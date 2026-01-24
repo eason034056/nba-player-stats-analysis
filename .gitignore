@@ -1,0 +1,83 @@
+# .gitignore - Git 忽略檔案清單
+#
+# 這些檔案和目錄不會被 Git 追蹤
+
+# ==================== 環境變數 ====================
+# 包含敏感資訊，不應提交
+.env
+.env.local
+.env.*.local
+
+# ==================== Python ====================
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+.pytest_cache/
+.mypy_cache/
+.coverage
+htmlcov/
+.tox/
+.nox/
+.hypothesis/
+venv/
+ENV/
+
+# ==================== Node.js ====================
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
+
+# ==================== Next.js ====================
+.next/
+out/
+.vercel
+
+# ==================== IDE ====================
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# ==================== 日誌 ====================
+*.log
+logs/
+
+# ==================== 快取 ====================
+.cache/
+*.cache
+
+# ==================== 建置產物 ====================
+*.pyc
+*.pyo
+*.dll
+*.dylib
+
+# ==================== 測試覆蓋率 ====================
+coverage/
+.nyc_output/
+
+# ==================== 其他 ====================
+*.local
+Thumbs.db
+

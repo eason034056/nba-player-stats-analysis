@@ -1,0 +1,136 @@
+# docker-compose.yml - Docker Compose 配置檔
+#
+# 定義多容器應用的服務組成
+# 使用 docker-compose up 一鍵啟動所有服務
+#
+# 服務說明：
+# - backend: FastAPI 後端 API 服務
+# - redis: Redis 快取服務
+#
+# 使用方法：
+#   開發模式：docker-compose up
+#   背景執行：docker-compose up -d
+#   查看日誌：docker-compose logs -f
+#   停止服務：docker-compose down
+
+version: "3.8"
+
+services:
+  # ==================== 後端服務 ====================
+  backend:
+    # 建置設定
+    build:
+      context: ./backend  # Dockerfile 所在目錄
+      dockerfile: Dockerfile
+    
+    # 容器名稱
+    container_name: no-vig-nba-backend
+    
+    # 端口映射
+    # 主機端口:容器端口
+    ports:
+      - "8000:8000"
+    
+    # 環境變數
+    # 可以在 .env 檔案中定義，或直接在這裡設定
+    environment:
+      # The Odds API 設定
+      - ODDS_API_KEY=${ODDS_API_KEY}
+      - ODDS_API_BASE_URL=${ODDS_API_BASE_URL:-https://api.the-odds-api.com}
+      
+      # Redis 連線（指向同一 network 中的 redis 服務）
+      - REDIS_URL=redis://redis:6379
+      
+      # 快取 TTL
+      - CACHE_TTL_EVENTS=${CACHE_TTL_EVENTS:-300}
+      - CACHE_TTL_PROPS=${CACHE_TTL_PROPS:-60}
+      - CACHE_TTL_PLAYERS=${CACHE_TTL_PLAYERS:-300}
+      
+      # CORS 設定（允許前端來源）
+      - ALLOWED_ORIGINS=${ALLOWED_ORIGINS:-http://localhost:3000}
+      
+      # 日誌等級
+      - LOG_LEVEL=${LOG_LEVEL:-info}
+    
+    # 掛載 data 目錄（CSV 檔案）
+    # 將主機的 data 目錄掛載到容器的 /app/data 目錄
+    volumes:
+      - ./data:/app/data:ro  # ro = read-only，只讀模式
+    
+    # 依賴服務
+    # 確保 redis 啟動後才啟動 backend
+    depends_on:
+      - redis
+    
+    # 網路設定
+    networks:
+      - app-network
+    
+    # 重啟策略
+    # unless-stopped: 除非手動停止，否則自動重啟
+    restart: unless-stopped
+    
+    # 健康檢查
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+
+  # ==================== Redis 服務 ====================
+  redis:
+    # 使用官方 Redis 映像
+    # alpine 版本較小
+    image: redis:7-alpine
+    
+    # 容器名稱
+    container_name: no-vig-nba-redis
+    
+    # 端口映射（可選，主要用於除錯）
+    # 如果不需要從主機直接連接 Redis，可以移除
+    ports:
+      - "6379:6379"
+    
+    # 資料持久化（可選）
+    # 將 Redis 資料存儲在 volume 中，重啟後不會遺失
+    volumes:
+      - redis-data:/data
+    
+    # Redis 啟動命令
+    # --appendonly yes: 啟用 AOF 持久化
+    # --maxmemory 100mb: 限制記憶體使用
+    # --maxmemory-policy allkeys-lru: 記憶體滿時使用 LRU 策略清除
+    command: >
+      redis-server
+      --appendonly yes
+      --maxmemory 100mb
+      --maxmemory-policy allkeys-lru
+    
+    # 網路設定
+    networks:
+      - app-network
+    
+    # 重啟策略
+    restart: unless-stopped
+    
+    # 健康檢查
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+# ==================== 網路設定 ====================
+networks:
+  app-network:
+    # 使用 bridge 驅動
+    # 同一網路中的容器可以用服務名稱互相連線
+    driver: bridge
+
+# ==================== 資料卷設定 ====================
+volumes:
+  # Redis 資料持久化 volume
+  redis-data:
+    driver: local
+
