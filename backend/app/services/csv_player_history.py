@@ -80,6 +80,22 @@ class CSVPlayerHistoryService:
         self._all_players: List[str] = []  # 所有球員名單
         self._loaded: bool = False  # 是否已載入
     
+    def reload(self) -> None:
+        """
+        強制重新載入 CSV 資料
+        
+        清除所有快取並重新讀取 CSV 檔案
+        用於：
+        - CSV 檔案更新後重新載入
+        - 開發時修改程式碼後刷新資料
+        """
+        print("🔄 正在重新載入 CSV 資料...")
+        self._cache = {}
+        self._all_players = []
+        self._loaded = False
+        self.load_csv()
+        print(f"✅ 重新載入完成，共 {len(self._all_players)} 位球員")
+    
     def _parse_minutes(self, min_str: str) -> float:
         """
         解析分鐘欄位（格式：MM:SS 或數字）
@@ -195,6 +211,10 @@ class CSVPlayerHistoryService:
                         except ValueError:
                             pass
                 
+                # 解析先發狀態
+                status = row.get("Status", "").strip()
+                is_starter = status.lower() == "starter"
+                
                 # 建構比賽記錄
                 game_log = {
                     "player_name": player_name,
@@ -205,9 +225,11 @@ class CSVPlayerHistoryService:
                     "minutes": minutes,
                     # PRA（Points + Rebounds + Assists）
                     "pra": (pts or 0) + (reb or 0) + (ast or 0) if pts is not None else None,
-                    # 原始資料（用於除錯）
+                    # 原始資料（用於除錯和顯示）
                     "team": row.get("Team", ""),
                     "opponent": row.get("Opponent", ""),
+                    "status": status,  # "Starter" 或 "Bench"
+                    "is_starter": is_starter,  # 布林值，方便判斷
                 }
                 
                 # 按球員分組
@@ -379,6 +401,9 @@ class CSVPlayerHistoryService:
                 
                 # 建構 game log 資料
                 game_date = game.get("game_date")
+                minutes = game.get("minutes", 0)
+                is_starter = game.get("is_starter", False)
+                
                 valid_games.append({
                     "date": game_date.strftime("%m/%d") if game_date else "",
                     "date_full": game_date.strftime("%Y-%m-%d") if game_date else "",
@@ -386,6 +411,8 @@ class CSVPlayerHistoryService:
                     "value": value,
                     "is_over": value > threshold,
                     "team": game.get("team", ""),
+                    "minutes": round(minutes, 1),  # 上場時間（分鐘）
+                    "is_starter": is_starter,  # 是否先發
                 })
         
         # 取最近 N 場

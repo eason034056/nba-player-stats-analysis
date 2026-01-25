@@ -177,3 +177,68 @@ def calculate_consensus_weighted(
     
     return (weighted_over / total_weight, weighted_under / total_weight)
 
+
+def calculate_mode_threshold(lines: List[float]) -> Optional[float]:
+    """
+    計算所有博彩公司 line 的眾數（Mode）
+    
+    眾數是出現次數最多的值，用於確定市場共識的門檻值。
+    
+    計算策略：
+    1. 如果有明確眾數（某個值出現最多次），使用該值
+    2. 如果是多眾數（多個值出現次數相同），取這些眾數的平均值
+    3. 如果每個值都只出現一次（無眾數），取中位數作為代表
+    
+    Args:
+        lines: 所有博彩公司提供的 line 列表
+               例如 [24.5, 24.5, 24.5, 25.5, 25.5]
+    
+    Returns:
+        Optional[float]: 眾數門檻值，如果列表為空則返回 None
+    
+    Example:
+        >>> calculate_mode_threshold([24.5, 24.5, 24.5, 25.5])
+        24.5  # 24.5 出現 3 次，是眾數
+        
+        >>> calculate_mode_threshold([24.5, 24.5, 25.5, 25.5])
+        25.0  # 24.5 和 25.5 各出現 2 次，取平均
+        
+        >>> calculate_mode_threshold([24.5, 25.0, 25.5, 26.0])
+        25.25  # 每個值只出現 1 次，取中位數
+    """
+    if not lines:
+        return None
+    
+    # 使用 Counter 統計每個值的出現次數
+    from collections import Counter
+    
+    # 將浮點數四捨五入到小數點後一位，避免浮點數精度問題
+    # 例如 24.5000001 和 24.5 應該被視為相同
+    rounded_lines = [round(line, 1) for line in lines]
+    counter = Counter(rounded_lines)
+    
+    # 找出最大出現次數
+    max_count = max(counter.values())
+    
+    # 找出所有出現次數等於最大次數的值（眾數）
+    modes = [value for value, count in counter.items() if count == max_count]
+    
+    if max_count == 1:
+        # 每個值都只出現一次，沒有眾數
+        # 使用中位數作為代表值
+        sorted_lines = sorted(rounded_lines)
+        n = len(sorted_lines)
+        if n % 2 == 1:
+            # 奇數個：取中間值
+            return sorted_lines[n // 2]
+        else:
+            # 偶數個：取中間兩個值的平均
+            return (sorted_lines[n // 2 - 1] + sorted_lines[n // 2]) / 2
+    
+    if len(modes) == 1:
+        # 只有一個眾數
+        return modes[0]
+    
+    # 多個眾數，取平均值
+    return sum(modes) / len(modes)
+

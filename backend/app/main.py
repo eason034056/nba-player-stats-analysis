@@ -12,8 +12,9 @@ main.py - FastAPI 應用程式主入口點
 from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from app.api import health, nba
+from app.api import health, nba, daily_picks
 from app.services.cache import cache_service
+from app.services.scheduler import scheduler_service
 from app.settings import settings
 
 
@@ -42,10 +43,21 @@ async def lifespan(app: FastAPI):
     print(f"📊 Odds API Base URL: {settings.odds_api_base_url}")
     print(f"🔴 Redis URL: {settings.redis_url}")
     
+    # 啟動定時任務排程器
+    try:
+        scheduler_service.start()
+        print(f"📅 下次分析時間: {scheduler_service.get_next_run_time()}")
+    except Exception as e:
+        print(f"⚠️ 排程器啟動失敗: {e}")
+    
     yield  # 應用運行中...
     
     # 關閉時執行
     print("👋 Shutting down...")
+    
+    # 停止定時任務排程器
+    scheduler_service.stop()
+    
     await cache_service.close()
     print("✅ Cache service closed")
 
@@ -65,6 +77,7 @@ app = FastAPI(
     - **賽事列表**: 取得 NBA 當日賽事
     - **去水機率**: 計算球員 props 的公平機率
     - **球員建議**: Autocomplete 用的球員列表
+    - **每日精選**: 自動分析高機率（>65%）球員選擇
     
     ## 什麼是「去水機率」？
     
@@ -96,6 +109,7 @@ app.add_middleware(
 # 這樣組織代碼可以讓不同功能模組分開管理
 app.include_router(health.router)
 app.include_router(nba.router)
+app.include_router(daily_picks.router)  # 每日高機率球員分析
 
 
 # 根路徑重導向到 API 文件

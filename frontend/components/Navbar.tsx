@@ -12,7 +12,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Activity, Info, Zap } from "lucide-react";
+import { Activity, Info, Zap, Target } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 /**
@@ -20,6 +20,7 @@ import { cn } from "@/lib/utils";
  */
 const navLinks = [
   { href: "/", label: "首頁", icon: Activity },
+  { href: "/picks", label: "每日精選", icon: Target },
   { href: "/about", label: "關於", icon: Info },
 ];
 

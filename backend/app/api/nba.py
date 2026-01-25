@@ -532,6 +532,38 @@ async def get_csv_players(
         )
 
 
+@router.post(
+    "/csv/reload",
+    summary="重新載入 CSV 資料",
+    description="強制清除快取並重新讀取 CSV 檔案"
+)
+async def reload_csv():
+    """
+    強制重新載入 CSV 資料
+    
+    用於：
+    - CSV 檔案更新後刷新數據
+    - 修改程式碼後清除快取
+    
+    POST /api/nba/csv/reload
+    
+    Returns:
+        dict: 重新載入結果，包含球員數量
+    """
+    try:
+        csv_player_service.reload()
+        return {
+            "success": True,
+            "message": "CSV 資料已重新載入",
+            "total_players": len(csv_player_service.get_all_players())
+        }
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"重新載入失敗: {str(e)}"
+        )
+
+
 @router.get(
     "/player-history",
     response_model=PlayerHistoryResponse,
@@ -647,7 +679,9 @@ async def get_player_history(
                 opponent=log["opponent"],
                 value=log["value"],
                 is_over=log["is_over"],
-                team=log.get("team", "")
+                team=log.get("team", ""),
+                minutes=log.get("minutes", 0.0),  # 上場時間
+                is_starter=log.get("is_starter", False)  # 是否先發
             )
             for log in stats.get("game_logs", [])
         ]

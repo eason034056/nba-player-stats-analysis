@@ -182,6 +182,8 @@ class GameLog(BaseModel):
     value: float = Field(..., description="該指標的數值")
     is_over: bool = Field(..., description="是否超過閾值")
     team: str = Field(default="", description="球員所屬球隊")
+    minutes: float = Field(default=0.0, description="上場時間（分鐘）")
+    is_starter: bool = Field(default=False, description="是否先發")
 
 
 class PlayerHistoryResponse(BaseModel):
@@ -217,5 +219,68 @@ class PlayerHistoryResponse(BaseModel):
     game_logs: List[GameLog] = Field(default_factory=list, description="每場比賽詳細資料")
     opponents: List[str] = Field(default_factory=list, description="對手列表")
     opponent_filter: Optional[str] = Field(default=None, description="當前篩選的對手")
+    message: Optional[str] = Field(default=None, description="額外訊息")
+
+
+# ==================== 每日高機率球員分析 ====================
+
+class DailyPick(BaseModel):
+    """
+    單一高機率球員選擇
+    
+    當某球員在某 metric 上的歷史機率 > 65% 時，會被加入精選名單
+    
+    欄位說明：
+    - player_name: 球員名稱（例如 "Stephen Curry"）
+    - event_id: 賽事 ID，用於連結到詳細頁面
+    - home_team / away_team: 主客場球隊
+    - commence_time: 比賽開始時間（ISO 8601 格式）
+    - metric: 統計指標（points/assists/rebounds/pra）
+    - threshold: 眾數門檻（所有博彩公司 line 的眾數）
+    - direction: "over" 或 "under"，表示機率較高的方向
+    - probability: 歷史機率（>= 0.65）
+    - n_games: 用於計算的歷史場次數
+    - bookmakers_count: 提供此 line 的博彩公司數量
+    - all_lines: 所有博彩公司的 line 列表（用於顯示分佈）
+    """
+    player_name: str = Field(..., description="球員名稱")
+    event_id: str = Field(..., description="賽事 ID")
+    home_team: str = Field(..., description="主場球隊")
+    away_team: str = Field(..., description="客場球隊")
+    commence_time: str = Field(..., description="比賽開始時間")
+    metric: str = Field(..., description="統計指標 (points/assists/rebounds/pra)")
+    threshold: float = Field(..., description="眾數門檻")
+    direction: str = Field(..., description="方向 (over/under)")
+    probability: float = Field(..., description="歷史機率")
+    n_games: int = Field(..., description="樣本場次數")
+    bookmakers_count: int = Field(..., description="博彩公司數量")
+    all_lines: List[float] = Field(default_factory=list, description="所有博彩公司的 line")
+
+
+class AnalysisStats(BaseModel):
+    """
+    分析統計資訊
+    
+    提供整體分析的摘要統計
+    """
+    total_events: int = Field(..., description="分析的賽事總數")
+    total_players: int = Field(..., description="分析的球員總數")
+    total_props: int = Field(..., description="分析的 prop 總數")
+    high_prob_count: int = Field(..., description="高機率選擇數量")
+    analysis_duration_seconds: float = Field(..., description="分析耗時（秒）")
+
+
+class DailyPicksResponse(BaseModel):
+    """
+    每日高機率球員 API 回應模型
+    用於 GET /api/nba/daily-picks 端點
+    
+    返回當日所有發生機率 > 65% 的球員投注選擇
+    """
+    date: str = Field(..., description="分析日期 YYYY-MM-DD")
+    analyzed_at: str = Field(..., description="分析執行時間（ISO 8601）")
+    total_picks: int = Field(..., description="符合條件的選擇總數")
+    picks: List[DailyPick] = Field(default_factory=list, description="高機率球員列表")
+    stats: Optional[AnalysisStats] = Field(default=None, description="分析統計")
     message: Optional[str] = Field(default=None, description="額外訊息")
 

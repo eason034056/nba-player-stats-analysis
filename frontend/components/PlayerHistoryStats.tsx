@@ -457,20 +457,57 @@ export function PlayerHistoryStats({
                       contentStyle={{
                         backgroundColor: "#1e293b",
                         border: "1px solid #475569",
-                        borderRadius: "8px",
+                        borderRadius: "12px",
+                        padding: "12px",
+                        color: "#e2e8f0",
+                      }}
+                      labelStyle={{
+                        color: "#f1f5f9",
+                        fontWeight: "600",
+                        marginBottom: "8px",
+                      }}
+                      itemStyle={{
                         color: "#e2e8f0",
                       }}
                       formatter={(value, name, props) => {
-                        const log = props.payload as GameLog;
+                        const log = props.payload as any;
+                        const metricName = HISTORY_METRICS.find((m) => m.key === metric)?.name || metric;
+                        
                         return [
-                          `${value} ${log.is_over ? "(Over)" : "(Under)"}`,
-                          HISTORY_METRICS.find((m) => m.key === metric)?.name || metric
+                          <div key="value" className="space-y-1">
+                            <div className="flex items-center gap-2">
+                              <span className="font-bold text-lg" style={{ color: log.is_over ? "#10b981" : "#f43f5e" }}>
+                                {value}
+                              </span>
+                              <span className="text-xs px-2 py-0.5 rounded" style={{ 
+                                backgroundColor: log.is_over ? "#10b98120" : "#f43f5e20",
+                                color: log.is_over ? "#10b981" : "#f43f5e"
+                              }}>
+                                {log.is_over ? "Over" : "Under"}
+                              </span>
+                            </div>
+                            <div className="text-sm text-slate-300 space-y-0.5">
+                              <div>⏱️ 上場時間: <span className="font-semibold text-slate-100">{log.minutes || 0} 分鐘</span></div>
+                              <div>
+                                {log.is_starter ? (
+                                  <span className="text-amber-400">⭐ 先發</span>
+                                ) : (
+                                  <span className="text-slate-400">🪑 替補</span>
+                                )}
+                              </div>
+                            </div>
+                          </div>,
+                          metricName
                         ];
                       }}
                       labelFormatter={(value, payload) => {
                         if (payload && payload[0]) {
-                          const log = payload[0].payload as GameLog;
-                          return `${log.date_full} vs ${log.opponent}`;
+                          const log = payload[0].payload as any;
+                          return (
+                            <div className="text-slate-100 font-semibold border-b border-slate-700 pb-2 mb-2">
+                              📅 {log.date_full} vs {log.opponent}
+                            </div>
+                          );
                         }
                         return value;
                       }}
