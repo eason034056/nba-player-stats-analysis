@@ -274,7 +274,7 @@ export default function PicksPage() {
   
   return (
     <div className="min-h-screen page-enter">
-      <div className="max-w-6xl mx-auto px-6 py-12">
+      <div className="max-w-4xl mx-auto px-6 py-12">
         {/* Page title section */}
         <div className="text-center mb-16">
           <div className="inline-block mb-6">
@@ -308,7 +308,7 @@ export default function PicksPage() {
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-10">
             <StatCard 
               icon={Target}
-              label="High Probability Picks"
+              label="High Prob Picks"
               value={picks.length}
               subValue={`${highProbCount} ≥70%`}
             />
