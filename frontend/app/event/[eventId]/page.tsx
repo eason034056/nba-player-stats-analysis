@@ -1,21 +1,17 @@
 /**
- * event/[eventId]/page.tsx - 賽事詳情 / 計算頁面
+ * event/[eventId]/page.tsx - Event Detail / Calculator Page (Minimal Design)
  * 
- * 這是整個應用的核心頁面！
- * 
- * 功能：
- * - 顯示比賽資訊
- * - 選擇統計類型（Points/Assists/Rebounds/PRA）
- * - 輸入球員名稱（帶 Autocomplete）或從列表點擊選擇
- * - 選擇博彩公司
- * - 計算並顯示去水機率
- * - 顯示球員歷史數據分析（含 Histogram 視覺化）
+ * Design Philosophy:
+ * - Cream background (#FFF2DF)
+ * - Red accents (#E92016)
+ * - Yellow highlights (#F9DC24)
+ * - Clean typography and clear hierarchy
  */
 
 "use client";
 
-import { useState } from "react";
-import { useParams, useRouter } from "next/navigation";
+import { useState, useEffect } from "react";
+import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { useForm, Controller } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -27,6 +23,7 @@ import {
   Calendar,
 } from "lucide-react";
 import { getEvents, calculateNoVig } from "@/lib/api";
+import { TeamLogo } from "@/components/TeamLogo";
 import {
   calculatorFormSchema,
   type CalculatorFormData,
@@ -40,94 +37,84 @@ import { ResultsTable } from "@/components/ResultsTable";
 import { PlayerHistoryStats } from "@/components/PlayerHistoryStats";
 
 /**
- * 賽事詳情頁元件
- * 
- * 路由參數：eventId - 賽事 ID
+ * Event Page Component
  */
 export default function EventPage() {
-  // 從 URL 取得 eventId 參數
-  // useParams: Next.js 的 hook，用於取得動態路由參數
   const params = useParams();
   const eventId = params.eventId as string;
 
-  // 路由器，用於返回上一頁
+  const searchParams = useSearchParams();
+  const initialPlayer = searchParams.get("player") || "";
+  const initialMarket = (searchParams.get("market") as MarketKey) || "player_points";
+  const initialThreshold = searchParams.get("threshold") || "";
+
   const router = useRouter();
 
-  // 計算結果狀態
   const [result, setResult] = useState<NoVigResponse | null>(null);
+  const [selectedMarket, setSelectedMarket] = useState<MarketKey>(initialMarket);
 
-  // 市場類型狀態（獨立管理，因為不在表單驗證中）
-  const [selectedMarket, setSelectedMarket] = useState<MarketKey>("player_points");
-
-  // 表單設定
-  // useForm: react-hook-form 的核心 hook
-  // - 管理表單狀態
-  // - 處理表單驗證
-  // - 處理表單提交
   const {
-    control,       // 用於 Controller 元件
-    handleSubmit,  // 表單提交處理器
-    watch,         // 監聽表單值
-    setValue,      // 設定表單值
-    formState: { errors },  // 表單錯誤
+    control,
+    handleSubmit,
+    watch,
+    setValue,
+    formState: { errors },
   } = useForm<CalculatorFormData>({
-    // zodResolver: 使用 Zod schema 進行驗證
     resolver: zodResolver(calculatorFormSchema),
-    // 預設值
     defaultValues: {
-      player_name: "",
-      bookmakers: [],  // 空陣列表示全選
+      player_name: initialPlayer,
+      bookmakers: [],
     },
   });
 
-  // 監聽表單值（用於顯示）
+  useEffect(() => {
+    if (initialPlayer && initialMarket) {
+      mutation.mutate({
+        event_id: eventId,
+        player_name: initialPlayer,
+        market: initialMarket,
+        regions: "us",
+        bookmakers: null,
+        odds_format: "american",
+      });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   const playerName = watch("player_name");
 
-  // 取得賽事資訊（用於顯示比賽詳情）
-  // 這裡重用 events 查詢，從中找出對應的賽事
   const { data: eventsData, isLoading: isEventsLoading } = useQuery({
     queryKey: ["events", "all"],
     queryFn: () => getEvents(),
-    staleTime: 5 * 60 * 1000, // 5 分鐘
+    staleTime: 5 * 60 * 1000,
   });
 
-  // 從賽事列表中找出當前賽事
   const currentEvent = eventsData?.events.find(
     (e) => e.event_id === eventId
   );
 
-  // 計算去水機率 mutation
-  // useMutation: 用於會改變伺服器狀態的操作
-  // 與 useQuery 不同，mutation 需要手動觸發
   const mutation = useMutation({
     mutationFn: calculateNoVig,
     onSuccess: (data) => {
-      // 成功時設定結果
       setResult(data);
     },
     onError: (error) => {
-      console.error("計算失敗:", error);
+      console.error("Calculation failed:", error);
     },
   });
 
-  // 處理市場類型變更
-  // 當市場類型改變時，清除之前的結果和選擇的球員
   const handleMarketChange = (market: MarketKey) => {
     setSelectedMarket(market);
     setResult(null);
-    setValue("player_name", ""); // 清除已選擇的球員
+    setValue("player_name", "");
   };
 
-  // 表單提交處理
   const onSubmit = (data: CalculatorFormData) => {
-    // 清除之前的結果
     setResult(null);
-
-    // 發送計算請求
     mutation.mutate({
       event_id: eventId,
       player_name: data.player_name,
-      market: selectedMarket, // 使用選擇的市場類型
+      market: selectedMarket,
       regions: "us",
       bookmakers: data.bookmakers.length > 0 ? data.bookmakers : null,
       odds_format: "american",
@@ -135,51 +122,57 @@ export default function EventPage() {
   };
 
   return (
-    <div className="container mx-auto px-4 py-8 page-enter">
-      {/* 返回按鈕 */}
+    <div className="max-w-5xl mx-auto px-6 py-10 page-enter">
+      {/* Back button */}
       <button
         onClick={() => router.back()}
-        className="flex items-center gap-2 text-slate-400 hover:text-slate-200 
-                   transition-colors duration-200 mb-6"
+        className="flex items-center gap-2 text-gray hover:text-dark 
+                   transition-colors duration-150 mb-8 font-semibold"
       >
         <ArrowLeft className="w-5 h-5" />
-        <span>返回賽事列表</span>
+        <span>Back to Events</span>
       </button>
 
-      {/* 比賽資訊卡片 */}
+      {/* Game info card */}
       <div className="card mb-8">
         {isEventsLoading ? (
-          // 載入中骨架屏
           <div className="animate-pulse">
             <div className="skeleton h-8 w-64 mb-4" />
             <div className="skeleton h-4 w-48" />
           </div>
         ) : currentEvent ? (
-          // 顯示比賽資訊
           <>
-            <div className="flex items-center gap-3 mb-4">
-              <span className="text-3xl">🏀</span>
-              <h1 className="text-2xl font-bold text-slate-100">
-                {currentEvent.away_team} @ {currentEvent.home_team}
-              </h1>
+            <div className="flex items-center gap-4 mb-4 flex-wrap">
+              <div className="flex items-center gap-3">
+                <TeamLogo teamName={currentEvent.away_team} size={44} />
+                <span className="text-2xl font-bold text-dark">
+                  {currentEvent.away_team}
+                </span>
+              </div>
+              <span className="text-gray text-xl font-bold">@</span>
+              <div className="flex items-center gap-3">
+                <TeamLogo teamName={currentEvent.home_team} size={44} />
+                <span className="text-2xl font-bold text-dark">
+                  {currentEvent.home_team}
+                </span>
+              </div>
             </div>
-            <div className="flex items-center gap-2 text-slate-400">
+            <div className="flex items-center gap-2 text-gray">
               <Calendar className="w-4 h-4" />
               <span>{formatFullDate(currentEvent.commence_time)}</span>
             </div>
           </>
         ) : (
-          // 找不到比賽
-          <div className="flex items-center gap-3 text-amber-400">
+          <div className="flex items-center gap-3 text-red">
             <AlertCircle className="w-6 h-6" />
-            <span>找不到此比賽的資訊</span>
+            <span className="font-semibold">Game information not found</span>
           </div>
         )}
       </div>
 
-      {/* 計算表單 */}
+      {/* Calculator form */}
       <form onSubmit={handleSubmit(onSubmit)}>
-        {/* 市場類型選擇 */}
+        {/* Market type selection */}
         <div className="card mb-6">
           <MarketSelect
             value={selectedMarket}
@@ -188,7 +181,7 @@ export default function EventPage() {
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
-          {/* 球員輸入（帶有搜尋和列表） */}
+          {/* Player input */}
           <div className="card">
             <Controller
               name="player_name"
@@ -202,15 +195,14 @@ export default function EventPage() {
                 />
               )}
             />
-            {/* 錯誤訊息 */}
             {errors.player_name && (
-              <p className="mt-2 text-sm text-red-400">
+              <p className="mt-2 text-sm text-red font-medium">
                 {errors.player_name.message}
               </p>
             )}
           </div>
 
-          {/* 博彩公司選擇 */}
+          {/* Bookmaker selection */}
           <div className="card">
             <Controller
               name="bookmakers"
@@ -225,47 +217,49 @@ export default function EventPage() {
           </div>
         </div>
 
-        {/* 計算按鈕 */}
+        {/* Calculate button */}
         <div className="flex justify-center">
           <button
             type="submit"
             disabled={mutation.isPending || !playerName}
-            className="btn-primary flex items-center gap-2 px-8 py-3 text-lg
+            className="btn-primary flex items-center gap-2 px-10 py-4 text-lg
                        disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {mutation.isPending ? (
               <>
                 <Loader2 className="w-5 h-5 animate-spin" />
-                <span>計算中...</span>
+                <span>Calculating...</span>
               </>
             ) : (
               <>
                 <Calculator className="w-5 h-5" />
-                <span>計算去水機率</span>
+                <span>Calculate No-Vig Probability</span>
               </>
             )}
           </button>
         </div>
       </form>
 
-      {/* 錯誤提示 */}
+      {/* Error message */}
       {mutation.isError && (
-        <div className="card mt-6 border-red-800/50 bg-red-900/10">
-          <div className="flex items-start gap-3">
-            <AlertCircle className="w-6 h-6 text-red-400 shrink-0 mt-0.5" />
+        <div className="card mt-6 border-red">
+          <div className="flex items-start gap-4">
+            <div className="w-10 h-10 rounded-lg bg-red flex items-center justify-center shrink-0">
+              <AlertCircle className="w-5 h-5 text-white" />
+            </div>
             <div>
-              <h3 className="font-semibold text-red-300 mb-1">計算失敗</h3>
-              <p className="text-slate-400 text-sm">
+              <h3 className="font-bold text-dark mb-1">Calculation Failed</h3>
+              <p className="text-gray text-sm">
                 {mutation.error instanceof Error
                   ? mutation.error.message
-                  : "無法計算去水機率，請稍後再試"}
+                  : "Unable to calculate no-vig probability, please try again later"}
               </p>
             </div>
           </div>
         </div>
       )}
 
-      {/* 計算結果 */}
+      {/* Results */}
       <div className="mt-8">
         <ResultsTable
           data={result}
@@ -273,27 +267,29 @@ export default function EventPage() {
         />
       </div>
 
-      {/* 說明 */}
+      {/* Help text */}
       {!result && !mutation.isPending && (
-        <div className="mt-8 p-4 bg-slate-900/30 rounded-lg border border-slate-800/50">
-          <h3 className="text-sm font-medium text-slate-400 mb-2">
-            📊 什麼是去水機率？
+        <div className="mt-8 card">
+          <h3 className="text-sm font-bold text-dark mb-2">
+            📊 What is No-Vig Probability?
           </h3>
-          <p className="text-sm text-slate-500 leading-relaxed">
-            博彩公司的賠率包含「水錢」（vig/juice），使得 Over 和 Under 
-            的隱含機率總和超過 100%。去水機率是將這些隱含機率正規化後，
-            得出更接近真實的公平機率估計。水錢越低的博彩公司，
-            其賠率越接近真實機率。
+          <p className="text-sm text-gray leading-relaxed">
+            Bookmaker odds include "vig" (vig/juice), causing the sum of Over and Under 
+            implied probabilities to exceed 100%. No-vig probability normalizes these 
+            implied probabilities to derive a fair probability estimate closer to reality. 
+            Bookmakers with lower vig have odds closer to true probability.
           </p>
         </div>
       )}
 
-      {/* ==================== 歷史數據分析區域 ==================== */}
-      <div className="mt-12 pt-8 border-t border-slate-800/50">
+      {/* Historical Data Analysis Section */}
+      <div className="mt-12 pt-8 border-t-2 border-dark/10">
         <div className="card">
           <PlayerHistoryStats
+            eventId={eventId}
             initialPlayer={playerName}
             initialMarket={selectedMarket}
+            initialThreshold={initialThreshold}
             onPlayerSelect={(name) => setValue("player_name", name)}
           />
         </div>

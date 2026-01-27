@@ -353,10 +353,17 @@ class DailyAnalysisService:
                     if n_games < 10:
                         continue
                     
+                    # 從歷史數據中獲取球員所屬球隊（最近一場比賽的球隊）
+                    player_team = ""
+                    game_logs = history_stats.get("game_logs", [])
+                    if game_logs and len(game_logs) > 0:
+                        player_team = game_logs[0].get("team", "")
+                    
                     # 檢查是否超過機率門檻
                     if p_over is not None and p_over >= self.probability_threshold:
                         pick = DailyPick(
                             player_name=player_name,
+                            player_team=player_team,
                             event_id=event_id,
                             home_team=home_team,
                             away_team=away_team,
@@ -370,11 +377,12 @@ class DailyAnalysisService:
                             all_lines=sorted(lines)
                         )
                         picks.append(pick)
-                        print(f"  ✨ {player_name} {metric_key} OVER {mode_threshold}: {p_over:.1%}")
+                        print(f"  ✨ {player_name} ({player_team}) {metric_key} OVER {mode_threshold}: {p_over:.1%}")
                     
                     elif p_under is not None and p_under >= self.probability_threshold:
                         pick = DailyPick(
                             player_name=player_name,
+                            player_team=player_team,
                             event_id=event_id,
                             home_team=home_team,
                             away_team=away_team,
@@ -388,7 +396,7 @@ class DailyAnalysisService:
                             all_lines=sorted(lines)
                         )
                         picks.append(pick)
-                        print(f"  ✨ {player_name} {metric_key} UNDER {mode_threshold}: {p_under:.1%}")
+                        print(f"  ✨ {player_name} ({player_team}) {metric_key} UNDER {mode_threshold}: {p_under:.1%}")
             
             except OddsAPIError as e:
                 print(f"  ⚠️ 獲取 {market_key} 失敗: {e}")

@@ -1,14 +1,15 @@
 /**
- * tailwind.config.ts - Tailwind CSS 配置檔
+ * tailwind.config.ts - Tailwind CSS 配置檔（極簡風版本）
  * 
- * Tailwind CSS 是一個 utility-first 的 CSS 框架
- * 這個檔案定義了專案的設計系統（顏色、字體、間距等）
+ * 配色方案 (60-30-10 Rule):
+ * - #FFF2DF (60%) - 暖米色背景
+ * - #E92016 (30%) - 紅色強調
+ * - #F9DC24 (10%) - 黃色點綴
  */
 
 import type { Config } from "tailwindcss";
 
 const config: Config = {
-  // content: 告訴 Tailwind 要掃描哪些檔案來找出使用的 class
   content: [
     "./pages/**/*.{js,ts,jsx,tsx,mdx}",
     "./components/**/*.{js,ts,jsx,tsx,mdx}",
@@ -17,107 +18,79 @@ const config: Config = {
   
   theme: {
     extend: {
-      // 自定義顏色
+      // 極簡配色
       colors: {
-        // 主色調：深藍色系（NBA 風格）
-        primary: {
-          50: "#eff6ff",
-          100: "#dbeafe",
-          200: "#bfdbfe",
-          300: "#93c5fd",
-          400: "#60a5fa",
-          500: "#3b82f6",
-          600: "#2563eb",
-          700: "#1d4ed8",
-          800: "#1e40af",
-          900: "#1e3a8a",
-          950: "#172554",
+        // 主色調：暖米色系
+        cream: {
+          DEFAULT: "#FFF2DF",
+          light: "#FFFAF5",
+          dark: "#F5E6D0",
         },
-        // 強調色：琥珀/橙色（用於重要資訊和品牌色）
-        accent: {
-          50: "#fffbeb",
-          100: "#fef3c7",
-          200: "#fde68a",
-          300: "#fcd34d",
-          400: "#fbbf24",
-          500: "#f59e0b",
-          600: "#d97706",
-          700: "#b45309",
-          800: "#92400e",
-          900: "#78350f",
-          950: "#451a03",
+        // 強調色：紅色
+        red: {
+          DEFAULT: "#E92016",
+          light: "#FF3B2F",
+          dark: "#C41A12",
         },
-        // 成功色：翡翠綠（用於有利賠率）
-        success: {
-          400: "#34d399",
-          500: "#22c55e",
-          600: "#16a34a",
+        // 點綴色：黃色
+        yellow: {
+          DEFAULT: "#F9DC24",
+          light: "#FFE94E",
+          dark: "#E5C81A",
         },
-        // 警告色：紅色（用於不利賠率）
-        danger: {
-          400: "#f87171",
-          500: "#ef4444",
-          600: "#dc2626",
+        // 中性色
+        dark: {
+          DEFAULT: "#1A1A1A",
+          light: "#2D2D2D",
+        },
+        gray: {
+          DEFAULT: "#6B6B6B",
+          light: "#A0A0A0",
         },
       },
       
-      // 自定義字體
+      // 字體
       fontFamily: {
-        // 使用 Space Grotesk 作為主要字體（獨特的幾何風格）
-        sans: ["Space Grotesk", "system-ui", "sans-serif"],
-        // 使用等寬字體顯示數字
+        sans: ["DM Sans", "system-ui", "sans-serif"],
         mono: ["JetBrains Mono", "monospace"],
       },
       
-      // 自定義動畫
+      // 動畫
       animation: {
-        // 淡入動畫
-        "fade-in": "fadeIn 0.3s cubic-bezier(0.22, 1, 0.36, 1) forwards",
-        // 滑入動畫
-        "slide-up": "slideUp 0.4s cubic-bezier(0.22, 1, 0.36, 1)",
-        // 脈動動畫
-        "pulse-subtle": "pulseSubtle 2s ease-in-out infinite",
-        // 發光脈動
-        "pulse-glow": "pulseGlow 2s ease-in-out infinite",
+        "fade-in": "fadeIn 0.2s ease-out forwards",
+        "slide-up": "slideUp 0.25s ease-out",
       },
       
-      // 定義 keyframes
       keyframes: {
         fadeIn: {
+          "0%": { opacity: "0" },
+          "100%": { opacity: "1" },
+        },
+        slideUp: {
           "0%": { opacity: "0", transform: "translateY(8px)" },
           "100%": { opacity: "1", transform: "translateY(0)" },
         },
-        slideUp: {
-          "0%": { opacity: "0", transform: "translateY(12px)" },
-          "100%": { opacity: "1", transform: "translateY(0)" },
-        },
-        pulseSubtle: {
-          "0%, 100%": { opacity: "1" },
-          "50%": { opacity: "0.7" },
-        },
-        pulseGlow: {
-          "0%, 100%": { opacity: "0.6" },
-          "50%": { opacity: "1" },
-        },
       },
       
-      // 背景圖片
-      backgroundImage: {
-        "gradient-radial": "radial-gradient(var(--tw-gradient-stops))",
-        "gradient-conic": "conic-gradient(from 180deg at 50% 50%, var(--tw-gradient-stops))",
+      // 邊框半徑
+      borderRadius: {
+        "sm": "4px",
+        "md": "8px",
+        "lg": "12px",
+        "xl": "16px",
       },
       
-      // 自定義陰影
-      boxShadow: {
-        "glow-blue": "0 0 30px rgba(59, 130, 246, 0.15)",
-        "glow-amber": "0 0 30px rgba(245, 158, 11, 0.15)",
+      // 邊框寬度
+      borderWidth: {
+        "DEFAULT": "2px",
+        "1": "1px",
+        "2": "2px",
+        "3": "3px",
       },
     },
   },
   
-  // 插件
   plugins: [],
 };
 
 export default config;
-

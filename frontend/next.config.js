@@ -28,7 +28,12 @@ const nextConfig = {
   images: {
     // 允許的外部圖片來源
     remotePatterns: [
-      // 如果需要載入球隊 logo 等外部圖片，在這裡加入來源
+      {
+        protocol: "https",
+        hostname: "a.espncdn.com",
+        port: "",
+        pathname: "/i/teamlogos/**",
+      },
     ],
   },
   

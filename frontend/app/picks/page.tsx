@@ -1,19 +1,17 @@
 /**
- * picks/page.tsx - 每日精選頁面
+ * picks/page.tsx - Minimal Daily Picks Page
  * 
- * 顯示當日所有發生機率超過 65% 的高機率球員投注選擇
- * 
- * 功能：
- * - 自動載入當日高機率球員
- * - 按機率排序顯示
- * - 支援重新分析
- * - 點擊可查看詳細歷史
+ * Design Philosophy:
+ * - Clear information hierarchy
+ * - High probability in green, medium probability in yellow
+ * - Cards use white background with black border
+ * - Clean hover effects
  */
 
 "use client";
 
 import { useState, useCallback } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { 
   RefreshCw, 
   AlertCircle, 
@@ -36,140 +34,125 @@ import {
   DIRECTION_DISPLAY_NAMES 
 } from "@/lib/schemas";
 import { DatePicker } from "@/components/DatePicker";
+import { TeamLogo } from "@/components/TeamLogo";
 
 /**
- * 機率信心等級
- * - high: >= 70% (綠色)
- * - medium: >= 65% (琥珀色)
+ * Probability confidence level
  */
 function getProbabilityLevel(probability: number): "high" | "medium" {
   return probability >= 0.70 ? "high" : "medium";
 }
 
 /**
- * 單一精選卡片元件
+ * metric → market conversion
+ */
+function metricToMarket(metric: string): string {
+  switch (metric) {
+    case "points": return "player_points";
+    case "rebounds": return "player_rebounds";
+    case "assists": return "player_assists";
+    case "pra": return "player_points_rebounds_assists";
+    default: return "player_points";
+  }
+}
+
+/**
+ * Single pick card
  */
 function PickCard({ pick, index }: { pick: DailyPick; index: number }) {
   const level = getProbabilityLevel(pick.probability);
   const metricName = METRIC_DISPLAY_NAMES[pick.metric] || pick.metric;
   const directionName = DIRECTION_DISPLAY_NAMES[pick.direction] || pick.direction;
-  
-  // 動畫延遲
   const animationDelay = `${index * 50}ms`;
+  
+  const marketKey = metricToMarket(pick.metric);
+  const linkHref = `/event/${pick.event_id}?player=${encodeURIComponent(pick.player_name)}&market=${marketKey}&threshold=${pick.threshold}`;
   
   return (
     <div 
       className="animate-fade-in"
       style={{ animationDelay }}
     >
-      <Link href={`/event/${pick.event_id}`}>
+      <Link href={linkHref}>
         <div className={`
-          relative overflow-hidden rounded-2xl p-5
-          bg-gradient-to-br from-slate-900/80 to-slate-800/40
-          border transition-all duration-300 ease-out
-          hover:-translate-y-1 hover:shadow-xl
-          cursor-pointer group
+          card group cursor-pointer
+          transition-all duration-200
+          hover:-translate-y-1
           ${level === "high" 
-            ? "border-emerald-500/30 hover:border-emerald-400/50 hover:shadow-emerald-500/10" 
-            : "border-amber-500/30 hover:border-amber-400/50 hover:shadow-amber-500/10"
+            ? "hover:border-green-500" 
+            : "hover:border-yellow"
           }
         `}>
-          {/* 背景光效 */}
-          <div className={`
-            absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-300
-            ${level === "high"
-              ? "bg-gradient-to-br from-emerald-500/5 to-transparent"
-              : "bg-gradient-to-br from-amber-500/5 to-transparent"
-            }
-          `} />
-          
-          {/* 高機率標籤 */}
+          {/* High probability badge */}
           {level === "high" && (
-            <div className="absolute top-3 right-3">
-              <div className="flex items-center gap-1 px-2 py-1 rounded-full bg-emerald-500/20 border border-emerald-500/30">
-                <Flame className="w-3 h-3 text-emerald-400" />
-                <span className="text-xs font-semibold text-emerald-400">HOT</span>
+            <div className="absolute top-4 right-4">
+              <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-green-500 text-white text-xs font-bold">
+                <Flame className="w-3 h-3" />
+                HOT
               </div>
             </div>
           )}
           
-          {/* 內容區 */}
-          <div className="relative">
-            {/* 球員名稱 */}
-            <div className="flex items-center gap-3 mb-3">
-              <div className={`
-                w-10 h-10 rounded-xl flex items-center justify-center
-                ${level === "high" 
-                  ? "bg-emerald-500/20" 
-                  : "bg-amber-500/20"
-                }
-              `}>
-                <span className="text-lg">🏀</span>
-              </div>
-              <div>
-                <h3 className="text-lg font-bold text-slate-100 group-hover:text-white transition-colors">
-                  {pick.player_name}
-                </h3>
-                <p className="text-sm text-slate-400">
-                  {pick.away_team} @ {pick.home_team}
-                </p>
-              </div>
+          {/* Player info */}
+          <div className="flex items-center gap-4 mb-4">
+            <TeamLogo 
+              teamName={pick.player_team || pick.home_team} 
+              size={40} 
+              className="shrink-0"
+            />
+            <div className="flex-1 min-w-0 pr-16">
+              <h3 className="text-lg font-bold text-dark truncate">
+                {pick.player_name}
+              </h3>
+              <p className="text-sm text-gray truncate">
+                {pick.away_team} @ {pick.home_team}
+              </p>
+            </div>
+          </div>
+          
+          {/* Prediction content */}
+          <div className="flex items-center justify-between mb-4">
+            <div className={`
+              px-4 py-2 rounded-lg text-sm font-bold
+              ${pick.direction === "over"
+                ? "bg-green-500/10 text-green-600 border-2 border-green-500/30"
+                : "bg-blue-500/10 text-blue-600 border-2 border-blue-500/30"
+              }
+            `}>
+              {metricName} {directionName} {pick.threshold}
             </div>
             
-            {/* 預測內容 */}
-            <div className="flex items-center justify-between mb-4">
-              <div className="flex items-center gap-2">
-                <span className={`
-                  px-3 py-1.5 rounded-lg text-sm font-semibold
-                  ${pick.direction === "over"
-                    ? "bg-emerald-500/20 text-emerald-400"
-                    : "bg-blue-500/20 text-blue-400"
-                  }
-                `}>
-                  {metricName} {directionName} {pick.threshold}
-                </span>
-              </div>
-              
-              {/* 機率顯示 */}
-              <div className={`
-                text-2xl font-bold font-mono
-                ${level === "high" ? "text-emerald-400" : "text-amber-400"}
-              `}>
-                {formatProbability(pick.probability)}
-              </div>
+            {/* Probability display */}
+            <div className={`
+              text-3xl font-mono font-bold
+              ${level === "high" ? "text-green-500" : "text-yellow"}
+            `}>
+              {formatProbability(pick.probability)}
+            </div>
+          </div>
+          
+          {/* Probability progress bar */}
+          <div className="progress-bar mb-4">
+            <div 
+              className={`progress-bar-fill ${level === "high" ? "high" : "medium"}`}
+              style={{ width: `${pick.probability * 100}%` }}
+            />
+          </div>
+          
+          {/* Bottom info */}
+          <div className="flex items-center justify-between text-sm text-gray">
+            <div className="flex items-center gap-4">
+              <span className="flex items-center gap-1.5">
+                <BarChart3 className="w-4 h-4" />
+                {pick.n_games} games
+              </span>
+              <span className="flex items-center gap-1.5">
+                <Users className="w-4 h-4" />
+                {pick.bookmakers_count} bookmakers
+              </span>
             </div>
             
-            {/* 機率進度條 */}
-            <div className="mb-4">
-              <div className="h-2 bg-slate-800 rounded-full overflow-hidden">
-                <div 
-                  className={`
-                    h-full rounded-full transition-all duration-500
-                    ${level === "high"
-                      ? "bg-gradient-to-r from-emerald-500 to-emerald-400"
-                      : "bg-gradient-to-r from-amber-500 to-amber-400"
-                    }
-                  `}
-                  style={{ width: `${pick.probability * 100}%` }}
-                />
-              </div>
-            </div>
-            
-            {/* 底部資訊 */}
-            <div className="flex items-center justify-between text-xs text-slate-500">
-              <div className="flex items-center gap-4">
-                <span className="flex items-center gap-1">
-                  <BarChart3 className="w-3.5 h-3.5" />
-                  {pick.n_games} 場樣本
-                </span>
-                <span className="flex items-center gap-1">
-                  <Users className="w-3.5 h-3.5" />
-                  {pick.bookmakers_count} 家博彩公司
-                </span>
-              </div>
-              
-              <ChevronRight className="w-4 h-4 text-slate-600 group-hover:text-slate-400 transition-colors" />
-            </div>
+            <ChevronRight className="w-5 h-5 text-gray group-hover:text-red transition-colors" />
           </div>
         </div>
       </Link>
@@ -178,20 +161,20 @@ function PickCard({ pick, index }: { pick: DailyPick; index: number }) {
 }
 
 /**
- * 載入骨架屏
+ * Loading skeleton
  */
 function PickSkeleton() {
   return (
-    <div className="rounded-2xl p-5 border border-slate-800/50 bg-slate-900/40">
-      <div className="flex items-center gap-3 mb-4">
-        <div className="w-10 h-10 skeleton rounded-xl" />
+    <div className="card">
+      <div className="flex items-center gap-4 mb-4">
+        <div className="w-10 h-10 skeleton rounded-lg" />
         <div className="flex-1">
           <div className="h-5 w-32 skeleton mb-2" />
           <div className="h-4 w-48 skeleton" />
         </div>
       </div>
       <div className="flex items-center justify-between mb-4">
-        <div className="h-8 w-36 skeleton rounded-lg" />
+        <div className="h-10 w-36 skeleton rounded-lg" />
         <div className="h-8 w-16 skeleton" />
       </div>
       <div className="h-2 skeleton rounded-full mb-4" />
@@ -204,7 +187,7 @@ function PickSkeleton() {
 }
 
 /**
- * 統計卡片
+ * Stat card
  */
 function StatCard({ 
   icon: Icon, 
@@ -218,16 +201,16 @@ function StatCard({
   subValue?: string;
 }) {
   return (
-    <div className="bg-slate-900/30 border border-slate-800/50 rounded-xl p-4">
-      <div className="flex items-center gap-3">
-        <div className="w-10 h-10 rounded-lg bg-slate-800/50 flex items-center justify-center">
-          <Icon className="w-5 h-5 text-slate-400" />
+    <div className="card">
+      <div className="flex items-center gap-4">
+        <div className="w-12 h-12 rounded-lg bg-red flex items-center justify-center">
+          <Icon className="w-6 h-6 text-white" />
         </div>
         <div>
-          <p className="text-sm text-slate-500">{label}</p>
-          <p className="text-xl font-bold text-slate-100">{value}</p>
+          <p className="text-sm text-gray font-medium">{label}</p>
+          <p className="text-2xl font-bold text-dark">{value}</p>
           {subValue && (
-            <p className="text-xs text-slate-500">{subValue}</p>
+            <p className="text-xs text-gray">{subValue}</p>
           )}
         </div>
       </div>
@@ -236,14 +219,14 @@ function StatCard({
 }
 
 /**
- * 主頁面元件
+ * Main page component
  */
 export default function PicksPage() {
   const todayString = getTodayString();
   const [selectedDate, setSelectedDate] = useState(todayString);
   const [isTriggering, setIsTriggering] = useState(false);
+  const queryClient = useQueryClient();
   
-  // 使用 React Query 獲取數據
   const {
     data,
     isLoading,
@@ -256,113 +239,121 @@ export default function PicksPage() {
     queryFn: async () => {
       return await getDailyPicks({ date: selectedDate });
     },
-    staleTime: 5 * 60 * 1000, // 5 分鐘
+    staleTime: 5 * 60 * 1000,
     refetchOnWindowFocus: false,
   });
   
-  // 手動觸發分析
+  const handleRefresh = useCallback(async () => {
+    await queryClient.invalidateQueries({ 
+      queryKey: ["daily-picks", selectedDate] 
+    });
+    await refetch();
+  }, [selectedDate, refetch, queryClient]);
+  
   const handleTriggerAnalysis = useCallback(async () => {
     setIsTriggering(true);
     try {
       await triggerDailyAnalysis(selectedDate);
+      await queryClient.invalidateQueries({ 
+        queryKey: ["daily-picks", selectedDate] 
+      });
       await refetch();
     } catch (e) {
-      console.error("觸發分析失敗:", e);
+      console.error("Failed to trigger analysis:", e);
     } finally {
       setIsTriggering(false);
     }
-  }, [selectedDate, refetch]);
+  }, [selectedDate, refetch, queryClient]);
   
   const dateTitle = getDateDisplayTitle(selectedDate);
   const picks = data?.picks || [];
   const stats = data?.stats;
   
-  // 統計高機率數量
-  const highProbCount = picks.filter(p => p.probability >= 0.70).length;
-  const mediumProbCount = picks.filter(p => p.probability >= 0.65 && p.probability < 0.70).length;
+  const highProbCount = picks.filter((p: DailyPick) => p.probability >= 0.70).length;
+  const mediumProbCount = picks.filter((p: DailyPick) => p.probability >= 0.65 && p.probability < 0.70).length;
   
   return (
-    <div className="min-h-screen">
-      {/* 頁面背景裝飾 */}
-      <div className="fixed inset-0 overflow-hidden pointer-events-none">
-        <div className="absolute top-20 left-1/4 w-96 h-96 bg-emerald-500/5 rounded-full blur-3xl" />
-        <div className="absolute bottom-20 right-1/4 w-96 h-96 bg-amber-500/5 rounded-full blur-3xl" />
-      </div>
-
-      <div className="relative max-w-6xl mx-auto px-6 py-10 page-enter">
-        {/* 頁面標題區 */}
-        <div className="text-center mb-10">
-          <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-sm font-medium mb-4">
-            <Target className="w-4 h-4" />
-            <span>AI 自動分析</span>
+    <div className="min-h-screen page-enter">
+      <div className="max-w-6xl mx-auto px-6 py-12">
+        {/* Page title section */}
+        <div className="text-center mb-16">
+          <div className="inline-block mb-6">
+            <span className="badge-danger">
+              <Target className="w-3.5 h-3.5 mr-1.5" />
+              AI Auto Analysis
+            </span>
           </div>
-          <h1 className="text-4xl md:text-5xl font-bold mb-4">
-            <span className="text-gradient">每日精選</span>
+          
+          <h1 className="hero-title mb-4">
+            Daily <span className="text-red">Picks</span>
           </h1>
-          <p className="text-slate-400 text-lg max-w-md mx-auto">
-            基於歷史數據，自動篩選發生機率超過 65% 的高價值投注選擇
+          
+          <div className="accent-line mx-auto mb-6" />
+          
+          <p className="text-lg text-gray max-w-lg mx-auto">
+            Automatically filter high-value betting options with over 65% probability based on historical data
           </p>
         </div>
 
-        {/* 日期選擇區 */}
-        <div className="card-glass mb-8 py-5">
+        {/* Date selection section */}
+        <div className="card mb-10">
           <DatePicker
             value={selectedDate}
             onChange={setSelectedDate}
           />
         </div>
 
-        {/* 統計卡片區 */}
+        {/* Stats cards section */}
         {!isLoading && stats && (
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-10">
             <StatCard 
               icon={Target}
-              label="高機率選擇"
+              label="High Probability Picks"
               value={picks.length}
-              subValue={`${highProbCount} 個 ≥70%`}
+              subValue={`${highProbCount} ≥70%`}
             />
             <StatCard 
               icon={Calendar}
-              label="分析賽事"
+              label="Events Analyzed"
               value={stats.total_events}
-              subValue="場比賽"
+              subValue="games"
             />
             <StatCard 
               icon={Users}
-              label="分析球員"
+              label="Players Analyzed"
               value={stats.total_players}
-              subValue="位球員"
+              subValue="players"
             />
             <StatCard 
               icon={Clock}
-              label="分析耗時"
+              label="Analysis Time"
               value={`${stats.analysis_duration_seconds.toFixed(1)}s`}
               subValue={data?.analyzed_at ? new Date(data.analyzed_at).toLocaleTimeString() : ""}
             />
           </div>
         )}
 
-        {/* 操作區 */}
-        <div className="flex items-center justify-between mb-6">
-          <div className="flex items-center gap-3">
-            <h2 className="text-2xl font-bold text-slate-100">
-              {dateTitle}的精選
+        {/* Actions section */}
+        <div className="flex items-center justify-between mb-8">
+          <div className="flex items-center gap-4">
+            <h2 className="text-2xl font-bold text-dark">
+              {dateTitle} Picks
             </h2>
             {!isLoading && (
-              <span className="px-3 py-1 rounded-full bg-slate-800 text-slate-400 text-sm font-medium">
-                {picks.length} 個選擇
+              <span className="badge-neutral">
+                {picks.length} picks
               </span>
             )}
           </div>
           
           <div className="flex items-center gap-3">
             <button
-              onClick={() => refetch()}
+              onClick={handleRefresh}
               disabled={isFetching}
               className="btn-refresh"
             >
               <RefreshCw className={`w-4 h-4 ${isFetching ? "animate-spin" : ""}`} />
-              <span>重新整理</span>
+              <span>Refresh</span>
             </button>
             
             <button
@@ -371,35 +362,37 @@ export default function PicksPage() {
               className="btn-primary flex items-center gap-2"
             >
               <Zap className={`w-4 h-4 ${isTriggering ? "animate-pulse" : ""}`} />
-              <span>{isTriggering ? "分析中..." : "重新分析"}</span>
+              <span>{isTriggering ? "Analyzing..." : "Re-analyze"}</span>
             </button>
           </div>
         </div>
 
-        {/* 錯誤提示 */}
+        {/* Error message */}
         {isError && (
-          <div className="card mb-6 border-red-800/50 bg-red-900/10">
-            <div className="flex items-start gap-3">
-              <AlertCircle className="w-6 h-6 text-red-400 shrink-0 mt-0.5" />
+          <div className="card mb-8 border-red">
+            <div className="flex items-start gap-4">
+              <div className="w-10 h-10 rounded-lg bg-red flex items-center justify-center shrink-0">
+                <AlertCircle className="w-5 h-5 text-white" />
+              </div>
               <div>
-                <h3 className="font-semibold text-red-300 mb-1">
-                  載入失敗
+                <h3 className="font-bold text-dark mb-1">
+                  Load Failed
                 </h3>
-                <p className="text-slate-400 text-sm">
-                  {error instanceof Error ? error.message : "無法取得分析資料，請稍後再試"}
+                <p className="text-gray text-sm mb-3">
+                  {error instanceof Error ? error.message : "Unable to fetch analysis data, please try again later"}
                 </p>
                 <button
                   onClick={() => refetch()}
-                  className="mt-3 text-sm text-blue-400 hover:text-blue-300 transition-colors"
+                  className="text-sm font-bold text-red hover:underline"
                 >
-                  點擊重試
+                  Click to retry →
                 </button>
               </div>
             </div>
           </div>
         )}
 
-        {/* 載入中狀態 */}
+        {/* Loading state */}
         {isLoading && (
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {[...Array(6)].map((_, i) => (
@@ -408,17 +401,17 @@ export default function PicksPage() {
           </div>
         )}
 
-        {/* 無數據狀態 */}
+        {/* No data state */}
         {!isLoading && picks.length === 0 && (
-          <div className="card-glass text-center py-16">
-            <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-slate-800/50 flex items-center justify-center">
-              <TrendingUp className="w-8 h-8 text-slate-500" />
+          <div className="card text-center py-16">
+            <div className="w-20 h-20 mx-auto mb-6 rounded-full border-2 border-dark/20 flex items-center justify-center">
+              <TrendingUp className="w-10 h-10 text-gray" />
             </div>
-            <h3 className="text-xl font-semibold text-slate-300 mb-2">
-              尚無高機率選擇
+            <h3 className="text-2xl font-bold text-dark mb-3">
+              No High Probability Picks
             </h3>
-            <p className="text-slate-500 mb-6 max-w-md mx-auto">
-              {data?.message || "今日沒有找到發生機率超過 65% 的投注選擇，或數據尚未分析完成"}
+            <p className="text-gray mb-8 max-w-md mx-auto">
+              {data?.message || "No betting options with over 65% probability found today, or data analysis is not yet complete"}
             </p>
             <button
               onClick={handleTriggerAnalysis}
@@ -426,33 +419,33 @@ export default function PicksPage() {
               className="btn-primary"
             >
               <Zap className="w-4 h-4 mr-2" />
-              {isTriggering ? "分析中..." : "立即分析"}
+              {isTriggering ? "Analyzing..." : "Analyze Now"}
             </button>
           </div>
         )}
 
-        {/* 精選列表 */}
+        {/* Picks list */}
         {!isLoading && picks.length > 0 && (
           <>
-            {/* 分組：高機率 (>=70%) */}
+            {/* High probability (>=70%) */}
             {highProbCount > 0 && (
-              <div className="mb-8">
-                <div className="flex items-center gap-2 mb-4">
-                  <div className="w-8 h-8 rounded-lg bg-emerald-500/20 flex items-center justify-center">
-                    <Flame className="w-4 h-4 text-emerald-400" />
+              <div className="mb-10">
+                <div className="flex items-center gap-3 mb-6">
+                  <div className="w-10 h-10 rounded-lg bg-green-500 flex items-center justify-center">
+                    <Flame className="w-5 h-5 text-white" />
                   </div>
-                  <h3 className="text-lg font-semibold text-slate-200">
-                    高信心選擇
-                    <span className="text-emerald-400 ml-2">≥70%</span>
+                  <h3 className="text-xl font-bold text-dark">
+                    High Confidence Picks
+                    <span className="text-green-500 ml-2">≥70%</span>
                   </h3>
-                  <span className="px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-400 text-xs font-medium">
+                  <span className="badge-success">
                     {highProbCount}
                   </span>
                 </div>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   {picks
-                    .filter(p => p.probability >= 0.70)
-                    .map((pick, index) => (
+                    .filter((p: DailyPick) => p.probability >= 0.70)
+                    .map((pick: DailyPick, index: number) => (
                       <PickCard key={`${pick.player_name}-${pick.metric}`} pick={pick} index={index} />
                     ))
                   }
@@ -460,25 +453,25 @@ export default function PicksPage() {
               </div>
             )}
 
-            {/* 分組：中等機率 (65-70%) */}
+            {/* Medium probability (65-70%) */}
             {mediumProbCount > 0 && (
               <div>
-                <div className="flex items-center gap-2 mb-4">
-                  <div className="w-8 h-8 rounded-lg bg-amber-500/20 flex items-center justify-center">
-                    <TrendingUp className="w-4 h-4 text-amber-400" />
+                <div className="flex items-center gap-3 mb-6">
+                  <div className="w-10 h-10 rounded-lg bg-yellow flex items-center justify-center">
+                    <TrendingUp className="w-5 h-5 text-dark" />
                   </div>
-                  <h3 className="text-lg font-semibold text-slate-200">
-                    中等信心選擇
-                    <span className="text-amber-400 ml-2">65-70%</span>
+                  <h3 className="text-xl font-bold text-dark">
+                    Medium Confidence Picks
+                    <span className="text-yellow ml-2">65-70%</span>
                   </h3>
-                  <span className="px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-400 text-xs font-medium">
+                  <span className="badge-warning">
                     {mediumProbCount}
                   </span>
                 </div>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   {picks
-                    .filter(p => p.probability >= 0.65 && p.probability < 0.70)
-                    .map((pick, index) => (
+                    .filter((p: DailyPick) => p.probability >= 0.65 && p.probability < 0.70)
+                    .map((pick: DailyPick, index: number) => (
                       <PickCard key={`${pick.player_name}-${pick.metric}`} pick={pick} index={index} />
                     ))
                   }
@@ -488,16 +481,16 @@ export default function PicksPage() {
           </>
         )}
 
-        {/* 底部說明 */}
-        <div className="mt-12 text-center">
-          <p className="text-sm text-slate-500 max-w-lg mx-auto">
-            機率基於歷史數據計算，僅供參考。門檻值取自所有博彩公司的眾數。
+        {/* Bottom note */}
+        <div className="mt-16 text-center">
+          <div className="divider-light mb-8" />
+          <p className="text-sm text-gray max-w-lg mx-auto">
+            Probabilities are calculated based on historical data, for reference only. Threshold values are taken from the mode of all bookmakers.
             <br />
-            點擊任一選擇可查看詳細歷史數據和分析。
+            Click any pick to view detailed historical data and analysis.
           </p>
         </div>
       </div>
     </div>
   );
 }
-

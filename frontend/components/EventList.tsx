@@ -1,90 +1,95 @@
 /**
- * EventList.tsx - 賽事列表元件
+ * EventList.tsx - Minimal Events List Component
  * 
- * 顯示 NBA 賽事的列表
- * 每個賽事以卡片形式呈現，可點擊進入詳情頁
- * 
- * 功能：
- * - 顯示主客隊名稱
- * - 顯示比賽時間（本地時間）
- * - 點擊進入計算頁面
+ * Design Philosophy:
+ * - White cards with black borders
+ * - Clear typography
+ * - Red VS badge as visual focus
+ * - Border turns red on hover
  */
 
 "use client";
 
 import Link from "next/link";
-import { Clock, ChevronRight } from "lucide-react";
+import { Clock, ChevronRight, CalendarOff } from "lucide-react";
 import { type NBAEvent } from "@/lib/schemas";
-import { formatGameTime, cn } from "@/lib/utils";
+import { formatGameTime } from "@/lib/utils";
+import { TeamLogo } from "./TeamLogo";
 
-/**
- * EventList Props
- * 
- * @property events - 賽事陣列
- * @property isLoading - 是否正在載入
- */
 interface EventListProps {
   events: NBAEvent[];
   isLoading?: boolean;
 }
 
 /**
- * 單一賽事卡片元件
- * 
- * 顯示一場比賽的資訊
+ * Single event card component
  */
-function EventCard({ event, index }: { event: NBAEvent; index: number }) {
+function EventCard({ event }: { event: NBAEvent }) {
   return (
     <Link
       href={`/event/${event.event_id}`}
       className="group block"
     >
       <div className="card-game">
-        {/* 主要內容 */}
-        <div className="flex items-center gap-4">
-          {/* 左側：客隊 */}
+        {/* Main content */}
+        <div className="flex items-center gap-4 w-full">
+          {/* Left: Away team */}
           <div className="flex-1 text-center">
-            <div className="inline-flex items-center justify-center w-10 h-10 rounded-xl bg-gradient-to-br from-slate-700 to-slate-800 mb-2 group-hover:from-blue-600/20 group-hover:to-blue-700/20 transition-all">
-              <span className="text-lg">🏀</span>
+            <div className="flex flex-col items-center py-4">
+              <div className="h-12 flex items-center justify-center mb-3">
+                <TeamLogo 
+                  teamName={event.away_team} 
+                  size={44} 
+                  className="group-hover:scale-105 transition-transform"
+                />
+              </div>
+              <p className="text-base font-bold text-dark">
+                {event.away_team}
+              </p>
+              <p className="text-xs text-gray font-medium uppercase tracking-wide mt-1">
+                Away
+              </p>
             </div>
-            <p className="text-base font-bold text-slate-100 group-hover:text-white transition-colors">
-              {event.away_team}
-            </p>
-            <p className="text-xs text-slate-500 mt-0.5">客場</p>
           </div>
           
-          {/* 中間：VS 和時間 */}
-          <div className="flex flex-col items-center gap-2 px-4">
-            {/* VS 標籤 */}
-            <div className="relative">
-              <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-amber-500/20 to-orange-600/20 border border-amber-500/30 flex items-center justify-center group-hover:from-amber-500/30 group-hover:to-orange-600/30 group-hover:border-amber-500/50 transition-all">
-                <span className="text-xl font-black text-amber-400 group-hover:text-amber-300">VS</span>
-              </div>
-              {/* 發光效果 */}
-              <div className="absolute inset-0 rounded-2xl bg-amber-500/10 blur-xl opacity-0 group-hover:opacity-100 transition-opacity" />
+          {/* Center: VS and time */}
+          <div className="flex flex-col items-center gap-3 px-2">
+            {/* VS badge - red square */}
+            <div className="vs-badge">
+              VS
             </div>
             
-            {/* 比賽時間 */}
-            <div className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-slate-800/80">
-              <Clock className="w-3.5 h-3.5 text-slate-500" />
-              <span className="text-sm font-mono text-slate-400">{formatGameTime(event.commence_time)}</span>
+            {/* Game time */}
+            <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-full border-2 border-dark/20">
+              <Clock className="w-3.5 h-3.5 text-gray" />
+              <span className="text-sm font-mono font-semibold text-dark">
+                {formatGameTime(event.commence_time)}
+              </span>
             </div>
           </div>
           
-          {/* 右側：主隊 */}
+          {/* Right: Home team */}
           <div className="flex-1 text-center">
-            <div className="inline-flex items-center justify-center w-10 h-10 rounded-xl bg-gradient-to-br from-slate-700 to-slate-800 mb-2 group-hover:from-orange-600/20 group-hover:to-orange-700/20 transition-all">
-              <span className="text-lg">🏀</span>
+            <div className="flex flex-col items-center py-4">
+              <div className="h-12 flex items-center justify-center mb-3">
+                <TeamLogo 
+                  teamName={event.home_team} 
+                  size={44} 
+                  className="group-hover:scale-105 transition-transform"
+                />
+              </div>
+              <p className="text-base font-bold text-dark">
+                {event.home_team}
+              </p>
+              <p className="text-xs text-gray font-medium uppercase tracking-wide mt-1">
+                Home
+              </p>
             </div>
-            <p className="text-base font-bold text-slate-100 group-hover:text-white transition-colors">
-              {event.home_team}
-            </p>
-            <p className="text-xs text-slate-500 mt-0.5">主場</p>
           </div>
 
-          {/* 箭頭指示 */}
-          <div className="pl-2 opacity-0 group-hover:opacity-100 transition-all group-hover:translate-x-1">
-            <ChevronRight className="w-5 h-5 text-amber-400" />
+          {/* Arrow indicator */}
+          <div className="pl-2 opacity-0 group-hover:opacity-100 transition-all">
+            <ChevronRight className="w-5 h-5 text-red" />
           </div>
         </div>
       </div>
@@ -93,32 +98,30 @@ function EventCard({ event, index }: { event: NBAEvent; index: number }) {
 }
 
 /**
- * 載入骨架屏
- * 
- * 資料載入中時顯示的佔位元素
+ * Loading skeleton
  */
 function EventSkeleton() {
   return (
-    <div className="card-game">
+    <div className="card">
       <div className="flex items-center gap-4">
-        {/* 左側 */}
-        <div className="flex-1 flex flex-col items-center">
-          <div className="skeleton w-10 h-10 rounded-xl mb-2" />
-          <div className="skeleton h-5 w-28 mb-1" />
-          <div className="skeleton h-3 w-10" />
+        {/* Left */}
+        <div className="flex-1 flex flex-col items-center py-4">
+          <div className="skeleton w-11 h-11 rounded-lg mb-3" />
+          <div className="skeleton h-4 w-24 mb-2" />
+          <div className="skeleton h-3 w-12" />
         </div>
         
-        {/* 中間 */}
-        <div className="flex flex-col items-center gap-2 px-4">
-          <div className="skeleton w-14 h-14 rounded-2xl" />
+        {/* Center */}
+        <div className="flex flex-col items-center gap-3 px-2">
+          <div className="skeleton w-12 h-12 rounded-lg" />
           <div className="skeleton h-6 w-16 rounded-full" />
         </div>
         
-        {/* 右側 */}
-        <div className="flex-1 flex flex-col items-center">
-          <div className="skeleton w-10 h-10 rounded-xl mb-2" />
-          <div className="skeleton h-5 w-28 mb-1" />
-          <div className="skeleton h-3 w-10" />
+        {/* Right */}
+        <div className="flex-1 flex flex-col items-center py-4">
+          <div className="skeleton w-11 h-11 rounded-lg mb-3" />
+          <div className="skeleton h-4 w-24 mb-2" />
+          <div className="skeleton h-3 w-12" />
         </div>
       </div>
     </div>
@@ -127,11 +130,9 @@ function EventSkeleton() {
 
 /**
  * EventList 元件
- * 
- * 顯示賽事列表
  */
 export function EventList({ events, isLoading }: EventListProps) {
-  // 載入中狀態
+  // Loading state
   if (isLoading) {
     return (
       <div className="grid gap-4 md:grid-cols-2">
@@ -142,22 +143,26 @@ export function EventList({ events, isLoading }: EventListProps) {
     );
   }
 
-  // 沒有賽事
+  // No events
   if (events.length === 0) {
     return (
-      <div className="card-glass text-center py-16">
-        <div className="text-7xl mb-6">🏀</div>
-        <h3 className="text-2xl font-bold text-slate-200 mb-3">
-          今天沒有比賽
+      <div className="card text-center py-16">
+        <div className="mb-6 flex justify-center">
+          <div className="w-20 h-20 rounded-full border-2 border-dark/20 flex items-center justify-center">
+            <CalendarOff className="w-10 h-10 text-gray" />
+          </div>
+        </div>
+        <h3 className="text-2xl font-bold text-dark mb-3">
+          No Games Today
         </h3>
-        <p className="text-slate-500">
-          請選擇其他日期查看賽事
+        <p className="text-gray">
+          Please select another date to view events
         </p>
       </div>
     );
   }
 
-  // 顯示賽事列表（雙欄佈局）
+  // Display events list
   return (
     <div className="grid gap-4 md:grid-cols-2">
       {events.map((event, index) => (
@@ -166,10 +171,9 @@ export function EventList({ events, isLoading }: EventListProps) {
           className="animate-fade-in"
           style={{ animationDelay: `${index * 50}ms` }}
         >
-          <EventCard event={event} index={index} />
+          <EventCard event={event} />
         </div>
       ))}
     </div>
   );
 }
-

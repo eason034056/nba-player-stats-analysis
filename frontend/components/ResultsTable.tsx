@@ -1,11 +1,10 @@
 /**
- * ResultsTable.tsx - 結果表格元件
+ * ResultsTable.tsx - Results Table Component (Minimal Design)
  * 
- * 顯示去水機率計算結果
- * 包含：
- * - 各博彩公司的賠率和機率
- * - 市場共識
- * - 資料視覺化
+ * Design Philosophy:
+ * - White table with black borders
+ * - Red/yellow accents for data highlights
+ * - Clean, easy-to-read layout
  */
 
 "use client";
@@ -21,21 +20,13 @@ import {
   cn,
 } from "@/lib/utils";
 
-/**
- * ResultsTable Props
- * 
- * @property data - 計算結果資料
- * @property isLoading - 是否正在載入
- */
 interface ResultsTableProps {
   data: NoVigResponse | null;
   isLoading?: boolean;
 }
 
 /**
- * 機率長條圖元件
- * 
- * 視覺化顯示機率值
+ * Probability Bar
  */
 function ProbabilityBar({ 
   probability, 
@@ -47,11 +38,11 @@ function ProbabilityBar({
   const percentage = probability * 100;
   
   return (
-    <div className="relative w-24 h-2 bg-slate-800 rounded-full overflow-hidden">
+    <div className="relative w-24 h-2 bg-dark/10 rounded-full overflow-hidden">
       <div
         className={cn(
           "absolute left-0 top-0 h-full rounded-full transition-all duration-500",
-          color === "blue" ? "bg-blue-500" : "bg-amber-500"
+          color === "blue" ? "bg-blue-500" : "bg-yellow"
         )}
         style={{ width: `${percentage}%` }}
       />
@@ -60,71 +51,68 @@ function ProbabilityBar({
 }
 
 /**
- * 單行結果元件
- * 
- * 顯示一家博彩公司的資料
+ * Single Result Row
  */
 function ResultRow({ result }: { result: BookmakerResult }) {
-  // 判斷水錢高低
-  const isHighVig = result.vig > 0.06; // 6% 以上算高
-  const isLowVig = result.vig < 0.04;  // 4% 以下算低
+  const isHighVig = result.vig > 0.06;
+  const isLowVig = result.vig < 0.04;
 
   return (
-    <tr className="group">
-      {/* 博彩公司名稱 */}
-      <td className="font-medium text-slate-200">
+    <tr className="group hover:bg-cream transition-colors">
+      {/* Bookmaker name */}
+      <td className="font-semibold text-dark">
         {getBookmakerDisplayName(result.bookmaker)}
       </td>
 
-      {/* 門檻 Line */}
-      <td className="font-mono text-lg text-amber-400">
+      {/* Line */}
+      <td className="font-mono text-lg text-red font-bold">
         {result.line}
       </td>
 
-      {/* Over 賠率 */}
-      <td className="font-mono">
+      {/* Over odds */}
+      <td className="font-mono font-semibold">
         <span className={cn(
-          result.over_odds < 0 ? "text-red-400" : "text-green-400"
+          result.over_odds < 0 ? "text-red" : "text-green-600"
         )}>
           {formatAmericanOdds(result.over_odds)}
         </span>
       </td>
 
-      {/* Under 賠率 */}
-      <td className="font-mono">
+      {/* Under odds */}
+      <td className="font-mono font-semibold">
         <span className={cn(
-          result.under_odds < 0 ? "text-red-400" : "text-green-400"
+          result.under_odds < 0 ? "text-red" : "text-green-600"
         )}>
           {formatAmericanOdds(result.under_odds)}
         </span>
       </td>
 
-      {/* 水錢 */}
+      {/* Vig */}
       <td>
         <span className={cn(
-          "badge",
-          isHighVig && "badge-danger",
-          isLowVig && "badge-success",
-          !isHighVig && !isLowVig && "badge-warning"
+          "inline-flex items-center px-2.5 py-1 rounded-full text-xs font-bold",
+          isHighVig && "bg-red text-white",
+          isLowVig && "bg-green-500 text-white",
+          !isHighVig && !isLowVig && "bg-yellow text-dark"
         )}>
           {formatVig(result.vig)}
         </span>
       </td>
 
-      {/* Over 去水機率 */}
+      {/* Over probability */}
       <td>
         <div className="flex items-center gap-2">
-          <span className="font-mono text-blue-400 w-16">
+          <span className="font-mono text-blue-600 font-bold w-16">
             {formatProbability(result.p_over_fair)}
           </span>
           <ProbabilityBar probability={result.p_over_fair} color="blue" />
         </div>
       </td>
 
-      {/* Under 去水機率 */}
+      {/* Under probability */}
       <td>
         <div className="flex items-center gap-2">
-          <span className="font-mono text-amber-400 w-16">
+          <span className="font-mono text-yellow font-bold w-16">
             {formatProbability(result.p_under_fair)}
           </span>
           <ProbabilityBar probability={result.p_under_fair} color="amber" />
@@ -135,9 +123,7 @@ function ResultRow({ result }: { result: BookmakerResult }) {
 }
 
 /**
- * 共識區塊元件
- * 
- * 顯示市場共識
+ * Consensus Block
  */
 function ConsensusBlock({ 
   consensus 
@@ -147,47 +133,49 @@ function ConsensusBlock({
   if (!consensus) return null;
 
   return (
-    <div className="card mt-6 bg-gradient-to-r from-blue-900/20 to-purple-900/20 border-blue-800/50">
+    <div className="card mt-6 border-red">
       <div className="flex items-center gap-2 mb-4">
-        <Calculator className="w-5 h-5 text-blue-400" />
-        <h3 className="text-lg font-semibold text-slate-100">
-          市場共識
+        <div className="w-8 h-8 rounded-lg bg-red flex items-center justify-center">
+          <Calculator className="w-4 h-4 text-white" />
+        </div>
+        <h3 className="text-lg font-bold text-dark">
+          Market Consensus
         </h3>
-        <span className="text-xs text-slate-500">
-          ({consensus.method === "mean" ? "平均法" : "加權法"})
+        <span className="text-xs text-gray font-medium">
+          ({consensus.method === "mean" ? "Mean Method" : "Weighted Method"})
         </span>
       </div>
 
-      <div className="grid grid-cols-2 gap-6">
-        {/* Over 共識 */}
-        <div className="bg-slate-900/50 rounded-lg p-4">
+      <div className="grid grid-cols-2 gap-4">
+        {/* Over */}
+        <div className="bg-blue-50 rounded-lg p-4 border-2 border-blue-200">
           <div className="flex items-center gap-2 mb-2">
-            <TrendingUp className="w-4 h-4 text-blue-400" />
-            <span className="text-sm text-slate-400">Over</span>
+            <TrendingUp className="w-4 h-4 text-blue-600" />
+            <span className="text-sm text-blue-600 font-semibold">Over</span>
           </div>
-          <p className="text-3xl font-mono font-bold text-blue-400">
+          <p className="text-3xl font-mono font-bold text-blue-600">
             {formatProbability(consensus.p_over_fair)}
           </p>
-          <div className="mt-2 w-full bg-slate-800 rounded-full h-2">
+          <div className="mt-2 w-full bg-blue-200 rounded-full h-2">
             <div
-              className="bg-blue-500 h-full rounded-full transition-all duration-500"
+              className="bg-blue-600 h-full rounded-full transition-all duration-500"
               style={{ width: `${consensus.p_over_fair * 100}%` }}
             />
           </div>
         </div>
 
-        {/* Under 共識 */}
-        <div className="bg-slate-900/50 rounded-lg p-4">
+        {/* Under */}
+        <div className="bg-yellow/20 rounded-lg p-4 border-2 border-yellow">
           <div className="flex items-center gap-2 mb-2">
-            <TrendingDown className="w-4 h-4 text-amber-400" />
-            <span className="text-sm text-slate-400">Under</span>
+            <TrendingDown className="w-4 h-4 text-dark" />
+            <span className="text-sm text-dark font-semibold">Under</span>
           </div>
-          <p className="text-3xl font-mono font-bold text-amber-400">
+          <p className="text-3xl font-mono font-bold text-dark">
             {formatProbability(consensus.p_under_fair)}
           </p>
-          <div className="mt-2 w-full bg-slate-800 rounded-full h-2">
+          <div className="mt-2 w-full bg-yellow/50 rounded-full h-2">
             <div
-              className="bg-amber-500 h-full rounded-full transition-all duration-500"
+              className="bg-yellow h-full rounded-full transition-all duration-500"
               style={{ width: `${consensus.p_under_fair * 100}%` }}
             />
           </div>
@@ -198,7 +186,7 @@ function ConsensusBlock({
 }
 
 /**
- * 載入骨架屏
+ * Loading Skeleton
  */
 function TableSkeleton() {
   return (
@@ -233,32 +221,29 @@ function TableSkeleton() {
 }
 
 /**
- * ResultsTable 元件
- * 
- * 顯示去水機率計算結果
+ * ResultsTable Component
  */
 export function ResultsTable({ data, isLoading }: ResultsTableProps) {
-  // 載入中
   if (isLoading) {
     return <TableSkeleton />;
   }
 
-  // 無資料
   if (!data) {
     return null;
   }
 
-  // 有錯誤訊息
   if (data.message && data.results.length === 0) {
     return (
-      <div className="card border-amber-800/50 bg-amber-900/10">
-        <div className="flex items-start gap-3">
-          <AlertCircle className="w-6 h-6 text-amber-400 shrink-0 mt-0.5" />
+      <div className="card border-yellow">
+        <div className="flex items-start gap-4">
+          <div className="w-10 h-10 rounded-lg bg-yellow flex items-center justify-center shrink-0">
+            <AlertCircle className="w-5 h-5 text-dark" />
+          </div>
           <div>
-            <h3 className="font-semibold text-amber-300 mb-1">
-              找不到資料
+            <h3 className="font-bold text-dark mb-1">
+              No Data Found
             </h3>
-            <p className="text-slate-400 text-sm">
+            <p className="text-gray text-sm">
               {data.message}
             </p>
           </div>
@@ -269,28 +254,28 @@ export function ResultsTable({ data, isLoading }: ResultsTableProps) {
 
   return (
     <div className="animate-fade-in">
-      {/* 標題 */}
+      {/* Title */}
       <div className="flex items-center gap-3 mb-4">
-        <h2 className="text-xl font-semibold text-slate-100">
+        <h2 className="text-xl font-bold text-dark">
           {data.player_name}
         </h2>
-        <span className="badge bg-slate-800 text-slate-400">
+        <span className="badge-neutral">
           {getMarketDisplayName(data.market)}
         </span>
       </div>
 
-      {/* 結果表格 */}
+      {/* Table */}
       <div className="table-container">
         <table className="table">
           <thead>
             <tr>
-              <th>博彩公司</th>
+              <th>Bookmaker</th>
               <th>Line</th>
-              <th>Over 賠率</th>
-              <th>Under 賠率</th>
-              <th>水錢</th>
-              <th>Over 機率</th>
-              <th>Under 機率</th>
+              <th>Over Odds</th>
+              <th>Under Odds</th>
+              <th>Vig</th>
+              <th>Over Probability</th>
+              <th>Under Probability</th>
             </tr>
           </thead>
           <tbody>
@@ -301,15 +286,14 @@ export function ResultsTable({ data, isLoading }: ResultsTableProps) {
         </table>
       </div>
 
-      {/* 市場共識 */}
+      {/* Consensus */}
       <ConsensusBlock consensus={data.consensus} />
 
-      {/* 說明 */}
-      <p className="mt-4 text-xs text-slate-500">
-        * 水錢（Vig）越低表示該博彩公司的賠率越接近公平；
-        去水機率是移除水錢後的公平機率估計
+      {/* Note */}
+      <p className="mt-4 text-xs text-gray">
+        * Lower vig indicates the bookmaker's odds are closer to fair;
+        No-vig probability is the fair probability estimate after removing vig
       </p>
     </div>
   );
 }
-

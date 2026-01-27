@@ -232,6 +232,7 @@ class DailyPick(BaseModel):
     
     欄位說明：
     - player_name: 球員名稱（例如 "Stephen Curry"）
+    - player_team: 球員所屬球隊（簡短名稱，如 "Lakers", "Warriors"）
     - event_id: 賽事 ID，用於連結到詳細頁面
     - home_team / away_team: 主客場球隊
     - commence_time: 比賽開始時間（ISO 8601 格式）
@@ -244,6 +245,7 @@ class DailyPick(BaseModel):
     - all_lines: 所有博彩公司的 line 列表（用於顯示分佈）
     """
     player_name: str = Field(..., description="球員名稱")
+    player_team: str = Field(default="", description="球員所屬球隊（簡短名稱）")
     event_id: str = Field(..., description="賽事 ID")
     home_team: str = Field(..., description="主場球隊")
     away_team: str = Field(..., description="客場球隊")

@@ -1,14 +1,10 @@
 /**
- * PlayerHistoryStats.tsx - 球員歷史數據統計元件
+ * PlayerHistoryStats.tsx - Player History Stats Component (Minimal Design)
  * 
- * 顯示球員在指定指標上的歷史數據統計和視覺化
- * 
- * 功能：
- * - 從 CSV 讀取球員歷史比賽數據
- * - 計算並顯示 Over/Under 經驗機率
- * - 使用 Recharts 繪製時間序列圖表（X軸：日期+對手，Y軸：數值）
- * - 支援對手篩選功能
- * - 在圖表上標記用戶設定的閾值線
+ * Design Philosophy:
+ * - Cream background with clean cards
+ * - Red/yellow/green for data visualization
+ * - Clear, readable charts
  */
 
 "use client";
@@ -37,7 +33,7 @@ import {
   Info,
   Filter,
 } from "lucide-react";
-import { getCSVPlayers, getPlayerHistory } from "@/lib/api";
+import { getCSVPlayers, getPlayerHistory, calculateNoVig } from "@/lib/api";
 import {
   HISTORY_METRICS,
   RECENT_GAMES_OPTIONS,
@@ -47,86 +43,96 @@ import {
 import { cn } from "@/lib/utils";
 
 /**
- * 將博彩公司市場類型映射到歷史數據指標
- * 
- * @param marketKey - 博彩公司市場 key（如 "player_points"）
- * @returns 歷史數據指標 key（如 "points"）
- * 
- * 映射關係：
- * - player_points -> points
- * - player_assists -> assists
- * - player_rebounds -> rebounds
- * - player_points_rebounds_assists -> pra
+ * Map market key to history metric
  */
 function marketToHistoryMetric(marketKey?: string): HistoryMetricKey {
   switch (marketKey) {
-    case "player_points":
-      return "points";
-    case "player_assists":
-      return "assists";
-    case "player_rebounds":
-      return "rebounds";
-    case "player_points_rebounds_assists":
-      return "pra";
-    default:
-      return "points";
+    case "player_points": return "points";
+    case "player_assists": return "assists";
+    case "player_rebounds": return "rebounds";
+    case "player_points_rebounds_assists": return "pra";
+    default: return "points";
   }
 }
 
 /**
- * PlayerHistoryStats Props
- * 
- * @property onPlayerSelect - 當用戶選擇球員時的回調（可選）
- * @property initialPlayer - 初始選擇的球員（可選）
- * @property initialMarket - 初始選擇的市場類型（可選，會自動映射到歷史數據指標）
+ * Map history metric to market key
  */
-interface PlayerHistoryStatsProps {
-  onPlayerSelect?: (playerName: string) => void;
-  initialPlayer?: string;
-  initialMarket?: string;  // 博彩公司的市場 key（如 "player_points"）
+function historyMetricToMarket(metricKey: HistoryMetricKey): string {
+  switch (metricKey) {
+    case "points": return "player_points";
+    case "assists": return "player_assists";
+    case "rebounds": return "player_rebounds";
+    case "pra": return "player_points_rebounds_assists";
+    default: return "player_points";
+  }
 }
 
 /**
- * PlayerHistoryStats 元件
- * 
- * 顯示球員歷史數據統計和時間序列圖表
+ * Calculate mode
+ */
+function calculateMode(numbers: number[]): number | null {
+  if (numbers.length === 0) return null;
+  
+  const counts = new Map<number, number>();
+  for (const num of numbers) {
+    const rounded = Math.round(num * 10) / 10;
+    counts.set(rounded, (counts.get(rounded) || 0) + 1);
+  }
+  
+  const maxCount = Math.max(...Array.from(counts.values()));
+  const modes = Array.from(counts.entries())
+    .filter(([_, count]) => count === maxCount)
+    .map(([value]) => value);
+  
+  if (maxCount === 1) {
+    const sorted = [...numbers].sort((a, b) => a - b);
+    const mid = Math.floor(sorted.length / 2);
+    if (sorted.length % 2 === 0) {
+      return Math.round(((sorted[mid - 1] + sorted[mid]) / 2) * 10) / 10;
+    }
+    return Math.round(sorted[mid] * 10) / 10;
+  }
+  
+  if (modes.length === 1) return modes[0];
+  return Math.round((modes.reduce((a, b) => a + b, 0) / modes.length) * 10) / 10;
+}
+
+interface PlayerHistoryStatsProps {
+  eventId?: string;
+  onPlayerSelect?: (playerName: string) => void;
+  initialPlayer?: string;
+  initialMarket?: string;
+  initialThreshold?: string;
+}
+
+/**
+ * PlayerHistoryStats Component
  */
 export function PlayerHistoryStats({
+  eventId,
   onPlayerSelect,
   initialPlayer = "",
   initialMarket,
+  initialThreshold,
 }: PlayerHistoryStatsProps) {
-  // ==================== 狀態管理 ====================
-  
-  // 球員搜尋輸入
   const [searchInput, setSearchInput] = useState(initialPlayer);
-  
-  // 選擇的球員
   const [selectedPlayer, setSelectedPlayer] = useState(initialPlayer);
-  
-  // 統計指標（預設得分，或從初始市場類型映射）
   const [metric, setMetric] = useState<HistoryMetricKey>(
     marketToHistoryMetric(initialMarket)
   );
-  
-  // 閾值輸入
-  const [threshold, setThreshold] = useState<string>("24.5");
-
-  // 對手篩選（空字串表示全部）
+  const [threshold, setThreshold] = useState<string>(initialThreshold || "24.5");
   const [selectedOpponent, setSelectedOpponent] = useState<string>("");
+  const [isFetchingOdds, setIsFetchingOdds] = useState(false);
 
-  // ==================== 同步外部 props ====================
-  
-  // 當上方選擇的球員改變時，同步到歷史數據分析區
   useEffect(() => {
     if (initialPlayer && initialPlayer !== selectedPlayer) {
       setSelectedPlayer(initialPlayer);
       setSearchInput(initialPlayer);
-      setSelectedOpponent(""); // 重置對手篩選
+      setSelectedOpponent("");
     }
   }, [initialPlayer]);
 
-  // 當上方選擇的市場類型改變時，同步到歷史數據分析區的指標
   useEffect(() => {
     if (initialMarket) {
       const mappedMetric = marketToHistoryMetric(initialMarket);
@@ -136,23 +142,16 @@ export function PlayerHistoryStats({
     }
   }, [initialMarket]);
   
-  // 最近 N 場
   const [recentN, setRecentN] = useState<number>(0);
-  
-  // 下拉選單是否展開
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
 
-  // ==================== API 查詢 ====================
-
-  // 取得所有球員列表（用於搜尋）
   const { data: playersData, isLoading: isLoadingPlayers } = useQuery({
     queryKey: ["csvPlayers", searchInput],
     queryFn: () => getCSVPlayers(searchInput),
     enabled: isDropdownOpen || searchInput.length > 0,
-    staleTime: 60 * 1000, // 60 秒快取
+    staleTime: 60 * 1000,
   });
 
-  // 取得球員歷史統計
   const {
     data: historyData,
     isLoading: isLoadingHistory,
@@ -174,54 +173,90 @@ export function PlayerHistoryStats({
     staleTime: 30 * 1000,
   });
 
-  // ==================== 事件處理 ====================
+  const fetchOddsAndSetThreshold = useCallback(
+    async (playerName: string, metricKey: HistoryMetricKey) => {
+      if (!eventId) return;
+      
+      setIsFetchingOdds(true);
+      
+      try {
+        const marketKey = historyMetricToMarket(metricKey);
+        const result = await calculateNoVig({
+          event_id: eventId,
+          player_name: playerName,
+          market: marketKey,
+          regions: "us",
+          bookmakers: null,
+          odds_format: "american",
+        });
+        
+        if (result.results && result.results.length > 0) {
+          const lines = result.results.map((r) => r.line);
+          const modeValue = calculateMode(lines);
+          
+          if (modeValue !== null) {
+            setThreshold(modeValue.toString());
+          }
+        }
+      } catch (error) {
+        console.log("Unable to fetch odds data, using default threshold");
+      } finally {
+        setIsFetchingOdds(false);
+      }
+    },
+    [eventId]
+  );
 
-  // 選擇球員
   const handleSelectPlayer = useCallback(
     (playerName: string) => {
       setSelectedPlayer(playerName);
       setSearchInput(playerName);
       setIsDropdownOpen(false);
-      setSelectedOpponent(""); // 重置對手篩選
+      setSelectedOpponent("");
       onPlayerSelect?.(playerName);
+      
+      if (eventId) {
+        fetchOddsAndSetThreshold(playerName, metric);
+      }
     },
-    [onPlayerSelect]
+    [onPlayerSelect, eventId, metric, fetchOddsAndSetThreshold]
   );
 
-  // 閾值變更
   const handleThresholdChange = (value: string) => {
     setThreshold(value);
   };
 
-  // 球員列表
+  const handleMetricChange = (newMetric: HistoryMetricKey) => {
+    setMetric(newMetric);
+    if (selectedPlayer && eventId) {
+      fetchOddsAndSetThreshold(selectedPlayer, newMetric);
+    }
+  };
+
   const playerList = playersData?.players || [];
-
-  // 對手列表
   const opponentList = historyData?.opponents || [];
-
-  // Game logs 資料（用於圖表）
   const gameLogs = historyData?.game_logs || [];
-
-  // ==================== 渲染 ====================
 
   return (
     <div className="space-y-6">
-      {/* 標題 */}
-      <div className="flex items-center gap-2 text-amber-400">
-        <BarChart3 className="w-5 h-5" />
-        <h3 className="text-lg font-semibold">歷史數據分析</h3>
+      {/* Title */}
+      <div className="flex items-center gap-3">
+        <div className="w-8 h-8 rounded-lg bg-red flex items-center justify-center">
+          <BarChart3 className="w-4 h-4 text-white" />
+        </div>
+        <h3 className="text-lg font-bold text-dark">Historical Data Analysis</h3>
       </div>
 
-      {/* 球員選擇區 */}
+      {/* Player selection */}
       <div className="space-y-4">
-        {/* 球員搜尋 */}
+        {/* Player search */}
         <div className="relative">
-          <label className="block text-sm font-medium text-slate-300 mb-2">
+          <label className="block text-sm font-bold text-dark mb-2">
             <User className="inline w-4 h-4 mr-1.5" />
-            選擇球員（從 CSV 資料庫）
+            Select Player (from CSV database)
           </label>
           <div className="relative">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-500" />
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray" />
             <input
               type="text"
               value={searchInput}
@@ -230,51 +265,51 @@ export function PlayerHistoryStats({
                 setIsDropdownOpen(true);
               }}
               onFocus={() => setIsDropdownOpen(true)}
-              placeholder="搜尋球員名稱..."
+              placeholder="Search player name..."
               className="input pl-10 w-full"
             />
             {isLoadingPlayers && (
-              <Loader2 className="absolute right-3 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-500 animate-spin" />
+              <Loader2 className="absolute right-3 top-1/2 -translate-y-1/2 w-5 h-5 text-red animate-spin" />
             )}
           </div>
 
-          {/* 下拉選單 */}
+          {/* Dropdown */}
           {isDropdownOpen && playerList.length > 0 && (
-            <ul className="absolute z-50 w-full mt-1 max-h-60 overflow-auto bg-slate-800 border border-slate-700 rounded-lg shadow-xl">
+            <ul className="absolute z-50 w-full mt-2 max-h-60 overflow-auto bg-white border-2 border-dark rounded-lg">
               {playerList.slice(0, 50).map((player) => (
                 <li
                   key={player}
                   onClick={() => handleSelectPlayer(player)}
                   className={cn(
-                    "px-4 py-2.5 cursor-pointer flex items-center gap-3 transition-colors",
+                    "px-4 py-3 cursor-pointer flex items-center gap-3 transition-colors",
                     player === selectedPlayer
-                      ? "bg-amber-600/20 text-amber-300"
-                      : "text-slate-300 hover:bg-slate-700/50"
+                      ? "bg-yellow text-dark"
+                      : "text-dark hover:bg-cream"
                   )}
                 >
-                  <User className="w-4 h-4 text-slate-500" />
-                  <span>{player}</span>
+                  <User className="w-4 h-4 text-gray" />
+                  <span className="font-medium">{player}</span>
                 </li>
               ))}
               {playerList.length > 50 && (
-                <li className="px-4 py-2 text-sm text-slate-500 text-center">
-                  顯示前 50 位，請輸入關鍵字縮小範圍
+                <li className="px-4 py-2 text-sm text-gray text-center">
+                  Showing first 50, please enter keywords to narrow down
                 </li>
               )}
             </ul>
           )}
         </div>
 
-        {/* 選項區：指標 + 閾值 + 場次 + 對手 */}
+        {/* Options: metric + threshold + games + opponent */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-          {/* 統計指標選擇 */}
+          {/* Stat metric */}
           <div>
-            <label className="block text-sm font-medium text-slate-300 mb-2">
-              統計指標
+            <label className="block text-sm font-bold text-dark mb-2">
+              Stat Metric
             </label>
             <select
               value={metric}
-              onChange={(e) => setMetric(e.target.value as HistoryMetricKey)}
+              onChange={(e) => handleMetricChange(e.target.value as HistoryMetricKey)}
               className="input w-full"
             >
               {HISTORY_METRICS.map((m) => (
@@ -285,26 +320,32 @@ export function PlayerHistoryStats({
             </select>
           </div>
 
-          {/* 閾值輸入 */}
+          {/* Threshold */}
           <div>
-            <label className="block text-sm font-medium text-slate-300 mb-2">
+            <label className="block text-sm font-bold text-dark mb-2">
               <Calculator className="inline w-4 h-4 mr-1" />
-              閾值 (Threshold)
+              Threshold
             </label>
-            <input
-              type="number"
-              step="0.5"
-              value={threshold}
-              onChange={(e) => handleThresholdChange(e.target.value)}
-              placeholder="例如 24.5"
-              className="input w-full"
-            />
+            <div className="relative">
+              <input
+                type="number"
+                step="0.5"
+                value={threshold}
+                onChange={(e) => handleThresholdChange(e.target.value)}
+                placeholder="e.g., 24.5"
+                className="input w-full"
+                disabled={isFetchingOdds}
+              />
+              {isFetchingOdds && (
+                <Loader2 className="absolute right-3 top-1/2 -translate-y-1/2 w-5 h-5 text-red animate-spin" />
+              )}
+            </div>
           </div>
 
-          {/* 最近 N 場 */}
+          {/* Game range */}
           <div>
-            <label className="block text-sm font-medium text-slate-300 mb-2">
-              場次範圍
+            <label className="block text-sm font-bold text-dark mb-2">
+              Game Range
             </label>
             <select
               value={recentN}
@@ -319,11 +360,11 @@ export function PlayerHistoryStats({
             </select>
           </div>
 
-          {/* 對手篩選 */}
+          {/* Opponent filter */}
           <div>
-            <label className="block text-sm font-medium text-slate-300 mb-2">
+            <label className="block text-sm font-bold text-dark mb-2">
               <Filter className="inline w-4 h-4 mr-1" />
-              對手篩選
+              Opponent Filter
             </label>
             <select
               value={selectedOpponent}
@@ -331,7 +372,7 @@ export function PlayerHistoryStats({
               className="input w-full"
               disabled={!selectedPlayer || opponentList.length === 0}
             >
-              <option value="">全部對手</option>
+              <option value="">All Opponents</option>
               {opponentList.map((opp) => (
                 <option key={opp} value={opp}>
                   vs {opp}
@@ -342,73 +383,77 @@ export function PlayerHistoryStats({
         </div>
       </div>
 
-      {/* 錯誤提示 */}
+      {/* Error */}
       {isHistoryError && (
-        <div className="p-4 bg-red-900/20 border border-red-800/50 rounded-lg flex items-start gap-3">
-          <AlertCircle className="w-5 h-5 text-red-400 shrink-0 mt-0.5" />
-          <div>
-            <p className="text-red-300 font-medium">載入失敗</p>
-            <p className="text-sm text-slate-400">
-              {historyError instanceof Error
-                ? historyError.message
-                : "無法取得歷史數據"}
-            </p>
+        <div className="card border-red">
+          <div className="flex items-start gap-4">
+            <div className="w-10 h-10 rounded-lg bg-red flex items-center justify-center shrink-0">
+              <AlertCircle className="w-5 h-5 text-white" />
+            </div>
+            <div>
+              <p className="font-bold text-dark">Load Failed</p>
+              <p className="text-sm text-gray">
+                {historyError instanceof Error
+                  ? historyError.message
+                  : "Unable to fetch historical data"}
+              </p>
+            </div>
           </div>
         </div>
       )}
 
-      {/* 結果區域 */}
+      {/* Results */}
       {selectedPlayer && historyData && (
-        <div className="space-y-6 animate-in fade-in-50 duration-300">
-          {/* 機率統計卡片 */}
+        <div className="space-y-6 animate-fade-in">
+          {/* Stats cards */}
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-            {/* Over 機率 */}
-            <div className="p-4 bg-gradient-to-br from-emerald-900/30 to-emerald-800/20 border border-emerald-700/30 rounded-xl">
-              <div className="flex items-center gap-2 text-emerald-400 mb-2">
+            {/* Over probability */}
+            <div className="card bg-green-50 border-green-300">
+              <div className="flex items-center gap-2 text-green-700 mb-2">
                 <TrendingUp className="w-4 h-4" />
-                <span className="text-sm font-medium">Over 機率</span>
+                <span className="text-sm font-bold">Over Probability</span>
               </div>
-              <p className="text-2xl font-bold text-emerald-300">
+              <p className="text-2xl font-bold text-green-600">
                 {historyData.p_over !== null && historyData.p_over !== undefined
                   ? `${(historyData.p_over * 100).toFixed(1)}%`
                   : "N/A"}
               </p>
-              <p className="text-xs text-slate-500 mt-1">
+              <p className="text-xs text-gray mt-1">
                 &gt; {threshold}
               </p>
             </div>
 
-            {/* Under 機率 */}
-            <div className="p-4 bg-gradient-to-br from-rose-900/30 to-rose-800/20 border border-rose-700/30 rounded-xl">
-              <div className="flex items-center gap-2 text-rose-400 mb-2">
+            {/* Under probability */}
+            <div className="card bg-red/5 border-red/30">
+              <div className="flex items-center gap-2 text-red mb-2">
                 <TrendingDown className="w-4 h-4" />
-                <span className="text-sm font-medium">Under 機率</span>
+                <span className="text-sm font-bold">Under Probability</span>
               </div>
-              <p className="text-2xl font-bold text-rose-300">
+              <p className="text-2xl font-bold text-red">
                 {historyData.p_under !== null && historyData.p_under !== undefined
                   ? `${(historyData.p_under * 100).toFixed(1)}%`
                   : "N/A"}
               </p>
-              <p className="text-xs text-slate-500 mt-1">
+              <p className="text-xs text-gray mt-1">
                 &lt; {threshold}
               </p>
             </div>
 
-            {/* 平均值 */}
-            <div className="p-4 bg-slate-800/50 border border-slate-700/50 rounded-xl">
-              <p className="text-sm text-slate-400 mb-1">平均值</p>
-              <p className="text-xl font-semibold text-slate-200">
+            {/* Average */}
+            <div className="card">
+              <p className="text-sm font-bold text-dark mb-1">Average</p>
+              <p className="text-xl font-bold text-dark">
                 {historyData.mean?.toFixed(1) ?? "N/A"}
               </p>
             </div>
 
-            {/* 樣本數 */}
-            <div className="p-4 bg-slate-800/50 border border-slate-700/50 rounded-xl">
-              <p className="text-sm text-slate-400 mb-1">樣本場次</p>
-              <p className="text-xl font-semibold text-slate-200">
-                {historyData.n_games} 場
+            {/* Sample games */}
+            <div className="card">
+              <p className="text-sm font-bold text-dark mb-1">Sample Games</p>
+              <p className="text-xl font-bold text-dark">
+                {historyData.n_games} games
                 {selectedOpponent && (
-                  <span className="text-sm text-slate-500 ml-1">
+                  <span className="text-sm text-gray ml-1">
                     (vs {selectedOpponent})
                   </span>
                 )}
@@ -416,14 +461,14 @@ export function PlayerHistoryStats({
             </div>
           </div>
 
-          {/* 時間序列圖表 - 每場比賽 */}
+          {/* Chart */}
           {gameLogs && gameLogs.length > 0 && (
-            <div className="p-6 bg-slate-800/30 border border-slate-700/50 rounded-xl">
-              <h4 className="text-sm font-medium text-slate-300 mb-4 flex items-center gap-2">
+            <div className="card">
+              <h4 className="text-sm font-bold text-dark mb-4 flex items-center gap-2">
                 <BarChart3 className="w-4 h-4" />
-                {HISTORY_METRICS.find((m) => m.key === metric)?.name} 歷史走勢
+                {HISTORY_METRICS.find((m) => m.key === metric)?.name} Historical Trend
                 {selectedOpponent && (
-                  <span className="text-amber-400 ml-2">(vs {selectedOpponent})</span>
+                  <span className="text-red ml-2">(vs {selectedOpponent})</span>
                 )}
               </h4>
               <div className="h-72 md:h-80">
@@ -434,40 +479,39 @@ export function PlayerHistoryStats({
                   >
                     <XAxis
                       dataKey="date"
-                      tick={{ fill: "#94a3b8", fontSize: 10 }}
-                      axisLine={{ stroke: "#475569" }}
-                      tickLine={{ stroke: "#475569" }}
+                      tick={{ fill: "#6B6B6B", fontSize: 10 }}
+                      axisLine={{ stroke: "#1A1A1A" }}
+                      tickLine={{ stroke: "#1A1A1A" }}
                       angle={-45}
                       textAnchor="end"
                       height={60}
                       tickFormatter={(value, index) => {
                         const log = gameLogs[index];
-                        // 顯示日期 + 對手縮寫
                         const oppAbbr = log?.opponent?.substring(0, 3).toUpperCase() || "";
                         return `${value} ${oppAbbr}`;
                       }}
                     />
                     <YAxis
-                      tick={{ fill: "#94a3b8", fontSize: 12 }}
-                      axisLine={{ stroke: "#475569" }}
-                      tickLine={{ stroke: "#475569" }}
+                      tick={{ fill: "#6B6B6B", fontSize: 12 }}
+                      axisLine={{ stroke: "#1A1A1A" }}
+                      tickLine={{ stroke: "#1A1A1A" }}
                       domain={[0, 'auto']}
                     />
                     <Tooltip
                       contentStyle={{
-                        backgroundColor: "#1e293b",
-                        border: "1px solid #475569",
-                        borderRadius: "12px",
+                        backgroundColor: "#FFFFFF",
+                        border: "2px solid #1A1A1A",
+                        borderRadius: "8px",
                         padding: "12px",
-                        color: "#e2e8f0",
+                        color: "#1A1A1A",
                       }}
                       labelStyle={{
-                        color: "#f1f5f9",
-                        fontWeight: "600",
+                        color: "#1A1A1A",
+                        fontWeight: "700",
                         marginBottom: "8px",
                       }}
                       itemStyle={{
-                        color: "#e2e8f0",
+                        color: "#1A1A1A",
                       }}
                       formatter={(value, name, props) => {
                         const log = props.payload as any;
@@ -476,23 +520,23 @@ export function PlayerHistoryStats({
                         return [
                           <div key="value" className="space-y-1">
                             <div className="flex items-center gap-2">
-                              <span className="font-bold text-lg" style={{ color: log.is_over ? "#10b981" : "#f43f5e" }}>
+                              <span className="font-bold text-lg" style={{ color: log.is_over ? "#22C55E" : "#E92016" }}>
                                 {value}
                               </span>
-                              <span className="text-xs px-2 py-0.5 rounded" style={{ 
-                                backgroundColor: log.is_over ? "#10b98120" : "#f43f5e20",
-                                color: log.is_over ? "#10b981" : "#f43f5e"
+                              <span className="text-xs px-2 py-0.5 rounded font-bold" style={{ 
+                                backgroundColor: log.is_over ? "#22C55E" : "#E92016",
+                                color: "#FFFFFF"
                               }}>
                                 {log.is_over ? "Over" : "Under"}
                               </span>
                             </div>
-                            <div className="text-sm text-slate-300 space-y-0.5">
-                              <div>⏱️ 上場時間: <span className="font-semibold text-slate-100">{log.minutes || 0} 分鐘</span></div>
+                            <div className="text-sm space-y-0.5">
+                              <div>⏱️ Minutes: <span className="font-bold">{log.minutes || 0} min</span></div>
                               <div>
                                 {log.is_starter ? (
-                                  <span className="text-amber-400">⭐ 先發</span>
+                                  <span className="text-yellow font-bold">⭐ Starter</span>
                                 ) : (
-                                  <span className="text-slate-400">🪑 替補</span>
+                                  <span className="text-gray">🪑 Bench</span>
                                 )}
                               </div>
                             </div>
@@ -504,7 +548,7 @@ export function PlayerHistoryStats({
                         if (payload && payload[0]) {
                           const log = payload[0].payload as any;
                           return (
-                            <div className="text-slate-100 font-semibold border-b border-slate-700 pb-2 mb-2">
+                            <div className="font-bold border-b border-dark/20 pb-2 mb-2">
                               📅 {log.date_full} vs {log.opponent}
                             </div>
                           );
@@ -512,16 +556,17 @@ export function PlayerHistoryStats({
                         return value;
                       }}
                     />
-                    {/* 閾值參考線 */}
+                    {/* Threshold line */}
                     <ReferenceLine
                       y={parseFloat(threshold)}
-                      stroke="#f59e0b"
+                      stroke="#E92016"
                       strokeWidth={2}
                       strokeDasharray="5 5"
                       label={{
-                        value: `閾值: ${threshold}`,
-                        fill: "#f59e0b",
+                        value: `Threshold: ${threshold}`,
+                        fill: "#E92016",
                         fontSize: 12,
+                        fontWeight: 700,
                         position: "right",
                       }}
                     />
@@ -529,8 +574,7 @@ export function PlayerHistoryStats({
                       {gameLogs.map((entry, index) => (
                         <Cell
                           key={`cell-${index}`}
-                          fill={entry.is_over ? "#10b981" : "#f43f5e"}
-                          fillOpacity={0.8}
+                          fill={entry.is_over ? "#22C55E" : "#F87171"}
                         />
                       ))}
                     </Bar>
@@ -539,42 +583,40 @@ export function PlayerHistoryStats({
               </div>
               <div className="flex justify-center gap-6 mt-4 text-xs">
                 <div className="flex items-center gap-2">
-                  <div className="w-3 h-3 rounded bg-emerald-500/80" />
-                  <span className="text-slate-400">Over（超過閾值）</span>
+                  <div className="w-4 h-4 rounded bg-green-500" />
+                  <span className="text-dark font-medium">Over (above threshold)</span>
                 </div>
                 <div className="flex items-center gap-2">
-                  <div className="w-3 h-3 rounded bg-rose-500/80" />
-                  <span className="text-slate-400">Under（低於閾值）</span>
+                  <div className="w-4 h-4 rounded bg-red/70" />
+                  <span className="text-dark font-medium">Under (below threshold)</span>
                 </div>
                 <div className="flex items-center gap-2">
-                  <div className="w-6 h-0.5 bg-amber-500 border-dashed border" />
-                  <span className="text-slate-400">閾值線</span>
+                  <div className="w-8 h-0.5 bg-red border-dashed border" />
+                  <span className="text-dark font-medium">Threshold line</span>
                 </div>
               </div>
             </div>
           )}
 
-          {/* 統計詳情 */}
-          <div className="p-4 bg-slate-900/30 rounded-lg border border-slate-800/50">
-            <div className="flex items-start gap-2">
-              <Info className="w-4 h-4 text-slate-500 shrink-0 mt-0.5" />
-              <div className="text-xs text-slate-500 space-y-1">
+          {/* Notes */}
+          <div className="card">
+            <div className="flex items-start gap-3">
+              <Info className="w-5 h-5 text-gray shrink-0 mt-0.5" />
+              <div className="text-xs text-gray space-y-1">
                 <p>
-                  📊 以上數據基於 CSV 歷史比賽記錄計算，為「經驗機率」
-                  (empirical probability)
+                  📊 The above data is calculated based on CSV historical game records, representing "empirical probability"
                 </p>
                 <p>
-                  ⚠️ 此數據僅供參考，不代表實際預測結果，請謹慎投注
+                  ⚠️ This data is for reference only and does not represent actual prediction results, please bet responsibly
                 </p>
                 {historyData.equal_count && historyData.equal_count > 0 && (
                   <p>
-                    📌 有 {historyData.equal_count} 場比賽剛好等於閾值
-                    {threshold}，這些場次不計入 Over 或 Under
+                    📌 {historyData.equal_count} games exactly equal the threshold {threshold}, these games are not counted as Over or Under
                   </p>
                 )}
                 {selectedOpponent && (
                   <p>
-                    🎯 目前僅顯示對上 {selectedOpponent} 的比賽記錄
+                    🎯 Currently showing only games against {selectedOpponent}
                   </p>
                 )}
               </div>
@@ -583,19 +625,19 @@ export function PlayerHistoryStats({
         </div>
       )}
 
-      {/* 載入中 */}
+      {/* Loading */}
       {isLoadingHistory && selectedPlayer && (
         <div className="flex items-center justify-center py-12">
-          <Loader2 className="w-8 h-8 text-amber-400 animate-spin" />
-          <span className="ml-3 text-slate-400">正在計算歷史數據...</span>
+          <Loader2 className="w-8 h-8 text-red animate-spin" />
+          <span className="ml-3 text-gray font-medium">Calculating historical data...</span>
         </div>
       )}
 
-      {/* 未選擇球員提示 */}
+      {/* No player selected */}
       {!selectedPlayer && (
-        <div className="text-center py-12 text-slate-500">
-          <User className="w-12 h-12 mx-auto mb-3 opacity-50" />
-          <p>請選擇一位球員以查看歷史數據分析</p>
+        <div className="text-center py-12">
+          <User className="w-12 h-12 mx-auto mb-3 text-gray opacity-50" />
+          <p className="text-gray">Please select a player to view historical data analysis</p>
         </div>
       )}
     </div>
