@@ -595,6 +595,10 @@ async def get_player_history(
     opponent: Optional[str] = Query(
         default=None,
         description="對手篩選（球隊名稱），None 表示全部對手"
+    ),
+    is_starter: Optional[bool] = Query(
+        default=None,
+        description="先發篩選：True（僅先發）、False（僅替補）、None（全部）"
     )
 ) -> PlayerHistoryResponse:
     """
@@ -602,6 +606,7 @@ async def get_player_history(
     
     GET /api/nba/player-history?player=Stephen+Curry&metric=points&threshold=24.5
     GET /api/nba/player-history?player=Stephen+Curry&metric=points&threshold=24.5&opponent=Lakers
+    GET /api/nba/player-history?player=Stephen+Curry&metric=points&threshold=24.5&is_starter=true
     
     此端點計算球員在指定指標上的「經驗機率」（empirical probability）
     這是基於歷史數據的統計，不是模型預測！
@@ -619,6 +624,7 @@ async def get_player_history(
         bins: 直方圖分箱數
         exclude_dnp: 是否排除 DNP 場次
         opponent: 對手篩選（可選）
+        is_starter: 先發狀態篩選（True=僅先發、False=僅替補、None=全部）
     
     Returns:
         PlayerHistoryResponse: 包含機率、平均值、標準差、game_logs、對手列表
@@ -658,7 +664,8 @@ async def get_player_history(
             n=n,
             bins=bins,
             exclude_dnp=exclude_dnp,
-            opponent=opponent
+            opponent=opponent,
+            is_starter=is_starter
         )
         
         # 轉換 histogram 為 Pydantic 模型

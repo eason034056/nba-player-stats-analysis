@@ -7,6 +7,10 @@
  * - 用於管理伺服器狀態（server state）
  * - 自動快取、背景更新、重試等功能
  * - 比起自己用 useState + useEffect 更方便且強大
+ * 
+ * BetSlipProvider:
+ * - 管理下注列表的全局狀態
+ * - 自動同步到 localStorage 持久化
  */
 
 "use client"; // 標記為客戶端元件，因為使用了 state
@@ -14,6 +18,7 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { ReactQueryDevtools } from "@tanstack/react-query-devtools";
 import { useState } from "react";
+import { BetSlipProvider } from "@/contexts/BetSlipContext";
 
 /**
  * Providers 元件
@@ -58,7 +63,11 @@ export function Providers({ children }: { children: React.ReactNode }) {
     // QueryClientProvider: React Query 的 context provider
     // 讓所有子元件都能使用 useQuery、useMutation 等 hooks
     <QueryClientProvider client={queryClient}>
-      {children}
+      {/* BetSlipProvider: 下注列表的 context provider
+          讓所有子元件都能使用 useBetSlip hook 管理下注列表 */}
+      <BetSlipProvider>
+        {children}
+      </BetSlipProvider>
       
       {/* React Query Devtools: 開發工具
           只在開發環境顯示，用於除錯和監控查詢狀態 */}

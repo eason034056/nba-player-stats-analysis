@@ -6,14 +6,19 @@
  * - White/cream text for contrast
  * - No shadows, no gradients
  * - Clean geometric shapes
+ * 
+ * 功能：
+ * - 導航連結
+ * - 下注列表入口（顯示當前數量 badge）
  */
 
 "use client";
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Activity, Info, Target } from "lucide-react";
+import { Activity, Info, Target, ClipboardList } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { useBetSlip } from "@/contexts/BetSlipContext";
 
 /**
  * Navigation links configuration
@@ -28,9 +33,12 @@ const navLinks = [
  * Navbar component
  * 
  * Minimal design: red background, white text, no decoration
+ * 包含下注列表入口按鈕，顯示當前已選數量
  */
 export function Navbar() {
   const pathname = usePathname();
+  const { count } = useBetSlip();
+  const isBetSlipActive = pathname === "/betslip";
 
   return (
     <nav className="fixed top-0 left-0 right-0 z-50 bg-red">
@@ -80,6 +88,37 @@ export function Navbar() {
                 </Link>
               );
             })}
+
+            {/* Bet Slip 入口按鈕 */}
+            <Link
+              href="/betslip"
+              className={cn(
+                "relative flex items-center gap-2 px-4 py-2 rounded-lg ml-2",
+                "text-sm font-bold transition-all duration-150",
+                isBetSlipActive
+                  ? "bg-cream text-red"
+                  : "text-cream/80 hover:text-cream hover:bg-white/10"
+              )}
+            >
+              <div className="relative">
+                <ClipboardList className="w-4 h-4" />
+                {/* 數量 badge */}
+                {count > 0 && (
+                  <span className={cn(
+                    "absolute -top-2 -right-2.5",
+                    "min-w-[18px] h-[18px] px-1",
+                    "flex items-center justify-center",
+                    "text-[10px] font-bold rounded-full",
+                    isBetSlipActive
+                      ? "bg-red text-white"
+                      : "bg-cream text-red"
+                  )}>
+                    {count > 99 ? "99+" : count}
+                  </span>
+                )}
+              </div>
+              <span>Bet Slip</span>
+            </Link>
           </div>
         </div>
       </div>

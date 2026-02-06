@@ -23,6 +23,12 @@ interface EventListProps {
 
 /**
  * Single event card component
+ * 
+ * 結構說明：
+ * - 使用兩層佈局：上層是 Logo 列，下層是文字列
+ * - Logo 列：三欄對齊（Away Logo | VS | Home Logo）
+ * - 文字列：三欄對齊（Away Text | Time | Home Text）
+ * - 這樣確保 Logo 永遠在同一水平線上
  */
 function EventCard({ event }: { event: NBAEvent }) {
   return (
@@ -31,66 +37,78 @@ function EventCard({ event }: { event: NBAEvent }) {
       className="group block"
     >
       <div className="card-game">
-        {/* Main content */}
-        <div className="flex items-center gap-4 w-full">
-          {/* Left: Away team */}
-          <div className="flex-1 text-center">
-            <div className="flex flex-col items-center py-4">
-              <div className="h-12 flex items-center justify-center mb-3">
-                <TeamLogo 
-                  teamName={event.away_team} 
-                  size={44} 
-                  className="group-hover:scale-105 transition-transform"
-                />
-              </div>
-              <p className="text-base font-bold text-dark">
-                {event.away_team}
-              </p>
-              <p className="text-xs text-gray font-medium uppercase tracking-wide mt-1">
-                Away
-              </p>
-            </div>
-          </div>
+        {/* 主要內容 - 使用 flex column 分成上下兩部分 */}
+        <div className="flex flex-col gap-4 py-2">
           
-          {/* Center: VS and time */}
-          <div className="flex flex-col items-center gap-3 px-2">
-            {/* VS badge - red square */}
-            <div className="vs-badge">
-              VS
+          {/* 上層：Logo 列 - 確保三個 Logo 在同一水平線 */}
+          <div className="flex items-center">
+            {/* Away team logo */}
+            <div className="flex-1 flex justify-center">
+              <TeamLogo 
+                teamName={event.away_team} 
+                size={48} 
+                className="group-hover:scale-105 transition-transform"
+              />
             </div>
             
-            {/* Game time */}
-            <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-full border-2 border-dark/20">
-              <Clock className="w-3.5 h-3.5 text-gray" />
-              <span className="text-sm font-mono font-semibold text-dark">
-                {formatGameTime(event.commence_time)}
-              </span>
+            {/* VS badge - 中央紅色方塊，固定寬度確保對齊 */}
+            <div className="w-24 flex justify-center shrink-0">
+              <div className="vs-badge">
+                VS
+              </div>
+            </div>
+            
+            {/* Home team logo */}
+            <div className="flex-1 flex justify-center">
+              <TeamLogo 
+                teamName={event.home_team} 
+                size={48} 
+                className="group-hover:scale-105 transition-transform"
+              />
             </div>
           </div>
           
-          {/* Right: Home team */}
-          <div className="flex-1 text-center">
-            <div className="flex flex-col items-center py-4">
-              <div className="h-12 flex items-center justify-center mb-3">
-                <TeamLogo 
-                  teamName={event.home_team} 
-                  size={44} 
-                  className="group-hover:scale-105 transition-transform"
-                />
+          {/* 下層：文字列 - 球隊名稱和時間 */}
+          <div className="flex items-center">
+            {/* Away team text - 固定高度讓文字垂直置中 */}
+            <div className="flex-1 text-center">
+              <div className="min-h-[56px] flex flex-col items-center justify-center">
+                <p className="text-base font-bold text-dark leading-tight">
+                  {event.away_team}
+                </p>
+                <p className="text-xs text-gray font-medium uppercase tracking-wide mt-1">
+                  Away
+                </p>
               </div>
-              <p className="text-base font-bold text-dark">
-                {event.home_team}
-              </p>
-              <p className="text-xs text-gray font-medium uppercase tracking-wide mt-1">
-                Home
-              </p>
+            </div>
+            
+            {/* Game time - 中央時間顯示，固定寬度確保與上層 VS 對齊 */}
+            <div className="w-24 flex justify-center shrink-0">
+              <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-full border-2 border-dark/20">
+                <Clock className="w-3.5 h-3.5 text-gray" />
+                <span className="text-sm font-mono font-semibold text-dark">
+                  {formatGameTime(event.commence_time)}
+                </span>
+              </div>
+            </div>
+            
+            {/* Home team text - 固定高度讓文字垂直置中 */}
+            <div className="flex-1 text-center">
+              <div className="min-h-[56px] flex flex-col items-center justify-center">
+                <p className="text-base font-bold text-dark leading-tight">
+                  {event.home_team}
+                </p>
+                <p className="text-xs text-gray font-medium uppercase tracking-wide mt-1">
+                  Home
+                </p>
+              </div>
             </div>
           </div>
-
-          {/* Arrow indicator */}
-          <div className="pl-2 opacity-0 group-hover:opacity-100 transition-all">
-            <ChevronRight className="w-5 h-5 text-red" />
-          </div>
+        </div>
+        
+        {/* Arrow indicator - hover 時顯示 */}
+        <div className="absolute right-4 top-1/2 -translate-y-1/2 opacity-0 group-hover:opacity-100 transition-all">
+          <ChevronRight className="w-5 h-5 text-red" />
         </div>
       </div>
     </Link>
@@ -98,30 +116,39 @@ function EventCard({ event }: { event: NBAEvent }) {
 }
 
 /**
- * Loading skeleton
+ * Loading skeleton - 載入中骨架屏
+ * 結構與 EventCard 相同，使用灰色區塊模擬內容
  */
 function EventSkeleton() {
   return (
     <div className="card">
-      <div className="flex items-center gap-4">
-        {/* Left */}
-        <div className="flex-1 flex flex-col items-center py-4">
-          <div className="skeleton w-11 h-11 rounded-lg mb-3" />
-          <div className="skeleton h-4 w-24 mb-2" />
-          <div className="skeleton h-3 w-12" />
+      <div className="flex flex-col gap-4 py-2">
+        {/* 上層：Logo 列 */}
+        <div className="flex items-center">
+          <div className="flex-1 flex justify-center">
+            <div className="skeleton w-12 h-12 rounded-lg" />
+          </div>
+          <div className="w-24 flex justify-center shrink-0">
+            <div className="skeleton w-12 h-12 rounded-lg" />
+          </div>
+          <div className="flex-1 flex justify-center">
+            <div className="skeleton w-12 h-12 rounded-lg" />
+          </div>
         </div>
         
-        {/* Center */}
-        <div className="flex flex-col items-center gap-3 px-2">
-          <div className="skeleton w-12 h-12 rounded-lg" />
-          <div className="skeleton h-6 w-16 rounded-full" />
-        </div>
-        
-        {/* Right */}
-        <div className="flex-1 flex flex-col items-center py-4">
-          <div className="skeleton w-11 h-11 rounded-lg mb-3" />
-          <div className="skeleton h-4 w-24 mb-2" />
-          <div className="skeleton h-3 w-12" />
+        {/* 下層：文字列 */}
+        <div className="flex items-center">
+          <div className="flex-1 flex flex-col items-center gap-2">
+            <div className="skeleton h-4 w-24" />
+            <div className="skeleton h-3 w-12" />
+          </div>
+          <div className="w-24 flex justify-center shrink-0">
+            <div className="skeleton h-8 w-20 rounded-full" />
+          </div>
+          <div className="flex-1 flex flex-col items-center gap-2">
+            <div className="skeleton h-4 w-24" />
+            <div className="skeleton h-3 w-12" />
+          </div>
         </div>
       </div>
     </div>

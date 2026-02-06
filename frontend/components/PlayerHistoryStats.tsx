@@ -123,6 +123,7 @@ export function PlayerHistoryStats({
   );
   const [threshold, setThreshold] = useState<string>(initialThreshold || "24.5");
   const [selectedOpponent, setSelectedOpponent] = useState<string>("");
+  const [starterFilter, setStarterFilter] = useState<string>("all");
   const [isFetchingOdds, setIsFetchingOdds] = useState(false);
 
   useEffect(() => {
@@ -158,7 +159,7 @@ export function PlayerHistoryStats({
     isError: isHistoryError,
     error: historyError,
   } = useQuery({
-    queryKey: ["playerHistory", selectedPlayer, metric, threshold, recentN, selectedOpponent],
+    queryKey: ["playerHistory", selectedPlayer, metric, threshold, recentN, selectedOpponent, starterFilter],
     queryFn: () =>
       getPlayerHistory({
         player: selectedPlayer,
@@ -168,6 +169,7 @@ export function PlayerHistoryStats({
         bins: 15,
         exclude_dnp: true,
         opponent: selectedOpponent || undefined,
+        is_starter: starterFilter === "all" ? undefined : starterFilter === "starter",
       }),
     enabled: !!selectedPlayer && !!threshold && !isNaN(parseFloat(threshold)),
     staleTime: 30 * 1000,
@@ -300,8 +302,8 @@ export function PlayerHistoryStats({
           )}
         </div>
 
-        {/* Options: metric + threshold + games + opponent */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+        {/* Options: metric + threshold + games + opponent + starter */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4">
           {/* Stat metric */}
           <div>
             <label className="block text-sm font-bold text-dark mb-2">
@@ -380,6 +382,23 @@ export function PlayerHistoryStats({
               ))}
             </select>
           </div>
+
+          {/* Starter filter */}
+          <div>
+            <label className="block text-sm font-bold text-dark mb-2">
+              <Filter className="inline w-4 h-4 mr-1" />
+              Starter Filter
+            </label>
+            <select
+              value={starterFilter}
+              onChange={(e) => setStarterFilter(e.target.value)}
+              className="input w-full"
+            >
+              <option value="all">All Games</option>
+              <option value="starter">Starter Only</option>
+              <option value="bench">Bench Only</option>
+            </select>
+          </div>
         </div>
       </div>
 
@@ -452,9 +471,14 @@ export function PlayerHistoryStats({
               <p className="text-sm font-bold text-dark mb-1">Sample Games</p>
               <p className="text-xl font-bold text-dark">
                 {historyData.n_games} games
-                {selectedOpponent && (
+                {(selectedOpponent || starterFilter !== "all") && (
                   <span className="text-sm text-gray ml-1">
-                    (vs {selectedOpponent})
+                    (
+                    {selectedOpponent && `vs ${selectedOpponent}`}
+                    {selectedOpponent && starterFilter !== "all" && ", "}
+                    {starterFilter === "starter" && "Starter"}
+                    {starterFilter === "bench" && "Bench"}
+                    )
                   </span>
                 )}
               </p>
@@ -467,8 +491,15 @@ export function PlayerHistoryStats({
               <h4 className="text-sm font-bold text-dark mb-4 flex items-center gap-2">
                 <BarChart3 className="w-4 h-4" />
                 {HISTORY_METRICS.find((m) => m.key === metric)?.name} Historical Trend
-                {selectedOpponent && (
-                  <span className="text-red ml-2">(vs {selectedOpponent})</span>
+                {(selectedOpponent || starterFilter !== "all") && (
+                  <span className="text-red ml-2">
+                    (
+                    {selectedOpponent && `vs ${selectedOpponent}`}
+                    {selectedOpponent && starterFilter !== "all" && ", "}
+                    {starterFilter === "starter" && "Starter Only"}
+                    {starterFilter === "bench" && "Bench Only"}
+                    )
+                  </span>
                 )}
               </h4>
               <div className="h-72 md:h-80">
@@ -617,6 +648,16 @@ export function PlayerHistoryStats({
                 {selectedOpponent && (
                   <p>
                     🎯 Currently showing only games against {selectedOpponent}
+                  </p>
+                )}
+                {starterFilter === "starter" && (
+                  <p>
+                    ⭐ Currently showing only starter games
+                  </p>
+                )}
+                {starterFilter === "bench" && (
+                  <p>
+                    🪑 Currently showing only bench games
                   </p>
                 )}
               </div>

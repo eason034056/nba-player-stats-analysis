@@ -137,6 +137,57 @@ class CacheService:
             print(f"Cache delete error: {e}")
             return False
     
+    async def delete_pattern(self, pattern: str) -> int:
+        """
+        刪除符合 pattern 的所有快取資料
+        
+        使用 Redis SCAN + DELETE 刪除符合模式的所有 key
+        比 KEYS 命令更安全，不會阻塞 Redis
+        
+        Args:
+            pattern: 匹配模式（支援 * 萬用字元）
+                     例如: "daily_picks:*" 會刪除所有以 daily_picks: 開頭的 key
+        
+        Returns:
+            int: 刪除的 key 數量
+        
+        Example:
+            >>> await cache.delete_pattern("daily_picks:*")
+            3  # 刪除了 3 個 key
+        """
+        try:
+            client = await self.get_client()
+            deleted_count = 0
+            
+            # 使用 SCAN 迭代找出符合 pattern 的 key
+            # scan_iter: 異步迭代器，每次返回一批符合的 key
+            # match=pattern: 匹配模式
+            # count=100: 每次掃描的數量（建議值）
+            async for key in client.scan_iter(match=pattern, count=100):
+                await client.delete(key)
+                deleted_count += 1
+            
+            if deleted_count > 0:
+                print(f"🗑️ 已刪除 {deleted_count} 個快取 (pattern: {pattern})")
+            
+            return deleted_count
+            
+        except Exception as e:
+            print(f"Cache delete_pattern error: {e}")
+            return 0
+    
+    async def clear_daily_picks_cache(self) -> int:
+        """
+        清除所有每日精選的快取
+        
+        當 CSV 資料更新後，需要清除每日精選的快取
+        這樣下次請求會重新分析並使用最新的資料
+        
+        Returns:
+            int: 刪除的 key 數量
+        """
+        return await self.delete_pattern("daily_picks:*")
+    
     async def close(self):
         """
         關閉 Redis 連線

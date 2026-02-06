@@ -10,7 +10,7 @@
 
 "use client";
 
-import { useState, useCallback } from "react";
+import { useState, useCallback, useMemo } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { 
   RefreshCw, 
@@ -23,7 +23,11 @@ import {
   ChevronRight,
   Flame,
   BarChart3,
-  Calendar
+  Calendar,
+  Filter,
+  X,
+  Check,
+  ClipboardList
 } from "lucide-react";
 import Link from "next/link";
 import { getDailyPicks, triggerDailyAnalysis } from "@/lib/api";
@@ -35,6 +39,8 @@ import {
 } from "@/lib/schemas";
 import { DatePicker } from "@/components/DatePicker";
 import { TeamLogo } from "@/components/TeamLogo";
+import { PickContextMenu } from "@/components/PickContextMenu";
+import { useBetSlip } from "@/contexts/BetSlipContext";
 
 /**
  * Probability confidence level
@@ -58,12 +64,19 @@ function metricToMarket(metric: string): string {
 
 /**
  * Single pick card
+ * 
+ * 支援右鍵選單添加到下注列表
+ * 已添加的 pick 會顯示視覺反饋（綠色邊框和標記）
  */
 function PickCard({ pick, index }: { pick: DailyPick; index: number }) {
+  const { isInSlip } = useBetSlip();
   const level = getProbabilityLevel(pick.probability);
   const metricName = METRIC_DISPLAY_NAMES[pick.metric] || pick.metric;
   const directionName = DIRECTION_DISPLAY_NAMES[pick.direction] || pick.direction;
   const animationDelay = `${index * 50}ms`;
+  
+  // 檢查是否已在下注列表中
+  const isAdded = isInSlip(pick.player_name, pick.metric);
   
   const marketKey = metricToMarket(pick.metric);
   const linkHref = `/event/${pick.event_id}?player=${encodeURIComponent(pick.player_name)}&market=${marketKey}&threshold=${pick.threshold}`;
@@ -73,89 +86,110 @@ function PickCard({ pick, index }: { pick: DailyPick; index: number }) {
       className="animate-fade-in"
       style={{ animationDelay }}
     >
-      <Link href={linkHref}>
-        <div className={`
-          card group cursor-pointer
-          transition-all duration-200
-          hover:-translate-y-1
-          ${level === "high" 
-            ? "hover:border-green-500" 
-            : "hover:border-yellow"
-          }
-        `}>
-          {/* High probability badge */}
-          {level === "high" && (
-            <div className="absolute top-4 right-4">
-              <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-green-500 text-white text-xs font-bold">
-                <Flame className="w-3 h-3" />
-                HOT
+      {/* 右鍵選單包裹 */}
+      <PickContextMenu pick={pick}>
+        <Link href={linkHref}>
+          <div className={`
+            card group cursor-pointer
+            transition-all duration-200
+            hover:-translate-y-1
+            ${isAdded 
+              ? "border-green-500 bg-green-50/50" 
+              : level === "high" 
+                ? "hover:border-green-500" 
+                : "hover:border-yellow"
+            }
+          `}>
+            {/* 已添加到下注列表的標記 */}
+            {isAdded && (
+              <div className="absolute top-4 left-4">
+                <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-green-500 text-white text-xs font-bold">
+                  <ClipboardList className="w-3 h-3" />
+                  IN SLIP
+                </div>
+              </div>
+            )}
+            
+            {/* High probability badge */}
+            {level === "high" && (
+              <div className={`absolute top-4 ${isAdded ? "right-4" : "right-4"}`}>
+                <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-green-500 text-white text-xs font-bold">
+                  <Flame className="w-3 h-3" />
+                  HOT
+                </div>
+              </div>
+            )}
+            
+            {/* Player info */}
+            <div className={`flex items-center gap-4 mb-4 ${isAdded ? "mt-8" : ""}`}>
+              <TeamLogo 
+                teamName={pick.player_team || pick.home_team} 
+                size={40} 
+                className="shrink-0"
+              />
+              <div className="flex-1 min-w-0 pr-16">
+                <h3 className="text-lg font-bold text-dark truncate">
+                  {pick.player_name}
+                </h3>
+                <p className="text-sm text-gray truncate">
+                  {pick.away_team} @ {pick.home_team}
+                </p>
               </div>
             </div>
-          )}
-          
-          {/* Player info */}
-          <div className="flex items-center gap-4 mb-4">
-            <TeamLogo 
-              teamName={pick.player_team || pick.home_team} 
-              size={40} 
-              className="shrink-0"
-            />
-            <div className="flex-1 min-w-0 pr-16">
-              <h3 className="text-lg font-bold text-dark truncate">
-                {pick.player_name}
-              </h3>
-              <p className="text-sm text-gray truncate">
-                {pick.away_team} @ {pick.home_team}
-              </p>
-            </div>
-          </div>
-          
-          {/* Prediction content */}
-          <div className="flex items-center justify-between mb-4">
-            <div className={`
-              px-4 py-2 rounded-lg text-sm font-bold
-              ${pick.direction === "over"
-                ? "bg-green-500/10 text-green-600 border-2 border-green-500/30"
-                : "bg-blue-500/10 text-blue-600 border-2 border-blue-500/30"
-              }
-            `}>
-              {metricName} {directionName} {pick.threshold}
+            
+            {/* Prediction content */}
+            <div className="flex items-center justify-between mb-4">
+              <div className={`
+                px-4 py-2 rounded-lg text-sm font-bold
+                ${pick.direction === "over"
+                  ? "bg-green-500/10 text-green-600 border-2 border-green-500/30"
+                  : "bg-blue-500/10 text-blue-600 border-2 border-blue-500/30"
+                }
+              `}>
+                {metricName} {directionName} {pick.threshold}
+              </div>
+              
+              {/* Probability display */}
+              <div className={`
+                text-3xl font-mono font-bold
+                ${level === "high" ? "text-green-500" : "text-yellow"}
+              `}>
+                {formatProbability(pick.probability)}
+              </div>
             </div>
             
-            {/* Probability display */}
-            <div className={`
-              text-3xl font-mono font-bold
-              ${level === "high" ? "text-green-500" : "text-yellow"}
-            `}>
-              {formatProbability(pick.probability)}
-            </div>
-          </div>
-          
-          {/* Probability progress bar */}
-          <div className="progress-bar mb-4">
-            <div 
-              className={`progress-bar-fill ${level === "high" ? "high" : "medium"}`}
-              style={{ width: `${pick.probability * 100}%` }}
-            />
-          </div>
-          
-          {/* Bottom info */}
-          <div className="flex items-center justify-between text-sm text-gray">
-            <div className="flex items-center gap-4">
-              <span className="flex items-center gap-1.5">
-                <BarChart3 className="w-4 h-4" />
-                {pick.n_games} games
-              </span>
-              <span className="flex items-center gap-1.5">
-                <Users className="w-4 h-4" />
-                {pick.bookmakers_count} bookmakers
-              </span>
+            {/* Probability progress bar */}
+            <div className="progress-bar mb-4">
+              <div 
+                className={`progress-bar-fill ${level === "high" ? "high" : "medium"}`}
+                style={{ width: `${pick.probability * 100}%` }}
+              />
             </div>
             
-            <ChevronRight className="w-5 h-5 text-gray group-hover:text-red transition-colors" />
+            {/* Bottom info */}
+            <div className="flex items-center justify-between text-sm text-gray">
+              <div className="flex items-center gap-4">
+                <span className="flex items-center gap-1.5">
+                  <BarChart3 className="w-4 h-4" />
+                  {pick.n_games} games
+                </span>
+                <span className="flex items-center gap-1.5">
+                  <Users className="w-4 h-4" />
+                  {pick.bookmakers_count} bookmakers
+                </span>
+              </div>
+              
+              <div className="flex items-center gap-2">
+                {/* 右鍵提示 */}
+                <span className="text-xs text-gray/60 hidden group-hover:inline">
+                  Right-click to add
+                </span>
+                <ChevronRight className="w-5 h-5 text-gray group-hover:text-red transition-colors" />
+              </div>
+            </div>
           </div>
-        </div>
-      </Link>
+        </Link>
+      </PickContextMenu>
     </div>
   );
 }
@@ -219,12 +253,85 @@ function StatCard({
 }
 
 /**
+ * Team filter component - multi-select
+ * 
+ * 球隊篩選器組件，支援多選
+ * - teams: 所有可選的球隊列表
+ * - selectedTeams: 已選擇的球隊
+ * - onToggle: 切換選擇狀態的回調
+ * - onClear: 清除所有選擇的回調
+ */
+function TeamFilter({
+  teams,
+  selectedTeams,
+  onToggle,
+  onClear,
+}: {
+  teams: string[];
+  selectedTeams: Set<string>;
+  onToggle: (team: string) => void;
+  onClear: () => void;
+}) {
+  if (teams.length === 0) return null;
+  
+  return (
+    <div className="card mb-8">
+      <div className="flex items-center justify-between mb-4">
+        <div className="flex items-center gap-2">
+          <Filter className="w-5 h-5 text-gray" />
+          <span className="font-bold text-dark">Filter by Team</span>
+          {selectedTeams.size > 0 && (
+            <span className="badge-neutral">
+              {selectedTeams.size} selected
+            </span>
+          )}
+        </div>
+        {selectedTeams.size > 0 && (
+          <button
+            onClick={onClear}
+            className="flex items-center gap-1.5 text-sm text-gray hover:text-red transition-colors"
+          >
+            <X className="w-4 h-4" />
+            Clear all
+          </button>
+        )}
+      </div>
+      
+      <div className="flex flex-wrap gap-2">
+        {teams.map((team) => {
+          const isSelected = selectedTeams.has(team);
+          return (
+            <button
+              key={team}
+              onClick={() => onToggle(team)}
+              className={`
+                flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium
+                transition-all duration-200 border-2
+                ${isSelected
+                  ? "bg-red text-white border-red"
+                  : "bg-white text-dark border-dark/20 hover:border-red hover:text-red"
+                }
+              `}
+            >
+              <TeamLogo teamName={team} size={20} />
+              <span>{team}</span>
+              {isSelected && <Check className="w-4 h-4" />}
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+/**
  * Main page component
  */
 export default function PicksPage() {
   const todayString = getTodayString();
   const [selectedDate, setSelectedDate] = useState(todayString);
   const [isTriggering, setIsTriggering] = useState(false);
+  const [selectedTeams, setSelectedTeams] = useState<Set<string>>(new Set());
   const queryClient = useQueryClient();
   
   const {
@@ -265,9 +372,54 @@ export default function PicksPage() {
     }
   }, [selectedDate, refetch, queryClient]);
   
+  // 從 picks 中提取所有唯一的球隊（使用 player_team）
+  // Extract unique teams from picks (using player_team)
+  const allTeams = useMemo(() => {
+    const picks = data?.picks || [];
+    const teamsSet = new Set<string>();
+    picks.forEach((pick: DailyPick) => {
+      if (pick.player_team) {
+        teamsSet.add(pick.player_team);
+      }
+    });
+    // 按字母順序排序
+    return Array.from(teamsSet).sort();
+  }, [data?.picks]);
+  
+  // 切換球隊選擇狀態
+  // Toggle team selection
+  const handleToggleTeam = useCallback((team: string) => {
+    setSelectedTeams((prev) => {
+      const newSet = new Set(prev);
+      if (newSet.has(team)) {
+        newSet.delete(team);
+      } else {
+        newSet.add(team);
+      }
+      return newSet;
+    });
+  }, []);
+  
+  // 清除所有選擇
+  // Clear all selections
+  const handleClearTeams = useCallback(() => {
+    setSelectedTeams(new Set());
+  }, []);
+  
   const dateTitle = getDateDisplayTitle(selectedDate);
-  const picks = data?.picks || [];
+  const allPicks = data?.picks || [];
   const stats = data?.stats;
+  
+  // 根據選擇的球隊篩選 picks
+  // Filter picks based on selected teams
+  const picks = useMemo(() => {
+    if (selectedTeams.size === 0) {
+      return allPicks;
+    }
+    return allPicks.filter((pick: DailyPick) => 
+      pick.player_team && selectedTeams.has(pick.player_team)
+    );
+  }, [allPicks, selectedTeams]);
   
   const highProbCount = picks.filter((p: DailyPick) => p.probability >= 0.70).length;
   const mediumProbCount = picks.filter((p: DailyPick) => p.probability >= 0.65 && p.probability < 0.70).length;
@@ -309,8 +461,8 @@ export default function PicksPage() {
             <StatCard 
               icon={Target}
               label="High Prob Picks"
-              value={picks.length}
-              subValue={`${highProbCount} ≥70%`}
+              value={allPicks.length}
+              subValue={`${allPicks.filter((p: DailyPick) => p.probability >= 0.70).length} ≥70%`}
             />
             <StatCard 
               icon={Calendar}
@@ -333,6 +485,16 @@ export default function PicksPage() {
           </div>
         )}
 
+        {/* Team filter section */}
+        {!isLoading && allTeams.length > 0 && (
+          <TeamFilter
+            teams={allTeams}
+            selectedTeams={selectedTeams}
+            onToggle={handleToggleTeam}
+            onClear={handleClearTeams}
+          />
+        )}
+
         {/* Actions section */}
         <div className="flex items-center justify-between mb-8">
           <div className="flex items-center gap-4">
@@ -341,7 +503,10 @@ export default function PicksPage() {
             </h2>
             {!isLoading && (
               <span className="badge-neutral">
-                {picks.length} picks
+                {selectedTeams.size > 0 
+                  ? `${picks.length} / ${allPicks.length} picks`
+                  : `${picks.length} picks`
+                }
               </span>
             )}
           </div>

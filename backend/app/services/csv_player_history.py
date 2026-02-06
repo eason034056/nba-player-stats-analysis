@@ -310,7 +310,8 @@ class CSVPlayerHistoryService:
         n: int = 0,
         bins: int = 15,
         exclude_dnp: bool = True,
-        opponent: Optional[str] = None
+        opponent: Optional[str] = None,
+        is_starter: Optional[bool] = None
     ) -> Dict[str, Any]:
         """
         計算球員歷史數據統計
@@ -325,6 +326,7 @@ class CSVPlayerHistoryService:
             bins: 直方圖分箱數（預設 15）
             exclude_dnp: 是否排除 DNP（Did Not Play，分鐘數為 0 的場次）
             opponent: 對手篩選（可選，None 表示全部）
+            is_starter: 先發狀態篩選（True=僅先發、False=僅替補、None=全部）
         
         Returns:
             Dict 包含：
@@ -343,6 +345,9 @@ class CSVPlayerHistoryService:
         Example:
             get_player_stats("Stephen Curry", "points", 24.5, n=20)
             # 返回 Curry 最近 20 場比賽得分超過 24.5 的機率
+            
+            get_player_stats("Stephen Curry", "points", 24.5, n=20, is_starter=True)
+            # 返回 Curry 最近 20 場「先發」比賽得分超過 24.5 的機率
         """
         self.load_csv()
         
@@ -394,6 +399,14 @@ class CSVPlayerHistoryService:
             if opponent and game.get("opponent", "") != opponent:
                 continue
             
+            # 先發狀態篩選
+            # is_starter=True: 只要先發場次
+            # is_starter=False: 只要替補場次
+            # is_starter=None: 全部場次
+            if is_starter is not None:
+                if game.get("is_starter", False) != is_starter:
+                    continue
+            
             # 取得對應指標的值
             value = game.get(metric)
             if value is not None:
@@ -402,7 +415,7 @@ class CSVPlayerHistoryService:
                 # 建構 game log 資料
                 game_date = game.get("game_date")
                 minutes = game.get("minutes", 0)
-                is_starter = game.get("is_starter", False)
+                game_is_starter = game.get("is_starter", False)
                 
                 valid_games.append({
                     "date": game_date.strftime("%m/%d") if game_date else "",
@@ -412,7 +425,7 @@ class CSVPlayerHistoryService:
                     "is_over": value > threshold,
                     "team": game.get("team", ""),
                     "minutes": round(minutes, 1),  # 上場時間（分鐘）
-                    "is_starter": is_starter,  # 是否先發
+                    "is_starter": game_is_starter,  # 是否先發
                 })
         
         # 取最近 N 場

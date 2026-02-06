@@ -206,13 +206,14 @@ class DailyAnalysisService:
         )
         
         # 7. 存入快取（包含時區偏移量）
-        if use_cache:
-            cache_key = f"{DAILY_PICKS_CACHE_KEY}:{date}:tz{tz_offset_minutes}"
-            await cache_service.set(
-                cache_key,
-                response.model_dump(mode='json'),
-                ttl=DAILY_PICKS_CACHE_TTL
-            )
+        # 注意：即使 use_cache=False（強制重新分析），也要存入快取
+        # 這樣下一次 GET 請求就能獲取最新的分析結果
+        cache_key = f"{DAILY_PICKS_CACHE_KEY}:{date}:tz{tz_offset_minutes}"
+        await cache_service.set(
+            cache_key,
+            response.model_dump(mode='json'),
+            ttl=DAILY_PICKS_CACHE_TTL
+        )
         
         print(f"\n✅ 分析完成！找到 {len(all_picks)} 個高機率選擇，耗時 {duration:.2f} 秒")
         

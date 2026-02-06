@@ -54,8 +54,9 @@ services:
     
     # 掛載 data 目錄（CSV 檔案）
     # 將主機的 data 目錄掛載到容器的 /app/data 目錄
+    # 移除 :ro 只讀限制，讓容器可以下載並更新 CSV 文件
     volumes:
-      - ./data:/app/data:ro  # ro = read-only，只讀模式
+      - ./data:/app/data
     
     # 依賴服務
     # 確保 redis 啟動後才啟動 backend
