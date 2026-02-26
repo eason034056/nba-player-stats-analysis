@@ -30,6 +30,9 @@ from apscheduler.triggers.interval import IntervalTrigger
 
 from app.services.daily_analysis import daily_analysis_service
 from app.services.csv_downloader import csv_downloader_service
+from app.services.projection_service import projection_service
+from app.services.odds_snapshot_service import odds_snapshot_service
+from app.services.cache import cache_service
 
 
 class SchedulerService:
@@ -92,6 +95,40 @@ class SchedulerService:
             replace_existing=True  # 如果任務已存在,替換它
         )
         
+        # 添加投影資料預取任務（3 個時間點）
+        # 
+        # 投影資料預取策略：
+        # - 早期（UTC 16:00 ≈ 美東 11AM）：初版投影，比賽前 ~8 小時
+        # - 中期（UTC 22:00 ≈ 美東 5PM）：更新版，大部分先發已確認
+        # - 最終（UTC 23:30 ≈ 美東 6:30PM）：最終版，比賽即將開始
+        #
+        # SportsDataIO 的 Projection API 是 bulk endpoint，
+        # 一次 call 回傳該日期所有球員的投影資料，
+        # 因此每天 3 次 call 就能覆蓋所有需求。
+        self._scheduler.add_job(
+            self._run_projection_fetch_job,
+            trigger=CronTrigger(hour=16, minute=0),
+            id='projection_fetch_early',
+            name='投影資料預取（早期 - 初版）',
+            replace_existing=True
+        )
+        
+        self._scheduler.add_job(
+            self._run_projection_fetch_job,
+            trigger=CronTrigger(hour=22, minute=0),
+            id='projection_fetch_mid',
+            name='投影資料預取（中期 - 先發確認後）',
+            replace_existing=True
+        )
+        
+        self._scheduler.add_job(
+            self._run_projection_fetch_final_job,
+            trigger=CronTrigger(hour=23, minute=30),
+            id='projection_fetch_final',
+            name='投影資料預取（最終版 + 清除 daily picks 快取）',
+            replace_existing=True
+        )
+        
         # 添加 CSV 下載任務
         # 芝加哥時間 10:00 執行
         # timezone="America/Chicago": 指定時區,APScheduler 會自動處理夏令/冬令時間
@@ -110,12 +147,48 @@ class SchedulerService:
             replace_existing=True
         )
         
+        # 添加盤口快照任務（3 個時間點，與投影預取相同）
+        #
+        # 盤口快照策略（Line Movement Tracking）：
+        # - 早期（UTC 16:00 ≈ 美東 11AM）：早盤，傷病報告出來後的初始線
+        # - 中期（UTC 22:00 ≈ 美東 5PM）：午盤，sharp money 進場後
+        # - 最終（UTC 23:30 ≈ 美東 6:30PM）：封盤前，最終線
+        #
+        # 每次快照會對每場賽事用一次 API call 取得 4 個 market 的賠率，
+        # 計算所有 bookmaker/player/market 的 no-vig，批量寫入 PostgreSQL。
+        # 失敗不影響投影預取和每日分析。
+        self._scheduler.add_job(
+            self._run_odds_snapshot_job,
+            trigger=CronTrigger(hour=16, minute=5),
+            id='odds_snapshot_early',
+            name='盤口快照（早期 - 早盤）',
+            replace_existing=True
+        )
+        
+        self._scheduler.add_job(
+            self._run_odds_snapshot_job,
+            trigger=CronTrigger(hour=22, minute=5),
+            id='odds_snapshot_mid',
+            name='盤口快照（中期 - 午盤）',
+            replace_existing=True
+        )
+        
+        self._scheduler.add_job(
+            self._run_odds_snapshot_job,
+            trigger=CronTrigger(hour=23, minute=35),
+            id='odds_snapshot_final',
+            name='盤口快照（最終 - 封盤前）',
+            replace_existing=True
+        )
+        
         # 啟動排程器
         self._scheduler.start()
         self._is_running = True
         
         print("✅ 排程器已啟動")
         print("📅 排程任務:")
+        print("   - 投影資料預取:每天 UTC 16:00, 22:00, 23:30")
+        print("   - 盤口快照:每天 UTC 16:05, 22:05, 23:35")
         print("   - 每日分析:每天 UTC 12:00")
         print("   - CSV 下載:每天芝加哥時間 10:00")
         
@@ -205,6 +278,119 @@ class SchedulerService:
             traceback.print_exc()
         
         print("=" * 50 + "\n")
+    
+    async def _run_projection_fetch_job(self):
+        """
+        執行投影資料預取任務
+        
+        呼叫 projection_service.fetch_and_store() 取得今日投影資料
+        資料會同時寫入 Redis 和 PostgreSQL
+        """
+        print("\n" + "=" * 50)
+        print(f"📊 開始執行投影資料預取: {datetime.now(timezone.utc).isoformat()}")
+        print("=" * 50)
+        
+        try:
+            today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+            projections = await projection_service.fetch_and_store(today)
+            
+            print(f"✅ 投影資料預取完成! {len(projections)} 球員")
+        
+        except Exception as e:
+            print(f"❌ 投影資料預取失敗: {e}")
+            import traceback
+            traceback.print_exc()
+        
+        print("=" * 50 + "\n")
+    
+    async def _run_projection_fetch_final_job(self):
+        """
+        執行最終版投影資料預取
+        
+        與 _run_projection_fetch_job 相同，但額外清除 daily picks 快取，
+        這樣下次請求 daily picks 時會使用最新的投影資料重新分析。
+        """
+        print("\n" + "=" * 50)
+        print(f"📊 開始執行最終版投影資料預取: {datetime.now(timezone.utc).isoformat()}")
+        print("=" * 50)
+        
+        try:
+            today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+            projections = await projection_service.fetch_and_store(today)
+            
+            print(f"✅ 最終版投影資料預取完成! {len(projections)} 球員")
+            
+            # 清除 daily picks 快取，讓下次分析使用最新投影
+            deleted = await cache_service.clear_daily_picks_cache()
+            if deleted > 0:
+                print(f"🗑️ 已清除 {deleted} 個 daily picks 快取")
+        
+        except Exception as e:
+            print(f"❌ 最終版投影資料預取失敗: {e}")
+            import traceback
+            traceback.print_exc()
+        
+        print("=" * 50 + "\n")
+    
+    async def _run_odds_snapshot_job(self):
+        """
+        執行盤口快照任務
+
+        叫 "_run_odds_snapshot_job" 因為它是排程器呼叫的 job handler，
+        負責「執行」一次「盤口快照」。
+        包含錯誤處理，失敗不影響其他任務。
+        """
+        print("\n" + "=" * 50)
+        print(f"📸 開始執行盤口快照: {datetime.now(timezone.utc).isoformat()}")
+        print("=" * 50)
+
+        try:
+            today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+            result = await odds_snapshot_service.take_snapshot(today)
+
+            print(f"✅ 盤口快照完成!")
+            print(f"   日期: {result['date']}")
+            print(f"   賽事數: {result['event_count']}")
+            print(f"   盤口筆數: {result['total_lines']}")
+            print(f"   耗時: {result['duration_ms']}ms")
+
+        except Exception as e:
+            print(f"❌ 盤口快照失敗: {e}")
+            import traceback
+            traceback.print_exc()
+
+        print("=" * 50 + "\n")
+
+    async def trigger_odds_snapshot_now(self, date: Optional[str] = None) -> dict:
+        """
+        手動觸發盤口快照
+
+        叫 "trigger_odds_snapshot_now" 因為它允許「立即觸發」盤口快照，
+        不需要等到排程時間。用於 API 端點的手動觸發功能。
+
+        Args:
+            date: 日期（YYYY-MM-DD），None 表示今天
+
+        Returns:
+            快照結果 dict（包含 date, event_count, total_lines, duration_ms）
+        """
+        if date is None:
+            date = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+        return await odds_snapshot_service.take_snapshot(date)
+
+    async def trigger_projection_fetch_now(self, date: Optional[str] = None) -> dict:
+        """
+        手動觸發投影資料預取
+        
+        Args:
+            date: 日期（YYYY-MM-DD），None 表示今天
+        
+        Returns:
+            投影資料 dict
+        """
+        if date is None:
+            date = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+        return await projection_service.fetch_and_store(date)
     
     async def trigger_now(self):
         """

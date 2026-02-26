@@ -222,6 +222,93 @@ class PlayerHistoryResponse(BaseModel):
     message: Optional[str] = Field(default=None, description="額外訊息")
 
 
+# ==================== 球員投影資料 ====================
+
+class PlayerProjection(BaseModel):
+    """
+    單一球員的投影資料
+    
+    對應 SportsDataIO Projected Player Game Stats API 的資料。
+    這是「預測值」，不是實際比賽結果。
+    
+    欄位分類：
+    - 基本資訊：球員名稱、球隊、位置
+    - 核心投影：預計得分、籃板、助攻等（Free Trial 可用）
+    - 對位難度：對手防守排名
+    - 先發/傷病：先發狀態、傷病資訊（Free Trial 會被 scrambled）
+    - DFS 相關：DraftKings / FanDuel 薪資和 Fantasy 分數
+    """
+    # 基本資訊
+    player_id: Optional[int] = Field(default=None, description="SportsDataIO 球員 ID")
+    player_name: str = Field(..., description="球員姓名")
+    team: Optional[str] = Field(default=None, description="球隊縮寫（如 GS, LAL）")
+    position: Optional[str] = Field(default=None, description="場上位置（PG/SG/SF/PF/C）")
+    opponent: Optional[str] = Field(default=None, description="對手球隊縮寫")
+    home_or_away: Optional[str] = Field(default=None, description="HOME 或 AWAY")
+    
+    # 核心投影數據（Free Trial 可用）
+    minutes: Optional[float] = Field(default=None, description="預計上場分鐘數")
+    points: Optional[float] = Field(default=None, description="預計得分")
+    rebounds: Optional[float] = Field(default=None, description="預計籃板")
+    assists: Optional[float] = Field(default=None, description="預計助攻")
+    steals: Optional[float] = Field(default=None, description="預計抄截")
+    blocked_shots: Optional[float] = Field(default=None, description="預計阻攻")
+    turnovers: Optional[float] = Field(default=None, description="預計失誤")
+    pra: Optional[float] = Field(default=None, description="預計 PRA（Points + Rebounds + Assists）")
+    
+    # 投籃數據
+    field_goals_made: Optional[float] = Field(default=None, description="投籃命中數")
+    field_goals_attempted: Optional[float] = Field(default=None, description="投籃出手數")
+    three_pointers_made: Optional[float] = Field(default=None, description="三分命中數")
+    three_pointers_attempted: Optional[float] = Field(default=None, description="三分出手數")
+    free_throws_made: Optional[float] = Field(default=None, description="罰球命中數")
+    free_throws_attempted: Optional[float] = Field(default=None, description="罰球出手數")
+    
+    # 先發與傷病（Free Trial 會 scrambled，顯示為 None）
+    started: Optional[int] = Field(default=None, description="是否先發（1=Yes, 0=No）")
+    lineup_confirmed: Optional[bool] = Field(default=None, description="先發是否已確認")
+    injury_status: Optional[str] = Field(default=None, description="傷病狀態（Free Trial 為 None）")
+    injury_body_part: Optional[str] = Field(default=None, description="傷病部位")
+    
+    # 對位難度
+    opponent_rank: Optional[int] = Field(default=None, description="對手整體防守排名（1-30）")
+    opponent_position_rank: Optional[int] = Field(default=None, description="對手對該位置防守排名")
+    
+    # DFS 相關
+    draftkings_salary: Optional[float] = Field(default=None, description="DraftKings DFS 薪資")
+    fanduel_salary: Optional[float] = Field(default=None, description="FanDuel DFS 薪資")
+    fantasy_points_dk: Optional[float] = Field(default=None, description="DraftKings Fantasy 分數")
+    fantasy_points_fd: Optional[float] = Field(default=None, description="FanDuel Fantasy 分數")
+    
+    # 進階指標
+    usage_rate_percentage: Optional[float] = Field(default=None, description="球權使用率 %")
+    player_efficiency_rating: Optional[float] = Field(default=None, description="球員效率值（PER）")
+
+
+class ProjectionsResponse(BaseModel):
+    """
+    投影資料 API 回應模型
+    
+    用於 GET /api/nba/projections 端點
+    返回指定日期所有球員的投影資料
+    """
+    date: str = Field(..., description="查詢日期（YYYY-MM-DD）")
+    player_count: int = Field(..., description="球員數量")
+    fetched_at: Optional[str] = Field(default=None, description="資料抓取時間")
+    projections: List[PlayerProjection] = Field(default_factory=list, description="球員投影列表")
+
+
+class ProjectionRefreshResponse(BaseModel):
+    """
+    投影資料刷新 API 回應模型
+    
+    用於 POST /api/nba/projections/refresh 端點
+    """
+    date: str = Field(..., description="刷新日期")
+    player_count: int = Field(..., description="取得的球員數量")
+    message: str = Field(..., description="操作結果訊息")
+
+
 # ==================== 每日高機率球員分析 ====================
 
 class DailyPick(BaseModel):
@@ -257,6 +344,37 @@ class DailyPick(BaseModel):
     n_games: int = Field(..., description="樣本場次數")
     bookmakers_count: int = Field(..., description="博彩公司數量")
     all_lines: List[float] = Field(default_factory=list, description="所有博彩公司的 line")
+    
+    # === 投影資料欄位（來自 SportsDataIO Projection API）===
+    has_projection: bool = Field(default=False, description="是否有投影資料")
+    projected_value: Optional[float] = Field(
+        default=None, 
+        description="投影值（如 projected points = 29.3）"
+    )
+    projected_minutes: Optional[float] = Field(
+        default=None, 
+        description="預計上場分鐘數"
+    )
+    edge: Optional[float] = Field(
+        default=None, 
+        description="投影值與盤口的差距（projected_value - threshold），正數 = 有利 Over"
+    )
+    opponent_rank: Optional[int] = Field(
+        default=None, 
+        description="對手整體防守排名（1-30，1=最弱防守）"
+    )
+    opponent_position_rank: Optional[int] = Field(
+        default=None, 
+        description="對手對該位置防守排名（1-30）"
+    )
+    injury_status: Optional[str] = Field(
+        default=None, 
+        description="傷病狀態（Free Trial 為 None）"
+    )
+    lineup_confirmed: Optional[bool] = Field(
+        default=None, 
+        description="先發是否已確認"
+    )
 
 
 class AnalysisStats(BaseModel):
@@ -285,4 +403,99 @@ class DailyPicksResponse(BaseModel):
     picks: List[DailyPick] = Field(default_factory=list, description="高機率球員列表")
     stats: Optional[AnalysisStats] = Field(default=None, description="分析統計")
     message: Optional[str] = Field(default=None, description="額外訊息")
+
+
+# ==================== 盤口快照（Line Movement Tracking）====================
+
+class OddsLineSnapshot(BaseModel):
+    """
+    單筆盤口快照資料
+
+    代表某一時刻、某一博彩公司、某一球員、某一 market 的 no-vig 計算結果。
+    一次快照 run 會產生多筆 OddsLineSnapshot。
+
+    欄位說明：
+    - bookmaker: 博彩公司 key（如 "draftkings"）
+    - line: 盤口門檻值（如 24.5），這是「會移動」的核心數據
+    - over_odds / under_odds: 原始美式賠率（如 -110）
+    - vig: 水錢比例（如 0.0476 = 4.76%）
+    - over_fair_prob / under_fair_prob: 去水後的公平機率
+    """
+    bookmaker: str = Field(..., description="博彩公司 key")
+    line: Optional[float] = Field(default=None, description="盤口門檻值")
+    over_odds: Optional[int] = Field(default=None, description="Over 美式賠率")
+    under_odds: Optional[int] = Field(default=None, description="Under 美式賠率")
+    vig: Optional[float] = Field(default=None, description="水錢比例")
+    over_fair_prob: Optional[float] = Field(default=None, description="Over 去水機率")
+    under_fair_prob: Optional[float] = Field(default=None, description="Under 去水機率")
+
+
+class OddsConsensus(BaseModel):
+    """
+    盤口共識（Consensus）
+
+    多家博彩公司去水機率的平均值，代表市場共識。
+    在 API 回應中，consensus 是從 odds_line_snapshots 表
+    按 (snapshot_at, player_name, market) 分組後
+    用 SQL AVG() 即時計算而來，不另外儲存。
+    """
+    over_fair_prob: float = Field(..., description="共識 Over 去水機率")
+    under_fair_prob: float = Field(..., description="共識 Under 去水機率")
+    avg_line: Optional[float] = Field(default=None, description="平均盤口線")
+    bookmaker_count: int = Field(default=0, description="博彩公司數量")
+
+
+class OddsSnapshotGroup(BaseModel):
+    """
+    一次快照的分組資料
+
+    代表某一時刻的所有博彩公司盤口資料。
+    例如 UTC 16:00 的快照，包含 DraftKings、FanDuel 等各家的 line + no-vig。
+    用於 line movement 視覺化：每個 group 是時間軸上的一個資料點。
+
+    欄位說明：
+    - snapshot_at: 快照時間（ISO 8601 格式）
+    - lines: 各博彩公司的 no-vig 計算結果列表
+    - consensus: 所有博彩公司的去水機率平均值
+    """
+    snapshot_at: str = Field(..., description="快照時間（ISO 8601）")
+    lines: List[OddsLineSnapshot] = Field(
+        default_factory=list, description="各博彩公司的盤口資料"
+    )
+    consensus: Optional[OddsConsensus] = Field(
+        default=None, description="市場共識（去水機率平均）"
+    )
+
+
+class OddsHistoryResponse(BaseModel):
+    """
+    盤口歷史 API 回應模型
+
+    用於 GET /api/nba/odds-history 端點。
+    回傳某球員某 market 在指定日期的所有快照，
+    每個快照包含各博彩公司的 no-vig 結果和市場共識。
+
+    使用場景：前端 Line Movement Chart 的資料來源。
+    """
+    date: str = Field(..., description="比賽日期 YYYY-MM-DD")
+    player_name: str = Field(..., description="球員名稱")
+    market: str = Field(..., description="市場類型")
+    snapshot_count: int = Field(default=0, description="快照數量")
+    snapshots: List[OddsSnapshotGroup] = Field(
+        default_factory=list, description="快照列表（按時間排序）"
+    )
+
+
+class OddsSnapshotTriggerResponse(BaseModel):
+    """
+    手動觸發盤口快照的回應模型
+
+    用於 POST /api/nba/odds-history/snapshot 端點。
+    回傳快照執行結果的摘要。
+    """
+    date: str = Field(..., description="快照日期")
+    event_count: int = Field(default=0, description="處理的賽事數")
+    total_lines: int = Field(default=0, description="寫入的 odds line 總筆數")
+    duration_ms: int = Field(default=0, description="耗時（毫秒）")
+    message: str = Field(default="", description="操作結果訊息")
 

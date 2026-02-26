@@ -10,7 +10,7 @@
 
 "use client";
 
-import { useState, useCallback, useMemo } from "react";
+import { useState, useCallback, useMemo, useEffect } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { 
   RefreshCw, 
@@ -27,7 +27,11 @@ import {
   Filter,
   X,
   Check,
-  ClipboardList
+  ClipboardList,
+  Timer,
+  Shield,
+  ArrowUpRight,
+  ArrowDownRight,
 } from "lucide-react";
 import Link from "next/link";
 import { getDailyPicks, triggerDailyAnalysis } from "@/lib/api";
@@ -39,6 +43,7 @@ import {
 } from "@/lib/schemas";
 import { DatePicker } from "@/components/DatePicker";
 import { TeamLogo } from "@/components/TeamLogo";
+import { getShortTeamName } from "@/lib/team-logos";
 import { PickContextMenu } from "@/components/PickContextMenu";
 import { useBetSlip } from "@/contexts/BetSlipContext";
 
@@ -47,6 +52,39 @@ import { useBetSlip } from "@/contexts/BetSlipContext";
  */
 function getProbabilityLevel(probability: number): "high" | "medium" {
   return probability >= 0.70 ? "high" : "medium";
+}
+
+/**
+ * Matchup difficulty level based on opponent rank (1-30)
+ * 
+ * opponent_rank 的含義：
+ * - 1-10: 對手防守較弱，對進攻球員有利（Easy）
+ * - 11-20: 中等防守（Average）
+ * - 21-30: 對手防守強，對進攻球員不利（Hard）
+ * 
+ * 注意：rank 低 = 對手防守弱 = 對球員有利
+ */
+function getMatchupLevel(rank: number | null | undefined): { label: string; color: string } | null {
+  if (rank == null) return null;
+  if (rank <= 10) return { label: "Easy", color: "text-green-600 bg-green-500/10" };
+  if (rank <= 20) return { label: "Avg", color: "text-yellow-600 bg-yellow-500/10" };
+  return { label: "Hard", color: "text-red-600 bg-red-500/10" };
+}
+
+/**
+ * Format edge value with sign and color info
+ * 
+ * edge = projected_value - threshold
+ * 正數 = 投影值高於盤口（配合 Over 方向時有利）
+ * 負數 = 投影值低於盤口（配合 Under 方向時有利）
+ */
+function formatEdge(edge: number | null | undefined, direction: string): { text: string; favorable: boolean } | null {
+  if (edge == null) return null;
+  const absEdge = Math.abs(edge);
+  // Edge 有利的判斷：Over 時 edge > 0 有利，Under 時 edge < 0 有利
+  const favorable = direction === "over" ? edge > 0 : edge < 0;
+  const sign = edge > 0 ? "+" : "";
+  return { text: `${sign}${edge.toFixed(1)}`, favorable };
 }
 
 /**
@@ -157,6 +195,62 @@ function PickCard({ pick, index }: { pick: DailyPick; index: number }) {
                 {formatProbability(pick.probability)}
               </div>
             </div>
+            
+            {/* Projection info row (Edge + Minutes + Matchup) */}
+            {pick.has_projection && (
+              <div className="flex items-center gap-2 mb-4 flex-wrap">
+                {/* Edge badge */}
+                {(() => {
+                  const edgeInfo = formatEdge(pick.edge, pick.direction);
+                  if (!edgeInfo) return null;
+                  return (
+                    <span className={`
+                      inline-flex items-center gap-1 px-2 py-1 rounded-md text-xs font-bold
+                      ${edgeInfo.favorable 
+                        ? "bg-green-500/10 text-green-600" 
+                        : "bg-red-500/10 text-red-600"
+                      }
+                    `}>
+                      {edgeInfo.favorable 
+                        ? <ArrowUpRight className="w-3 h-3" />
+                        : <ArrowDownRight className="w-3 h-3" />
+                      }
+                      Edge {edgeInfo.text}
+                    </span>
+                  );
+                })()}
+                
+                {/* Projected minutes */}
+                {pick.projected_minutes != null && (
+                  <span className={`
+                    inline-flex items-center gap-1 px-2 py-1 rounded-md text-xs font-bold
+                    ${pick.projected_minutes < 20 
+                      ? "bg-red-500/10 text-red-600" 
+                      : "bg-gray/10 text-gray"
+                    }
+                  `}>
+                    <Timer className="w-3 h-3" />
+                    {pick.projected_minutes.toFixed(0)}min
+                    {pick.projected_minutes < 20 && " ⚠️"}
+                  </span>
+                )}
+                
+                {/* Opponent matchup rank */}
+                {(() => {
+                  const matchup = getMatchupLevel(pick.opponent_position_rank || pick.opponent_rank);
+                  if (!matchup) return null;
+                  return (
+                    <span className={`
+                      inline-flex items-center gap-1 px-2 py-1 rounded-md text-xs font-bold
+                      ${matchup.color}
+                    `}>
+                      <Shield className="w-3 h-3" />
+                      {matchup.label}
+                    </span>
+                  );
+                })()}
+              </div>
+            )}
             
             {/* Probability progress bar */}
             <div className="progress-bar mb-4">
@@ -314,7 +408,7 @@ function TeamFilter({
               `}
             >
               <TeamLogo teamName={team} size={20} />
-              <span>{team}</span>
+              <span>{getShortTeamName(team)}</span>
               {isSelected && <Check className="w-4 h-4" />}
             </button>
           );
@@ -323,6 +417,19 @@ function TeamFilter({
     </div>
   );
 }
+
+// ==================== sessionStorage keys ====================
+
+/**
+ * STORAGE_KEY_DATE - 儲存使用者選擇的日期
+ * STORAGE_KEY_TEAMS - 儲存使用者選擇的球隊篩選
+ * 
+ * 使用 sessionStorage（而非 localStorage），
+ * 因為篩選條件只需要在當前瀏覽器 session（分頁）期間保留，
+ * 關閉分頁後自動清除，不會影響下次開啟的預設值。
+ */
+const STORAGE_KEY_DATE = "picks-filter-date";
+const STORAGE_KEY_TEAMS = "picks-filter-teams";
 
 /**
  * Main page component
@@ -333,6 +440,41 @@ export default function PicksPage() {
   const [isTriggering, setIsTriggering] = useState(false);
   const [selectedTeams, setSelectedTeams] = useState<Set<string>>(new Set());
   const queryClient = useQueryClient();
+  
+  // ==================== 從 sessionStorage 還原篩選狀態 ====================
+  
+  /**
+   * useEffect - 元件掛載時從 sessionStorage 還原上次的篩選設定
+   * 
+   * 為什麼用 useEffect 而不是 useState 的 lazy initializer？
+   * → 因為 Next.js 的 "use client" 元件仍會在 server 端先渲染一次，
+   *   server 端沒有 sessionStorage（window 未定義），
+   *   如果在 useState 初始化時讀取 sessionStorage，
+   *   server 和 client 的初始值會不一致，導致 hydration mismatch 錯誤。
+   * → 改用 useEffect 保證只在 client 端執行，安全地還原狀態。
+   * 
+   * 還原邏輯：
+   * 1. 讀取 STORAGE_KEY_DATE → 如果存在就還原日期（這會觸發 React Query 重新取資料）
+   * 2. 讀取 STORAGE_KEY_TEAMS → 如果存在就還原球隊篩選（JSON string → Set）
+   */
+  useEffect(() => {
+    const storedDate = sessionStorage.getItem(STORAGE_KEY_DATE);
+    if (storedDate) {
+      setSelectedDate(storedDate);
+    }
+    
+    const storedTeams = sessionStorage.getItem(STORAGE_KEY_TEAMS);
+    if (storedTeams) {
+      try {
+        const teams = JSON.parse(storedTeams);
+        if (Array.isArray(teams) && teams.length > 0) {
+          setSelectedTeams(new Set(teams));
+        }
+      } catch {
+        // JSON 解析失敗時忽略，使用預設空 Set
+      }
+    }
+  }, []);
   
   const {
     data,
@@ -350,6 +492,26 @@ export default function PicksPage() {
     refetchOnWindowFocus: false,
   });
   
+  // ==================== 篩選操作（含 sessionStorage 持久化） ====================
+  
+  /**
+   * handleDateChange - 日期變更處理
+   * 
+   * 當使用者透過 DatePicker 選擇新日期時觸發：
+   * 1. 更新 React state（selectedDate）→ 觸發 React Query 重新取該日的 picks
+   * 2. 同步寫入 sessionStorage → 下次回到頁面時可還原
+   * 3. 清空球隊篩選 → 因為不同日期的比賽球隊可能不同
+   * 
+   * 使用方式：<DatePicker onChange={handleDateChange} />
+   */
+  const handleDateChange = useCallback((date: string) => {
+    setSelectedDate(date);
+    sessionStorage.setItem(STORAGE_KEY_DATE, date);
+    // 切換日期時清除球隊篩選，因為不同日期的比賽球隊不同
+    setSelectedTeams(new Set());
+    sessionStorage.setItem(STORAGE_KEY_TEAMS, JSON.stringify([]));
+  }, []);
+
   const handleRefresh = useCallback(async () => {
     await queryClient.invalidateQueries({ 
       queryKey: ["daily-picks", selectedDate] 
@@ -386,8 +548,16 @@ export default function PicksPage() {
     return Array.from(teamsSet).sort();
   }, [data?.picks]);
   
-  // 切換球隊選擇狀態
-  // Toggle team selection
+  /**
+   * handleToggleTeam - 切換單個球隊的選擇/取消選擇
+   * 
+   * 當使用者點擊球隊按鈕時觸發：
+   * 1. 如果該球隊已選擇 → 從 Set 中移除
+   * 2. 如果該球隊未選擇 → 加入 Set
+   * 3. 同步寫入 sessionStorage → 持久化篩選狀態
+   * 
+   * 使用方式：<TeamFilter onToggle={handleToggleTeam} />
+   */
   const handleToggleTeam = useCallback((team: string) => {
     setSelectedTeams((prev) => {
       const newSet = new Set(prev);
@@ -396,14 +566,24 @@ export default function PicksPage() {
       } else {
         newSet.add(team);
       }
+      // 在 setState callback 內同步寫入 sessionStorage
+      sessionStorage.setItem(STORAGE_KEY_TEAMS, JSON.stringify(Array.from(newSet)));
       return newSet;
     });
   }, []);
   
-  // 清除所有選擇
-  // Clear all selections
+  /**
+   * handleClearTeams - 清除所有球隊篩選
+   * 
+   * 當使用者點擊「Clear all」按鈕時觸發：
+   * 1. 重置 selectedTeams 為空 Set（顯示所有球隊的 picks）
+   * 2. 同步清除 sessionStorage 中的球隊篩選
+   * 
+   * 使用方式：<TeamFilter onClear={handleClearTeams} />
+   */
   const handleClearTeams = useCallback(() => {
     setSelectedTeams(new Set());
+    sessionStorage.setItem(STORAGE_KEY_TEAMS, JSON.stringify([]));
   }, []);
   
   const dateTitle = getDateDisplayTitle(selectedDate);
@@ -451,7 +631,7 @@ export default function PicksPage() {
         <div className="card mb-10">
           <DatePicker
             value={selectedDate}
-            onChange={setSelectedDate}
+            onChange={handleDateChange}
           />
         </div>
 

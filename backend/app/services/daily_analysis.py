@@ -30,6 +30,7 @@ from app.services.odds_provider import OddsAPIError
 from app.services.csv_player_history import csv_player_service
 from app.services.prob import calculate_mode_threshold
 from app.services.cache import cache_service
+from app.services.projection_service import projection_service
 from app.models.schemas import DailyPick, DailyPicksResponse, AnalysisStats
 
 
@@ -155,6 +156,19 @@ class DailyAnalysisService:
         
         print(f"📅 找到 {len(events)} 場賽事")
         
+        # 2.5. 預取投影資料（SportsDataIO）
+        # 一次 API call 取得該日期所有球員的投影，
+        # 之後在每場比賽分析中重複使用（不需要額外 API call）
+        projections: Dict[str, Dict] = {}
+        try:
+            projections = await projection_service.get_projections(date)
+            if projections:
+                print(f"📊 取得 {len(projections)} 筆投影資料")
+            else:
+                print(f"ℹ️ 無投影資料可用，將只使用歷史機率分析")
+        except Exception as e:
+            print(f"⚠️ 取得投影資料失敗（不影響主分析流程）: {e}")
+        
         # 3. 分析每場賽事
         all_picks: List[DailyPick] = []
         total_players = 0
@@ -173,7 +187,8 @@ class DailyAnalysisService:
                     event_id=event_id,
                     home_team=home_team,
                     away_team=away_team,
-                    commence_time=commence_time
+                    commence_time=commence_time,
+                    projections=projections
                 )
                 all_picks.extend(event_picks)
                 total_players += players_count
@@ -294,18 +309,22 @@ class DailyAnalysisService:
         event_id: str,
         home_team: str,
         away_team: str,
-        commence_time: str
+        commence_time: str,
+        projections: Optional[Dict[str, Dict]] = None
     ) -> Tuple[List[DailyPick], int, int]:
         """
         分析單場賽事
         
-        對該場賽事的所有球員，分析 4 種 metric 的機率
+        對該場賽事的所有球員，分析 4 種 metric 的機率，
+        並結合投影資料計算 Value Edge。
         
         Args:
             event_id: 賽事 ID
             home_team: 主場球隊
             away_team: 客場球隊
             commence_time: 比賽時間
+            projections: 投影資料 dict（以 player_name 為 key），
+                         由 run_daily_analysis 預先取得後傳入
         
         Returns:
             Tuple[List[DailyPick], int, int]: (高機率選擇列表, 球員數, prop 數)
@@ -313,6 +332,9 @@ class DailyAnalysisService:
         picks: List[DailyPick] = []
         all_players: set = set()
         total_props = 0
+        
+        if projections is None:
+            projections = {}
         
         # 對每種 metric 進行分析
         for market_key, metric_key in SUPPORTED_MARKETS:
@@ -354,11 +376,39 @@ class DailyAnalysisService:
                     if n_games < 10:
                         continue
                     
-                    # 從歷史數據中獲取球員所屬球隊（最近一場比賽的球隊）
+                    # === 投影資料整合（Value Edge Detection）===
+                    # 從預取的投影資料中查找該球員的投影
+                    proj = projections.get(player_name, {})
+                    has_projection = bool(proj)
+                    
+                    # 從投影資料優先取得球員當前球隊
+                    # SportsDataIO 投影 API 的 team 欄位會即時反映季中交易，
+                    # 比 CSV 歷史記錄更可靠（CSV 只記錄最近一場比賽的球隊）
+                    # 投影 API 回傳縮寫格式（如 "GS", "MIL"），CSV 回傳簡短名稱（如 "Warriors", "Bucks"）
                     player_team = ""
-                    game_logs = history_stats.get("game_logs", [])
-                    if game_logs and len(game_logs) > 0:
-                        player_team = game_logs[0].get("team", "")
+                    if proj and proj.get("team"):
+                        player_team = proj.get("team")  # 來自 SportsDataIO（縮寫如 "GS"）
+                    else:
+                        # Fallback: 從 CSV 歷史數據取最近一場比賽的球隊
+                        game_logs = history_stats.get("game_logs", [])
+                        if game_logs and len(game_logs) > 0:
+                            player_team = game_logs[0].get("team", "")
+                    
+                    # 取得該 metric 對應的投影值
+                    # metric_key 與投影欄位名稱一致（points, rebounds, assists, pra）
+                    projected_value = proj.get(metric_key) if proj else None
+                    projected_minutes = proj.get("minutes") if proj else None
+                    opponent_rank = proj.get("opponent_rank") if proj else None
+                    opponent_position_rank = proj.get("opponent_position_rank") if proj else None
+                    injury_status = proj.get("injury_status") if proj else None
+                    lineup_confirmed = proj.get("lineup_confirmed") if proj else None
+                    
+                    # 計算 Edge（投影值與盤口的差距）
+                    # 正數 = 投影值高於盤口（有利 Over）
+                    # 負數 = 投影值低於盤口（有利 Under）
+                    edge = None
+                    if projected_value is not None and mode_threshold is not None:
+                        edge = round(projected_value - mode_threshold, 2)
                     
                     # 檢查是否超過機率門檻
                     if p_over is not None and p_over >= self.probability_threshold:
@@ -375,10 +425,23 @@ class DailyAnalysisService:
                             probability=round(p_over, 4),
                             n_games=n_games,
                             bookmakers_count=len(lines),
-                            all_lines=sorted(lines)
+                            all_lines=sorted(lines),
+                            # 投影資料
+                            has_projection=has_projection,
+                            projected_value=round(projected_value, 2) if projected_value is not None else None,
+                            projected_minutes=round(projected_minutes, 1) if projected_minutes is not None else None,
+                            edge=edge,
+                            opponent_rank=opponent_rank,
+                            opponent_position_rank=opponent_position_rank,
+                            injury_status=injury_status,
+                            lineup_confirmed=lineup_confirmed,
                         )
                         picks.append(pick)
-                        print(f"  ✨ {player_name} ({player_team}) {metric_key} OVER {mode_threshold}: {p_over:.1%}")
+                        
+                        # 打印包含 edge 資訊的日誌
+                        edge_str = f" (edge: {edge:+.1f})" if edge is not None else ""
+                        min_str = f" [{projected_minutes:.0f}min]" if projected_minutes is not None else ""
+                        print(f"  ✨ {player_name} ({player_team}) {metric_key} OVER {mode_threshold}: {p_over:.1%}{edge_str}{min_str}")
                     
                     elif p_under is not None and p_under >= self.probability_threshold:
                         pick = DailyPick(
@@ -394,10 +457,22 @@ class DailyAnalysisService:
                             probability=round(p_under, 4),
                             n_games=n_games,
                             bookmakers_count=len(lines),
-                            all_lines=sorted(lines)
+                            all_lines=sorted(lines),
+                            # 投影資料
+                            has_projection=has_projection,
+                            projected_value=round(projected_value, 2) if projected_value is not None else None,
+                            projected_minutes=round(projected_minutes, 1) if projected_minutes is not None else None,
+                            edge=edge,
+                            opponent_rank=opponent_rank,
+                            opponent_position_rank=opponent_position_rank,
+                            injury_status=injury_status,
+                            lineup_confirmed=lineup_confirmed,
                         )
                         picks.append(pick)
-                        print(f"  ✨ {player_name} ({player_team}) {metric_key} UNDER {mode_threshold}: {p_under:.1%}")
+                        
+                        edge_str = f" (edge: {edge:+.1f})" if edge is not None else ""
+                        min_str = f" [{projected_minutes:.0f}min]" if projected_minutes is not None else ""
+                        print(f"  ✨ {player_name} ({player_team}) {metric_key} UNDER {mode_threshold}: {p_under:.1%}{edge_str}{min_str}")
             
             except OddsAPIError as e:
                 print(f"  ⚠️ 獲取 {market_key} 失敗: {e}")

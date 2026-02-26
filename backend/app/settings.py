@@ -22,6 +22,13 @@ class Settings(BaseSettings):
     odds_api_key: str = ""  # The Odds API 的 API 金鑰
     odds_api_base_url: str = "https://api.the-odds-api.com"  # API 基礎 URL
     
+    # SportsDataIO 設定（球員投影數據）
+    sportsdata_api_key: str = ""  # SportsDataIO API 金鑰
+    sportsdata_base_url: str = "https://api.sportsdata.io"  # SportsDataIO API 基礎 URL
+    
+    # PostgreSQL 設定
+    database_url: str = "postgresql://novig:novig@localhost:5432/novig_nba"  # PostgreSQL 連線 URL
+    
     # Redis 設定
     redis_url: str = "redis://localhost:6379"  # Redis 連線 URL
     
@@ -29,6 +36,7 @@ class Settings(BaseSettings):
     cache_ttl_events: int = 300  # 賽事列表快取時間（5分鐘）
     cache_ttl_props: int = 60    # Props 資料快取時間（1分鐘）
     cache_ttl_players: int = 300 # 球員建議快取時間（5分鐘）
+    cache_ttl_projections: int = 7200  # 投影資料快取時間（2小時）
     
     # CORS 設定
     allowed_origins: str = "http://localhost:3000"  # 允許的前端來源，逗號分隔

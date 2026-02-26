@@ -51,6 +51,16 @@ services:
       
       # 日誌等級
       - LOG_LEVEL=${LOG_LEVEL:-info}
+      
+      # SportsDataIO 設定
+      - SPORTSDATA_API_KEY=${SPORTSDATA_API_KEY:-}
+      - SPORTSDATA_BASE_URL=${SPORTSDATA_BASE_URL:-https://api.sportsdata.io}
+      
+      # PostgreSQL 設定
+      - DATABASE_URL=postgresql://novig:novig@postgres:5432/novig_nba
+      
+      # 投影資料快取 TTL
+      - CACHE_TTL_PROJECTIONS=${CACHE_TTL_PROJECTIONS:-7200}
     
     # 掛載 data 目錄（CSV 檔案）
     # 將主機的 data 目錄掛載到容器的 /app/data 目錄
@@ -59,9 +69,10 @@ services:
       - ./data:/app/data
     
     # 依賴服務
-    # 確保 redis 啟動後才啟動 backend
+    # 確保 redis 和 postgres 啟動後才啟動 backend
     depends_on:
       - redis
+      - postgres
     
     # 網路設定
     networks:
@@ -122,6 +133,44 @@ services:
       timeout: 5s
       retries: 5
 
+  # ==================== PostgreSQL 服務 ====================
+  postgres:
+    # 使用官方 PostgreSQL 映像（Alpine 輕量版）
+    image: postgres:16-alpine
+    
+    # 容器名稱
+    container_name: no-vig-nba-postgres
+    
+    # 端口映射已移除：本機已有 PostgreSQL 佔用 5432/5433
+    # backend 透過 Docker 內部網路 (postgres:5432) 連線，不需要對外暴露端口
+    # 如需從主機直接連線除錯，可取消下面的註解（選一個沒被佔用的端口）
+    # ports:
+    #   - "5434:5432"
+    
+    # PostgreSQL 環境變數
+    environment:
+      - POSTGRES_USER=novig
+      - POSTGRES_PASSWORD=novig
+      - POSTGRES_DB=novig_nba
+    
+    # 資料持久化
+    volumes:
+      - pg-data:/var/lib/postgresql/data
+    
+    # 網路設定
+    networks:
+      - app-network
+    
+    # 重啟策略
+    restart: unless-stopped
+    
+    # 健康檢查
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U novig -d novig_nba"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
 # ==================== 網路設定 ====================
 networks:
   app-network:
@@ -133,5 +182,8 @@ networks:
 volumes:
   # Redis 資料持久化 volume
   redis-data:
+    driver: local
+  # PostgreSQL 資料持久化 volume
+  pg-data:
     driver: local
 

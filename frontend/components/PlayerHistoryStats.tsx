@@ -32,6 +32,7 @@ import {
   AlertCircle,
   Info,
   Filter,
+  Target,
 } from "lucide-react";
 import { getCSVPlayers, getPlayerHistory, calculateNoVig } from "@/lib/api";
 import {
@@ -39,6 +40,7 @@ import {
   RECENT_GAMES_OPTIONS,
   type HistoryMetricKey,
   type GameLog,
+  type PlayerProjection,
 } from "@/lib/schemas";
 import { cn } from "@/lib/utils";
 
@@ -98,12 +100,45 @@ function calculateMode(numbers: number[]): number | null {
   return Math.round((modes.reduce((a, b) => a + b, 0) / modes.length) * 10) / 10;
 }
 
+/**
+ * getProjectionValueForMetric - 從投影資料中取出對應 metric 的數值
+ *
+ * 叫 "getProjectionValueForMetric" 因為它根據 HistoryMetricKey
+ * 從 PlayerProjection 物件中取出正確的投影數值。
+ * 例如 metric="points" → projection.points
+ *
+ * @param projection - 球員投影資料
+ * @param metric - 統計指標 key
+ * @returns 該 metric 的投影數值，或 null
+ */
+function getProjectionValueForMetric(
+  projection: PlayerProjection | undefined,
+  metric: HistoryMetricKey
+): number | null {
+  if (!projection) return null;
+  switch (metric) {
+    case "points": return projection.points ?? null;
+    case "rebounds": return projection.rebounds ?? null;
+    case "assists": return projection.assists ?? null;
+    case "pra": return projection.pra ?? null;
+    default: return null;
+  }
+}
+
 interface PlayerHistoryStatsProps {
   eventId?: string;
   onPlayerSelect?: (playerName: string) => void;
   initialPlayer?: string;
   initialMarket?: string;
   initialThreshold?: string;
+  /**
+   * 球員投影資料（可選）
+   * 
+   * 當從 Event Detail Page 傳入時，用於：
+   * 1. 在圖表上繪製投影值的參考線（藍色實線）
+   * 2. 在 stat cards 中新增第 5 張「Projected」卡片
+   */
+  projection?: PlayerProjection;
 }
 
 /**
@@ -115,6 +150,7 @@ export function PlayerHistoryStats({
   initialPlayer = "",
   initialMarket,
   initialThreshold,
+  projection,
 }: PlayerHistoryStatsProps) {
   const [searchInput, setSearchInput] = useState(initialPlayer);
   const [selectedPlayer, setSelectedPlayer] = useState(initialPlayer);
@@ -238,6 +274,10 @@ export function PlayerHistoryStats({
   const playerList = playersData?.players || [];
   const opponentList = historyData?.opponents || [];
   const gameLogs = historyData?.game_logs || [];
+
+  // 從投影資料取得當前 metric 的投影數值
+  // projectedValue 用於：(1) 圖表的藍色參考線 (2) 第 5 張 stat card
+  const projectedValue = getProjectionValueForMetric(projection, metric);
 
   return (
     <div className="space-y-6">
@@ -425,7 +465,15 @@ export function PlayerHistoryStats({
       {selectedPlayer && historyData && (
         <div className="space-y-6 animate-fade-in">
           {/* Stats cards */}
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+          {/* 
+            當有投影資料時，grid 從 4 欄變為 5 欄，多出一張「Projected」卡片。
+            grid-cols-2: 手機上 2 欄
+            md:grid-cols-4 / md:grid-cols-5: 桌面上 4 或 5 欄
+          */}
+          <div className={cn(
+            "grid grid-cols-2 gap-4",
+            projectedValue != null ? "md:grid-cols-5" : "md:grid-cols-4"
+          )}>
             {/* Over probability */}
             <div className="card bg-green-50 border-green-300">
               <div className="flex items-center gap-2 text-green-700 mb-2">
@@ -483,6 +531,35 @@ export function PlayerHistoryStats({
                 )}
               </p>
             </div>
+
+            {/* Projected Value (5th card) — 只在有投影資料時顯示 */}
+            {/* 
+              這張卡片橋接「歷史分析」和「投影預測」兩種資料來源：
+              使用者可以同時看到 "歷史上 72% Over" 和 "投影 29.3 也支持 Over +2.8"
+            */}
+            {projectedValue != null && (
+              <div className="card bg-blue-50 border-blue-300">
+                <div className="flex items-center gap-2 text-blue-700 mb-2">
+                  <Target className="w-4 h-4" />
+                  <span className="text-sm font-bold">Projected</span>
+                </div>
+                <p className="text-2xl font-bold text-blue-600">
+                  {projectedValue.toFixed(1)}
+                </p>
+                {threshold && !isNaN(parseFloat(threshold)) && (
+                  <p className={cn(
+                    "text-xs font-bold mt-1",
+                    projectedValue >= parseFloat(threshold) ? "text-green-600" : "text-red"
+                  )}>
+                    Edge: {projectedValue >= parseFloat(threshold) ? "+" : ""}
+                    {(projectedValue - parseFloat(threshold)).toFixed(1)} vs line
+                  </p>
+                )}
+                <p className="text-[10px] text-gray mt-0.5">
+                  SportsDataIO ML
+                </p>
+              </div>
+            )}
           </div>
 
           {/* Chart */}
@@ -587,7 +664,7 @@ export function PlayerHistoryStats({
                         return value;
                       }}
                     />
-                    {/* Threshold line */}
+                    {/* Threshold line（紅色虛線）— 盤口閾值 */}
                     <ReferenceLine
                       y={parseFloat(threshold)}
                       stroke="#E92016"
@@ -601,6 +678,26 @@ export function PlayerHistoryStats({
                         position: "right",
                       }}
                     />
+                    {/* Projected value line（藍色實線）— SportsDataIO 投影值 */}
+                    {/* 
+                      只在有投影資料時顯示。
+                      藍色實線 vs 紅色虛線，讓使用者在同一圖表上
+                      看到投影值相對於盤口和歷史數據的位置。
+                    */}
+                    {projectedValue != null && (
+                      <ReferenceLine
+                        y={projectedValue}
+                        stroke="#2563EB"
+                        strokeWidth={2}
+                        label={{
+                          value: `Projected: ${projectedValue.toFixed(1)}`,
+                          fill: "#2563EB",
+                          fontSize: 12,
+                          fontWeight: 700,
+                          position: "left",
+                        }}
+                      />
+                    )}
                     <Bar dataKey="value" radius={[4, 4, 0, 0]}>
                       {gameLogs.map((entry, index) => (
                         <Cell
@@ -612,7 +709,7 @@ export function PlayerHistoryStats({
                   </BarChart>
                 </ResponsiveContainer>
               </div>
-              <div className="flex justify-center gap-6 mt-4 text-xs">
+              <div className="flex justify-center gap-6 mt-4 text-xs flex-wrap">
                 <div className="flex items-center gap-2">
                   <div className="w-4 h-4 rounded bg-green-500" />
                   <span className="text-dark font-medium">Over (above threshold)</span>
@@ -625,6 +722,13 @@ export function PlayerHistoryStats({
                   <div className="w-8 h-0.5 bg-red border-dashed border" />
                   <span className="text-dark font-medium">Threshold line</span>
                 </div>
+                {/* 投影參考線圖例 — 只在有投影資料時顯示 */}
+                {projectedValue != null && (
+                  <div className="flex items-center gap-2">
+                    <div className="w-8 h-0.5 bg-blue-600" />
+                    <span className="text-dark font-medium">Projected value</span>
+                  </div>
+                )}
               </div>
             </div>
           )}

@@ -31,6 +31,7 @@ import {
 } from "lucide-react";
 import { useBetSlip, type BetSlipPick } from "@/contexts/BetSlipContext";
 import { TeamLogo } from "@/components/TeamLogo";
+import { getShortTeamName } from "@/lib/team-logos";
 import { METRIC_DISPLAY_NAMES, DIRECTION_DISPLAY_NAMES } from "@/lib/schemas";
 import { formatProbability } from "@/lib/utils";
 
@@ -106,7 +107,7 @@ function BetSlipCard({ pick, onRemove }: { pick: BetSlipPick; onRemove: () => vo
               </h3>
               <p className="text-sm text-gray">
                 {pick.player_team && (
-                  <span className="font-medium">{pick.player_team} · </span>
+                  <span className="font-medium">{getShortTeamName(pick.player_team)} · </span>
                 )}
                 {pick.away_team} @ {pick.home_team}
               </p>
@@ -326,7 +327,7 @@ function ShareImageTemplate({
                     margin: 0,
                     lineHeight: 1.35,
                   }}>
-                    {pick.player_team && <span style={{ fontWeight: 500 }}>{pick.player_team} · </span>}
+                    {pick.player_team && <span style={{ fontWeight: 500 }}>{getShortTeamName(pick.player_team)} · </span>}
                     {pick.away_team} @ {pick.home_team}
                   </div>
                 </div>

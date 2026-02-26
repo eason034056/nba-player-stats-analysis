@@ -12,8 +12,9 @@ main.py - FastAPI 應用程式主入口點
 from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from app.api import health, nba, daily_picks
+from app.api import health, nba, daily_picks, projections, odds_history
 from app.services.cache import cache_service
+from app.services.db import db_service
 from app.services.scheduler import scheduler_service
 from app.settings import settings
 
@@ -42,6 +43,15 @@ async def lifespan(app: FastAPI):
     print("🚀 Starting No-Vig NBA API...")
     print(f"📊 Odds API Base URL: {settings.odds_api_base_url}")
     print(f"🔴 Redis URL: {settings.redis_url}")
+    print(f"🐘 Database URL: {settings.database_url}")
+    print(f"📈 SportsDataIO: {'已設定' if settings.sportsdata_api_key else '未設定（投影功能停用）'}")
+    
+    # 初始化 PostgreSQL 連線池
+    try:
+        await db_service.init()
+    except Exception as e:
+        print(f"⚠️ PostgreSQL 初始化失敗: {e}")
+        print("   投影功能的持久化儲存將不可用（仍可使用 Redis 快取）")
     
     # 啟動定時任務排程器
     try:
@@ -58,8 +68,11 @@ async def lifespan(app: FastAPI):
     # 停止定時任務排程器
     scheduler_service.stop()
     
+    # 關閉 PostgreSQL 連線池
+    await db_service.close()
+    
     await cache_service.close()
-    print("✅ Cache service closed")
+    print("✅ All services closed")
 
 
 # 建立 FastAPI 應用實例
@@ -110,6 +123,8 @@ app.add_middleware(
 app.include_router(health.router)
 app.include_router(nba.router)
 app.include_router(daily_picks.router)  # 每日高機率球員分析
+app.include_router(projections.router)  # 球員投影資料（SportsDataIO）
+app.include_router(odds_history.router)  # 盤口歷史快照（Line Movement Tracking）
 
 
 # 根路徑重導向到 API 文件

@@ -22,7 +22,7 @@ import {
   AlertCircle,
   Calendar,
 } from "lucide-react";
-import { getEvents, calculateNoVig } from "@/lib/api";
+import { getEvents, calculateNoVig, getPlayerProjection } from "@/lib/api";
 import { TeamLogo } from "@/components/TeamLogo";
 import {
   calculatorFormSchema,
@@ -35,6 +35,7 @@ import { BookmakerSelect } from "@/components/BookmakerSelect";
 import { MarketSelect, type MarketKey } from "@/components/MarketSelect";
 import { ResultsTable } from "@/components/ResultsTable";
 import { PlayerHistoryStats } from "@/components/PlayerHistoryStats";
+import { PlayerProjectionPanel } from "@/components/PlayerProjectionPanel";
 
 /**
  * Event Page Component
@@ -92,6 +93,43 @@ export default function EventPage() {
   const currentEvent = eventsData?.events.find(
     (e) => e.event_id === eventId
   );
+
+  // 從比賽時間取得日期（YYYY-MM-DD），用於投影 API 查詢
+  // commence_time 是 ISO 8601 格式，取前 10 個字元即為日期
+  const gameDate = currentEvent?.commence_time
+    ? currentEvent.commence_time.slice(0, 10)
+    : undefined;
+
+  // ==================== 投影資料查詢 ====================
+  // 當球員被選中且比賽日期存在時，從後端取得該球員的投影數據
+  // useQuery key 包含 playerName + gameDate，任一變更時自動 refetch
+  const {
+    data: projectionData,
+    isLoading: isProjectionLoading,
+  } = useQuery({
+    queryKey: ["playerProjection", playerName, gameDate],
+    queryFn: () => getPlayerProjection(playerName, gameDate),
+    enabled: !!playerName && !!gameDate,
+    staleTime: 5 * 60 * 1000, // 5 分鐘內不重新取得
+    retry: false, // 404（球員無投影）不需重試
+  });
+
+  // marketToProjectionMetric: 把 MarketKey 轉成投影面板用的 metric key
+  // MarketKey 是完整的 market 名稱（如 "player_points"）
+  // 投影面板需要簡短的 metric key（如 "points"）
+  const projectionMetric = (() => {
+    switch (selectedMarket) {
+      case "player_points": return "points" as const;
+      case "player_rebounds": return "rebounds" as const;
+      case "player_assists": return "assists" as const;
+      case "player_points_rebounds_assists": return "pra" as const;
+      default: return "points" as const;
+    }
+  })();
+
+  // 從計算結果中取出 threshold（盤口線）
+  // result.results 是各家盤口的結果陣列，取第一個的 line 作為 threshold
+  const currentThreshold = result?.results?.[0]?.line ?? null;
 
   const mutation = useMutation({
     mutationFn: calculateNoVig,
@@ -282,6 +320,23 @@ export default function EventPage() {
         </div>
       )}
 
+      {/* Player Projection Panel */}
+      {/* 
+        只在球員被選中時顯示。
+        插在 Results 和 Historical Data 之間，提供投影數據的即時參考。
+        isProjectionLoading 時顯示骨架畫面，projectionData 載入完成後渲染面板。
+      */}
+      {playerName && (
+        <div className="mt-8">
+          <PlayerProjectionPanel
+            projection={projectionData ?? null}
+            metric={projectionMetric}
+            threshold={currentThreshold}
+            isLoading={isProjectionLoading}
+          />
+        </div>
+      )}
+
       {/* Historical Data Analysis Section */}
       <div className="mt-12 pt-8 border-t-2 border-dark/10">
         <div className="card">
@@ -291,6 +346,7 @@ export default function EventPage() {
             initialMarket={selectedMarket}
             initialThreshold={initialThreshold}
             onPlayerSelect={(name) => setValue("player_name", name)}
+            projection={projectionData ?? undefined}
           />
         </div>
       </div>
