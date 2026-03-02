@@ -218,7 +218,10 @@ class PlayerHistoryResponse(BaseModel):
     histogram: List[HistogramBin] = Field(default_factory=list, description="直方圖資料")
     game_logs: List[GameLog] = Field(default_factory=list, description="每場比賽詳細資料")
     opponents: List[str] = Field(default_factory=list, description="對手列表")
+    teammates: List[str] = Field(default_factory=list, description="隊友列表（用於星級隊友選擇器）")
     opponent_filter: Optional[str] = Field(default=None, description="當前篩選的對手")
+    teammate_filter: Optional[List[str]] = Field(default=None, description="當前篩選的星級隊友")
+    teammate_played: Optional[bool] = Field(default=None, description="星級隊友出賽篩選")
     message: Optional[str] = Field(default=None, description="額外訊息")
 
 

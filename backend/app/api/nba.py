@@ -599,6 +599,14 @@ async def get_player_history(
     is_starter: Optional[bool] = Query(
         default=None,
         description="先發篩選：True（僅先發）、False（僅替補）、None（全部）"
+    ),
+    teammate_filter: Optional[str] = Query(
+        default=None,
+        description="星級隊友篩選，多位以逗號分隔（例如 'Giannis Antetokounmpo,Khris Middleton'）"
+    ),
+    teammate_played: Optional[bool] = Query(
+        default=None,
+        description="星級隊友出賽篩選：True（皆有上場）、False（皆未上場）、None（不篩選）"
     )
 ) -> PlayerHistoryResponse:
     """
@@ -656,6 +664,11 @@ async def get_player_history(
         )
     
     try:
+        # 解析 teammate_filter 逗號分隔字串為列表
+        teammate_list = None
+        if teammate_filter:
+            teammate_list = [t.strip() for t in teammate_filter.split(",") if t.strip()]
+        
         # 呼叫 CSV 服務計算統計
         stats = csv_player_service.get_player_stats(
             player_name=player,
@@ -665,7 +678,9 @@ async def get_player_history(
             bins=bins,
             exclude_dnp=exclude_dnp,
             opponent=opponent,
-            is_starter=is_starter
+            is_starter=is_starter,
+            teammate_filter=teammate_list,
+            teammate_played=teammate_played
         )
         
         # 轉換 histogram 為 Pydantic 模型
@@ -706,7 +721,10 @@ async def get_player_history(
             histogram=histogram_bins,
             game_logs=game_logs,
             opponents=stats.get("opponents", []),
+            teammates=stats.get("teammates", []),
             opponent_filter=stats.get("opponent_filter"),
+            teammate_filter=stats.get("teammate_filter"),
+            teammate_played=stats.get("teammate_played"),
             message=stats.get("message")
         )
         

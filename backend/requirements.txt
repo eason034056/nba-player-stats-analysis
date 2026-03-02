@@ -70,3 +70,8 @@ pytest-asyncio==0.24.0
 # - 開發時使用
 python-dotenv==1.0.0
 
+# ==================== 資料集生成（scripts/dataset）====================
+# openai: OpenAI API 客戶端
+# - Phase 3 用於生成 Tree-of-Thought 結構化答案
+openai>=1.0.0
+

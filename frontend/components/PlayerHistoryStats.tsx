@@ -28,11 +28,13 @@ import {
   Calculator,
   Search,
   User,
+  Users,
   Loader2,
   AlertCircle,
   Info,
   Filter,
   Target,
+  X,
 } from "lucide-react";
 import { getCSVPlayers, getPlayerHistory, calculateNoVig } from "@/lib/api";
 import {
@@ -160,6 +162,10 @@ export function PlayerHistoryStats({
   const [threshold, setThreshold] = useState<string>(initialThreshold || "24.5");
   const [selectedOpponent, setSelectedOpponent] = useState<string>("");
   const [starterFilter, setStarterFilter] = useState<string>("all");
+  const [teammateFilter, setTeammateFilter] = useState<string[]>([]);
+  const [teammatePlayedFilter, setTeammatePlayedFilter] = useState<string>("all");
+  const [teammateSearchInput, setTeammateSearchInput] = useState<string>("");
+  const [isTeammateDropdownOpen, setIsTeammateDropdownOpen] = useState(false);
   const [isFetchingOdds, setIsFetchingOdds] = useState(false);
 
   useEffect(() => {
@@ -195,7 +201,7 @@ export function PlayerHistoryStats({
     isError: isHistoryError,
     error: historyError,
   } = useQuery({
-    queryKey: ["playerHistory", selectedPlayer, metric, threshold, recentN, selectedOpponent, starterFilter],
+    queryKey: ["playerHistory", selectedPlayer, metric, threshold, recentN, selectedOpponent, starterFilter, teammateFilter, teammatePlayedFilter],
     queryFn: () =>
       getPlayerHistory({
         player: selectedPlayer,
@@ -206,6 +212,8 @@ export function PlayerHistoryStats({
         exclude_dnp: true,
         opponent: selectedOpponent || undefined,
         is_starter: starterFilter === "all" ? undefined : starterFilter === "starter",
+        teammate_filter: teammateFilter.length > 0 ? teammateFilter : undefined,
+        teammate_played: teammatePlayedFilter === "all" ? undefined : teammatePlayedFilter === "with",
       }),
     enabled: !!selectedPlayer && !!threshold && !isNaN(parseFloat(threshold)),
     staleTime: 30 * 1000,
@@ -251,6 +259,9 @@ export function PlayerHistoryStats({
       setSearchInput(playerName);
       setIsDropdownOpen(false);
       setSelectedOpponent("");
+      setTeammateFilter([]);
+      setTeammatePlayedFilter("all");
+      setTeammateSearchInput("");
       onPlayerSelect?.(playerName);
       
       if (eventId) {
@@ -273,7 +284,16 @@ export function PlayerHistoryStats({
 
   const playerList = playersData?.players || [];
   const opponentList = historyData?.opponents || [];
+  const teammateList = historyData?.teammates || [];
   const gameLogs = historyData?.game_logs || [];
+
+  const filteredTeammateList = teammateSearchInput
+    ? teammateList.filter(
+        (t) =>
+          t.toLowerCase().includes(teammateSearchInput.toLowerCase()) &&
+          !teammateFilter.includes(t)
+      )
+    : teammateList.filter((t) => !teammateFilter.includes(t));
 
   // 從投影資料取得當前 metric 的投影數值
   // projectedValue 用於：(1) 圖表的藍色參考線 (2) 第 5 張 stat card
@@ -440,6 +460,111 @@ export function PlayerHistoryStats({
             </select>
           </div>
         </div>
+
+        {/* Teammate Impact Filter - 僅限同隊隊友 */}
+        {selectedPlayer && teammateList.length > 0 && (
+          <div className="space-y-3 pt-2">
+            <div>
+              <label className="block text-sm font-bold text-dark">
+                <Users className="inline w-4 h-4 mr-1.5" />
+                Teammate Impact Filter
+              </label>
+              <p className="text-xs text-gray mt-1">
+                Only teammates from the same team can be selected
+              </p>
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {/* Teammate search + multi-select */}
+              <div className="relative">
+                <div className="relative">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray" />
+                  <input
+                    type="text"
+                    value={teammateSearchInput}
+                    onChange={(e) => {
+                      setTeammateSearchInput(e.target.value);
+                      setIsTeammateDropdownOpen(true);
+                    }}
+                    onFocus={() => setIsTeammateDropdownOpen(true)}
+                    placeholder="Search teammate to add..."
+                    className="input pl-10 w-full text-sm"
+                  />
+                </div>
+
+                {isTeammateDropdownOpen && filteredTeammateList.length > 0 && (
+                  <ul className="absolute z-50 w-full mt-1 max-h-48 overflow-auto bg-white border-2 border-dark rounded-lg shadow-lg">
+                    {filteredTeammateList.slice(0, 30).map((teammate) => (
+                      <li
+                        key={teammate}
+                        onClick={() => {
+                          setTeammateFilter((prev) => [...prev, teammate]);
+                          setTeammateSearchInput("");
+                          setIsTeammateDropdownOpen(false);
+                          if (teammatePlayedFilter === "all") {
+                            setTeammatePlayedFilter("without");
+                          }
+                        }}
+                        className="px-3 py-2 cursor-pointer text-sm text-dark hover:bg-cream flex items-center gap-2"
+                      >
+                        <User className="w-3 h-3 text-gray" />
+                        {teammate}
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+
+              {/* With / Without toggle */}
+              <div>
+                <select
+                  value={teammatePlayedFilter}
+                  onChange={(e) => setTeammatePlayedFilter(e.target.value)}
+                  className="input w-full text-sm"
+                  disabled={teammateFilter.length === 0}
+                >
+                  <option value="all">All Games (no teammate filter)</option>
+                  <option value="with">With selected teammates</option>
+                  <option value="without">Without selected teammates</option>
+                </select>
+              </div>
+            </div>
+
+            {/* Selected teammate chips */}
+            {teammateFilter.length > 0 && (
+              <div className="flex flex-wrap gap-2">
+                {teammateFilter.map((t) => (
+                  <span
+                    key={t}
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-yellow/30 border border-yellow text-dark text-xs font-bold rounded-full"
+                  >
+                    {t}
+                    <button
+                      onClick={() => {
+                        const next = teammateFilter.filter((x) => x !== t);
+                        setTeammateFilter(next);
+                        if (next.length === 0) {
+                          setTeammatePlayedFilter("all");
+                        }
+                      }}
+                      className="hover:text-red transition-colors"
+                    >
+                      <X className="w-3 h-3" />
+                    </button>
+                  </span>
+                ))}
+                <button
+                  onClick={() => {
+                    setTeammateFilter([]);
+                    setTeammatePlayedFilter("all");
+                  }}
+                  className="text-xs text-red font-bold hover:underline"
+                >
+                  Clear all
+                </button>
+              </div>
+            )}
+          </div>
+        )}
       </div>
 
       {/* Error */}
@@ -519,13 +644,16 @@ export function PlayerHistoryStats({
               <p className="text-sm font-bold text-dark mb-1">Sample Games</p>
               <p className="text-xl font-bold text-dark">
                 {historyData.n_games} games
-                {(selectedOpponent || starterFilter !== "all") && (
+                {(selectedOpponent || starterFilter !== "all" || teammateFilter.length > 0) && (
                   <span className="text-sm text-gray ml-1">
                     (
                     {selectedOpponent && `vs ${selectedOpponent}`}
-                    {selectedOpponent && starterFilter !== "all" && ", "}
+                    {selectedOpponent && (starterFilter !== "all" || teammateFilter.length > 0) && ", "}
                     {starterFilter === "starter" && "Starter"}
                     {starterFilter === "bench" && "Bench"}
+                    {starterFilter !== "all" && teammateFilter.length > 0 && ", "}
+                    {teammateFilter.length > 0 && teammatePlayedFilter === "with" && `w/ ${teammateFilter.join(", ")}`}
+                    {teammateFilter.length > 0 && teammatePlayedFilter === "without" && `w/o ${teammateFilter.join(", ")}`}
                     )
                   </span>
                 )}
@@ -568,13 +696,16 @@ export function PlayerHistoryStats({
               <h4 className="text-sm font-bold text-dark mb-4 flex items-center gap-2">
                 <BarChart3 className="w-4 h-4" />
                 {HISTORY_METRICS.find((m) => m.key === metric)?.name} Historical Trend
-                {(selectedOpponent || starterFilter !== "all") && (
+                {(selectedOpponent || starterFilter !== "all" || teammateFilter.length > 0) && (
                   <span className="text-red ml-2">
                     (
                     {selectedOpponent && `vs ${selectedOpponent}`}
-                    {selectedOpponent && starterFilter !== "all" && ", "}
+                    {selectedOpponent && (starterFilter !== "all" || teammateFilter.length > 0) && ", "}
                     {starterFilter === "starter" && "Starter Only"}
                     {starterFilter === "bench" && "Bench Only"}
+                    {starterFilter !== "all" && teammateFilter.length > 0 && ", "}
+                    {teammateFilter.length > 0 && teammatePlayedFilter === "with" && `w/ ${teammateFilter.join(", ")}`}
+                    {teammateFilter.length > 0 && teammatePlayedFilter === "without" && `w/o ${teammateFilter.join(", ")}`}
                     )
                   </span>
                 )}
@@ -762,6 +893,16 @@ export function PlayerHistoryStats({
                 {starterFilter === "bench" && (
                   <p>
                     🪑 Currently showing only bench games
+                  </p>
+                )}
+                {teammateFilter.length > 0 && teammatePlayedFilter === "with" && (
+                  <p>
+                    👥 Currently showing games where {teammateFilter.join(", ")} played
+                  </p>
+                )}
+                {teammateFilter.length > 0 && teammatePlayedFilter === "without" && (
+                  <p>
+                    👤 Currently showing games where {teammateFilter.join(", ")} did NOT play
                   </p>
                 )}
               </div>

@@ -20,7 +20,7 @@ CSV 欄位對應：
 
 import csv
 import os
-from typing import List, Optional, Dict, Any, Tuple
+from typing import List, Optional, Dict, Any, Set, Tuple
 from datetime import datetime
 import statistics
 
@@ -78,6 +78,7 @@ class CSVPlayerHistoryService:
     def __init__(self):
         self._cache: Dict[str, List[Dict[str, Any]]] = {}  # player_name -> game_logs
         self._all_players: List[str] = []  # 所有球員名單
+        self._lineup_cache: Dict[Tuple[str, str], Set[str]] = {}  # (team, date_str) -> {player_names}
         self._loaded: bool = False  # 是否已載入
     
     def reload(self) -> None:
@@ -92,6 +93,7 @@ class CSVPlayerHistoryService:
         print("🔄 正在重新載入 CSV 資料...")
         self._cache = {}
         self._all_players = []
+        self._lineup_cache = {}
         self._loaded = False
         self.load_csv()
         print(f"✅ 重新載入完成，共 {len(self._all_players)} 位球員")
@@ -236,6 +238,15 @@ class CSVPlayerHistoryService:
                 if player_name not in self._cache:
                     self._cache[player_name] = []
                 self._cache[player_name].append(game_log)
+                
+                # 建立 lineup cache：(team, date_str) -> 有出賽球員集合
+                if minutes > 0 and game_date is not None:
+                    team = row.get("Team", "").strip()
+                    date_key = game_date.strftime("%Y-%m-%d")
+                    lineup_key = (team, date_key)
+                    if lineup_key not in self._lineup_cache:
+                        self._lineup_cache[lineup_key] = set()
+                    self._lineup_cache[lineup_key].add(player_name)
         
         # 建立球員名單（排序）
         self._all_players = sorted(self._cache.keys())
@@ -302,6 +313,57 @@ class CSVPlayerHistoryService:
         
         return sorted(list(opponents))
 
+    def get_players_in_game(self, team: str, date: datetime) -> Set[str]:
+        """
+        查詢某隊在某天出賽的球員集合
+        
+        Args:
+            team: 球隊名稱（如 "Bucks"）
+            date: 比賽日期
+        
+        Returns:
+            Set[str]: 出賽球員名稱集合
+        """
+        self.load_csv()
+        date_key = date.strftime("%Y-%m-%d")
+        return self._lineup_cache.get((team, date_key), set())
+    
+    def get_teammates(self, player_name: str) -> List[str]:
+        """
+        取得與該球員同隊出賽過的所有隊友名單
+        
+        遍歷該球員的所有 game log，從 _lineup_cache 中收集同場出賽的隊友。
+        
+        Args:
+            player_name: 球員名稱
+        
+        Returns:
+            List[str]: 隊友名稱列表（已去重、排序，不含自己）
+        """
+        self.load_csv()
+        
+        player_games = self._cache.get(player_name, [])
+        if not player_games:
+            player_lower = player_name.lower()
+            for p in self._all_players:
+                if player_lower in p.lower() or p.lower() in player_lower:
+                    player_games = self._cache.get(p, [])
+                    player_name = p
+                    break
+        
+        teammates: Set[str] = set()
+        for game in player_games:
+            team = game.get("team", "")
+            game_date = game.get("game_date")
+            if not team or game_date is None:
+                continue
+            date_key = game_date.strftime("%Y-%m-%d")
+            lineup = self._lineup_cache.get((team, date_key), set())
+            teammates.update(lineup)
+        
+        teammates.discard(player_name)
+        return sorted(teammates)
+
     def get_player_stats(
         self,
         player_name: str,
@@ -311,7 +373,9 @@ class CSVPlayerHistoryService:
         bins: int = 15,
         exclude_dnp: bool = True,
         opponent: Optional[str] = None,
-        is_starter: Optional[bool] = None
+        is_starter: Optional[bool] = None,
+        teammate_filter: Optional[List[str]] = None,
+        teammate_played: Optional[bool] = None
     ) -> Dict[str, Any]:
         """
         計算球員歷史數據統計
@@ -327,6 +391,8 @@ class CSVPlayerHistoryService:
             exclude_dnp: 是否排除 DNP（Did Not Play，分鐘數為 0 的場次）
             opponent: 對手篩選（可選，None 表示全部）
             is_starter: 先發狀態篩選（True=僅先發、False=僅替補、None=全部）
+            teammate_filter: 星級隊友名稱列表（可選，例如 ["Giannis Antetokounmpo"]）
+            teammate_played: True=僅隊友皆有上場、False=僅隊友皆未上場、None=不篩選
         
         Returns:
             Dict 包含：
@@ -339,15 +405,16 @@ class CSVPlayerHistoryService:
             - mean: 平均值
             - std: 標準差
             - histogram: 直方圖資料（已棄用，保留兼容性）
-            - game_logs: 每場比賽詳細資料（新增）
-            - opponents: 對手列表（新增）
+            - game_logs: 每場比賽詳細資料
+            - opponents: 對手列表
+            - teammates: 隊友列表（用於前端多選）
         
         Example:
             get_player_stats("Stephen Curry", "points", 24.5, n=20)
-            # 返回 Curry 最近 20 場比賽得分超過 24.5 的機率
             
-            get_player_stats("Stephen Curry", "points", 24.5, n=20, is_starter=True)
-            # 返回 Curry 最近 20 場「先發」比賽得分超過 24.5 的機率
+            get_player_stats("A.J. Green", "points", 10.5,
+                             teammate_filter=["Giannis Antetokounmpo"], teammate_played=False)
+            # 返回 A.J. Green 在 Giannis 未上場時的得分統計
         """
         self.load_csv()
         
@@ -380,11 +447,22 @@ class CSVPlayerHistoryService:
                 "histogram": [],
                 "game_logs": [],
                 "opponents": [],
+                "teammates": [],
                 "message": f"找不到球員 '{player_name}'"
             }
         
         # 取得所有對手（用於篩選器）
         all_opponents = self.get_player_opponents(player_name)
+        # 取得所有隊友（用於星級隊友選擇器，僅限同隊）
+        all_teammates = self.get_teammates(player_name)
+        
+        # 驗證 teammate_filter：只接受同隊隊友，過濾掉非隊友
+        validated_teammate_filter = None
+        if teammate_filter:
+            teammate_set = set(all_teammates)
+            validated_teammate_filter = [t for t in teammate_filter if t in teammate_set]
+            if not validated_teammate_filter and teammate_filter:
+                validated_teammate_filter = None
         
         # 收集有效的比賽記錄
         valid_games: List[Dict[str, Any]] = []
@@ -406,6 +484,22 @@ class CSVPlayerHistoryService:
             if is_starter is not None:
                 if game.get("is_starter", False) != is_starter:
                     continue
+            
+            # 星級隊友篩選（僅限同隊隊友）
+            # teammate_played=True: 所有選定隊友都有出賽
+            # teammate_played=False: 所有選定隊友都未出賽
+            if validated_teammate_filter and teammate_played is not None:
+                game_team = game.get("team", "")
+                game_date = game.get("game_date")
+                if game_team and game_date:
+                    date_key = game_date.strftime("%Y-%m-%d")
+                    lineup = self._lineup_cache.get((game_team, date_key), set())
+                    if teammate_played:
+                        if not all(t in lineup for t in validated_teammate_filter):
+                            continue
+                    else:
+                        if any(t in lineup for t in validated_teammate_filter):
+                            continue
             
             # 取得對應指標的值
             value = game.get(metric)
@@ -446,6 +540,7 @@ class CSVPlayerHistoryService:
                 "histogram": [],
                 "game_logs": [],
                 "opponents": all_opponents,
+                "teammates": all_teammates,
                 "message": f"球員 '{player_name}' 沒有 {metric} 的有效資料"
             }
         
@@ -477,13 +572,16 @@ class CSVPlayerHistoryService:
             "n_games": n_games,
             "p_over": round(p_over, 4) if p_over is not None else None,
             "p_under": round(p_under, 4) if p_under is not None else None,
-            "equal_count": equal_count,  # threshold 剛好相等的場次
+            "equal_count": equal_count,
             "mean": round(mean_val, 2),
             "std": round(std_val, 2),
             "histogram": histogram,
-            "game_logs": game_logs_for_chart,  # 每場比賽詳細資料
-            "opponents": all_opponents,  # 對手列表
-            "opponent_filter": opponent,  # 當前篩選的對手
+            "game_logs": game_logs_for_chart,
+            "opponents": all_opponents,
+            "teammates": all_teammates,
+            "opponent_filter": opponent,
+            "teammate_filter": validated_teammate_filter,
+            "teammate_played": teammate_played,
             "message": None
         }
     
