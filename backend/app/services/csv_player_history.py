@@ -217,21 +217,47 @@ class CSVPlayerHistoryService:
                 status = row.get("Status", "").strip()
                 is_starter = status.lower() == "starter"
                 
-                # 建構比賽記錄
+                # Parse all 28 CSV columns
+                season = row.get("Season", "").strip()
+                wl = row.get("W/L", "").strip()
+                pos = row.get("Pos", "").strip()
+
+                fgm = self._parse_float(row.get("FGM", ""))
+                fga = self._parse_float(row.get("FGA", ""))
+                fg_pct = self._parse_float(row.get("FG%", ""))
+                tpm = self._parse_float(row.get("3PM", ""))
+                tpa = self._parse_float(row.get("3PA", ""))
+                tp_pct = self._parse_float(row.get("3P%", ""))
+                ftm = self._parse_float(row.get("FTM", ""))
+                fta = self._parse_float(row.get("FTA", ""))
+                ft_pct = self._parse_float(row.get("FT%", ""))
+                stl = self._parse_float(row.get("STL", ""))
+                blk = self._parse_float(row.get("BLK", ""))
+                tov = self._parse_float(row.get("TOV", ""))
+                pf = self._parse_float(row.get("PF", ""))
+                fic = self._parse_float(row.get("FIC", ""))
+
                 game_log = {
                     "player_name": player_name,
                     "game_date": game_date,
+                    "season": season,
                     "points": pts,
                     "assists": ast,
                     "rebounds": reb,
                     "minutes": minutes,
-                    # PRA（Points + Rebounds + Assists）
                     "pra": (pts or 0) + (reb or 0) + (ast or 0) if pts is not None else None,
-                    # 原始資料（用於除錯和顯示）
-                    "team": row.get("Team", ""),
-                    "opponent": row.get("Opponent", ""),
-                    "status": status,  # "Starter" 或 "Bench"
-                    "is_starter": is_starter,  # 布林值，方便判斷
+                    "team": row.get("Team", "").strip(),
+                    "opponent": row.get("Opponent", "").strip(),
+                    "status": status,
+                    "is_starter": is_starter,
+                    "wl": wl,
+                    "pos": pos,
+                    "fgm": fgm, "fga": fga, "fg_pct": fg_pct,
+                    "tpm": tpm, "tpa": tpa, "tp_pct": tp_pct,
+                    "ftm": ftm, "fta": fta, "ft_pct": ft_pct,
+                    "orb": orb, "drb": drb,
+                    "stl": stl, "blk": blk, "tov": tov, "pf": pf,
+                    "fic": fic,
                 }
                 
                 # 按球員分組
