@@ -8,6 +8,10 @@
 .env.local
 .env.*.local
 
+# nba_lineup_rag 子專案（明確排除）
+nba_lineup_rag/.env
+nba_lineup_rag/data/
+
 # ==================== Python ====================
 __pycache__/
 *.py[cod]

@@ -1,0 +1,112 @@
+{
+  "1": {
+    "question": "Is Kevin Durant playing tonight against the Pacers?",
+    "description": "Needs real-time injury information for Rockets star",
+    "results": {
+      "llm_only": {
+        "answer": "I'm sorry, but I cannot provide real-time information about player availability or game schedules, as my training data only goes up to October 2023. To find out if Kevin Durant is playing tonight against the Pacers, I recommend checking the latest updates from reliable sports news sources or the official NBA website.",
+        "sources_count": 0
+      },
+      "simple_rag": {
+        "answer": "Kevin Durant is not playing tonight against the Pacers, as he is listed as \"Out\" due to an ankle injury and is expected to be out until at least February 4 (source: [1], [2]).",
+        "sources_count": 2
+      },
+      "hyde": {
+        "answer": "Kevin Durant is currently listed as \"Out\" and is expected to be out until at least February 4 due to an ankle injury (source: [1], [2]). Therefore, he will not be playing tonight against the Pacers.",
+        "sources_count": 3
+      },
+      "rerank": {
+        "answer": "Kevin Durant is out and will not play tonight against the Pacers due to an ankle injury. He is expected to be out until at least February 4 (source: [1], [2]).",
+        "sources_count": 2
+      }
+    }
+  },
+  "2": {
+    "question": "What is Brandon Ingram’s injury status today?",
+    "description": "Needs latest status update for Hornets key player",
+    "results": {
+      "llm_only": {
+        "answer": "As of my last knowledge update in October 2023, Brandon Ingram plays for the New Orleans Pelicans, not the Toronto Raptors (TOR). I do not have access to real-time injury updates or current player statuses. For the latest information on Brandon Ingram's injury status, I recommend checking official team announcements, sports news websites, or the NBA's official channels.",
+        "sources_count": 0
+      },
+      "simple_rag": {
+        "answer": "Sorry, no relevant information was found to answer this question.",
+        "sources_count": 0
+      },
+      "hyde": {
+        "answer": "Sorry, no relevant information was found to answer this question.",
+        "sources_count": 0
+      },
+      "rerank": {
+        "answer": "Sorry, no relevant information found to answer this question.",
+        "sources_count": 0
+      }
+    }
+  },
+  "3": {
+    "question": "Which Timberwolves players are currently listed as questionable or out for tonight?",
+    "description": "Needs to retrieve information about multiple players",
+    "results": {
+      "llm_only": {
+        "answer": "I'm sorry, but I don't have access to real-time data or updates on player injuries or game statuses as my training only goes up until October 2023. To find the most current information on the Minnesota Timberwolves' roster, including players listed as questionable or out, I recommend checking the official NBA website, the Timberwolves' team site, or a reliable sports news outlet.",
+        "sources_count": 0
+      },
+      "simple_rag": {
+        "answer": "Based on the provided information, the following Timberwolves players are currently listed as questionable or out for tonight:\n\n- **Questionable**: \n  - Anthony Edwards (Game Time Decision, Back)\n  - Julius Randle (Game Time Decision, Thumb)\n\n- **Out**: \n  - Terrence Shannon Jr. (Expected to be out until at least Feb 4, Foot)\n\nThis information is derived from the injury status updates provided in the context.",
+        "sources_count": 6
+      },
+      "hyde": {
+        "answer": "The Timberwolves players currently listed as questionable or out for tonight are:\n\n- **Questionable**: Anthony Edwards (Game Time Decision, Back)\n- **Out**: Terrence Shannon Jr. (Expected to be out until at least Feb 4, Foot) \n\nNo other Timberwolves players are mentioned as questionable or out in the provided context.",
+        "sources_count": 10
+      },
+      "rerank": {
+        "answer": "The Timberwolves players currently listed as questionable or out for tonight are:\n\n- **Questionable**: \n  - Anthony Edwards (Game Time Decision, Back)\n  - Julius Randle (Game Time Decision, Thumb)\n\n- **Out**: \n  - Terrence Shannon Jr. (Expected to be out until at least Feb 4, Foot)",
+        "sources_count": 6
+      }
+    }
+  },
+  "4": {
+    "question": "What injuries have affected the Grizzlies going into tonight’s game?",
+    "description": "Needs an overview of the team's injury situation",
+    "results": {
+      "llm_only": {
+        "answer": "I'm unable to provide real-time updates or the latest injury reports as my training data only goes up to October 2023. For the most accurate and current information regarding injuries affecting the Memphis Grizzlies or any other team, I recommend checking the latest updates from reliable sports news sources or the official NBA website.",
+        "sources_count": 0
+      },
+      "simple_rag": {
+        "answer": "The injuries affecting the Grizzlies going into tonight’s game are as follows:\n\n1. **Ja Morant** - Out due to an elbow injury, expected to be out until at least February 20.\n2. **Jaren Jackson Jr.** - Game-Time Decision due to a quadriceps injury.\n3. **John Konchar** - Expected to be out until at least February 4 due to a neck injury.\n4. **Brandon Clarke** - Out, expected to be out until at least February 20.\n\nThese details indicate the current injury status of the players on the Grizzlies roster.",
+        "sources_count": 6
+      },
+      "hyde": {
+        "answer": "The injuries affecting the Grizzlies going into tonight's game are as follows:\n\n1. **Ja Morant** - Out due to a sprained elbow, expected to be out until at least February 20 (Source: [1], [3], [5]).\n2. **Jaren Jackson Jr.** - Game-Time Decision due to a quadriceps injury (Source: [4]).\n3. **John Konchar** - Expected to be out until at least February 4 due to a neck injury (Source: [8]).\n\nThese injuries may impact the team's performance in the game.",
+        "sources_count": 10
+      },
+      "rerank": {
+        "answer": "The Grizzlies have the following injury statuses going into tonight's game:\n\n1. **Ja Morant**: Out due to an elbow injury, expected to be out until at least February 20.\n2. **Jaren Jackson Jr.**: Game-Time Decision due to a quadriceps injury.\n3. **John Konchar**: Expected to be out until at least February 4 due to a neck injury.\n4. **Brandon Clarke**: Out, expected to be out until at least February 20.\n\nIn summary, Morant and Clarke are confirmed out, while Jackson Jr. is a game-time decision, and Konchar is also expected to be out.",
+        "sources_count": 6
+      }
+    }
+  },
+  "5": {
+    "question": "Who are the key NBA players dealing with injuries and questionable statuses for tonight’s slate of games?",
+    "description": "Needs a cross-team summary for the Feb 2 games",
+    "results": {
+      "llm_only": {
+        "answer": "I'm sorry, but I don't have access to real-time data or updates on player injuries or game statuses as of October 2023. For the latest information on key NBA players dealing with injuries or questionable statuses, I recommend checking reliable sports news websites, the NBA's official site, or social media platforms for the most current updates.",
+        "sources_count": 0
+      },
+      "simple_rag": {
+        "answer": "Based on the provided context, the key NBA players dealing with injuries and questionable statuses for tonight’s slate of games are:\n\n1. **James Harden** (LAC) - Status: Game Time Decision (Personal) [Source: 3]\n2. **Ajay Mitchell** (OKC) - Status: Game Time Decision (Abdomen) [Source: 5]\n3. **Stephen Curry** (GSW) - Status: Day-To-Day [Source: 6]\n\nCannot be determined based on current information if there are additional players with questionable statuses.",
+        "sources_count": 9
+      },
+      "hyde": {
+        "answer": "The key NBA players dealing with injuries and questionable statuses for tonight’s slate of games are:\n\n1. **Joel Embiid** (PHI) - Status: Game Time Decision (Injury: Ankle)\n2. **James Harden** (LAC) - Status: Game Time Decision (Injury: Personal)\n3. **Stephen Curry** (GSW) - Status: Game Time Decision (Injury: Knee)\n\nAdditionally, it is important to note that both Joel Embiid and James Harden are listed as Game Time Decisions, meaning their availability will be determined before the game.",
+        "sources_count": 10
+      },
+      "rerank": {
+        "answer": "Based on the provided context, the key NBA players dealing with injuries and questionable statuses for tonight's slate of games are:\n\n1. **James Harden** - Status: Game Time Decision (Personal) (Source: [3])\n2. **Ajay Mitchell** - Status: Game Time Decision (Abdomen) (Source: [5])\n3. **Stephen Curry** - Status: Day-To-Day (Source: [6])\n\nOther players mentioned, such as Bradley Beal and Obi Toppin, are confirmed to be out and not available for tonight's games.",
+        "sources_count": 9
+      }
+    }
+  }
+}
