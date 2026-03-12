@@ -2,7 +2,7 @@
 """
 03_generate_answers.py - Phase 3: Answer 生成（OpenAI）
 
-使用 OpenAI API（gpt-4o / gpt-4o-mini）為 train_questions.jsonl 中的每題生成
+使用 OpenAI API（gpt-4o-mini）為 train_questions.jsonl 中的每題生成
 Tree-of-Thought 結構化答案，產出 train_full.jsonl 供 LoRA 微調使用。
 
 實作要點（依 plan Phase 3 與第八點建議）：
@@ -294,7 +294,7 @@ def main():
         "--model",
         type=str,
         default="gpt-4o-mini",
-        help="OpenAI 模型名稱（gpt-4o, gpt-4o-mini 等）",
+        help="OpenAI 模型名稱（gpt-4o-mini, gpt-4o-mini 等）",
     )
     parser.add_argument(
         "--limit",

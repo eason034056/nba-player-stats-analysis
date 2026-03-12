@@ -1,0 +1,19 @@
+# Assignment 3 LoRA Fine-tuning 依賴
+# 使用方式：pip install -r scripts/finetune/requirements_finetune.txt
+
+# transformers: Hugging Face 模型與 tokenizer
+# - 載入 SmolLM2-1.7B-Instruct
+# - apply_chat_template 轉換 Alpaca 格式為 ChatML
+transformers>=4.36
+
+# peft: Parameter-Efficient Fine-Tuning（Step 3 LoRA 用）
+peft>=0.7
+
+# datasets: Hugging Face 資料集格式（prepare_dataset 用）
+datasets
+
+# accelerate: 分散式訓練與混合精度
+accelerate
+
+# torch: PyTorch 深度學習框架
+torch
