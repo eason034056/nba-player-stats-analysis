@@ -12,7 +12,7 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { RefreshCw, AlertCircle } from "lucide-react";
+import { RefreshCw, AlertCircle, CalendarRange, Sparkles, ArrowRight } from "lucide-react";
 import { getEvents } from "@/lib/api";
 import { getTodayString, getDateDisplayTitle } from "@/lib/utils";
 import { EventList } from "@/components/EventList";
@@ -81,42 +81,80 @@ export default function HomePage() {
 
   return (
     <div className="min-h-screen page-enter">
-      <div className="max-w-4xl mx-auto px-6 py-12">
-        {/* Page title section - minimal bold typography */}
-        <div className="text-center mb-16">
-          {/* Badge */}
-          <div className="inline-block mb-6">
-            <span className="badge-neutral">
-              No-Vig Probability Calculator
-            </span>
-          </div>
-          
-          {/* Main title */}
-          <h1 className="hero-title mb-4">
-            NBA <span className="text-red">Events</span>
-          </h1>
-          
-          {/* Red accent line */}
-          <div className="accent-line mx-auto mb-6" />
-          
-          {/* Subtitle */}
-          <p className="text-lg text-gray max-w-md mx-auto">
-            Calculate no-vig probabilities to find the best betting opportunities
-          </p>
-        </div>
+      <div className="mx-auto max-w-6xl px-6 py-10">
+        <section className="grid gap-6 lg:grid-cols-[1.3fr_0.7fr] lg:items-end mb-10">
+          <div className="card">
+            <div className="section-eyebrow">
+              <Sparkles className="mr-2 h-3.5 w-3.5" />
+              NBA probability board
+            </div>
 
-        {/* Date selection section */}
-        <div className="card mb-10">
+            <h1 className="hero-title mb-5">
+              Tonight&apos;s slate,
+              <span className="text-gradient block">reframed like a studio board.</span>
+            </h1>
+
+            <div className="accent-line mb-6" />
+
+            <p className="max-w-2xl text-lg leading-8 text-gray">
+              Browse the daily schedule, step into any matchup, and trace bookmaker pricing into a cleaner no-vig read before you move into picks or deeper player analysis.
+            </p>
+          </div>
+
+          <div className="card">
+            <p className="text-xs uppercase tracking-[0.24em] text-light mb-3">
+              Live board status
+            </p>
+            <div className="space-y-4">
+              <div className="flex items-end justify-between gap-4">
+                <div>
+                  <p className="text-sm text-gray">Selected day</p>
+                  <p className="text-2xl font-semibold text-dark">{dateTitle}</p>
+                </div>
+                <div className="rounded-full border border-white/10 bg-white/6 px-3 py-1 text-xs uppercase tracking-[0.24em] text-light">
+                  {isFetching ? "Refreshing" : "Ready"}
+                </div>
+              </div>
+
+              <div className="grid grid-cols-3 gap-3">
+                <div className="rounded-[22px] border border-white/8 bg-white/4 p-4">
+                  <p className="text-xs uppercase tracking-[0.2em] text-light">Games</p>
+                  <p className="mt-2 text-3xl font-semibold text-dark">{eventCount}</p>
+                </div>
+                <div className="rounded-[22px] border border-white/8 bg-white/4 p-4">
+                  <p className="text-xs uppercase tracking-[0.2em] text-light">Flow</p>
+                  <p className="mt-2 text-sm font-semibold text-dark">Schedule</p>
+                  <p className="text-xs text-gray">Into matchup</p>
+                </div>
+                <div className="rounded-[22px] border border-white/8 bg-white/4 p-4">
+                  <p className="text-xs uppercase tracking-[0.2em] text-light">Refresh</p>
+                  <p className="mt-2 text-sm font-semibold text-dark">60 sec</p>
+                  <p className="text-xs text-gray">React Query cache</p>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <div className="card mb-8">
+          <div className="mb-5 flex items-center gap-3">
+            <div className="flex h-11 w-11 items-center justify-center rounded-full border border-white/10 bg-white/6">
+              <CalendarRange className="h-5 w-5 text-red" />
+            </div>
+            <div>
+              <p className="text-xs uppercase tracking-[0.22em] text-light">Date control</p>
+              <h2 className="text-xl font-semibold text-dark">Move across the slate</h2>
+            </div>
+          </div>
           <DatePicker
             value={selectedDate}
             onChange={setSelectedDate}
           />
         </div>
 
-        {/* Events title row */}
-        <div className="flex items-center justify-between mb-6">
+        <div className="mb-6 flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
           <div className="flex items-center gap-4">
-            <h2 className="text-2xl font-bold text-dark">
+            <h2 className="text-2xl font-semibold text-dark">
               {dateTitle} Games
             </h2>
             {!isLoading && (
@@ -136,15 +174,14 @@ export default function HomePage() {
           </button>
         </div>
 
-        {/* Error message */}
         {isError && (
           <div className="card mb-6 border-red">
             <div className="flex items-start gap-4">
-              <div className="w-10 h-10 rounded-lg bg-red flex items-center justify-center shrink-0">
+              <div className="w-10 h-10 rounded-full bg-red flex items-center justify-center shrink-0">
                 <AlertCircle className="w-5 h-5 text-white" />
               </div>
               <div>
-                <h3 className="font-bold text-dark mb-1">
+                <h3 className="font-semibold text-dark mb-1">
                   Load Failed
                 </h3>
                 <p className="text-gray text-sm mb-3">
@@ -161,17 +198,32 @@ export default function HomePage() {
           </div>
         )}
 
-        {/* Events list */}
         <EventList
           events={data?.events || []}
           isLoading={isLoading}
         />
 
-        {/* Bottom hint */}
-        <div className="mt-16 text-center">
-          <p className="text-sm text-gray">
-            Click any game → Enter player name → View no-vig probability
-          </p>
+        <section className="mt-10 grid gap-4 md:grid-cols-3">
+          <div className="card">
+            <p className="text-xs uppercase tracking-[0.22em] text-light mb-2">Step 1</p>
+            <h3 className="text-xl font-semibold text-dark mb-2">Choose a game</h3>
+            <p className="text-sm leading-7 text-gray">Start from the slate view and move into whichever matchup deserves a deeper pricing read.</p>
+          </div>
+          <div className="card">
+            <p className="text-xs uppercase tracking-[0.22em] text-light mb-2">Step 2</p>
+            <h3 className="text-xl font-semibold text-dark mb-2">Inspect the player market</h3>
+            <p className="text-sm leading-7 text-gray">Compare market type, player selection, sportsbook coverage, projections, and historical hit rates in one flow.</p>
+          </div>
+          <div className="card">
+            <p className="text-xs uppercase tracking-[0.22em] text-light mb-2">Step 3</p>
+            <h3 className="text-xl font-semibold text-dark mb-2">Carry the best reads forward</h3>
+            <p className="text-sm leading-7 text-gray">Use Daily Picks and Bet Slip as the fast lane when you want curation, saving, and shareable summaries.</p>
+          </div>
+        </section>
+
+        <div className="mt-12 flex items-center justify-center gap-2 text-sm text-gray">
+          <ArrowRight className="h-4 w-4 text-red" />
+          <p>Open any matchup to calculate no-vig probability and inspect deeper player context.</p>
         </div>
       </div>
     </div>

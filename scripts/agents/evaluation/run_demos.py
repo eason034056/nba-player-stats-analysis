@@ -118,16 +118,18 @@ def main():
 
             pq = r.get("parsed_query", {})
             f.write(f"**Parsed**: player=`{pq.get('player')}`, metric=`{pq.get('metric')}`, "
-                    f"threshold=`{pq.get('threshold')}`\n\n")
+                    f"threshold=`{pq.get('threshold')}`, direction=`{pq.get('direction', 'over')}`\n\n")
 
             sc = r.get("scorecard", {})
             f.write("### Scorecard\n\n")
             f.write(f"| Field | Value |\n|---|---|\n")
+            sc_dir = sc.get('direction', 'over')
+            f.write(f"| Direction | {sc_dir} |\n")
             f.write(f"| Decision | **{sc.get('decision', '?').upper()}** |\n")
             f.write(f"| Confidence | {sc.get('confidence', 0):.1%} |\n")
-            f.write(f"| Model Probability | {sc.get('model_probability', 0):.1%} |\n")
+            f.write(f"| Model Probability ({sc_dir}) | {sc.get('model_probability', 0):.1%} |\n")
             mip = sc.get('market_implied_probability')
-            f.write(f"| Market Implied | {f'{mip:.1%}' if mip else 'N/A'} |\n")
+            f.write(f"| Market Implied ({sc_dir}) | {f'{mip:.1%}' if mip else 'N/A'} |\n")
             f.write(f"| Expected Value | {sc.get('expected_value_pct', 0):+.2%} |\n")
             f.write(f"| Best Book | {sc.get('best_book', 'N/A')} |\n")
             f.write(f"| Eligible | {'Yes' if sc.get('eligible_for_bet') else 'No'} |\n")

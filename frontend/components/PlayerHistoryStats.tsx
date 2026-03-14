@@ -870,7 +870,7 @@ export function PlayerHistoryStats({
               <Info className="w-5 h-5 text-gray shrink-0 mt-0.5" />
               <div className="text-xs text-gray space-y-1">
                 <p>
-                  📊 The above data is calculated based on CSV historical game records, representing "empirical probability"
+                  📊 The above data is calculated based on CSV historical game records, representing &quot;empirical probability&quot;
                 </p>
                 <p>
                   ⚠️ This data is for reference only and does not represent actual prediction results, please bet responsibly

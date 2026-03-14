@@ -160,57 +160,64 @@ export default function EventPage() {
   };
 
   return (
-    <div className="max-w-5xl mx-auto px-6 py-10 page-enter">
-      {/* Back button */}
+    <div className="mx-auto max-w-6xl px-6 py-10 page-enter">
       <button
         onClick={() => router.back()}
-        className="flex items-center gap-2 text-gray hover:text-dark 
-                   transition-colors duration-150 mb-8 font-semibold"
+        className="mb-6 flex items-center gap-2 text-gray transition-colors duration-150 hover:text-dark font-semibold"
       >
         <ArrowLeft className="w-5 h-5" />
         <span>Back to Events</span>
       </button>
 
-      {/* Game info card */}
-      <div className="card mb-8">
-        {isEventsLoading ? (
-          <div className="animate-pulse">
-            <div className="skeleton h-8 w-64 mb-4" />
-            <div className="skeleton h-4 w-48" />
-          </div>
-        ) : currentEvent ? (
-          <>
-            <div className="flex items-center gap-4 mb-4 flex-wrap">
-              <div className="flex items-center gap-3">
-                <TeamLogo teamName={currentEvent.away_team} size={44} />
-                <span className="text-2xl font-bold text-dark">
-                  {currentEvent.away_team}
+      <section className="grid gap-6 lg:grid-cols-[1.1fr_0.9fr] mb-8">
+        <div className="card">
+          <div className="section-eyebrow">Event workspace</div>
+          {isEventsLoading ? (
+            <div className="animate-pulse">
+              <div className="skeleton h-8 w-64 mb-4" />
+              <div className="skeleton h-4 w-48" />
+            </div>
+          ) : currentEvent ? (
+            <>
+              <h1 className="hero-title mb-5">
+                {currentEvent.away_team}
+                <span className="text-gradient block">@ {currentEvent.home_team}</span>
+              </h1>
+              <div className="accent-line mb-6" />
+              <div className="flex flex-wrap items-center gap-3 text-gray">
+                <span className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/4 px-3 py-1.5">
+                  <Calendar className="w-4 h-4 text-red" />
+                  {formatFullDate(currentEvent.commence_time)}
+                </span>
+                <span className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/4 px-3 py-1.5">
+                  <TeamLogo teamName={currentEvent.away_team} size={20} />
+                  <span>{currentEvent.away_team}</span>
+                </span>
+                <span className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/4 px-3 py-1.5">
+                  <TeamLogo teamName={currentEvent.home_team} size={20} />
+                  <span>{currentEvent.home_team}</span>
                 </span>
               </div>
-              <span className="text-gray text-xl font-bold">@</span>
-              <div className="flex items-center gap-3">
-                <TeamLogo teamName={currentEvent.home_team} size={44} />
-                <span className="text-2xl font-bold text-dark">
-                  {currentEvent.home_team}
-                </span>
-              </div>
+            </>
+          ) : (
+            <div className="flex items-center gap-3 text-red">
+              <AlertCircle className="w-6 h-6" />
+              <span className="font-semibold">Game information not found</span>
             </div>
-            <div className="flex items-center gap-2 text-gray">
-              <Calendar className="w-4 h-4" />
-              <span>{formatFullDate(currentEvent.commence_time)}</span>
-            </div>
-          </>
-        ) : (
-          <div className="flex items-center gap-3 text-red">
-            <AlertCircle className="w-6 h-6" />
-            <span className="font-semibold">Game information not found</span>
-          </div>
-        )}
-      </div>
+          )}
+        </div>
 
-      {/* Calculator form */}
+        <div className="card">
+          <p className="text-xs uppercase tracking-[0.22em] text-light mb-3">How to read this page</p>
+          <div className="space-y-4 text-sm leading-7 text-gray">
+            <p>1. Pick a market, then choose a player and optional bookmakers.</p>
+            <p>2. Run the no-vig calculation to inspect fairer over/under pricing.</p>
+            <p>3. Compare the result with projection data and historical performance before saving a stance.</p>
+          </div>
+        </div>
+      </section>
+
       <form onSubmit={handleSubmit(onSubmit)}>
-        {/* Market type selection */}
         <div className="card mb-6">
           <MarketSelect
             value={selectedMarket}
@@ -219,7 +226,6 @@ export default function EventPage() {
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
-          {/* Player input */}
           <div className="card">
             <Controller
               name="player_name"
@@ -240,7 +246,6 @@ export default function EventPage() {
             )}
           </div>
 
-          {/* Bookmaker selection */}
           <div className="card">
             <Controller
               name="bookmakers"
@@ -255,7 +260,6 @@ export default function EventPage() {
           </div>
         </div>
 
-        {/* Calculate button */}
         <div className="flex justify-center">
           <button
             type="submit"
@@ -278,7 +282,6 @@ export default function EventPage() {
         </div>
       </form>
 
-      {/* Error message */}
       {mutation.isError && (
         <div className="card mt-6 border-red">
           <div className="flex items-start gap-4">
@@ -297,7 +300,6 @@ export default function EventPage() {
         </div>
       )}
 
-      {/* Results */}
       <div className="mt-8">
         <ResultsTable
           data={result}
@@ -305,14 +307,13 @@ export default function EventPage() {
         />
       </div>
 
-      {/* Help text */}
       {!result && !mutation.isPending && (
         <div className="mt-8 card">
-          <h3 className="text-sm font-bold text-dark mb-2">
+          <h3 className="text-sm font-semibold text-dark mb-2">
             📊 What is No-Vig Probability?
           </h3>
           <p className="text-sm text-gray leading-relaxed">
-            Bookmaker odds include "vig" (vig/juice), causing the sum of Over and Under 
+            Bookmaker odds include &quot;vig&quot; (vig/juice), causing the sum of Over and Under 
             implied probabilities to exceed 100%. No-vig probability normalizes these 
             implied probabilities to derive a fair probability estimate closer to reality. 
             Bookmakers with lower vig have odds closer to true probability.
@@ -320,12 +321,6 @@ export default function EventPage() {
         </div>
       )}
 
-      {/* Player Projection Panel */}
-      {/* 
-        只在球員被選中時顯示。
-        插在 Results 和 Historical Data 之間，提供投影數據的即時參考。
-        isProjectionLoading 時顯示骨架畫面，projectionData 載入完成後渲染面板。
-      */}
       {playerName && (
         <div className="mt-8">
           <PlayerProjectionPanel
@@ -337,7 +332,6 @@ export default function EventPage() {
         </div>
       )}
 
-      {/* Historical Data Analysis Section */}
       <div className="mt-12 pt-8 border-t-2 border-dark/10">
         <div className="card">
           <PlayerHistoryStats

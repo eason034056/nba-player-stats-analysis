@@ -9,6 +9,7 @@ Every public tool returns a dict conforming to the signal contract:
   { signal, effect_size, sample_size, reliability, window, source, as_of, details }
 """
 
+import asyncio
 import json
 import math
 import os
@@ -266,8 +267,90 @@ def _team_code_from_name(team_name: str) -> str:
     return team_name
 
 
-def get_official_injury_report(team: str, date: str = "") -> Dict[str, Any]:
-    code = _team_code_from_name(team)
+def _run_async(coro):
+    """Bridge async calls from sync context (same pattern as market.py)."""
+    try:
+        loop = asyncio.get_event_loop()
+        if loop.is_running():
+            import concurrent.futures
+            with concurrent.futures.ThreadPoolExecutor() as pool:
+                return pool.submit(asyncio.run, coro).result()
+        return loop.run_until_complete(coro)
+    except RuntimeError:
+        return asyncio.run(coro)
+
+
+async def _infer_opponent_from_schedule(player: str, date: str) -> str:
+    """
+    當 query 未指定對手時，從 The Odds API 賽程推斷對手球隊。
+    流程：取得今日賽事 → 逐一查該球員的賠率 → 找到該場即得 home/away，用 CSV 球員所屬隊判斷對手。
+    """
+    games = _games_for(player)
+    if not games:
+        return "unknown"
+    player_team = games[0].get("team", "")  # CSV 格式如 "Warriors", "Bucks"
+    if not player_team:
+        return "unknown"
+
+    try:
+        from app.services.odds_theoddsapi import odds_provider
+    except ImportError:
+        return "unknown"
+
+    now = datetime.now(timezone.utc)
+    events = await odds_provider.get_events(
+        sport="basketball_nba",
+        regions="us",
+        date_from=now - timedelta(hours=6),
+        date_to=now + timedelta(hours=18),
+    )
+    if not events:
+        return "unknown"
+
+    player_code = _team_code_from_name(player_team)
+    player_low = player.lower()
+
+    for ev in events:
+        try:
+            from app.services.odds_gateway import odds_gateway
+
+            snapshot = await odds_gateway.get_market_snapshot(
+                sport="basketball_nba",
+                event_id=ev["id"],
+                regions="us",
+                markets="player_points",
+                odds_format="american",
+                priority="background",
+                record_hot_key=False,
+            )
+            odds = snapshot.data
+        except Exception:
+            continue
+        for bm in odds.get("bookmakers", []):
+            for mkt in bm.get("markets", []):
+                for o in mkt.get("outcomes", []):
+                    if o.get("description", "").lower() == player_low:
+                        home = ev.get("home_team", "")
+                        away = ev.get("away_team", "")
+                        home_code = _team_code_from_name(home)
+                        away_code = _team_code_from_name(away)
+                        if home_code == player_code:
+                            return away
+                        if away_code == player_code:
+                            return home
+                        return "unknown"
+    return "unknown"
+
+
+def get_official_injury_report(team: str, date: str = "", player: str = "") -> Dict[str, Any]:
+    # 當 query 未指定對手時，從 The Odds API 賽程推斷
+    effective_team = team
+    if (not team or team == "unknown") and player:
+        effective_team = _run_async(_infer_opponent_from_schedule(player, date))
+        if effective_team == "unknown":
+            effective_team = team or "unknown"  # 保持原值以便 details 顯示
+
+    code = _team_code_from_name(effective_team)
     entries = _fetch_injury_report_for_team(code)
     return _signal_payload(
         "caution" if entries else "neutral",
@@ -276,7 +359,7 @@ def get_official_injury_report(team: str, date: str = "") -> Dict[str, Any]:
         0.9 if entries else 0.5,
         "today",
         "official_injury_report",
-        {"team": team, "team_code": code, "injuries": entries},
+        {"team": effective_team, "team_code": code, "injuries": entries},
     )
 
 

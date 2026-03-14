@@ -13,16 +13,22 @@ If the API key is missing or the request fails, the tool degrades gracefully.
 
 import asyncio
 import os
+import re
 import statistics
 import sys
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional, Tuple
 
-_PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", ".."))
+_AGENTS_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+_PROJECT_ROOT = os.path.abspath(os.path.join(_AGENTS_DIR, "..", ".."))
 _BACKEND_DIR = os.path.join(_PROJECT_ROOT, "backend")
+if _AGENTS_DIR not in sys.path:
+    sys.path.insert(0, _AGENTS_DIR)
 if _BACKEND_DIR not in sys.path:
     sys.path.insert(0, _BACKEND_DIR)
 
+from date_utils import normalize_date, date_to_utc_range
+from app.services.normalize import canonical_name, extract_player_names, find_player, suggest_players
 from app.services.prob import american_to_prob, devig, calculate_vig
 
 _NOW_ISO = lambda: datetime.now(timezone.utc).isoformat()
@@ -48,32 +54,151 @@ def _signal_payload(signal, effect_size, sample_size, reliability, window, sourc
     }
 
 
+def _normalize_direction(direction: str, lines: List[Dict[str, Any]]) -> str:
+    """Resolve 'any' into a concrete side using the current market."""
+    dir_lower = (direction or "over").lower()
+    if dir_lower != "any":
+        return dir_lower
+    fair_overs = [l["fair_over"] for l in lines]
+    consensus_fair = statistics.mean(fair_overs) if fair_overs else 0.5
+    return "over" if consensus_fair >= 0.5 else "under"
+
+
+def _same_line_lines(lines: List[Dict[str, Any]], threshold: float) -> List[Dict[str, Any]]:
+    return [l for l in lines if abs(l["line"] - float(threshold)) < 1e-9]
+
+
+def _same_line_side_prob(lines: List[Dict[str, Any]], direction: str) -> Optional[float]:
+    if not lines:
+        return None
+    fair_key = "fair_over" if direction == "over" else "fair_under"
+    return statistics.mean([l[fair_key] for l in lines])
+
+
+def _build_market_quote_for_line(
+    lines: List[Dict[str, Any]],
+    threshold: float,
+    direction: str,
+) -> Dict[str, Any]:
+    available_lines = sorted({l["line"] for l in lines})
+    dir_lower = _normalize_direction(direction, lines)
+
+    if not threshold or threshold <= 0:
+        return {
+            "signal": "unavailable",
+            "effect_size": 0,
+            "sample_size": 0,
+            "reliability": 0,
+            "window": "today",
+            "source": "odds_api",
+            "as_of": _NOW_ISO(),
+            "details": {
+                "error": "queried line not specified",
+                "pricing_mode": "overview_only",
+                "direction": dir_lower,
+                "queried_line": threshold,
+                "available_lines": available_lines,
+                "matched_n_books": 0,
+            },
+        }
+
+    matched = _same_line_lines(lines, threshold)
+    if not matched:
+        return {
+            "signal": "unavailable",
+            "effect_size": 0,
+            "sample_size": 0,
+            "reliability": 0,
+            "window": "today",
+            "source": "odds_api",
+            "as_of": _NOW_ISO(),
+            "details": {
+                "error": "queried line not currently available",
+                "pricing_mode": "overview_only",
+                "direction": dir_lower,
+                "queried_line": threshold,
+                "available_lines": available_lines,
+                "matched_n_books": 0,
+            },
+        }
+
+    key = "over_odds" if dir_lower == "over" else "under_odds"
+    fair_key = "fair_over" if dir_lower == "over" else "fair_under"
+    best = max(matched, key=lambda l: l[key])
+    query_prob = _same_line_side_prob(matched, dir_lower)
+    reliability = min(len(matched) / 6, 1.0)
+
+    return _signal_payload(
+        "neutral",
+        (query_prob or 0.5) - 0.5,
+        len(matched),
+        reliability,
+        "today",
+        "odds_api",
+        {
+            "pricing_mode": "exact_line",
+            "direction": dir_lower,
+            "queried_line": float(threshold),
+            "available_lines": available_lines,
+            "matched_n_books": len(matched),
+            "books": matched,
+            "market_implied_for_query": round(query_prob, 4) if query_prob is not None else None,
+            "best_book": best["bookmaker"],
+            "best_odds": best[key],
+            "best_line": best["line"],
+            "best_fair_prob": best[fair_key],
+        },
+    )
+
+
 # ---------------------------------------------------------------------------
 # Async helpers to call The Odds API
 # ---------------------------------------------------------------------------
 
-async def _get_events_today():
+async def _get_events(date: str = ""):
+    """
+    Fetch NBA events. The Odds API 使用 UTC。
+
+    - date 為空：查 now-6h ~ now+18h（UTC）
+    - date 為 YYYY-MM-DD：視為本地日期，轉成 UTC 區間後查詢
+    """
     from app.services.odds_theoddsapi import odds_provider
-    from datetime import timedelta
     now = datetime.now(timezone.utc)
+    date_from = now - timedelta(hours=6)
+    date_to = now + timedelta(hours=18)
+
+    # 先正規化（支援 "tomorrow" 等，若從其他路徑傳入）
+    norm = normalize_date(date) if date else ""
+    if norm:
+        utc_range = date_to_utc_range(norm)
+        if utc_range:
+            start_utc, end_utc = utc_range
+            # 若目標日期在未來，擴展查詢範圍
+            if end_utc > now:
+                date_from = min(date_from, start_utc)
+                date_to = max(date_to, end_utc)
+
     return await odds_provider.get_events(
         sport="basketball_nba",
         regions="us",
-        date_from=now - timedelta(hours=6),
-        date_to=now + timedelta(hours=18),
+        date_from=date_from,
+        date_to=date_to,
     )
 
 
 async def _get_player_odds(event_id: str, market_key: str):
-    from app.services.odds_theoddsapi import odds_provider
+    from app.services.odds_gateway import odds_gateway
     try:
-        return await odds_provider.get_event_odds(
+        snapshot = await odds_gateway.get_market_snapshot(
             sport="basketball_nba",
             event_id=event_id,
             regions="us",
             markets=market_key,
             odds_format="american",
+            priority="background",
+            record_hot_key=False,
         )
+        return snapshot.data
     except Exception:
         return {}
 
@@ -95,9 +220,28 @@ def _find_event_for_player(events: list, player: str) -> Optional[str]:
     return events[0]["id"] if events else None
 
 
-def _extract_player_lines(odds_data: dict, player: str) -> List[Dict[str, Any]]:
-    """Pull all bookmaker lines for a given player from an odds response."""
-    player_low = player.lower()
+def _collect_player_candidates(odds_data: dict) -> List[str]:
+    players = set()
+    for bm in odds_data.get("bookmakers", []):
+        for mkt in bm.get("markets", []):
+            players.update(extract_player_names(mkt.get("outcomes", [])))
+    return sorted(players)
+
+
+def _extract_player_lines(
+    odds_data: dict,
+    player: str,
+) -> Tuple[List[Dict[str, Any]], Optional[str], List[str], List[Tuple[str, int]]]:
+    """Pull all bookmaker lines for the matched player from an odds response."""
+    candidates = _collect_player_candidates(odds_data)
+    matched_player = find_player(player, candidates)
+    suggestions = suggest_players(player, candidates, limit=5, threshold=70)
+
+    if not matched_player:
+        return [], None, candidates, suggestions
+
+    matched_core = canonical_name(matched_player)
+    matched_names = {candidate for candidate in candidates if canonical_name(candidate) == matched_core}
     results = []
     for bm in odds_data.get("bookmakers", []):
         bm_key = bm.get("key", "")
@@ -105,7 +249,7 @@ def _extract_player_lines(odds_data: dict, player: str) -> List[Dict[str, Any]]:
             outs_by_player: Dict[str, dict] = {}
             for o in mkt.get("outcomes", []):
                 desc = o.get("description", "")
-                if desc.lower() != player_low:
+                if desc not in matched_names:
                     continue
                 direction = o.get("name", "").lower()
                 outs_by_player[direction] = o
@@ -133,24 +277,51 @@ def _extract_player_lines(odds_data: dict, player: str) -> List[Dict[str, Any]]:
                         })
                     except (ValueError, ZeroDivisionError):
                         continue
-    return results
+    return results, matched_player, candidates, suggestions
 
 
-async def _fetch_market_data(player: str, metric: str):
+async def _fetch_market_data(player: str, metric: str, date: str = "") -> Tuple[List[Dict[str, Any]], Optional[str], Dict[str, Any]]:
+    """Returns (lines, market_key, meta). meta contains match/error context for the caller."""
     market_key = MARKET_MAP.get(metric, f"player_{metric}")
-    events = await _get_events_today()
+    events = await _get_events(date)
     if not events:
-        return [], None
+        return [], None, {
+            "error": "no NBA events in time window (try expanding date or check API)",
+            "query_player_name": player,
+            "searched_events": 0,
+        }
 
     lines_all = []
+    matched_player = None
+    all_candidates = set()
+    best_suggestions: List[Tuple[str, int]] = []
     for ev in events:
         odds = await _get_player_odds(ev["id"], market_key)
-        lines = _extract_player_lines(odds, player)
+        lines, matched_name, candidates, suggestions = _extract_player_lines(odds, player)
+        all_candidates.update(candidates)
+        if suggestions and not best_suggestions:
+            best_suggestions = suggestions
         if lines:
             lines_all = lines
+            matched_player = matched_name
             break
 
-    return lines_all, market_key
+    if lines_all:
+        return lines_all, market_key, {
+            "query_player_name": player,
+            "matched_player_name": matched_player or player,
+            "searched_events": len(events),
+        }
+
+    suggestions = suggest_players(player, sorted(all_candidates), limit=5, threshold=70) or best_suggestions
+    return [], market_key, {
+        "error": "player not found in any event",
+        "hint": "check name spelling or try the sportsbook version, e.g. Cody Williams Jr.",
+        "query_player_name": player,
+        "suggestions": [{"name": name, "score": score} for name, score in suggestions],
+        "candidate_count": len(all_candidates),
+        "searched_events": len(events),
+    }
 
 
 # ===================================================================
@@ -160,14 +331,15 @@ async def _fetch_market_data(player: str, metric: str):
 def get_current_market(player: str, metric: str, date: str = "") -> Dict[str, Any]:
     """All bookmaker lines, no-vig fair probability, consensus."""
     try:
-        lines, mkt_key = _run_async(_fetch_market_data(player, metric))
+        lines, mkt_key, meta = _run_async(_fetch_market_data(player, metric, date))
     except Exception as e:
         return _signal_payload("unavailable", 0, 0, 0, "today", "odds_api",
                                {"error": str(e)})
 
     if not lines:
-        return _signal_payload("unavailable", 0, 0, 0, "today", "odds_api",
-                               {"error": "no lines found for player/metric"})
+        details = dict(meta)
+        details.setdefault("error", "no lines found for player/metric")
+        return _signal_payload("unavailable", 0, 0, 0, "today", "odds_api", details)
 
     fair_overs = [l["fair_over"] for l in lines]
     consensus_fair = statistics.mean(fair_overs)
@@ -178,18 +350,22 @@ def get_current_market(player: str, metric: str, date: str = "") -> Dict[str, An
                            {"consensus_fair_over": round(consensus_fair, 4),
                             "consensus_line": consensus_line,
                             "books": lines,
-                            "n_books": len(lines)})
+                            "n_books": len(lines),
+                            "query_player_name": meta.get("query_player_name", player),
+                            "matched_player_name": meta.get("matched_player_name", player)})
 
 
 def get_line_movement(player: str, metric: str, date: str = "") -> Dict[str, Any]:
     """Opening vs current line, direction, magnitude."""
     try:
-        lines, _ = _run_async(_fetch_market_data(player, metric))
+        lines, _, meta = _run_async(_fetch_market_data(player, metric, date))
     except Exception as e:
         return _signal_payload("unavailable", 0, 0, 0, "today", "odds_api", {"error": str(e)})
 
     if not lines:
-        return _signal_payload("unavailable", 0, 0, 0, "today", "odds_api", {"error": "no lines"})
+        details = dict(meta)
+        details.setdefault("error", "no lines")
+        return _signal_payload("unavailable", 0, 0, 0, "today", "odds_api", details)
 
     all_lines = [l["line"] for l in lines]
     current = statistics.median(all_lines)
@@ -197,39 +373,89 @@ def get_line_movement(player: str, metric: str, date: str = "") -> Dict[str, Any
     return _signal_payload("neutral", 0, len(lines), min(len(lines) / 6, 1.0), "today", "odds_api",
                            {"current_consensus_line": current,
                             "all_lines": sorted(set(all_lines)),
-                            "note": "snapshot only; historical movement requires stored odds_line_snapshots"})
+                            "note": "snapshot only; historical movement requires stored odds_line_snapshots",
+                            "query_player_name": meta.get("query_player_name", player),
+                            "matched_player_name": meta.get("matched_player_name", player)})
 
 
 def get_best_price(player: str, metric: str, direction: str, date: str = "") -> Dict[str, Any]:
     """Best currently available line/odds for the intended side (over or under)."""
     try:
-        lines, _ = _run_async(_fetch_market_data(player, metric))
+        lines, _, meta = _run_async(_fetch_market_data(player, metric, date))
     except Exception as e:
         return _signal_payload("unavailable", 0, 0, 0, "today", "odds_api", {"error": str(e)})
 
     if not lines:
-        return _signal_payload("unavailable", 0, 0, 0, "today", "odds_api", {"error": "no lines"})
+        details = dict(meta)
+        details.setdefault("error", "no lines")
+        return _signal_payload("unavailable", 0, 0, 0, "today", "odds_api", details)
 
-    key = "over_odds" if direction.lower() == "over" else "under_odds"
+    dir_lower = _normalize_direction(direction, lines)
+
+    key = "over_odds" if dir_lower == "over" else "under_odds"
+    fair_key = "fair_over" if dir_lower == "over" else "fair_under"
     best = max(lines, key=lambda l: l[key])
 
     return _signal_payload("neutral", 0, len(lines), min(len(lines) / 6, 1.0), "today", "odds_api",
-                           {"direction": direction,
+                           {"direction": dir_lower,
                             "best_book": best["bookmaker"],
                             "best_odds": best[key],
                             "best_line": best["line"],
-                            "best_fair_prob": best["fair_over"] if direction.lower() == "over" else best["fair_under"]})
+                            "best_fair_prob": best[fair_key],
+                            "query_player_name": meta.get("query_player_name", player),
+                            "matched_player_name": meta.get("matched_player_name", player)})
+
+
+def get_market_quote_for_line(
+    player: str,
+    metric: str,
+    threshold: float,
+    direction: str,
+    date: str = "",
+) -> Dict[str, Any]:
+    """
+    Query-specific market quote.
+
+    Unlike get_current_market(), this only prices the exact line the user asked about.
+    If the queried line is not currently available, it returns unavailable and includes
+    the available market lines for debugging/UI display.
+    """
+    try:
+        lines, _, meta = _run_async(_fetch_market_data(player, metric, date))
+    except Exception as e:
+        return _signal_payload(
+            "unavailable",
+            0,
+            0,
+            0,
+            "today",
+            "odds_api",
+            {"error": str(e), "queried_line": threshold, "pricing_mode": "overview_only"},
+        )
+
+    if not lines:
+        details = dict(meta)
+        details.setdefault("error", "no lines")
+        details.update({"queried_line": threshold, "pricing_mode": "overview_only"})
+        return _signal_payload("unavailable", 0, 0, 0, "today", "odds_api", details)
+
+    result = _build_market_quote_for_line(lines, threshold, direction)
+    result["details"]["query_player_name"] = meta.get("query_player_name", player)
+    result["details"]["matched_player_name"] = meta.get("matched_player_name", player)
+    return result
 
 
 def get_bookmaker_spread(player: str, metric: str, date: str = "") -> Dict[str, Any]:
     """Disagreement across books – wide spread = uncertain market."""
     try:
-        lines, _ = _run_async(_fetch_market_data(player, metric))
+        lines, _, meta = _run_async(_fetch_market_data(player, metric, date))
     except Exception as e:
         return _signal_payload("unavailable", 0, 0, 0, "today", "odds_api", {"error": str(e)})
 
     if not lines:
-        return _signal_payload("unavailable", 0, 0, 0, "today", "odds_api", {"error": "no lines"})
+        details = dict(meta)
+        details.setdefault("error", "no lines")
+        return _signal_payload("unavailable", 0, 0, 0, "today", "odds_api", details)
 
     all_lines = [l["line"] for l in lines]
     spread = max(all_lines) - min(all_lines)
@@ -241,12 +467,15 @@ def get_bookmaker_spread(player: str, metric: str, date: str = "") -> Dict[str, 
                             "line_std": round(std, 2),
                             "min_line": min(all_lines),
                             "max_line": max(all_lines),
-                            "interpretation": "wide disagreement" if spread > 2 else "tight consensus"})
+                            "interpretation": "wide disagreement" if spread > 2 else "tight consensus",
+                            "query_player_name": meta.get("query_player_name", player),
+                            "matched_player_name": meta.get("matched_player_name", player)})
 
 
 ALL_MARKET_TOOLS = [
     get_current_market,
     get_line_movement,
     get_best_price,
+    get_market_quote_for_line,
     get_bookmaker_spread,
 ]

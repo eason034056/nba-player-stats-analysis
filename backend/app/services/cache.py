@@ -197,6 +197,67 @@ class CacheService:
         if self._client:
             await self._client.close()
             self._client = None
+
+    async def acquire_lock(self, key: str, ttl: int) -> bool:
+        """
+        取得簡單分散式鎖。
+
+        使用 SET key value NX EX ttl，成功表示本次請求取得鎖。
+        """
+        try:
+            client = await self.get_client()
+            acquired = await client.set(key, "1", ex=ttl, nx=True)
+            return bool(acquired)
+        except Exception as e:
+            print(f"Cache acquire_lock error: {e}")
+            return False
+
+    async def release_lock(self, key: str) -> bool:
+        """
+        釋放分散式鎖。
+        """
+        try:
+            client = await self.get_client()
+            await client.delete(key)
+            return True
+        except Exception as e:
+            print(f"Cache release_lock error: {e}")
+            return False
+
+    async def increment_sorted_set(self, key: str, member: str, amount: float = 1.0) -> float:
+        """
+        對 sorted set 的 member 做加權累計。
+        """
+        try:
+            client = await self.get_client()
+            return await client.zincrby(key, amount, member)
+        except Exception as e:
+            print(f"Cache increment_sorted_set error: {e}")
+            return 0.0
+
+    async def get_top_sorted_set_members(self, key: str, limit: int) -> list[str]:
+        """
+        取得 sorted set 分數最高的前 N 個 member。
+        """
+        try:
+            client = await self.get_client()
+            members = await client.zrevrange(key, 0, max(limit - 1, 0))
+            return list(members)
+        except Exception as e:
+            print(f"Cache get_top_sorted_set_members error: {e}")
+            return []
+
+    async def remove_sorted_set_member(self, key: str, member: str) -> bool:
+        """
+        從 sorted set 移除指定 member。
+        """
+        try:
+            client = await self.get_client()
+            await client.zrem(key, member)
+            return True
+        except Exception as e:
+            print(f"Cache remove_sorted_set_member error: {e}")
+            return False
     
     @staticmethod
     def build_events_key(date: str, regions: str) -> str:
@@ -263,4 +324,3 @@ class CacheService:
 
 # 建立全域快取服務實例
 cache_service = CacheService()
-

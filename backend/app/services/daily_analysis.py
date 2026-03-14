@@ -25,6 +25,7 @@ from datetime import datetime, timezone, timedelta
 from typing import List, Dict, Any, Optional, Tuple
 from collections import defaultdict
 
+from app.services.odds_gateway import odds_gateway
 from app.services.odds_theoddsapi import odds_provider
 from app.services.odds_provider import OddsAPIError
 from app.services.csv_player_history import csv_player_service
@@ -499,15 +500,17 @@ class DailyAnalysisService:
             博彩公司數據列表
         """
         try:
-            raw_odds = await odds_provider.get_event_odds(
+            snapshot = await odds_gateway.get_market_snapshot(
                 sport="basketball_nba",
                 event_id=event_id,
                 regions="us",
                 markets=market,
-                odds_format="american"
+                odds_format="american",
+                priority="background",
+                record_hot_key=False,
             )
             
-            return raw_odds.get("bookmakers", [])
+            return snapshot.data.get("bookmakers", [])
         
         except OddsAPIError as e:
             if e.status_code == 404:
@@ -561,4 +564,3 @@ class DailyAnalysisService:
 
 # 建立全域服務實例
 daily_analysis_service = DailyAnalysisService()
-

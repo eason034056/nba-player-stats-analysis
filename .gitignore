@@ -52,6 +52,7 @@ yarn-error.log*
 
 # ==================== Next.js ====================
 .next/
+.next-dev/
 out/
 .vercel
 
@@ -84,4 +85,3 @@ coverage/
 # ==================== 其他 ====================
 *.local
 Thumbs.db
-

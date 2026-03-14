@@ -33,6 +33,7 @@ import time
 from datetime import datetime, timezone, timedelta
 from typing import List, Dict, Any, Optional, Tuple
 
+from app.services.odds_gateway import odds_gateway
 from app.services.odds_theoddsapi import odds_provider
 from app.services.odds_provider import OddsAPIError
 from app.services.prob import american_to_prob, calculate_vig, devig
@@ -292,15 +293,17 @@ class OddsSnapshotService:
             待寫入的 row tuples 列表，每個 tuple 對應 UPSERT_LINE_SQL 的 $1-$14
         """
         # 一次取得 4 個 market 的賠率（減少 API call）
-        raw_odds = await odds_provider.get_event_odds(
+        snapshot = await odds_gateway.get_market_snapshot(
             sport="basketball_nba",
             event_id=event_id,
             regions="us",
             markets=SNAPSHOT_MARKETS,
             odds_format="american",
+            priority="background",
+            record_hot_key=False,
         )
 
-        bookmakers_data = raw_odds.get("bookmakers", [])
+        bookmakers_data = snapshot.data.get("bookmakers", [])
         date_obj = datetime.strptime(date, "%Y-%m-%d").date()
         rows: List[tuple] = []
 

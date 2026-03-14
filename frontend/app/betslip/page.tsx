@@ -14,9 +14,10 @@
 
 "use client";
 
-import { useState, useRef, useCallback } from "react";
+import { useState, useRef, useCallback, useEffect } from "react";
 import Link from "next/link";
 import { 
+  Bot,
   ClipboardList, 
   Trash2, 
   X, 
@@ -30,6 +31,8 @@ import {
   Share2
 } from "lucide-react";
 import { useBetSlip, type BetSlipPick } from "@/contexts/BetSlipContext";
+import { useAgentWidget } from "@/contexts/AgentWidgetContext";
+import { createAgentPickContextFromBetSlip } from "@/lib/agent-chat";
 import { TeamLogo } from "@/components/TeamLogo";
 import { getShortTeamName } from "@/lib/team-logos";
 import { METRIC_DISPLAY_NAMES, DIRECTION_DISPLAY_NAMES } from "@/lib/schemas";
@@ -90,19 +93,16 @@ function BetSlipCard({ pick, onRemove }: { pick: BetSlipPick; onRemove: () => vo
   return (
     <div className="card group animate-fade-in">
       <div className="flex items-start gap-4">
-        {/* 球隊 Logo */}
         <TeamLogo 
           teamName={pick.player_team || pick.home_team} 
           size={48} 
           className="shrink-0"
         />
         
-        {/* 主要內容 */}
         <div className="flex-1 min-w-0">
-          {/* 球員名稱和移除按鈕 */}
           <div className="flex items-start justify-between mb-2">
             <div>
-              <h3 className="text-lg font-bold text-dark">
+              <h3 className="text-lg font-semibold text-dark">
                 {pick.player_name}
               </h3>
               <p className="text-sm text-gray">
@@ -113,17 +113,15 @@ function BetSlipCard({ pick, onRemove }: { pick: BetSlipPick; onRemove: () => vo
               </p>
             </div>
             
-            {/* 移除按鈕 */}
             <button
               onClick={onRemove}
-              className="p-2 rounded-lg text-gray hover:text-red hover:bg-red/10 transition-colors"
+              className="p-2 rounded-full text-gray hover:text-red hover:bg-red/10 transition-colors"
               title="Remove from bet slip"
             >
               <X className="w-5 h-5" />
             </button>
           </div>
           
-          {/* 預測內容 */}
           <div className="flex items-center justify-between mb-3">
             <div className={`
               px-3 py-1.5 rounded-lg text-sm font-bold
@@ -135,7 +133,6 @@ function BetSlipCard({ pick, onRemove }: { pick: BetSlipPick; onRemove: () => vo
               {metricName} {directionName} {pick.threshold}
             </div>
             
-            {/* 機率顯示 */}
             <div className="flex items-center gap-2">
               {level === "high" && (
                 <Flame className="w-4 h-4 text-green-500" />
@@ -149,7 +146,6 @@ function BetSlipCard({ pick, onRemove }: { pick: BetSlipPick; onRemove: () => vo
             </div>
           </div>
           
-          {/* 比賽時間和查看詳情 */}
           <div className="flex items-center justify-between text-sm">
             <span className="text-gray">
               {formatGameTime(pick.commence_time)}
@@ -174,10 +170,10 @@ function BetSlipCard({ pick, onRemove }: { pick: BetSlipPick; onRemove: () => vo
 function EmptyState() {
   return (
     <div className="card text-center py-16">
-      <div className="w-20 h-20 mx-auto mb-6 rounded-full border-2 border-dark/20 flex items-center justify-center">
+      <div className="w-20 h-20 mx-auto mb-6 rounded-full border border-white/10 bg-white/4 flex items-center justify-center">
         <ClipboardList className="w-10 h-10 text-gray" />
       </div>
-      <h3 className="text-2xl font-bold text-dark mb-3">
+      <h3 className="text-2xl font-semibold text-dark mb-3">
         Your Bet Slip is Empty
       </h3>
       <p className="text-gray mb-8 max-w-md mx-auto">
@@ -431,6 +427,7 @@ function ShareImageTemplate({
  * BetSlipPage - 下注列表頁面主組件
  */
 export default function BetSlipPage() {
+  const { setPageContext, submitAction } = useAgentWidget();
   const { picks, removePick, clearAll, count } = useBetSlip();
   const [showPreview, setShowPreview] = useState(false);
   const [isGenerating, setIsGenerating] = useState(false);
@@ -587,39 +584,67 @@ export default function BetSlipPage() {
     }
   }, [picks, generateCanvas, handleDownload]);
 
+  useEffect(() => {
+    setPageContext({
+      route: "/betslip",
+    });
+  }, [setPageContext]);
+
+  const handleReviewSlip = useCallback(async () => {
+    await submitAction({
+      action: "review_slip",
+      message: "Compare with my slip",
+      contextPatch: {
+        bet_slip: picks.map((pick) => createAgentPickContextFromBetSlip(pick)),
+      },
+    });
+  }, [picks, submitAction]);
+
   return (
     <div className="min-h-screen page-enter">
-      <div className="max-w-4xl mx-auto px-6 py-12">
-        {/* 頁面標題 */}
-        <div className="text-center mb-12">
-          <div className="inline-block mb-6">
-            <span className="badge-danger">
-              <ClipboardList className="w-3.5 h-3.5 mr-1.5" />
-              My Selections
-            </span>
-          </div>
-          
-          <h1 className="hero-title mb-4">
-            Bet <span className="text-red">Slip</span>
-          </h1>
-          
-          <div className="accent-line mx-auto mb-6" />
-          
-          <p className="text-lg text-gray max-w-lg mx-auto">
-            Manage your selected picks and generate shareable images for your friends
-          </p>
-        </div>
+      <div className="mx-auto max-w-6xl px-6 py-10">
+        <section className="grid gap-6 lg:grid-cols-[1.15fr_0.85fr] mb-8">
+          <div className="card">
+            <div className="section-eyebrow">
+              <ClipboardList className="mr-2 h-3.5 w-3.5" />
+              My selections
+            </div>
 
-        {/* 空狀態 */}
+            <h1 className="hero-title mb-4">
+              Bet slip,
+              <span className="text-gradient block">saved as a curated board.</span>
+            </h1>
+
+            <div className="accent-line mb-6" />
+
+            <p className="max-w-2xl text-lg leading-8 text-gray">
+              Keep the picks you want to revisit, refine them before game time, and export the final board into a shareable image that still looks considered outside the app.
+            </p>
+          </div>
+
+          <div className="card">
+            <p className="text-xs uppercase tracking-[0.22em] text-light mb-3">Slip status</p>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="rounded-[22px] border border-white/8 bg-white/4 p-4">
+                <p className="text-xs uppercase tracking-[0.18em] text-light">Saved picks</p>
+                <p className="mt-2 text-3xl font-semibold text-dark">{count}</p>
+              </div>
+              <div className="rounded-[22px] border border-white/8 bg-white/4 p-4">
+                <p className="text-xs uppercase tracking-[0.18em] text-light">Share mode</p>
+                <p className="mt-2 text-sm font-semibold text-dark">{showPreview ? "Previewing" : "Ready"}</p>
+                <p className="text-xs text-gray">PNG / clipboard / web share</p>
+              </div>
+            </div>
+          </div>
+        </section>
+
         {count === 0 && <EmptyState />}
 
-        {/* 有 picks 時顯示內容 */}
         {count > 0 && (
           <>
-            {/* 操作按鈕區 */}
             <div className="flex items-center justify-between mb-8">
               <div className="flex items-center gap-3">
-                <h2 className="text-xl font-bold text-dark">
+                <h2 className="text-xl font-semibold text-dark">
                   Your Picks
                 </h2>
                 <span className="badge-neutral">
@@ -628,7 +653,14 @@ export default function BetSlipPage() {
               </div>
               
               <div className="flex items-center gap-3">
-                {/* 預覽按鈕 */}
+                <button
+                  onClick={() => void handleReviewSlip()}
+                  className="btn-refresh"
+                >
+                  <Bot className="w-4 h-4 text-red" />
+                  <span>Review My Slip</span>
+                </button>
+
                 <button
                   onClick={() => setShowPreview(!showPreview)}
                   className="btn-refresh"
@@ -637,10 +669,9 @@ export default function BetSlipPage() {
                   <span>{showPreview ? "Hide Preview" : "Preview Image"}</span>
                 </button>
                 
-                {/* 清空按鈕 */}
                 <button
                   onClick={clearAll}
-                  className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-bold text-red hover:bg-red/10 transition-colors"
+                  className="flex items-center gap-2 px-4 py-2 rounded-full text-sm font-bold text-red hover:bg-red/10 transition-colors"
                 >
                   <Trash2 className="w-4 h-4" />
                   <span>Clear All</span>
@@ -648,7 +679,6 @@ export default function BetSlipPage() {
               </div>
             </div>
 
-            {/* Picks 列表 */}
             <div className="grid grid-cols-1 gap-4 mb-8">
               {picks.map((pick) => (
                 <BetSlipCard
@@ -659,20 +689,17 @@ export default function BetSlipPage() {
               ))}
             </div>
 
-            {/* 分享圖片預覽 */}
             {showPreview && (
               <div className="mb-8">
-                <h3 className="text-lg font-bold text-dark mb-4">Share Image Preview</h3>
+                <h3 className="text-lg font-semibold text-dark mb-4">Share Image Preview</h3>
                 <div className="overflow-x-auto pb-4">
-                  <div className="inline-block rounded-xl overflow-hidden shadow-lg">
+                  <div className="inline-block rounded-[28px] overflow-hidden shadow-panel">
                     <ShareImageTemplate picks={picks} forwardedRef={shareImageRef} />
                   </div>
                 </div>
               </div>
             )}
 
-            {/* 隱藏的分享圖片模板（用於生成圖片）
-                在生成圖片時會暫時將 opacity 設為 1 來確保正確渲染 */}
             {!showPreview && (
               <div 
                 style={{
@@ -689,15 +716,13 @@ export default function BetSlipPage() {
               </div>
             )}
 
-            {/* 分享操作按鈕 */}
             <div className="card">
-              <h3 className="text-lg font-bold text-dark mb-4">Share Your Picks</h3>
+              <h3 className="text-lg font-semibold text-dark mb-4">Share Your Picks</h3>
               <p className="text-gray text-sm mb-6">
                 Generate an image of your picks to share with friends on social media or messaging apps.
               </p>
               
               <div className="flex flex-wrap gap-3">
-                {/* 下載按鈕 */}
                 <button
                   onClick={handleDownload}
                   disabled={isGenerating}
@@ -707,7 +732,6 @@ export default function BetSlipPage() {
                   <span>{isGenerating ? "Generating..." : "Download PNG"}</span>
                 </button>
                 
-                {/* 複製到剪貼簿 */}
                 <button
                   onClick={handleCopyToClipboard}
                   disabled={isGenerating}
@@ -726,7 +750,6 @@ export default function BetSlipPage() {
                   )}
                 </button>
                 
-                {/* 分享按鈕（使用 Web Share API） */}
                 <button
                   onClick={handleShare}
                   disabled={isGenerating}
@@ -740,7 +763,6 @@ export default function BetSlipPage() {
           </>
         )}
 
-        {/* 底部提示 */}
         <div className="mt-16 text-center">
           <div className="divider-light mb-8" />
           <p className="text-sm text-gray max-w-lg mx-auto">

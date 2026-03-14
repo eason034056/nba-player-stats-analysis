@@ -30,6 +30,7 @@ from apscheduler.triggers.interval import IntervalTrigger
 
 from app.services.daily_analysis import daily_analysis_service
 from app.services.csv_downloader import csv_downloader_service
+from app.services.odds_gateway import odds_gateway
 from app.services.projection_service import projection_service
 from app.services.odds_snapshot_service import odds_snapshot_service
 from app.services.cache import cache_service
@@ -180,6 +181,14 @@ class SchedulerService:
             name='盤口快照（最終 - 封盤前）',
             replace_existing=True
         )
+
+        self._scheduler.add_job(
+            self._run_hot_key_prewarm_job,
+            trigger=IntervalTrigger(seconds=30),
+            id='odds_hot_key_prewarm',
+            name='熱門 Odds Key 預熱',
+            replace_existing=True
+        )
         
         # 啟動排程器
         self._scheduler.start()
@@ -189,6 +198,7 @@ class SchedulerService:
         print("📅 排程任務:")
         print("   - 投影資料預取:每天 UTC 16:00, 22:00, 23:30")
         print("   - 盤口快照:每天 UTC 16:05, 22:05, 23:35")
+        print("   - 熱門 Odds Key 預熱:每 30 秒")
         print("   - 每日分析:每天 UTC 12:00")
         print("   - CSV 下載:每天芝加哥時間 10:00")
         
@@ -360,6 +370,17 @@ class SchedulerService:
             traceback.print_exc()
 
         print("=" * 50 + "\n")
+
+    async def _run_hot_key_prewarm_job(self):
+        """
+        預熱最近 5 分鐘內最熱門的 odds key。
+        """
+        try:
+            warmed = await odds_gateway.prewarm_hot_keys()
+            if warmed > 0:
+                print(f"🔥 熱門 Odds Key 預熱完成: {warmed}")
+        except Exception as e:
+            print(f"⚠️ 熱門 Odds Key 預熱失敗: {e}")
 
     async def trigger_odds_snapshot_now(self, date: Optional[str] = None) -> dict:
         """

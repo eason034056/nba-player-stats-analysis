@@ -1,377 +1,398 @@
-/**
- * globals.css - 極簡風全域樣式
- * 
- * 設計理念：
- * - 扁平化設計，無漸層、無陰影
- * - 大量留白，讓內容呼吸
- * - 高對比度配色
- * - 幾何圖形和清晰線條
- * 
- * 配色方案 (60-30-10 Rule):
- * - #FFF2DF (60%) - 暖米色背景
- * - #E92016 (30%) - 紅色強調
- * - #F9DC24 (10%) - 黃色點綴
- */
-
-/* ==================== Tailwind 指令 ==================== */
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
-/* ==================== Google Fonts 載入 ==================== */
-/* 
- * DM Sans: 現代幾何無襯線字體，極簡風格
- * JetBrains Mono: 等寬字體，用於數字顯示
- */
-@import url('https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700;0,9..40,800;1,9..40,400&family=JetBrains+Mono:wght@400;500;600&display=swap');
-
-/* ==================== CSS 變數 ==================== */
 :root {
-  /* 主色調 - 極簡配色 */
-  --color-cream: #FFF2DF;        /* 60% - 主背景 */
-  --color-cream-dark: #F5E6D0;   /* 背景變體 */
-  --color-red: #E92016;          /* 30% - 強調色 */
-  --color-red-light: #FF3B2F;    /* 紅色亮版 */
-  --color-red-dark: #C41A12;     /* 紅色暗版 */
-  --color-yellow: #F9DC24;       /* 10% - 點綴色 */
-  --color-yellow-light: #FFE94E; /* 黃色亮版 */
-  
-  /* 中性色 */
-  --color-black: #1A1A1A;        /* 純黑文字 */
-  --color-dark: #2D2D2D;         /* 深灰 */
-  --color-gray: #6B6B6B;         /* 中灰 */
-  --color-light-gray: #A0A0A0;   /* 淺灰 */
-  --color-white: #FFFFFF;        /* 純白 */
-  
-  /* 語義色彩 */
-  --color-success: #22C55E;      /* 成功/高機率 */
-  --color-warning: #F59E0B;      /* 警告/中機率 */
-  --color-danger: #E92016;       /* 危險/錯誤（使用主紅色） */
-  
-  /* 圓角 - 極簡使用較小圓角或直角 */
-  --radius-sm: 4px;
-  --radius-md: 8px;
-  --radius-lg: 12px;
-  --radius-xl: 16px;
+  --color-canvas: #07101d;
+  --color-canvas-alt: #0d1729;
+  --color-surface: rgba(13, 24, 42, 0.78);
+  --color-surface-strong: rgba(20, 34, 58, 0.92);
+  --color-surface-soft: rgba(255, 255, 255, 0.06);
+  --color-border: rgba(255, 255, 255, 0.1);
+  --color-border-strong: rgba(255, 255, 255, 0.22);
+
+  --color-cream: #f6efe2;
+  --color-cream-dark: #d6cab7;
+  --color-red: #ff886c;
+  --color-red-light: #ffd0c1;
+  --color-red-dark: #df6b52;
+  --color-yellow: #f3c775;
+  --color-yellow-light: #fae3ab;
+
+  --color-black: #08101d;
+  --color-dark: #ebf1fb;
+  --color-gray: #95a6c5;
+  --color-light-gray: #cad4e6;
+  --color-white: #fffaf2;
+
+  --color-success: #71d7a1;
+  --color-warning: #f3c775;
+  --color-danger: #ff886c;
+
+  --shadow-soft: 0 24px 60px rgba(2, 8, 20, 0.34);
+  --shadow-card: 0 28px 90px rgba(2, 8, 20, 0.4);
+  --shadow-button: 0 12px 40px rgba(255, 248, 230, 0.16);
+
+  --radius-sm: 10px;
+  --radius-md: 16px;
+  --radius-lg: 24px;
+  --radius-xl: 32px;
   --radius-full: 9999px;
-  
-  /* 邊框粗細 */
+
   --border-thin: 1px;
-  --border-medium: 2px;
-  --border-thick: 3px;
+  --border-medium: 1px;
+  --border-thick: 1px;
 }
 
-/* ==================== 基礎樣式 ==================== */
 @layer base {
   html {
     @apply antialiased;
     scroll-behavior: smooth;
   }
-  
+
   body {
     @apply min-h-screen;
-    font-family: 'DM Sans', system-ui, sans-serif;
-    background-color: var(--color-cream);
-    color: var(--color-black);
-  }
-  
-  h1, h2, h3, h4, h5, h6 {
-    @apply font-bold tracking-tight;
-    color: var(--color-black);
-  }
-  
-  .font-mono {
-    font-family: 'JetBrains Mono', monospace;
+    font-family: var(--font-sans), sans-serif;
+    color: var(--color-dark);
+    background:
+      radial-gradient(circle at top left, rgba(255, 136, 108, 0.14), transparent 30%),
+      radial-gradient(circle at top right, rgba(112, 146, 255, 0.12), transparent 32%),
+      radial-gradient(circle at bottom center, rgba(243, 199, 117, 0.08), transparent 28%),
+      linear-gradient(180deg, #050b15 0%, #08111f 42%, #091525 100%);
+    letter-spacing: -0.01em;
+    position: relative;
+    overflow-x: hidden;
   }
 
-  /* 選取文字樣式 */
+  body::before,
+  body::after {
+    content: "";
+    position: fixed;
+    inset: auto;
+    pointer-events: none;
+    z-index: 0;
+    filter: blur(80px);
+    opacity: 0.55;
+  }
+
+  body::before {
+    top: 8rem;
+    left: -8rem;
+    width: 20rem;
+    height: 20rem;
+    background: rgba(255, 136, 108, 0.16);
+  }
+
+  body::after {
+    right: -6rem;
+    bottom: 10rem;
+    width: 18rem;
+    height: 18rem;
+    background: rgba(243, 199, 117, 0.12);
+  }
+
+  h1, h2, h3, h4, h5, h6 {
+    @apply tracking-tight;
+    color: var(--color-dark);
+  }
+
+  .font-mono {
+    font-family: "JetBrains Mono", monospace;
+  }
+
   ::selection {
-    background-color: var(--color-yellow);
-    color: var(--color-black);
+    background-color: rgba(243, 199, 117, 0.32);
+    color: var(--color-white);
   }
 }
 
-/* ==================== 自訂元件樣式 ==================== */
 @layer components {
-  /* ===== 按鈕 ===== */
-  
-  /* 主要按鈕 - 紅色填滿 */
   .btn-primary {
-    @apply px-6 py-3 
-           font-bold rounded-lg
-           transition-all duration-150
-           active:scale-[0.98]
-           focus:outline-none focus:ring-2 focus:ring-offset-2
-           disabled:opacity-50 disabled:cursor-not-allowed;
-    background-color: var(--color-red);
-    color: var(--color-white);
-    border: var(--border-medium) solid var(--color-red);
-  }
-  
-  .btn-primary:hover:not(:disabled) {
-    background-color: var(--color-red-dark);
-    border-color: var(--color-red-dark);
-  }
-  
-  .btn-primary:focus {
-    --tw-ring-color: var(--color-red);
-    --tw-ring-offset-color: var(--color-cream);
-  }
-  
-  /* 次要按鈕 - 邊框樣式 */
-  .btn-secondary {
-    @apply px-6 py-3 
-           font-bold rounded-lg
-           transition-all duration-150
-           active:scale-[0.98]
-           focus:outline-none focus:ring-2 focus:ring-offset-2;
-    background-color: transparent;
+    @apply inline-flex items-center justify-center gap-2 rounded-full px-6 py-3 font-semibold transition-all duration-200 active:scale-[0.98] focus:outline-none focus:ring-2 disabled:cursor-not-allowed disabled:opacity-50;
+    background: linear-gradient(135deg, var(--color-cream) 0%, #fff7e8 100%);
     color: var(--color-black);
-    border: var(--border-medium) solid var(--color-black);
-  }
-  
-  .btn-secondary:hover {
-    background-color: var(--color-black);
-    color: var(--color-cream);
-  }
-  
-  .btn-secondary:focus {
-    --tw-ring-color: var(--color-black);
-    --tw-ring-offset-color: var(--color-cream);
+    border: 1px solid rgba(255, 255, 255, 0.5);
+    box-shadow: var(--shadow-button);
   }
 
-  /* 重新整理按鈕 */
+  .btn-primary:hover:not(:disabled) {
+    transform: translateY(-1px);
+    box-shadow: 0 20px 48px rgba(255, 248, 230, 0.2);
+  }
+
+  .btn-primary:focus {
+    --tw-ring-color: rgba(255, 255, 255, 0.38);
+  }
+
+  .btn-secondary {
+    @apply inline-flex items-center justify-center gap-2 rounded-full px-6 py-3 font-semibold transition-all duration-200 active:scale-[0.98] focus:outline-none focus:ring-2;
+    background: rgba(255, 255, 255, 0.04);
+    color: var(--color-dark);
+    border: 1px solid var(--color-border);
+    backdrop-filter: blur(18px);
+  }
+
+  .btn-secondary:hover {
+    background: rgba(255, 255, 255, 0.08);
+    border-color: var(--color-border-strong);
+  }
+
+  .btn-secondary:focus {
+    --tw-ring-color: rgba(255, 255, 255, 0.22);
+  }
+
   .btn-refresh {
-    @apply flex items-center gap-2 px-4 py-2
-           font-semibold rounded-lg
-           transition-all duration-150
-           active:scale-[0.98];
-    background-color: transparent;
-    color: var(--color-gray);
-    border: var(--border-medium) solid var(--color-gray);
+    @apply inline-flex items-center gap-2 rounded-full px-4 py-2.5 font-semibold transition-all duration-200 active:scale-[0.98];
+    background: rgba(255, 255, 255, 0.04);
+    color: var(--color-dark);
+    border: 1px solid var(--color-border);
+    backdrop-filter: blur(18px);
   }
-  
+
   .btn-refresh:hover {
-    color: var(--color-black);
-    border-color: var(--color-black);
+    background: rgba(255, 255, 255, 0.09);
+    border-color: var(--color-border-strong);
   }
-  
-  /* 黃色點綴按鈕 */
+
   .btn-accent {
-    @apply px-6 py-3 
-           font-bold rounded-lg
-           transition-all duration-150
-           active:scale-[0.98];
-    background-color: var(--color-yellow);
+    @apply inline-flex items-center justify-center gap-2 rounded-full px-6 py-3 font-semibold transition-all duration-200 active:scale-[0.98];
+    background: linear-gradient(135deg, var(--color-yellow) 0%, var(--color-yellow-light) 100%);
     color: var(--color-black);
-    border: var(--border-medium) solid var(--color-yellow);
+    border: 1px solid rgba(255, 241, 211, 0.4);
   }
-  
+
   .btn-accent:hover {
-    background-color: var(--color-yellow-light);
-    border-color: var(--color-yellow-light);
+    transform: translateY(-1px);
   }
-  
-  /* ===== 輸入框 ===== */
+
   .input {
-    @apply w-full px-4 py-3 
-           rounded-lg
-           transition-all duration-150
-           focus:outline-none;
-    background-color: var(--color-white);
-    color: var(--color-black);
-    border: var(--border-medium) solid var(--color-black);
+    @apply w-full rounded-[20px] px-4 py-3.5 transition-all duration-200 focus:outline-none;
+    background: rgba(255, 255, 255, 0.04);
+    color: var(--color-dark);
+    border: 1px solid var(--color-border);
+    backdrop-filter: blur(16px);
   }
-  
+
   .input::placeholder {
-    color: var(--color-light-gray);
+    color: rgba(202, 212, 230, 0.58);
   }
-  
+
   .input:focus {
-    border-color: var(--color-red);
+    border-color: rgba(255, 255, 255, 0.34);
+    box-shadow: 0 0 0 4px rgba(255, 255, 255, 0.05);
   }
-  
-  /* ===== 卡片 ===== */
-  
-  /* 基礎卡片 - 白底黑框 */
+
   .card {
-    @apply rounded-lg p-6;
-    background-color: var(--color-white);
-    border: var(--border-medium) solid var(--color-black);
+    @apply relative overflow-hidden rounded-[28px] p-6;
+    background:
+      linear-gradient(180deg, rgba(255, 255, 255, 0.055) 0%, rgba(255, 255, 255, 0.03) 100%),
+      var(--color-surface);
+    border: 1px solid var(--color-border);
+    box-shadow: var(--shadow-card);
+    backdrop-filter: blur(24px);
   }
-  
-  /* 玻璃態卡片 - 在極簡設計中改為半透明白底 */
+
+  .card::before {
+    content: "";
+    position: absolute;
+    inset: 0 0 auto 0;
+    height: 1px;
+    background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.22), transparent);
+    pointer-events: none;
+  }
+
   .card-glass {
-    @apply rounded-lg p-6;
-    background-color: rgba(255, 255, 255, 0.8);
-    border: var(--border-thin) solid var(--color-black);
+    @apply rounded-[28px] p-6;
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid var(--color-border);
+    backdrop-filter: blur(20px);
   }
-  
-  /* 比賽卡片 */
+
   .card-game {
-    @apply relative overflow-hidden
-           rounded-lg p-5
-           transition-all duration-200;
-    background-color: var(--color-white);
-    border: var(--border-medium) solid var(--color-black);
+    @apply relative overflow-hidden rounded-[30px] p-5 transition-all duration-300;
+    background:
+      linear-gradient(180deg, rgba(255, 255, 255, 0.045) 0%, rgba(255, 255, 255, 0.025) 100%),
+      var(--color-surface);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    box-shadow: var(--shadow-soft);
+    backdrop-filter: blur(24px);
   }
-  
+
   .card-game:hover {
-    transform: translateY(-2px);
-    border-color: var(--color-red);
+    transform: translateY(-4px);
+    border-color: rgba(255, 208, 193, 0.42);
+    box-shadow: 0 35px 100px rgba(2, 8, 20, 0.46);
   }
-  
-  /* 可互動卡片 */
+
   .card-interactive {
-    @apply card cursor-pointer
-           transition-all duration-200
-           active:scale-[0.99];
+    @apply card cursor-pointer transition-all duration-200 active:scale-[0.99];
   }
-  
+
   .card-interactive:hover {
-    border-color: var(--color-red);
+    border-color: rgba(255, 255, 255, 0.18);
   }
-  
-  /* ===== 表格 ===== */
+
   .table-container {
-    @apply overflow-x-auto rounded-lg;
-    border: var(--border-medium) solid var(--color-black);
+    @apply overflow-x-auto rounded-[24px];
+    border: 1px solid var(--color-border);
+    background: rgba(255, 255, 255, 0.02);
   }
-  
+
   .table {
     @apply w-full text-sm;
   }
-  
+
   .table th {
-    @apply px-4 py-3 text-left font-bold;
-    background-color: var(--color-black);
-    color: var(--color-cream);
-    border-bottom: var(--border-medium) solid var(--color-black);
+    @apply px-4 py-3 text-left text-xs font-semibold uppercase tracking-[0.2em];
+    background: rgba(255, 255, 255, 0.04);
+    color: var(--color-light-gray);
+    border-bottom: 1px solid var(--color-border);
   }
-  
+
   .table td {
     @apply px-4 py-3;
-    border-bottom: var(--border-thin) solid var(--color-black);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+    color: var(--color-dark);
   }
-  
+
   .table tr:last-child td {
     @apply border-b-0;
   }
-  
+
   .table tbody tr {
     @apply transition-colors duration-150;
   }
-  
+
   .table tbody tr:hover {
-    background-color: var(--color-cream);
+    background: rgba(255, 255, 255, 0.04);
   }
-  
-  /* ===== 標籤 / Badge ===== */
+
   .badge {
-    @apply inline-flex items-center px-3 py-1 
-           rounded-full text-xs font-bold uppercase tracking-wide;
+    @apply inline-flex items-center rounded-full px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.24em];
+    border: 1px solid transparent;
   }
-  
+
   .badge-success {
     @apply badge;
-    background-color: var(--color-success);
-    color: var(--color-white);
+    background: rgba(113, 215, 161, 0.14);
+    border-color: rgba(113, 215, 161, 0.24);
+    color: var(--color-success);
   }
-  
+
   .badge-warning {
     @apply badge;
-    background-color: var(--color-yellow);
-    color: var(--color-black);
+    background: rgba(243, 199, 117, 0.12);
+    border-color: rgba(243, 199, 117, 0.2);
+    color: var(--color-yellow);
   }
-  
+
   .badge-danger {
     @apply badge;
-    background-color: var(--color-red);
-    color: var(--color-white);
+    background: rgba(255, 136, 108, 0.14);
+    border-color: rgba(255, 136, 108, 0.22);
+    color: var(--color-red-light);
   }
-  
+
   .badge-neutral {
     @apply badge;
-    background-color: var(--color-black);
-    color: var(--color-cream);
+    background: rgba(255, 255, 255, 0.05);
+    border-color: rgba(255, 255, 255, 0.1);
+    color: var(--color-light-gray);
   }
 }
 
-/* ==================== 工具類別 ==================== */
 @layer utilities {
-  /* 文字漸層 - 極簡風改為純色 */
   .text-gradient {
-    color: var(--color-red);
+    background: linear-gradient(135deg, #ffffff 0%, #f0d6b6 52%, #ff8b70 100%);
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
   }
-  
-  /* 文字顏色工具 */
+
   .text-cream { color: var(--color-cream); }
   .text-red { color: var(--color-red); }
   .text-yellow { color: var(--color-yellow); }
-  .text-dark { color: var(--color-black); }
+  .text-dark { color: var(--color-dark); }
   .text-gray { color: var(--color-gray); }
   .text-light { color: var(--color-light-gray); }
-  
-  /* 背景色工具 */
-  .bg-cream { background-color: var(--color-cream); }
+
+  .bg-cream { background-color: rgba(255, 255, 255, 0.05); }
   .bg-red { background-color: var(--color-red); }
   .bg-yellow { background-color: var(--color-yellow); }
-  .bg-dark { background-color: var(--color-black); }
-  
-  /* 邊框顏色工具 */
-  .border-cream { border-color: var(--color-cream); }
+  .bg-dark { background-color: var(--color-canvas); }
+
+  .border-cream { border-color: rgba(255, 255, 255, 0.14); }
   .border-red { border-color: var(--color-red); }
   .border-yellow { border-color: var(--color-yellow); }
-  .border-dark { border-color: var(--color-black); }
-  
-  /* 隱藏滾動條但保持滾動功能 */
+  .border-dark { border-color: var(--color-border); }
+
   .scrollbar-hide {
     -ms-overflow-style: none;
     scrollbar-width: none;
   }
-  
+
   .scrollbar-hide::-webkit-scrollbar {
     display: none;
   }
-  
-  /* 極簡分隔線 */
+
   .divider {
     @apply w-full h-0;
-    border-top: var(--border-medium) solid var(--color-black);
+    border-top: 1px solid rgba(255, 255, 255, 0.12);
   }
-  
+
   .divider-light {
     @apply w-full h-0;
-    border-top: var(--border-thin) solid var(--color-light-gray);
+    border-top: 1px solid rgba(255, 255, 255, 0.08);
+  }
+  .page-shell {
+    @apply relative z-10;
+  }
+
+  .section-eyebrow {
+    @apply mb-5 inline-flex items-center rounded-full px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.24em];
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    color: var(--color-light-gray);
   }
 }
 
-/* ==================== 動畫 ==================== */
-/* 骨架屏載入動畫 - 極簡版 */
 @keyframes shimmer {
   0% {
-    opacity: 0.4;
-  }
-  50% {
-    opacity: 0.8;
+    background-position: 200% 0;
   }
   100% {
-    opacity: 0.4;
+    background-position: -200% 0;
   }
 }
 
 .skeleton {
-  @apply rounded-md;
-  background-color: var(--color-cream-dark);
-  animation: shimmer 1.5s ease-in-out infinite;
+  @apply rounded-xl;
+  background: linear-gradient(
+    90deg,
+    rgba(255, 255, 255, 0.06) 0%,
+    rgba(255, 255, 255, 0.12) 50%,
+    rgba(255, 255, 255, 0.06) 100%
+  );
+  background-size: 200% 100%;
+  animation: shimmer 1.6s linear infinite;
 }
 
-/* 頁面進入動畫 - 極簡版（更快更直接） */
 .page-enter {
-  animation: pageEnter 0.25s ease-out;
+  animation: pageEnter 0.45s cubic-bezier(0.22, 1, 0.36, 1);
 }
 
 @keyframes pageEnter {
+  from {
+    opacity: 0;
+    transform: translateY(18px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes fadeIn {
   from {
     opacity: 0;
     transform: translateY(8px);
@@ -382,62 +403,48 @@
   }
 }
 
-/* 淡入動畫 */
-@keyframes fadeIn {
-  from {
-    opacity: 0;
-  }
-  to {
-    opacity: 1;
-  }
-}
-
 .animate-fade-in {
-  animation: fadeIn 0.2s ease-out forwards;
+  animation: fadeIn 0.35s ease-out forwards;
   opacity: 0;
 }
 
-/* 簡單的縮放懸停效果 */
 .hover-lift {
-  @apply transition-transform duration-150;
+  @apply transition-transform duration-200;
 }
 
 .hover-lift:hover {
   transform: translateY(-2px);
 }
 
-/* ==================== 特殊元素 ==================== */
-
-/* 紅色強調線 */
 .accent-line {
-  @apply w-16 h-1;
-  background-color: var(--color-red);
+  @apply h-[2px] w-20 rounded-full;
+  background: linear-gradient(90deg, rgba(255, 255, 255, 0), var(--color-red), rgba(243, 199, 117, 0.8));
 }
 
-/* 黃色亮點標記 */
 .highlight {
-  background-color: var(--color-yellow);
-  padding: 0 4px;
+  background: rgba(243, 199, 117, 0.18);
+  color: var(--color-yellow-light);
+  padding: 0 6px;
+  border-radius: 999px;
 }
 
-/* 大標題樣式 */
 .hero-title {
-  @apply text-5xl md:text-7xl font-extrabold tracking-tighter;
-  color: var(--color-black);
+  font-family: var(--font-display), serif;
+  @apply text-5xl font-semibold tracking-[-0.04em] md:text-7xl;
+  color: var(--color-white);
+  line-height: 0.94;
 }
 
-/* VS 標籤 */
 .vs-badge {
-  @apply w-12 h-12 rounded-lg flex items-center justify-center
-         font-extrabold text-lg;
-  background-color: var(--color-red);
+  @apply flex h-12 w-12 items-center justify-center rounded-full text-base font-semibold;
+  background: radial-gradient(circle at top, rgba(255, 255, 255, 0.24), rgba(255, 136, 108, 0.3));
+  border: 1px solid rgba(255, 255, 255, 0.16);
   color: var(--color-white);
 }
 
-/* 進度條 */
 .progress-bar {
   @apply h-2 rounded-full overflow-hidden;
-  background-color: var(--color-cream-dark);
+  background: rgba(255, 255, 255, 0.08);
 }
 
 .progress-bar-fill {
@@ -445,22 +452,20 @@
 }
 
 .progress-bar-fill.high {
-  background-color: var(--color-success);
+  background: linear-gradient(90deg, rgba(113, 215, 161, 0.65), var(--color-success));
 }
 
 .progress-bar-fill.medium {
-  background-color: var(--color-yellow);
+  background: linear-gradient(90deg, rgba(243, 199, 117, 0.65), var(--color-yellow));
 }
 
-/* 數字顯示 */
 .stat-number {
   @apply font-mono text-4xl font-bold;
-  color: var(--color-red);
+  color: var(--color-cream);
 }
 
-/* 底部頁尾 */
 .footer {
-  @apply py-8 mt-auto text-center;
-  border-top: var(--border-medium) solid var(--color-black);
+  @apply mt-auto py-10 text-center;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
   color: var(--color-gray);
 }

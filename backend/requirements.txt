@@ -75,3 +75,9 @@ python-dotenv==1.0.0
 # - Phase 3 用於生成 Tree-of-Thought 結構化答案
 openai>=1.0.0
 
+# ==================== Agent runtime（scripts/agents）====================
+# LangGraph: Multi-step agent orchestration
+langgraph==1.1.2
+
+# LangChain OpenAI: ChatOpenAI runtime used by scripts/agents
+langchain-openai==1.1.11

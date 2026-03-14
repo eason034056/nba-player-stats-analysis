@@ -14,9 +14,17 @@
 
 "use client";
 
+import { useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Activity, Info, Target, ClipboardList } from "lucide-react";
+import {
+  Activity,
+  ClipboardList,
+  Info,
+  Menu,
+  Target,
+  X,
+} from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useBetSlip } from "@/contexts/BetSlipContext";
 
@@ -29,6 +37,52 @@ const navLinks = [
   { href: "/about", label: "About", icon: Info },
 ];
 
+function NavItem({
+  href,
+  label,
+  icon: Icon,
+  isActive,
+  badge,
+  onNavigate,
+}: {
+  href: string;
+  label: string;
+  icon: typeof Activity;
+  isActive: boolean;
+  badge?: number;
+  onNavigate?: () => void;
+}) {
+  return (
+    <Link
+      href={href}
+      aria-current={isActive ? "page" : undefined}
+      onClick={onNavigate}
+      className={cn(
+        "group relative flex items-center gap-2.5 rounded-full px-4 py-2.5",
+        "text-sm font-semibold tracking-[0.02em] transition-all duration-200",
+        isActive
+          ? "bg-white text-slate-950 shadow-[0_12px_40px_rgba(255,255,255,0.16)]"
+          : "text-white/72 hover:bg-white/10 hover:text-white"
+      )}
+    >
+      <span className="relative">
+        <Icon className="h-4 w-4" />
+        {typeof badge === "number" && badge > 0 && (
+          <span
+            className={cn(
+              "absolute -right-2.5 -top-2 flex min-w-[18px] items-center justify-center rounded-full px-1 text-[10px] font-bold",
+              isActive ? "bg-slate-950 text-white" : "bg-white text-slate-950"
+            )}
+          >
+            {badge > 99 ? "99+" : badge}
+          </span>
+        )}
+      </span>
+      <span>{label}</span>
+    </Link>
+  );
+}
+
 /**
  * Navbar component
  * 
@@ -38,88 +92,93 @@ const navLinks = [
 export function Navbar() {
   const pathname = usePathname();
   const { count } = useBetSlip();
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const isBetSlipActive = pathname === "/betslip";
 
   return (
-    <nav className="fixed top-0 left-0 right-0 z-50 bg-red">
-      <div className="max-w-4xl mx-auto px-6">
-        <div className="flex items-center justify-between h-16">
-          {/* Logo / Site name */}
-          <Link 
-            href="/" 
-            className="flex items-center gap-3 group"
-          >
-            {/* Logo - 極簡圓形 */}
-            <div className="w-10 h-10 rounded-lg bg-cream flex items-center justify-center">
-              <span className="text-2xl">🏀</span>
-            </div>
-            
-            {/* 網站名稱 */}
-            <div className="flex flex-col">
-              <span className="text-xl font-extrabold text-cream tracking-tight">
-                No-Vig NBA
-              </span>
-              <span className="text-[10px] text-cream/70 -mt-0.5 tracking-wider uppercase font-medium">
-                Fair Odds Calculator
-              </span>
-            </div>
-          </Link>
+    <nav className="fixed left-0 right-0 top-0 z-50 px-4 pt-4 sm:px-6">
+      <div className="mx-auto max-w-6xl">
+        <div className="rounded-[28px] border border-white/12 bg-[rgba(7,12,24,0.75)] px-4 py-3 shadow-[0_20px_70px_rgba(3,8,20,0.45)] backdrop-blur-xl sm:px-6">
+          <div className="flex items-center justify-between gap-4">
+            <Link
+              href="/"
+              className="group flex items-center gap-3"
+              onClick={() => setIsMobileMenuOpen(false)}
+            >
+              <div className="flex h-11 w-11 items-center justify-center rounded-[18px] border border-white/12 bg-[radial-gradient(circle_at_top,#fff8e6_0%,#d9c7a0_100%)] text-xl shadow-[inset_0_1px_0_rgba(255,255,255,0.55)]">
+                🏀
+              </div>
 
-          {/* Navigation links */}
-          <div className="flex items-center gap-1">
-            {navLinks.map((link) => {
-              const isActive = pathname === link.href;
-              const Icon = link.icon;
+              <div className="flex min-w-0 flex-col">
+                <span className="truncate text-lg font-semibold tracking-[0.02em] text-white">
+                  No-Vig NBA
+                </span>
+                <span className="truncate text-[10px] uppercase tracking-[0.34em] text-white/45">
+                  Cinematic Data Atelier
+                </span>
+              </div>
+            </Link>
 
-              return (
-                <Link
+            <div className="hidden items-center gap-2 md:flex">
+              {navLinks.map((link) => (
+                <NavItem
                   key={link.href}
                   href={link.href}
-                  className={cn(
-                    "flex items-center gap-2 px-4 py-2 rounded-lg",
-                    "text-sm font-bold transition-all duration-150",
-                    isActive
-                      ? "bg-cream text-red"
-                      : "text-cream/80 hover:text-cream hover:bg-white/10"
-                  )}
-                >
-                  <Icon className="w-4 h-4" />
-                  <span>{link.label}</span>
-                </Link>
-              );
-            })}
+                  label={link.label}
+                  icon={link.icon}
+                  isActive={pathname === link.href}
+                />
+              ))}
 
-            {/* Bet Slip 入口按鈕 */}
-            <Link
-              href="/betslip"
-              className={cn(
-                "relative flex items-center gap-2 px-4 py-2 rounded-lg ml-2",
-                "text-sm font-bold transition-all duration-150",
-                isBetSlipActive
-                  ? "bg-cream text-red"
-                  : "text-cream/80 hover:text-cream hover:bg-white/10"
-              )}
+              <NavItem
+                href="/betslip"
+                label="Bet Slip"
+                icon={ClipboardList}
+                isActive={isBetSlipActive}
+                badge={count}
+              />
+            </div>
+
+            <button
+              type="button"
+              aria-label={isMobileMenuOpen ? "Close navigation menu" : "Open navigation menu"}
+              aria-expanded={isMobileMenuOpen}
+              onClick={() => setIsMobileMenuOpen((open) => !open)}
+              className="inline-flex h-11 w-11 items-center justify-center rounded-full border border-white/12 bg-white/6 text-white transition-colors hover:bg-white/12 md:hidden"
             >
-              <div className="relative">
-                <ClipboardList className="w-4 h-4" />
-                {/* 數量 badge */}
-                {count > 0 && (
-                  <span className={cn(
-                    "absolute -top-2 -right-2.5",
-                    "min-w-[18px] h-[18px] px-1",
-                    "flex items-center justify-center",
-                    "text-[10px] font-bold rounded-full",
-                    isBetSlipActive
-                      ? "bg-red text-white"
-                      : "bg-cream text-red"
-                  )}>
-                    {count > 99 ? "99+" : count}
-                  </span>
-                )}
-              </div>
-              <span>Bet Slip</span>
-            </Link>
+              {isMobileMenuOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
+            </button>
           </div>
+
+          {isMobileMenuOpen && (
+            <div
+              role="dialog"
+              aria-label="Mobile navigation"
+              className="mt-4 rounded-[24px] border border-white/10 bg-white/6 p-3 md:hidden"
+            >
+              <div className="grid gap-2">
+                {navLinks.map((link) => (
+                  <NavItem
+                    key={link.href}
+                    href={link.href}
+                    label={link.label}
+                    icon={link.icon}
+                    isActive={pathname === link.href}
+                    onNavigate={() => setIsMobileMenuOpen(false)}
+                  />
+                ))}
+
+                <NavItem
+                  href="/betslip"
+                  label="Bet Slip"
+                  icon={ClipboardList}
+                  isActive={isBetSlipActive}
+                  badge={count}
+                  onNavigate={() => setIsMobileMenuOpen(false)}
+                />
+              </div>
+            </div>
+          )}
         </div>
       </div>
     </nav>

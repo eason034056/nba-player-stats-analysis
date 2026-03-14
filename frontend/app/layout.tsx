@@ -10,9 +10,21 @@
  */
 
 import type { Metadata } from "next";
+import { Cormorant_Garamond, Manrope } from "next/font/google";
 import "./globals.css";
 import { Providers } from "./providers";
 import { Navbar } from "@/components/Navbar";
+
+const sans = Manrope({
+  subsets: ["latin"],
+  variable: "--font-sans",
+});
+
+const display = Cormorant_Garamond({
+  subsets: ["latin"],
+  weight: ["500", "600", "700"],
+  variable: "--font-display",
+});
 
 /**
  * Metadata 設定
@@ -52,25 +64,24 @@ export default function RootLayout({
 }) {
   return (
     <html lang="zh-TW">
-      <body>
+      <body className={`${sans.variable} ${display.variable}`}>
         <Providers>
-          {/* 導航欄 */}
           <Navbar />
-          
-          {/* 主要內容區域 */}
-          <main className="min-h-screen pt-20">
+
+          <main className="page-shell min-h-screen pt-28">
             {children}
           </main>
-          
-          {/* 頁尾 - 極簡風格 */}
+
           <footer className="footer">
-            <div className="max-w-4xl mx-auto px-6">
-              <p className="text-sm mb-1">
-                本站為資訊與數據分析用途，不構成投注建議
-              </p>
-              <p className="text-xs text-light">
-                資料可能延遲或缺漏，以外部供應商為準
-              </p>
+            <div className="mx-auto max-w-6xl px-6">
+              <div className="rounded-[28px] border border-white/8 bg-white/4 px-6 py-6 backdrop-blur-xl">
+                <p className="text-sm text-dark mb-2">
+                  No-Vig NBA 將賽程、機率、projection 與歷史表現整理成更可讀的分析體驗。
+                </p>
+                <p className="text-xs text-light">
+                  本站內容僅供資訊與研究用途，不構成投注建議；即時賠率與資料可能延遲或缺漏，請以官方來源為準。
+                </p>
+              </div>
             </div>
           </footer>
         </Providers>

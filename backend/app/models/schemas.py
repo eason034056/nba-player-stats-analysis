@@ -120,6 +120,10 @@ class NoVigResponse(BaseModel):
     results: List[BookmakerResult] = Field(default_factory=list, description="各博彩公司結果")
     consensus: Optional[Consensus] = Field(default=None, description="市場共識")
     message: Optional[str] = Field(default=None, description="額外訊息（如找不到球員）")
+    fetched_at: Optional[datetime] = Field(default=None, description="快取資料抓取時間")
+    data_age_seconds: Optional[int] = Field(default=None, description="資料距今秒數")
+    cache_state: Optional[str] = Field(default=None, description="fresh | stale | refreshed")
+    source: Optional[str] = Field(default=None, description="snapshot_cache | upstream")
 
 
 # ==================== 球員建議 ====================
@@ -130,6 +134,10 @@ class PlayerSuggestResponse(BaseModel):
     用於前端 autocomplete 功能
     """
     players: List[str] = Field(default_factory=list, description="球員名稱列表")
+    fetched_at: Optional[datetime] = Field(default=None, description="快取資料抓取時間")
+    data_age_seconds: Optional[int] = Field(default=None, description="資料距今秒數")
+    cache_state: Optional[str] = Field(default=None, description="fresh | stale | refreshed")
+    source: Optional[str] = Field(default=None, description="snapshot_cache | upstream")
 
 
 # ==================== 錯誤回應 ====================
@@ -501,4 +509,3 @@ class OddsSnapshotTriggerResponse(BaseModel):
     total_lines: int = Field(default=0, description="寫入的 odds line 總筆數")
     duration_ms: int = Field(default=0, description="耗時（毫秒）")
     message: str = Field(default="", description="操作結果訊息")
-

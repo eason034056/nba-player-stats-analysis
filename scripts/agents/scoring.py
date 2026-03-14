@@ -50,6 +50,7 @@ def compute_scorecard(
     historical_signals: Dict[str, Any],
     projection_signals: Dict[str, Any],
     market_signals: Dict[str, Any],
+    direction: str = "over",
 ) -> Dict[str, Any]:
     """
     Build the deterministic decision payload.
@@ -62,6 +63,8 @@ def compute_scorecard(
         Keyed by tool name -> signal payload (from projection.py – all 'unavailable').
     market_signals : dict
         Keyed by tool name -> signal payload (from market.py).
+    direction : str
+        "over" | "under" | "any". When "under", model/market/EV use P(under) instead of P(over).
 
     Returns
     -------
@@ -118,26 +121,64 @@ def compute_scorecard(
         flags.append("back_to_back")
 
     # ------------------------------------------------------------------
-    # 5. Teammate / injury adjustment
+    # 5. Teammate / own-team injury adjustment
     # ------------------------------------------------------------------
+    # 5a. Chemistry-based adjustment from auto_teammate_impact
     teammate = historical_signals.get("auto_teammate_impact", {})
     tm_chemistry = _safe(teammate, "details", "teammate_chemistry", default=[])
     tm_adj = 0.0
     unresolved_injury = False
+    out_stars = []
+    questionable_stars = []
+
     for c in (tm_chemistry if isinstance(tm_chemistry, list) else []):
         status = c.get("injury_status", "Healthy")
         delta = c.get("chemistry_delta", 0)
+        star = c.get("star", "")
+        w_n = c.get("with", {}).get("n", 0) or 0
+        wo_n = c.get("without", {}).get("n", 0) or 0
+        has_data = w_n >= 3 and wo_n >= 3
+
         if status in ("Questionable", "Day-To-Day"):
             unresolved_injury = True
-        if status == "Out":
+            questionable_stars.append(star)
+
+        if status == "Out" and has_data:
+            # Star confirmed out: chemistry_delta > 0 means player does better
+            # WITH the star, so losing them hurts -> negative adjustment.
+            # delta < 0 means player is better WITHOUT -> positive adjustment.
+            tm_adj += (-delta) * 0.02
+            out_stars.append(star)
+        elif status in ("Questionable", "Day-To-Day") and has_data:
             tm_adj += (-delta) * 0.01
-        elif status in ("Questionable", "Day-To-Day"):
-            tm_adj += (-delta) * 0.005
+
+    # 5b. Count significant injuries on own team from the full injury report
+    own_report = historical_signals.get("get_own_team_injury_report", {})
+    own_injuries = _safe(own_report, "details", "injuries", default=[])
+    serious_out = [
+        e for e in (own_injuries if isinstance(own_injuries, list) else [])
+        if e.get("status", "") in ("Out",)
+    ]
+    questionable_list = [
+        e for e in (own_injuries if isinstance(own_injuries, list) else [])
+        if e.get("status", "") in ("Questionable", "Day-To-Day")
+    ]
+
+    if len(serious_out) >= 3:
+        tm_adj -= 0.02
+        flags.append(f"multiple_teammates_out ({len(serious_out)} confirmed out)")
+
+    if questionable_list:
+        flags.append(
+            f"teammates_questionable: {', '.join(e.get('player', '?') for e in questionable_list[:5])}"
+        )
 
     model_prob += _clamp(tm_adj, -MAX_TEAMMATE_ADJ, MAX_TEAMMATE_ADJ)
 
     if unresolved_injury:
         flags.append("unresolved_teammate_injury")
+    if out_stars:
+        flags.append(f"star_teammates_out: {', '.join(out_stars)}")
 
     # ------------------------------------------------------------------
     # 6. Variance penalty
@@ -156,15 +197,13 @@ def compute_scorecard(
     # 8. Market comparison
     # ------------------------------------------------------------------
     market = market_signals.get("get_current_market", {})
-    market_fair = _safe(market, "details", "consensus_fair_over", default=None)
-    best_price_data = market_signals.get("get_best_price", {})
-    best_book = _safe(best_price_data, "details", "best_book", default=None)
-    best_line = _safe(best_price_data, "details", "best_line", default=None)
-    best_fair_prob = _safe(best_price_data, "details", "best_fair_prob", default=None)
-
-    market_implied = float(market_fair) if market_fair else None
-    if market_implied is None:
-        flags.append("no_market_data")
+    market_quote = market_signals.get("get_market_quote_for_line", {})
+    pricing_mode = _safe(market_quote, "details", "pricing_mode", default="overview_only")
+    available_lines = _safe(market_quote, "details", "available_lines", default=[])
+    market_implied_for_query = _safe(market_quote, "details", "market_implied_for_query", default=None)
+    best_book = _safe(market_quote, "details", "best_book", default=None)
+    best_line = _safe(market_quote, "details", "best_line", default=None)
+    best_odds = _safe(market_quote, "details", "best_odds", default=None)
 
     # ------------------------------------------------------------------
     # Clamp final probability
@@ -172,10 +211,27 @@ def compute_scorecard(
     model_prob = _clamp(model_prob, 0.05, 0.95)
 
     # ------------------------------------------------------------------
-    # Expected value
+    # Direction-aware: user asked over vs under
+    # ------------------------------------------------------------------
+    dir_lower = (direction or "over").lower()
+    if dir_lower == "under":
+        # 用戶問 under → 顯示 P(under)、市場 P(under)、Under 的 EV
+        model_prob_display = 1.0 - model_prob
+    else:
+        # 用戶問 over（或 any）→ 顯示 P(over)、市場 P(over)、Over 的 EV
+        model_prob_display = model_prob
+    market_implied = float(market_implied_for_query) if market_implied_for_query else None
+
+    if market_implied is None:
+        flags.append("no_market_data")
+        if pricing_mode != "exact_line" and available_lines:
+            flags.append(f"available_lines: {', '.join(str(line) for line in available_lines)}")
+
+    # ------------------------------------------------------------------
+    # Expected value（針對用戶問的方向）
     # ------------------------------------------------------------------
     if market_implied and market_implied > 0:
-        ev_pct = (model_prob - market_implied) / market_implied
+        ev_pct = (model_prob_display - market_implied) / market_implied
     else:
         ev_pct = 0.0
 
@@ -208,7 +264,10 @@ def compute_scorecard(
         pass_reason = f"sample size too small ({base_n})"
     elif market_implied is None:
         eligible = False
-        pass_reason = "no market price available"
+        if pricing_mode != "exact_line" and available_lines:
+            pass_reason = "queried line not currently available"
+        else:
+            pass_reason = "no market price available"
     elif unresolved_injury:
         eligible = False
         pass_reason = "key teammate injury status unresolved"
@@ -224,21 +283,27 @@ def compute_scorecard(
     # ------------------------------------------------------------------
     return {
         "decision": decision_candidate,
+        "direction": dir_lower,  # 用戶問的方向，供 CLI 顯示
         "confidence": round(confidence, 3),
-        "model_probability": round(model_prob, 4),
+        "model_probability": round(model_prob_display, 4),
         "market_implied_probability": round(market_implied, 4) if market_implied else None,
         "expected_value_pct": round(ev_pct, 4),
+        "market_pricing_mode": pricing_mode,
+        "available_lines": available_lines,
         "best_book": best_book,
         "best_line": best_line,
+        "best_odds": best_odds,
         "eligible_for_bet": eligible,
         "pass_reason": pass_reason,
         "data_quality_flags": flags,
         "adjustments": {
-            "base_rate": round(base_rate, 4),
+            "base_rate_over": round(base_rate, 4),
+            "base_rate_display": round((1.0 - base_rate) if dir_lower == "under" else base_rate, 4),
             "trend_adj": round(trend_adj, 4),
             "shoot_adj": round(shoot_adj, 4),
             "combined_ts_capped": round(combined_ts, 4),
             "schedule_adj": round(sched_adj, 4),
             "teammate_adj": round(tm_adj, 4),
+            "note": "base_rate_over is always P(over). base_rate_display is adjusted for user direction.",
         },
     }

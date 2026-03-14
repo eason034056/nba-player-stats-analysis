@@ -5,8 +5,10 @@ cli.py – CLI frontend for the NBA Multi-Agent Betting Advisor.
 Usage:
   python cli.py                           # interactive mode
   python cli.py "Should I bet Curry over 28.5 points tonight?"   # one-shot mode
+  python cli.py --log-data "query"         # 輸出 Agent 抓取的所有資料（含解釋）
 """
 
+import argparse
 import json
 import os
 import sys
@@ -21,6 +23,7 @@ from dotenv import load_dotenv
 load_dotenv(os.path.join(_PROJECT_ROOT, ".env"))
 
 from graph import compile_graph
+from data_logger import log_all_agent_data
 
 
 def _print_header():
@@ -39,10 +42,16 @@ def _format_scorecard(sc: dict) -> str:
     lines.append(f"  Market Implied : {mip:.1%}" if mip else "  Market Implied : N/A")
     ev = sc.get('expected_value_pct', 0)
     lines.append(f"  Expected Value : {ev:+.2%}")
+    lines.append(f"  Pricing Mode   : {sc.get('market_pricing_mode', 'overview_only')}")
     bb = sc.get('best_book')
     bl = sc.get('best_line')
     if bb:
-        lines.append(f"  Best Book      : {bb} @ {bl}")
+        best_odds = sc.get('best_odds')
+        odds_suffix = f" ({best_odds:+d})" if isinstance(best_odds, int) else ""
+        lines.append(f"  Best Book      : {bb} @ {bl}{odds_suffix}")
+    available_lines = sc.get('available_lines') or []
+    if available_lines:
+        lines.append(f"  Available Lines: {', '.join(str(line) for line in available_lines)}")
     lines.append(f"  Eligible       : {'YES' if sc.get('eligible_for_bet') else 'NO'}")
     pr = sc.get('pass_reason')
     if pr:
@@ -64,7 +73,7 @@ def _format_dimensions(dims: dict) -> str:
     return "\n".join(lines) if lines else "    (none)"
 
 
-def run_query(query: str, app=None, verbose: bool = False) -> dict:
+def run_query(query: str, app=None, verbose: bool = False, log_data: bool = False) -> dict:
     if app is None:
         app = compile_graph()
 
@@ -112,16 +121,25 @@ def run_query(query: str, app=None, verbose: bool = False) -> dict:
                 ms = update.get("market_signals", {})
                 cm = ms.get("get_current_market", {})
                 n_books = (cm.get("details") or {}).get("n_books", 0)
-                print(f"  [Market]     Loaded {n_books} books")
+                err = (cm.get("details") or {}).get("error", "")
+                if n_books:
+                    print(f"  [Market]     Loaded {n_books} books")
+                else:
+                    print(f"  [Market]     Loaded 0 books" + (f" — {err}" if err else ""))
 
             elif node_name == "scoring":
                 sc = update.get("scorecard", {})
-                dec = sc.get("decision", "?").upper()
                 mp = sc.get("model_probability", 0)
                 mip = sc.get("market_implied_probability")
                 ev = sc.get("expected_value_pct", 0)
                 mip_str = f"{mip:.1%}" if mip else "N/A"
-                print(f"  [Scoring]    Model {mp:.1%} vs Market {mip_str} -> EV {ev:+.2%}")
+                direction = sc.get("direction", "over")
+                dir_label = f" ({direction})" if direction and direction != "any" else ""
+                pricing_mode = sc.get("market_pricing_mode", "overview_only")
+                print(
+                    f"  [Scoring]    Model {mp:.1%} vs Market {mip_str}{dir_label} "
+                    f"[{pricing_mode}] -> EV {ev:+.2%}"
+                )
 
             elif node_name == "critic":
                 notes = update.get("critic_notes", [])
@@ -171,18 +189,30 @@ def run_query(query: str, app=None, verbose: bool = False) -> dict:
         print("\n--- FULL SCORECARD JSON ---")
         print(json.dumps(sc, indent=2, default=str))
 
+    if log_data:
+        log_all_agent_data(final_state)
+
     return fd
 
 
 def main():
+    parser = argparse.ArgumentParser(description="NBA Multi-Agent Betting Advisor")
+    parser.add_argument("query", nargs="*", help="Query string (optional, for one-shot mode)")
+    parser.add_argument("--log-data", action="store_true", help="輸出 Agent 抓取的所有資料（含中文解釋）")
+    parser.add_argument("-v", "--verbose", action="store_true", help="輸出完整 JSON")
+    args = parser.parse_args()
+
     _print_header()
 
-    if len(sys.argv) > 1:
-        query = " ".join(sys.argv[1:])
-        run_query(query)
+    if args.query:
+        query = " ".join(args.query)
+        run_query(query, verbose=args.verbose, log_data=args.log_data)
         return
 
-    print("\nType a question, or 'quit' to exit.\n")
+    print("\nType a question, or 'quit' to exit.")
+    if args.log_data:
+        print("  (--log-data 已啟用：每次查詢都會輸出抓取的資料)")
+    print()
     app = compile_graph()
     while True:
         try:
@@ -198,7 +228,7 @@ def main():
             break
 
         try:
-            run_query(query, app=app)
+            run_query(query, app=app, verbose=args.verbose, log_data=args.log_data)
         except Exception as e:
             print(f"\n  ERROR: {e}\n")
 

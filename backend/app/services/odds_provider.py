@@ -9,6 +9,7 @@ odds_provider.py - 賠率提供者抽象介面
 """
 
 from abc import ABC, abstractmethod
+from dataclasses import dataclass
 from typing import List, Optional, Dict, Any
 from datetime import datetime
 
@@ -46,6 +47,34 @@ class OddsProvider(ABC):
             OddsAPIError: 當 API 呼叫失敗時
         """
         pass
+
+
+@dataclass(frozen=True)
+class QuotaUsage:
+    """
+    The Odds API 配額使用情況。
+
+    - remaining: 剩餘可用請求數
+    - used: 已使用請求數
+    - last: 本次請求消耗量
+    """
+
+    remaining: Optional[int] = None
+    used: Optional[int] = None
+    last: Optional[int] = None
+
+    @property
+    def total(self) -> Optional[int]:
+        if self.remaining is None or self.used is None:
+            return None
+        return self.remaining + self.used
+
+    @property
+    def remaining_ratio(self) -> Optional[float]:
+        total = self.total
+        if total in (None, 0) or self.remaining is None:
+            return None
+        return self.remaining / total
     
     @abstractmethod
     async def get_event_odds(
@@ -110,4 +139,3 @@ class OddsAPIError(Exception):
         if self.status_code:
             return f"[{self.status_code}] {self.message}"
         return self.message
-

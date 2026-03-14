@@ -9,10 +9,10 @@ The Odds API 是一個專門提供運動賽事賠率的第三方服務
 """
 
 import httpx
-from typing import List, Optional, Dict, Any
+from typing import List, Optional, Dict, Any, Tuple
 from datetime import datetime
 from app.settings import settings
-from app.services.odds_provider import OddsProvider, OddsAPIError
+from app.services.odds_provider import OddsProvider, OddsAPIError, QuotaUsage
 
 
 class TheOddsAPIProvider(OddsProvider):
@@ -43,7 +43,7 @@ class TheOddsAPIProvider(OddsProvider):
         endpoint: str, 
         params: Dict[str, Any],
         max_retries: int = 3
-    ) -> Dict[str, Any]:
+    ) -> Tuple[Any, Optional[QuotaUsage]]:
         """
         發送 HTTP GET 請求到 The Odds API
         
@@ -81,7 +81,12 @@ class TheOddsAPIProvider(OddsProvider):
                     
                     # 檢查回應狀態碼
                     if response.status_code == 200:
-                        return response.json()
+                        usage = QuotaUsage(
+                            remaining=self._parse_header_int(response.headers.get("x-requests-remaining")),
+                            used=self._parse_header_int(response.headers.get("x-requests-used")),
+                            last=self._parse_header_int(response.headers.get("x-requests-last")),
+                        )
+                        return response.json(), usage
                     
                     # 處理各種錯誤狀態碼
                     if response.status_code == 401:
@@ -114,6 +119,15 @@ class TheOddsAPIProvider(OddsProvider):
         
         # 所有重試都失敗
         raise last_error or OddsAPIError("Unknown error after retries")
+
+    @staticmethod
+    def _parse_header_int(value: Optional[str]) -> Optional[int]:
+        if value is None:
+            return None
+        try:
+            return int(value)
+        except (TypeError, ValueError):
+            return None
     
     async def get_events(
         self,
@@ -162,7 +176,7 @@ class TheOddsAPIProvider(OddsProvider):
             params["commenceTimeTo"] = date_to.strftime("%Y-%m-%dT%H:%M:%SZ")
         
         # 發送請求
-        data = await self._make_request(endpoint, params)
+        data, _ = await self._make_request(endpoint, params)
         
         # API 回傳的是賽事列表（陣列）
         return data if isinstance(data, list) else []
@@ -224,11 +238,33 @@ class TheOddsAPIProvider(OddsProvider):
             params["bookmakers"] = ",".join(bookmakers)
         
         # 發送請求
-        data = await self._make_request(endpoint, params)
+        data, _ = await self._make_request(endpoint, params)
         
         return data
+
+    async def get_event_odds_with_usage(
+        self,
+        sport: str = "basketball_nba",
+        event_id: str = "",
+        regions: str = "us",
+        markets: str = "player_points",
+        odds_format: str = "american",
+        bookmakers: Optional[List[str]] = None
+    ) -> Tuple[Dict[str, Any], Optional[QuotaUsage]]:
+        endpoint = f"/v4/sports/{sport}/events/{event_id}/odds"
+
+        params = {
+            "regions": regions,
+            "markets": markets,
+            "oddsFormat": odds_format
+        }
+
+        if bookmakers:
+            params["bookmakers"] = ",".join(bookmakers)
+
+        data, usage = await self._make_request(endpoint, params)
+        return data, usage
 
 
 # 建立全域實例
 odds_provider = TheOddsAPIProvider()
-

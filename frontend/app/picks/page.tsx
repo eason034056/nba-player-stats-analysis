@@ -15,6 +15,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { 
   RefreshCw, 
   AlertCircle, 
+  Bot,
   TrendingUp, 
   Target, 
   Clock,
@@ -32,6 +33,7 @@ import {
   Shield,
   ArrowUpRight,
   ArrowDownRight,
+  ArrowLeftRight,
 } from "lucide-react";
 import Link from "next/link";
 import { getDailyPicks, triggerDailyAnalysis } from "@/lib/api";
@@ -45,7 +47,9 @@ import { DatePicker } from "@/components/DatePicker";
 import { TeamLogo } from "@/components/TeamLogo";
 import { getShortTeamName } from "@/lib/team-logos";
 import { PickContextMenu } from "@/components/PickContextMenu";
+import { useAgentWidget } from "@/contexts/AgentWidgetContext";
 import { useBetSlip } from "@/contexts/BetSlipContext";
+import { createAgentPickContextFromDailyPick } from "@/lib/agent-chat";
 
 /**
  * Probability confidence level
@@ -107,38 +111,83 @@ function metricToMarket(metric: string): string {
  * 已添加的 pick 會顯示視覺反饋（綠色邊框和標記）
  */
 function PickCard({ pick, index }: { pick: DailyPick; index: number }) {
-  const { isInSlip } = useBetSlip();
+  const { setSelectedPickContext, submitAction } = useAgentWidget();
+  const { picks, isInSlip, addPick, removePick } = useBetSlip();
   const level = getProbabilityLevel(pick.probability);
   const metricName = METRIC_DISPLAY_NAMES[pick.metric] || pick.metric;
   const directionName = DIRECTION_DISPLAY_NAMES[pick.direction] || pick.direction;
   const animationDelay = `${index * 50}ms`;
-  
-  // 檢查是否已在下注列表中
+
   const isAdded = isInSlip(pick.player_name, pick.metric);
-  
   const marketKey = metricToMarket(pick.metric);
   const linkHref = `/event/${pick.event_id}?player=${encodeURIComponent(pick.player_name)}&market=${marketKey}&threshold=${pick.threshold}`;
-  
+  const reverseDirection = pick.direction === "over" ? "under" : "over";
+  const reverseDirectionName = DIRECTION_DISPLAY_NAMES[reverseDirection] || reverseDirection;
+  const existingPick = picks.find(
+    (item) => item.player_name === pick.player_name && item.metric === pick.metric
+  );
+  const isReversedInSlip = existingPick?.direction === reverseDirection;
+
+  const buildBetSlipPick = (direction: string, probability: number) => ({
+    player_name: pick.player_name,
+    player_team: pick.player_team || "",
+    event_id: pick.event_id,
+    home_team: pick.home_team,
+    away_team: pick.away_team,
+    commence_time: pick.commence_time,
+    metric: pick.metric,
+    threshold: pick.threshold,
+    direction,
+    probability,
+    n_games: pick.n_games,
+  });
+
+  const handleToggleBetSlip = () => {
+    const id = `${pick.player_name}-${pick.metric}`;
+
+    if (isAdded && !isReversedInSlip) {
+      removePick(id);
+      return;
+    }
+
+    removePick(id);
+    addPick(buildBetSlipPick(pick.direction, pick.probability));
+  };
+
+  const handleAddReverseBet = () => {
+    removePick(`${pick.player_name}-${pick.metric}`);
+    addPick(buildBetSlipPick(reverseDirection, 1 - pick.probability));
+  };
+
+  const handleAskAgent = async () => {
+    const pickContext = createAgentPickContextFromDailyPick(pick);
+    setSelectedPickContext(pickContext);
+    await submitAction({
+      action: "analyze_pick",
+      message: "Should I bet this?",
+      contextPatch: {
+        selected_pick: pickContext,
+      },
+    });
+  };
+
   return (
-    <div 
-      className="animate-fade-in"
-      style={{ animationDelay }}
-    >
-      {/* 右鍵選單包裹 */}
+    <div className="animate-fade-in" style={{ animationDelay }}>
       <PickContextMenu pick={pick}>
-        <Link href={linkHref}>
-          <div className={`
-            card group cursor-pointer
+        <div
+          className={`
+            card group
             transition-all duration-200
             hover:-translate-y-1
-            ${isAdded 
-              ? "border-green-500 bg-green-50/50" 
-              : level === "high" 
-                ? "hover:border-green-500" 
+            ${isAdded
+              ? "border-green-500 bg-green-50/50"
+              : level === "high"
+                ? "hover:border-green-500"
                 : "hover:border-yellow"
             }
-          `}>
-            {/* 已添加到下注列表的標記 */}
+          `}
+        >
+          <Link href={linkHref} className="block cursor-pointer">
             {isAdded && (
               <div className="absolute top-4 left-4">
                 <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-green-500 text-white text-xs font-bold">
@@ -147,22 +196,20 @@ function PickCard({ pick, index }: { pick: DailyPick; index: number }) {
                 </div>
               </div>
             )}
-            
-            {/* High probability badge */}
+
             {level === "high" && (
-              <div className={`absolute top-4 ${isAdded ? "right-4" : "right-4"}`}>
+              <div className="absolute top-4 right-4">
                 <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-green-500 text-white text-xs font-bold">
                   <Flame className="w-3 h-3" />
                   HOT
                 </div>
               </div>
             )}
-            
-            {/* Player info */}
+
             <div className={`flex items-center gap-4 mb-4 ${isAdded ? "mt-8" : ""}`}>
-              <TeamLogo 
-                teamName={pick.player_team || pick.home_team} 
-                size={40} 
+              <TeamLogo
+                teamName={pick.player_team || pick.home_team}
+                size={40}
                 className="shrink-0"
               />
               <div className="flex-1 min-w-0 pr-16">
@@ -174,44 +221,46 @@ function PickCard({ pick, index }: { pick: DailyPick; index: number }) {
                 </p>
               </div>
             </div>
-            
-            {/* Prediction content */}
+
             <div className="flex items-center justify-between mb-4">
-              <div className={`
-                px-4 py-2 rounded-lg text-sm font-bold
-                ${pick.direction === "over"
-                  ? "bg-green-500/10 text-green-600 border-2 border-green-500/30"
-                  : "bg-blue-500/10 text-blue-600 border-2 border-blue-500/30"
-                }
-              `}>
+              <div
+                className={`
+                  px-4 py-2 rounded-lg text-sm font-bold
+                  ${pick.direction === "over"
+                    ? "bg-green-500/10 text-green-600 border-2 border-green-500/30"
+                    : "bg-blue-500/10 text-blue-600 border-2 border-blue-500/30"
+                  }
+                `}
+              >
                 {metricName} {directionName} {pick.threshold}
               </div>
-              
-              {/* Probability display */}
-              <div className={`
-                text-3xl font-mono font-bold
-                ${level === "high" ? "text-green-500" : "text-yellow"}
-              `}>
+
+              <div
+                className={`
+                  text-3xl font-mono font-bold
+                  ${level === "high" ? "text-green-500" : "text-yellow"}
+                `}
+              >
                 {formatProbability(pick.probability)}
               </div>
             </div>
-            
-            {/* Projection info row (Edge + Minutes + Matchup) */}
+
             {pick.has_projection && (
               <div className="flex items-center gap-2 mb-4 flex-wrap">
-                {/* Edge badge */}
                 {(() => {
                   const edgeInfo = formatEdge(pick.edge, pick.direction);
                   if (!edgeInfo) return null;
                   return (
-                    <span className={`
-                      inline-flex items-center gap-1 px-2 py-1 rounded-md text-xs font-bold
-                      ${edgeInfo.favorable 
-                        ? "bg-green-500/10 text-green-600" 
-                        : "bg-red-500/10 text-red-600"
-                      }
-                    `}>
-                      {edgeInfo.favorable 
+                    <span
+                      className={`
+                        inline-flex items-center gap-1 px-2 py-1 rounded-md text-xs font-bold
+                        ${edgeInfo.favorable
+                          ? "bg-green-500/10 text-green-600"
+                          : "bg-red-500/10 text-red-600"
+                        }
+                      `}
+                    >
+                      {edgeInfo.favorable
                         ? <ArrowUpRight className="w-3 h-3" />
                         : <ArrowDownRight className="w-3 h-3" />
                       }
@@ -219,31 +268,33 @@ function PickCard({ pick, index }: { pick: DailyPick; index: number }) {
                     </span>
                   );
                 })()}
-                
-                {/* Projected minutes */}
+
                 {pick.projected_minutes != null && (
-                  <span className={`
-                    inline-flex items-center gap-1 px-2 py-1 rounded-md text-xs font-bold
-                    ${pick.projected_minutes < 20 
-                      ? "bg-red-500/10 text-red-600" 
-                      : "bg-gray/10 text-gray"
-                    }
-                  `}>
+                  <span
+                    className={`
+                      inline-flex items-center gap-1 px-2 py-1 rounded-md text-xs font-bold
+                      ${pick.projected_minutes < 20
+                        ? "bg-red-500/10 text-red-600"
+                        : "bg-gray/10 text-gray"
+                      }
+                    `}
+                  >
                     <Timer className="w-3 h-3" />
                     {pick.projected_minutes.toFixed(0)}min
                     {pick.projected_minutes < 20 && " ⚠️"}
                   </span>
                 )}
-                
-                {/* Opponent matchup rank */}
+
                 {(() => {
                   const matchup = getMatchupLevel(pick.opponent_position_rank || pick.opponent_rank);
                   if (!matchup) return null;
                   return (
-                    <span className={`
-                      inline-flex items-center gap-1 px-2 py-1 rounded-md text-xs font-bold
-                      ${matchup.color}
-                    `}>
+                    <span
+                      className={`
+                        inline-flex items-center gap-1 px-2 py-1 rounded-md text-xs font-bold
+                        ${matchup.color}
+                      `}
+                    >
                       <Shield className="w-3 h-3" />
                       {matchup.label}
                     </span>
@@ -251,16 +302,14 @@ function PickCard({ pick, index }: { pick: DailyPick; index: number }) {
                 })()}
               </div>
             )}
-            
-            {/* Probability progress bar */}
+
             <div className="progress-bar mb-4">
-              <div 
+              <div
                 className={`progress-bar-fill ${level === "high" ? "high" : "medium"}`}
                 style={{ width: `${pick.probability * 100}%` }}
               />
             </div>
-            
-            {/* Bottom info */}
+
             <div className="flex items-center justify-between text-sm text-gray">
               <div className="flex items-center gap-4">
                 <span className="flex items-center gap-1.5">
@@ -272,17 +321,58 @@ function PickCard({ pick, index }: { pick: DailyPick; index: number }) {
                   {pick.bookmakers_count} bookmakers
                 </span>
               </div>
-              
+
               <div className="flex items-center gap-2">
-                {/* 右鍵提示 */}
                 <span className="text-xs text-gray/60 hidden group-hover:inline">
-                  Right-click to add
+                  Right-click for more
                 </span>
                 <ChevronRight className="w-5 h-5 text-gray group-hover:text-red transition-colors" />
               </div>
             </div>
+          </Link>
+
+          <div className="mt-4 flex flex-wrap gap-2 border-t border-dark/10 pt-4">
+            <button
+              type="button"
+              onClick={handleToggleBetSlip}
+              className={`
+                inline-flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-bold transition-colors
+                ${isAdded && !isReversedInSlip
+                  ? "bg-green-500 text-white"
+                  : "bg-dark text-cream hover:bg-dark/85"
+                }
+              `}
+            >
+              <ClipboardList className="w-4 h-4" />
+              <span>{isAdded && !isReversedInSlip ? "Added to Bet Slip" : "Add to Bet Slip"}</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={handleAddReverseBet}
+              className={`
+                inline-flex items-center gap-2 rounded-lg border px-3 py-2 text-sm font-semibold transition-colors
+                ${isReversedInSlip
+                  ? "border-blue-500 bg-blue-500 text-white"
+                  : "border-dark/20 bg-white text-dark hover:border-blue-500 hover:text-blue-600"
+                }
+              `}
+            >
+              <ArrowLeftRight className="w-4 h-4" />
+              <span>{isReversedInSlip ? `Reverse Added (${reverseDirectionName})` : `Add ${reverseDirectionName}`}</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => void handleAskAgent()}
+              className="inline-flex items-center gap-2 rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm font-semibold text-dark transition-colors hover:border-white/20 hover:bg-white/10"
+              aria-label={`Ask Agent about ${pick.player_name}`}
+            >
+              <Bot className="w-4 h-4 text-red" />
+              <span>Ask Agent</span>
+            </button>
           </div>
-        </Link>
+        </div>
       </PickContextMenu>
     </div>
   );
@@ -331,12 +421,12 @@ function StatCard({
   return (
     <div className="card">
       <div className="flex items-center gap-4">
-        <div className="w-12 h-12 rounded-lg bg-red flex items-center justify-center">
+        <div className="w-12 h-12 rounded-full bg-red flex items-center justify-center">
           <Icon className="w-6 h-6 text-white" />
         </div>
         <div>
-          <p className="text-sm text-gray font-medium">{label}</p>
-          <p className="text-2xl font-bold text-dark">{value}</p>
+          <p className="text-xs uppercase tracking-[0.18em] text-light">{label}</p>
+          <p className="text-2xl font-semibold text-dark">{value}</p>
           {subValue && (
             <p className="text-xs text-gray">{subValue}</p>
           )}
@@ -373,7 +463,7 @@ function TeamFilter({
       <div className="flex items-center justify-between mb-4">
         <div className="flex items-center gap-2">
           <Filter className="w-5 h-5 text-gray" />
-          <span className="font-bold text-dark">Filter by Team</span>
+          <span className="font-semibold text-dark">Filter by Team</span>
           {selectedTeams.size > 0 && (
             <span className="badge-neutral">
               {selectedTeams.size} selected
@@ -400,10 +490,10 @@ function TeamFilter({
               onClick={() => onToggle(team)}
               className={`
                 flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium
-                transition-all duration-200 border-2
+                transition-all duration-200 border
                 ${isSelected
-                  ? "bg-red text-white border-red"
-                  : "bg-white text-dark border-dark/20 hover:border-red hover:text-red"
+                  ? "bg-red text-white border-red shadow-[0_12px_32px_rgba(255,136,108,0.2)]"
+                  : "bg-white/5 text-dark border-white/10 hover:border-red hover:text-red"
                 }
               `}
             >
@@ -435,6 +525,7 @@ const STORAGE_KEY_TEAMS = "picks-filter-teams";
  * Main page component
  */
 export default function PicksPage() {
+  const { setPageContext, submitAction } = useAgentWidget();
   const todayString = getTodayString();
   const [selectedDate, setSelectedDate] = useState(todayString);
   const [isTriggering, setIsTriggering] = useState(false);
@@ -587,7 +678,7 @@ export default function PicksPage() {
   }, []);
   
   const dateTitle = getDateDisplayTitle(selectedDate);
-  const allPicks = data?.picks || [];
+  const allPicks = useMemo(() => data?.picks ?? [], [data?.picks]);
   const stats = data?.stats;
   
   // 根據選擇的球隊篩選 picks
@@ -603,31 +694,72 @@ export default function PicksPage() {
   
   const highProbCount = picks.filter((p: DailyPick) => p.probability >= 0.70).length;
   const mediumProbCount = picks.filter((p: DailyPick) => p.probability >= 0.65 && p.probability < 0.70).length;
+
+  useEffect(() => {
+    setPageContext({
+      route: "/picks",
+      date: selectedDate,
+      selected_teams: Array.from(selectedTeams),
+    });
+  }, [selectedDate, selectedTeams, setPageContext]);
+
+  const handleReviewBoard = useCallback(async () => {
+    await submitAction({
+      action: "review_board",
+      message: "Review this board and identify the cleanest bet.",
+      contextPatch: {
+        visible_picks: picks
+          .slice(0, 6)
+          .map((pick) => createAgentPickContextFromDailyPick(pick)),
+      },
+    });
+  }, [picks, submitAction]);
   
   return (
     <div className="min-h-screen page-enter">
-      <div className="max-w-4xl mx-auto px-6 py-12">
-        {/* Page title section */}
-        <div className="text-center mb-16">
-          <div className="inline-block mb-6">
-            <span className="badge-danger">
-              <Target className="w-3.5 h-3.5 mr-1.5" />
+      <div className="mx-auto max-w-6xl px-6 py-10">
+        <section className="grid gap-6 lg:grid-cols-[1.2fr_0.8fr] mb-8">
+          <div className="card">
+            <div className="section-eyebrow">
+              <Target className="mr-2 h-3.5 w-3.5" />
               AI Auto Analysis
-            </span>
-          </div>
-          
-          <h1 className="hero-title mb-4">
-            Daily <span className="text-red">Picks</span>
-          </h1>
-          
-          <div className="accent-line mx-auto mb-6" />
-          
-          <p className="text-lg text-gray max-w-lg mx-auto">
-            Automatically filter high-value betting options with over 65% probability based on historical data
-          </p>
-        </div>
+            </div>
 
-        {/* Date selection section */}
+            <h1 className="hero-title mb-4">
+              Daily picks,
+              <span className="text-gradient block">sorted into conviction tiers.</span>
+            </h1>
+
+            <div className="accent-line mb-6" />
+
+            <p className="max-w-2xl text-lg leading-8 text-gray">
+              This board surfaces the strongest historical edges for the day, then lets you add, reverse, filter, and move directly into the deeper event workspace without breaking your flow.
+            </p>
+          </div>
+
+          <div className="card">
+            <p className="text-xs uppercase tracking-[0.22em] text-light mb-3">Board status</p>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="rounded-[22px] border border-white/8 bg-white/4 p-4">
+                <p className="text-xs uppercase tracking-[0.18em] text-light">Day</p>
+                <p className="mt-2 text-xl font-semibold text-dark">{dateTitle}</p>
+              </div>
+              <div className="rounded-[22px] border border-white/8 bg-white/4 p-4">
+                <p className="text-xs uppercase tracking-[0.18em] text-light">Filters</p>
+                <p className="mt-2 text-xl font-semibold text-dark">{selectedTeams.size}</p>
+              </div>
+              <div className="rounded-[22px] border border-white/8 bg-white/4 p-4">
+                <p className="text-xs uppercase tracking-[0.18em] text-light">High</p>
+                <p className="mt-2 text-xl font-semibold text-dark">{highProbCount}</p>
+              </div>
+              <div className="rounded-[22px] border border-white/8 bg-white/4 p-4">
+                <p className="text-xs uppercase tracking-[0.18em] text-light">Medium</p>
+                <p className="mt-2 text-xl font-semibold text-dark">{mediumProbCount}</p>
+              </div>
+            </div>
+          </div>
+        </section>
+
         <div className="card mb-10">
           <DatePicker
             value={selectedDate}
@@ -692,6 +824,14 @@ export default function PicksPage() {
           </div>
           
           <div className="flex items-center gap-3">
+            <button
+              onClick={() => void handleReviewBoard()}
+              className="btn-refresh"
+            >
+              <Bot className="w-4 h-4 text-red" />
+              <span>Review Board</span>
+            </button>
+
             <button
               onClick={handleRefresh}
               disabled={isFetching}

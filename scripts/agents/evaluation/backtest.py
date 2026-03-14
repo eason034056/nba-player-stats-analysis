@@ -32,11 +32,12 @@ from scoring import compute_scorecard
 
 
 TEST_PLAYERS = [
-    ("Stephen Curry", "points", 26.5),
-    ("Giannis Antetokounmpo", "rebounds", 11.5),
-    ("Tyrese Haliburton", "assists", 8.5),
-    ("Victor Wembanyama", "pra", 30.5),
-    ("A.J. Green", "points", 9.5),
+    # (player, metric, threshold, direction)
+    ("Stephen Curry", "points", 26.5, "over"),
+    ("Giannis Antetokounmpo", "rebounds", 11.5, "under"),
+    ("Tyrese Haliburton", "assists", 8.5, "over"),
+    ("Victor Wembanyama", "pra", 30.5, "over"),
+    ("A.J. Green", "points", 9.5, "under"),
 ]
 
 CONFIDENCE_BUCKETS = [(0.0, 0.4), (0.4, 0.5), (0.5, 0.6), (0.6, 0.7), (0.7, 0.8), (0.8, 1.01)]
@@ -45,7 +46,7 @@ CONFIDENCE_BUCKETS = [(0.0, 0.4), (0.4, 0.5), (0.5, 0.6), (0.6, 0.7), (0.7, 0.8)
 def _run_backtest():
     results = []
 
-    for player, metric, threshold in TEST_PLAYERS:
+    for player, metric, threshold, direction in TEST_PLAYERS:
         hist_signals = {
             "get_base_stats": get_base_stats(player, metric, threshold),
             "get_trend_analysis": get_trend_analysis(player, metric),
@@ -58,16 +59,19 @@ def _run_backtest():
             historical_signals=hist_signals,
             projection_signals={},
             market_signals={},
+            direction=direction,
         )
 
         base_details = hist_signals["get_base_stats"].get("details", {})
-        actual_rate = base_details.get("hit_rate", 0)
+        raw_hit_rate = base_details.get("hit_rate", 0)
+        actual_rate = (1.0 - raw_hit_rate) if direction == "under" else raw_hit_rate
         n = base_details.get("total", 0)
 
         results.append({
             "player": player,
             "metric": metric,
             "threshold": threshold,
+            "direction": direction,
             "model_prob": sc["model_probability"],
             "actual_rate": actual_rate,
             "sample_size": n,
@@ -112,10 +116,10 @@ def main():
         f.write("# Backtest Report – NBA Multi-Agent Betting Advisor\n\n")
         f.write(f"Generated: {datetime.now().strftime('%Y-%m-%d %H:%M')}\n\n")
         f.write("## Per-Player Results\n\n")
-        f.write("| Player | Metric | Threshold | Model Prob | Actual Rate | N | Decision | Flags |\n")
-        f.write("|--------|--------|-----------|-----------|-------------|---|----------|-------|\n")
+        f.write("| Player | Metric | Threshold | Direction | Model Prob | Actual Rate | N | Decision | Flags |\n")
+        f.write("|--------|--------|-----------|-----------|-----------|-------------|---|----------|-------|\n")
         for r in results:
-            f.write(f"| {r['player']} | {r['metric']} | {r['threshold']} | {r['model_prob']:.3f} | "
+            f.write(f"| {r['player']} | {r['metric']} | {r['threshold']} | {r['direction']} | {r['model_prob']:.3f} | "
                     f"{r['actual_rate']:.3f} | {r['sample_size']} | {r['decision']} | {', '.join(r['flags']) or '-'} |\n")
 
         f.write("\n## Calibration\n\n")
@@ -129,7 +133,7 @@ def main():
     print(f"Wrote {out_path}")
 
     for r in results:
-        print(f"  {r['player']:25s}  model={r['model_prob']:.3f}  actual={r['actual_rate']:.3f}  "
+        print(f"  {r['player']:25s}  {r['direction']:5s}  model={r['model_prob']:.3f}  actual={r['actual_rate']:.3f}  "
               f"n={r['sample_size']}  decision={r['decision']}")
 
 

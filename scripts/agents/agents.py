@@ -32,6 +32,7 @@ if _AGENTS_DIR not in sys.path:
 if os.path.join(_PROJECT_ROOT, "backend") not in sys.path:
     sys.path.insert(0, os.path.join(_PROJECT_ROOT, "backend"))
 
+from date_utils import normalize_date
 from tools.historical import (
     get_base_stats, get_starter_bench_split, get_opponent_history,
     get_trend_analysis, get_streak_info, get_minutes_role_trend,
@@ -45,7 +46,7 @@ from tools.projection import (
 )
 from tools.market import (
     get_current_market, get_line_movement,
-    get_best_price, get_bookmaker_spread,
+    get_best_price, get_market_quote_for_line, get_bookmaker_spread,
 )
 from scoring import compute_scorecard
 
@@ -85,6 +86,7 @@ Rules:
 - If the user mentions a bet recommendation, set needs_market=true.
 - projection is always false (dummy data).
 - If no threshold is explicit, set threshold to 0 and note it must come from the market line.
+- If the user says "tomorrow" (or typos like "tommorow"), set date to tomorrow's date in YYYY-MM-DD (e.g. 2025-03-13) so market tools can fetch that day's odds.
 - Return ONLY the JSON object, no extra text.
 """
 
@@ -110,6 +112,11 @@ def planner_node(state: Dict[str, Any]) -> Dict[str, Any]:
             "needs_projection": False, "comparison_players": [],
             "parse_error": text,
         }
+
+    # 將 "tomorrow"/"today" 等口語轉成 YYYY-MM-DD（本地時區），供各 tool 使用
+    raw_date = parsed.get("date", "")
+    if raw_date:
+        parsed["date"] = normalize_date(raw_date)
 
     return {
         "parsed_query": parsed,
@@ -150,9 +157,20 @@ def historical_agent_node(state: Dict[str, Any]) -> Dict[str, Any]:
     signals["get_schedule_context"] = get_schedule_context(player, date)
     signals["get_game_script_splits"] = get_game_script_splits(player, metric, threshold)
     signals["auto_teammate_impact"] = auto_teammate_impact(player, metric, threshold)
-    signals["get_official_injury_report"] = get_official_injury_report(
-        pq.get("opponent", "") or "unknown", date
+
+    # Fetch injury report for the player's OWN team (not the opponent).
+    # auto_teammate_impact already does this internally, but we also surface
+    # the raw report so the Critic and Synthesizer can reference it directly.
+    own_team = signals["auto_teammate_impact"].get("details", {}).get("team", "")
+    signals["get_own_team_injury_report"] = get_official_injury_report(
+        own_team or "unknown", date, player=player
     )
+
+    # Also fetch opponent injury report if we know the opponent
+    if opponent:
+        signals["get_opponent_injury_report"] = get_official_injury_report(
+            opponent, date
+        )
 
     return {
         "historical_signals": signals,
@@ -191,6 +209,7 @@ def market_agent_node(state: Dict[str, Any]) -> Dict[str, Any]:
     pq = state.get("parsed_query", {})
     player = pq.get("player", "")
     metric = pq.get("metric", "points")
+    threshold = pq.get("threshold", 0)
     date = pq.get("date", "")
     direction = pq.get("direction", "over")
 
@@ -198,6 +217,9 @@ def market_agent_node(state: Dict[str, Any]) -> Dict[str, Any]:
     signals["get_current_market"] = get_current_market(player, metric, date)
     signals["get_line_movement"] = get_line_movement(player, metric, date)
     signals["get_best_price"] = get_best_price(player, metric, direction, date)
+    signals["get_market_quote_for_line"] = get_market_quote_for_line(
+        player, metric, threshold, direction, date
+    )
     signals["get_bookmaker_spread"] = get_bookmaker_spread(player, metric, date)
 
     return {
@@ -211,10 +233,13 @@ def market_agent_node(state: Dict[str, Any]) -> Dict[str, Any]:
 # ===================================================================
 
 def scoring_node(state: Dict[str, Any]) -> Dict[str, Any]:
+    pq = state.get("parsed_query", {})
+    direction = pq.get("direction", "over")
     scorecard = compute_scorecard(
         historical_signals=state.get("historical_signals", {}),
         projection_signals=state.get("projection_signals", {}),
         market_signals=state.get("market_signals", {}),
+        direction=direction,
     )
     return {
         "scorecard": scorecard,
@@ -233,11 +258,24 @@ You are the Critic of an NBA player-prop betting advisor.
 You receive a deterministic scorecard and dimension signals. Your job is to
 ATTACK the scorecard — find weaknesses, contradictions, and risks.
 
+IMPORTANT – Direction context:
+- The scorecard includes a "direction" field ("over" or "under") indicating which
+  side the user is asking about.
+- model_probability and market_implied_probability are ALREADY adjusted for that
+  direction. For example, if direction="under", model_probability = P(under).
+- hit_rate and shrunk_rate in raw signal details are ALWAYS P(over > threshold).
+  When direction="under", the relevant probability is 1 - hit_rate.
+
 Required checks:
 - Double-counting risk across trend / shooting / recent form
 - Small or asymmetric samples
 - Stale roster assumptions
-- Unresolved or conflicting injury reports
+- OWN-TEAM INJURY REPORT: Are key teammates OUT or QUESTIONABLE? If so,
+  what is the chemistry_delta for each one (positive = player does better WITH
+  the star, so losing them HURTS)? Has the scorecard adequately accounted for
+  the combined impact of multiple missing teammates?
+- Opponent injury report: Does the opponent being weakened or strong affect
+  game script and therefore player opportunity?
 - High variance with weak payout edge
 - Market disagreement or line movement against the recommendation
 - Whether the deterministic score is overconfident relative to signal quality
@@ -246,7 +284,6 @@ Output ONLY a JSON object:
 {
   "risk_factors": ["..."],
   "risk_grade": "low | medium | high",
-  "should_downgrade_to_avoid": true | false,
   "reasoning": "..."
 }
 """
@@ -258,6 +295,9 @@ def critic_node(state: Dict[str, Any]) -> Dict[str, Any]:
     market = state.get("market_signals", {})
     flags = state.get("data_quality_flags", [])
 
+    tm_details = hist.get("auto_teammate_impact", {}).get("details") or {}
+    own_inj = hist.get("get_own_team_injury_report", {}).get("details") or {}
+
     summary = json.dumps({
         "scorecard": scorecard,
         "data_quality_flags": flags,
@@ -266,7 +306,9 @@ def critic_node(state: Dict[str, Any]) -> Dict[str, Any]:
         "trend_signal": hist.get("get_trend_analysis", {}).get("signal"),
         "variance_cv": (hist.get("get_variance_profile", {}).get("details") or {}).get("cv"),
         "market_signal": market.get("get_current_market", {}).get("signal"),
-        "teammate_scenario": (hist.get("auto_teammate_impact", {}).get("details") or {}).get("today_scenario"),
+        "teammate_scenario": tm_details.get("today_scenario"),
+        "teammate_chemistry_details": tm_details.get("teammate_chemistry", []),
+        "own_team_injury_report": own_inj.get("injuries", []),
     }, indent=2, default=str)
 
     resp = _get_llm().invoke([
@@ -280,11 +322,9 @@ def critic_node(state: Dict[str, Any]) -> Dict[str, Any]:
             text = text.split("```")[1].replace("json", "").strip()
         critic = json.loads(text)
     except json.JSONDecodeError:
-        critic = {"risk_factors": [text], "risk_grade": "medium", "should_downgrade_to_avoid": False, "reasoning": text}
+        critic = {"risk_factors": [text], "risk_grade": "medium", "reasoning": text}
 
     notes = critic.get("risk_factors", [])
-    if critic.get("should_downgrade_to_avoid"):
-        notes.append("CRITIC RECOMMENDS DOWNGRADE TO AVOID")
 
     return {
         "critic_notes": notes,
@@ -304,8 +344,20 @@ You receive:
 - Dimension signals
 - Critic risk notes
 
+IMPORTANT – Direction context:
+- The scorecard includes a "direction" field ("over" or "under") indicating which
+  side the user is asking about.
+- model_probability and market_implied_probability are ALREADY adjusted for that
+  direction. For example, if direction="under", model_probability = P(under),
+  market_implied_probability = P(under), and expected_value_pct is for the under side.
+- hit_rate and shrunk_rate in raw signal details are ALWAYS P(over > threshold).
+  When direction="under", the relevant probability is 1 - hit_rate.
+- When explaining to the user, always tie model_probability and EV to the user's
+  bet direction. E.g. "Model estimates a 66.5% probability of going UNDER."
+
 Your job: EXPLAIN the scorecard to the user. Do NOT override the decision.
-If the critic says downgrade to avoid, honor that.
+Critic notes are risk context only. They can change the framing of the summary,
+but they must NOT change the final decision.
 
 Output ONLY a JSON object:
 {
@@ -320,11 +372,13 @@ Output ONLY a JSON object:
     "shooting": {"signal": "...", "reliability": <float>, "detail": "..."},
     "variance": {"signal": "...", "reliability": <float>, "detail": "..."},
     "schedule": {"signal": "...", "reliability": <float>, "detail": "..."},
+    "own_team_injuries": {"signal": "...", "reliability": <float>,
+      "detail": "list OUT/QUE teammates and chemistry_delta impact on target player"},
     "projection": {"signal": "unavailable", "reliability": 0.0, "detail": "dummy data excluded"},
     "market": {"signal": "...", "reliability": <float>, "detail": "..."}
   },
   "risk_factors": ["..."],
-  "summary": "one paragraph conclusion",
+  "summary": "one paragraph conclusion – MUST mention own-team injury impacts if any key teammates are OUT/Questionable, and always specify whether the probability/EV is for over or under",
   "needs_retry": false,
   "retry_reason": null
 }
@@ -341,11 +395,6 @@ def synthesizer_node(state: Dict[str, Any]) -> Dict[str, Any]:
     proj = state.get("projection_signals", {})
     critic_notes = state.get("critic_notes", [])
 
-    # If critic forced avoid, override scorecard decision
-    decision_override = None
-    if "CRITIC RECOMMENDS DOWNGRADE TO AVOID" in critic_notes:
-        decision_override = "avoid"
-
     payload = json.dumps({
         "scorecard": scorecard,
         "critic_notes": critic_notes,
@@ -354,8 +403,11 @@ def synthesizer_node(state: Dict[str, Any]) -> Dict[str, Any]:
         "shooting": hist.get("get_shooting_profile", {}),
         "variance": hist.get("get_variance_profile", {}),
         "schedule": hist.get("get_schedule_context", {}),
-        "teammate": hist.get("auto_teammate_impact", {}),
+        "teammate_chemistry": hist.get("auto_teammate_impact", {}),
+        "own_team_injury_report": hist.get("get_own_team_injury_report", {}),
+        "opponent_injury_report": hist.get("get_opponent_injury_report", {}),
         "market_current": market.get("get_current_market", {}),
+        "market_query_quote": market.get("get_market_quote_for_line", {}),
         "projection_status": "all_unavailable",
     }, indent=2, default=str)
 
@@ -383,8 +435,8 @@ def synthesizer_node(state: Dict[str, Any]) -> Dict[str, Any]:
             "retry_reason": None,
         }
 
-    if decision_override:
-        final["decision"] = decision_override
+    # Deterministic scoring is authoritative; the synthesizer only explains it.
+    final["decision"] = scorecard.get("decision", final.get("decision", "avoid"))
 
     needs_retry = final.get("needs_retry", False)
     iteration = state.get("iteration", 0)

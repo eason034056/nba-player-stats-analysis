@@ -291,7 +291,7 @@ export function ResultsTable({ data, isLoading }: ResultsTableProps) {
 
       {/* Note */}
       <p className="mt-4 text-xs text-gray">
-        * Lower vig indicates the bookmaker's odds are closer to fair;
+        * Lower vig indicates the bookmaker&apos;s odds are closer to fair;
         No-vig probability is the fair probability estimate after removing vig
       </p>
     </div>

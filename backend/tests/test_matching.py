@@ -16,11 +16,13 @@ import os
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from app.services.normalize import (
+    canonical_name,
     normalize_name,
     exact_match,
     fuzzy_match,
     find_player,
-    extract_player_names
+    extract_player_names,
+    suggest_players,
 )
 
 
@@ -64,10 +66,10 @@ class TestNormalizeName:
         """
         測試移除連字號
         
-        例如 "Shai Gilgeous-Alexander" 變成 "shai gilgeousalexander"
+        例如 "Shai Gilgeous-Alexander" 變成 "shai gilgeous alexander"
         """
         result = normalize_name("Shai Gilgeous-Alexander")
-        assert result == "shai gilgeousalexander"
+        assert result == "shai gilgeous alexander"
     
     def test_multiple_spaces(self):
         """
@@ -89,6 +91,13 @@ class TestNormalizeName:
         """
         result = normalize_name("LeBron JAMES")
         assert result == "lebron james"
+
+    def test_canonical_name_strips_suffix_and_alias(self):
+        """
+        canonical_name 會去掉 suffix，並把常見暱稱對齊。
+        """
+        assert canonical_name("Cody Williams Jr.") == "cody williams"
+        assert canonical_name("Steph Curry") == "stephen curry"
 
 
 class TestExactMatch:
@@ -129,6 +138,22 @@ class TestExactMatch:
         candidates = ["D'Angelo Russell", "P.J. Washington"]
         result = exact_match("dangelo russell", candidates)
         assert result == "D'Angelo Russell"
+
+    def test_suffixless_match(self):
+        """
+        查詢缺少 Jr/Sr 等 suffix 時仍應匹配。
+        """
+        candidates = ["Cody Williams Jr.", "Jalen Williams"]
+        result = exact_match("Cody Williams", candidates)
+        assert result == "Cody Williams Jr."
+
+    def test_collapsed_initials_match(self):
+        """
+        "P J Washington" 應視為 "P.J. Washington"。
+        """
+        candidates = ["P.J. Washington", "Patrick Williams"]
+        result = exact_match("P J Washington", candidates)
+        assert result == "P.J. Washington"
     
     def test_empty_candidates(self):
         """
@@ -186,6 +211,14 @@ class TestFuzzyMatch:
         result = fuzzy_match("Stephen Curry", [], threshold=80)
         assert result is None
 
+    def test_fuzzy_match_avoids_wrong_last_name(self):
+        """
+        不應把相似但不同姓氏的人硬匹配上。
+        """
+        candidates = ["Nikola Jovic", "Seth Curry"]
+        result = fuzzy_match("Nikola Jokic", candidates, threshold=80)
+        assert result is None
+
 
 class TestFindPlayer:
     """
@@ -241,6 +274,30 @@ class TestFindPlayer:
         candidates = ["LeBron James"]
         result = find_player("lebron james", candidates)
         assert result == "LeBron James"
+
+    def test_find_player_nickname(self):
+        """
+        常見 first-name 暱稱應能對上正式名稱。
+        """
+        candidates = ["Michael Conley", "Mike Muscala"]
+        result = find_player("Mike Conley", candidates)
+        assert result == "Michael Conley"
+
+    def test_find_player_middle_name_shortcut(self):
+        """
+        省略中間名字時應能匹配三段式姓名。
+        """
+        candidates = ["Karl-Anthony Towns", "Jaden McDaniels"]
+        result = find_player("Karl Towns", candidates)
+        assert result == "Karl-Anthony Towns"
+
+    def test_find_player_ambiguous_initial(self):
+        """
+        單純首字母 + 姓氏如果有歧義，不應任意選一個。
+        """
+        candidates = ["Stephen Curry", "Seth Curry"]
+        result = find_player("S. Curry", candidates)
+        assert result is None
 
 
 class TestExtractPlayerNames:
@@ -317,6 +374,20 @@ class TestExtractPlayerNames:
         assert players[0] == "Stephen Curry"
 
 
+class TestSuggestPlayers:
+    """
+    測試 miss 時的候選建議。
+    """
+
+    def test_suggest_players_returns_ranked_candidates(self):
+        candidates = ["Stephen Curry", "Seth Curry", "LeBron James"]
+        result = suggest_players("Steph Curry", candidates, limit=2, threshold=70)
+
+        assert result
+        assert result[0][0] == "Stephen Curry"
+        assert result[0][1] >= result[-1][1]
+
+
 # 整合測試
 class TestMatchingIntegration:
     """
@@ -335,7 +406,10 @@ class TestMatchingIntegration:
             "Anthony Davis",
             "D'Angelo Russell",
             "P.J. Washington",
-            "Shai Gilgeous-Alexander"
+            "Shai Gilgeous-Alexander",
+            "Karl-Anthony Towns",
+            "Cody Williams Jr.",
+            "Michael Conley",
         ]
         
         # 各種用戶輸入測試
@@ -346,9 +420,12 @@ class TestMatchingIntegration:
             ("LEBRON JAMES", "LeBron James"),
             ("dangelo russell", "D'Angelo Russell"),  # 沒有單引號
             ("pj washington", "P.J. Washington"),  # 沒有句點
+            ("sga", "Shai Gilgeous-Alexander"),
+            ("Karl Towns", "Karl-Anthony Towns"),
+            ("Cody Williams", "Cody Williams Jr."),
+            ("Mike Conley", "Michael Conley"),
         ]
         
         for user_input, expected in test_cases:
             result = find_player(user_input, api_players, threshold=80)
             assert result == expected, f"Failed for input '{user_input}'"
-

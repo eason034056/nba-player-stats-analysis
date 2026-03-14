@@ -12,7 +12,7 @@ main.py - FastAPI 應用程式主入口點
 from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from app.api import health, nba, daily_picks, projections, odds_history
+from app.api import agent, health, nba, daily_picks, projections, odds_history
 from app.services.cache import cache_service
 from app.services.db import db_service
 from app.services.scheduler import scheduler_service
@@ -122,6 +122,7 @@ app.add_middleware(
 # 這樣組織代碼可以讓不同功能模組分開管理
 app.include_router(health.router)
 app.include_router(nba.router)
+app.include_router(agent.router)
 app.include_router(daily_picks.router)  # 每日高機率球員分析
 app.include_router(projections.router)  # 球員投影資料（SportsDataIO）
 app.include_router(odds_history.router)  # 盤口歷史快照（Line Movement Tracking）
@@ -159,4 +160,3 @@ if __name__ == "__main__":
         port=8000,
         reload=True
     )
-

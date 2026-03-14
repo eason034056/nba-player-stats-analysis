@@ -29,13 +29,14 @@ from app.models.schemas import (
 from app.services.odds_theoddsapi import odds_provider
 from app.services.odds_provider import OddsAPIError
 from app.services.cache import cache_service, CacheService
+from app.services.odds_gateway import odds_gateway, MarketSnapshotResult
 from app.services.prob import (
     american_to_prob,
     calculate_vig,
     devig,
     calculate_consensus_mean
 )
-from app.services.normalize import find_player, extract_player_names
+from app.services.normalize import extract_player_names, find_player, suggest_players as suggest_player_names
 from app.services.csv_player_history import csv_player_service
 from app.settings import settings
 
@@ -44,6 +45,30 @@ router = APIRouter(
     prefix="/api/nba",
     tags=["nba"]
 )
+
+
+def _snapshot_metadata(snapshot: MarketSnapshotResult) -> dict:
+    return {
+        "fetched_at": snapshot.fetched_at,
+        "data_age_seconds": snapshot.data_age_seconds,
+        "cache_state": snapshot.cache_state,
+        "source": snapshot.source,
+    }
+
+
+def _collect_player_names(
+    bookmakers_data: list[dict],
+    market_key: str,
+) -> list[str]:
+    player_set = set()
+    for bookmaker in bookmakers_data:
+        for market in bookmaker.get("markets", []):
+            if market.get("key") != market_key:
+                continue
+            for outcome in market.get("outcomes", []):
+                if "description" in outcome:
+                    player_set.add(outcome["description"])
+    return sorted(player_set)
 
 
 @router.get(
@@ -253,49 +278,44 @@ async def calculate_no_vig(request: NoVigRequest) -> NoVigResponse:
         }
     """
     try:
-        # 1. 呼叫 The Odds API 取得 props 資料
-        raw_odds = await odds_provider.get_event_odds(
+        snapshot = await odds_gateway.get_market_snapshot(
             sport="basketball_nba",
             event_id=request.event_id,
             regions=request.regions,
             markets=request.market,
             odds_format=request.odds_format,
-            bookmakers=request.bookmakers
+            bookmakers=request.bookmakers,
+            priority="interactive",
         )
-        
-        # 2. 解析並收集所有球員名稱（用於匹配）
-        all_player_names = set()
-        bookmakers_data = raw_odds.get("bookmakers", [])
-        
-        for bookmaker in bookmakers_data:
-            for market in bookmaker.get("markets", []):
-                if market.get("key") == request.market:
-                    for outcome in market.get("outcomes", []):
-                        # outcomes 的 description 欄位包含球員名稱
-                        if "description" in outcome:
-                            all_player_names.add(outcome["description"])
+        bookmakers_data = snapshot.data.get("bookmakers", [])
+        all_player_names = _collect_player_names(bookmakers_data, request.market)
         
         # 3. 匹配球員名稱
         matched_player = find_player(
             request.player_name,
-            list(all_player_names)
+            all_player_names
         )
         
         if not matched_player:
+            suggestions = suggest_player_names(request.player_name, all_player_names, limit=5, threshold=70)
+            if suggestions:
+                hint = ", ".join(f"{name} ({score})" for name, score in suggestions)
+                message = f"找不到球員 '{request.player_name}'。最接近的名稱：{hint}"
+            else:
+                message = f"找不到球員 '{request.player_name}'。可用球員：{all_player_names[:10]}"
             return NoVigResponse(
                 event_id=request.event_id,
                 player_name=request.player_name,
                 market=request.market,
                 results=[],
                 consensus=None,
-                message=f"找不到球員 '{request.player_name}'。可用球員：{list(all_player_names)[:10]}"
+                message=message,
+                **_snapshot_metadata(snapshot),
             )
         
         # 4. 對每個博彩公司計算去水機率
         results: List[BookmakerResult] = []
         fair_probs_for_consensus = []
-        
-        now = datetime.now(timezone.utc)
         
         for bookmaker in bookmakers_data:
             bookmaker_key = bookmaker.get("key", "unknown")
@@ -354,7 +374,7 @@ async def calculate_no_vig(request: NoVigRequest) -> NoVigResponse:
                         vig=round(vig, 4),
                         p_over_fair=round(p_over_fair, 4),
                         p_under_fair=round(p_under_fair, 4),
-                        fetched_at=now
+                        fetched_at=snapshot.fetched_at
                     )
                     results.append(result)
                     fair_probs_for_consensus.append((p_over_fair, p_under_fair))
@@ -381,7 +401,8 @@ async def calculate_no_vig(request: NoVigRequest) -> NoVigResponse:
             market=request.market,
             results=results,
             consensus=consensus,
-            message=None if results else "此球員在選定的博彩公司中沒有 props 資料"
+            message=None if results else "此球員在選定的博彩公司中沒有 props 資料",
+            **_snapshot_metadata(snapshot),
         )
         
     except OddsAPIError as e:
@@ -432,55 +453,31 @@ async def suggest_players(
             "players": ["Stephen Curry", "Seth Curry", "LeBron James"]
         }
     """
-    # 1. 檢查快取
-    cache_key = CacheService.build_players_key(event_id)
-    cached_data = await cache_service.get(cache_key)
-    
-    all_players: List[str] = []
-    
-    if cached_data:
-        all_players = cached_data.get("players", [])
-    else:
-        # 2. 快取未命中，呼叫 API
-        try:
-            raw_odds = await odds_provider.get_event_odds(
-                sport="basketball_nba",
-                event_id=event_id,
-                regions="us",
-                markets=market,
-                odds_format="american"
-            )
-            
-            # 3. 提取球員名稱
-            player_set = set()
-            for bookmaker in raw_odds.get("bookmakers", []):
-                for mkt in bookmaker.get("markets", []):
-                    if mkt.get("key") == market:
-                        for outcome in mkt.get("outcomes", []):
-                            if "description" in outcome:
-                                player_set.add(outcome["description"])
-            
-            all_players = sorted(list(player_set))
-            
-            # 4. 存入快取
-            await cache_service.set(
-                cache_key,
-                {"players": all_players},
-                ttl=settings.cache_ttl_players
-            )
-            
-        except OddsAPIError as e:
-            raise HTTPException(
-                status_code=e.status_code or 500,
-                detail=str(e)
-            )
+    try:
+        snapshot = await odds_gateway.get_market_snapshot(
+            sport="basketball_nba",
+            event_id=event_id,
+            regions="us",
+            markets=market,
+            odds_format="american",
+            priority="interactive",
+        )
+        all_players = _collect_player_names(snapshot.data.get("bookmakers", []), market)
+    except OddsAPIError as e:
+        raise HTTPException(
+            status_code=e.status_code or 500,
+            detail=str(e)
+        )
     
     # 5. 過濾（如果有搜尋關鍵字）
     if q:
         q_lower = q.lower()
         all_players = [p for p in all_players if q_lower in p.lower()]
     
-    return PlayerSuggestResponse(players=all_players)
+    return PlayerSuggestResponse(
+        players=all_players,
+        **_snapshot_metadata(snapshot),
+    )
 
 
 # ==================== CSV 球員歷史數據 API ====================
@@ -738,4 +735,3 @@ async def get_player_history(
             status_code=500,
             detail=f"計算失敗: {str(e)}"
         )
-
