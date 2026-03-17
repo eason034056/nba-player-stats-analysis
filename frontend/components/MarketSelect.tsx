@@ -63,15 +63,15 @@ export function MarketSelect({
   disabled = false,
 }: MarketSelectProps) {
   return (
-    <div>
+    <div className="space-y-4">
       {/* Label */}
-      <label className="block text-sm font-bold text-dark mb-3">
-        <Activity className="inline w-4 h-4 mr-1.5" />
+      <label className="control-label">
+        <Activity className="h-4 w-4 text-red" />
         Stat Type
       </label>
 
       {/* Market selection grid */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+      <div className="grid grid-cols-2 gap-3 xl:grid-cols-4">
         {MARKETS.map((market) => {
           const Icon = market.icon;
           const isSelected = value === market.key;
@@ -82,44 +82,49 @@ export function MarketSelect({
               type="button"
               onClick={() => !disabled && onChange(market.key)}
               disabled={disabled}
+              aria-pressed={isSelected}
               className={cn(
-                "relative flex flex-col items-center justify-center",
-                "p-4 rounded-lg border-2 transition-all duration-150",
-                "focus:outline-none",
+                isSelected ? "control-tile-active" : "control-tile",
                 isSelected
-                  ? "border-red bg-red text-white"
-                  : "border-dark/20 bg-white text-dark hover:border-dark",
-                disabled && "opacity-50 cursor-not-allowed"
+                  ? "ring-1 ring-white/20"
+                  : "hover:ring-1 hover:ring-white/10",
+                disabled && "cursor-not-allowed opacity-50"
               )}
               title={market.description}
             >
               {/* Icon */}
               <Icon
                 className={cn(
-                  "w-6 h-6 mb-2",
-                  isSelected ? "text-white" : "text-gray"
+                  "mb-3 h-6 w-6",
+                  isSelected ? "text-white" : "text-light"
                 )}
               />
-              
+
               {/* Name */}
-              <span className={cn(
-                "text-sm font-bold",
-                isSelected ? "text-white" : "text-dark"
-              )}>
+              <span
+                className={cn(
+                  "text-sm font-semibold leading-tight md:text-base",
+                  isSelected ? "text-white" : "text-dark",
+                )}
+              >
                 {market.name}
               </span>
 
               {/* Short name */}
-              <span className={cn(
-                "text-xs mt-0.5",
-                isSelected ? "text-white/70" : "text-gray"
-              )}>
+              <span
+                className={cn(
+                  "mt-1 text-[11px] uppercase tracking-[0.22em]",
+                  isSelected ? "text-white/72" : "text-light",
+                )}
+              >
                 {market.shortName}
               </span>
 
               {/* Selected indicator */}
               {isSelected && (
-                <div className="absolute top-2 right-2 w-2 h-2 bg-white rounded-full" />
+                <div className="absolute right-3 top-3 flex h-6 w-6 items-center justify-center rounded-full border border-white/22 bg-white/12">
+                  <div className="h-2.5 w-2.5 rounded-full bg-white" />
+                </div>
               )}
             </button>
           );
@@ -127,7 +132,7 @@ export function MarketSelect({
       </div>
 
       {/* Description */}
-      <p className="mt-3 text-xs text-gray">
+      <p className="control-hint">
         Select the player stat type to query
       </p>
     </div>

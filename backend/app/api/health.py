@@ -1,12 +1,12 @@
 """
-health.py - 健康檢查 API 端點
+health.py - Health Check API Endpoints
 
-提供服務健康狀態檢查功能
-用途：
-1. 部署時確認服務正常啟動
-2. 負載均衡器（Load Balancer）定期檢查
-3. 監控系統偵測服務狀態
-4. 手動觸發排程任務（如 CSV 下載）
+Provides health status checking for the service.
+Use Cases:
+1. Confirm service is running after deployment
+2. Periodic checks by the load balancer
+3. Service status checks for monitoring systems
+4. Manual triggering of scheduled tasks (e.g. CSV download)
 """
 
 from fastapi import APIRouter
@@ -15,10 +15,10 @@ from app.models.schemas import HealthResponse
 from app.services.scheduler import scheduler_service
 from app.services.csv_downloader import csv_downloader_service
 
-# 建立路由器
-# APIRouter: FastAPI 的路由分組工具
-# prefix: 此路由器下所有端點的共同前綴
-# tags: 用於 API 文件分類（OpenAPI/Swagger）
+# Create router
+# APIRouter: FastAPI's routing group tool
+# prefix: common prefix for all endpoints under this router
+# tags: Used for API documentation category (OpenAPI/Swagger)
 router = APIRouter(
     prefix="/api",
     tags=["health"]
@@ -28,24 +28,24 @@ router = APIRouter(
 @router.get(
     "/health",
     response_model=HealthResponse,
-    summary="健康檢查",
-    description="檢查 API 服務是否正常運作"
+    summary="Health Check",
+    description="Check if the API service is up and running"
 )
 async def health_check() -> HealthResponse:
     """
-    健康檢查端點
-    
+    Health Check Endpoint
+
     GET /api/health
-    
-    用於確認 API 服務正常運作
-    返回服務名稱和當前伺服器時間（UTC）
-    
+
+    Used to confirm the API service is running.
+    Returns the service name and current server time (UTC).
+
     Returns:
-        HealthResponse: 包含服務狀態的回應
-        - ok: True 表示服務正常
-        - service: 服務識別名稱
-        - time: 伺服器當前 UTC 時間
-    
+        HealthResponse: Contains the service status.
+        - ok: True means the service is healthy
+        - service: Identifier of the service
+        - time: Current server UTC time
+
     Example Response:
         {
             "ok": true,
@@ -62,68 +62,68 @@ async def health_check() -> HealthResponse:
 
 @router.post(
     "/trigger-csv-download",
-    summary="手動觸發 CSV 下載",
-    description="從 GitHub 下載最新的 NBA 球員數據 CSV 文件"
+    summary="Manually Trigger CSV Download",
+    description="Download the latest NBA player data CSV file from GitHub"
 )
 async def trigger_csv_download():
     """
-    手動觸發 CSV 下載
-    
+    Manually Trigger CSV Download
+
     POST /api/trigger-csv-download
-    
-    用於手動下載最新的 NBA 球員數據 CSV，不需要等待排程時間
-    這個端點會立即從 GitHub 下載 CSV 並儲存到 data/ 目錄
-    
+
+    Used to manually download the latest NBA player data CSV file without waiting for the scheduled time.
+    This endpoint will immediately download the CSV from GitHub and save it to the data/ directory.
+
     Returns:
-        dict: 下載結果
-        - success: bool, 是否成功
-        - message: str, 結果訊息
-        - last_modified: str | None, CSV 檔案的最後修改時間
-    
-    Example Response (成功):
+        dict: Download result
+        - success: bool, whether the download was successful
+        - message: str, result message
+        - last_modified: str | None, last modification time of the CSV file
+
+    Example Response (Success):
         {
             "success": true,
-            "message": "CSV 下載成功",
+            "message": "CSV download succeeded",
             "last_modified": "2026-01-28T15:00:00+00:00"
         }
-    
-    Example Response (失敗):
+
+    Example Response (Failure):
         {
             "success": false,
-            "message": "CSV 下載失敗",
+            "message": "CSV download failed",
             "last_modified": null
         }
     """
-    # 呼叫排程器的手動觸發方法
+    # Call the scheduler's manual trigger method
     success = await scheduler_service.trigger_csv_download_now()
     
     return {
         "success": success,
-        "message": "CSV 下載成功" if success else "CSV 下載失敗",
+        "message": "CSV download succeeded" if success else "CSV download failed",
         "last_modified": csv_downloader_service.get_last_modified()
     }
 
 
 @router.get(
     "/scheduler-status",
-    summary="查看排程器狀態",
-    description="取得排程器的運行狀態和下次執行時間"
+    summary="View Scheduler Status",
+    description="Get the scheduler status and the next run time"
 )
 async def get_scheduler_status():
     """
-    查看排程器狀態
-    
+    View Scheduler Status
+
     GET /api/scheduler-status
-    
-    顯示所有排程任務的狀態和下次執行時間
-    
+
+    Shows the status and next run time for all scheduled tasks.
+
     Returns:
-        dict: 排程器狀態
-        - is_running: bool, 排程器是否運行中
-        - next_daily_analysis: str | None, 每日分析的下次執行時間
-        - next_csv_download: str | None, CSV 下載的下次執行時間
-        - csv_last_modified: str | None, CSV 檔案的最後修改時間
-    
+        dict: Scheduler status
+        - is_running: bool, whether the scheduler is running
+        - next_daily_analysis: str | None, next run time for daily analysis
+        - next_csv_download: str | None, next run time for CSV download
+        - csv_last_modified: str | None, last modification time of the CSV file
+
     Example Response:
         {
             "is_running": true,

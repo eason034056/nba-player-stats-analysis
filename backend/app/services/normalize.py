@@ -1,7 +1,7 @@
 """
-normalize.py - 球員名稱正規化與匹配模組
+normalize.py - Player Name Normalization and Matching Module
 
-處理不同資料源間的球員名稱差異，例如：
+Handles name discrepancies across different data sources, such as:
 - "Cody Williams" vs "Cody Williams Jr."
 - "Steph Curry" vs "Stephen Curry"
 - "P J Washington" vs "P.J. Washington"
@@ -38,15 +38,15 @@ for group in _FIRST_NAME_GROUPS:
 
 def normalize_name(name: str) -> str:
     """
-    正規化球員名稱。
+    Normalize player name.
 
-    規則：
-    1. 去除前後空白
-    2. 轉小寫
-    3. 移除重音符號
-    4. 句點/單引號直接移除，連字號改成空白
-    5. 其他非英數字元改成空白
-    6. 將多個空白合併成一個
+    Rules:
+    1. Strip leading/trailing spaces
+    2. Convert to lower case
+    3. Remove diacritics
+    4. Remove periods/apostrophes directly, convert hyphens to spaces
+    5. Other non-alphanumeric characters to space
+    6. Merge multiple spaces into one
     """
     normalized = unicodedata.normalize("NFKD", name.strip())
     normalized = "".join(ch for ch in normalized if not unicodedata.combining(ch))
@@ -65,9 +65,9 @@ def _tokenize_name(name: str) -> List[str]:
 
 def _collapse_initial_tokens(tokens: Sequence[str]) -> List[str]:
     """
-    把連續單字母 token 合併。
+    Merge consecutive single-letter tokens.
 
-    例如：
+    For example:
     - ["p", "j", "washington"] -> ["pj", "washington"]
     - ["s", "curry"] -> ["s", "curry"]
     """
@@ -113,9 +113,9 @@ def _canonical_tokens(name: str) -> List[str]:
 
 def canonical_name(name: str) -> str:
     """
-    產生較穩定的 canonical key，用於跨資料源對齊。
+    Generate a stable canonical key for cross data source alignment.
 
-    會移除常見 suffix，並把少數常見暱稱的 first name 轉成固定形式。
+    Removes common suffixes and maps some common first-name nicknames to a canonical form.
     """
     return " ".join(_canonical_tokens(name))
 
@@ -297,10 +297,10 @@ def _is_ambiguous_initial_query(query: str, candidates: List[str]) -> bool:
 
 def exact_match(query: str, candidates: List[str]) -> Optional[str]:
     """
-    精確匹配：使用 canonical/alias key 做唯一匹配。
+    Exact match: Uses canonical/alias key for unique matching.
 
-    只有當 alias key 在候選列表中唯一時才返回，避免 "S Curry" 這種模糊輸入
-    在 Stephen/Seth 之間被隨機選中。
+    Only returns a match when the alias key is unique among candidates, avoiding ambiguous input
+    such as "S Curry" matching both Stephen and Seth.
     """
     query_keys = _name_variants(query)
     if not query_keys:
@@ -333,10 +333,10 @@ def fuzzy_match(
     threshold: int = 90
 ) -> Optional[Tuple[str, int]]:
     """
-    模糊匹配：在沒有 exact/canonical match 時，使用相似度做回退。
+    Fuzzy match: Falls back to similarity matching when there is no exact/canonical match.
 
-    會加入 last-name 一致性的加權，以及對不同 last name 的懲罰，
-    降低誤把 "Nikola Jokic" 匹配成 "Nikola Jovic" 的風險。
+    Adds extra weight to last-name consistency, and penalty for different last names,
+    to reduce risks like matching "Nikola Jokic" as "Nikola Jovic".
     """
     ranked = _rank_candidates(query, candidates)
     if not ranked:
@@ -364,7 +364,7 @@ def suggest_players(
     threshold: int = 60
 ) -> List[Tuple[str, int]]:
     """
-    回傳相似候選，用於 miss 時提示使用者或 UI。
+    Returns similar candidates, for UI or user suggestion on no match.
     """
     ranked = _rank_candidates(query, candidates)
     suggestions: List[Tuple[str, int]] = []
@@ -381,11 +381,11 @@ def suggest_players(
 
 def find_player(query: str, candidates: List[str], threshold: int = 90) -> Optional[str]:
     """
-    主要的球員名稱匹配函數。
+    The main player name matching function.
 
-    策略：
-    1. exact/canonical 唯一匹配
-    2. fuzzy 回退
+    Strategy:
+    1. exact/canonical unique match
+    2. fuzzy fallback
     """
     exact = exact_match(query, candidates)
     if exact:
@@ -400,17 +400,17 @@ def find_player(query: str, candidates: List[str], threshold: int = 90) -> Optio
 
 def extract_player_names(outcomes: List[dict]) -> List[str]:
     """
-    從 Odds API 的 outcomes 資料中提取所有球員名稱
-    
-    outcomes 是 The Odds API 返回的投注選項列表
-    每個 outcome 通常包含 "description" 或 "name" 欄位，內含球員名稱
-    
+    Extracts all player names from the Odds API outcomes data.
+
+    Outcomes is a list of betting options returned by The Odds API.
+    Each outcome usually has a "description" or "name" field that contains a player name.
+
     Args:
-        outcomes: Odds API 返回的 outcomes 列表
-    
+        outcomes: List of outcomes returned by the Odds API
+
     Returns:
-        去重後的球員名稱列表
-    
+        List of unique player names
+
     Example:
         >>> outcomes = [
         ...     {"name": "Over", "description": "Stephen Curry"},
@@ -423,10 +423,10 @@ def extract_player_names(outcomes: List[dict]) -> List[str]:
     players = set()
     
     for outcome in outcomes:
-        # 嘗試從 description 欄位取得球員名稱
+        # Try to get player name from the description field
         if "description" in outcome and outcome["description"]:
             players.add(outcome["description"])
-        # 某些 API 可能使用其他欄位名稱
+        # Some APIs may use other field names
         elif "player" in outcome and outcome["player"]:
             players.add(outcome["player"])
     

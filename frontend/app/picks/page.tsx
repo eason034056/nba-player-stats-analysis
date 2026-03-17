@@ -13,7 +13,6 @@
 import { useState, useCallback, useMemo, useEffect } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { 
-  RefreshCw, 
   AlertCircle, 
   Bot,
   TrendingUp, 
@@ -36,20 +35,23 @@ import {
   ArrowLeftRight,
 } from "lucide-react";
 import Link from "next/link";
-import { getDailyPicks, triggerDailyAnalysis } from "@/lib/api";
+import { getDailyPicks, getLineups, triggerDailyAnalysis } from "@/lib/api";
 import { getTodayString, getDateDisplayTitle, formatProbability } from "@/lib/utils";
 import { 
-  type DailyPick, 
+  type DailyPick,
+  type TeamLineup,
   METRIC_DISPLAY_NAMES, 
   DIRECTION_DISPLAY_NAMES 
 } from "@/lib/schemas";
 import { DatePicker } from "@/components/DatePicker";
 import { TeamLogo } from "@/components/TeamLogo";
-import { getShortTeamName } from "@/lib/team-logos";
+import { getCanonicalTeamCode, getShortTeamName } from "@/lib/team-logos";
 import { PickContextMenu } from "@/components/PickContextMenu";
 import { useAgentWidget } from "@/contexts/AgentWidgetContext";
 import { useBetSlip } from "@/contexts/BetSlipContext";
 import { createAgentPickContextFromDailyPick } from "@/lib/agent-chat";
+import { LineupStatusBadge } from "@/components/LineupStatusBadge";
+import { buildEventDetailHref } from "@/lib/event-detail-link";
 
 /**
  * Probability confidence level
@@ -110,7 +112,21 @@ function metricToMarket(metric: string): string {
  * 支援右鍵選單添加到下注列表
  * 已添加的 pick 會顯示視覺反饋（綠色邊框和標記）
  */
-function PickCard({ pick, index }: { pick: DailyPick; index: number }) {
+function PickCard({
+  pick,
+  index,
+  selectedDate,
+  lineup,
+  isLineupLoading = false,
+  isLineupError = false,
+}: {
+  pick: DailyPick;
+  index: number;
+  selectedDate: string;
+  lineup?: TeamLineup | null;
+  isLineupLoading?: boolean;
+  isLineupError?: boolean;
+}) {
   const { setSelectedPickContext, submitAction } = useAgentWidget();
   const { picks, isInSlip, addPick, removePick } = useBetSlip();
   const level = getProbabilityLevel(pick.probability);
@@ -120,7 +136,13 @@ function PickCard({ pick, index }: { pick: DailyPick; index: number }) {
 
   const isAdded = isInSlip(pick.player_name, pick.metric);
   const marketKey = metricToMarket(pick.metric);
-  const linkHref = `/event/${pick.event_id}?player=${encodeURIComponent(pick.player_name)}&market=${marketKey}&threshold=${pick.threshold}`;
+  const linkHref = buildEventDetailHref({
+    eventId: pick.event_id,
+    date: selectedDate,
+    player: pick.player_name,
+    market: marketKey,
+    threshold: pick.threshold,
+  });
   const reverseDirection = pick.direction === "over" ? "under" : "over";
   const reverseDirectionName = DIRECTION_DISPLAY_NAMES[reverseDirection] || reverseDirection;
   const existingPick = picks.find(
@@ -220,6 +242,15 @@ function PickCard({ pick, index }: { pick: DailyPick; index: number }) {
                   {pick.away_team} @ {pick.home_team}
                 </p>
               </div>
+            </div>
+
+            <div className="mb-4">
+              <LineupStatusBadge
+                lineup={lineup}
+                playerName={pick.player_name}
+                isLoading={isLineupLoading}
+                isError={isLineupError}
+              />
             </div>
 
             <div className="flex items-center justify-between mb-4">
@@ -519,7 +550,8 @@ function TeamFilter({
  * 關閉分頁後自動清除，不會影響下次開啟的預設值。
  */
 const STORAGE_KEY_DATE = "picks-filter-date";
-const STORAGE_KEY_TEAMS = "picks-filter-teams";
+const STORAGE_KEY_TEAMS = "picks-filter-teams:v2";
+const STALE_BOARD_MINUTES = 15;
 
 /**
  * Main page component
@@ -531,6 +563,16 @@ export default function PicksPage() {
   const [isTriggering, setIsTriggering] = useState(false);
   const [selectedTeams, setSelectedTeams] = useState<Set<string>>(new Set());
   const queryClient = useQueryClient();
+  const dailyPicksQueryKey = useMemo(
+    () => ["daily-picks", selectedDate] as const,
+    [selectedDate],
+  );
+  const fetchDailyPicks = useCallback(
+    async (refresh = false) => {
+      return await getDailyPicks({ date: selectedDate, refresh });
+    },
+    [selectedDate],
+  );
   
   // ==================== 從 sessionStorage 還原篩選狀態 ====================
   
@@ -575,11 +617,22 @@ export default function PicksPage() {
     refetch,
     isFetching,
   } = useQuery({
-    queryKey: ["daily-picks", selectedDate],
+    queryKey: dailyPicksQueryKey,
     queryFn: async () => {
-      return await getDailyPicks({ date: selectedDate });
+      return await fetchDailyPicks();
     },
     staleTime: 5 * 60 * 1000,
+    refetchOnWindowFocus: false,
+  });
+
+  const {
+    data: lineupsData,
+    isLoading: isLineupsLoading,
+    isError: isLineupsError,
+  } = useQuery({
+    queryKey: ["lineups", selectedDate],
+    queryFn: async () => getLineups(selectedDate),
+    staleTime: 60 * 1000,
     refetchOnWindowFocus: false,
   });
   
@@ -603,19 +656,12 @@ export default function PicksPage() {
     sessionStorage.setItem(STORAGE_KEY_TEAMS, JSON.stringify([]));
   }, []);
 
-  const handleRefresh = useCallback(async () => {
-    await queryClient.invalidateQueries({ 
-      queryKey: ["daily-picks", selectedDate] 
-    });
-    await refetch();
-  }, [selectedDate, refetch, queryClient]);
-  
   const handleTriggerAnalysis = useCallback(async () => {
     setIsTriggering(true);
     try {
       await triggerDailyAnalysis(selectedDate);
       await queryClient.invalidateQueries({ 
-        queryKey: ["daily-picks", selectedDate] 
+        queryKey: dailyPicksQueryKey,
       });
       await refetch();
     } catch (e) {
@@ -623,7 +669,7 @@ export default function PicksPage() {
     } finally {
       setIsTriggering(false);
     }
-  }, [selectedDate, refetch, queryClient]);
+  }, [dailyPicksQueryKey, queryClient, refetch, selectedDate]);
   
   // 從 picks 中提取所有唯一的球隊（使用 player_team）
   // Extract unique teams from picks (using player_team)
@@ -631,13 +677,30 @@ export default function PicksPage() {
     const picks = data?.picks || [];
     const teamsSet = new Set<string>();
     picks.forEach((pick: DailyPick) => {
-      if (pick.player_team) {
-        teamsSet.add(pick.player_team);
+      const teamCode = pick.player_team_code || getCanonicalTeamCode(pick.player_team);
+      if (teamCode) {
+        teamsSet.add(teamCode);
       }
     });
     // 按字母順序排序
     return Array.from(teamsSet).sort();
   }, [data?.picks]);
+
+  useEffect(() => {
+    if (allTeams.length === 0) {
+      return;
+    }
+
+    setSelectedTeams((prev) => {
+      const filtered = new Set(Array.from(prev).filter((team) => allTeams.includes(team)));
+      if (filtered.size === prev.size) {
+        return prev;
+      }
+
+      sessionStorage.setItem(STORAGE_KEY_TEAMS, JSON.stringify(Array.from(filtered)));
+      return filtered;
+    });
+  }, [allTeams]);
   
   /**
    * handleToggleTeam - 切換單個球隊的選擇/取消選擇
@@ -680,6 +743,14 @@ export default function PicksPage() {
   const dateTitle = getDateDisplayTitle(selectedDate);
   const allPicks = useMemo(() => data?.picks ?? [], [data?.picks]);
   const stats = data?.stats;
+  const lineupsByTeam = useMemo(() => {
+    return new Map(
+      (lineupsData?.lineups ?? []).map((lineup) => [
+        getCanonicalTeamCode(lineup.team),
+        lineup,
+      ]),
+    );
+  }, [lineupsData?.lineups]);
   
   // 根據選擇的球隊篩選 picks
   // Filter picks based on selected teams
@@ -688,12 +759,30 @@ export default function PicksPage() {
       return allPicks;
     }
     return allPicks.filter((pick: DailyPick) => 
-      pick.player_team && selectedTeams.has(pick.player_team)
+      selectedTeams.has(pick.player_team_code || getCanonicalTeamCode(pick.player_team))
     );
   }, [allPicks, selectedTeams]);
   
   const highProbCount = picks.filter((p: DailyPick) => p.probability >= 0.70).length;
   const mediumProbCount = picks.filter((p: DailyPick) => p.probability >= 0.65 && p.probability < 0.70).length;
+  const analyzedAt = data?.analyzed_at ? new Date(data.analyzed_at) : null;
+  const boardAgeMinutes =
+    analyzedAt != null ? Math.floor((Date.now() - analyzedAt.getTime()) / 60000) : null;
+  const isStaleBoard = boardAgeMinutes != null && boardAgeMinutes > STALE_BOARD_MINUTES;
+  const isFilterEmptyState = !isLoading && allPicks.length > 0 && picks.length === 0;
+  const isBoardEmptyState = !isLoading && allPicks.length === 0;
+
+  useEffect(() => {
+    if (!isFilterEmptyState) {
+      return;
+    }
+
+    console.debug("filter_empty_state", {
+      date: selectedDate,
+      selectedTeams: Array.from(selectedTeams),
+      totalPicks: allPicks.length,
+    });
+  }, [allPicks.length, isFilterEmptyState, selectedDate, selectedTeams]);
 
   useEffect(() => {
     setPageContext({
@@ -757,6 +846,22 @@ export default function PicksPage() {
                 <p className="mt-2 text-xl font-semibold text-dark">{mediumProbCount}</p>
               </div>
             </div>
+            {data?.analyzed_at ? (
+              <div className="mt-4 flex items-center justify-between rounded-[18px] border border-white/8 bg-white/4 px-4 py-3 text-sm">
+                <span
+                  className={`rounded-full px-2.5 py-1 text-xs font-semibold uppercase tracking-[0.18em] ${
+                    isStaleBoard
+                      ? "bg-yellow-500/15 text-yellow-700"
+                      : "bg-green-500/15 text-green-700"
+                  }`}
+                >
+                  {isStaleBoard ? "Stale board" : "Fresh board"}
+                </span>
+                <span className="text-gray">
+                  Updated {new Date(data.analyzed_at).toLocaleTimeString()}
+                </span>
+              </div>
+            ) : null}
           </div>
         </section>
 
@@ -831,15 +936,6 @@ export default function PicksPage() {
               <Bot className="w-4 h-4 text-red" />
               <span>Review Board</span>
             </button>
-
-            <button
-              onClick={handleRefresh}
-              disabled={isFetching}
-              className="btn-refresh"
-            >
-              <RefreshCw className={`w-4 h-4 ${isFetching ? "animate-spin" : ""}`} />
-              <span>Refresh</span>
-            </button>
             
             <button
               onClick={handleTriggerAnalysis}
@@ -886,8 +982,8 @@ export default function PicksPage() {
           </div>
         )}
 
-        {/* No data state */}
-        {!isLoading && picks.length === 0 && (
+        {/* Empty board state */}
+        {isBoardEmptyState && (
           <div className="card text-center py-16">
             <div className="w-20 h-20 mx-auto mb-6 rounded-full border-2 border-dark/20 flex items-center justify-center">
               <TrendingUp className="w-10 h-10 text-gray" />
@@ -896,15 +992,48 @@ export default function PicksPage() {
               No High Probability Picks
             </h3>
             <p className="text-gray mb-8 max-w-md mx-auto">
-              {data?.message || "No betting options with over 65% probability found today, or data analysis is not yet complete"}
+              {data?.message || `No betting options with over 65% probability were found for ${selectedDate}.`}
+            </p>
+            <div className="flex flex-wrap items-center justify-center gap-3">
+              <button
+                onClick={handleTriggerAnalysis}
+                disabled={isTriggering}
+                className="btn-primary"
+              >
+                <Zap className="w-4 h-4 mr-2" />
+                {isTriggering ? "Analyzing..." : "Analyze Now"}
+              </button>
+              {selectedDate !== todayString ? (
+                <button
+                  type="button"
+                  onClick={() => handleDateChange(todayString)}
+                  className="btn-refresh"
+                >
+                  Jump to Today
+                </button>
+              ) : null}
+            </div>
+          </div>
+        )}
+
+        {/* Filter empty state */}
+        {isFilterEmptyState && (
+          <div className="card text-center py-16">
+            <div className="w-20 h-20 mx-auto mb-6 rounded-full border-2 border-dark/20 flex items-center justify-center">
+              <Filter className="w-10 h-10 text-gray" />
+            </div>
+            <h3 className="text-2xl font-bold text-dark mb-3">
+              No Picks Match Current Filters
+            </h3>
+            <p className="text-gray mb-8 max-w-md mx-auto">
+              {allPicks.length} picks are available for {selectedDate}, but none match the selected team filters.
             </p>
             <button
-              onClick={handleTriggerAnalysis}
-              disabled={isTriggering}
+              type="button"
+              onClick={handleClearTeams}
               className="btn-primary"
             >
-              <Zap className="w-4 h-4 mr-2" />
-              {isTriggering ? "Analyzing..." : "Analyze Now"}
+              Clear filters
             </button>
           </div>
         )}
@@ -930,9 +1059,20 @@ export default function PicksPage() {
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   {picks
                     .filter((p: DailyPick) => p.probability >= 0.70)
-                    .map((pick: DailyPick, index: number) => (
-                      <PickCard key={`${pick.player_name}-${pick.metric}`} pick={pick} index={index} />
-                    ))
+                    .map((pick: DailyPick, index: number) => {
+                      const teamCode = pick.player_team_code || getCanonicalTeamCode(pick.player_team);
+                      return (
+                        <PickCard
+                          key={`${pick.player_name}-${pick.metric}`}
+                          pick={pick}
+                          index={index}
+                          selectedDate={selectedDate}
+                          lineup={lineupsByTeam.get(teamCode) ?? null}
+                          isLineupLoading={isLineupsLoading}
+                          isLineupError={isLineupsError}
+                        />
+                      );
+                    })
                   }
                 </div>
               </div>
@@ -956,9 +1096,20 @@ export default function PicksPage() {
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   {picks
                     .filter((p: DailyPick) => p.probability >= 0.65 && p.probability < 0.70)
-                    .map((pick: DailyPick, index: number) => (
-                      <PickCard key={`${pick.player_name}-${pick.metric}`} pick={pick} index={index} />
-                    ))
+                    .map((pick: DailyPick, index: number) => {
+                      const teamCode = pick.player_team_code || getCanonicalTeamCode(pick.player_team);
+                      return (
+                        <PickCard
+                          key={`${pick.player_name}-${pick.metric}`}
+                          pick={pick}
+                          index={index}
+                          selectedDate={selectedDate}
+                          lineup={lineupsByTeam.get(teamCode) ?? null}
+                          isLineupLoading={isLineupsLoading}
+                          isLineupError={isLineupsError}
+                        />
+                      );
+                    })
                   }
                 </div>
               </div>

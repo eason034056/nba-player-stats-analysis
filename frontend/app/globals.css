@@ -28,6 +28,16 @@
   --color-success: #71d7a1;
   --color-warning: #f3c775;
   --color-danger: #ff886c;
+  --color-control-surface: rgba(8, 16, 29, 0.88);
+  --color-control-surface-strong: rgba(11, 23, 39, 0.96);
+  --color-control-surface-soft: rgba(255, 255, 255, 0.05);
+  --color-control-border: rgba(202, 212, 230, 0.16);
+  --color-control-border-strong: rgba(255, 208, 193, 0.34);
+  --color-control-text: #f5f8ff;
+  --color-control-muted: #aab7d0;
+  --color-scrollbar-track: rgba(10, 18, 31, 0.82);
+  --color-scrollbar-thumb: rgba(202, 212, 230, 0.34);
+  --color-scrollbar-thumb-hover: rgba(255, 208, 193, 0.52);
 
   --shadow-soft: 0 24px 60px rgba(2, 8, 20, 0.34);
   --shadow-card: 0 28px 90px rgba(2, 8, 20, 0.4);
@@ -103,6 +113,47 @@
   ::selection {
     background-color: rgba(243, 199, 117, 0.32);
     color: var(--color-white);
+  }
+
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: var(--color-scrollbar-thumb) var(--color-scrollbar-track);
+  }
+
+  *::-webkit-scrollbar {
+    width: 12px;
+    height: 12px;
+  }
+
+  *::-webkit-scrollbar-track {
+    background: var(--color-scrollbar-track);
+    border-radius: 9999px;
+    border: 3px solid transparent;
+    background-clip: padding-box;
+  }
+
+  *::-webkit-scrollbar-thumb {
+    background: linear-gradient(
+      180deg,
+      var(--color-scrollbar-thumb-hover) 0%,
+      var(--color-scrollbar-thumb) 100%
+    );
+    border-radius: 9999px;
+    border: 3px solid transparent;
+    background-clip: padding-box;
+  }
+
+  *::-webkit-scrollbar-thumb:hover {
+    background: linear-gradient(
+      180deg,
+      rgba(255, 226, 188, 0.75) 0%,
+      rgba(255, 136, 108, 0.66) 100%
+    );
+    background-clip: padding-box;
+  }
+
+  *::-webkit-scrollbar-corner {
+    background: transparent;
   }
 }
 
@@ -180,6 +231,159 @@
   .input:focus {
     border-color: rgba(255, 255, 255, 0.34);
     box-shadow: 0 0 0 4px rgba(255, 255, 255, 0.05);
+  }
+
+  .control-label {
+    @apply flex items-center gap-2 text-sm font-semibold tracking-[0.01em];
+    color: var(--color-light-gray);
+  }
+
+  .control-hint {
+    @apply text-xs leading-6;
+    color: rgba(202, 212, 230, 0.72);
+  }
+
+  .control-input {
+    @apply w-full rounded-[22px] px-4 py-3.5 transition-all duration-200 focus:outline-none;
+    background:
+      linear-gradient(180deg, rgba(255, 255, 255, 0.045) 0%, rgba(255, 255, 255, 0.02) 100%),
+      var(--color-control-surface);
+    color: var(--color-control-text);
+    border: 1px solid var(--color-control-border);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
+    backdrop-filter: blur(20px);
+  }
+
+  .control-input::placeholder {
+    color: rgba(202, 212, 230, 0.72);
+  }
+
+  .control-input:focus {
+    border-color: var(--color-control-border-strong);
+    box-shadow:
+      0 0 0 4px rgba(255, 136, 108, 0.1),
+      inset 0 1px 0 rgba(255, 255, 255, 0.06);
+  }
+
+  .control-popover {
+    @apply rounded-[24px] border overflow-auto;
+    background:
+      linear-gradient(180deg, rgba(16, 30, 50, 0.98) 0%, rgba(8, 17, 30, 0.98) 100%);
+    border-color: rgba(255, 255, 255, 0.1);
+    box-shadow: 0 24px 64px rgba(2, 8, 20, 0.5);
+    backdrop-filter: blur(24px);
+  }
+
+  .control-option {
+    @apply cursor-pointer transition-all duration-150;
+    color: var(--color-control-text);
+  }
+
+  .control-option:hover {
+    background: rgba(255, 255, 255, 0.06);
+  }
+
+  .control-option-active {
+    background: rgba(255, 136, 108, 0.16);
+    color: var(--color-white);
+  }
+
+  .control-tile {
+    @apply relative flex flex-col items-center justify-center rounded-[24px] border px-4 py-5 text-center transition-all duration-200 focus:outline-none active:scale-[0.99];
+    min-height: 142px;
+    background:
+      linear-gradient(180deg, rgba(255, 255, 255, 0.035) 0%, rgba(255, 255, 255, 0.015) 100%),
+      var(--color-control-surface);
+    border-color: var(--color-control-border);
+    color: var(--color-control-text);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
+  }
+
+  .control-tile:hover {
+    transform: translateY(-1px);
+    border-color: rgba(255, 255, 255, 0.22);
+    background:
+      linear-gradient(180deg, rgba(255, 255, 255, 0.055) 0%, rgba(255, 255, 255, 0.02) 100%),
+      var(--color-control-surface-strong);
+  }
+
+  .control-tile-active {
+    @apply relative flex flex-col items-center justify-center rounded-[24px] border px-4 py-5 text-center transition-all duration-200 focus:outline-none active:scale-[0.99];
+    min-height: 142px;
+    background: linear-gradient(135deg, rgba(255, 136, 108, 0.96) 0%, rgba(255, 154, 114, 0.92) 100%);
+    border-color: rgba(255, 229, 214, 0.34);
+    color: var(--color-white);
+    box-shadow:
+      0 18px 44px rgba(255, 136, 108, 0.22),
+      inset 0 1px 0 rgba(255, 255, 255, 0.18);
+  }
+
+  .control-chip {
+    @apply rounded-full border px-3 py-2 text-sm transition-all duration-150 focus:outline-none;
+    background: rgba(255, 255, 255, 0.03);
+    border-color: rgba(255, 255, 255, 0.1);
+    color: var(--color-control-text);
+  }
+
+  .control-chip:hover {
+    border-color: rgba(255, 255, 255, 0.22);
+    background: rgba(255, 255, 255, 0.06);
+  }
+
+  .control-chip-active {
+    @apply rounded-full border px-3 py-2 text-sm transition-all duration-150 focus:outline-none;
+    background: linear-gradient(135deg, rgba(255, 136, 108, 0.92) 0%, rgba(255, 154, 114, 0.9) 100%);
+    border-color: rgba(255, 226, 188, 0.28);
+    color: var(--color-white);
+    box-shadow: 0 10px 26px rgba(255, 136, 108, 0.18);
+  }
+
+  .control-nav-button {
+    @apply flex h-12 w-12 items-center justify-center rounded-full border transition-all duration-200 focus:outline-none active:scale-[0.98];
+    background: rgba(255, 255, 255, 0.025);
+    border-color: rgba(255, 255, 255, 0.12);
+    color: var(--color-control-text);
+  }
+
+  .control-nav-button:hover {
+    background: rgba(255, 255, 255, 0.065);
+    border-color: rgba(255, 255, 255, 0.24);
+  }
+
+  .control-date-pill {
+    @apply relative flex min-h-[72px] min-w-[240px] items-center justify-center rounded-full border px-6 py-3 transition-all duration-200;
+    background:
+      linear-gradient(180deg, rgba(255, 255, 255, 0.035) 0%, rgba(255, 255, 255, 0.02) 100%),
+      var(--color-control-surface);
+    border-color: rgba(255, 255, 255, 0.12);
+    color: var(--color-control-text);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
+  }
+
+  .control-date-pill:hover {
+    border-color: rgba(255, 208, 193, 0.34);
+  }
+
+  .control-segment {
+    @apply inline-flex items-center justify-center rounded-full border px-5 py-3 text-sm font-semibold transition-all duration-200 focus:outline-none active:scale-[0.98];
+    min-width: 122px;
+    background: rgba(255, 255, 255, 0.025);
+    border-color: rgba(255, 255, 255, 0.12);
+    color: var(--color-control-text);
+  }
+
+  .control-segment:hover {
+    background: rgba(255, 255, 255, 0.065);
+    border-color: rgba(255, 255, 255, 0.22);
+  }
+
+  .control-segment-active {
+    @apply inline-flex items-center justify-center rounded-full border px-5 py-3 text-sm font-semibold transition-all duration-200 focus:outline-none active:scale-[0.98];
+    min-width: 122px;
+    background: linear-gradient(135deg, rgba(255, 136, 108, 0.96) 0%, rgba(255, 154, 114, 0.92) 100%);
+    border-color: rgba(255, 226, 188, 0.28);
+    color: var(--color-white);
+    box-shadow: 0 14px 32px rgba(255, 136, 108, 0.18);
   }
 
   .card {
@@ -333,6 +537,10 @@
 
   .scrollbar-hide::-webkit-scrollbar {
     display: none;
+  }
+
+  .app-scrollbar {
+    scrollbar-gutter: stable;
   }
 
   .divider {

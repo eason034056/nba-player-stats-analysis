@@ -1,12 +1,12 @@
 """
-nba.py - NBA 相關 API 端點
+nba.py - NBA related API endpoints
 
-包含：
-1. 賽事列表 API（GET /api/nba/events）
-2. 去水機率計算 API（POST /api/nba/props/no-vig）
-3. 球員建議 API（GET /api/nba/players/suggest）
+Includes:
+1. Game List API (GET /api/nba/events)
+2. No-Vig Probability Calculation API (POST /api/nba/props/no-vig)
+3. Player Suggestions API (GET /api/nba/players/suggest)
 
-這是整個應用的核心功能模組
+This is the core functional module of the application.
 """
 
 from fastapi import APIRouter, HTTPException, Query
@@ -40,7 +40,7 @@ from app.services.normalize import extract_player_names, find_player, suggest_pl
 from app.services.csv_player_history import csv_player_service
 from app.settings import settings
 
-# 建立路由器
+# Initialize router
 router = APIRouter(
     prefix="/api/nba",
     tags=["nba"]
@@ -74,46 +74,46 @@ def _collect_player_names(
 @router.get(
     "/events",
     response_model=EventsResponse,
-    summary="取得 NBA 賽事列表",
-    description="取得指定日期的 NBA 賽事列表"
+    summary="Get NBA games list",
+    description="Get NBA games list for a specified date"
 )
 async def get_events(
     date: Optional[str] = Query(
         default=None,
-        description="查詢日期（YYYY-MM-DD），預設今天",
+        description="Query date (YYYY-MM-DD), defaults to today",
         pattern=r"^\d{4}-\d{2}-\d{2}$"
     ),
     regions: str = Query(
         default="us",
-        description="地區代碼（us, uk, eu, au）"
+        description="Region code (us, uk, eu, au)"
     ),
     tz_offset: Optional[int] = Query(
         default=None,
-        description="時區偏移量（分鐘），例如 UTC-6 傳 -360，UTC+8 傳 480。用於過濾本地日期的比賽。"
+        description="Timezone offset (minutes), e.g. UTC-6 send -360, UTC+8 send 480. Used for filtering local date games."
     )
 ) -> EventsResponse:
     """
-    取得 NBA 賽事列表
-    
+    Get NBA games list
+
     GET /api/nba/events?date=YYYY-MM-DD&regions=us
-    
-    流程：
-    1. 檢查 Redis 快取
-    2. 若快取命中（cache hit），直接返回
-    3. 若快取未命中（cache miss），呼叫 The Odds API
-    4. 將結果存入快取
-    5. 返回結果
-    
+
+    Flow:
+    1. Check Redis cache
+    2. If cache hit, return directly
+    3. If cache miss, call The Odds API
+    4. Store result in cache
+    5. Return result
+
     Args:
-        date: 查詢日期（YYYY-MM-DD），預設今天
-        regions: 地區代碼，影響可用的博彩公司
-    
+        date: Query date (YYYY-MM-DD), defaults to today
+        regions: Region code, affects available bookmakers
+
     Returns:
-        EventsResponse: 賽事列表
-    
+        EventsResponse: Games list
+
     Raises:
-        HTTPException: 當 API 呼叫失敗時返回對應的錯誤
-    
+        HTTPException: API call fails
+
     Example Response:
         {
             "date": "2026-01-14",
@@ -128,41 +128,41 @@ async def get_events(
             ]
         }
     """
-    # 處理日期參數：預設今天
+    # Handle date param: defaults to today
     if date is None:
         date = datetime.now(timezone.utc).strftime("%Y-%m-%d")
     
-    # 處理時區偏移量：預設 UTC（0 分鐘）
-    # 注意：JavaScript 的 getTimezoneOffset() 返回的是「UTC - 本地時間」的分鐘數
-    # 例如：UTC-6 返回 360（正數），UTC+8 返回 -480（負數）
-    # 但前端傳來的是正常的偏移量（UTC-6 傳 -360，UTC+8 傳 480）
+    # Handle timezone offset: default UTC (0 minutes)
+    # Note: JavaScript's getTimezoneOffset() returns "UTC - Local" minutes
+    # Example: UTC-6 returns 360 (positive), UTC+8 returns -480 (negative)
+    # But front-end should send "normal" offset (UTC-6 send -360, UTC+8 send 480)
     offset_minutes = tz_offset if tz_offset is not None else 0
     
-    # 1. 檢查快取（包含時區偏移量以區分不同時區的請求）
+    # 1. Check cache (include timezone offset to distinguish different local time requests)
     cache_key = f"{CacheService.build_events_key(date, regions)}:tz{offset_minutes}"
     cached_data = await cache_service.get(cache_key)
     
     if cached_data:
-        # 快取命中
+        # Cache hit
         return EventsResponse(**cached_data)
     
-    # 2. 快取未命中，呼叫外部 API
+    # 2. Cache miss, call external API
     try:
-        # 計算用戶本地日期對應的 UTC 時間範圍
-        # 例如：用戶在 UTC-6 選擇 "2026-01-17"
-        # 本地 2026-01-17 00:00:00 = UTC 2026-01-17 06:00:00
-        # 本地 2026-01-17 23:59:59 = UTC 2026-01-18 05:59:59
+        # Calculate UTC time range for user's local date
+        # Example: If user is UTC-6 and selects "2026-01-17"
+        # Local 2026-01-17 00:00:00 = UTC 2026-01-17 06:00:00
+        # Local 2026-01-17 23:59:59 = UTC 2026-01-18 05:59:59
         date_obj = datetime.strptime(date, "%Y-%m-%d")
         
-        # 本地時間 00:00:00 轉換為 UTC
+        # Local 00:00:00 to UTC
         local_start = datetime.combine(date_obj.date(), datetime.min.time())
         utc_start = local_start - timedelta(minutes=offset_minutes)
         
-        # 本地時間 23:59:59 轉換為 UTC（不使用 datetime.max.time() 以避免微秒）
+        # Local 23:59:59 to UTC (avoid datetime.max.time to skip microseconds)
         local_end = datetime.combine(date_obj.date(), time(23, 59, 59))
         utc_end = local_end - timedelta(minutes=offset_minutes)
         
-        # 查詢範圍擴大一點以確保涵蓋邊界情況
+        # Expand search range to cover boundary cases
         date_from = utc_start - timedelta(hours=1)
         date_to = utc_end + timedelta(hours=1)
         
@@ -173,26 +173,26 @@ async def get_events(
             date_to=date_to
         )
         
-        # 3. 轉換資料格式並過濾日期
-        # 過濾邏輯：只返回比賽開始時間在用戶本地日期範圍內的比賽
+        # 3. Transform and filter data by date
+        # Filter: return only games whose commence time falls within local date
         events = []
         for raw_event in raw_events:
             commence_time_str = raw_event.get("commence_time", "")
             
             if commence_time_str:
-                # 解析 UTC 時間（格式：2026-01-17T00:10:00Z）
+                # Parse UTC time (e.g. 2026-01-17T00:10:00Z)
                 try:
                     commence_utc = datetime.fromisoformat(commence_time_str.replace('Z', '+00:00'))
-                    # 轉換為用戶本地時間
+                    # Convert to local time
                     commence_local = commence_utc + timedelta(minutes=offset_minutes)
-                    # 取得本地日期
+                    # Get local date
                     commence_local_date = commence_local.strftime("%Y-%m-%d")
                     
-                    # 只返回本地日期等於用戶選擇日期的比賽
+                    # Only return games where local date matches request
                     if commence_local_date != date:
                         continue
                 except ValueError:
-                    # 無法解析時間，跳過過濾
+                    # Couldn't parse time, skip filter
                     pass
             
             events.append(NBAEvent(
@@ -203,13 +203,13 @@ async def get_events(
                 commence_time=commence_time_str
             ))
         
-        # 4. 建構回應
+        # 4. Build response
         response = EventsResponse(
             date=date,
             events=events
         )
         
-        # 5. 存入快取
+        # 5. Store in cache
         await cache_service.set(
             cache_key,
             response.model_dump(mode='json'),
@@ -233,41 +233,41 @@ async def get_events(
 @router.post(
     "/props/no-vig",
     response_model=NoVigResponse,
-    summary="計算去水機率",
-    description="查詢指定球員的 props 並計算去水機率"
+    summary="Calculate no-vig probabilities",
+    description="Query specific player props and calculate no-vig probabilities"
 )
 async def calculate_no_vig(request: NoVigRequest) -> NoVigResponse:
     """
-    計算球員 props 的去水機率
-    
+    Calculate no-vig probability for player props
+
     POST /api/nba/props/no-vig
-    
-    這是整個應用的核心功能！
-    
-    流程：
-    1. 檢查快取（以 event_id + market + regions + bookmakers 為 key）
-    2. 若快取未命中，呼叫 The Odds API 取得 props 資料
-    3. 在 outcomes 中搜尋指定球員（使用模糊匹配）
-    4. 對每個博彩公司：
-       a. 取得 line（門檻）、over_odds、under_odds
-       b. 計算隱含機率（implied probability）
-       c. 計算水錢（vig）
-       d. 計算去水機率（fair probability）
-    5. 計算市場共識（多家博彩公司的平均）
-    6. 存入快取並返回
-    
+
+    This is a core feature of the application!
+
+    Flow:
+    1. Check cache (using event_id + market + regions + bookmakers as key)
+    2. If cache miss, call The Odds API for props data
+    3. Search for specified player in outcomes (fuzzy matching)
+    4. For each bookmaker:
+       a. Get line (threshold), over_odds, under_odds
+       b. Calculate implied probability
+       c. Calculate vig
+       d. Calculate fair probability (no-vig)
+    5. Calculate market consensus (average of all bookmakers)
+    6. Store in cache and return
+
     Args:
-        request: NoVigRequest 包含：
-            - event_id: 賽事 ID
-            - player_name: 球員名稱
-            - market: 市場類型（預設 player_points）
-            - regions: 地區代碼
-            - bookmakers: 指定博彩公司（可選）
-            - odds_format: 賠率格式
-    
+        request: NoVigRequest containing:
+            - event_id: Game ID
+            - player_name: Player name
+            - market: Market type (default player_points)
+            - regions: Region code
+            - bookmakers: Specific bookmakers (optional)
+            - odds_format: Odds format
+
     Returns:
-        NoVigResponse: 包含各博彩公司結果和市場共識
-    
+        NoVigResponse: Contains results from each bookmaker and market consensus
+
     Example Request:
         {
             "event_id": "abc123",
@@ -290,7 +290,7 @@ async def calculate_no_vig(request: NoVigRequest) -> NoVigResponse:
         bookmakers_data = snapshot.data.get("bookmakers", [])
         all_player_names = _collect_player_names(bookmakers_data, request.market)
         
-        # 3. 匹配球員名稱
+        # 3. Match player name
         matched_player = find_player(
             request.player_name,
             all_player_names
@@ -300,9 +300,9 @@ async def calculate_no_vig(request: NoVigRequest) -> NoVigResponse:
             suggestions = suggest_player_names(request.player_name, all_player_names, limit=5, threshold=70)
             if suggestions:
                 hint = ", ".join(f"{name} ({score})" for name, score in suggestions)
-                message = f"找不到球員 '{request.player_name}'。最接近的名稱：{hint}"
+                message = f"Player '{request.player_name}' not found. Closest names: {hint}"
             else:
-                message = f"找不到球員 '{request.player_name}'。可用球員：{all_player_names[:10]}"
+                message = f"Player '{request.player_name}' not found. Available players: {all_player_names[:10]}"
             return NoVigResponse(
                 event_id=request.event_id,
                 player_name=request.player_name,
@@ -313,7 +313,7 @@ async def calculate_no_vig(request: NoVigRequest) -> NoVigResponse:
                 **_snapshot_metadata(snapshot),
             )
         
-        # 4. 對每個博彩公司計算去水機率
+        # 4. Calculate no-vig probabilities for each bookmaker
         results: List[BookmakerResult] = []
         fair_probs_for_consensus = []
         
@@ -324,7 +324,7 @@ async def calculate_no_vig(request: NoVigRequest) -> NoVigResponse:
                 if market.get("key") != request.market:
                     continue
                 
-                # 找出該球員的 Over 和 Under
+                # Find Over and Under outcomes for player
                 over_outcome = None
                 under_outcome = None
                 line = None
@@ -341,7 +341,7 @@ async def calculate_no_vig(request: NoVigRequest) -> NoVigResponse:
                             if line is None:
                                 line = outcome.get("point")
                 
-                # 需要同時有 Over 和 Under 才能計算
+                # Require both Over and Under to calculate
                 if over_outcome is None or under_outcome is None or line is None:
                     continue
                 
@@ -351,19 +351,19 @@ async def calculate_no_vig(request: NoVigRequest) -> NoVigResponse:
                 if over_odds == 0 or under_odds == 0:
                     continue
                 
-                # 5. 計算機率
+                # 5. Calculate probabilities
                 try:
-                    # 隱含機率（含水）
+                    # Implied probabilities (with vig)
                     p_over_imp = american_to_prob(over_odds)
                     p_under_imp = american_to_prob(under_odds)
                     
-                    # 水錢
+                    # Vig (house edge)
                     vig = calculate_vig(p_over_imp, p_under_imp)
                     
-                    # 去水機率
+                    # No-vig (fair) probabilities
                     p_over_fair, p_under_fair = devig(p_over_imp, p_under_imp)
                     
-                    # 建構結果
+                    # Build result
                     result = BookmakerResult(
                         bookmaker=bookmaker_key,
                         line=line,
@@ -380,10 +380,10 @@ async def calculate_no_vig(request: NoVigRequest) -> NoVigResponse:
                     fair_probs_for_consensus.append((p_over_fair, p_under_fair))
                     
                 except (ValueError, ZeroDivisionError):
-                    # 計算錯誤，跳過此博彩公司
+                    # Calculation error, skip this bookmaker
                     continue
         
-        # 6. 計算市場共識
+        # 6. Calculate market consensus
         consensus = None
         if fair_probs_for_consensus:
             consensus_probs = calculate_consensus_mean(fair_probs_for_consensus)
@@ -394,14 +394,14 @@ async def calculate_no_vig(request: NoVigRequest) -> NoVigResponse:
                     p_under_fair=round(consensus_probs[1], 4)
                 )
         
-        # 7. 建構回應
+        # 7. Build response
         return NoVigResponse(
             event_id=request.event_id,
-            player_name=matched_player,  # 使用匹配後的正確名稱
+            player_name=matched_player,  # Use the matched name
             market=request.market,
             results=results,
             consensus=consensus,
-            message=None if results else "此球員在選定的博彩公司中沒有 props 資料",
+            message=None if results else "No props data for this player at the selected bookmakers",
             **_snapshot_metadata(snapshot),
         )
         
@@ -420,34 +420,34 @@ async def calculate_no_vig(request: NoVigRequest) -> NoVigResponse:
 @router.get(
     "/players/suggest",
     response_model=PlayerSuggestResponse,
-    summary="球員名稱建議",
-    description="取得指定賽事中可用的球員列表（用於 autocomplete）"
+    summary="Player name suggestion",
+    description="Get available player names for a specific game (for autocomplete)"
 )
 async def suggest_players(
-    event_id: str = Query(..., description="賽事 ID"),
-    q: str = Query(default="", description="搜尋關鍵字（可選）"),
-    market: str = Query(default="player_points", description="市場類型")
+    event_id: str = Query(..., description="Game ID"),
+    q: str = Query(default="", description="Search keyword (optional)"),
+    market: str = Query(default="player_points", description="Market type")
 ) -> PlayerSuggestResponse:
     """
-    取得球員名稱建議（用於 Autocomplete）
-    
+    Get player name suggestions (for Autocomplete)
+
     GET /api/nba/players/suggest?event_id=abc123&q=cur
-    
-    流程：
-    1. 檢查快取
-    2. 若快取未命中，呼叫 The Odds API 取得該場比賽的 props
-    3. 從 outcomes 中提取所有球員名稱
-    4. 若有搜尋關鍵字，進行過濾
-    5. 存入快取並返回
-    
+
+    Flow:
+    1. Check cache
+    2. If cache miss, call The Odds API for game props
+    3. Extract all player names from outcomes
+    4. Filter by keyword if given
+    5. Store in cache and return
+
     Args:
-        event_id: 賽事 ID
-        q: 搜尋關鍵字（用於過濾）
-        market: 市場類型
-    
+        event_id: Game ID
+        q: Search keyword (for filtering)
+        market: Market type
+
     Returns:
-        PlayerSuggestResponse: 球員名稱列表
-    
+        PlayerSuggestResponse: List of player names
+
     Example Response:
         {
             "players": ["Stephen Curry", "Seth Curry", "LeBron James"]
@@ -469,7 +469,7 @@ async def suggest_players(
             detail=str(e)
         )
     
-    # 5. 過濾（如果有搜尋關鍵字）
+    # 5. Filter if keyword is given
     if q:
         q_lower = q.lower()
         all_players = [p for p in all_players if q_lower in p.lower()]
@@ -480,31 +480,31 @@ async def suggest_players(
     )
 
 
-# ==================== CSV 球員歷史數據 API ====================
+# ==================== CSV Player History Data API ====================
 
 @router.get(
     "/csv/players",
     response_model=CSVPlayersResponse,
-    summary="取得 CSV 球員名單",
-    description="從 CSV 檔案中取得所有球員名單（用於 autocomplete）"
+    summary="Get CSV player list",
+    description="Get all player names from CSV file (for autocomplete)"
 )
 async def get_csv_players(
-    q: str = Query(default="", description="搜尋關鍵字（可選）")
+    q: str = Query(default="", description="Search keyword (optional)")
 ) -> CSVPlayersResponse:
     """
-    取得 CSV 檔案中的球員名單
-    
+    Get player names from the CSV file
+
     GET /api/nba/csv/players?q=curry
-    
-    此端點從 data/nba_player_game_logs.csv 讀取球員名單
-    用於前端球員選擇器的 autocomplete 功能
-    
+
+    This endpoint reads player names from data/nba_player_game_logs.csv
+    Used for frontend player autocomplete
+
     Args:
-        q: 搜尋關鍵字（不區分大小寫）
-    
+        q: Search keyword (case-insensitive)
+
     Returns:
-        CSVPlayersResponse: 球員名稱列表
-    
+        CSVPlayersResponse: List of player names
+
     Example Response:
         {
             "players": ["Stephen Curry", "Seth Curry"],
@@ -525,115 +525,115 @@ async def get_csv_players(
     except Exception as e:
         raise HTTPException(
             status_code=500,
-            detail=f"讀取 CSV 失敗: {str(e)}"
+            detail=f"Failed to read CSV: {str(e)}"
         )
 
 
 @router.post(
     "/csv/reload",
-    summary="重新載入 CSV 資料",
-    description="強制清除快取並重新讀取 CSV 檔案"
+    summary="Reload CSV data",
+    description="Force clear cache and reload CSV file"
 )
 async def reload_csv():
     """
-    強制重新載入 CSV 資料
-    
-    用於：
-    - CSV 檔案更新後刷新數據
-    - 修改程式碼後清除快取
-    
+    Force reload CSV data
+
+    Used for:
+    - Refreshing data after CSV file updates
+    - Clearing cache after code changes
+
     POST /api/nba/csv/reload
-    
+
     Returns:
-        dict: 重新載入結果，包含球員數量
+        dict: Reload result, including player count
     """
     try:
         csv_player_service.reload()
         return {
             "success": True,
-            "message": "CSV 資料已重新載入",
+            "message": "CSV data reloaded",
             "total_players": len(csv_player_service.get_all_players())
         }
     except Exception as e:
         raise HTTPException(
             status_code=500,
-            detail=f"重新載入失敗: {str(e)}"
+            detail=f"Reload failed: {str(e)}"
         )
 
 
 @router.get(
     "/player-history",
     response_model=PlayerHistoryResponse,
-    summary="取得球員歷史數據統計",
-    description="計算球員在指定指標上的歷史經驗機率和分佈"
+    summary="Get player historical stats",
+    description="Calculate empirical probability and distribution for player historical data on a specified metric"
 )
 async def get_player_history(
-    player: str = Query(..., description="球員名稱"),
+    player: str = Query(..., description="Player name"),
     metric: str = Query(
         default="points",
-        description="統計指標：points（得分）、assists（助攻）、rebounds（籃板）、pra（得分+籃板+助攻）"
+        description="Stat metric: points, assists, rebounds, pra (points+rebounds+assists)"
     ),
-    threshold: float = Query(..., description="閾值（例如 24.5）"),
+    threshold: float = Query(..., description="Threshold (e.g. 24.5)"),
     n: int = Query(
         default=0,
         ge=0,
-        description="最近 N 場比賽，0 表示全部"
+        description="Last N games, 0 means all"
     ),
     bins: int = Query(
         default=15,
         ge=5,
         le=50,
-        description="直方圖分箱數（5-50）"
+        description="Histogram bins (5-50)"
     ),
     exclude_dnp: bool = Query(
         default=True,
-        description="是否排除 DNP（Did Not Play，分鐘數為 0 的場次）"
+        description="Exclude DNP (Did Not Play, 0 minutes) games"
     ),
     opponent: Optional[str] = Query(
         default=None,
-        description="對手篩選（球隊名稱），None 表示全部對手"
+        description="Opponent filter (team name), None means all"
     ),
     is_starter: Optional[bool] = Query(
         default=None,
-        description="先發篩選：True（僅先發）、False（僅替補）、None（全部）"
+        description="Starter filter: True (starter only), False (bench only), None (all)"
     ),
     teammate_filter: Optional[str] = Query(
         default=None,
-        description="星級隊友篩選，多位以逗號分隔（例如 'Giannis Antetokounmpo,Khris Middleton'）"
+        description="Star teammate filter, comma separated (e.g. 'Giannis Antetokounmpo,Khris Middleton')"
     ),
     teammate_played: Optional[bool] = Query(
         default=None,
-        description="星級隊友出賽篩選：True（皆有上場）、False（皆未上場）、None（不篩選）"
+        description="Star teammate played filter: True (all played), False (all DNP), None (no filter)"
     )
 ) -> PlayerHistoryResponse:
     """
-    取得球員歷史數據統計
-    
+    Get player historical statistical summary
+
     GET /api/nba/player-history?player=Stephen+Curry&metric=points&threshold=24.5
     GET /api/nba/player-history?player=Stephen+Curry&metric=points&threshold=24.5&opponent=Lakers
     GET /api/nba/player-history?player=Stephen+Curry&metric=points&threshold=24.5&is_starter=true
-    
-    此端點計算球員在指定指標上的「經驗機率」（empirical probability）
-    這是基於歷史數據的統計，不是模型預測！
-    
-    機率定義（符合運彩 props 直覺）：
-    - Over: value > threshold（嚴格大於）
-    - Under: value < threshold（嚴格小於）
-    - 若 value == threshold，則不計入 Over 也不計入 Under
-    
+
+    This endpoint computes the "empirical probability" of a player on a statistic,
+    based on historical data, not model predictions!
+
+    Probability definition (aligned with sportsbook props):
+    - Over: value > threshold (strictly greater)
+    - Under: value < threshold (strictly less)
+    - If value == threshold, does not count toward Over or Under
+
     Args:
-        player: 球員名稱
-        metric: 統計指標（points/assists/rebounds/pra）
-        threshold: 閾值（可以是小數，如 24.5）
-        n: 最近 N 場比賽（0 表示使用全部歷史資料）
-        bins: 直方圖分箱數
-        exclude_dnp: 是否排除 DNP 場次
-        opponent: 對手篩選（可選）
-        is_starter: 先發狀態篩選（True=僅先發、False=僅替補、None=全部）
-    
+        player: Player name
+        metric: Statistical metric (points/assists/rebounds/pra)
+        threshold: Threshold (can be decimal, e.g. 24.5)
+        n: Last N games (0 means use all history)
+        bins: Histogram bin number
+        exclude_dnp: Whether to exclude DNP games
+        opponent: Opponent filter (optional)
+        is_starter: Starter status filter (True=only starter, False=only bench, None=all)
+
     Returns:
-        PlayerHistoryResponse: 包含機率、平均值、標準差、game_logs、對手列表
-    
+        PlayerHistoryResponse: Contains probabilities, mean, stddev, game_logs, opponent list
+
     Example Response:
         {
             "player": "Stephen Curry",
@@ -652,21 +652,21 @@ async def get_player_history(
             "histogram": [...]
         }
     """
-    # 驗證 metric 參數
+    # Validate metric param
     valid_metrics = ["points", "assists", "rebounds", "pra"]
     if metric not in valid_metrics:
         raise HTTPException(
             status_code=400,
-            detail=f"無效的 metric: {metric}。有效值: {valid_metrics}"
+            detail=f"Invalid metric: {metric}. Valid: {valid_metrics}"
         )
     
     try:
-        # 解析 teammate_filter 逗號分隔字串為列表
+        # Parse teammate_filter comma-separated string to list
         teammate_list = None
         if teammate_filter:
             teammate_list = [t.strip() for t in teammate_filter.split(",") if t.strip()]
         
-        # 呼叫 CSV 服務計算統計
+        # Call CSV service for statistics
         stats = csv_player_service.get_player_stats(
             player_name=player,
             metric=metric,
@@ -680,7 +680,7 @@ async def get_player_history(
             teammate_played=teammate_played
         )
         
-        # 轉換 histogram 為 Pydantic 模型
+        # Convert histogram to Pydantic model
         histogram_bins = [
             HistogramBin(
                 binStart=bin_data["binStart"],
@@ -690,7 +690,7 @@ async def get_player_history(
             for bin_data in stats.get("histogram", [])
         ]
         
-        # 轉換 game_logs 為 Pydantic 模型
+        # Convert game_logs to Pydantic model
         game_logs = [
             GameLog(
                 date=log["date"],
@@ -699,8 +699,8 @@ async def get_player_history(
                 value=log["value"],
                 is_over=log["is_over"],
                 team=log.get("team", ""),
-                minutes=log.get("minutes", 0.0),  # 上場時間
-                is_starter=log.get("is_starter", False)  # 是否先發
+                minutes=log.get("minutes", 0.0),  # Playing time
+                is_starter=log.get("is_starter", False)  # Starter status
             )
             for log in stats.get("game_logs", [])
         ]
@@ -733,5 +733,5 @@ async def get_player_history(
     except Exception as e:
         raise HTTPException(
             status_code=500,
-            detail=f"計算失敗: {str(e)}"
+            detail=f"Calculation failed: {str(e)}"
         )

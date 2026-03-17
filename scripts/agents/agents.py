@@ -14,6 +14,7 @@ Agent list:
   6. Synthesizer       – explain the deterministic result
 """
 
+import asyncio
 import json
 import os
 import sys
@@ -34,11 +35,12 @@ if os.path.join(_PROJECT_ROOT, "backend") not in sys.path:
 
 from date_utils import normalize_date
 from tools.historical import (
-    get_base_stats, get_starter_bench_split, get_opponent_history,
+    get_base_stats, get_role_conditioned_base_stats, get_starter_bench_split, get_opponent_history,
     get_trend_analysis, get_streak_info, get_minutes_role_trend,
     get_shooting_profile, get_variance_profile,
     get_schedule_context, get_game_script_splits,
     auto_teammate_impact, get_official_injury_report,
+    get_projected_lineup_consensus, get_player_lineup_context,
 )
 from tools.projection import (
     get_full_projection, calculate_edge,
@@ -60,6 +62,44 @@ def _get_llm():
     if _LLM is None:
         _LLM = ChatOpenAI(model="gpt-4o-mini", temperature=0.2)
     return _LLM
+
+
+def _merge_selected_pick_context(
+    parsed: Dict[str, Any],
+    event_context: Dict[str, Any],
+) -> Dict[str, Any]:
+    merged = dict(parsed)
+    selected_pick = event_context.get("selected_pick") or {}
+    if not selected_pick:
+        return merged
+
+    player_team = selected_pick.get("player_team", "")
+    home_team = selected_pick.get("home_team", "")
+    away_team = selected_pick.get("away_team", "")
+    opponent = merged.get("opponent", "")
+    if player_team == home_team:
+        opponent = away_team
+    elif player_team == away_team:
+        opponent = home_team
+
+    merged.update(
+        {
+            "player": selected_pick.get("player_name", merged.get("player", "")),
+            "metric": selected_pick.get("metric", merged.get("metric", "points")),
+            "threshold": selected_pick.get("threshold", merged.get("threshold", 0)),
+            "date": event_context.get("date") or merged.get("date", ""),
+            "direction": selected_pick.get("direction", merged.get("direction", "any")),
+            "event_id": selected_pick.get("event_id", merged.get("event_id", "")),
+            "home_team": home_team,
+            "away_team": away_team,
+            "opponent": opponent,
+            "needs_market": True,
+            "needs_historical": True,
+            "needs_projection": False,
+            "comparison_players": merged.get("comparison_players", []),
+        }
+    )
+    return merged
 
 # ===================================================================
 # 1. PLANNER
@@ -91,9 +131,10 @@ Rules:
 """
 
 
-def planner_node(state: Dict[str, Any]) -> Dict[str, Any]:
+async def planner_node(state: Dict[str, Any]) -> Dict[str, Any]:
     query = state.get("user_query", "")
-    resp = _get_llm().invoke([
+    event_context = state.get("event_context", {})
+    resp = await _get_llm().ainvoke([
         SystemMessage(content=_PLANNER_SYSTEM),
         HumanMessage(content=query),
     ])
@@ -117,6 +158,10 @@ def planner_node(state: Dict[str, Any]) -> Dict[str, Any]:
     raw_date = parsed.get("date", "")
     if raw_date:
         parsed["date"] = normalize_date(raw_date)
+    elif event_context.get("date"):
+        parsed["date"] = normalize_date(event_context.get("date"))
+
+    parsed = _merge_selected_pick_context(parsed, event_context)
 
     return {
         "parsed_query": parsed,
@@ -133,8 +178,9 @@ def planner_node(state: Dict[str, Any]) -> Dict[str, Any]:
 # 2. HISTORICAL + OPPORTUNITY AGENT
 # ===================================================================
 
-def historical_agent_node(state: Dict[str, Any]) -> Dict[str, Any]:
+async def historical_agent_node(state: Dict[str, Any]) -> Dict[str, Any]:
     pq = state.get("parsed_query", {})
+    event_context = state.get("event_context", {})
     player = pq.get("player", "")
     metric = pq.get("metric", "points")
     threshold = pq.get("threshold", 0)
@@ -156,19 +202,44 @@ def historical_agent_node(state: Dict[str, Any]) -> Dict[str, Any]:
     signals["get_variance_profile"] = get_variance_profile(player, metric)
     signals["get_schedule_context"] = get_schedule_context(player, date)
     signals["get_game_script_splits"] = get_game_script_splits(player, metric, threshold)
-    signals["auto_teammate_impact"] = auto_teammate_impact(player, metric, threshold)
+    signals["auto_teammate_impact"] = await asyncio.to_thread(auto_teammate_impact, player, metric, threshold)
 
     # Fetch injury report for the player's OWN team (not the opponent).
     # auto_teammate_impact already does this internally, but we also surface
     # the raw report so the Critic and Synthesizer can reference it directly.
     own_team = signals["auto_teammate_impact"].get("details", {}).get("team", "")
-    signals["get_own_team_injury_report"] = get_official_injury_report(
+    if not own_team:
+        selected_pick = event_context.get("selected_pick") or {}
+        own_team = selected_pick.get("player_team", "")
+    signals["get_own_team_injury_report"] = await get_official_injury_report(
         own_team or "unknown", date, player=player
     )
+    signals["get_own_team_projected_lineup"] = await get_projected_lineup_consensus(
+        own_team or "unknown", date
+    )
+    signals["get_player_lineup_context"] = await get_player_lineup_context(
+        player,
+        date,
+        team=own_team or "unknown",
+        opponent=opponent or "unknown",
+    )
+    player_is_projected_starter = signals["get_player_lineup_context"].get("details", {}).get(
+        "player_is_projected_starter"
+    )
+    if isinstance(player_is_projected_starter, bool):
+        signals["get_role_conditioned_base_stats"] = get_role_conditioned_base_stats(
+            player,
+            metric,
+            threshold,
+            player_is_projected_starter,
+        )
 
     # Also fetch opponent injury report if we know the opponent
     if opponent:
-        signals["get_opponent_injury_report"] = get_official_injury_report(
+        signals["get_opponent_injury_report"] = await get_official_injury_report(
+            opponent, date
+        )
+        signals["get_opponent_projected_lineup"] = await get_projected_lineup_consensus(
             opponent, date
         )
 
@@ -205,22 +276,23 @@ def projection_agent_node(state: Dict[str, Any]) -> Dict[str, Any]:
 # 4. MARKET AGENT
 # ===================================================================
 
-def market_agent_node(state: Dict[str, Any]) -> Dict[str, Any]:
+async def market_agent_node(state: Dict[str, Any]) -> Dict[str, Any]:
     pq = state.get("parsed_query", {})
     player = pq.get("player", "")
     metric = pq.get("metric", "points")
     threshold = pq.get("threshold", 0)
     date = pq.get("date", "")
     direction = pq.get("direction", "over")
+    event_id = pq.get("event_id", "")
 
     signals: Dict[str, Any] = {}
-    signals["get_current_market"] = get_current_market(player, metric, date)
-    signals["get_line_movement"] = get_line_movement(player, metric, date)
-    signals["get_best_price"] = get_best_price(player, metric, direction, date)
-    signals["get_market_quote_for_line"] = get_market_quote_for_line(
-        player, metric, threshold, direction, date
+    signals["get_current_market"] = await get_current_market(player, metric, date, event_id=event_id)
+    signals["get_line_movement"] = await get_line_movement(player, metric, date, event_id=event_id)
+    signals["get_best_price"] = await get_best_price(player, metric, direction, date, event_id=event_id)
+    signals["get_market_quote_for_line"] = await get_market_quote_for_line(
+        player, metric, threshold, direction, date, event_id=event_id
     )
-    signals["get_bookmaker_spread"] = get_bookmaker_spread(player, metric, date)
+    signals["get_bookmaker_spread"] = await get_bookmaker_spread(player, metric, date, event_id=event_id)
 
     return {
         "market_signals": signals,
@@ -263,8 +335,10 @@ IMPORTANT – Direction context:
   side the user is asking about.
 - model_probability and market_implied_probability are ALREADY adjusted for that
   direction. For example, if direction="under", model_probability = P(under).
+- query_aligned_context is the canonical, direction-aware explanation payload.
+  Use it for any user-facing probability or side-specific statement.
 - hit_rate and shrunk_rate in raw signal details are ALWAYS P(over > threshold).
-  When direction="under", the relevant probability is 1 - hit_rate.
+  They are audit-only and must not be quoted as under probabilities.
 
 Required checks:
 - Double-counting risk across trend / shooting / recent form
@@ -274,6 +348,8 @@ Required checks:
   what is the chemistry_delta for each one (positive = player does better WITH
   the star, so losing them HURTS)? Has the scorecard adequately accounted for
   the combined impact of multiple missing teammates?
+- PROJECTED LINEUPS: Is the player still in the projected starting five? Are
+  the free lineup sources aligned or still moving?
 - Opponent injury report: Does the opponent being weakened or strong affect
   game script and therefore player opportunity?
 - High variance with weak payout edge
@@ -289,7 +365,7 @@ Output ONLY a JSON object:
 """
 
 
-def critic_node(state: Dict[str, Any]) -> Dict[str, Any]:
+async def critic_node(state: Dict[str, Any]) -> Dict[str, Any]:
     scorecard = state.get("scorecard", {})
     hist = state.get("historical_signals", {})
     market = state.get("market_signals", {})
@@ -300,6 +376,7 @@ def critic_node(state: Dict[str, Any]) -> Dict[str, Any]:
 
     summary = json.dumps({
         "scorecard": scorecard,
+        "query_aligned_context": scorecard.get("query_aligned_context", {}),
         "data_quality_flags": flags,
         "base_stats_signal": hist.get("get_base_stats", {}).get("signal"),
         "base_stats_n": hist.get("get_base_stats", {}).get("sample_size"),
@@ -309,9 +386,11 @@ def critic_node(state: Dict[str, Any]) -> Dict[str, Any]:
         "teammate_scenario": tm_details.get("today_scenario"),
         "teammate_chemistry_details": tm_details.get("teammate_chemistry", []),
         "own_team_injury_report": own_inj.get("injuries", []),
+        "own_team_projected_lineup": hist.get("get_own_team_projected_lineup", {}),
+        "player_lineup_context": hist.get("get_player_lineup_context", {}),
     }, indent=2, default=str)
 
-    resp = _get_llm().invoke([
+    resp = await _get_llm().ainvoke([
         SystemMessage(content=_CRITIC_SYSTEM),
         HumanMessage(content=summary),
     ])
@@ -350,8 +429,11 @@ IMPORTANT – Direction context:
 - model_probability and market_implied_probability are ALREADY adjusted for that
   direction. For example, if direction="under", model_probability = P(under),
   market_implied_probability = P(under), and expected_value_pct is for the under side.
+- query_aligned_context is the canonical, direction-aware explanation payload.
+  Any user-facing probability statement in summary or dimensions.detail MUST come
+  from query_aligned_context.*.query_probability.
 - hit_rate and shrunk_rate in raw signal details are ALWAYS P(over > threshold).
-  When direction="under", the relevant probability is 1 - hit_rate.
+  They are audit-only and must not be quoted as under probabilities.
 - When explaining to the user, always tie model_probability and EV to the user's
   bet direction. E.g. "Model estimates a 66.5% probability of going UNDER."
 
@@ -365,7 +447,7 @@ Output ONLY a JSON object:
   "confidence": <float 0-1>,
   "model_probability": <float>,
   "market_implied_probability": <float or null>,
-  "expected_value_pct": <float>,
+  "expected_value_pct": <float or null>,
   "dimensions": {
     "historical": {"signal": "...", "reliability": <float>, "detail": "..."},
     "trend_role": {"signal": "...", "reliability": <float>, "detail": "..."},
@@ -374,6 +456,7 @@ Output ONLY a JSON object:
     "schedule": {"signal": "...", "reliability": <float>, "detail": "..."},
     "own_team_injuries": {"signal": "...", "reliability": <float>,
       "detail": "list OUT/QUE teammates and chemistry_delta impact on target player"},
+    "lineup": {"signal": "...", "reliability": <float>, "detail": "..."},
     "projection": {"signal": "unavailable", "reliability": 0.0, "detail": "dummy data excluded"},
     "market": {"signal": "...", "reliability": <float>, "detail": "..."}
   },
@@ -388,7 +471,7 @@ Do NOT retry just because you feel uncertain.
 """
 
 
-def synthesizer_node(state: Dict[str, Any]) -> Dict[str, Any]:
+async def synthesizer_node(state: Dict[str, Any]) -> Dict[str, Any]:
     scorecard = state.get("scorecard", {})
     hist = state.get("historical_signals", {})
     market = state.get("market_signals", {})
@@ -397,6 +480,7 @@ def synthesizer_node(state: Dict[str, Any]) -> Dict[str, Any]:
 
     payload = json.dumps({
         "scorecard": scorecard,
+        "query_aligned_context": scorecard.get("query_aligned_context", {}),
         "critic_notes": critic_notes,
         "historical_base": hist.get("get_base_stats", {}),
         "trend": hist.get("get_trend_analysis", {}),
@@ -406,12 +490,15 @@ def synthesizer_node(state: Dict[str, Any]) -> Dict[str, Any]:
         "teammate_chemistry": hist.get("auto_teammate_impact", {}),
         "own_team_injury_report": hist.get("get_own_team_injury_report", {}),
         "opponent_injury_report": hist.get("get_opponent_injury_report", {}),
+        "own_team_projected_lineup": hist.get("get_own_team_projected_lineup", {}),
+        "opponent_projected_lineup": hist.get("get_opponent_projected_lineup", {}),
+        "player_lineup_context": hist.get("get_player_lineup_context", {}),
         "market_current": market.get("get_current_market", {}),
         "market_query_quote": market.get("get_market_quote_for_line", {}),
         "projection_status": "all_unavailable",
     }, indent=2, default=str)
 
-    resp = _get_llm().invoke([
+    resp = await _get_llm().ainvoke([
         SystemMessage(content=_SYNTH_SYSTEM),
         HumanMessage(content=payload),
     ])
@@ -427,7 +514,8 @@ def synthesizer_node(state: Dict[str, Any]) -> Dict[str, Any]:
             "confidence": scorecard.get("confidence", 0),
             "model_probability": scorecard.get("model_probability", 0),
             "market_implied_probability": scorecard.get("market_implied_probability"),
-            "expected_value_pct": scorecard.get("expected_value_pct", 0),
+            "expected_value_pct": scorecard.get("expected_value_pct"),
+            "query_aligned_context": scorecard.get("query_aligned_context", {}),
             "dimensions": {},
             "risk_factors": critic_notes,
             "summary": text,
@@ -437,6 +525,21 @@ def synthesizer_node(state: Dict[str, Any]) -> Dict[str, Any]:
 
     # Deterministic scoring is authoritative; the synthesizer only explains it.
     final["decision"] = scorecard.get("decision", final.get("decision", "avoid"))
+    for key in (
+        "confidence",
+        "model_probability",
+        "market_implied_probability",
+        "expected_value_pct",
+        "market_pricing_mode",
+        "queried_line",
+        "best_line",
+        "available_lines",
+        "best_book",
+        "best_odds",
+    ):
+        if key in scorecard:
+            final[key] = scorecard.get(key)
+    final["query_aligned_context"] = scorecard.get("query_aligned_context", {})
 
     needs_retry = final.get("needs_retry", False)
     iteration = state.get("iteration", 0)

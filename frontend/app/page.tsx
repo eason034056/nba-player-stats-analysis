@@ -200,6 +200,7 @@ export default function HomePage() {
 
         <EventList
           events={data?.events || []}
+          selectedDate={selectedDate}
           isLoading={isLoading}
         />
 

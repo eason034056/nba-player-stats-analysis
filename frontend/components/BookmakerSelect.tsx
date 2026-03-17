@@ -66,8 +66,8 @@ export function BookmakerSelect({
   return (
     <div className={cn(disabled && "opacity-50 pointer-events-none")}>
       {/* Label */}
-      <label className="block text-sm font-bold text-dark mb-3">
-        <Building2 className="inline w-4 h-4 mr-1.5" />
+      <label className="control-label mb-3">
+        <Building2 className="h-4 w-4 text-red" />
         Bookmakers
       </label>
 
@@ -76,12 +76,12 @@ export function BookmakerSelect({
         type="button"
         onClick={toggleSelectAll}
         className={cn(
-          "w-full mb-4 px-4 py-3 rounded-lg",
+          "mb-4 w-full rounded-full px-4 py-3",
           "flex items-center justify-between",
-          "border-2 transition-all duration-150 font-semibold",
+          "border transition-all duration-150 font-semibold",
           isAllSelected
-            ? "bg-yellow border-yellow text-dark"
-            : "bg-white border-dark/20 text-gray hover:border-dark"
+            ? "control-segment-active"
+            : "control-segment"
         )}
       >
         <span>{isAllSelected ? "✓ All Selected" : "Select All"}</span>
@@ -90,7 +90,7 @@ export function BookmakerSelect({
 
       {/* Featured bookmakers */}
       <div className="mb-4">
-        <h4 className="text-xs font-bold text-gray mb-2 uppercase tracking-wider">
+        <h4 className="mb-2 text-xs font-bold uppercase tracking-wider text-light">
           Featured Platforms
         </h4>
         <div className="grid grid-cols-2 gap-2">
@@ -103,17 +103,14 @@ export function BookmakerSelect({
                 type="button"
                 onClick={() => toggleBookmaker(bookmaker.key)}
                 className={cn(
-                  "px-3 py-2.5 rounded-lg text-sm font-medium",
+                  selected ? "control-chip-active" : "control-chip",
+                  "px-3 py-2.5 text-sm font-medium",
                   "flex items-center justify-between",
-                  "border-2 transition-all duration-150",
-                  selected
-                    ? "bg-dark border-dark text-white"
-                    : "bg-white border-dark/20 text-dark hover:border-dark"
                 )}
               >
-                <span className="truncate">{bookmaker.name}</span>
+                <span className="truncate text-inherit">{bookmaker.name}</span>
                 {selected && (
-                  <Check className="w-4 h-4 text-green-400 shrink-0 ml-2" />
+                  <Check className="ml-2 h-4 w-4 shrink-0 text-green-300" />
                 )}
               </button>
             );
@@ -126,7 +123,7 @@ export function BookmakerSelect({
         <button
           type="button"
           onClick={() => setShowOthers(!showOthers)}
-          className="flex items-center justify-between w-full mb-2 text-xs font-bold text-gray hover:text-dark transition-colors uppercase tracking-wider"
+          className="mb-2 flex w-full items-center justify-between text-xs font-bold uppercase tracking-wider text-light transition-colors hover:text-dark"
         >
           <span>Other Bookmakers ({otherBooks.length})</span>
           {showOthers ? (
@@ -147,17 +144,14 @@ export function BookmakerSelect({
                   type="button"
                   onClick={() => toggleBookmaker(bookmaker.key)}
                   className={cn(
-                    "px-3 py-2 rounded-lg text-xs",
+                    selected ? "control-chip-active" : "control-chip",
+                    "px-3 py-2 text-xs",
                     "flex items-center justify-between",
-                    "border-2 transition-all duration-150",
-                    selected
-                      ? "bg-dark border-dark text-white"
-                      : "bg-white border-dark/20 text-gray hover:border-dark hover:text-dark"
                   )}
                 >
-                  <span className="truncate">{bookmaker.name}</span>
+                  <span className="truncate text-inherit">{bookmaker.name}</span>
                   {selected && (
-                    <Check className="w-3.5 h-3.5 text-green-400 shrink-0 ml-1.5" />
+                    <Check className="ml-1.5 h-3.5 w-3.5 shrink-0 text-green-300" />
                   )}
                 </button>
               );
@@ -167,7 +161,7 @@ export function BookmakerSelect({
       </div>
 
       {/* Selected count */}
-      <p className="mt-4 text-xs text-gray">
+      <p className="control-hint mt-4">
         {isAllSelected ? (
           <>Will query all {BOOKMAKERS.length} bookmakers</>
         ) : (

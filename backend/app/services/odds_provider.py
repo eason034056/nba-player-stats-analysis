@@ -1,11 +1,11 @@
 """
-odds_provider.py - 賠率提供者抽象介面
+odds_provider.py - Abstract Odds Provider Interface
 
-定義與外部賠率 API 互動的抽象介面（Abstract Base Class）
-使用介面設計可以：
-1. 方便替換不同的賠率 API 供應商
-2. 方便進行單元測試（mock）
-3. 符合依賴反轉原則（DIP）
+Defines the abstract interface for interaction with external odds APIs (Abstract Base Class).
+Using an interface design has several benefits:
+1. Easy to swap different odds API providers
+2. Easy unit testing (mocking)
+3. Conforms to Dependency Inversion Principle (DIP)
 """
 
 from abc import ABC, abstractmethod
@@ -16,11 +16,11 @@ from datetime import datetime
 
 class OddsProvider(ABC):
     """
-    賠率提供者抽象基底類別
-    
-    定義所有賠率 API 必須實作的方法
-    ABC (Abstract Base Class): Python 的抽象類別裝飾器
-    abstractmethod: 標記必須由子類別實作的方法
+    Abstract base class for odds providers.
+
+    Defines all methods that an odds API must implement.
+    ABC (Abstract Base Class): Python's abstract class decorator.
+    abstractmethod: Marks methods that must be implemented by subclasses.
     """
     
     @abstractmethod
@@ -32,19 +32,19 @@ class OddsProvider(ABC):
         date_to: Optional[datetime] = None
     ) -> List[Dict[str, Any]]:
         """
-        取得賽事列表
-        
+        Retrieve the list of events.
+
         Args:
-            sport: 運動類型（如 "basketball_nba"）
-            regions: 地區代碼（如 "us"）
-            date_from: 開始日期（可選）
-            date_to: 結束日期（可選）
-        
+            sport: Type of sport (e.g., "basketball_nba")
+            regions: Region code (e.g., "us")
+            date_from: Start date (optional)
+            date_to: End date (optional)
+
         Returns:
-            賽事列表，每個賽事為一個字典
-        
+            List of events, each as a dictionary
+
         Raises:
-            OddsAPIError: 當 API 呼叫失敗時
+            OddsAPIError: When an API call fails
         """
         pass
 
@@ -52,11 +52,11 @@ class OddsProvider(ABC):
 @dataclass(frozen=True)
 class QuotaUsage:
     """
-    The Odds API 配額使用情況。
+    Odds API quota usage information.
 
-    - remaining: 剩餘可用請求數
-    - used: 已使用請求數
-    - last: 本次請求消耗量
+    - remaining: Number of remaining allowed requests
+    - used: Number of requests already used
+    - last: Number used in the most recent request
     """
 
     remaining: Optional[int] = None
@@ -87,44 +87,44 @@ class QuotaUsage:
         bookmakers: Optional[List[str]] = None
     ) -> Dict[str, Any]:
         """
-        取得單場賽事的賠率資料
+        Retrieve the odds data for a single event.
         
         Args:
-            sport: 運動類型
-            event_id: 賽事 ID
-            regions: 地區代碼
-            markets: 投注市場類型（如 "player_points"）
-            odds_format: 賠率格式（"american" 或 "decimal"）
-            bookmakers: 指定博彩公司列表（可選，None 表示全部）
+            sport: Type of sport
+            event_id: Event ID
+            regions: Region code
+            markets: Betting market type (e.g., "player_points")
+            odds_format: Odds format ("american" or "decimal")
+            bookmakers: List of specified bookmaker(s) (optional, None for all)
         
         Returns:
-            賠率資料字典
+            Odds data as a dictionary
         
         Raises:
-            OddsAPIError: 當 API 呼叫失敗時
+            OddsAPIError: When an API call fails
         """
         pass
 
 
 class OddsAPIError(Exception):
     """
-    賠率 API 錯誤例外類別
-    
-    用於封裝所有與外部賠率 API 相關的錯誤
-    包含狀態碼和訊息，方便除錯和錯誤處理
-    
+    Odds API error exception class.
+
+    Used to encapsulate all errors related to external odds APIs.
+    Contains status code and message for debugging and error handling.
+
     Attributes:
-        status_code: HTTP 狀態碼（如 401, 404, 500）
-        message: 錯誤訊息
+        status_code: HTTP status code (e.g., 401, 404, 500)
+        message: Error message
     """
     
     def __init__(self, message: str, status_code: Optional[int] = None):
         """
-        初始化 OddsAPIError
-        
+        Initialize OddsAPIError
+
         Args:
-            message: 錯誤訊息
-            status_code: HTTP 狀態碼（可選）
+            message: Error message
+            status_code: HTTP status code (optional)
         """
         self.message = message
         self.status_code = status_code
@@ -132,9 +132,9 @@ class OddsAPIError(Exception):
     
     def __str__(self) -> str:
         """
-        字串表示
-        
-        如果有狀態碼，會一併顯示
+        String representation
+
+        Status code is included if present.
         """
         if self.status_code:
             return f"[{self.status_code}] {self.message}"

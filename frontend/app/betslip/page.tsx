@@ -14,7 +14,8 @@
 
 "use client";
 
-import { useState, useRef, useCallback, useEffect } from "react";
+import { useState, useRef, useCallback, useEffect, useMemo } from "react";
+import { useQuery } from "@tanstack/react-query";
 import Link from "next/link";
 import { 
   Bot,
@@ -33,10 +34,13 @@ import {
 import { useBetSlip, type BetSlipPick } from "@/contexts/BetSlipContext";
 import { useAgentWidget } from "@/contexts/AgentWidgetContext";
 import { createAgentPickContextFromBetSlip } from "@/lib/agent-chat";
+import { getLineups } from "@/lib/api";
+import { buildEventDetailHref } from "@/lib/event-detail-link";
 import { TeamLogo } from "@/components/TeamLogo";
-import { getShortTeamName } from "@/lib/team-logos";
-import { METRIC_DISPLAY_NAMES, DIRECTION_DISPLAY_NAMES } from "@/lib/schemas";
-import { formatProbability } from "@/lib/utils";
+import { getCanonicalTeamCode, getShortTeamName } from "@/lib/team-logos";
+import { METRIC_DISPLAY_NAMES, DIRECTION_DISPLAY_NAMES, type TeamLineup } from "@/lib/schemas";
+import { formatProbability, getLocalDateString } from "@/lib/utils";
+import { LineupStatusBadge } from "@/components/LineupStatusBadge";
 
 // ==================== 輔助函數 ====================
 
@@ -82,13 +86,31 @@ function formatGameTime(isoString: string): string {
 /**
  * 單一 Pick 卡片（列表版本）
  */
-function BetSlipCard({ pick, onRemove }: { pick: BetSlipPick; onRemove: () => void }) {
+function BetSlipCard({
+  pick,
+  onRemove,
+  lineup,
+  isLineupLoading = false,
+  isLineupError = false,
+}: {
+  pick: BetSlipPick;
+  onRemove: () => void;
+  lineup?: TeamLineup | null;
+  isLineupLoading?: boolean;
+  isLineupError?: boolean;
+}) {
   const level = getProbabilityLevel(pick.probability);
   const metricName = METRIC_DISPLAY_NAMES[pick.metric] || pick.metric;
   const directionName = DIRECTION_DISPLAY_NAMES[pick.direction] || pick.direction;
   
   const marketKey = metricToMarket(pick.metric);
-  const detailHref = `/event/${pick.event_id}?player=${encodeURIComponent(pick.player_name)}&market=${marketKey}&threshold=${pick.threshold}`;
+  const detailHref = buildEventDetailHref({
+    eventId: pick.event_id,
+    commenceTime: pick.commence_time,
+    player: pick.player_name,
+    market: marketKey,
+    threshold: pick.threshold,
+  });
 
   return (
     <div className="card group animate-fade-in">
@@ -111,6 +133,14 @@ function BetSlipCard({ pick, onRemove }: { pick: BetSlipPick; onRemove: () => vo
                 )}
                 {pick.away_team} @ {pick.home_team}
               </p>
+              <div className="mt-3">
+                <LineupStatusBadge
+                  lineup={lineup}
+                  playerName={pick.player_name}
+                  isLoading={isLineupLoading}
+                  isError={isLineupError}
+                />
+              </div>
             </div>
             
             <button
@@ -433,6 +463,36 @@ export default function BetSlipPage() {
   const [isGenerating, setIsGenerating] = useState(false);
   const [copySuccess, setCopySuccess] = useState(false);
   const shareImageRef = useRef<HTMLDivElement>(null);
+  const lineupDates = useMemo(() => {
+    return Array.from(
+        new Set(
+          picks
+          .map((pick) => getLocalDateString(pick.commence_time))
+          .filter((value): value is string => Boolean(value)),
+      ),
+    ).sort();
+  }, [picks]);
+  const {
+    data: lineupResponses,
+    isLoading: isLineupsLoading,
+    isError: isLineupsError,
+  } = useQuery({
+    queryKey: ["lineups", "betslip", lineupDates],
+    queryFn: async () => Promise.all(lineupDates.map((date) => getLineups(date))),
+    enabled: lineupDates.length > 0,
+    staleTime: 60 * 1000,
+    refetchOnWindowFocus: false,
+  });
+  const lineupsByDateAndTeam = useMemo(() => {
+    return new Map(
+      (lineupResponses ?? []).flatMap((response) =>
+        response.lineups.map((lineup) => [
+          `${response.date}:${getCanonicalTeamCode(lineup.team)}`,
+          lineup,
+        ] as const),
+      ),
+    );
+  }, [lineupResponses]);
 
   /**
    * 生成圖片的核心函數
@@ -685,6 +745,13 @@ export default function BetSlipPage() {
                   key={pick.id}
                   pick={pick}
                   onRemove={() => removePick(pick.id)}
+                  lineup={
+                    lineupsByDateAndTeam.get(
+                      `${getLocalDateString(pick.commence_time)}:${getCanonicalTeamCode(pick.player_team)}`,
+                    ) ?? null
+                  }
+                  isLineupLoading={isLineupsLoading}
+                  isLineupError={isLineupsError}
                 />
               ))}
             </div>

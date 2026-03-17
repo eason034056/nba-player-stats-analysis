@@ -125,14 +125,14 @@ export function PlayerInput({
     <div className="space-y-4">
       {/* Search input */}
       <div className="relative">
-        <label className="block text-sm font-bold text-dark mb-2">
-          <Search className="inline w-4 h-4 mr-1.5" />
+        <label className="control-label mb-2">
+          <Search className="h-4 w-4 text-red" />
           Search Player
         </label>
 
         <div className="relative">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray" />
-          
+          <Search className="pointer-events-none absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-light" />
+
           <input
             ref={inputRef}
             type="text"
@@ -143,13 +143,13 @@ export function PlayerInput({
             disabled={disabled}
             placeholder="Enter player name, e.g., Stephen Curry"
             className={cn(
-              "input pl-10 pr-10",
-              disabled && "opacity-50 cursor-not-allowed"
+              "control-input pl-12 pr-11",
+              disabled && "cursor-not-allowed opacity-50"
             )}
           />
 
           {isLoadingSearch && (
-            <Loader2 className="absolute right-3 top-1/2 -translate-y-1/2 w-5 h-5 text-red animate-spin" />
+            <Loader2 className="absolute right-4 top-1/2 h-5 w-5 -translate-y-1/2 animate-spin text-red" />
           )}
         </div>
 
@@ -157,21 +157,21 @@ export function PlayerInput({
         {isOpen && filteredPlayers.length > 0 && (
           <ul
             ref={listRef}
-            className="absolute z-50 w-full mt-2 bg-white border-2 border-dark rounded-lg max-h-60 overflow-auto"
+            className="control-popover absolute z-50 mt-2 max-h-60 w-full"
           >
             {filteredPlayers.map((player, index) => (
               <li
                 key={player}
                 onClick={() => selectPlayer(player)}
                 className={cn(
-                  "px-4 py-3 cursor-pointer flex items-center gap-3 transition-colors duration-100",
+                  "control-option flex items-center gap-3 px-4 py-3",
                   index === highlightedIndex
-                    ? "bg-yellow text-dark"
-                    : "text-dark hover:bg-cream"
+                    ? "control-option-active"
+                    : "text-dark"
                 )}
               >
-                <User className="w-4 h-4 text-gray" />
-                <span className="font-medium">{player}</span>
+                <User className="h-4 w-4 text-light" />
+                <span className="font-medium text-inherit">{player}</span>
               </li>
             ))}
           </ul>
@@ -179,8 +179,8 @@ export function PlayerInput({
 
         {/* No results */}
         {isOpen && value.length >= 2 && !isLoadingSearch && filteredPlayers.length === 0 && (
-          <div className="absolute z-50 w-full mt-2 px-4 py-3 bg-white border-2 border-dark rounded-lg">
-            <p className="text-sm text-gray">
+          <div className="control-popover absolute z-50 mt-2 w-full px-4 py-3">
+            <p className="text-sm text-light">
               No matching players found
             </p>
           </div>
@@ -189,8 +189,8 @@ export function PlayerInput({
 
       {/* All players list */}
       <div>
-        <label className="block text-sm font-bold text-dark mb-2">
-          <Users className="inline w-4 h-4 mr-1.5" />
+        <label className="control-label mb-2">
+          <Users className="h-4 w-4 text-red" />
           All Players (Click to Select)
         </label>
 
@@ -201,7 +201,7 @@ export function PlayerInput({
             ))}
           </div>
         ) : allPlayerList.length > 0 ? (
-          <div className="max-h-64 overflow-y-auto rounded-lg border-2 border-dark/20 bg-white p-2">
+          <div className="control-popover max-h-64 p-2">
             <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
               {allPlayerList.map((player) => {
                 const isSelected = value === player;
@@ -212,37 +212,33 @@ export function PlayerInput({
                     onClick={() => selectPlayer(player)}
                     disabled={disabled}
                     className={cn(
-                      "px-3 py-2 rounded-lg text-sm text-left",
+                      isSelected ? "control-chip-active" : "control-chip",
+                      "px-3 py-2 text-left",
                       "flex items-center gap-2",
-                      "transition-all duration-150 border-2",
-                      "focus:outline-none",
-                      isSelected
-                        ? "bg-red border-red text-white"
-                        : "bg-white border-dark/20 text-dark hover:border-dark",
-                      disabled && "opacity-50 cursor-not-allowed"
+                      disabled && "cursor-not-allowed opacity-50"
                     )}
                   >
                     <User className={cn(
-                      "w-3.5 h-3.5 shrink-0",
-                      isSelected ? "text-white" : "text-gray"
+                      "h-3.5 w-3.5 shrink-0",
+                      isSelected ? "text-white" : "text-light"
                     )} />
-                    <span className="truncate font-medium">{player}</span>
+                    <span className="truncate font-medium text-inherit">{player}</span>
                   </button>
                 );
               })}
             </div>
           </div>
         ) : (
-          <div className="px-4 py-8 text-center bg-white rounded-lg border-2 border-dark/20">
-            <Users className="w-10 h-10 text-gray mx-auto mb-2" />
-            <p className="text-sm text-gray">
+          <div className="control-popover px-4 py-8 text-center">
+            <Users className="mx-auto mb-2 h-10 w-10 text-light" />
+            <p className="text-sm text-light">
               No player data available for this game yet
             </p>
           </div>
         )}
 
         {allPlayerList.length > 0 && (
-          <p className="mt-2 text-xs text-gray">
+          <p className="control-hint mt-2">
             {allPlayerList.length} players have Props data for this stat type
           </p>
         )}

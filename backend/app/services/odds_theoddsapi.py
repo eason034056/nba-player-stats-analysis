@@ -1,124 +1,159 @@
 """
-odds_theoddsapi.py - The Odds API 實作
+odds_theoddsapi.py - The Odds API Implementation
 
-實作 OddsProvider 介面，與 The Odds API v4 互動
-API 文件：https://the-odds-api.com/liveapi/guides/v4/
+Implements the OddsProvider interface and interacts with The Odds API v4.
+API Documentation: https://the-odds-api.com/liveapi/guides/v4/
 
-The Odds API 是一個專門提供運動賽事賠率的第三方服務
-支援多種運動和博彩公司
+The Odds API is a third-party service specializing in providing sports betting odds,
+supporting various sports and bookmakers.
 """
 
-import httpx
-from typing import List, Optional, Dict, Any, Tuple
+import json
+import logging
+from typing import Any, Dict, List, Optional, Tuple
 from datetime import datetime
+
+import httpx
+
 from app.settings import settings
 from app.services.odds_provider import OddsProvider, OddsAPIError, QuotaUsage
+
+logger = logging.getLogger(__name__)
 
 
 class TheOddsAPIProvider(OddsProvider):
     """
-    The Odds API v4 實作
-    
-    負責與 The Odds API 進行 HTTP 通訊
-    包含重試機制和錯誤處理
-    
-    API 端點：
-    - GET /v4/sports/{sport}/events - 取得賽事列表
-    - GET /v4/sports/{sport}/events/{eventId}/odds - 取得單場賠率
+    Implementation of The Odds API v4.
+
+    Handles HTTP communication with The Odds API,
+    including retry logic and error handling.
+
+    API Endpoints:
+    - GET /v4/sports/{sport}/events - get event list
+    - GET /v4/sports/{sport}/events/{eventId}/odds - get odds for a specific event
     """
-    
+
     def __init__(self):
         """
-        初始化 The Odds API Provider
-        
-        從 settings 取得：
-        - base_url: API 基礎 URL
-        - api_key: API 金鑰（用於認證）
+        Initialize The Odds API Provider
+
+        Retrieves from settings:
+        - base_url: Base API URL
+        - api_key: API key (for authentication)
         """
         self.base_url = settings.odds_api_base_url
         self.api_key = settings.odds_api_key
-    
+
     async def _make_request(
-        self, 
-        endpoint: str, 
+        self,
+        endpoint: str,
         params: Dict[str, Any],
         max_retries: int = 3
     ) -> Tuple[Any, Optional[QuotaUsage]]:
         """
-        發送 HTTP GET 請求到 The Odds API
-        
-        包含重試機制（retry with backoff）：
-        當請求失敗時，會重試最多 max_retries 次
-        
-        httpx: 現代化的 Python HTTP 客戶端
-        - 支援 async/await
-        - 比 requests 更適合用於非同步應用
-        
+        Send an HTTP GET request to The Odds API
+
+        Includes retry with backoff: 
+        If the request fails, will retry up to max_retries times.
+
+        httpx: modern Python HTTP client
+        - Supports async/await
+        - Better suited for async applications than requests
+
         Args:
-            endpoint: API 端點路徑（如 "/v4/sports/basketball_nba/events"）
-            params: 查詢參數字典
-            max_retries: 最大重試次數
-        
+            endpoint: API endpoint path (e.g. "/v4/sports/basketball_nba/events")
+            params: query parameters as dict
+            max_retries: maximum number of retries
+
         Returns:
-            API 回應的 JSON 資料
-        
+            JSON data from the API response
+
         Raises:
-            OddsAPIError: 當所有重試都失敗時
+            OddsAPIError: if all retries fail
         """
-        # 加入 API key 到參數中
+        # Add API key to parameters
         params["apiKey"] = self.api_key
-        
+
         url = f"{self.base_url}{endpoint}"
-        
+
         last_error = None
-        
-        # 重試迴圈
+
+        # Retry loop
         for attempt in range(max_retries):
             try:
-                # 使用 async with 確保連線正確關閉
+                # Use async with to ensure the connection is properly closed
                 async with httpx.AsyncClient(timeout=30.0) as client:
                     response = await client.get(url, params=params)
-                    
-                    # 檢查回應狀態碼
+                    usage = self._build_quota_usage(response)
+                    self._log_quota_usage(
+                        endpoint=endpoint,
+                        status_code=response.status_code,
+                        usage=usage,
+                    )
+
+                    # Check response status code
                     if response.status_code == 200:
-                        usage = QuotaUsage(
-                            remaining=self._parse_header_int(response.headers.get("x-requests-remaining")),
-                            used=self._parse_header_int(response.headers.get("x-requests-used")),
-                            last=self._parse_header_int(response.headers.get("x-requests-last")),
-                        )
                         return response.json(), usage
-                    
-                    # 處理各種錯誤狀態碼
+
+                    # Handle various error status codes
                     if response.status_code == 401:
                         raise OddsAPIError("Invalid API key", 401)
                     elif response.status_code == 404:
                         raise OddsAPIError("Resource not found", 404)
                     elif response.status_code == 422:
                         raise OddsAPIError(
-                            f"Invalid parameters: {response.text}", 
+                            f"Invalid parameters: {response.text}",
                             422
                         )
                     elif response.status_code == 429:
-                        # Rate limit exceeded，需要等待後重試
+                        # Rate limit exceeded; need to wait and retry
                         raise OddsAPIError("Rate limit exceeded", 429)
                     else:
                         raise OddsAPIError(
-                            f"API error: {response.text}", 
+                            f"API error: {response.text}",
                             response.status_code
                         )
-                        
+
             except httpx.TimeoutException:
                 last_error = OddsAPIError("Request timeout")
             except httpx.RequestError as e:
                 last_error = OddsAPIError(f"Request error: {str(e)}")
             except OddsAPIError as e:
-                # 對於 401（認證錯誤）和 422（參數錯誤），不需要重試
+                # For 401 (authentication error) and 422 (parameter error), no need to retry
                 if e.status_code in [401, 422]:
                     raise
                 last_error = e
-        
-        # 所有重試都失敗
+
+        # All retries failed
         raise last_error or OddsAPIError("Unknown error after retries")
+
+    def _build_quota_usage(self, response: httpx.Response) -> QuotaUsage:
+        return QuotaUsage(
+            remaining=self._parse_header_int(response.headers.get("x-requests-remaining")),
+            used=self._parse_header_int(response.headers.get("x-requests-used")),
+            last=self._parse_header_int(response.headers.get("x-requests-last")),
+        )
+
+    def _log_quota_usage(
+        self,
+        endpoint: str,
+        status_code: int,
+        usage: QuotaUsage,
+    ) -> None:
+        logger.info(
+            "odds_api_quota %s",
+            json.dumps(
+                {
+                    "endpoint": endpoint,
+                    "status_code": status_code,
+                    "remaining": usage.remaining,
+                    "used": usage.used,
+                    "last": usage.last,
+                    "total": usage.total,
+                },
+                sort_keys=True,
+            ),
+        )
 
     @staticmethod
     def _parse_header_int(value: Optional[str]) -> Optional[int]:
@@ -128,7 +163,7 @@ class TheOddsAPIProvider(OddsProvider):
             return int(value)
         except (TypeError, ValueError):
             return None
-    
+
     async def get_events(
         self,
         sport: str = "basketball_nba",
@@ -137,27 +172,27 @@ class TheOddsAPIProvider(OddsProvider):
         date_to: Optional[datetime] = None
     ) -> List[Dict[str, Any]]:
         """
-        取得 NBA 賽事列表
-        
-        呼叫 The Odds API 的 events 端點
-        API 端點：GET /v4/sports/{sport}/events
-        
-        API 文件：https://the-odds-api.com/liveapi/guides/v4/#get-events
-        
+        Get NBA event list
+
+        Calls The Odds API events endpoint
+        API Endpoint: GET /v4/sports/{sport}/events
+
+        API Docs: https://the-odds-api.com/liveapi/guides/v4/#get-events
+
         Args:
-            sport: 運動類型，預設 "basketball_nba"
-            regions: 地區代碼，預設 "us"
-            date_from: 開始日期篩選（可選）
-            date_to: 結束日期篩選（可選）
-        
+            sport: sport key, default "basketball_nba"
+            regions: region code, default "us"
+            date_from: start date filter (optional)
+            date_to: end date filter (optional)
+
         Returns:
-            賽事列表，每個賽事包含：
-            - id: 賽事 ID
-            - sport_key: 運動類型
-            - home_team: 主場球隊
-            - away_team: 客場球隊
-            - commence_time: 開始時間（ISO 8601）
-        
+            List of events, each event includes:
+            - id: event ID
+            - sport_key: sport key
+            - home_team: home team name
+            - away_team: away team name
+            - commence_time: start time (ISO 8601)
+
         Example:
             >>> provider = TheOddsAPIProvider()
             >>> events = await provider.get_events()
@@ -165,22 +200,22 @@ class TheOddsAPIProvider(OddsProvider):
             ...     print(f"{event['away_team']} @ {event['home_team']}")
         """
         endpoint = f"/v4/sports/{sport}/events"
-        
+
         params = {}
-        
-        # 日期篩選（如果提供）
-        # The Odds API 只接受 YYYY-MM-DDTHH:MM:SSZ 格式，不能有微秒
+
+        # Date filtering (if provided)
+        # The Odds API only accepts YYYY-MM-DDTHH:MM:SSZ format, no microseconds
         if date_from:
             params["commenceTimeFrom"] = date_from.strftime("%Y-%m-%dT%H:%M:%SZ")
         if date_to:
             params["commenceTimeTo"] = date_to.strftime("%Y-%m-%dT%H:%M:%SZ")
-        
-        # 發送請求
+
+        # Send request
         data, _ = await self._make_request(endpoint, params)
-        
-        # API 回傳的是賽事列表（陣列）
+
+        # API returns a list of events (array)
         return data if isinstance(data, list) else []
-    
+
     async def get_event_odds(
         self,
         sport: str = "basketball_nba",
@@ -191,32 +226,32 @@ class TheOddsAPIProvider(OddsProvider):
         bookmakers: Optional[List[str]] = None
     ) -> Dict[str, Any]:
         """
-        取得單場賽事的球員 props 賠率
-        
-        呼叫 The Odds API 的 event odds 端點
-        API 端點：GET /v4/sports/{sport}/events/{eventId}/odds
-        
-        API 文件：https://the-odds-api.com/liveapi/guides/v4/#get-event-odds
-        
-        注意：球員 props（如 player_points）屬於「非精選市場」，
-        需要使用 event-specific 端點而非 odds 端點
-        
+        Get player props odds for a given event
+
+        Calls The Odds API event odds endpoint
+        API Endpoint: GET /v4/sports/{sport}/events/{eventId}/odds
+
+        API Docs: https://the-odds-api.com/liveapi/guides/v4/#get-event-odds
+
+        Note: Player props (e.g. player_points) are "non-featured" markets,
+        so must use the event-specific endpoint, not /odds
+
         Args:
-            sport: 運動類型
-            event_id: 賽事 ID（從 get_events 取得）
-            regions: 地區代碼（影響可用的博彩公司）
-            markets: 市場類型（player_points, player_rebounds 等）
-            odds_format: 賠率格式
-                - "american": 美式（-110, +150）
-                - "decimal": 小數（1.91, 2.50）
-            bookmakers: 指定博彩公司（可選）
-        
+            sport: sport key
+            event_id: event ID (obtained from get_events)
+            regions: region code (influences available bookmakers)
+            markets: market type (e.g. player_points, player_rebounds, etc.)
+            odds_format: odds format
+                - "american": American (-110, +150)
+                - "decimal": Decimal (1.91, 2.50)
+            bookmakers: specific bookmakers to query (optional)
+
         Returns:
-            賠率資料，包含：
-            - id: 賽事 ID
-            - sport_key: 運動類型
-            - bookmakers: 博彩公司列表，每個包含 markets 和 outcomes
-        
+            Odds data, including:
+            - id: event ID
+            - sport_key: sport key
+            - bookmakers: list of bookmakers, each includes markets and outcomes
+
         Example:
             >>> odds = await provider.get_event_odds(
             ...     event_id="abc123",
@@ -226,20 +261,20 @@ class TheOddsAPIProvider(OddsProvider):
             ...     print(f"{bookmaker['key']}: {len(bookmaker['markets'])} markets")
         """
         endpoint = f"/v4/sports/{sport}/events/{event_id}/odds"
-        
+
         params = {
             "regions": regions,
             "markets": markets,
             "oddsFormat": odds_format
         }
-        
-        # 如果指定了博彩公司
+
+        # If specific bookmakers are given
         if bookmakers:
             params["bookmakers"] = ",".join(bookmakers)
-        
-        # 發送請求
+
+        # Send request
         data, _ = await self._make_request(endpoint, params)
-        
+
         return data
 
     async def get_event_odds_with_usage(
@@ -266,5 +301,5 @@ class TheOddsAPIProvider(OddsProvider):
         return data, usage
 
 
-# 建立全域實例
+# Create a global instance
 odds_provider = TheOddsAPIProvider()

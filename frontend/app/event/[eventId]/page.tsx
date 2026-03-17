@@ -22,20 +22,22 @@ import {
   AlertCircle,
   Calendar,
 } from "lucide-react";
-import { getEvents, calculateNoVig, getPlayerProjection } from "@/lib/api";
+import { getEvents, calculateNoVig, getPlayerProjection, getTeamLineup } from "@/lib/api";
 import { TeamLogo } from "@/components/TeamLogo";
 import {
   calculatorFormSchema,
   type CalculatorFormData,
   type NoVigResponse,
 } from "@/lib/schemas";
-import { formatFullDate } from "@/lib/utils";
+import { formatFullDate, getLocalDateString } from "@/lib/utils";
 import { PlayerInput } from "@/components/PlayerInput";
 import { BookmakerSelect } from "@/components/BookmakerSelect";
 import { MarketSelect, type MarketKey } from "@/components/MarketSelect";
 import { ResultsTable } from "@/components/ResultsTable";
 import { PlayerHistoryStats } from "@/components/PlayerHistoryStats";
 import { PlayerProjectionPanel } from "@/components/PlayerProjectionPanel";
+import { TeamLineupPanel } from "@/components/TeamLineupPanel";
+import { getCanonicalTeamCode } from "@/lib/team-logos";
 
 /**
  * Event Page Component
@@ -45,6 +47,7 @@ export default function EventPage() {
   const eventId = params.eventId as string;
 
   const searchParams = useSearchParams();
+  const routeDate = searchParams.get("date");
   const initialPlayer = searchParams.get("player") || "";
   const initialMarket = (searchParams.get("market") as MarketKey) || "player_points";
   const initialThreshold = searchParams.get("threshold") || "";
@@ -85,8 +88,8 @@ export default function EventPage() {
   const playerName = watch("player_name");
 
   const { data: eventsData, isLoading: isEventsLoading } = useQuery({
-    queryKey: ["events", "all"],
-    queryFn: () => getEvents(),
+    queryKey: ["events", routeDate || "all"],
+    queryFn: () => getEvents(routeDate || undefined),
     staleTime: 5 * 60 * 1000,
   });
 
@@ -95,10 +98,12 @@ export default function EventPage() {
   );
 
   // 從比賽時間取得日期（YYYY-MM-DD），用於投影 API 查詢
-  // commence_time 是 ISO 8601 格式，取前 10 個字元即為日期
+  // commence_time 是 ISO 8601 格式，需轉成本地日期避免 UTC 換日造成錯位
   const gameDate = currentEvent?.commence_time
-    ? currentEvent.commence_time.slice(0, 10)
+    ? getLocalDateString(currentEvent.commence_time)
     : undefined;
+  const awayTeamCode = currentEvent ? getCanonicalTeamCode(currentEvent.away_team) : "";
+  const homeTeamCode = currentEvent ? getCanonicalTeamCode(currentEvent.home_team) : "";
 
   // ==================== 投影資料查詢 ====================
   // 當球員被選中且比賽日期存在時，從後端取得該球員的投影數據
@@ -112,6 +117,28 @@ export default function EventPage() {
     enabled: !!playerName && !!gameDate,
     staleTime: 5 * 60 * 1000, // 5 分鐘內不重新取得
     retry: false, // 404（球員無投影）不需重試
+  });
+
+  const {
+    data: awayLineup,
+    isLoading: isAwayLineupLoading,
+  } = useQuery({
+    queryKey: ["teamLineup", awayTeamCode, gameDate],
+    queryFn: () => getTeamLineup(awayTeamCode, gameDate),
+    enabled: Boolean(awayTeamCode && gameDate),
+    staleTime: 60 * 1000,
+    retry: false,
+  });
+
+  const {
+    data: homeLineup,
+    isLoading: isHomeLineupLoading,
+  } = useQuery({
+    queryKey: ["teamLineup", homeTeamCode, gameDate],
+    queryFn: () => getTeamLineup(homeTeamCode, gameDate),
+    enabled: Boolean(homeTeamCode && gameDate),
+    staleTime: 60 * 1000,
+    retry: false,
   });
 
   // marketToProjectionMetric: 把 MarketKey 轉成投影面板用的 metric key
@@ -216,6 +243,27 @@ export default function EventPage() {
           </div>
         </div>
       </section>
+
+      {currentEvent ? (
+        <section className="mb-8">
+          <div className="mb-4">
+            <p className="section-eyebrow">Lineup Status</p>
+            <h2 className="mt-2 text-2xl font-semibold text-dark">Projected starters and confidence</h2>
+          </div>
+          <div className="grid gap-6 lg:grid-cols-2">
+            <TeamLineupPanel
+              lineup={awayLineup ?? null}
+              isLoading={isAwayLineupLoading}
+              title={`${awayTeamCode} lineup status`}
+            />
+            <TeamLineupPanel
+              lineup={homeLineup ?? null}
+              isLoading={isHomeLineupLoading}
+              title={`${homeTeamCode} lineup status`}
+            />
+          </div>
+        </section>
+      ) : null}
 
       <form onSubmit={handleSubmit(onSubmit)}>
         <div className="card mb-6">

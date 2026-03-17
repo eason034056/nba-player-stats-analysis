@@ -11,7 +11,7 @@
 
 import { Calendar, ChevronLeft, ChevronRight } from "lucide-react";
 import { format, addDays, subDays } from "date-fns";
-import { zhTW } from "date-fns/locale";
+import { enUS } from "date-fns/locale";
 import { cn, isToday as checkIsToday, isTomorrow as checkIsTomorrow } from "@/lib/utils";
 
 interface DatePickerProps {
@@ -28,7 +28,7 @@ export function DatePicker({ value, onChange }: DatePickerProps) {
   const currentDate = value ? new Date(value + "T00:00:00") : new Date();
   
   const formatDateString = (date: Date) => format(date, "yyyy-MM-dd");
-  const formatDisplayDate = (date: Date) => format(date, "MMM d, EEEE", { locale: zhTW });
+  const formatDisplayDate = (date: Date) => format(date, "MMM d · EEE", { locale: enUS });
 
   const today = formatDateString(new Date());
   const tomorrow = formatDateString(addDays(new Date(), 1));
@@ -47,17 +47,14 @@ export function DatePicker({ value, onChange }: DatePickerProps) {
   const isTomorrow = checkIsTomorrow(value);
 
   return (
-    <div className="flex items-center justify-center gap-6">
+    <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-center lg:gap-6">
       {/* Date navigation */}
-      <div className="flex items-center gap-2">
+      <div className="flex items-center justify-center gap-3">
         {/* Previous day button */}
         <button
           type="button"
           onClick={goToPreviousDay}
-          className="w-10 h-10 rounded-lg flex items-center justify-center
-                     border-2 border-dark text-dark
-                     hover:bg-dark hover:text-cream
-                     transition-all duration-150 active:scale-95"
+          className="control-nav-button"
           title="Previous Day"
         >
           <ChevronLeft className="w-5 h-5" />
@@ -65,14 +62,20 @@ export function DatePicker({ value, onChange }: DatePickerProps) {
 
         {/* Date display/selection area */}
         <div className="relative">
-          <div className="flex items-center gap-3 px-5 py-2.5 rounded-lg
-                          border-2 border-dark bg-white
-                          min-w-[200px] justify-center cursor-pointer
-                          hover:border-red transition-colors">
-            <Calendar className="w-5 h-5 text-red" />
-            <span className="font-bold text-dark">
-              {formatDisplayDate(currentDate)}
-            </span>
+          <div className="control-date-pill cursor-pointer">
+            <div className="flex items-center gap-3">
+              <div className="flex h-11 w-11 items-center justify-center rounded-full border border-white/10 bg-white/6">
+                <Calendar className="h-5 w-5 text-red" />
+              </div>
+              <div className="text-left">
+                <p className="text-[11px] uppercase tracking-[0.26em] text-light">
+                  Selected day
+                </p>
+                <span className="block text-lg font-semibold text-dark">
+                  {formatDisplayDate(currentDate)}
+                </span>
+              </div>
+            </div>
           </div>
           {/* Hidden date input */}
           <input
@@ -87,10 +90,7 @@ export function DatePicker({ value, onChange }: DatePickerProps) {
         <button
           type="button"
           onClick={goToNextDay}
-          className="w-10 h-10 rounded-lg flex items-center justify-center
-                     border-2 border-dark text-dark
-                     hover:bg-dark hover:text-cream
-                     transition-all duration-150 active:scale-95"
+          className="control-nav-button"
           title="Next Day"
         >
           <ChevronRight className="w-5 h-5" />
@@ -98,19 +98,15 @@ export function DatePicker({ value, onChange }: DatePickerProps) {
       </div>
 
       {/* Divider */}
-      <div className="w-px h-8 bg-dark/20" />
+      <div className="hidden h-10 w-px bg-white/10 lg:block" />
 
       {/* Quick buttons */}
-      <div className="flex items-center gap-2">
+      <div className="flex items-center justify-center gap-2">
         <button
           type="button"
           onClick={() => onChange(today)}
           className={cn(
-            "px-5 py-2.5 rounded-lg text-sm font-bold",
-            "border-2 transition-all duration-150 active:scale-95",
-            isToday
-              ? "bg-red border-red text-white"
-              : "bg-white border-dark text-dark hover:bg-dark hover:text-cream"
+            isToday ? "control-segment-active" : "control-segment"
           )}
         >
           Today
@@ -120,11 +116,7 @@ export function DatePicker({ value, onChange }: DatePickerProps) {
           type="button"
           onClick={() => onChange(tomorrow)}
           className={cn(
-            "px-5 py-2.5 rounded-lg text-sm font-bold",
-            "border-2 transition-all duration-150 active:scale-95",
-            isTomorrow
-              ? "bg-yellow border-yellow text-dark"
-              : "bg-white border-dark text-dark hover:bg-dark hover:text-cream"
+            isTomorrow ? "control-segment-active" : "control-segment"
           )}
         >
           Tomorrow

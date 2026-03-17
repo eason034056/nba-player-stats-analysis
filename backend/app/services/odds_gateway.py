@@ -1,12 +1,12 @@
 """
-odds_gateway.py - 共享 odds market snapshot gateway
+odds_gateway.py - Shared odds market snapshot gateway
 
-集中管理昂貴的 event odds 請求，提供：
-- 共享 snapshot cache
-- stale-while-revalidate
-- single-flight 去重
-- quota protection
-- 熱門 key 記錄與預熱
+Centralized management for expensive event odds requests, providing:
+- Shared snapshot cache
+- Stale-while-revalidate
+- Single-flight deduplication
+- Quota protection
+- Recording and prewarming hot keys
 """
 
 from __future__ import annotations
@@ -43,9 +43,10 @@ class MarketSnapshotResult:
 
 class OddsMarketGateway:
     """
-    唯一的昂貴 odds 入口。
+    The only entrance for expensive odds requests.
 
-    所有 event odds 相關請求都應先透過本 gateway，再由上層做派生計算。
+    All event odds-related requests should be processed through this gateway
+    before performing any calculations or derivations in upper layers.
     """
 
     def __init__(

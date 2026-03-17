@@ -1,25 +1,25 @@
 """
-projection_provider.py - SportsDataIO 投影資料 API 客戶端
+projection_provider.py - SportsDataIO Projection Data API Client
 
-封裝 SportsDataIO 的 Projected Player Game Stats API 呼叫。
+Encapsulates calls to the SportsDataIO Projected Player Game Stats API.
 
 API Endpoint:
     GET https://api.sportsdata.io/v3/nba/projections/json/PlayerGameProjectionStatsByDate/{date}
 
-特點：
-- 一次呼叫回傳該日期「所有球員」的投影數據（bulk endpoint）
-- 每日呼叫 1-3 次即可覆蓋所有需求
-- Free Trial 版本的 InjuryStatus / LineupStatus 會被 scrambled
+Features:
+- Returns projections for "all players" on a given date in a single call (bulk endpoint).
+- 1-3 calls per day cover all needs.
+- InjuryStatus / LineupStatus fields in Free Trial version may be scrambled.
 
-主要功能：
-- fetch_projections_by_date(): 呼叫 API 取得投影數據
-- normalize_projection(): 將 API 欄位名稱轉為內部格式（snake_case）
+Main Functions:
+- fetch_projections_by_date(): Call the API to get projection data.
+- normalize_projection(): Convert API field names to internal format (snake_case).
 
-依賴：
-- httpx: 異步 HTTP 客戶端（已在 requirements.txt 中）
-- settings: 讀取 API key 和 base URL
+Dependencies:
+- httpx: Asynchronous HTTP client (already in requirements.txt)
+- settings: For API key and base URL
 
-使用方式：
+Usage:
     from app.services.projection_provider import projection_provider
     
     projections = await projection_provider.fetch_projections_by_date("2026-02-08")
@@ -36,14 +36,14 @@ from app.settings import settings
 
 class SportsDataProjectionError(Exception):
     """
-    SportsDataIO API 呼叫錯誤
-    
-    用於封裝所有 SportsDataIO API 相關的錯誤，
-    讓上層呼叫者可以統一 catch 處理
-    
+    SportsDataIO API Call Error
+
+    Used to encapsulate all SportsDataIO API related errors,
+    so higher-level callers can catch them uniformly.
+
     Attributes:
-        status_code: HTTP 狀態碼（0 表示網路錯誤）
-        message: 錯誤描述
+        status_code: HTTP status code (0 indicates network error)
+        message: Error description
     """
     def __init__(self, status_code: int, message: str):
         self.status_code = status_code
@@ -51,25 +51,25 @@ class SportsDataProjectionError(Exception):
         super().__init__(f"SportsDataIO Error {status_code}: {message}")
 
 
-# ==================== 欄位名稱映射 ====================
+# ==================== Field Name Mapping ====================
 
-# SportsDataIO API 回傳的欄位名稱（PascalCase）→ 內部使用的欄位名稱（snake_case）
-# 只映射我們需要的欄位，忽略不需要的
+# Mapping from SportsDataIO's returned field names (PascalCase) to internal field names (snake_case)
+# Only the fields we need are mapped; unnecessary ones are ignored.
 FIELD_MAPPING: Dict[str, str] = {
-    # 基本資訊
+    # Basic Info
     "PlayerID": "player_id",
     "Name": "player_name",
     "Team": "team",
     "Position": "position",
     "GameID": "game_id",
     
-    # 對戰資訊
+    # Match Info
     "Opponent": "opponent",
     "HomeOrAway": "home_or_away",
     "Day": "day",
     "DateTime": "date_time",
     
-    # 核心投影數據
+    # Core Projection Data
     "Minutes": "minutes",
     "Points": "points",
     "Rebounds": "rebounds",
@@ -82,7 +82,7 @@ FIELD_MAPPING: Dict[str, str] = {
     "PersonalFouls": "personal_fouls",
     "PlusMinus": "plus_minus",
     
-    # 投籃數據
+    # Shooting Data
     "FieldGoalsMade": "field_goals_made",
     "FieldGoalsAttempted": "field_goals_attempted",
     "FieldGoalsPercentage": "field_goals_percentage",
@@ -93,7 +93,7 @@ FIELD_MAPPING: Dict[str, str] = {
     "FreeThrowsMade": "free_throws_made",
     "FreeThrowsAttempted": "free_throws_attempted",
     
-    # 先發與傷病
+    # Lineup and Injury
     "Started": "started",
     "LineupConfirmed": "lineup_confirmed",
     "LineupStatus": "lineup_status",
@@ -102,23 +102,23 @@ FIELD_MAPPING: Dict[str, str] = {
     "InjuryStartDate": "injury_start_date",
     "InjuryNotes": "injury_notes",
     
-    # 對位難度
+    # Opponent Difficulty
     "OpponentRank": "opponent_rank",
     "OpponentPositionRank": "opponent_position_rank",
     
-    # DFS 薪資
+    # DFS Salary
     "DraftKingsSalary": "draftkings_salary",
     "FanDuelSalary": "fanduel_salary",
     "YahooSalary": "yahoo_salary",
     "FantasyDataSalary": "fantasydata_salary",
     
-    # Fantasy 分數
+    # Fantasy Scores
     "FantasyPointsDraftKings": "fantasy_points_dk",
     "FantasyPointsFanDuel": "fantasy_points_fd",
     "FantasyPointsYahoo": "fantasy_points_yahoo",
     "FantasyPoints": "fantasy_points",
     
-    # 進階指標
+    # Advanced Metrics
     "UsageRatePercentage": "usage_rate_percentage",
     "PlayerEfficiencyRating": "player_efficiency_rating",
     "TrueShootingPercentage": "true_shooting_percentage",
@@ -126,7 +126,7 @@ FIELD_MAPPING: Dict[str, str] = {
     "StealsPercentage": "steals_percentage",
     "BlocksPercentage": "blocks_percentage",
     
-    # 中繼資料
+    # Metadata
     "Updated": "api_updated_at",
     "IsGameOver": "is_game_over",
     "SeasonType": "season_type",
@@ -136,25 +136,25 @@ FIELD_MAPPING: Dict[str, str] = {
 
 def _is_scrambled(value: Any) -> bool:
     """
-    偵測 Free Trial 的 scrambled 欄位
-    
-    SportsDataIO Free Trial 會將某些欄位（如 InjuryStatus）
-    替換成隨機的 scrambled 字串（看起來像亂碼）。
-    
-    判斷規則：
-    - 字串長度 > 20 且包含數字+字母混合 → 可能是 scrambled
-    - 常見的有效值（如 "Questionable", "Out", "Probable"）→ 不是 scrambled
-    
+    Detects scrambled fields in Free Trial.
+
+    SportsDataIO's Free Trial may replace certain fields (such as InjuryStatus)
+    with randomly scrambled strings (which look like gibberish).
+
+    Detection logic:
+    - String longer than 15 chars and containing a mix of digits and letters -> likely scrambled
+    - Common valid values (like "Questionable", "Out", "Probable") are not considered scrambled
+
     Args:
-        value: 要檢查的值
-    
+        value: The value to check
+
     Returns:
-        True 如果判定為 scrambled
+        True if determined to be scrambled
     """
     if not isinstance(value, str):
         return False
     
-    # 常見有效值白名單
+    # Whitelist of common valid values
     valid_values = {
         "questionable", "out", "doubtful", "probable", "day-to-day",
         "scrambled", "active", "inactive",
@@ -163,7 +163,7 @@ def _is_scrambled(value: Any) -> bool:
     if value.lower().strip() in valid_values:
         return False
     
-    # Scrambled 值通常是長字串，包含混合字母和數字
+    # Scrambled values are usually long strings containing mixed letters and digits
     if len(value) > 15:
         has_digit = any(c.isdigit() for c in value)
         has_alpha = any(c.isalpha() for c in value)
@@ -175,50 +175,49 @@ def _is_scrambled(value: Any) -> bool:
 
 class SportsDataProjectionProvider:
     """
-    SportsDataIO 投影資料 API 客戶端
-    
-    負責呼叫 SportsDataIO 的 Projected Player Game Stats API，
-    並將回傳的 PascalCase 欄位名稱正規化為 snake_case。
-    
-    特點：
-    - 使用 httpx 異步 HTTP 客戶端
-    - 內建重試邏輯（max_retries=2，指數退避）
-    - 自動偵測並處理 Free Trial 的 scrambled 欄位
-    
-    使用方式：
+    SportsDataIO Projection Data API Client
+
+    Responsible for calling the SportsDataIO Projected Player Game Stats API
+    and normalizing returned PascalCase field names to snake_case.
+
+    Features:
+    - Uses httpx async HTTP client
+    - Built-in retry logic (max_retries=2, exponential backoff)
+    - Automatically detects and handles scrambled fields from Free Trial
+
+    Usage:
         provider = SportsDataProjectionProvider()
         projections = await provider.fetch_projections_by_date("2026-02-08")
     """
     
     def __init__(self):
         """
-        初始化 API 客戶端
-        
-        從 settings 讀取 API key 和 base URL
-        max_retries: 最大重試次數（不含首次嘗試）
-        timeout: HTTP 請求逾時時間（秒）
+        Initialize API client
+
+        Reads API key and base URL from settings.
+        max_retries: Maximum number of retries (not counting the initial try)
+        timeout: HTTP request timeout in seconds
         """
         self.api_key = settings.sportsdata_api_key
         self.base_url = settings.sportsdata_base_url
         self.max_retries = 2
-        self.timeout = 30.0  # 秒
+        self.timeout = 30.0  # seconds
     
     async def fetch_projections_by_date(self, date: str) -> List[Dict[str, Any]]:
         """
-        呼叫 SportsDataIO API 取得指定日期的所有球員投影
-        
+        Fetches all player projections for the specified date from SportsDataIO API.
+
         API Endpoint:
             GET {base_url}/v3/nba/projections/json/PlayerGameProjectionStatsByDate/{date}
-        
-        認證方式：
+
+        Authentication:
             Header: Ocp-Apim-Subscription-Key: {api_key}
-        
+
         Args:
-            date: 比賽日期（EST 時區），格式 YYYY-MM-DD
-                  例如 "2026-02-08"
-        
+            date: Game date (EST timezone), format YYYY-MM-DD (e.g. "2026-02-08")
+
         Returns:
-            正規化後的投影資料列表，每個元素是一個 dict
+            List of normalized projection data, each element is a dict like:
             [
                 {
                     "player_id": 20000441,
@@ -232,12 +231,12 @@ class SportsDataProjectionProvider:
             ]
         
         Raises:
-            SportsDataProjectionError: API 呼叫失敗（包含重試後仍失敗）
+            SportsDataProjectionError: If the API call fails (even after all retries)
         """
         if not self.api_key:
             raise SportsDataProjectionError(
                 0, 
-                "SPORTSDATA_API_KEY 未設定。請在 .env 中設定 SPORTSDATA_API_KEY。"
+                "SPORTSDATA_API_KEY is not set. Please set SPORTSDATA_API_KEY in your .env."
             )
         
         url = (
@@ -249,7 +248,7 @@ class SportsDataProjectionProvider:
             "Ocp-Apim-Subscription-Key": self.api_key,
         }
         
-        # 重試邏輯：指數退避（1s, 2s, 4s...）
+        # Retry logic: exponential backoff (1s, 2s, 4s, ...)
         last_error: Optional[Exception] = None
         
         for attempt in range(self.max_retries + 1):
@@ -257,93 +256,93 @@ class SportsDataProjectionProvider:
                 async with httpx.AsyncClient(timeout=self.timeout) as client:
                     response = await client.get(url, headers=headers)
                 
-                # 檢查 HTTP 狀態碼
+                # Check HTTP status code
                 if response.status_code == 200:
                     raw_data = response.json()
                     
-                    # API 回傳空列表表示該日無投影資料
+                    # Empty list returned means no projections for the date
                     if not raw_data:
-                        print(f"ℹ️ SportsDataIO: {date} 無投影資料")
+                        print(f"ℹ️ SportsDataIO: No projections for {date}")
                         return []
                     
-                    # 正規化每筆投影資料
+                    # Normalize each projection record
                     normalized = [
                         self.normalize_projection(raw)
                         for raw in raw_data
-                        if raw.get("Name")  # 過濾掉沒有名字的無效紀錄
+                        if raw.get("Name")  # Exclude invalid records with no name
                     ]
                     
-                    print(f"✅ SportsDataIO: 取得 {len(normalized)} 筆投影資料 ({date})")
+                    print(f"✅ SportsDataIO: Got {len(normalized)} projections ({date})")
                     return normalized
                 
                 elif response.status_code == 401:
                     raise SportsDataProjectionError(
                         401,
-                        "API Key 無效或已過期。請檢查 SPORTSDATA_API_KEY 設定。"
+                        "API Key is invalid or expired. Please check your SPORTSDATA_API_KEY setting."
                     )
                 
                 elif response.status_code == 403:
                     raise SportsDataProjectionError(
                         403,
-                        "無權限存取此 API。可能需要升級 subscription。"
+                        "You do not have permission to access this API. Your subscription may need to be upgraded."
                     )
                 
                 elif response.status_code == 429:
-                    # Rate limit，等待後重試
+                    # Rate limit reached, wait before retrying
                     wait_time = 2 ** (attempt + 1)
-                    print(f"⚠️ SportsDataIO Rate Limit，等待 {wait_time}s 後重試...")
+                    print(f"⚠️ SportsDataIO Rate Limit, waiting {wait_time}s before retry...")
                     await asyncio.sleep(wait_time)
                     last_error = SportsDataProjectionError(
-                        429, "API 呼叫次數超過限制"
+                        429, "API rate limit exceeded"
                     )
                     continue
                 
                 else:
                     last_error = SportsDataProjectionError(
                         response.status_code,
-                        f"API 回傳非預期狀態碼: {response.status_code}"
+                        f"API returned unexpected status code: {response.status_code}"
                     )
             
             except httpx.TimeoutException:
                 last_error = SportsDataProjectionError(
-                    0, f"API 請求逾時（{self.timeout}s）"
+                    0, f"API request timed out ({self.timeout}s)"
                 )
             except httpx.HTTPError as e:
                 last_error = SportsDataProjectionError(
-                    0, f"HTTP 連線錯誤: {str(e)}"
+                    0, f"HTTP connection error: {str(e)}"
                 )
             except SportsDataProjectionError:
-                raise  # 401, 403 等不可重試的錯誤直接拋出
+                raise  # 401, 403 and other non-retryable errors are raised directly
             except Exception as e:
                 last_error = SportsDataProjectionError(
-                    0, f"未預期的錯誤: {str(e)}"
+                    0, f"Unexpected error: {str(e)}"
                 )
             
-            # 重試前等待（指數退避）
+            # Wait before retrying (exponential backoff)
             if attempt < self.max_retries:
                 wait_time = 2 ** attempt  # 1s, 2s
-                print(f"⚠️ SportsDataIO API 呼叫失敗（嘗試 {attempt + 1}/{self.max_retries + 1}），"
-                      f"等待 {wait_time}s 後重試...")
+                print(f"⚠️ SportsDataIO API call failed (attempt {attempt + 1}/{self.max_retries + 1}), "
+                      f"waiting {wait_time}s before retrying...")
                 await asyncio.sleep(wait_time)
         
-        # 所有重試都失敗
-        raise last_error or SportsDataProjectionError(0, "未知錯誤")
+        # All attempts failed
+        raise last_error or SportsDataProjectionError(0, "Unknown error")
     
     def normalize_projection(self, raw: Dict[str, Any]) -> Dict[str, Any]:
         """
-        將 SportsDataIO API 回傳的 PascalCase 欄位正規化為 snake_case
-        
-        處理邏輯：
-        1. 遍歷 FIELD_MAPPING 中定義的欄位
-        2. 如果 API 回傳中有該欄位，轉換名稱後加入結果
-        3. 對 scrambled 的字串欄位（Free Trial）設為 None
-        4. 計算衍生欄位（如 PRA = points + rebounds + assists）
-        
+        Normalize SportsDataIO API's PascalCase fields to snake_case
+
+        Logic:
+        1. Iterate over the fields defined in FIELD_MAPPING
+        2. If the API response contains the field, add it to output using internal name
+        3. If the field is a scrambled string (Free Trial), set it as None
+        4. Compute derived fields (such as PRA = points + rebounds + assists)
+
         Args:
-            raw: API 回傳的原始 dict（PascalCase 欄位名稱）
+            raw: API response dict (PascalCase field names)
         
         Returns:
-            正規化後的 dict（snake_case 欄位名稱）
+            Dictionary with normalized field names (snake_case)
         
         Example:
             >>> raw = {"Name": "Stephen Curry", "Points": 29.3, "Minutes": 34}
@@ -356,7 +355,7 @@ class SportsDataProjectionProvider:
             value = raw.get(api_field)
             
             if value is not None:
-                # 檢查是否為 Free Trial scrambled 值
+                # Check if this is a scrambled value due to Free Trial limitations
                 if isinstance(value, str) and _is_scrambled(value):
                     result[internal_field] = None
                 else:
@@ -364,7 +363,7 @@ class SportsDataProjectionProvider:
             else:
                 result[internal_field] = None
         
-        # 計算衍生欄位：PRA（Points + Rebounds + Assists）
+        # Derived field: PRA (Points + Rebounds + Assists)
         points = result.get("points") or 0
         rebounds = result.get("rebounds") or 0
         assists = result.get("assists") or 0
@@ -372,10 +371,10 @@ class SportsDataProjectionProvider:
             result.get("points"), result.get("rebounds"), result.get("assists")
         ]) else None
         
-        # 解析比賽日期（從 Day 欄位提取 YYYY-MM-DD）
+        # Parse game date (extract YYYY-MM-DD from Day field)
         day_value = result.get("day")
         if day_value and isinstance(day_value, str):
-            # API 回傳格式：2026-02-08T00:00:00
+            # API format: 2026-02-08T00:00:00
             result["date"] = day_value[:10]
         else:
             result["date"] = None
@@ -383,5 +382,5 @@ class SportsDataProjectionProvider:
         return result
 
 
-# 建立全域 API 客戶端實例
+# Create a global API client instance
 projection_provider = SportsDataProjectionProvider()

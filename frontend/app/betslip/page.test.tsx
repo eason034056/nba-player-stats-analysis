@@ -16,6 +16,7 @@ const navigationMocks = vi.hoisted(() => ({
 }));
 
 const apiMocks = vi.hoisted(() => ({
+  getLineups: vi.fn(),
   sendAgentChat: vi.fn(),
 }));
 
@@ -39,6 +40,7 @@ vi.mock("@/lib/api", async () => {
   const actual = await vi.importActual<typeof import("@/lib/api")>("@/lib/api");
   return {
     ...actual,
+    getLineups: apiMocks.getLineups,
     sendAgentChat: apiMocks.sendAgentChat,
   };
 });
@@ -48,6 +50,31 @@ describe("BetSlipPage", () => {
     clearBetSlip();
     window.sessionStorage.clear();
     navigationMocks.usePathname.mockReturnValue("/betslip");
+    apiMocks.getLineups.mockResolvedValue({
+      date: "2026-03-11",
+      team_count: 1,
+      fetched_at: "2026-03-12T00:00:00.000Z",
+      cache_state: "fresh",
+      lineups: [
+        {
+          date: "2026-03-11",
+          team: "LAL",
+          opponent: "GSW",
+          home_or_away: "HOME",
+          status: "projected",
+          starters: ["Stephen Curry", "Austin Reaves", "LeBron James", "Rui Hachimura", "Anthony Davis"],
+          bench_candidates: ["D'Angelo Russell"],
+          sources: ["rotowire", "rotogrinders"],
+          source_disagreement: false,
+          confidence: "high",
+          updated_at: "2026-03-12T00:00:00.000Z",
+          source_snapshots: {
+            rotowire: { team: "LAL", status: "confirmed", starters: ["Stephen Curry"] },
+            rotogrinders: { team: "LAL", status: "projected", starters: ["Stephen Curry"] },
+          },
+        },
+      ],
+    });
     apiMocks.sendAgentChat.mockResolvedValue({
       thread: "thread-1",
       action: "review_slip",
@@ -104,6 +131,7 @@ describe("BetSlipPage", () => {
     });
 
     expect(screen.getAllByText("Stephen Curry")).toHaveLength(2);
+    expect(await screen.findByText(/lineup aligned/i)).toBeInTheDocument();
     expect(
       screen.getByRole("button", { name: /download png/i }),
     ).toBeInTheDocument();
@@ -138,6 +166,21 @@ describe("BetSlipPage", () => {
           ]),
         }),
       }),
+    );
+  });
+
+  it("includes a local date query in detail links", async () => {
+    seedBetSlip([createBetSlipPick()]);
+
+    renderWithProviders(<BetSlipPage />);
+
+    const detailLink = await screen.findByRole("link", {
+      name: /view details/i,
+    });
+
+    expect(detailLink).toHaveAttribute(
+      "href",
+      "/event/evt-1?date=2026-03-11&player=Stephen+Curry&market=player_points&threshold=28.5",
     );
   });
 });

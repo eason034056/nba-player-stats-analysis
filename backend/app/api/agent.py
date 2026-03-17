@@ -17,6 +17,6 @@ router = APIRouter(
 )
 async def chat_with_agent(request: AgentChatRequest) -> AgentChatResponse:
     try:
-        return agent_chat_service.handle_chat(request)
+        return await agent_chat_service.handle_chat(request)
     except Exception as exc:
         raise HTTPException(status_code=500, detail=f"Agent chat failed: {exc}") from exc

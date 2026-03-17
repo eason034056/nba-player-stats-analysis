@@ -14,7 +14,7 @@ TOOL_EXPLANATIONS = {
     # ========== Historical Agent (Dimension 1-5) ==========
     "get_base_stats": {
         "name": "基礎統計 (Base Stats)",
-        "desc": "從 CSV 歷史資料計算該球員在指定指標（如 points）的整體表現：平均、中位數、標準差、過線率。⚠️ hit_rate/shrunk_rate 永遠是 P(over > threshold)，Under 查詢需用 1 - hit_rate。",
+        "desc": "從 CSV 歷史資料計算該球員在指定指標（如 points）的整體表現：平均、中位數、標準差、過線率。⚠️ hit_rate/shrunk_rate 永遠是 P(over > threshold)，user-facing 機率敘述應使用 scorecard.query_aligned_context。",
         "source": "nba_player_game_logs.csv",
         "fields": ["mean", "median", "hit_rate", "over_count", "total"],
     },
@@ -23,6 +23,12 @@ TOOL_EXPLANATIONS = {
         "desc": "比較球員擔任先發 vs 替補時的表現差異。先發平均較高可能偏向 over。⚠️ hit_rate 永遠是 P(over)。",
         "source": "csv (is_starter 欄位)",
         "fields": ["starter", "bench"],
+    },
+    "get_role_conditioned_base_stats": {
+        "name": "角色條件基準 (Role-Conditioned Base)",
+        "desc": "根據今日預測角色，只取該球員歷史先發或替補場次來建立 base rate，供 scorer 與全樣本混合。",
+        "source": "csv (is_starter 欄位)",
+        "fields": ["role", "role_label", "minimum_role_sample", "mean", "hit_rate", "shrunk_rate"],
     },
     "get_opponent_history": {
         "name": "對戰對手歷史 (vs Opponent)",
@@ -84,10 +90,28 @@ TOOL_EXPLANATIONS = {
         "source": "nba_lineup_rag (ESPN/CBS injury pages)",
         "fields": ["team", "injuries"],
     },
+    "get_own_team_projected_lineup": {
+        "name": "免費先發共識 (Own Team Lineup)",
+        "desc": "從 RotoWire + RotoGrinders 整理本隊的免費先發預測共識。",
+        "source": "rotowire + rotogrinders",
+        "fields": ["team", "starters", "confidence", "source_disagreement"],
+    },
+    "get_opponent_projected_lineup": {
+        "name": "免費先發共識 (Opponent Lineup)",
+        "desc": "從 RotoWire + RotoGrinders 整理對手的免費先發預測共識。",
+        "source": "rotowire + rotogrinders",
+        "fields": ["team", "starters", "confidence", "source_disagreement"],
+    },
+    "get_player_lineup_context": {
+        "name": "球員先發脈絡 (Player Lineup Context)",
+        "desc": "判斷該球員是否仍在預測先發，以及先發資訊是否過舊或來源衝突。",
+        "source": "rotowire + rotogrinders",
+        "fields": ["player_is_projected_starter", "freshness_risk", "source_disagreement"],
+    },
     # ========== Market Agent (Dimension 7) ==========
     "get_current_market": {
         "name": "當前盤口 (Current Market)",
-        "desc": "從 The Odds API 取得各家博彩商的賠率，計算 consensus line、去 vig 後的公平機率。⚠️ consensus_fair_over 永遠是 P(over)。Under 查詢需用 1 - consensus_fair_over。",
+        "desc": "從 The Odds API 取得各家博彩商的賠率，計算 consensus line、去 vig 後的公平機率。⚠️ consensus_fair_over 永遠是 P(over)。user-facing 機率敘述應使用 scorecard.query_aligned_context。",
         "source": "The Odds API (live)",
         "fields": ["consensus_fair_over", "consensus_line", "books", "n_books"],
     },
@@ -244,5 +268,19 @@ def log_all_agent_data(state: Dict[str, Any]) -> None:
         print("=" * 60)
         for f in flags:
             print(f"    - {f}")
+
+    scorecard = state.get("scorecard", {})
+    query_ctx = scorecard.get("query_aligned_context", {}) if isinstance(scorecard, dict) else {}
+    if query_ctx:
+        print("\n" + "=" * 60)
+        print("  【Query-Aligned Context】")
+        print("=" * 60)
+        historical_ctx = query_ctx.get("historical", {})
+        market_ctx = query_ctx.get("market", {})
+        print(f"    - query_side: {query_ctx.get('query_side', '?')}")
+        if historical_ctx.get("query_probability") is not None:
+            print(f"    - historical.query_probability: {historical_ctx.get('query_probability'):.4f}")
+        if market_ctx.get("query_probability") is not None:
+            print(f"    - market.query_probability: {market_ctx.get('query_probability'):.4f}")
 
     print("\n" + "━" * 64 + "\n")

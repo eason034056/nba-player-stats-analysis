@@ -1,36 +1,36 @@
 """
-projection_service.py - 投影資料混合取得 + 儲存服務（方案 C + D）
+projection_service.py - Hybrid Projection Data Fetch + Storage Service (Plan C + D)
 
-這是整個投影功能的核心模組，負責：
-1. 統一的投影資料取得入口（get_projections）
-2. 混合取得策略（Hybrid Fetch）：
-   - Redis 命中 + 新鮮 → 直接返回
-   - Redis 命中 + 過期 → 返回舊資料 + 背景刷新
-   - Redis 未命中 → 同步取得 + 快取
-3. 雙重儲存：Redis（快速讀取）+ PostgreSQL（持久化歷史）
-4. 提供歷史投影查詢（未來回測用）
+This is the core module for the projection feature, responsible for:
+1. Unified entry point for getting projection data (get_projections)
+2. Hybrid fetch strategy:
+   - Redis hit + fresh → return directly
+   - Redis hit + stale → return old data + background refresh
+   - Redis miss → fetch synchronously + cache
+3. Dual storage: Redis (fast read) + PostgreSQL (historical persistence)
+4. Provides historical projection queries (for future backtest use)
 
-策略說明：
-    SportsDataIO 的 Projection API 是 bulk endpoint，
-    一次 call 返回該日期所有球員的投影。
-    這意味著：
-    - 排程預取（每天 3 次）是最高效的方式
-    - On-demand 呼叫只在 cache miss 時作為 fallback
-    - 背景刷新用於資料過期但用戶不需要等待的場景
+Strategy notes:
+    The SportsDataIO Projection API is a bulk endpoint,
+    One call returns projections for all players for the specified date.
+    This means:
+    - Scheduled prefetching (3 times daily) is most efficient
+    - On-demand API calls are only a fallback on cache miss
+    - Background refresh is for when data is stale but users don't need to wait
 
-依賴：
-    - projection_provider: SportsDataIO API 客戶端
-    - cache_service: Redis 快取
-    - db_service: PostgreSQL 資料庫
+Dependencies:
+    - projection_provider: SportsDataIO API client
+    - cache_service: Redis cache
+    - db_service: PostgreSQL database
 
-使用方式：
+Usage:
     from app.services.projection_service import projection_service
     
-    # 取得今日所有球員投影（自動處理快取邏輯）
+    # Get projections for all players for a date (automatic cache handling)
     projections = await projection_service.get_projections("2026-02-08")
     # projections = {"Stephen Curry": {...}, "LeBron James": {...}, ...}
     
-    # 強制刷新（由排程器呼叫）
+    # Force refresh (called by scheduler)
     projections = await projection_service.fetch_and_store("2026-02-08")
 """
 
@@ -49,41 +49,41 @@ from app.services.db import db_service
 from app.settings import settings
 
 
-# ==================== Redis Key 設計 ====================
+# ==================== Redis Key Design ====================
 
 def _build_projections_key(date: str) -> str:
     """
-    建構投影資料的 Redis 快取 key
+    Construct the Redis cache key for projections
     
-    格式：projections:nba:{date}
-    例如：projections:nba:2026-02-08
+    Format: projections:nba:{date}
+    Example: projections:nba:2026-02-08
     
-    存的是一個 dict，key 為 player_name，value 為投影資料
+    Stores a dict, key is player_name, value is projection data
     """
     return f"projections:nba:{date}"
 
 
 def _build_projections_meta_key(date: str) -> str:
     """
-    建構投影資料中繼資訊的 Redis 快取 key
+    Construct the Redis cache key for projection metadata
     
-    格式：projections:nba:{date}:meta
+    Format: projections:nba:{date}:meta
     
-    存的是一個 dict：
+    Stores a dict like:
     {
-        "fetched_at": "2026-02-08T22:00:00Z",  # 抓取時間
-        "player_count": 250                       # 球員數量
+        "fetched_at": "2026-02-08T22:00:00Z",  # fetch timestamp
+        "player_count": 250                     # number of players
     }
     
-    用於判斷資料是否過期（stale check）
+    Used to determine data freshness (stale check)
     """
     return f"projections:nba:{date}:meta"
 
 
 # ==================== PostgreSQL UPSERT SQL ====================
 
-# ON CONFLICT ... DO UPDATE：如果已存在相同 (date, player_name, game_id) 的紀錄，
-# 就更新它而不是插入新的。這確保排程器多次呼叫不會產生重複資料。
+# ON CONFLICT ... DO UPDATE: If the same record (date, player_name, game_id) already exists,
+# update it instead of inserting a new one. This prevents duplicates if the scheduler runs multiple times.
 UPSERT_PROJECTION_SQL = """
 INSERT INTO player_projections (
     date, player_id, player_name, team, position,
@@ -147,7 +147,7 @@ DO UPDATE SET
     api_updated_at = EXCLUDED.api_updated_at
 """
 
-# 插入抓取日誌
+# Insert fetch log
 INSERT_FETCH_LOG_SQL = """
 INSERT INTO projection_fetch_logs (date, fetched_at, player_count, status, error_message, duration_ms)
 VALUES ($1, $2, $3, $4, $5, $6)
@@ -156,135 +156,135 @@ VALUES ($1, $2, $3, $4, $5, $6)
 
 class ProjectionService:
     """
-    投影資料混合取得 + 儲存服務
+    Hybrid projection data fetch + storage service
     
-    實作三條讀取路徑：
-    1. Redis 命中 + 新鮮（< max_stale_minutes）→ 直接返回
-    2. Redis 命中 + 過期（> max_stale_minutes）→ 返回舊資料 + 背景非同步刷新
-    3. Redis 未命中 → 同步呼叫 API + 存入 Redis 和 PostgreSQL + 返回
+    Implements three data retrieval paths:
+    1. Redis hit + fresh (< max_stale_minutes) → return directly
+    2. Redis hit + stale (> max_stale_minutes) → return old data + trigger async background refresh
+    3. Redis miss → synchronous API call + store to Redis and PostgreSQL + return
     
-    寫入路徑：
-    - 每次從 API 取得資料後，同時寫入 Redis 和 PostgreSQL
-    - Redis: 快速讀取，有 TTL（預設 2 小時）
-    - PostgreSQL: 持久化儲存，用於歷史回測
+    Write path:
+    - Each time data is fetched from the API, write to both Redis and PostgreSQL
+    - Redis: fast read, has TTL (default 2 hours)
+    - PostgreSQL: persistent history, used for backtesting
     """
     
     def __init__(self, max_stale_minutes: int = 120):
         """
-        初始化服務
+        Initialize the service
         
         Args:
-            max_stale_minutes: 資料過期閾值（分鐘）
-                超過此時間的快取資料會觸發背景刷新
-                預設 120 分鐘（2 小時），與 Redis TTL 一致
+            max_stale_minutes: Data freshness expiration threshold (minutes)
+                Cache older than this will trigger background refresh
+                Default 120 minutes (2 hours), same as Redis TTL
         """
         self.max_stale_minutes = max_stale_minutes
-        self._refresh_locks: Dict[str, bool] = {}  # 防止同一日期重複刷新
+        self._refresh_locks: Dict[str, bool] = {}  # Prevent duplicate refresh for same date
     
     async def get_projections(self, date: str) -> Dict[str, Dict[str, Any]]:
         """
-        統一的投影資料取得入口
+        Unified entry-point for getting projection data
         
-        這是最常被呼叫的方法，daily_analysis 和 API endpoint 都用它。
-        返回一個 dict，key 是球員名稱，value 是投影資料，
-        方便用 player_name 快速查找。
+        This is the most commonly called method, used by daily_analysis and API endpoints.
+        Returns a dict where key is player_name and value is the projection data,
+        for efficient lookup by player_name.
         
-        混合策略流程：
-        1. 查 Redis → 有資料 → 檢查新鮮度
-           - 新鮮 → 直接返回
-           - 過期 → 返回舊資料 + 背景刷新
-        2. 查 Redis → 無資料 → 同步呼叫 API → 存入雙層儲存 → 返回
-        3. API 也失敗 → 嘗試從 PostgreSQL 回讀 → 還是沒有 → 返回空 dict
+        Hybrid strategy flow:
+        1. Check Redis → if data exists → check staleness
+           - fresh → return directly
+           - stale → return old data + trigger background refresh
+        2. Redis miss → synchronous API call → store to both layers → return
+        3. If API also fails → try to read from PostgreSQL → still missing → return empty dict
         
         Args:
-            date: 比賽日期（YYYY-MM-DD）
+            date: game date (YYYY-MM-DD)
         
         Returns:
             Dict[player_name, projection_dict]
-            例如: {"Stephen Curry": {"points": 29.3, "minutes": 34.5, ...}}
+            Example: {"Stephen Curry": {"points": 29.3, "minutes": 34.5, ...}}
         """
         cache_key = _build_projections_key(date)
         meta_key = _build_projections_meta_key(date)
         
-        # 1. 嘗試從 Redis 讀取
+        # 1. Try to read from Redis
         cached_data = await cache_service.get(cache_key)
         cached_meta = await cache_service.get(meta_key)
         
         if cached_data and isinstance(cached_data, dict):
-            # Cache hit! 檢查新鮮度
+            # Cache hit! Check staleness
             if cached_meta and self._is_stale(cached_meta):
-                # 資料過期 → 返回舊資料，同時背景刷新
+                # Data is stale → return old data, trigger background refresh
                 self._trigger_background_refresh(date)
-                print(f"📦 投影資料 cache hit (stale, 背景刷新中): {date}")
+                print(f"📦 Projection data cache hit (stale, background refresh triggered): {date}")
             else:
-                print(f"📦 投影資料 cache hit (fresh): {date}")
+                print(f"📦 Projection data cache hit (fresh): {date}")
             
             return cached_data
         
-        # 2. Cache miss → 同步取得
-        print(f"📭 投影資料 cache miss: {date}，同步取得中...")
+        # 2. Cache miss → synchronous fetch
+        print(f"📭 Projection data cache miss: {date}, fetching synchronously...")
         try:
             return await self.fetch_and_store(date)
         except SportsDataProjectionError as e:
-            print(f"⚠️ SportsDataIO API 呼叫失敗: {e}")
+            print(f"⚠️ SportsDataIO API call failed: {e}")
             
-            # 3. Fallback: 嘗試從 PostgreSQL 讀取
+            # 3. Fallback: try to read from PostgreSQL
             pg_data = await self._read_from_postgres(date)
             if pg_data:
-                print(f"📀 從 PostgreSQL 回讀投影資料: {date} ({len(pg_data)} 筆)")
-                # 回填 Redis
+                print(f"📀 Projections loaded from PostgreSQL: {date} ({len(pg_data)} records)")
+                # Backfill Redis
                 await self._write_to_redis(date, pg_data)
                 return pg_data
             
-            print(f"❌ 無法取得投影資料: {date}")
+            print(f"❌ Unable to get projections: {date}")
             return {}
         except Exception as e:
-            print(f"❌ 取得投影資料時發生未預期錯誤: {e}")
+            print(f"❌ Unexpected error while getting projections: {e}")
             return {}
     
     async def get_player_projection(
         self, date: str, player_name: str
     ) -> Optional[Dict[str, Any]]:
         """
-        取得單一球員的投影資料
+        Get projection data for a single player
         
-        內部呼叫 get_projections() 取得所有球員資料後，
-        用 player_name 做 key lookup（O(1)）
+        Internally calls get_projections() for all data,
+        then does O(1) key lookup by player_name
         
         Args:
-            date: 比賽日期（YYYY-MM-DD）
-            player_name: 球員名稱
+            date: game date (YYYY-MM-DD)
+            player_name: player name
         
         Returns:
-            投影資料 dict，或 None（找不到）
+            projection dict, or None (if not found)
         """
         projections = await self.get_projections(date)
         return projections.get(player_name)
     
     async def fetch_and_store(self, date: str) -> Dict[str, Dict[str, Any]]:
         """
-        強制從 API 取得投影資料並存入雙層儲存
+        Force fetch projection data from API and store to both layers
         
-        這個方法用於：
-        1. 排程器的定時預取
-        2. cache miss 的同步 fallback
-        3. 手動觸發刷新
+        This method is used by:
+        1. Scheduler's periodic prefetch
+        2. Cache miss synchronous fallback
+        3. Manually triggered refresh
         
-        流程：
-        1. 呼叫 SportsDataIO API
-        2. 將列表轉為 dict（以 player_name 為 key）
-        3. 寫入 Redis（快取）
-        4. 寫入 PostgreSQL（持久化）
-        5. 記錄抓取日誌
+        Flow:
+        1. Call SportsDataIO API
+        2. Convert list to dict (by player_name as key)
+        3. Write to Redis (cache)
+        4. Write to PostgreSQL (persistence)
+        5. Log fetch
         
         Args:
-            date: 比賽日期（YYYY-MM-DD）
+            date: game date (YYYY-MM-DD)
         
         Returns:
             Dict[player_name, projection_dict]
         
         Raises:
-            SportsDataProjectionError: API 呼叫失敗
+            SportsDataProjectionError: if API fetch fails
         """
         start_time = time.time()
         error_message = None
@@ -292,28 +292,28 @@ class ProjectionService:
         player_count = 0
         
         try:
-            # 1. 呼叫 API
+            # 1. Call API
             raw_projections = await projection_provider.fetch_projections_by_date(date)
             player_count = len(raw_projections)
             
-            # 2. 轉為 dict（以 player_name 為 key）
-            # 如果同一球員有多筆（不同比賽），使用最後一筆
+            # 2. Convert to dict (by player_name)
+            # If the same player has more than one row (e.g. multiple games), use the last one
             projections_dict: Dict[str, Dict[str, Any]] = {}
             for proj in raw_projections:
                 name = proj.get("player_name")
                 if name:
                     projections_dict[name] = proj
             
-            # 3. 寫入 Redis
+            # 3. Write to Redis
             await self._write_to_redis(date, projections_dict)
             
-            # 4. 寫入 PostgreSQL（非阻塞，失敗不影響主流程）
+            # 4. Write to PostgreSQL (non-blocking, failure does not affect main flow)
             try:
                 await self._write_to_postgres(date, raw_projections)
             except Exception as e:
-                print(f"⚠️ 寫入 PostgreSQL 失敗（不影響主流程）: {e}")
+                print(f"⚠️ Failed to write to PostgreSQL (ignored): {e}")
             
-            print(f"✅ 投影資料已取得並儲存: {date} ({player_count} 球員)")
+            print(f"✅ Projection data fetched and stored: {date} ({player_count} players)")
             return projections_dict
         
         except SportsDataProjectionError as e:
@@ -324,10 +324,10 @@ class ProjectionService:
         except Exception as e:
             status = "error"
             error_message = str(e)
-            raise SportsDataProjectionError(0, f"未預期錯誤: {e}")
+            raise SportsDataProjectionError(0, f"Unexpected error: {e}")
         
         finally:
-            # 5. 記錄抓取日誌（無論成功或失敗）
+            # 5. Log fetch (whether success or fail)
             duration_ms = int((time.time() - start_time) * 1000)
             await self._log_fetch(date, player_count, status, error_message, duration_ms)
     
@@ -335,16 +335,16 @@ class ProjectionService:
         self, player_name: str, n_days: int = 30
     ) -> List[Dict[str, Any]]:
         """
-        從 PostgreSQL 讀取球員的歷史投影資料
+        Load a player's historical projection data from PostgreSQL
         
-        用於未來的回測功能：比較投影值 vs 實際表現
+        Used for future backtesting: compare projections vs real performance
         
         Args:
-            player_name: 球員名稱
-            n_days: 回溯天數（預設 30 天）
+            player_name: player name
+            n_days: number of days to look back (default 30)
         
         Returns:
-            歷史投影列表，按日期降序排列
+            List of historical projections, ordered by date DESC
         """
         if not db_service.is_connected:
             return []
@@ -362,23 +362,23 @@ class ProjectionService:
             )
             return rows
         except Exception as e:
-            print(f"⚠️ 讀取歷史投影失敗: {e}")
+            print(f"⚠️ Failed to read historical projections: {e}")
             return []
     
-    # ==================== 內部方法 ====================
+    # ==================== Internal Methods ====================
     
     def _is_stale(self, meta: Dict[str, Any]) -> bool:
         """
-        判斷快取資料是否過期
+        Determine if cached data is stale
         
-        比較 meta 中的 fetched_at 時間與現在的差距，
-        如果超過 max_stale_minutes 就判定為過期。
+        Compare fetched_at in meta to now;
+        if older than max_stale_minutes, treat as stale.
         
         Args:
-            meta: 快取中繼資訊 {"fetched_at": "...", "player_count": N}
+            meta: cache meta information {"fetched_at": "...", "player_count": N}
         
         Returns:
-            True 如果資料已過期
+            True if stale
         """
         fetched_at_str = meta.get("fetched_at")
         if not fetched_at_str:
@@ -386,7 +386,7 @@ class ProjectionService:
         
         try:
             fetched_at = datetime.fromisoformat(fetched_at_str)
-            # 確保有時區資訊
+            # Ensure timezone info
             if fetched_at.tzinfo is None:
                 fetched_at = fetched_at.replace(tzinfo=timezone.utc)
             
@@ -401,18 +401,18 @@ class ProjectionService:
     
     def _trigger_background_refresh(self, date: str):
         """
-        觸發背景非同步刷新
+        Trigger asynchronous background refresh
         
-        使用 asyncio.create_task() 在背景執行 API 呼叫，
-        不阻塞當前請求。
+        Uses asyncio.create_task() to call API in the background,
+        without blocking the current request.
         
-        使用 _refresh_locks 防止同一日期的重複刷新：
-        如果已經有一個刷新任務在跑，就不再啟動新的。
+        Uses _refresh_locks to prevent duplicate refresh for same date:
+        if a refresh job is already running, do not start a new one.
         
         Args:
-            date: 比賽日期（YYYY-MM-DD）
+            date: game date (YYYY-MM-DD)
         """
-        # 防止重複刷新
+        # Prevent duplicate refresh
         if self._refresh_locks.get(date):
             return
         
@@ -421,40 +421,40 @@ class ProjectionService:
         async def _do_refresh():
             try:
                 await self.fetch_and_store(date)
-                print(f"🔄 背景刷新完成: {date}")
+                print(f"🔄 Background refresh complete: {date}")
             except Exception as e:
-                print(f"⚠️ 背景刷新失敗: {date} - {e}")
+                print(f"⚠️ Background refresh failed: {date} - {e}")
             finally:
                 self._refresh_locks.pop(date, None)
         
-        # 建立背景任務
+        # Launch background task
         asyncio.create_task(_do_refresh())
-        print(f"🔄 已觸發背景刷新: {date}")
+        print(f"🔄 Background refresh triggered: {date}")
     
     async def _write_to_redis(
         self, date: str, projections_dict: Dict[str, Dict[str, Any]]
     ):
         """
-        將投影資料寫入 Redis
+        Write projection data to Redis
         
-        寫入兩個 key：
-        1. projections:nba:{date} → 完整投影資料（dict）
-        2. projections:nba:{date}:meta → 中繼資訊（fetched_at, player_count）
+        Writes two keys:
+        1. projections:nba:{date} → full projection dictionary
+        2. projections:nba:{date}:meta → meta info (fetched_at, player_count)
         
-        TTL 使用 settings.cache_ttl_projections（預設 7200 秒 = 2 小時）
+        TTL uses settings.cache_ttl_projections (default 7200s = 2h)
         
         Args:
-            date: 比賽日期
-            projections_dict: 投影資料（以 player_name 為 key）
+            date: game date
+            projections_dict: projections keyed by player_name
         """
         cache_key = _build_projections_key(date)
         meta_key = _build_projections_meta_key(date)
         ttl = settings.cache_ttl_projections
         
-        # 寫入投影資料
+        # Write main projection data
         await cache_service.set(cache_key, projections_dict, ttl=ttl)
         
-        # 寫入中繼資訊
+        # Write metadata
         meta = {
             "fetched_at": datetime.now(timezone.utc).isoformat(),
             "player_count": len(projections_dict),
@@ -463,25 +463,25 @@ class ProjectionService:
     
     async def _write_to_postgres(self, date: str, projections: List[Dict[str, Any]]):
         """
-        將投影資料寫入 PostgreSQL
+        Write projection data to PostgreSQL
         
-        使用 UPSERT（INSERT ... ON CONFLICT DO UPDATE）確保冪等性：
-        - 如果該 (date, player_name, game_id) 不存在 → 插入
-        - 如果已存在 → 更新所有欄位
+        Uses UPSERT (INSERT ... ON CONFLICT DO UPDATE) for idempotence:
+        - If (date, player_name, game_id) does not exist → insert
+        - If exists → update all fields
         
         Args:
-            date: 比賽日期
-            projections: 正規化後的投影資料列表
+            date: game date
+            projections: normalized list of projections
         """
         if not db_service.is_connected:
             return
         
         now = datetime.now(timezone.utc)
         
-        # 準備批量 upsert 的參數
+        # Prepare batch upsert parameters
         args_list = []
         for proj in projections:
-            # 解析日期
+            # Date parsing
             proj_date = proj.get("date")
             if proj_date:
                 try:
@@ -491,7 +491,7 @@ class ProjectionService:
             else:
                 parsed_date = date_type.fromisoformat(date)
             
-            # 解析 API updated_at 時間
+            # API updated_at timestamp parsing
             api_updated = proj.get("api_updated_at")
             parsed_api_updated = None
             if api_updated and isinstance(api_updated, str):
@@ -505,54 +505,54 @@ class ProjectionService:
             args_list.append((
                 parsed_date,                           # $1 date
                 proj.get("player_id"),                 # $2 player_id
-                proj.get("player_name", ""),            # $3 player_name
-                proj.get("team"),                       # $4 team
-                proj.get("position"),                   # $5 position
-                proj.get("opponent"),                   # $6 opponent
-                proj.get("home_or_away"),               # $7 home_or_away
-                proj.get("game_id"),                    # $8 game_id
-                proj.get("minutes"),                    # $9 minutes
-                proj.get("points"),                     # $10 points
-                proj.get("rebounds"),                    # $11 rebounds
-                proj.get("assists"),                     # $12 assists
-                proj.get("steals"),                      # $13 steals
-                proj.get("blocked_shots"),               # $14 blocked_shots
-                proj.get("turnovers"),                   # $15 turnovers
-                proj.get("field_goals_made"),            # $16
-                proj.get("field_goals_attempted"),       # $17
-                proj.get("three_pointers_made"),         # $18
-                proj.get("three_pointers_attempted"),    # $19
-                proj.get("free_throws_made"),            # $20
-                proj.get("free_throws_attempted"),       # $21
-                proj.get("started"),                     # $22
-                proj.get("lineup_confirmed"),            # $23
-                proj.get("injury_status"),               # $24
-                proj.get("injury_body_part"),            # $25
-                proj.get("opponent_rank"),               # $26
-                proj.get("opponent_position_rank"),      # $27
-                proj.get("draftkings_salary"),           # $28
-                proj.get("fanduel_salary"),              # $29
-                proj.get("fantasy_points_dk"),           # $30
-                proj.get("fantasy_points_fd"),           # $31
-                proj.get("usage_rate_percentage"),       # $32
-                proj.get("player_efficiency_rating"),    # $33
-                now,                                     # $34 fetched_at
-                parsed_api_updated,                      # $35 api_updated_at
+                proj.get("player_name", ""),           # $3 player_name
+                proj.get("team"),                      # $4 team
+                proj.get("position"),                  # $5 position
+                proj.get("opponent"),                  # $6 opponent
+                proj.get("home_or_away"),              # $7 home_or_away
+                proj.get("game_id"),                   # $8 game_id
+                proj.get("minutes"),                   # $9 minutes
+                proj.get("points"),                    # $10 points
+                proj.get("rebounds"),                  # $11 rebounds
+                proj.get("assists"),                   # $12 assists
+                proj.get("steals"),                    # $13 steals
+                proj.get("blocked_shots"),             # $14 blocked_shots
+                proj.get("turnovers"),                 # $15 turnovers
+                proj.get("field_goals_made"),          # $16
+                proj.get("field_goals_attempted"),     # $17
+                proj.get("three_pointers_made"),       # $18
+                proj.get("three_pointers_attempted"),  # $19
+                proj.get("free_throws_made"),          # $20
+                proj.get("free_throws_attempted"),     # $21
+                proj.get("started"),                   # $22
+                proj.get("lineup_confirmed"),          # $23
+                proj.get("injury_status"),             # $24
+                proj.get("injury_body_part"),          # $25
+                proj.get("opponent_rank"),             # $26
+                proj.get("opponent_position_rank"),    # $27
+                proj.get("draftkings_salary"),         # $28
+                proj.get("fanduel_salary"),            # $29
+                proj.get("fantasy_points_dk"),         # $30
+                proj.get("fantasy_points_fd"),         # $31
+                proj.get("usage_rate_percentage"),     # $32
+                proj.get("player_efficiency_rating"),  # $33
+                now,                                  # $34 fetched_at
+                parsed_api_updated,                   # $35 api_updated_at
             ))
         
         if args_list:
             try:
                 await db_service.executemany(UPSERT_PROJECTION_SQL, args_list)
-                print(f"💾 已寫入 PostgreSQL: {len(args_list)} 筆投影資料 ({date})")
+                print(f"💾 Wrote to PostgreSQL: {len(args_list)} records ({date})")
             except Exception as e:
-                print(f"⚠️ PostgreSQL 批量寫入失敗: {e}")
+                print(f"⚠️ Batch write to PostgreSQL failed: {e}")
     
     async def _read_from_postgres(self, date: str) -> Dict[str, Dict[str, Any]]:
         """
-        從 PostgreSQL 讀取投影資料（Redis cache miss 的 fallback）
+        Load projection data from PostgreSQL (fallback for Redis cache miss)
         
         Args:
-            date: 比賽日期
+            date: game date
         
         Returns:
             Dict[player_name, projection_dict]
@@ -571,8 +571,8 @@ class ProjectionService:
             for row in rows:
                 name = row.get("player_name")
                 if name:
-                    # 將 asyncpg Record dict 轉為普通 dict
-                    # 處理 date/datetime 物件的序列化
+                    # Convert asyncpg Record to normal dict
+                    # Serialize date/datetime objects
                     cleaned = {}
                     for k, v in row.items():
                         if isinstance(v, (datetime, date_type)):
@@ -584,7 +584,7 @@ class ProjectionService:
             return result
         
         except Exception as e:
-            print(f"⚠️ PostgreSQL 讀取失敗: {e}")
+            print(f"⚠️ PostgreSQL read failed: {e}")
             return {}
     
     async def _log_fetch(
@@ -596,14 +596,14 @@ class ProjectionService:
         duration_ms: int,
     ):
         """
-        記錄抓取日誌到 PostgreSQL
+        Record fetch log to PostgreSQL
         
         Args:
-            date: 查詢日期
-            player_count: 球員數量
-            status: 狀態（success / error）
-            error_message: 錯誤訊息
-            duration_ms: 耗時（毫秒）
+            date: query date
+            player_count: number of players
+            status: status (success / error)
+            error_message: error message
+            duration_ms: duration in ms
         """
         if not db_service.is_connected:
             return
@@ -620,9 +620,9 @@ class ProjectionService:
                 duration_ms,
             )
         except Exception as e:
-            # 日誌寫入失敗不應該影響主流程
-            print(f"⚠️ 抓取日誌寫入失敗: {e}")
+            # Logging failure should not affect main flow
+            print(f"⚠️ Failed to write fetch log: {e}")
 
 
-# 建立全域服務實例
+# Create global service instance
 projection_service = ProjectionService()

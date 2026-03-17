@@ -1,25 +1,25 @@
 """
-projections.py - 投影資料 API 端點
+projections.py - API endpoints for Player Projections
 
-提供球員投影資料的 REST API，供前端查詢和手動操作。
+Provides REST API endpoints for player projection data, supporting frontend queries and manual refresh.
 
-端點：
-- GET  /api/nba/projections          - 取得指定日期所有球員投影
-- GET  /api/nba/projections/{player} - 取得單一球員投影
-- POST /api/nba/projections/refresh  - 手動刷新投影資料
+Endpoints:
+- GET  /api/nba/projections          - Get all player projections for a specified date
+- GET  /api/nba/projections/{player} - Get projection for a single player
+- POST /api/nba/projections/refresh  - Manually refresh projection data
 
-資料來源：
+Data Sources:
     SportsDataIO Projected Player Game Stats API
-    透過 projection_service 的混合取得策略（Redis + PostgreSQL）
+    Uses a composite fetching strategy via projection_service (Redis + PostgreSQL)
 
-使用方式：
-    # 取得今日所有球員投影
+Usage Examples:
+    # Get all player projections for today
     GET /api/nba/projections?date=2026-02-08
-    
-    # 取得特定球員投影
+
+    # Get a specific player's projection
     GET /api/nba/projections/Stephen Curry?date=2026-02-08
-    
-    # 手動刷新（強制重新呼叫 API）
+
+    # Manual refresh (force API call)
     POST /api/nba/projections/refresh?date=2026-02-08
 """
 
@@ -37,9 +37,9 @@ from app.models.schemas import (
 )
 
 
-# 建立路由器
-# prefix: 所有端點都以 /api/nba/projections 開頭
-# tags: 在 Swagger 文件中的分組標籤
+# Create the router
+# prefix: All endpoints begin with /api/nba/projections
+# tags: Group label in Swagger docs
 router = APIRouter(
     prefix="/api/nba/projections",
     tags=["projections"],
@@ -49,55 +49,55 @@ router = APIRouter(
 @router.get(
     "",
     response_model=ProjectionsResponse,
-    summary="取得投影資料",
+    summary="Get player projections",
     description="""
-    取得指定日期所有球員的投影資料。
-    
-    使用混合取得策略：
-    1. 優先從 Redis 快取讀取
-    2. 快取過期時觸發背景刷新
-    3. 快取未命中時同步呼叫 SportsDataIO API
-    
-    **注意**：Free Trial 版本的 InjuryStatus / LineupStatus 會是 null。
+    Retrieve projections data for all players on a specified date.
+
+    Fetching strategy:
+    1. Prefer reading from Redis cache
+    2. If cache is expired, triggers background refresh
+    3. If cache miss, synchronously calls SportsDataIO API
+
+    **Note**: InjuryStatus / LineupStatus will be null for the Free Trial version.
     """
 )
 async def get_projections(
     date: Optional[str] = Query(
         default=None,
-        description="查詢日期（YYYY-MM-DD），預設今天"
+        description="Query date (YYYY-MM-DD), defaults to today"
     ),
 ):
     """
-    取得指定日期的所有球員投影資料
-    
+    Get all player projections for the specified date
+
     Args:
-        date: 比賽日期，格式 YYYY-MM-DD。
-              不提供時使用 UTC 當天日期。
-    
+        date: Game date in YYYY-MM-DD format.
+              If not provided, today in UTC is used.
+
     Returns:
-        ProjectionsResponse: 包含所有球員投影的回應
-    
+        ProjectionsResponse: Response containing all player projections
+
     Example:
         GET /api/nba/projections?date=2026-02-08
     """
-    # 預設使用 UTC 當天
+    # Default to today (UTC)
     if date is None:
         date = datetime.now(timezone.utc).strftime("%Y-%m-%d")
-    
+
     try:
         projections_dict = await projection_service.get_projections(date)
     except SportsDataProjectionError as e:
         raise HTTPException(
             status_code=502,
-            detail=f"SportsDataIO API 錯誤: {e.message}"
+            detail=f"SportsDataIO API error: {e.message}"
         )
     except Exception as e:
         raise HTTPException(
             status_code=500,
-            detail=f"取得投影資料失敗: {str(e)}"
+            detail=f"Failed to retrieve projections: {str(e)}"
         )
-    
-    # 將 dict 轉為 PlayerProjection 列表
+
+    # Convert dict to list of PlayerProjection
     projections_list = []
     for player_name, proj_data in projections_dict.items():
         try:
@@ -137,13 +137,13 @@ async def get_projections(
             )
             projections_list.append(projection)
         except Exception as e:
-            # 單個球員資料格式有問題不影響整體
-            print(f"⚠️ 球員投影資料格式錯誤 ({player_name}): {e}")
+            # Malformed single player projection data does not affect overall results
+            print(f"⚠️ Player projection format error ({player_name}): {e}")
             continue
-    
-    # 按球員名稱排序
+
+    # Sort by player name
     projections_list.sort(key=lambda p: p.player_name)
-    
+
     return ProjectionsResponse(
         date=date,
         player_count=len(projections_list),
@@ -155,54 +155,54 @@ async def get_projections(
 @router.get(
     "/{player_name}",
     response_model=PlayerProjection,
-    summary="取得單一球員投影",
-    description="取得指定球員在指定日期的投影資料。"
+    summary="Get single player projection",
+    description="Get a player's projection for a specified date."
 )
 async def get_player_projection(
     player_name: str,
     date: Optional[str] = Query(
         default=None,
-        description="查詢日期（YYYY-MM-DD），預設今天"
+        description="Query date (YYYY-MM-DD), defaults to today"
     ),
 ):
     """
-    取得單一球員的投影資料
-    
+    Get a single player's projection
+
     Args:
-        player_name: 球員名稱（URL path 參數）
-        date: 比賽日期
-    
+        player_name: Player's name (URL path parameter)
+        date: Game date
+
     Returns:
-        PlayerProjection: 球員投影資料
-    
+        PlayerProjection: Player's projection data
+
     Raises:
-        404: 找不到該球員的投影資料
-    
+        404: Player projection not found
+
     Example:
         GET /api/nba/projections/Stephen%20Curry?date=2026-02-08
     """
     if date is None:
         date = datetime.now(timezone.utc).strftime("%Y-%m-%d")
-    
+
     try:
         proj = await projection_service.get_player_projection(date, player_name)
     except SportsDataProjectionError as e:
         raise HTTPException(
             status_code=502,
-            detail=f"SportsDataIO API 錯誤: {e.message}"
+            detail=f"SportsDataIO API error: {e.message}"
         )
     except Exception as e:
         raise HTTPException(
             status_code=500,
-            detail=f"取得投影資料失敗: {str(e)}"
+            detail=f"Failed to retrieve player projection: {str(e)}"
         )
-    
+
     if proj is None:
         raise HTTPException(
             status_code=404,
-            detail=f"找不到 {player_name} 在 {date} 的投影資料"
+            detail=f"Projection for {player_name} on {date} not found"
         )
-    
+
     return PlayerProjection(
         player_id=proj.get("player_id"),
         player_name=player_name,
@@ -242,55 +242,55 @@ async def get_player_projection(
 @router.post(
     "/refresh",
     response_model=ProjectionRefreshResponse,
-    summary="手動刷新投影資料",
+    summary="Manually refresh projections",
     description="""
-    強制重新呼叫 SportsDataIO API 並更新快取和資料庫。
-    
-    通常用於：
-    - 排程器之外的手動更新
-    - 確認最新的陣容變化
-    - 除錯
+    Force refresh of projections by calling SportsDataIO API and updating cache/database.
+
+    Typical use cases:
+    - Manual update outside of scheduler
+    - Confirm the latest lineup changes
+    - Troubleshooting
     """
 )
 async def refresh_projections(
     date: Optional[str] = Query(
         default=None,
-        description="刷新日期（YYYY-MM-DD），預設今天"
+        description="Refresh date (YYYY-MM-DD), defaults to today"
     ),
 ):
     """
-    手動觸發投影資料刷新
-    
-    直接呼叫 SportsDataIO API，更新 Redis 和 PostgreSQL。
-    
+    Manually trigger projections refresh
+
+    Calls SportsDataIO API directly, updating Redis and PostgreSQL.
+
     Args:
-        date: 比賽日期
-    
+        date: Game date
+
     Returns:
-        ProjectionRefreshResponse: 刷新結果
-    
+        ProjectionRefreshResponse: Refresh result
+
     Example:
         POST /api/nba/projections/refresh?date=2026-02-08
     """
     if date is None:
         date = datetime.now(timezone.utc).strftime("%Y-%m-%d")
-    
+
     try:
         projections = await projection_service.fetch_and_store(date)
-        
+
         return ProjectionRefreshResponse(
             date=date,
             player_count=len(projections),
-            message=f"成功刷新 {len(projections)} 筆投影資料"
+            message=f"Successfully refreshed {len(projections)} player projections"
         )
-    
+
     except SportsDataProjectionError as e:
         raise HTTPException(
             status_code=502,
-            detail=f"SportsDataIO API 錯誤: {e.message}"
+            detail=f"SportsDataIO API error: {e.message}"
         )
     except Exception as e:
         raise HTTPException(
             status_code=500,
-            detail=f"刷新投影資料失敗: {str(e)}"
+            detail=f"Failed to refresh projections: {str(e)}"
         )

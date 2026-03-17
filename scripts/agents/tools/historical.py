@@ -123,40 +123,122 @@ def _direction(rate: float) -> str:
     return "neutral"
 
 
-# ===================================================================
-# DIMENSION 1 – Base Distribution / Role Splits
-# ===================================================================
-
-def get_base_stats(player: str, metric: str, threshold: float, n: int = 0) -> Dict[str, Any]:
-    games = _games_for(player, n)
+def _build_base_rate_signal(
+    games: List[Dict[str, Any]],
+    metric: str,
+    threshold: float,
+    *,
+    window: str,
+    source: str,
+    reliability_min_n: int = 10,
+    reliability_full_n: int = 50,
+    extra_details: Optional[Dict[str, Any]] = None,
+) -> Dict[str, Any]:
     vals = _values(games, metric)
     if not vals:
-        return _signal_payload("unavailable", 0, 0, 0, f"last_{n}" if n else "season", "csv", {"error": f"no data for {player}/{metric}"})
+        return _signal_payload(
+            "unavailable",
+            0,
+            0,
+            0,
+            window,
+            source,
+            {"error": f"no data for {metric}"},
+        )
 
     rate, over, total = _hit_rate(vals, threshold)
     mean = statistics.mean(vals)
     med = statistics.median(vals)
     std = statistics.stdev(vals) if len(vals) > 1 else 0.0
     shrunk = _shrink(rate, total)
-    rel = _reliability_from_n(total)
+    rel = _reliability_from_n(total, min_n=reliability_min_n, full_n=reliability_full_n)
+
+    details = {
+        "hit_rate": round(rate, 4),
+        "shrunk_rate": round(shrunk, 4),
+        "mean": round(mean, 2),
+        "median": round(med, 2),
+        "std": round(std, 2),
+        "over_count": over,
+        "total": total,
+    }
+    if extra_details:
+        details.update(extra_details)
 
     return _signal_payload(
         signal=_direction(shrunk),
         effect_size=mean - threshold,
         sample_size=total,
         reliability=rel,
+        window=window,
+        source=source,
+        details=details,
+    )
+
+
+# ===================================================================
+# DIMENSION 1 – Base Distribution / Role Splits
+# ===================================================================
+
+def get_base_stats(player: str, metric: str, threshold: float, n: int = 0) -> Dict[str, Any]:
+    games = _games_for(player, n)
+    result = _build_base_rate_signal(
+        games,
+        metric,
+        threshold,
         window=f"last_{n}" if n else "season",
         source="csv",
-        details={
-            "hit_rate": round(rate, 4),
-            "shrunk_rate": round(shrunk, 4),
-            "mean": round(mean, 2),
-            "median": round(med, 2),
-            "std": round(std, 2),
-            "over_count": over,
-            "total": total,
+    )
+    if result["signal"] == "unavailable":
+        result["details"]["error"] = f"no data for {player}/{metric}"
+    return result
+
+
+def get_role_conditioned_base_stats(
+    player: str,
+    metric: str,
+    threshold: float,
+    is_starter: Optional[bool],
+    n: int = 0,
+) -> Dict[str, Any]:
+    if is_starter is None:
+        return _signal_payload(
+            "unavailable",
+            0,
+            0,
+            0,
+            f"last_{n}" if n else "season",
+            "csv",
+            {"error": "role is unknown; cannot build role-conditioned base stats"},
+        )
+
+    role = "starter" if is_starter else "bench"
+    role_label = "projected_starter" if is_starter else "projected_bench"
+    games = [g for g in _games_for(player, n) if bool(g.get("is_starter")) is is_starter]
+    result = _build_base_rate_signal(
+        games,
+        metric,
+        threshold,
+        window=f"last_{n}" if n else "season",
+        source="csv",
+        reliability_min_n=4,
+        reliability_full_n=20,
+        extra_details={
+            "role": role,
+            "role_label": role_label,
+            "minimum_role_sample": 4,
         },
     )
+    if result["signal"] == "unavailable":
+        result["details"].update(
+            {
+                "role": role,
+                "role_label": role_label,
+                "minimum_role_sample": 4,
+                "error": f"no {role} data for {player}/{metric}",
+            }
+        )
+    return result
 
 
 def get_starter_bench_split(player: str, metric: str, threshold: float) -> Dict[str, Any]:
@@ -267,17 +349,8 @@ def _team_code_from_name(team_name: str) -> str:
     return team_name
 
 
-def _run_async(coro):
-    """Bridge async calls from sync context (same pattern as market.py)."""
-    try:
-        loop = asyncio.get_event_loop()
-        if loop.is_running():
-            import concurrent.futures
-            with concurrent.futures.ThreadPoolExecutor() as pool:
-                return pool.submit(asyncio.run, coro).result()
-        return loop.run_until_complete(coro)
-    except RuntimeError:
-        return asyncio.run(coro)
+def _today_date_string() -> str:
+    return datetime.now(timezone.utc).strftime("%Y-%m-%d")
 
 
 async def _infer_opponent_from_schedule(player: str, date: str) -> str:
@@ -342,16 +415,16 @@ async def _infer_opponent_from_schedule(player: str, date: str) -> str:
     return "unknown"
 
 
-def get_official_injury_report(team: str, date: str = "", player: str = "") -> Dict[str, Any]:
+async def get_official_injury_report(team: str, date: str = "", player: str = "") -> Dict[str, Any]:
     # 當 query 未指定對手時，從 The Odds API 賽程推斷
     effective_team = team
     if (not team or team == "unknown") and player:
-        effective_team = _run_async(_infer_opponent_from_schedule(player, date))
+        effective_team = await _infer_opponent_from_schedule(player, date)
         if effective_team == "unknown":
             effective_team = team or "unknown"  # 保持原值以便 details 顯示
 
     code = _team_code_from_name(effective_team)
-    entries = _fetch_injury_report_for_team(code)
+    entries = await asyncio.to_thread(_fetch_injury_report_for_team, code)
     return _signal_payload(
         "caution" if entries else "neutral",
         0.0,
@@ -360,6 +433,130 @@ def get_official_injury_report(team: str, date: str = "", player: str = "") -> D
         "today",
         "official_injury_report",
         {"team": effective_team, "team_code": code, "injuries": entries},
+    )
+
+
+async def get_projected_lineup_consensus(team: str, date: str = "") -> Dict[str, Any]:
+    try:
+        from app.services.lineup_service import lineup_service
+    except ImportError:
+        return _signal_payload("unavailable", 0, 0, 0.0, "today", "lineup_consensus", {"error": "service unavailable"})
+
+    effective_date = date or _today_date_string()
+    code = _team_code_from_name(team)
+    lineup, cache_state, _fetched_at = await lineup_service.get_team_lineup(effective_date, code)
+    if not lineup:
+        return _signal_payload(
+            "unavailable",
+            0,
+            0,
+            0.0,
+            "today",
+            "lineup_consensus",
+            {"team": team, "team_code": code, "cache_state": cache_state},
+        )
+
+    updated_at = lineup.get("updated_at")
+    freshness_minutes = None
+    if updated_at:
+        try:
+            parsed = datetime.fromisoformat(updated_at.replace("Z", "+00:00"))
+            freshness_minutes = int((datetime.now(timezone.utc) - parsed).total_seconds() / 60)
+        except ValueError:
+            freshness_minutes = None
+
+    confidence = lineup.get("confidence")
+    reliability = {
+        "high": 0.85,
+        "medium": 0.7,
+        "low": 0.55,
+    }.get(confidence, 0.4)
+    signal = "caution" if lineup.get("status") != "projected" or lineup.get("source_disagreement") else "neutral"
+
+    return _signal_payload(
+        signal,
+        0.0,
+        len(lineup.get("starters") or []),
+        reliability,
+        "today",
+        "lineup_consensus",
+        {
+            **lineup,
+            "team_code": code,
+            "cache_state": cache_state,
+            "freshness_minutes": freshness_minutes,
+        },
+    )
+
+
+async def get_player_lineup_context(player: str, date: str = "", team: str = "", opponent: str = "") -> Dict[str, Any]:
+    target_team = team
+    if not target_team:
+        games = _games_for(player, 1)
+        if games:
+            target_team = games[0].get("team", "")
+
+    own_lineup = await get_projected_lineup_consensus(target_team, date)
+    opponent_lineup = await get_projected_lineup_consensus(opponent, date) if opponent else _signal_payload(
+        "neutral", 0, 0, 0.0, "today", "lineup_consensus", {}
+    )
+
+    own_details = own_lineup.get("details", {}) if isinstance(own_lineup, dict) else {}
+    starters = list(own_details.get("starters") or [])
+    team_code = own_details.get("team") or _team_code_from_name(target_team)
+    canonical_player_name = None
+    try:
+        from app.services.lineup_source_support import resolve_canonical_player_name
+
+        canonical_player_name = resolve_canonical_player_name(player, team_code).get("canonical_name")
+    except ImportError:
+        canonical_player_name = None
+
+    player_match_value = (canonical_player_name or player).lower()
+    has_complete_projected_lineup = own_details.get("status") == "projected" and len(starters) == 5
+    player_matches_starter = any(player_match_value == starter.lower() for starter in starters)
+    if player_matches_starter:
+        player_is_projected_starter = True
+    elif has_complete_projected_lineup and canonical_player_name:
+        player_is_projected_starter = False
+    else:
+        player_is_projected_starter = None
+    freshness_minutes = own_details.get("freshness_minutes")
+    freshness_risk = isinstance(freshness_minutes, int) and freshness_minutes > 20
+    source_disagreement = bool(own_details.get("source_disagreement"))
+    confidence = own_details.get("confidence")
+
+    signal = "positive"
+    if not starters:
+        signal = "unavailable"
+    elif player_is_projected_starter is False or source_disagreement or freshness_risk or not has_complete_projected_lineup:
+        signal = "caution"
+
+    return _signal_payload(
+        signal,
+        0.0,
+        len(starters),
+        {
+            "high": 0.85,
+            "medium": 0.7,
+            "low": 0.55,
+        }.get(confidence, 0.4),
+        "today",
+        "lineup_consensus",
+        {
+            "player": player,
+            "team": team_code,
+            "canonical_player_name": canonical_player_name,
+            "player_is_projected_starter": player_is_projected_starter,
+            "source_disagreement": source_disagreement,
+            "freshness_risk": freshness_risk,
+            "freshness_minutes": freshness_minutes,
+            "confidence": confidence,
+            "status": own_details.get("status"),
+            "starters": starters,
+            "player_team_lineup": own_details,
+            "opponent_team_lineup": opponent_lineup.get("details", {}),
+        },
     )
 
 
@@ -803,10 +1000,13 @@ def get_rotation_absorption_map(player: str, metric: str, date: str = "") -> Dic
 
 ALL_HISTORICAL_TOOLS = [
     get_base_stats,
+    get_role_conditioned_base_stats,
     get_starter_bench_split,
     get_opponent_history,
     get_teammate_impact,
     get_official_injury_report,
+    get_projected_lineup_consensus,
+    get_player_lineup_context,
     get_availability_context,
     auto_teammate_impact,
     get_trend_analysis,

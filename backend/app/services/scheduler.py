@@ -1,24 +1,24 @@
 """
-scheduler.py - 定時任務排程器
+scheduler.py - Scheduled Job Scheduler
 
-使用 APScheduler 實現定時任務,自動執行每日分析
+Implements scheduled jobs using APScheduler for daily automation
 
-APScheduler(Advanced Python Scheduler)是一個輕量級的 Python 定時任務庫
-優點:
-- 不需要額外的服務(如 Celery + Redis/RabbitMQ)
-- 支援多種觸發器(cron、interval、date)
-- 適合單機部署
+APScheduler (Advanced Python Scheduler) is a lightweight Python scheduling library.
+Advantages:
+- No need for external services (such as Celery + Redis/RabbitMQ)
+- Supports multiple triggers (cron, interval, date)
+- Suitable for single-machine deployment
 
-主要功能:
-- 每天定時執行每日分析
-- 每天自動下載最新的 NBA 球員數據 CSV
-- 支援手動觸發
-- 錯誤處理和重試
+Main features:
+- Run daily analysis at a fixed time every day
+- Download the latest NBA player stats CSV daily
+- Supports manual trigger
+- Error handling and retry
 
-排程策略:
-- 每日分析:每天 UTC 12:00(美東 7:00 AM / 台北 20:00)執行
-- CSV 下載:每天芝加哥時間 10:00 執行(自動處理夏令/冬令時間)
-- NBA 比賽通常在美東晚上,這個時間賠率已經穩定
+Scheduling strategy:
+- Daily analysis: Run every day at UTC 12:00 (7:00 AM US Eastern / 20:00 Taipei)
+- CSV download: Run every day at 10:00 Chicago time (handles DST automatically)
+- NBA games are usually at night US Eastern, by this time odds have stabilized
 """
 
 import asyncio
@@ -34,83 +34,84 @@ from app.services.odds_gateway import odds_gateway
 from app.services.projection_service import projection_service
 from app.services.odds_snapshot_service import odds_snapshot_service
 from app.services.cache import cache_service
+from app.services.lineup_service import lineup_service
 
 
 class SchedulerService:
     """
-    定時任務排程器服務
+    Scheduled Job Scheduler Service
     
-    管理所有定時任務的啟動、停止和執行
+    Manages all scheduled tasks, including starting, stopping, and running
     
-    使用方式:
+    Usage:
         scheduler = SchedulerService()
-        scheduler.start()  # 啟動排程器
-        scheduler.stop()   # 停止排程器
+        scheduler.start()  # Start the scheduler
+        scheduler.stop()   # Stop the scheduler
     
-    定時任務:
-    - daily_analysis_job: 每天 UTC 12:00 執行每日分析
+    Scheduled Jobs:
+    - daily_analysis_job: Runs daily analysis at UTC 12:00 every day
     """
     
     def __init__(self):
         """
-        初始化排程器
+        Initialize the scheduler
         
-        AsyncIOScheduler: 適用於 asyncio 的排程器
-        - 可以執行 async 函數
-        - 與 FastAPI 的 async 架構相容
+        AsyncIOScheduler: Scheduler for asyncio
+        - Can run async functions
+        - Compatible with FastAPI's async architecture
         """
         self._scheduler: Optional[AsyncIOScheduler] = None
         self._is_running = False
     
     def start(self):
         """
-        啟動排程器
+        Start the scheduler
         
-        建立 AsyncIOScheduler 並添加定時任務
+        Create AsyncIOScheduler instance and add scheduled jobs
         
-        注意:排程器需要在 asyncio event loop 中運行
-        FastAPI 的 lifespan 事件是適合的啟動時機
+        Note: Scheduler must run inside asyncio event loop.
+        The FastAPI lifespan event is a suitable starting point.
         """
         if self._is_running:
-            print("⚠️ 排程器已經在運行中")
+            print("⚠️ Scheduler is already running")
             return
         
-        # 建立排程器
+        # Create the scheduler
         self._scheduler = AsyncIOScheduler(
-            timezone="UTC",  # 使用 UTC 時區
+            timezone="UTC",  # Use UTC timezone
             job_defaults={
-                'coalesce': True,      # 合併錯過的執行(只執行一次)
-                'max_instances': 1,    # 同一任務最多同時執行 1 個實例
-                'misfire_grace_time': 3600  # 錯過的任務在 1 小時內仍會執行
+                'coalesce': True,      # Merge missed runs (run only once)
+                'max_instances': 1,    # Only one instance of the same job can run at once
+                'misfire_grace_time': 3600  # Jobs missed within 1 hour will still be run
             }
         )
         
-        # 添加每日分析任務
-        # CronTrigger: 類似 Linux cron 的觸發器
-        # hour=12, minute=0: 每天 UTC 12:00 執行
+        # Add daily analysis job
+        # CronTrigger: Similar to Linux cron
+        # hour=12, minute=0: Run at UTC 12:00 every day
         self._scheduler.add_job(
             self._run_daily_analysis_job,
             trigger=CronTrigger(hour=12, minute=0),
             id='daily_analysis_job',
-            name='每日高機率球員分析',
-            replace_existing=True  # 如果任務已存在,替換它
+            name='Daily High Probability Player Analysis',
+            replace_existing=True  # Replace if job already exists
         )
         
-        # 添加投影資料預取任務（3 個時間點）
+        # Add projection data prefetch jobs (3 times a day)
         # 
-        # 投影資料預取策略：
-        # - 早期（UTC 16:00 ≈ 美東 11AM）：初版投影，比賽前 ~8 小時
-        # - 中期（UTC 22:00 ≈ 美東 5PM）：更新版，大部分先發已確認
-        # - 最終（UTC 23:30 ≈ 美東 6:30PM）：最終版，比賽即將開始
+        # Projection fetch strategy:
+        # - Early (UTC 16:00 ≈ US Eastern 11AM): Initial projections, ~8 hours before games
+        # - Mid (UTC 22:00 ≈ US Eastern 5PM): Updated projections, after most starters confirmed
+        # - Final (UTC 23:30 ≈ US Eastern 6:30PM): Final projections, right before games
         #
-        # SportsDataIO 的 Projection API 是 bulk endpoint，
-        # 一次 call 回傳該日期所有球員的投影資料，
-        # 因此每天 3 次 call 就能覆蓋所有需求。
+        # SportsDataIO's Projection API is a bulk endpoint,
+        # a single call returns projection data for all players of the day,
+        # so calling 3 times covers all needs.
         self._scheduler.add_job(
             self._run_projection_fetch_job,
             trigger=CronTrigger(hour=16, minute=0),
             id='projection_fetch_early',
-            name='投影資料預取（早期 - 初版）',
+            name='Projection Data Prefetch (Early - Initial)',
             replace_existing=True
         )
         
@@ -118,7 +119,7 @@ class SchedulerService:
             self._run_projection_fetch_job,
             trigger=CronTrigger(hour=22, minute=0),
             id='projection_fetch_mid',
-            name='投影資料預取（中期 - 先發確認後）',
+            name='Projection Data Prefetch (Mid - After Starters Confirmed)',
             replace_existing=True
         )
         
@@ -126,16 +127,16 @@ class SchedulerService:
             self._run_projection_fetch_final_job,
             trigger=CronTrigger(hour=23, minute=30),
             id='projection_fetch_final',
-            name='投影資料預取（最終版 + 清除 daily picks 快取）',
+            name='Projection Data Prefetch (Final + Clear Daily Picks Cache)',
             replace_existing=True
         )
         
-        # 添加 CSV 下載任務
-        # 芝加哥時間 10:00 執行
-        # timezone="America/Chicago": 指定時區,APScheduler 會自動處理夏令/冬令時間
-        # 芝加哥時間 10:00 對應:
-        #   - 冬令時間 (CST, UTC-6): UTC 16:00
-        #   - 夏令時間 (CDT, UTC-5): UTC 15:00
+        # Add CSV download job
+        # Runs at 10:00 Chicago time
+        # timezone="America/Chicago": APScheduler will handle daylight saving automatically
+        # 10:00 Chicago time corresponds to:
+        #   - Standard (CST, UTC-6): UTC 16:00
+        #   - Daylight (CDT, UTC-5): UTC 15:00
         self._scheduler.add_job(
             self._run_csv_download_job,
             trigger=CronTrigger(
@@ -144,25 +145,25 @@ class SchedulerService:
                 timezone="America/Chicago"
             ),
             id='csv_download_job',
-            name='下載 NBA 球員數據 CSV',
+            name='Download NBA Player Stats CSV',
             replace_existing=True
         )
         
-        # 添加盤口快照任務（3 個時間點，與投影預取相同）
+        # Add odds snapshot jobs (3 times, same times as projection prefetch)
         #
-        # 盤口快照策略（Line Movement Tracking）：
-        # - 早期（UTC 16:00 ≈ 美東 11AM）：早盤，傷病報告出來後的初始線
-        # - 中期（UTC 22:00 ≈ 美東 5PM）：午盤，sharp money 進場後
-        # - 最終（UTC 23:30 ≈ 美東 6:30PM）：封盤前，最終線
+        # Odds snapshot strategy (Line Movement Tracking):
+        # - Early (UTC 16:00 ≈ US Eastern 11AM): Early line, after injury reports
+        # - Mid (UTC 22:00 ≈ US Eastern 5PM): Late afternoon, after sharp money
+        # - Final (UTC 23:30 ≈ US Eastern 6:30PM): Pre-lock, final line
         #
-        # 每次快照會對每場賽事用一次 API call 取得 4 個 market 的賠率，
-        # 計算所有 bookmaker/player/market 的 no-vig，批量寫入 PostgreSQL。
-        # 失敗不影響投影預取和每日分析。
+        # Each snapshot calls odds API once per event for 4 markets,
+        # calculates no-vig for all bookmaker/player/market, and batch writes to PostgreSQL.
+        # Failure does not affect projection prefetch or daily analysis.
         self._scheduler.add_job(
             self._run_odds_snapshot_job,
             trigger=CronTrigger(hour=16, minute=5),
             id='odds_snapshot_early',
-            name='盤口快照（早期 - 早盤）',
+            name='Odds Snapshot (Early Line)',
             replace_existing=True
         )
         
@@ -170,7 +171,7 @@ class SchedulerService:
             self._run_odds_snapshot_job,
             trigger=CronTrigger(hour=22, minute=5),
             id='odds_snapshot_mid',
-            name='盤口快照（中期 - 午盤）',
+            name='Odds Snapshot (Mid Line)',
             replace_existing=True
         )
         
@@ -178,7 +179,7 @@ class SchedulerService:
             self._run_odds_snapshot_job,
             trigger=CronTrigger(hour=23, minute=35),
             id='odds_snapshot_final',
-            name='盤口快照（最終 - 封盤前）',
+            name='Odds Snapshot (Final Pre-Lock)',
             replace_existing=True
         )
 
@@ -186,72 +187,109 @@ class SchedulerService:
             self._run_hot_key_prewarm_job,
             trigger=IntervalTrigger(seconds=30),
             id='odds_hot_key_prewarm',
-            name='熱門 Odds Key 預熱',
+            name='Hot Odds Key Prewarm',
+            replace_existing=True
+        )
+
+        self._scheduler.add_job(
+            self._run_lineup_fetch_job,
+            trigger=CronTrigger(
+                hour=9,
+                minute=30,
+                timezone="America/Chicago",
+            ),
+            id='lineup_fetch_opening',
+            name='Free Lineup Prefetch (baseline)',
+            replace_existing=True
+        )
+
+        self._scheduler.add_job(
+            self._run_lineup_fetch_job,
+            trigger=CronTrigger(
+                hour="11-21",
+                minute="0,15,30,45",
+                timezone="America/Chicago",
+            ),
+            id='lineup_fetch_active_window',
+            name='Free Lineup Refresh (every 15 minutes)',
+            replace_existing=True
+        )
+
+        self._scheduler.add_job(
+            self._run_lineup_fetch_job,
+            trigger=CronTrigger(
+                hour="22,23,0",
+                minute="0,5,10,15,20,25,30,35,40,45,50,55",
+                timezone="America/Chicago",
+            ),
+            id='lineup_fetch_pre_tipoff',
+            name='Free Lineup Refresh (every 5 minutes)',
             replace_existing=True
         )
         
-        # 啟動排程器
+        # Start the scheduler
         self._scheduler.start()
         self._is_running = True
         
-        print("✅ 排程器已啟動")
-        print("📅 排程任務:")
-        print("   - 投影資料預取:每天 UTC 16:00, 22:00, 23:30")
-        print("   - 盤口快照:每天 UTC 16:05, 22:05, 23:35")
-        print("   - 熱門 Odds Key 預熱:每 30 秒")
-        print("   - 每日分析:每天 UTC 12:00")
-        print("   - CSV 下載:每天芝加哥時間 10:00")
+        print("✅ Scheduler started")
+        print("📅 Scheduled Jobs:")
+        print("   - Free Lineup Refresh: 09:30 (baseline) / 11:00-22:00 every 15min / 22:00-00:30 every 5min")
+        print("   - Projection Data Prefetch: Daily UTC 16:00, 22:00, 23:30")
+        print("   - Odds Snapshot: Daily UTC 16:05, 22:05, 23:35")
+        print("   - Hot Odds Key Prewarm: Every 30 seconds")
+        print("   - Daily Analysis: Daily UTC 12:00")
+        print("   - CSV Download: Daily 10:00 Chicago time")
         
-        # 列出所有排程的任務
+        # List all scheduled jobs
         jobs = self._scheduler.get_jobs()
         for job in jobs:
             print(f"   📌 {job.id}: {job.name}")
-            print(f"      下次執行: {job.next_run_time}")
+            print(f"      Next run: {job.next_run_time}")
     
     def stop(self):
         """
-        停止排程器
+        Stop the scheduler
         
-        優雅地關閉排程器,等待正在執行的任務完成
+        Gracefully shuts down the scheduler, waits for running jobs to finish
         """
         if not self._is_running or self._scheduler is None:
             return
         
         self._scheduler.shutdown(wait=True)
         self._is_running = False
-        print("✅ 排程器已停止")
+        print("✅ Scheduler stopped")
     
     async def _run_daily_analysis_job(self):
         """
-        執行每日分析任務
+        Run daily analysis job
         
-        這是排程器呼叫的任務函數
-        包含錯誤處理和日誌記錄
+        This is the job function called by the scheduler.
+        Includes error handling and logging.
         """
         print("\n" + "=" * 50)
-        print(f"🚀 開始執行每日分析任務: {datetime.now(timezone.utc).isoformat()}")
+        print(f"🚀 Starting daily analysis job: {datetime.now(timezone.utc).isoformat()}")
         print("=" * 50)
         
         try:
-            # 執行今日分析
+            # Run today's analysis
             today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
             result = await daily_analysis_service.run_daily_analysis(
                 date=today,
-                use_cache=False  # 定時任務強制重新分析
+                use_cache=False  # Forced re-analysis in scheduled jobs
             )
             
-            print(f"\n✅ 每日分析完成!")
-            print(f"   日期: {result.date}")
-            print(f"   找到 {result.total_picks} 個高機率選擇")
+            print(f"\n✅ Daily analysis completed!")
+            print(f"   Date: {result.date}")
+            print(f"   Found {result.total_picks} high-probability picks")
             
             if result.stats:
-                print(f"   分析賽事: {result.stats.total_events} 場")
-                print(f"   分析球員: {result.stats.total_players} 人")
-                print(f"   耗時: {result.stats.analysis_duration_seconds:.2f} 秒")
+                print(f"   Events analyzed: {result.stats.total_events}")
+                print(f"   Players analyzed: {result.stats.total_players}")
+                print(f"   Duration: {result.stats.analysis_duration_seconds:.2f} seconds")
             
         except Exception as e:
-            print(f"\n❌ 每日分析任務失敗: {e}")
-            # 這裡可以加入通知機制(如 email、Slack)
+            print(f"\n❌ Daily analysis job failed: {e}")
+            # Notification mechanisms (such as email, Slack) can be added here
             import traceback
             traceback.print_exc()
         
@@ -259,31 +297,31 @@ class SchedulerService:
     
     async def _run_csv_download_job(self):
         """
-        執行 CSV 下載任務
+        Run CSV download job
         
-        從 GitHub 下載最新的 NBA 球員比賽記錄 CSV
-        這個任務在芝加哥時間每天 10:00 自動執行
+        Download the latest NBA player game log CSV from GitHub.
+        This job runs every day at 10:00 Chicago time.
         
-        流程:
-        1. 呼叫 csv_downloader_service.download()
-        2. 記錄下載結果(成功/失敗)
-        3. 錯誤處理和日誌
+        Steps:
+        1. Call csv_downloader_service.download()
+        2. Log the result (success/failure)
+        3. Error handling and logs
         """
         print("\n" + "=" * 50)
-        print(f"📥 開始執行 CSV 下載任務: {datetime.now(timezone.utc).isoformat()}")
+        print(f"📥 Starting CSV download job: {datetime.now(timezone.utc).isoformat()}")
         print("=" * 50)
         
         try:
-            # 呼叫下載服務
+            # Call the download service
             success = await csv_downloader_service.download()
             
             if success:
-                print(f"✅ CSV 下載任務完成!")
+                print(f"✅ CSV download job completed!")
             else:
-                print(f"⚠️ CSV 下載任務失敗,請檢查網路或 URL")
+                print(f"⚠️ CSV download job failed, please check network or URL")
                 
         except Exception as e:
-            print(f"❌ CSV 下載任務異常: {e}")
+            print(f"❌ CSV download job exception: {e}")
             import traceback
             traceback.print_exc()
         
@@ -291,23 +329,23 @@ class SchedulerService:
     
     async def _run_projection_fetch_job(self):
         """
-        執行投影資料預取任務
+        Run projection data prefetch job
         
-        呼叫 projection_service.fetch_and_store() 取得今日投影資料
-        資料會同時寫入 Redis 和 PostgreSQL
+        Calls projection_service.fetch_and_store() to get today's projections.
+        Data is written to Redis and PostgreSQL.
         """
         print("\n" + "=" * 50)
-        print(f"📊 開始執行投影資料預取: {datetime.now(timezone.utc).isoformat()}")
+        print(f"📊 Starting projection data prefetch: {datetime.now(timezone.utc).isoformat()}")
         print("=" * 50)
         
         try:
             today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
             projections = await projection_service.fetch_and_store(today)
             
-            print(f"✅ 投影資料預取完成! {len(projections)} 球員")
+            print(f"✅ Projection data prefetch completed! {len(projections)} players")
         
         except Exception as e:
-            print(f"❌ 投影資料預取失敗: {e}")
+            print(f"❌ Projection data prefetch failed: {e}")
             import traceback
             traceback.print_exc()
         
@@ -315,28 +353,28 @@ class SchedulerService:
     
     async def _run_projection_fetch_final_job(self):
         """
-        執行最終版投影資料預取
+        Run final projection data prefetch
         
-        與 _run_projection_fetch_job 相同，但額外清除 daily picks 快取，
-        這樣下次請求 daily picks 時會使用最新的投影資料重新分析。
+        Same as _run_projection_fetch_job, but also clears daily picks cache,
+        so the next request for daily picks will use the latest projections.
         """
         print("\n" + "=" * 50)
-        print(f"📊 開始執行最終版投影資料預取: {datetime.now(timezone.utc).isoformat()}")
+        print(f"📊 Starting final projection data prefetch: {datetime.now(timezone.utc).isoformat()}")
         print("=" * 50)
         
         try:
             today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
             projections = await projection_service.fetch_and_store(today)
             
-            print(f"✅ 最終版投影資料預取完成! {len(projections)} 球員")
+            print(f"✅ Final projection data prefetch completed! {len(projections)} players")
             
-            # 清除 daily picks 快取，讓下次分析使用最新投影
+            # Clear daily picks cache so the next analysis uses new projections
             deleted = await cache_service.clear_daily_picks_cache()
             if deleted > 0:
-                print(f"🗑️ 已清除 {deleted} 個 daily picks 快取")
+                print(f"🗑️ Cleared {deleted} daily picks cache")
         
         except Exception as e:
-            print(f"❌ 最終版投影資料預取失敗: {e}")
+            print(f"❌ Final projection data prefetch failed: {e}")
             import traceback
             traceback.print_exc()
         
@@ -344,28 +382,28 @@ class SchedulerService:
     
     async def _run_odds_snapshot_job(self):
         """
-        執行盤口快照任務
+        Run odds snapshot job
 
-        叫 "_run_odds_snapshot_job" 因為它是排程器呼叫的 job handler，
-        負責「執行」一次「盤口快照」。
-        包含錯誤處理，失敗不影響其他任務。
+        Named "_run_odds_snapshot_job" because it is called as a job handler by the scheduler,
+        responsible for running a single "odds snapshot".
+        Includes error handling; failures do not affect other jobs.
         """
         print("\n" + "=" * 50)
-        print(f"📸 開始執行盤口快照: {datetime.now(timezone.utc).isoformat()}")
+        print(f"📸 Starting odds snapshot: {datetime.now(timezone.utc).isoformat()}")
         print("=" * 50)
 
         try:
             today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
             result = await odds_snapshot_service.take_snapshot(today)
 
-            print(f"✅ 盤口快照完成!")
-            print(f"   日期: {result['date']}")
-            print(f"   賽事數: {result['event_count']}")
-            print(f"   盤口筆數: {result['total_lines']}")
-            print(f"   耗時: {result['duration_ms']}ms")
+            print(f"✅ Odds snapshot complete!")
+            print(f"   Date: {result['date']}")
+            print(f"   Number of events: {result['event_count']}")
+            print(f"   Number of lines: {result['total_lines']}")
+            print(f"   Duration: {result['duration_ms']}ms")
 
         except Exception as e:
-            print(f"❌ 盤口快照失敗: {e}")
+            print(f"❌ Odds snapshot failed: {e}")
             import traceback
             traceback.print_exc()
 
@@ -373,27 +411,43 @@ class SchedulerService:
 
     async def _run_hot_key_prewarm_job(self):
         """
-        預熱最近 5 分鐘內最熱門的 odds key。
+        Prewarm the most popular odds keys in the last 5 minutes.
         """
         try:
             warmed = await odds_gateway.prewarm_hot_keys()
             if warmed > 0:
-                print(f"🔥 熱門 Odds Key 預熱完成: {warmed}")
+                print(f"🔥 Hot Odds Key prewarm completed: {warmed}")
         except Exception as e:
-            print(f"⚠️ 熱門 Odds Key 預熱失敗: {e}")
+            print(f"⚠️ Hot Odds Key prewarm failed: {e}")
+
+    async def _run_lineup_fetch_job(self):
+        print("\n" + "=" * 50)
+        print(f"🧾 Starting free lineup refresh: {datetime.now(timezone.utc).isoformat()}")
+        print("=" * 50)
+
+        try:
+            today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+            lineups = await lineup_service.fetch_and_store(today)
+            print(f"✅ Free lineup refresh completed! {len(lineups)} teams")
+        except Exception as e:
+            print(f"❌ Free lineup refresh failed: {e}")
+            import traceback
+            traceback.print_exc()
+
+        print("=" * 50 + "\n")
 
     async def trigger_odds_snapshot_now(self, date: Optional[str] = None) -> dict:
         """
-        手動觸發盤口快照
+        Manually trigger odds snapshot
 
-        叫 "trigger_odds_snapshot_now" 因為它允許「立即觸發」盤口快照，
-        不需要等到排程時間。用於 API 端點的手動觸發功能。
+        Named "trigger_odds_snapshot_now" because it allows you to "trigger" an odds snapshot immediately,
+        without waiting for the scheduled time. Used in API endpoints for manual triggering.
 
         Args:
-            date: 日期（YYYY-MM-DD），None 表示今天
+            date: Date (YYYY-MM-DD), None means today
 
         Returns:
-            快照結果 dict（包含 date, event_count, total_lines, duration_ms）
+            Snapshot result dict (contains date, event_count, total_lines, duration_ms)
         """
         if date is None:
             date = datetime.now(timezone.utc).strftime("%Y-%m-%d")
@@ -401,50 +455,55 @@ class SchedulerService:
 
     async def trigger_projection_fetch_now(self, date: Optional[str] = None) -> dict:
         """
-        手動觸發投影資料預取
+        Manually trigger projection data prefetch
         
         Args:
-            date: 日期（YYYY-MM-DD），None 表示今天
+            date: Date (YYYY-MM-DD), None means today
         
         Returns:
-            投影資料 dict
+            Projections dict
         """
         if date is None:
             date = datetime.now(timezone.utc).strftime("%Y-%m-%d")
         return await projection_service.fetch_and_store(date)
+
+    async def trigger_lineup_fetch_now(self, date: Optional[str] = None) -> dict:
+        if date is None:
+            date = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+        return await lineup_service.fetch_and_store(date)
     
     async def trigger_now(self):
         """
-        立即觸發每日分析任務
+        Manually trigger daily analysis job
         
-        用於手動測試或需要立即更新數據時
+        Used for manual testing or when needing immediate data refresh
         
         Returns:
-            分析結果
+            Analysis result
         """
         return await self._run_daily_analysis_job()
     
     async def trigger_csv_download_now(self) -> bool:
         """
-        立即觸發 CSV 下載任務
+        Manually trigger CSV download job
         
-        用於手動測試或需要立即更新數據時
-        不需要等到排程時間
+        Used for manual testing or when an immediate data refresh is needed.
+        No need to wait for the scheduled time.
         
         Returns:
-            bool: 下載是否成功
+            bool: Whether download succeeded
         
-        使用方式:
+        Usage:
             success = await scheduler_service.trigger_csv_download_now()
         """
         return await csv_downloader_service.download()
     
     def get_next_run_time(self) -> Optional[str]:
         """
-        取得每日分析的下次執行時間
+        Get the next run time for daily analysis
         
         Returns:
-            下次執行時間的 ISO 格式字串,或 None
+            ISO formatted datetime string for next run, or None
         """
         if not self._scheduler:
             return None
@@ -456,10 +515,10 @@ class SchedulerService:
     
     def get_csv_download_next_run_time(self) -> Optional[str]:
         """
-        取得 CSV 下載的下次執行時間
+        Get the next run time for CSV download
         
         Returns:
-            下次執行時間的 ISO 格式字串,或 None
+            ISO formatted datetime string for next run, or None
         """
         if not self._scheduler:
             return None
@@ -471,9 +530,9 @@ class SchedulerService:
     
     @property
     def is_running(self) -> bool:
-        """檢查排程器是否正在運行"""
+        """Check if scheduler is running"""
         return self._is_running
 
 
-# 建立全域排程器實例
+# Create global scheduler instance
 scheduler_service = SchedulerService()

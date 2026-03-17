@@ -6,12 +6,11 @@ Data source: The Odds API (live) + PostgreSQL odds_line_snapshots (historical).
 These tools are the pricing layer: they convert raw bookmaker odds into
 fair probability, consensus, movement, best price, and bookmaker disagreement.
 
-Because The Odds API calls are async and the LangGraph agent loop is sync,
-each public function uses asyncio.run() to bridge the gap.
+These public functions are async because they fetch live market data and
+should run on the caller's event loop instead of creating their own loop.
 If the API key is missing or the request fails, the tool degrades gracefully.
 """
 
-import asyncio
 import os
 import re
 import statistics
@@ -94,7 +93,7 @@ def _build_market_quote_for_line(
             "as_of": _NOW_ISO(),
             "details": {
                 "error": "queried line not specified",
-                "pricing_mode": "overview_only",
+                "pricing_mode": "unavailable",
                 "direction": dir_lower,
                 "queried_line": threshold,
                 "available_lines": available_lines,
@@ -104,21 +103,32 @@ def _build_market_quote_for_line(
 
     matched = _same_line_lines(lines, threshold)
     if not matched:
+        nearest_line = min(
+            available_lines,
+            key=lambda line: (abs(line - float(threshold)), line),
+        )
+        nearest_matches = _same_line_lines(lines, nearest_line)
+        key = "over_odds" if dir_lower == "over" else "under_odds"
+        best = max(nearest_matches, key=lambda line: line[key]) if nearest_matches else None
         return {
-            "signal": "unavailable",
+            "signal": "caution",
             "effect_size": 0,
-            "sample_size": 0,
-            "reliability": 0,
+            "sample_size": len(nearest_matches),
+            "reliability": min(len(nearest_matches) / 6, 1.0),
             "window": "today",
             "source": "odds_api",
             "as_of": _NOW_ISO(),
             "details": {
                 "error": "queried line not currently available",
-                "pricing_mode": "overview_only",
+                "pricing_mode": "line_moved",
                 "direction": dir_lower,
-                "queried_line": threshold,
+                "queried_line": float(threshold),
                 "available_lines": available_lines,
-                "matched_n_books": 0,
+                "matched_n_books": len(nearest_matches),
+                "best_line": nearest_line,
+                "best_book": best["bookmaker"] if best else None,
+                "best_odds": best[key] if best else None,
+                "market_implied_for_query": None,
             },
         }
 
@@ -186,7 +196,11 @@ async def _get_events(date: str = ""):
     )
 
 
-async def _get_player_odds(event_id: str, market_key: str):
+async def _get_player_odds(
+    event_id: str,
+    market_key: str,
+    priority: str = "interactive",
+):
     from app.services.odds_gateway import odds_gateway
     try:
         snapshot = await odds_gateway.get_market_snapshot(
@@ -195,24 +209,12 @@ async def _get_player_odds(event_id: str, market_key: str):
             regions="us",
             markets=market_key,
             odds_format="american",
-            priority="background",
+            priority=priority,
             record_hot_key=False,
         )
         return snapshot.data
     except Exception:
         return {}
-
-
-def _run_async(coro):
-    try:
-        loop = asyncio.get_event_loop()
-        if loop.is_running():
-            import concurrent.futures
-            with concurrent.futures.ThreadPoolExecutor() as pool:
-                return pool.submit(asyncio.run, coro).result()
-        return loop.run_until_complete(coro)
-    except RuntimeError:
-        return asyncio.run(coro)
 
 
 def _find_event_for_player(events: list, player: str) -> Optional[str]:
@@ -280,9 +282,43 @@ def _extract_player_lines(
     return results, matched_player, candidates, suggestions
 
 
-async def _fetch_market_data(player: str, metric: str, date: str = "") -> Tuple[List[Dict[str, Any]], Optional[str], Dict[str, Any]]:
+async def _fetch_market_data(
+    player: str,
+    metric: str,
+    date: str = "",
+    event_id: str = "",
+    priority: str = "interactive",
+) -> Tuple[List[Dict[str, Any]], Optional[str], Dict[str, Any]]:
     """Returns (lines, market_key, meta). meta contains match/error context for the caller."""
     market_key = MARKET_MAP.get(metric, f"player_{metric}")
+    if event_id:
+        odds = await _get_player_odds(event_id, market_key, priority=priority)
+        if not odds:
+            return [], market_key, {
+                "error": "no market snapshot returned for event",
+                "query_player_name": player,
+                "event_id": event_id,
+                "searched_events": 1,
+            }
+
+        lines, matched_name, candidates, suggestions = _extract_player_lines(odds, player)
+        if lines:
+            return lines, market_key, {
+                "query_player_name": player,
+                "matched_player_name": matched_name or player,
+                "event_id": event_id,
+                "searched_events": 1,
+            }
+
+        return [], market_key, {
+            "error": "player not found in requested event",
+            "query_player_name": player,
+            "event_id": event_id,
+            "searched_events": 1,
+            "suggestions": [{"name": name, "score": score} for name, score in suggestions],
+            "candidate_count": len(candidates),
+        }
+
     events = await _get_events(date)
     if not events:
         return [], None, {
@@ -295,8 +331,9 @@ async def _fetch_market_data(player: str, metric: str, date: str = "") -> Tuple[
     matched_player = None
     all_candidates = set()
     best_suggestions: List[Tuple[str, int]] = []
+    matched_event_id = None
     for ev in events:
-        odds = await _get_player_odds(ev["id"], market_key)
+        odds = await _get_player_odds(ev["id"], market_key, priority=priority)
         lines, matched_name, candidates, suggestions = _extract_player_lines(odds, player)
         all_candidates.update(candidates)
         if suggestions and not best_suggestions:
@@ -304,12 +341,14 @@ async def _fetch_market_data(player: str, metric: str, date: str = "") -> Tuple[
         if lines:
             lines_all = lines
             matched_player = matched_name
+            matched_event_id = ev["id"]
             break
 
     if lines_all:
         return lines_all, market_key, {
             "query_player_name": player,
             "matched_player_name": matched_player or player,
+            "event_id": matched_event_id,
             "searched_events": len(events),
         }
 
@@ -328,10 +367,17 @@ async def _fetch_market_data(player: str, metric: str, date: str = "") -> Tuple[
 # PUBLIC TOOLS
 # ===================================================================
 
-def get_current_market(player: str, metric: str, date: str = "") -> Dict[str, Any]:
+async def get_current_market(
+    player: str,
+    metric: str,
+    date: str = "",
+    event_id: str = "",
+) -> Dict[str, Any]:
     """All bookmaker lines, no-vig fair probability, consensus."""
     try:
-        lines, mkt_key, meta = _run_async(_fetch_market_data(player, metric, date))
+        lines, mkt_key, meta = await _fetch_market_data(
+            player, metric, date, event_id=event_id, priority="interactive"
+        )
     except Exception as e:
         return _signal_payload("unavailable", 0, 0, 0, "today", "odds_api",
                                {"error": str(e)})
@@ -351,14 +397,22 @@ def get_current_market(player: str, metric: str, date: str = "") -> Dict[str, An
                             "consensus_line": consensus_line,
                             "books": lines,
                             "n_books": len(lines),
+                            "event_id": meta.get("event_id", event_id),
                             "query_player_name": meta.get("query_player_name", player),
                             "matched_player_name": meta.get("matched_player_name", player)})
 
 
-def get_line_movement(player: str, metric: str, date: str = "") -> Dict[str, Any]:
+async def get_line_movement(
+    player: str,
+    metric: str,
+    date: str = "",
+    event_id: str = "",
+) -> Dict[str, Any]:
     """Opening vs current line, direction, magnitude."""
     try:
-        lines, _, meta = _run_async(_fetch_market_data(player, metric, date))
+        lines, _, meta = await _fetch_market_data(
+            player, metric, date, event_id=event_id, priority="interactive"
+        )
     except Exception as e:
         return _signal_payload("unavailable", 0, 0, 0, "today", "odds_api", {"error": str(e)})
 
@@ -374,14 +428,23 @@ def get_line_movement(player: str, metric: str, date: str = "") -> Dict[str, Any
                            {"current_consensus_line": current,
                             "all_lines": sorted(set(all_lines)),
                             "note": "snapshot only; historical movement requires stored odds_line_snapshots",
+                            "event_id": meta.get("event_id", event_id),
                             "query_player_name": meta.get("query_player_name", player),
                             "matched_player_name": meta.get("matched_player_name", player)})
 
 
-def get_best_price(player: str, metric: str, direction: str, date: str = "") -> Dict[str, Any]:
+async def get_best_price(
+    player: str,
+    metric: str,
+    direction: str,
+    date: str = "",
+    event_id: str = "",
+) -> Dict[str, Any]:
     """Best currently available line/odds for the intended side (over or under)."""
     try:
-        lines, _, meta = _run_async(_fetch_market_data(player, metric, date))
+        lines, _, meta = await _fetch_market_data(
+            player, metric, date, event_id=event_id, priority="interactive"
+        )
     except Exception as e:
         return _signal_payload("unavailable", 0, 0, 0, "today", "odds_api", {"error": str(e)})
 
@@ -402,16 +465,18 @@ def get_best_price(player: str, metric: str, direction: str, date: str = "") -> 
                             "best_odds": best[key],
                             "best_line": best["line"],
                             "best_fair_prob": best[fair_key],
+                            "event_id": meta.get("event_id", event_id),
                             "query_player_name": meta.get("query_player_name", player),
                             "matched_player_name": meta.get("matched_player_name", player)})
 
 
-def get_market_quote_for_line(
+async def get_market_quote_for_line(
     player: str,
     metric: str,
     threshold: float,
     direction: str,
     date: str = "",
+    event_id: str = "",
 ) -> Dict[str, Any]:
     """
     Query-specific market quote.
@@ -421,7 +486,9 @@ def get_market_quote_for_line(
     the available market lines for debugging/UI display.
     """
     try:
-        lines, _, meta = _run_async(_fetch_market_data(player, metric, date))
+        lines, _, meta = await _fetch_market_data(
+            player, metric, date, event_id=event_id, priority="interactive"
+        )
     except Exception as e:
         return _signal_payload(
             "unavailable",
@@ -430,25 +497,33 @@ def get_market_quote_for_line(
             0,
             "today",
             "odds_api",
-            {"error": str(e), "queried_line": threshold, "pricing_mode": "overview_only"},
+            {"error": str(e), "queried_line": threshold, "pricing_mode": "unavailable"},
         )
 
     if not lines:
         details = dict(meta)
         details.setdefault("error", "no lines")
-        details.update({"queried_line": threshold, "pricing_mode": "overview_only"})
+        details.update({"queried_line": threshold, "pricing_mode": "unavailable"})
         return _signal_payload("unavailable", 0, 0, 0, "today", "odds_api", details)
 
     result = _build_market_quote_for_line(lines, threshold, direction)
+    result["details"]["event_id"] = meta.get("event_id", event_id)
     result["details"]["query_player_name"] = meta.get("query_player_name", player)
     result["details"]["matched_player_name"] = meta.get("matched_player_name", player)
     return result
 
 
-def get_bookmaker_spread(player: str, metric: str, date: str = "") -> Dict[str, Any]:
+async def get_bookmaker_spread(
+    player: str,
+    metric: str,
+    date: str = "",
+    event_id: str = "",
+) -> Dict[str, Any]:
     """Disagreement across books – wide spread = uncertain market."""
     try:
-        lines, _, meta = _run_async(_fetch_market_data(player, metric, date))
+        lines, _, meta = await _fetch_market_data(
+            player, metric, date, event_id=event_id, priority="interactive"
+        )
     except Exception as e:
         return _signal_payload("unavailable", 0, 0, 0, "today", "odds_api", {"error": str(e)})
 
@@ -468,6 +543,7 @@ def get_bookmaker_spread(player: str, metric: str, date: str = "") -> Dict[str, 
                             "min_line": min(all_lines),
                             "max_line": max(all_lines),
                             "interpretation": "wide disagreement" if spread > 2 else "tight consensus",
+                            "event_id": meta.get("event_id", event_id),
                             "query_player_name": meta.get("query_player_name", player),
                             "matched_player_name": meta.get("matched_player_name", player)})
 

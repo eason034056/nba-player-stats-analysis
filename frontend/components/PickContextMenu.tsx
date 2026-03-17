@@ -25,6 +25,7 @@ import { createPortal } from "react-dom";
 import { useRouter } from "next/navigation";
 import { Plus, Minus, ExternalLink, ClipboardList, ArrowLeftRight } from "lucide-react";
 import { useBetSlip, type BetSlipPick } from "@/contexts/BetSlipContext";
+import { buildEventDetailHref } from "@/lib/event-detail-link";
 import { type DailyPick } from "@/lib/schemas";
 
 // ==================== 類型定義 ====================
@@ -238,7 +239,13 @@ export function PickContextMenu({ children, pick }: PickContextMenuProps) {
    */
   const handleViewDetails = useCallback(() => {
     const marketKey = metricToMarket(pick.metric);
-    const href = `/event/${pick.event_id}?player=${encodeURIComponent(pick.player_name)}&market=${marketKey}&threshold=${pick.threshold}`;
+    const href = buildEventDetailHref({
+      eventId: pick.event_id,
+      commenceTime: pick.commence_time,
+      player: pick.player_name,
+      market: marketKey,
+      threshold: pick.threshold,
+    });
     router.push(href);
     closeMenu();
   }, [pick, router, closeMenu]);

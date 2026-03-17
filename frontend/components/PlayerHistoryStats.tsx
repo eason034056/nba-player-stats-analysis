@@ -174,7 +174,7 @@ export function PlayerHistoryStats({
       setSearchInput(initialPlayer);
       setSelectedOpponent("");
     }
-  }, [initialPlayer]);
+  }, [initialPlayer, selectedPlayer]);
 
   useEffect(() => {
     if (initialMarket) {
@@ -183,7 +183,7 @@ export function PlayerHistoryStats({
         setMetric(mappedMetric);
       }
     }
-  }, [initialMarket]);
+  }, [initialMarket, metric]);
   
   const [recentN, setRecentN] = useState<number>(0);
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
@@ -313,12 +313,12 @@ export function PlayerHistoryStats({
       <div className="space-y-4">
         {/* Player search */}
         <div className="relative">
-          <label className="block text-sm font-bold text-dark mb-2">
-            <User className="inline w-4 h-4 mr-1.5" />
+          <label className="control-label mb-2">
+            <User className="h-4 w-4 text-red" />
             Select Player (from CSV database)
           </label>
           <div className="relative">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray" />
+            <Search className="pointer-events-none absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-light" />
             <input
               type="text"
               value={searchInput}
@@ -328,33 +328,33 @@ export function PlayerHistoryStats({
               }}
               onFocus={() => setIsDropdownOpen(true)}
               placeholder="Search player name..."
-              className="input pl-10 w-full"
+              className="control-input w-full pl-12"
             />
             {isLoadingPlayers && (
-              <Loader2 className="absolute right-3 top-1/2 -translate-y-1/2 w-5 h-5 text-red animate-spin" />
+              <Loader2 className="absolute right-4 top-1/2 h-5 w-5 -translate-y-1/2 animate-spin text-red" />
             )}
           </div>
 
           {/* Dropdown */}
           {isDropdownOpen && playerList.length > 0 && (
-            <ul className="absolute z-50 w-full mt-2 max-h-60 overflow-auto bg-white border-2 border-dark rounded-lg">
+            <ul className="control-popover absolute z-50 mt-2 max-h-60 w-full">
               {playerList.slice(0, 50).map((player) => (
                 <li
                   key={player}
                   onClick={() => handleSelectPlayer(player)}
                   className={cn(
-                    "px-4 py-3 cursor-pointer flex items-center gap-3 transition-colors",
+                    "control-option flex items-center gap-3 px-4 py-3",
                     player === selectedPlayer
-                      ? "bg-yellow text-dark"
-                      : "text-dark hover:bg-cream"
+                      ? "control-option-active"
+                      : "text-dark"
                   )}
                 >
-                  <User className="w-4 h-4 text-gray" />
-                  <span className="font-medium">{player}</span>
+                  <User className="h-4 w-4 text-light" />
+                  <span className="font-medium text-inherit">{player}</span>
                 </li>
               ))}
               {playerList.length > 50 && (
-                <li className="px-4 py-2 text-sm text-gray text-center">
+                <li className="px-4 py-2 text-center text-sm text-light">
                   Showing first 50, please enter keywords to narrow down
                 </li>
               )}
@@ -465,11 +465,11 @@ export function PlayerHistoryStats({
         {selectedPlayer && teammateList.length > 0 && (
           <div className="space-y-3 pt-2">
             <div>
-              <label className="block text-sm font-bold text-dark">
-                <Users className="inline w-4 h-4 mr-1.5" />
+              <label className="control-label">
+                <Users className="h-4 w-4 text-red" />
                 Teammate Impact Filter
               </label>
-              <p className="text-xs text-gray mt-1">
+              <p className="control-hint mt-1">
                 Only teammates from the same team can be selected
               </p>
             </div>
@@ -477,7 +477,7 @@ export function PlayerHistoryStats({
               {/* Teammate search + multi-select */}
               <div className="relative">
                 <div className="relative">
-                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray" />
+                  <Search className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-light" />
                   <input
                     type="text"
                     value={teammateSearchInput}
@@ -487,12 +487,12 @@ export function PlayerHistoryStats({
                     }}
                     onFocus={() => setIsTeammateDropdownOpen(true)}
                     placeholder="Search teammate to add..."
-                    className="input pl-10 w-full text-sm"
+                    className="control-input w-full pl-11 text-sm"
                   />
                 </div>
 
                 {isTeammateDropdownOpen && filteredTeammateList.length > 0 && (
-                  <ul className="absolute z-50 w-full mt-1 max-h-48 overflow-auto bg-white border-2 border-dark rounded-lg shadow-lg">
+                  <ul className="control-popover absolute z-50 mt-1 max-h-48 w-full">
                     {filteredTeammateList.slice(0, 30).map((teammate) => (
                       <li
                         key={teammate}
@@ -504,9 +504,9 @@ export function PlayerHistoryStats({
                             setTeammatePlayedFilter("without");
                           }
                         }}
-                        className="px-3 py-2 cursor-pointer text-sm text-dark hover:bg-cream flex items-center gap-2"
+                        className="control-option flex items-center gap-2 px-3 py-2 text-sm text-dark"
                       >
-                        <User className="w-3 h-3 text-gray" />
+                        <User className="h-3 w-3 text-light" />
                         {teammate}
                       </li>
                     ))}
@@ -535,7 +535,7 @@ export function PlayerHistoryStats({
                 {teammateFilter.map((t) => (
                   <span
                     key={t}
-                    className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-yellow/30 border border-yellow text-dark text-xs font-bold rounded-full"
+                    className="control-chip-active inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold"
                   >
                     {t}
                     <button
@@ -546,7 +546,7 @@ export function PlayerHistoryStats({
                           setTeammatePlayedFilter("all");
                         }
                       }}
-                      className="hover:text-red transition-colors"
+                      className="transition-colors hover:text-white/70"
                     >
                       <X className="w-3 h-3" />
                     </button>

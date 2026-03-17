@@ -6,6 +6,7 @@ Usage:
   python evaluation/run_demos.py
 """
 
+import asyncio
 import json
 import os
 import sys
@@ -31,7 +32,7 @@ DEMO_PROMPTS = [
 ]
 
 
-def _run_one(app, query: str) -> dict:
+async def _run_one(app, query: str) -> dict:
     """Run a single query through the graph, return full final state."""
     initial = {
         "messages": [],
@@ -51,14 +52,14 @@ def _run_one(app, query: str) -> dict:
     }
 
     final = {}
-    for event in app.stream(initial, stream_mode="updates"):
+    async for event in app.astream(initial, stream_mode="updates"):
         for node, update in event.items():
             final.update(update)
 
     return final
 
 
-def main():
+async def main():
     app = compile_graph()
     timestamp = datetime.now().strftime("%Y-%m-%d %H:%M")
 
@@ -68,7 +69,7 @@ def main():
         print(f"  Demo {i}/{len(DEMO_PROMPTS)}: {prompt}")
         print(f"{'='*60}")
         try:
-            state = _run_one(app, prompt)
+            state = await _run_one(app, prompt)
             sc = state.get("scorecard", {})
             fd = state.get("final_decision", {})
             critic = state.get("critic_notes", [])
@@ -170,4 +171,4 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    asyncio.run(main())

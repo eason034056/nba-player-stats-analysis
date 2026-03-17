@@ -12,7 +12,7 @@ main.py - FastAPI 應用程式主入口點
 from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from app.api import agent, health, nba, daily_picks, projections, odds_history
+from app.api import agent, health, nba, daily_picks, projections, odds_history, lineups
 from app.services.cache import cache_service
 from app.services.db import db_service
 from app.services.scheduler import scheduler_service
@@ -126,6 +126,7 @@ app.include_router(agent.router)
 app.include_router(daily_picks.router)  # 每日高機率球員分析
 app.include_router(projections.router)  # 球員投影資料（SportsDataIO）
 app.include_router(odds_history.router)  # 盤口歷史快照（Line Movement Tracking）
+app.include_router(lineups.router)  # 免費先發預測共識
 
 
 # 根路徑重導向到 API 文件

@@ -25,6 +25,8 @@ import {
 
 const STORAGE_KEY = "agent_widget_state";
 
+export type AgentWidgetViewMode = "panel" | "workspace";
+
 interface AgentWidgetSubmitOptions {
   action: AgentAction;
   message: string;
@@ -38,8 +40,16 @@ interface AgentWidgetContextValue {
   messages: AgentThreadMessage[];
   pageContext: AgentPageContext;
   selectedPickContext: AgentPickContext | null;
+  viewMode: AgentWidgetViewMode;
+  isSuggestionsOpen: boolean;
+  isAnalysisPanelOpen: boolean;
   openWidget: () => void;
   closeWidget: () => void;
+  setViewMode: (viewMode: AgentWidgetViewMode) => void;
+  toggleSuggestions: () => void;
+  closeSuggestions: () => void;
+  toggleAnalysisPanel: () => void;
+  closeAnalysisPanel: () => void;
   setPageContext: (page: Partial<AgentPageContext>) => void;
   setSelectedPickContext: (pick: AgentPickContext | null) => void;
   clearSelectedPickContext: () => void;
@@ -53,16 +63,50 @@ interface StoredAgentWidgetState {
   threadId: string;
   pageContext: AgentPageContext;
   selectedPickContext: AgentPickContext | null;
+  viewMode: AgentWidgetViewMode;
 }
 
 const AgentWidgetContext = createContext<AgentWidgetContextValue | undefined>(
   undefined,
 );
 
+const DEFAULT_PAGE_CONTEXT = (route: string): AgentPageContext => ({
+  route,
+  date: null,
+  selected_teams: [],
+});
+
+const readStoredState = (route: string): StoredAgentWidgetState | null => {
+  if (typeof window === "undefined") {
+    return null;
+  }
+
+  const rawState = sessionStorage.getItem(STORAGE_KEY);
+  if (!rawState) {
+    return null;
+  }
+
+  try {
+    const parsedState = JSON.parse(rawState) as StoredAgentWidgetState;
+    return {
+      isOpen: parsedState.isOpen ?? false,
+      messages: parsedState.messages ?? [],
+      threadId: parsedState.threadId ?? "",
+      pageContext: parsedState.pageContext ?? DEFAULT_PAGE_CONTEXT(route),
+      selectedPickContext: parsedState.selectedPickContext ?? null,
+      viewMode: parsedState.viewMode ?? "panel",
+    };
+  } catch {
+    sessionStorage.removeItem(STORAGE_KEY);
+    return null;
+  }
+};
+
 const createLocalId = () => {
   if (typeof crypto !== "undefined" && "randomUUID" in crypto) {
     return crypto.randomUUID();
   }
+
   return `${Date.now()}-${Math.random().toString(16).slice(2)}`;
 };
 
@@ -84,6 +128,7 @@ const createAssistantMessage = (
   text: response.reply,
   action: response.action,
   status: response.status,
+  quick_actions: response.quick_actions,
   verdict: response.verdict ?? null,
   slip_review: response.slip_review ?? null,
 });
@@ -101,51 +146,34 @@ const getAgentErrorMessage = (error: unknown) => {
 
 export const AgentWidgetProvider = ({ children }: { children: ReactNode }) => {
   const pathname = usePathname();
+  const route = pathname || "/";
+  const storedState = readStoredState(route);
   const { picks } = useBetSlip();
-  const [isOpen, setIsOpen] = useState(false);
+  const [isOpen, setIsOpen] = useState(storedState?.isOpen ?? false);
   const [isPending, setIsPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [messages, setMessages] = useState<AgentThreadMessage[]>([]);
-  const [threadId, setThreadId] = useState("");
-  const [pageContext, setPageContextState] = useState<AgentPageContext>({
-    route: pathname || "/",
-    date: null,
-    selected_teams: [],
-  });
+  const [messages, setMessages] = useState<AgentThreadMessage[]>(
+    storedState?.messages ?? [],
+  );
+  const [threadId, setThreadId] = useState(storedState?.threadId ?? "");
+  const [pageContext, setPageContextState] = useState<AgentPageContext>(
+    storedState?.pageContext ?? DEFAULT_PAGE_CONTEXT(route),
+  );
   const [selectedPickContext, setSelectedPickContextState] =
-    useState<AgentPickContext | null>(null);
+    useState<AgentPickContext | null>(storedState?.selectedPickContext ?? null);
   const [lastRequest, setLastRequest] = useState<AgentChatRequest | null>(null);
-
-  useEffect(() => {
-    const rawState = sessionStorage.getItem(STORAGE_KEY);
-    if (!rawState) {
-      return;
-    }
-
-    try {
-      const parsedState = JSON.parse(rawState) as StoredAgentWidgetState;
-      setIsOpen(parsedState.isOpen);
-      setMessages(parsedState.messages || []);
-      setThreadId(parsedState.threadId || "");
-      setPageContextState(
-        parsedState.pageContext || {
-          route: pathname || "/",
-          date: null,
-          selected_teams: [],
-        },
-      );
-      setSelectedPickContextState(parsedState.selectedPickContext || null);
-    } catch {
-      sessionStorage.removeItem(STORAGE_KEY);
-    }
-  }, [pathname]);
+  const [viewMode, setViewModeState] = useState<AgentWidgetViewMode>(
+    storedState?.viewMode ?? "panel",
+  );
+  const [isSuggestionsOpen, setIsSuggestionsOpen] = useState(false);
+  const [isAnalysisPanelOpen, setIsAnalysisPanelOpen] = useState(false);
 
   useEffect(() => {
     setPageContextState((current) => ({
       ...current,
-      route: pathname || current.route || "/",
+      route: route || current.route || "/",
     }));
-  }, [pathname]);
+  }, [route]);
 
   useEffect(() => {
     const storedState: StoredAgentWidgetState = {
@@ -154,9 +182,16 @@ export const AgentWidgetProvider = ({ children }: { children: ReactNode }) => {
       threadId,
       pageContext,
       selectedPickContext,
+      viewMode,
     };
+
     sessionStorage.setItem(STORAGE_KEY, JSON.stringify(storedState));
-  }, [isOpen, messages, pageContext, selectedPickContext, threadId]);
+  }, [isOpen, messages, pageContext, selectedPickContext, threadId, viewMode]);
+
+  const closeTransientChrome = useCallback(() => {
+    setIsSuggestionsOpen(false);
+    setIsAnalysisPanelOpen(false);
+  }, []);
 
   const openWidget = useCallback(() => {
     setIsOpen(true);
@@ -164,17 +199,41 @@ export const AgentWidgetProvider = ({ children }: { children: ReactNode }) => {
 
   const closeWidget = useCallback(() => {
     setIsOpen(false);
+    closeTransientChrome();
+  }, [closeTransientChrome]);
+
+  const setViewMode = useCallback((nextViewMode: AgentWidgetViewMode) => {
+    setViewModeState(nextViewMode);
+    if (nextViewMode === "panel") {
+      setIsAnalysisPanelOpen(false);
+    }
+  }, []);
+
+  const toggleSuggestions = useCallback(() => {
+    setIsSuggestionsOpen((current) => !current);
+  }, []);
+
+  const closeSuggestions = useCallback(() => {
+    setIsSuggestionsOpen(false);
+  }, []);
+
+  const toggleAnalysisPanel = useCallback(() => {
+    setIsAnalysisPanelOpen((current) => !current);
+  }, []);
+
+  const closeAnalysisPanel = useCallback(() => {
+    setIsAnalysisPanelOpen(false);
   }, []);
 
   const setPageContext = useCallback(
     (page: Partial<AgentPageContext>) => {
       setPageContextState((current) => ({
-        route: page.route ?? pathname ?? current.route,
+        route: page.route ?? route ?? current.route,
         date: page.date ?? current.date ?? null,
         selected_teams: page.selected_teams ?? current.selected_teams,
       }));
     },
-    [pathname],
+    [route],
   );
 
   const setSelectedPickContext = useCallback((pick: AgentPickContext | null) => {
@@ -221,8 +280,8 @@ export const AgentWidgetProvider = ({ children }: { children: ReactNode }) => {
         const response = await sendAgentChat(request);
         setThreadId(response.thread || request.thread);
         setMessages((current) => [...current, createAssistantMessage(response)]);
-      } catch (error) {
-        setError(getAgentErrorMessage(error));
+      } catch (requestError) {
+        setError(getAgentErrorMessage(requestError));
       } finally {
         setIsPending(false);
       }
@@ -239,6 +298,7 @@ export const AgentWidgetProvider = ({ children }: { children: ReactNode }) => {
         message,
         context: buildRequestContext(contextPatch),
       };
+
       setThreadId(nextThreadId);
       await runRequest(request, true);
     },
@@ -249,6 +309,7 @@ export const AgentWidgetProvider = ({ children }: { children: ReactNode }) => {
     if (!lastRequest) {
       return;
     }
+
     await runRequest(lastRequest, false);
   }, [lastRequest, runRequest]);
 
@@ -260,8 +321,16 @@ export const AgentWidgetProvider = ({ children }: { children: ReactNode }) => {
       messages,
       pageContext,
       selectedPickContext,
+      viewMode,
+      isSuggestionsOpen,
+      isAnalysisPanelOpen,
       openWidget,
       closeWidget,
+      setViewMode,
+      toggleSuggestions,
+      closeSuggestions,
+      toggleAnalysisPanel,
+      closeAnalysisPanel,
       setPageContext,
       setSelectedPickContext,
       clearSelectedPickContext,
@@ -270,10 +339,14 @@ export const AgentWidgetProvider = ({ children }: { children: ReactNode }) => {
     }),
     [
       clearSelectedPickContext,
+      closeAnalysisPanel,
+      closeSuggestions,
       closeWidget,
       error,
+      isAnalysisPanelOpen,
       isOpen,
       isPending,
+      isSuggestionsOpen,
       messages,
       openWidget,
       pageContext,
@@ -281,7 +354,11 @@ export const AgentWidgetProvider = ({ children }: { children: ReactNode }) => {
       selectedPickContext,
       setPageContext,
       setSelectedPickContext,
+      setViewMode,
       submitAction,
+      toggleAnalysisPanel,
+      toggleSuggestions,
+      viewMode,
     ],
   );
 
@@ -297,5 +374,6 @@ export const useAgentWidget = () => {
   if (!context) {
     throw new Error("useAgentWidget must be used within AgentWidgetProvider");
   }
+
   return context;
 };

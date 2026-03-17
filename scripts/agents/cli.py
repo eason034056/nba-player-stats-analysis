@@ -9,10 +9,10 @@ Usage:
 """
 
 import argparse
+import asyncio
 import json
 import os
 import sys
-from datetime import datetime
 
 _AGENTS_DIR = os.path.dirname(os.path.abspath(__file__))
 _PROJECT_ROOT = os.path.abspath(os.path.join(_AGENTS_DIR, "..", ".."))
@@ -41,8 +41,8 @@ def _format_scorecard(sc: dict) -> str:
     mip = sc.get('market_implied_probability')
     lines.append(f"  Market Implied : {mip:.1%}" if mip else "  Market Implied : N/A")
     ev = sc.get('expected_value_pct', 0)
-    lines.append(f"  Expected Value : {ev:+.2%}")
-    lines.append(f"  Pricing Mode   : {sc.get('market_pricing_mode', 'overview_only')}")
+    lines.append(f"  Expected Value : {ev:+.2%}" if ev is not None else "  Expected Value : N/A")
+    lines.append(f"  Pricing Mode   : {sc.get('market_pricing_mode', 'unavailable')}")
     bb = sc.get('best_book')
     bl = sc.get('best_line')
     if bb:
@@ -59,6 +59,15 @@ def _format_scorecard(sc: dict) -> str:
     flags = sc.get('data_quality_flags', [])
     if flags:
         lines.append(f"  Quality Flags  : {', '.join(flags)}")
+    query_ctx = sc.get("query_aligned_context", {}) or {}
+    historical_ctx = query_ctx.get("historical", {}) if isinstance(query_ctx, dict) else {}
+    market_ctx = query_ctx.get("market", {}) if isinstance(query_ctx, dict) else {}
+    historical_query_prob = historical_ctx.get("query_probability")
+    market_query_prob = market_ctx.get("query_probability")
+    if historical_query_prob is not None:
+        lines.append(f"  Hist Query P   : {historical_query_prob:.1%}")
+    if market_query_prob is not None:
+        lines.append(f"  Mkt Query P    : {market_query_prob:.1%}")
     return "\n".join(lines)
 
 
@@ -69,15 +78,13 @@ def _format_dimensions(dims: dict) -> str:
             sig = info.get("signal", "?")
             rel = info.get("reliability", 0)
             det = info.get("detail", "")
-            lines.append(f"    {name:15s}  {sig:12s}  rel={rel:.2f}  {det[:60]}")
+            lines.append(f"    {name:15s}  {sig:12s}  rel={rel:.2f}  {det}")
     return "\n".join(lines) if lines else "    (none)"
 
 
-def run_query(query: str, app=None, verbose: bool = False, log_data: bool = False) -> dict:
+async def run_query(query: str, app=None, verbose: bool = False, log_data: bool = False) -> dict:
     if app is None:
         app = compile_graph()
-
-    today = datetime.now().strftime("%Y-%m-%d")
 
     initial_state = {
         "messages": [],
@@ -100,9 +107,12 @@ def run_query(query: str, app=None, verbose: bool = False, log_data: bool = Fals
     print(f"  Query: {query}")
     print(f"{'─' * 64}")
 
+    final_state = initial_state.copy()
+
     # Stream node events
-    for event in app.stream(initial_state, stream_mode="updates"):
+    async for event in app.astream(initial_state, stream_mode="updates"):
         for node_name, update in event.items():
+            final_state.update(update)
             if node_name == "planner":
                 pq = update.get("parsed_query", {})
                 player = pq.get("player", "?")
@@ -131,14 +141,15 @@ def run_query(query: str, app=None, verbose: bool = False, log_data: bool = Fals
                 sc = update.get("scorecard", {})
                 mp = sc.get("model_probability", 0)
                 mip = sc.get("market_implied_probability")
-                ev = sc.get("expected_value_pct", 0)
+                ev = sc.get("expected_value_pct")
                 mip_str = f"{mip:.1%}" if mip else "N/A"
                 direction = sc.get("direction", "over")
                 dir_label = f" ({direction})" if direction and direction != "any" else ""
-                pricing_mode = sc.get("market_pricing_mode", "overview_only")
+                pricing_mode = sc.get("market_pricing_mode", "unavailable")
+                ev_str = f"{ev:+.2%}" if ev is not None else "N/A"
                 print(
                     f"  [Scoring]    Model {mp:.1%} vs Market {mip_str}{dir_label} "
-                    f"[{pricing_mode}] -> EV {ev:+.2%}"
+                    f"[{pricing_mode}] -> EV {ev_str}"
                 )
 
             elif node_name == "critic":
@@ -150,12 +161,6 @@ def run_query(query: str, app=None, verbose: bool = False, log_data: bool = Fals
                 dec = fd.get("decision", "?").upper()
                 conf = fd.get("confidence", 0)
                 print(f"  [Synth]      Final: {dec} (confidence {conf:.1%})")
-
-    # Gather final state
-    final_state = initial_state.copy()
-    for event in app.stream(initial_state, stream_mode="updates"):
-        for _, update in event.items():
-            final_state.update(update)
 
     fd = final_state.get("final_decision", {})
     sc = final_state.get("scorecard", {})
@@ -195,7 +200,7 @@ def run_query(query: str, app=None, verbose: bool = False, log_data: bool = Fals
     return fd
 
 
-def main():
+async def main_async():
     parser = argparse.ArgumentParser(description="NBA Multi-Agent Betting Advisor")
     parser.add_argument("query", nargs="*", help="Query string (optional, for one-shot mode)")
     parser.add_argument("--log-data", action="store_true", help="輸出 Agent 抓取的所有資料（含中文解釋）")
@@ -206,7 +211,7 @@ def main():
 
     if args.query:
         query = " ".join(args.query)
-        run_query(query, verbose=args.verbose, log_data=args.log_data)
+        await run_query(query, verbose=args.verbose, log_data=args.log_data)
         return
 
     print("\nType a question, or 'quit' to exit.")
@@ -216,7 +221,7 @@ def main():
     app = compile_graph()
     while True:
         try:
-            query = input("> ").strip()
+            query = (await asyncio.to_thread(input, "> ")).strip()
         except (EOFError, KeyboardInterrupt):
             print("\nBye!")
             break
@@ -228,10 +233,10 @@ def main():
             break
 
         try:
-            run_query(query, app=app, verbose=args.verbose, log_data=args.log_data)
+            await run_query(query, app=app, verbose=args.verbose, log_data=args.log_data)
         except Exception as e:
             print(f"\n  ERROR: {e}\n")
 
 
 if __name__ == "__main__":
-    main()
+    asyncio.run(main_async())

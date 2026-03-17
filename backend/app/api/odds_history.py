@@ -1,20 +1,20 @@
 """
-odds_history.py - 盤口歷史 API 端點
+odds_history.py - Odds History API Endpoint
 
-提供盤口快照資料的查詢和手動觸發功能，用於 Line Movement Tracking。
+Provides query and manual triggering functionality for line snapshot data, for Line Movement Tracking.
 
-端點：
-- GET  /api/nba/odds-history          - 查詢球員/market 的盤口歷史快照
-- POST /api/nba/odds-history/snapshot  - 手動觸發一次盤口快照
+Endpoints:
+- GET  /api/nba/odds-history           - Query the odds line snapshot history for a player/market
+- POST /api/nba/odds-history/snapshot  - Manually trigger a line snapshot
 
-資料來源：
-    odds_line_snapshots 表（由 odds_snapshot_service 定期寫入）
+Data source:
+    odds_line_snapshots table (periodically written by odds_snapshot_service)
 
-使用方式：
-    # 查詢 Stephen Curry 在 2026-02-08 的 player_points 盤口變動
+Usage:
+    # Query line movement of Stephen Curry's player_points on 2026-02-08
     GET /api/nba/odds-history?player_name=Stephen Curry&market=player_points&date=2026-02-08
 
-    # 手動觸發今日快照
+    # Manually trigger today's snapshot
     POST /api/nba/odds-history/snapshot?date=2026-02-08
 """
 
@@ -34,18 +34,16 @@ from app.models.schemas import (
     OddsSnapshotTriggerResponse,
 )
 
-
-# 建立路由器
-# prefix: 所有端點都以 /api/nba/odds-history 開頭
-# tags: 在 Swagger 文件中的分組標籤
+# Create the router
+# prefix: All endpoints start with /api/nba/odds-history
+# tags: Group label in the Swagger documentation
 router = APIRouter(
     prefix="/api/nba/odds-history",
     tags=["odds-history"],
 )
 
-
-# 查詢 SQL：取得指定球員/market/日期的所有快照資料
-# 按 snapshot_at 和 bookmaker 排序，方便後續按時間分組
+# Query SQL: retrieve all snapshot data for the specified player/market/date
+# Sort by snapshot_at and bookmaker for later grouping by time
 QUERY_HISTORY_SQL = """
 SELECT
     snapshot_at,
@@ -67,45 +65,45 @@ ORDER BY snapshot_at ASC, bookmaker ASC
 @router.get(
     "",
     response_model=OddsHistoryResponse,
-    summary="查詢盤口歷史",
+    summary="Query Odds Line History",
     description="""
-    查詢指定球員在指定 market 和日期的所有盤口快照。
+    Query all line snapshots for a specified player, market, and date.
 
-    回傳按時間排序的快照列表，每個快照包含：
-    - 各博彩公司的盤口線、賠率、no-vig 機率
-    - 市場共識（所有博彩公司的去水機率平均）
+    Returns a time-ordered list of snapshots. Each snapshot contains:
+    - Per-bookmaker lines, odds, no-vig probabilities
+    - Market consensus (average no-vig probability across all bookmakers)
 
-    用於 Line Movement Tracking：觀察盤口從開盤到封盤的變化。
+    Used for Line Movement Tracking: observe how lines change from opening to closing.
     """
 )
 async def get_odds_history(
     player_name: str = Query(
         ...,
-        description="球員名稱（如 Stephen Curry）"
+        description="Player name (e.g. Stephen Curry)"
     ),
     market: str = Query(
         ...,
-        description="市場類型（player_points, player_rebounds, player_assists, player_points_rebounds_assists）"
+        description="Market type (player_points, player_rebounds, player_assists, player_points_rebounds_assists)"
     ),
     date: Optional[str] = Query(
         default=None,
-        description="比賽日期（YYYY-MM-DD），預設今天"
+        description="Game date (YYYY-MM-DD), defaults to today"
     ),
 ):
     """
-    查詢盤口歷史快照
+    Query odds line history snapshots.
 
-    從 odds_line_snapshots 表查詢指定球員/market/日期的所有快照，
-    按 snapshot_at 分組，每組內包含各 bookmaker 的 no-vig 結果。
-    Consensus 在查詢時即時計算（AVG），不另外儲存。
+    Query all snapshots for the specified player/market/date from the odds_line_snapshots table,
+    group by snapshot_at, with each group containing the no-vig results for each bookmaker.
+    Consensus (AVG) is calculated on the fly during the query and not stored elsewhere.
 
     Args:
-        player_name: 球員名稱（必填）
-        market: 市場類型（必填）
-        date: 比賽日期，預設 UTC 今天
+        player_name: Player name (required)
+        market: Market type (required)
+        date: Game date, defaults to UTC today
 
     Returns:
-        OddsHistoryResponse: 包含按時間排序的快照列表
+        OddsHistoryResponse: List of snapshots sorted by time
 
     Example:
         GET /api/nba/odds-history?player_name=Stephen Curry&market=player_points&date=2026-02-08
@@ -113,13 +111,13 @@ async def get_odds_history(
     if not db_service.is_connected:
         raise HTTPException(
             status_code=503,
-            detail="PostgreSQL 未連線，無法查詢盤口歷史"
+            detail="PostgreSQL is not connected, cannot query odds history"
         )
 
     if date is None:
         date = datetime.now(timezone.utc).strftime("%Y-%m-%d")
 
-    # 驗證 market
+    # Validate market
     valid_markets = [
         "player_points", "player_rebounds",
         "player_assists", "player_points_rebounds_assists",
@@ -127,7 +125,7 @@ async def get_odds_history(
     if market not in valid_markets:
         raise HTTPException(
             status_code=400,
-            detail=f"無效的 market: {market}。有效值: {valid_markets}"
+            detail=f"Invalid market: {market}. Valid values: {valid_markets}"
         )
 
     try:
@@ -136,15 +134,15 @@ async def get_odds_history(
     except Exception as e:
         raise HTTPException(
             status_code=500,
-            detail=f"查詢盤口歷史失敗: {str(e)}"
+            detail=f"Failed to query odds history: {str(e)}"
         )
 
-    # 按 snapshot_at 分組
-    # defaultdict(list): 自動為新 key 建立空 list
-    # 把同一時間的所有 bookmaker rows 分在同一組
+    # Group by snapshot_at
+    # defaultdict(list): automatically creates an empty list for new keys
+    # All bookmaker rows at the same time are grouped together
     groups: Dict[str, list] = defaultdict(list)
     for row in rows:
-        # snapshot_at 可能是 datetime 物件，轉為 ISO 字串作為 key
+        # snapshot_at might be a datetime object, convert to ISO string as key
         snap_time = row["snapshot_at"]
         if isinstance(snap_time, datetime):
             snap_key = snap_time.isoformat()
@@ -153,11 +151,11 @@ async def get_odds_history(
 
         groups[snap_key].append(row)
 
-    # 建構回應
+    # Build response
     snapshots: List[OddsSnapshotGroup] = []
 
     for snap_key, group_rows in groups.items():
-        # 各 bookmaker 的盤口資料
+        # Line data for each bookmaker
         lines = [
             OddsLineSnapshot(
                 bookmaker=r["bookmaker"],
@@ -171,8 +169,8 @@ async def get_odds_history(
             for r in group_rows
         ]
 
-        # 計算 consensus（去水機率平均值）
-        # 只納入有 over_fair_prob 和 under_fair_prob 的 rows
+        # Calculate consensus (average no-vig probability)
+        # Only include rows with both over_fair_prob and under_fair_prob present
         valid_probs = [
             r for r in group_rows
             if r["over_fair_prob"] is not None and r["under_fair_prob"] is not None
@@ -184,7 +182,7 @@ async def get_odds_history(
             avg_over = sum(float(r["over_fair_prob"]) for r in valid_probs) / n
             avg_under = sum(float(r["under_fair_prob"]) for r in valid_probs) / n
 
-            # 平均盤口線
+            # Average line value
             valid_lines = [float(r["line"]) for r in valid_probs if r["line"] is not None]
             avg_line = sum(valid_lines) / len(valid_lines) if valid_lines else None
 
@@ -215,33 +213,33 @@ async def get_odds_history(
 @router.post(
     "/snapshot",
     response_model=OddsSnapshotTriggerResponse,
-    summary="手動觸發盤口快照",
+    summary="Manually Trigger Odds Snapshot",
     description="""
-    手動觸發一次盤口快照，立即擷取所有賽事的盤口資料並寫入 PostgreSQL。
+    Manually trigger a snapshot, immediately capture all event line data and write to PostgreSQL.
 
-    通常用於：
-    - 排程器之外的手動更新
-    - 測試快照功能
-    - 在特定時間點（如大傷病消息後）捕捉盤口變化
+    Common use cases:
+    - Manual updates outside of the scheduler
+    - Testing snapshot functionality
+    - Capturing line changes at specific moments (e.g. after big injury news)
     """
 )
 async def trigger_snapshot(
     date: Optional[str] = Query(
         default=None,
-        description="快照日期（YYYY-MM-DD），預設今天"
+        description="Snapshot date (YYYY-MM-DD), defaults to today"
     ),
 ):
     """
-    手動觸發盤口快照
+    Manually trigger an odds line snapshot.
 
-    直接呼叫 odds_snapshot_service.take_snapshot()，
-    擷取所有賽事的賠率、計算 no-vig、寫入 PostgreSQL。
+    Directly call odds_snapshot_service.take_snapshot(),
+    captures all event odds, computes no-vig, writes to PostgreSQL.
 
     Args:
-        date: 快照日期，預設 UTC 今天
+        date: Snapshot date, defaults to UTC today
 
     Returns:
-        OddsSnapshotTriggerResponse: 快照執行結果摘要
+        OddsSnapshotTriggerResponse: Snapshot execution result summary
     """
     if date is None:
         date = datetime.now(timezone.utc).strftime("%Y-%m-%d")
@@ -255,13 +253,13 @@ async def trigger_snapshot(
             total_lines=result["total_lines"],
             duration_ms=result["duration_ms"],
             message=(
-                f"成功擷取 {result['total_lines']} 筆盤口資料 "
-                f"（{result['event_count']} 場賽事，耗時 {result['duration_ms']}ms）"
+                f"Successfully captured {result['total_lines']} odds line records "
+                f"({result['event_count']} events, took {result['duration_ms']}ms)"
             ),
         )
 
     except Exception as e:
         raise HTTPException(
             status_code=500,
-            detail=f"盤口快照失敗: {str(e)}"
+            detail=f"Odds snapshot failed: {str(e)}"
         )

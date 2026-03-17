@@ -1,73 +1,86 @@
-# No-Vig NBA 🏀
+# NBA Multi-Agent Betting Advisor
 
-NBA 球員得分 Props「去水機率」計算網站
+This project is an implementation of a multi-agent system for Generative AI Assignment 4. The system uses `LangGraph` to coordinate multiple LLM agents and combines NBA historical data, live odds, and lineup information to provide analysis results for player props. It also features an interactive web front-end for users to input questions and view responses directly.
 
-## 功能
+## Assignment Requirements Mapping
 
-- 📅 查看 NBA 每日賽事
-- 🎯 計算球員得分 Props 的去水機率
-- 📊 比較多家博彩公司的賠率
-- 📈 顯示市場共識機率
+- At least 2 LLM-based agents: This project currently includes several agents such as `planner`, `historical_agent`, `projection_agent`, `market_agent`, `critic`, and `synthesizer`
+- Agent framework: Uses `LangGraph`
+- Front-end: Provides a `Next.js` web interface, and a CLI entry point via `scripts/agents/cli.py`
+- README requirement: This document explains how to launch the project and obtain necessary data
 
-## 技術棧
+## Project Features
 
-### 後端 (Python)
-- **FastAPI** - 現代化的 Web 框架
-- **Redis** - 快取服務
-- **Pydantic** - 資料驗證
-- **HTTPX** - HTTP 客戶端
-- **RapidFuzz** - 模糊字串匹配
+- Query NBA games and player props information
+- Display vig-free probabilities and market consensus
+- Analyze player historical game data
+- Integrate live odds, lineups, and agent analysis results
+- Interact with the multi-agent system via the front-end Agent Widget
 
-### 前端 (TypeScript)
-- **Next.js 14** - React 框架
-- **TanStack Query** - 資料管理
-- **Tailwind CSS** - 樣式框架
-- **react-hook-form** - 表單處理
-- **Zod** - 資料驗證
+## Tech Stack
 
-## 快速開始
+### Backend
 
-### 前置需求
+- `FastAPI`
+- `LangGraph`
+- `Redis`
+- `PostgreSQL`
+- `HTTPX`
+- `Pydantic`
 
-- Docker & Docker Compose
-- Node.js 18+ (前端開發用)
-- Python 3.11+ (後端開發用)
-- The Odds API 金鑰 ([註冊](https://the-odds-api.com/))
+### Frontend
 
-### 使用 Docker Compose 啟動
+- `Next.js 14`
+- `TypeScript`
+- `Tailwind CSS`
+- `TanStack Query`
 
-1. **複製環境變數檔案**
+## 1. How to Start the Project
+
+### Prerequisites
+
+- `Docker` and `Docker Compose`
+- `Node.js 18+`
+- `Python 3.11+`
+- `The Odds API` key: <https://the-odds-api.com/>
+- `OpenAI API` key: Needed for agent chat functionality
+
+### Recommended: Start Backend with Docker, Frontend Locally
+
+1. Copy the environment variables file
 
 ```bash
 cp env.example .env
 ```
 
-2. **編輯 .env 填入 API 金鑰**
+2. Edit the root `.env` file
+
+At minimum, fill in the following two fields:
 
 ```bash
-# 編輯 .env 檔案，填入你的 Odds API 金鑰
-# 可在 https://the-odds-api.com/ 註冊取得免費金鑰
-ODDS_API_KEY=your_api_key_here
+ODDS_API_KEY=your_odds_api_key_here
+OPENAI_API_KEY=your_openai_api_key_here
 ```
 
-3. **（可選）設定前端環境變數**
+Notes:
+
+- `ODDS_API_KEY` is used to fetch live odds data
+- `OPENAI_API_KEY` is needed to enable multi-agent chat/analysis features
+- `SPORTSDATA_API_KEY` is optional – you can start the project without it
+
+3. Start the backend, Redis, and PostgreSQL
 
 ```bash
-# 在 frontend 目錄建立 .env.local
-echo "NEXT_PUBLIC_API_URL=http://localhost:8000" > frontend/.env.local
+docker compose up --build -d
 ```
 
-4. **啟動服務**
+4. Check if backend started normally
 
 ```bash
-# 啟動後端 + Redis
-docker-compose up -d
-
-# 查看日誌
-docker-compose logs -f backend
+docker compose logs -f backend
 ```
 
-5. **啟動前端（開發模式）**
+5. Start the frontend
 
 ```bash
 cd frontend
@@ -75,128 +88,151 @@ npm install
 npm run dev
 ```
 
-6. **開啟瀏覽器**
+6. Open the project in your browser
 
-- 前端：http://localhost:3000
-- 後端 API：http://localhost:8000
-- API 文件：http://localhost:8000/docs
+- Frontend homepage: <http://localhost:3000>
+- Backend API: <http://localhost:8000>
+- Swagger docs: <http://localhost:8000/docs>
 
-### 本地開發（不使用 Docker）
+### Local Development (No Docker)
 
-#### 後端
+If you want to run everything locally for development, use the following method. This is more suitable for development and not the main recommended workflow for grading.
+
+#### Backend
 
 ```bash
 cd backend
-
-# 建立虛擬環境
-python -m venv venv
-source venv/bin/activate  # macOS/Linux
-# venv\Scripts\activate   # Windows
-
-# 安裝依賴
+python -m venv .venv
+source .venv/bin/activate
 pip install -r requirements.txt
-
-# 啟動 Redis（需要本地安裝）
-redis-server
-
-# 啟動後端
-uvicorn app.main:app --reload
+uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 ```
 
-#### 前端
+Notes:
+
+- If not using Docker, you should start `Redis` yourself
+- If `PostgreSQL` isn't running, some persistence features might not work, but the API may launch with downgraded functionality
+
+#### Frontend
 
 ```bash
 cd frontend
-
-# 安裝依賴
 npm install
-
-# 啟動開發伺服器
 npm run dev
 ```
 
-## API 端點
+If you need to explicitly specify the API endpoint for frontend requests, create `frontend/.env.local`:
 
-| 方法 | 端點 | 說明 |
-|------|------|------|
-| GET | `/api/health` | 健康檢查 |
-| GET | `/api/nba/events` | 取得賽事列表 |
-| POST | `/api/nba/props/no-vig` | 計算去水機率 |
-| GET | `/api/nba/players/suggest` | 球員名稱建議 |
-
-詳細 API 文件請參考：http://localhost:8000/docs
-
-## 專案結構
-
-```
-.
-├── backend/                 # 後端 FastAPI
-│   ├── app/
-│   │   ├── api/            # API 路由
-│   │   ├── models/         # Pydantic 模型
-│   │   ├── services/       # 業務邏輯
-│   │   ├── main.py         # 應用入口
-│   │   └── settings.py     # 設定
-│   ├── tests/              # 單元測試
-│   ├── Dockerfile
-│   └── requirements.txt
-│
-├── frontend/               # 前端 Next.js
-│   ├── app/               # 頁面
-│   ├── components/        # 元件
-│   ├── lib/               # 工具函數
-│   ├── package.json
-│   └── tailwind.config.ts
-│
-├── docker-compose.yml      # Docker Compose 配置
-├── .env.example           # 環境變數範例
-└── README.md
+```bash
+NEXT_PUBLIC_API_URL=http://localhost:8000
 ```
 
-## 測試
+## 2. How to Obtain Required Data
 
-### 後端測試
+Assignment 4 requires the README to explain "where to download the data." This project uses two types of data: static historical data and real-time external data.
+
+### A. Historical Data CSV
+
+The project uses a player game logs data file:
+
+- Target path: `data/nba_player_game_logs.csv`
+- Original source: <https://github.com/eason034056/nba-player-stats-scraper/blob/main/nba_player_game_logs.csv>
+- Direct download: <https://raw.githubusercontent.com/eason034056/nba-player-stats-scraper/main/nba_player_game_logs.csv>
+
+If your cloned repo doesn't have this file, run:
+
+```bash
+mkdir -p data
+curl -L "https://raw.githubusercontent.com/eason034056/nba-player-stats-scraper/main/nba_player_game_logs.csv" -o data/nba_player_game_logs.csv
+```
+
+### B. Use API to Download CSV Automatically
+
+After starting the backend, you can also call the API to have the system download the CSV to the `data/` directory:
+
+```bash
+curl -X POST http://localhost:8000/api/trigger-csv-download
+```
+
+To check the scheduler and CSV status:
+
+```bash
+curl http://localhost:8000/api/scheduler-status
+```
+
+### C. Real-Time External Data
+
+You do not need to manually download the following data files; the system fetches them live when running:
+
+- Real-time odds data: from `The Odds API`
+- Starting lineups and injury status: from `RotoWire` and `RotoGrinders`
+
+To fully use the project, make sure:
+
+1. You have prepared API keys in `.env`
+2. `data/nba_player_game_logs.csv` exists (or download it using the above API/command)
+
+## 3. Interaction Methods
+
+### Web Front-End
+
+After going to <http://localhost:3000>, you can:
+
+- View games and player props
+- Use Agent Widget to ask analysis questions
+- View odds, lineup, historical context, and more
+
+### CLI Front-End
+
+If you want to use the multi-agent system directly via command line:
+
+```bash
+cd scripts/agents
+python cli.py "Should I bet Curry over 28.5 points tonight?"
+```
+
+To enter interactive mode:
+
+```bash
+cd scripts/agents
+python cli.py
+```
+
+## 4. Testing and Utility Commands
+
+### Backend Tests
 
 ```bash
 cd backend
 pytest
 ```
 
-### 測試內容
+### Frontend Tests
 
-- `test_prob.py` - 機率計算測試
-- `test_matching.py` - 球員名稱匹配測試
-
-## 計算說明
-
-### 美式賠率轉機率
-
-```
-若 odds < 0: p = |odds| / (|odds| + 100)
-若 odds > 0: p = 100 / (odds + 100)
+```bash
+cd frontend
+npm test
 ```
 
-### 去水計算
+### Export LangGraph Mermaid Diagram
 
-```
-p_fair = p_implied / (p_over + p_under)
-```
+Assignment requires a graph visualization. You can export the LangGraph Mermaid diagram with:
 
-### 市場共識
-
-```
-consensus = mean(p_fair) across all bookmakers
+```bash
+cd scripts/agents
+python graph.py
 ```
 
-## 免責聲明
+## 5. Project Structure
 
-⚠️ 本站為資訊與數據分析用途，不構成投注建議。
-
-- 賠率資料可能有延遲或缺漏
-- 請以官方來源為準
-- 請根據當地法律合法使用博彩服務
-
-## 授權
-
-MIT License
+```text
+.
+├── backend/                 # FastAPI backend
+├── frontend/                # Next.js frontend
+├── scripts/agents/          # LangGraph multi-agent system and CLI
+├── data/                    # Local data files (includes nba_player_game_logs.csv)
+├── docker-compose.yml       # Backend, Redis, PostgreSQL launch configuration
+├── env.example              # Environment variable example
+└── README.md
+```
 
