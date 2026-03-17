@@ -2,6 +2,25 @@
 
 This project is an implementation of a multi-agent system for Generative AI Assignment 4. The system uses `LangGraph` to coordinate multiple LLM agents and combines NBA historical data, live odds, and lineup information to provide analysis results for player props. It also features an interactive web front-end for users to input questions and view responses directly.
 
+## System Architecture
+
+```mermaid
+graph TD
+    User[User Query] --> Planner[Planner Agent]
+    Planner -->|"fan-out"| Stats[Historical + Opportunity Agent]
+    Planner -->|"fan-out"| ProjectionStub[Projection Agent (stub only)]
+    Planner -->|"fan-out"| Market[Market + Odds Agent]
+    Stats --> Score[Deterministic Scoring Node]
+    ProjectionStub --> Score
+    Market --> Score
+    Score --> Critic[Critic Agent]
+    Critic --> Synthesizer[Synthesizer Agent]
+    Synthesizer -->|"missing mandatory input only"| Planner
+    Synthesizer -->|"ready"| FinalOutput[Final Decision]
+```
+
+This diagram shows the main LangGraph flow used by the project: the planner routes work to the analysis agents, the deterministic scoring node aggregates the signals, the critic checks risk and contradictions, and the synthesizer produces the final recommendation.
+
 ## Assignment Requirements Mapping
 
 - At least 2 LLM-based agents: This project currently includes several agents such as `planner`, `historical_agent`, `projection_agent`, `market_agent`, `critic`, and `synthesizer`
@@ -34,25 +53,6 @@ This project is an implementation of a multi-agent system for Generative AI Assi
 - `TypeScript`
 - `Tailwind CSS`
 - `TanStack Query`
-
-## Architecture (Multi-Agent Flow)
-
-The betting advisor uses 6 LLM agents plus a deterministic scoring layer. LLMs handle query parsing, tool planning, critique, and explanation; deterministic code handles signal aggregation, sample-size gating, and probability/EV calculation.
-
-```mermaid
-graph TD
-    User[User Query] --> Planner[Planner Agent]
-    Planner -->|"fan-out"| Stats[Historical + Opportunity Agent]
-    Planner -->|"fan-out"| ProjectionStub[Projection Agent (stub only)]
-    Planner -->|"fan-out"| Market[Market + Odds Agent]
-    Stats --> Score[Deterministic Scoring Node]
-    ProjectionStub --> Score
-    Market --> Score
-    Score --> Critic[Critic Agent]
-    Critic --> Synthesizer[Synthesizer Agent]
-    Synthesizer -->|"missing mandatory input only"| Planner
-    Synthesizer -->|"ready"| FinalOutput[Final Decision]
-```
 
 ## 1. How to Start the Project
 
