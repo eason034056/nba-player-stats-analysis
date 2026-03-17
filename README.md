@@ -35,6 +35,25 @@ This project is an implementation of a multi-agent system for Generative AI Assi
 - `Tailwind CSS`
 - `TanStack Query`
 
+## Architecture (Multi-Agent Flow)
+
+The betting advisor uses 6 LLM agents plus a deterministic scoring layer. LLMs handle query parsing, tool planning, critique, and explanation; deterministic code handles signal aggregation, sample-size gating, and probability/EV calculation.
+
+```mermaid
+graph TD
+    User[User Query] --> Planner[Planner Agent]
+    Planner -->|"fan-out"| Stats[Historical + Opportunity Agent]
+    Planner -->|"fan-out"| ProjectionStub[Projection Agent (stub only)]
+    Planner -->|"fan-out"| Market[Market + Odds Agent]
+    Stats --> Score[Deterministic Scoring Node]
+    ProjectionStub --> Score
+    Market --> Score
+    Score --> Critic[Critic Agent]
+    Critic --> Synthesizer[Synthesizer Agent]
+    Synthesizer -->|"missing mandatory input only"| Planner
+    Synthesizer -->|"ready"| FinalOutput[Final Decision]
+```
+
 ## 1. How to Start the Project
 
 ### Prerequisites
