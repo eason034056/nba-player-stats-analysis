@@ -6,17 +6,17 @@ This project is an implementation of a multi-agent system for Generative AI Assi
 
 ```mermaid
 graph TD
-    User[User Query] --> Planner[Planner Agent]
-    Planner -->|"fan-out"| Stats[Historical + Opportunity Agent]
-    Planner -->|"fan-out"| ProjectionStub[Projection Agent (stub only)]
-    Planner -->|"fan-out"| Market[Market + Odds Agent]
-    Stats --> Score[Deterministic Scoring Node]
+    User["User Query"] --> Planner["Planner Agent"]
+    Planner -->|fan-out| Stats["Historical + Opportunity Agent"]
+    Planner -->|fan-out| ProjectionStub["Projection Agent (stub only)"]
+    Planner -->|fan-out| Market["Market + Odds Agent"]
+    Stats --> Score["Deterministic Scoring Node"]
     ProjectionStub --> Score
     Market --> Score
-    Score --> Critic[Critic Agent]
-    Critic --> Synthesizer[Synthesizer Agent]
-    Synthesizer -->|"missing mandatory input only"| Planner
-    Synthesizer -->|"ready"| FinalOutput[Final Decision]
+    Score --> Critic["Critic Agent"]
+    Critic --> Synthesizer["Synthesizer Agent"]
+    Synthesizer -->|missing mandatory input only| Planner
+    Synthesizer -->|ready| FinalOutput["Final Decision"]
 ```
 
 This diagram shows the main LangGraph flow used by the project: the planner routes work to the analysis agents, the deterministic scoring node aggregates the signals, the critic checks risk and contradictions, and the synthesizer produces the final recommendation.
