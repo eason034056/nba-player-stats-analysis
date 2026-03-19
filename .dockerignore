@@ -1,0 +1,8 @@
+*
+!backend/
+!backend/**
+!scripts/
+!scripts/agents/
+!scripts/agents/**
+!data/
+!data/**

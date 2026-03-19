@@ -1,0 +1,195 @@
+# docker-compose.yml - Docker Compose 配置檔
+#
+# 定義多容器應用的服務組成
+# 使用 docker-compose up 一鍵啟動所有服務
+#
+# 服務說明：
+# - backend: FastAPI 後端 API 服務
+# - redis: Redis 快取服務
+#
+# 使用方法：
+#   開發模式：docker-compose up
+#   背景執行：docker-compose up -d
+#   查看日誌：docker-compose logs -f
+#   停止服務：docker-compose down
+
+version: "3.8"
+
+services:
+  # ==================== 後端服務 ====================
+  backend:
+    # 建置設定
+    build:
+      context: .  # 需要包含 backend + scripts/agents + data
+      dockerfile: ./backend/Dockerfile
+    
+    # 容器名稱
+    container_name: no-vig-nba-backend
+    
+    # 端口映射
+    # 主機端口:容器端口
+    ports:
+      - "8000:8000"
+    
+    # 環境變數
+    # 可以在 .env 檔案中定義，或直接在這裡設定
+    environment:
+      # The Odds API 設定
+      - ODDS_API_KEY=${ODDS_API_KEY}
+      - ODDS_API_BASE_URL=${ODDS_API_BASE_URL:-https://api.the-odds-api.com}
+      - OPENAI_API_KEY=${OPENAI_API_KEY:-}
+      
+      # Redis 連線（指向同一 network 中的 redis 服務）
+      - REDIS_URL=redis://redis:6379
+      
+      # 快取 TTL
+      - CACHE_TTL_EVENTS=${CACHE_TTL_EVENTS:-300}
+      - CACHE_TTL_PROPS=${CACHE_TTL_PROPS:-60}
+      - CACHE_TTL_PLAYERS=${CACHE_TTL_PLAYERS:-300}
+      - CACHE_TTL_MARKET_FRESH=${CACHE_TTL_MARKET_FRESH:-600}
+      - CACHE_TTL_MARKET_STALE=${CACHE_TTL_MARKET_STALE:-900}
+      - ODDS_REFRESH_LOCK_TTL=${ODDS_REFRESH_LOCK_TTL:-10}
+      - ODDS_WAIT_FOR_REFRESH_MS=${ODDS_WAIT_FOR_REFRESH_MS:-300}
+      - ODDS_QUOTA_PROTECT_PERCENT=${ODDS_QUOTA_PROTECT_PERCENT:-15}
+      - ODDS_HOT_KEYS_LIMIT=${ODDS_HOT_KEYS_LIMIT:-10}
+      
+      # CORS 設定（允許前端來源）
+      - ALLOWED_ORIGINS=${ALLOWED_ORIGINS:-http://localhost:3000}
+      
+      # 日誌等級
+      - LOG_LEVEL=${LOG_LEVEL:-info}
+      
+      # SportsDataIO 設定
+      - SPORTSDATA_API_KEY=${SPORTSDATA_API_KEY:-}
+      - SPORTSDATA_BASE_URL=${SPORTSDATA_BASE_URL:-https://api.sportsdata.io}
+      
+      # PostgreSQL 設定
+      - DATABASE_URL=postgresql://novig:novig@postgres:5432/novig_nba
+      
+      # 投影資料快取 TTL
+      - CACHE_TTL_PROJECTIONS=${CACHE_TTL_PROJECTIONS:-7200}
+    
+    # 掛載 data 目錄（CSV 檔案）
+    # 將主機的 data 目錄掛載到容器的 /app/data 目錄
+    # 移除 :ro 只讀限制，讓容器可以下載並更新 CSV 文件
+    volumes:
+      - ./data:/app/data
+    
+    # 依賴服務
+    # 確保 redis 和 postgres 啟動後才啟動 backend
+    depends_on:
+      - redis
+      - postgres
+    
+    # 網路設定
+    networks:
+      - app-network
+    
+    # 重啟策略
+    # unless-stopped: 除非手動停止，否則自動重啟
+    restart: unless-stopped
+    
+    # 健康檢查
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+
+  # ==================== Redis 服務 ====================
+  redis:
+    # 使用官方 Redis 映像
+    # alpine 版本較小
+    image: redis:7-alpine
+    
+    # 容器名稱
+    container_name: no-vig-nba-redis
+    
+    # 端口映射（可選，主要用於除錯）
+    # 如果不需要從主機直接連接 Redis，可以移除
+    ports:
+      - "6379:6379"
+    
+    # 資料持久化（可選）
+    # 將 Redis 資料存儲在 volume 中，重啟後不會遺失
+    volumes:
+      - redis-data:/data
+    
+    # Redis 啟動命令
+    # --appendonly yes: 啟用 AOF 持久化
+    # --maxmemory 100mb: 限制記憶體使用
+    # --maxmemory-policy allkeys-lru: 記憶體滿時使用 LRU 策略清除
+    command: >
+      redis-server
+      --appendonly yes
+      --maxmemory 100mb
+      --maxmemory-policy allkeys-lru
+    
+    # 網路設定
+    networks:
+      - app-network
+    
+    # 重啟策略
+    restart: unless-stopped
+    
+    # 健康檢查
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ==================== PostgreSQL 服務 ====================
+  postgres:
+    # 使用官方 PostgreSQL 映像（Alpine 輕量版）
+    image: postgres:16-alpine
+    
+    # 容器名稱
+    container_name: no-vig-nba-postgres
+    
+    # 端口映射已移除：本機已有 PostgreSQL 佔用 5432/5433
+    # backend 透過 Docker 內部網路 (postgres:5432) 連線，不需要對外暴露端口
+    # 如需從主機直接連線除錯，可取消下面的註解（選一個沒被佔用的端口）
+    # ports:
+    #   - "5434:5432"
+    
+    # PostgreSQL 環境變數
+    environment:
+      - POSTGRES_USER=novig
+      - POSTGRES_PASSWORD=novig
+      - POSTGRES_DB=novig_nba
+    
+    # 資料持久化
+    volumes:
+      - pg-data:/var/lib/postgresql/data
+    
+    # 網路設定
+    networks:
+      - app-network
+    
+    # 重啟策略
+    restart: unless-stopped
+    
+    # 健康檢查
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U novig -d novig_nba"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+# ==================== 網路設定 ====================
+networks:
+  app-network:
+    # 使用 bridge 驅動
+    # 同一網路中的容器可以用服務名稱互相連線
+    driver: bridge
+
+# ==================== 資料卷設定 ====================
+volumes:
+  # Redis 資料持久化 volume
+  redis-data:
+    driver: local
+  # PostgreSQL 資料持久化 volume
+  pg-data:
+    driver: local
