@@ -1,16 +1,16 @@
 /**
- * PickContextMenu.tsx - 右鍵選單組件
- * 
- * 為 Pick 卡片提供右鍵選單功能
- * 用戶可以通過右鍵快速添加或移除下注列表中的選擇
- * 
- * 功能：
- * - 右鍵點擊顯示選單
- * - 添加到下注列表 / 從列表移除（根據狀態切換）
- * - 查看詳細數據（導航到 event 頁面）
- * - 點擊其他地方或按 ESC 關閉選單
- * 
- * 使用方式：
+ * PickContextMenu.tsx - Context Menu Component
+ *
+ * Provides a right-click context menu for Pick cards
+ * Users can quickly add or remove a pick from the bet slip via right click
+ *
+ * Features:
+ * - Show menu on right-click
+ * - Add to bet slip / remove (toggle based on state)
+ * - View detailed data (navigate to event page)
+ * - Close menu by clicking outside or pressing ESC
+ *
+ * Usage:
  * ```tsx
  * <PickContextMenu pick={pickData}>
  *   <PickCard pick={pickData} />
@@ -28,12 +28,12 @@ import { useBetSlip, type BetSlipPick } from "@/contexts/BetSlipContext";
 import { buildEventDetailHref } from "@/lib/event-detail-link";
 import { type DailyPick } from "@/lib/schemas";
 
-// ==================== 類型定義 ====================
+// ==================== Type Definitions ====================
 
 interface PickContextMenuProps {
-  /** 子組件（要包裹的卡片） */
+  /** Child component (the card to wrap) */
   children: ReactNode;
-  /** Pick 資料 */
+  /** Pick data */
   pick: DailyPick;
 }
 
@@ -42,12 +42,12 @@ interface MenuPosition {
   y: number;
 }
 
-// ==================== 輔助函數 ====================
+// ==================== Helper Functions ====================
 
 /**
- * metric → market 轉換
- * 
- * 將簡短的 metric key 轉換為 API 使用的 market key
+ * metric → market mapping
+ *
+ * Converts a short metric key to the market key used by the API
  */
 function metricToMarket(metric: string): string {
   switch (metric) {
@@ -59,18 +59,18 @@ function metricToMarket(metric: string): string {
   }
 }
 
-// ==================== 組件 ====================
+// ==================== Component ====================
 
 /**
- * PickContextMenu - 右鍵選單組件
- * 
- * 包裹任意子組件，提供右鍵選單功能
+ * PickContextMenu - Context menu component
+ *
+ * Wraps any child component to provide a right-click context menu
  */
 export function PickContextMenu({ children, pick }: PickContextMenuProps) {
   const router = useRouter();
   const { picks, addPick, removePick, isInSlip } = useBetSlip();
   
-  // 選單狀態
+  // Menu state
   const [isOpen, setIsOpen] = useState(false);
   const [position, setPosition] = useState<MenuPosition>({ x: 0, y: 0 });
   
@@ -78,75 +78,75 @@ export function PickContextMenu({ children, pick }: PickContextMenuProps) {
   const menuRef = useRef<HTMLDivElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   
-  // 檢查是否已在下注列表中
+  // Check if already in bet slip
   const isAdded = isInSlip(pick.player_name, pick.metric);
 
-  // ==================== 反向下注資訊 ====================
+  // ==================== Reverse Bet Info ====================
 
   /**
-   * reverseDirection - 反向方向
-   * 
-   * 如果原始方向是 "over"，反向就是 "under"，反之亦然
-   * 這讓用戶可以根據當天狀況逆向下注
+   * reverseDirection
+   *
+   * If original direction is "over", reverse is "under", and vice versa.
+   * Allows users to take the opposite bet based on current situations.
    */
   const reverseDirection = pick.direction === "over" ? "under" : "over";
 
   /**
-   * reverseProbability - 反向機率
-   * 
-   * 反向機率 = 1 - 原始機率
-   * 例如原始 Over 90% → 反向 Under 10%
+   * reverseProbability
+   *
+   * Reverse probability = 1 - original probability
+   * E.g.: Original Over 90% → Reverse (Under) 10%
    */
   const reverseProbability = 1 - pick.probability;
 
   /**
-   * reverseDirectionLabel - 反向方向的顯示名稱
-   * 
+   * reverseDirectionLabel
+   *
    * "over" → "Over", "under" → "Under"
    */
   const reverseDirectionLabel = reverseDirection === "over" ? "Over" : "Under";
 
   /**
-   * existingPick - 在 betslip 中已存在的相同 player+metric 的 pick
-   * 
-   * 用來判斷 betslip 裡的 pick 是原始方向還是反向
+   * existingPick - Existing pick in bet slip with same player+metric
+   *
+   * Used to determine if the pick in bet slip is original or reversed direction
    */
   const existingPick = picks.find(
     (p) => p.player_name === pick.player_name && p.metric === pick.metric
   );
 
   /**
-   * isReversedInSlip - 反向下注是否已在列表中
-   * 
-   * 當 existingPick 的 direction 與反向方向一致時為 true
-   * 用來在選單中顯示不同狀態（已添加/未添加）
+   * isReversedInSlip - Has the reverse bet already been added to the slip
+   *
+   * True if the pick in bet slip is in the reverse direction.
+   * Used to display current state in menu.
    */
   const isReversedInSlip = existingPick?.direction === reverseDirection;
 
-  // ==================== 事件處理 ====================
+  // ==================== Event Handlers ====================
 
   /**
-   * 處理右鍵點擊
-   * 
-   * 顯示選單並定位到滑鼠位置
+   * Handle right-click event
+   *
+   * Show menu and position it at the mouse location
    */
   const handleContextMenu = useCallback((e: React.MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
     
-    // 計算選單位置，確保不超出視窗邊界
+    // Compute menu position—ensure it doesn't overflow the viewport
     const x = e.clientX;
     const y = e.clientY;
     
-    // 獲取視窗尺寸
+    // Get window size
     const windowWidth = window.innerWidth;
     const windowHeight = window.innerHeight;
     
-    // 選單預估尺寸（加入反向下注選項後高度增加）
+    // Estimated menu size (increased after adding reverse bet option)
     const menuWidth = 220;
     const menuHeight = 200;
     
-    // 調整位置避免超出邊界
+    // Adjust position to avoid overflowing
     const adjustedX = x + menuWidth > windowWidth ? windowWidth - menuWidth - 10 : x;
     const adjustedY = y + menuHeight > windowHeight ? windowHeight - menuHeight - 10 : y;
     
@@ -155,21 +155,21 @@ export function PickContextMenu({ children, pick }: PickContextMenuProps) {
   }, []);
 
   /**
-   * 關閉選單
+   * Close the menu
    */
   const closeMenu = useCallback(() => {
     setIsOpen(false);
   }, []);
 
   /**
-   * 處理添加/移除下注列表
+   * Handle adding/removing from bet slip
    */
   const handleToggleBetSlip = useCallback(() => {
     if (isAdded) {
-      // 移除
+      // Remove
       removePick(`${pick.player_name}-${pick.metric}`);
     } else {
-      // 添加
+      // Add
       const betSlipPick: Omit<BetSlipPick, "id" | "added_at"> = {
         player_name: pick.player_name,
         player_team: pick.player_team || "",
@@ -189,32 +189,32 @@ export function PickContextMenu({ children, pick }: PickContextMenuProps) {
   }, [isAdded, pick, addPick, removePick, closeMenu]);
 
   /**
-   * 處理添加反向下注
-   * 
-   * handleAddReverseBet - 將 pick 以相反方向添加到下注列表
-   * 
-   * 使用方式：
-   * - 如果數據顯示 90% Under，但用戶認為今天情況不同想下 Over
-   * - 右鍵 → 點擊「Bet Reverse: Over X.X」即可添加反向下注
-   * 
-   * 邏輯：
-   * 1. 先移除已存在的同一 player+metric 的 pick（無論哪個方向）
-   * 2. 添加新的 pick，direction 反轉，probability 取 (1 - 原始)
-   * 
-   * 為什麼要先 removePick 再 addPick？
-   * - 因為 pick ID 是 `player_name-metric`，不包含方向
-   * - 所以同一球員同一指標只能有一個方向的 pick
-   * - removePick 使用 functional update (setPicks(prev => ...))
-   * - addPick 也使用 functional update，React 會依序套用
-   * - 所以 addPick 看到的 state 已經是移除後的結果，不會衝突
+   * Handle adding reverse bet
+   *
+   * handleAddReverseBet - Add the pick with the opposite direction to the bet slip
+   *
+   * Usage:
+   * - If the data says 90% Under, but user wants to bet Over based on circumstances
+   * - Right-click → Click "Bet Reverse: Over X.X" to add the reverse bet
+   *
+   * Logic:
+   * 1. First remove any existing pick with same player+metric (regardless of direction)
+   * 2. Add a new pick, with direction reversed and probability = (1 - original)
+   *
+   * Why removePick before addPick?
+   * - Because pick ID is `player_name-metric` (doesn't include direction)
+   * - So you can only have one pick per player+metric at a time
+   * - removePick uses functional update (setPicks(prev => ...))
+   * - addPick also uses functional update, so React applies them sequentially
+   * - addPick will see the state after removal, so there is no conflict
    */
   const handleAddReverseBet = useCallback(() => {
     const id = `${pick.player_name}-${pick.metric}`;
 
-    // 先移除已存在的 pick（如果有的話）
+    // Remove existing pick if any
     removePick(id);
 
-    // 添加反向 pick
+    // Add reverse pick
     const betSlipPick: Omit<BetSlipPick, "id" | "added_at"> = {
       player_name: pick.player_name,
       player_team: pick.player_team || "",
@@ -224,8 +224,8 @@ export function PickContextMenu({ children, pick }: PickContextMenuProps) {
       commence_time: pick.commence_time,
       metric: pick.metric,
       threshold: pick.threshold,
-      direction: reverseDirection,           // 反向方向
-      probability: reverseProbability,       // 反向機率
+      direction: reverseDirection,           // Opposite direction
+      probability: reverseProbability,       // Opposite probability
       n_games: pick.n_games,
     };
     addPick(betSlipPick);
@@ -233,9 +233,9 @@ export function PickContextMenu({ children, pick }: PickContextMenuProps) {
   }, [pick, reverseDirection, reverseProbability, addPick, removePick, closeMenu]);
 
   /**
-   * 處理查看詳細數據
-   * 
-   * 導航到 event 詳細頁面
+   * Handle viewing detailed data
+   *
+   * Navigate to event details page
    */
   const handleViewDetails = useCallback(() => {
     const marketKey = metricToMarket(pick.metric);
@@ -250,10 +250,10 @@ export function PickContextMenu({ children, pick }: PickContextMenuProps) {
     closeMenu();
   }, [pick, router, closeMenu]);
 
-  // ==================== 副作用 ====================
+  // ==================== Effects ====================
 
   /**
-   * 點擊外部關閉選單
+   * Close menu when clicking outside
    */
   useEffect(() => {
     if (!isOpen) return;
@@ -270,7 +270,7 @@ export function PickContextMenu({ children, pick }: PickContextMenuProps) {
       }
     };
 
-    // 延遲添加事件監聽，避免立即觸發
+    // Delay adding listeners to avoid immediate trigger
     const timeoutId = setTimeout(() => {
       document.addEventListener("click", handleClickOutside);
       document.addEventListener("keydown", handleEscape);
@@ -284,7 +284,7 @@ export function PickContextMenu({ children, pick }: PickContextMenuProps) {
   }, [isOpen, closeMenu]);
 
   /**
-   * 滾動時關閉選單
+   * Close menu on scroll
    */
   useEffect(() => {
     if (!isOpen) return;
@@ -297,9 +297,9 @@ export function PickContextMenu({ children, pick }: PickContextMenuProps) {
     return () => window.removeEventListener("scroll", handleScroll, true);
   }, [isOpen, closeMenu]);
 
-  // ==================== 渲染 ====================
+  // ==================== Render ====================
 
-  // 選單內容（使用 Portal 渲染到 body）
+  // Menu content (rendered to body via portal)
   const menuContent = isOpen && (
     <div
       ref={menuRef}
@@ -307,10 +307,10 @@ export function PickContextMenu({ children, pick }: PickContextMenuProps) {
       style={{
         left: position.x,
         top: position.y,
-        zIndex: 9999, // 使用非常高的 z-index 確保在最上層
+        zIndex: 9999, // Very high z-index to ensure on top
       }}
     >
-      {/* 選單標題 */}
+      {/* Menu Header */}
       <div className="px-4 py-2 border-b border-dark/10">
         <p className="text-sm font-bold text-dark truncate">
           {pick.player_name}
@@ -320,9 +320,9 @@ export function PickContextMenu({ children, pick }: PickContextMenuProps) {
         </p>
       </div>
 
-      {/* 選單項目 */}
+      {/* Menu Options */}
       <div className="py-1">
-        {/* 添加/移除下注列表 */}
+        {/* Add/Remove from bet slip */}
         <button
           onClick={handleToggleBetSlip}
           className={`
@@ -347,10 +347,10 @@ export function PickContextMenu({ children, pick }: PickContextMenuProps) {
           )}
         </button>
 
-        {/* 分隔線 */}
+        {/* Divider */}
         <div className="mx-3 my-1 border-t border-dark/10" />
 
-        {/* 反向下注 */}
+        {/* Reverse bet */}
         <button
           onClick={handleAddReverseBet}
           className={`
@@ -369,16 +369,16 @@ export function PickContextMenu({ children, pick }: PickContextMenuProps) {
               : `Bet Reverse: ${reverseDirectionLabel} ${pick.threshold}`
             }
           </span>
-          {/* 反向機率提示（小字顯示） */}
+          {/* Reverse probability hint (small text) */}
           <span className="text-xs text-gray opacity-70">
             {(reverseProbability * 100).toFixed(0)}%
           </span>
         </button>
 
-        {/* 分隔線 */}
+        {/* Divider */}
         <div className="mx-3 my-1 border-t border-dark/10" />
 
-        {/* 查看詳細數據 */}
+        {/* View details */}
         <button
           onClick={handleViewDetails}
           className="w-full flex items-center gap-3 px-4 py-2.5 text-sm font-medium text-dark hover:bg-dark/5 transition-colors duration-150"
@@ -388,7 +388,7 @@ export function PickContextMenu({ children, pick }: PickContextMenuProps) {
         </button>
       </div>
 
-      {/* 已添加提示 */}
+      {/* Already added hint */}
       {isAdded && (
         <div className="px-4 py-2 border-t border-dark/10">
           <p className={`text-xs flex items-center gap-1.5 ${isReversedInSlip ? "text-orange-600" : "text-green-600"}`}>
@@ -411,10 +411,10 @@ export function PickContextMenu({ children, pick }: PickContextMenuProps) {
 
   return (
     <div ref={containerRef} onContextMenu={handleContextMenu} className="relative">
-      {/* 子組件（被包裹的卡片） */}
+      {/* Wrapped child component */}
       {children}
 
-      {/* 右鍵選單 - 使用 Portal 渲染到 document.body，避免被其他元素遮擋 */}
+      {/* Context menu - Rendered via Portal to document.body to avoid overlap issues */}
       {typeof window !== "undefined" && menuContent && createPortal(menuContent, document.body)}
     </div>
   );

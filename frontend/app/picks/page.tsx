@@ -815,8 +815,7 @@ export default function PicksPage() {
             </div>
 
             <h1 className="hero-title mb-4">
-              Daily picks,
-              <span className="text-gradient block">sorted into conviction tiers.</span>
+              Daily Picks
             </h1>
 
             <div className="accent-line mb-6" />

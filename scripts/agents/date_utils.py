@@ -1,8 +1,8 @@
 """
-date_utils.py – 日期正規化與時區轉換
+date_utils.py – Date normalization and timezone conversion
 
-將 Planner 回傳的 date（如 "tomorrow"、"today"）轉成 YYYY-MM-DD，
-並以使用者本地時區為準，查詢 The Odds API 時再轉成 UTC。
+Converts date strings returned by the Planner (such as "tomorrow", "today") to YYYY-MM-DD,
+using the user's local timezone, and then converts them to UTC for The Odds API queries.
 """
 
 import re
@@ -12,20 +12,20 @@ from typing import Optional, Tuple
 
 def normalize_date(date_str: str) -> str:
     """
-    將口語化日期轉成 YYYY-MM-DD，以本地時區為準。
+    Converts a colloquial date string to YYYY-MM-DD, using the local timezone.
 
-    - "tomorrow" / "tomorow" / "tommorow" → 本地明天的日期
-    - "today" → 本地今天的日期
-    - "2025-03-13" → 原樣回傳（已為標準格式）
-    - "" 或無效 → ""
+    - "tomorrow" / "tomorow" / "tommorow" → tomorrow's date in local time
+    - "today" → today's date in local time
+    - "2025-03-13" → returns as is (already in standard format)
+    - "" or invalid input → ""
 
     Returns:
-        YYYY-MM-DD 字串，或 "" 表示無效/空
+        A string in YYYY-MM-DD format, or "" for invalid/empty input
     """
     if not date_str or not isinstance(date_str, str):
         return ""
     s = date_str.strip().lower()
-    # 使用本地時區（使用者所在時區）
+    # Use local timezone (user's timezone)
     now_local = datetime.now().astimezone()
     today = now_local.date()
 
@@ -46,16 +46,16 @@ def normalize_date(date_str: str) -> str:
 
 def date_to_utc_range(date_yyyy_mm_dd: str) -> Optional[Tuple[datetime, datetime]]:
     """
-    將 YYYY-MM-DD（視為本地日期）轉成 The Odds API 用的 UTC 時間範圍。
+    Converts a YYYY-MM-DD string (interpreted as a local date) to a UTC time range for The Odds API.
 
-    The Odds API 的 commenceTimeFrom/commenceTimeTo 使用 UTC。
-    此函數將「該日 00:00 ～ 23:59 本地時間」轉成對應的 UTC 區間。
+    The Odds API uses UTC for commenceTimeFrom/commenceTimeTo.
+    This function converts "that day 00:00 ~ 23:59 local time" to the corresponding UTC interval.
 
     Args:
-        date_yyyy_mm_dd: 如 "2025-03-13"
+        date_yyyy_mm_dd: e.g. "2025-03-13"
 
     Returns:
-        (date_from_utc, date_to_utc) 或 None（若日期無效）
+        (date_from_utc, date_to_utc), or None (if date is invalid)
     """
     if not date_yyyy_mm_dd or not re.match(r"^\d{4}-\d{2}-\d{2}$", date_yyyy_mm_dd):
         return None

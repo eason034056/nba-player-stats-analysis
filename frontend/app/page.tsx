@@ -90,14 +90,13 @@ export default function HomePage() {
             </div>
 
             <h1 className="hero-title mb-5">
-              Tonight&apos;s slate,
-              <span className="text-gradient block">reframed like a studio board.</span>
+              Tonight's Slate
             </h1>
 
             <div className="accent-line mb-6" />
 
             <p className="max-w-2xl text-lg leading-8 text-gray">
-              Browse the daily schedule, step into any matchup, and trace bookmaker pricing into a cleaner no-vig read before you move into picks or deeper player analysis.
+              Browse the daily schedule, enter any matchup, and follow bookmaker odds into a cleaner no-vig line before moving into picks or deeper player analysis.
             </p>
           </div>
 
@@ -124,7 +123,7 @@ export default function HomePage() {
                 <div className="rounded-[22px] border border-white/8 bg-white/4 p-4">
                   <p className="text-xs uppercase tracking-[0.2em] text-light">Flow</p>
                   <p className="mt-2 text-sm font-semibold text-dark">Schedule</p>
-                  <p className="text-xs text-gray">Into matchup</p>
+                  <p className="text-xs text-gray">Go to matchup</p>
                 </div>
                 <div className="rounded-[22px] border border-white/8 bg-white/4 p-4">
                   <p className="text-xs uppercase tracking-[0.2em] text-light">Refresh</p>
@@ -143,7 +142,7 @@ export default function HomePage() {
             </div>
             <div>
               <p className="text-xs uppercase tracking-[0.22em] text-light">Date control</p>
-              <h2 className="text-xl font-semibold text-dark">Move across the slate</h2>
+              <h2 className="text-xl font-semibold text-dark">Navigate the schedule</h2>
             </div>
           </div>
           <DatePicker
@@ -182,7 +181,7 @@ export default function HomePage() {
               </div>
               <div>
                 <h3 className="font-semibold text-dark mb-1">
-                  Load Failed
+                  Failed to load
                 </h3>
                 <p className="text-gray text-sm mb-3">
                   {error instanceof Error ? error.message : "Unable to fetch events data, please try again later"}
@@ -208,23 +207,23 @@ export default function HomePage() {
           <div className="card">
             <p className="text-xs uppercase tracking-[0.22em] text-light mb-2">Step 1</p>
             <h3 className="text-xl font-semibold text-dark mb-2">Choose a game</h3>
-            <p className="text-sm leading-7 text-gray">Start from the slate view and move into whichever matchup deserves a deeper pricing read.</p>
+            <p className="text-sm leading-7 text-gray">Start with the overview and drill down into any matchup that deserves a closer look at the pricing.</p>
           </div>
           <div className="card">
             <p className="text-xs uppercase tracking-[0.22em] text-light mb-2">Step 2</p>
-            <h3 className="text-xl font-semibold text-dark mb-2">Inspect the player market</h3>
-            <p className="text-sm leading-7 text-gray">Compare market type, player selection, sportsbook coverage, projections, and historical hit rates in one flow.</p>
+            <h3 className="text-xl font-semibold text-dark mb-2">Examine the player market</h3>
+            <p className="text-sm leading-7 text-gray">Compare market types, player options, sportsbook coverage, projections, and historical hit rates all in one place.</p>
           </div>
           <div className="card">
             <p className="text-xs uppercase tracking-[0.22em] text-light mb-2">Step 3</p>
-            <h3 className="text-xl font-semibold text-dark mb-2">Carry the best reads forward</h3>
-            <p className="text-sm leading-7 text-gray">Use Daily Picks and Bet Slip as the fast lane when you want curation, saving, and shareable summaries.</p>
+            <h3 className="text-xl font-semibold text-dark mb-2">Take your best reads further</h3>
+            <p className="text-sm leading-7 text-gray">Use Daily Picks and Bet Slip for fast curation, saving, and easy-to-share summaries.</p>
           </div>
         </section>
 
         <div className="mt-12 flex items-center justify-center gap-2 text-sm text-gray">
           <ArrowRight className="h-4 w-4 text-red" />
-          <p>Open any matchup to calculate no-vig probability and inspect deeper player context.</p>
+          <p>Open any matchup to calculate no-vig probabilities and see deeper player context.</p>
         </div>
       </div>
     </div>
