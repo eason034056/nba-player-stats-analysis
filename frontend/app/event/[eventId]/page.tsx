@@ -196,7 +196,7 @@ export default function EventPage() {
         <span>Back to Events</span>
       </button>
 
-      <section className="grid gap-6 lg:grid-cols-[1.1fr_0.9fr] mb-8">
+      <section className="grid gap-6 md:grid-cols-[1.1fr_0.9fr] mb-8">
         <div className="card">
           <div className="section-eyebrow">Event workspace</div>
           {isEventsLoading ? (
@@ -250,7 +250,7 @@ export default function EventPage() {
             <p className="section-eyebrow">Lineup Status</p>
             <h2 className="mt-2 text-2xl font-semibold text-dark">Projected starters and confidence</h2>
           </div>
-          <div className="grid gap-6 lg:grid-cols-2">
+          <div className="grid gap-6 md:grid-cols-2">
             <TeamLineupPanel
               lineup={awayLineup ?? null}
               isLoading={isAwayLineupLoading}
@@ -273,7 +273,7 @@ export default function EventPage() {
           />
         </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
           <div className="card">
             <Controller
               name="player_name"
@@ -312,7 +312,7 @@ export default function EventPage() {
           <button
             type="submit"
             disabled={mutation.isPending || !playerName}
-            className="btn-primary flex items-center gap-2 px-10 py-4 text-lg
+            className="btn-primary flex items-center gap-2 px-6 sm:px-10 py-4 text-base sm:text-lg
                        disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {mutation.isPending ? (

@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import logging
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, Literal, Optional
@@ -21,6 +22,8 @@ from app.services.cache import cache_service
 from app.services.odds_provider import OddsAPIError, QuotaUsage
 from app.services.odds_theoddsapi import odds_provider
 from app.settings import settings
+
+logger = logging.getLogger(__name__)
 
 CacheState = Literal["fresh", "stale", "refreshed"]
 SnapshotSource = Literal["snapshot_cache", "upstream"]
@@ -176,6 +179,7 @@ class OddsMarketGateway:
             },
             ttl=24 * 60 * 60,
         )
+        self._check_quota_alerts(usage)
 
     async def get_quota_usage(self) -> Optional[QuotaUsage]:
         cached_usage = await self.cache.get(QUOTA_USAGE_KEY)
@@ -197,6 +201,23 @@ class OddsMarketGateway:
             return False
 
         return remaining_ratio < (self.quota_protect_percent / 100)
+
+    @staticmethod
+    def _check_quota_alerts(usage: QuotaUsage) -> None:
+        ratio = usage.remaining_ratio
+        if ratio is None:
+            return
+        pct = round(ratio * 100, 1)
+        if pct <= settings.odds_quota_critical_percent:
+            logger.critical(
+                "odds_api_quota_critical remaining=%s%% used=%s remaining=%s",
+                pct, usage.used, usage.remaining,
+            )
+        elif pct <= settings.odds_quota_warn_percent:
+            logger.warning(
+                "odds_api_quota_warning remaining=%s%% used=%s remaining=%s",
+                pct, usage.used, usage.remaining,
+            )
 
     async def prewarm_hot_keys(self) -> int:
         if await self.is_quota_protected():

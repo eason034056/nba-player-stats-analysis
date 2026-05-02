@@ -9,10 +9,12 @@ Includes:
 This is the core functional module of the application.
 """
 
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, HTTPException, Query, Request
 from datetime import datetime, timezone, timedelta, time
 from typing import List, Optional
 from zoneinfo import ZoneInfo
+
+from app.middleware.rate_limit import limiter
 from app.models.schemas import (
     EventsResponse,
     NBAEvent,
@@ -236,7 +238,8 @@ async def get_events(
     summary="Calculate no-vig probabilities",
     description="Query specific player props and calculate no-vig probabilities"
 )
-async def calculate_no_vig(request: NoVigRequest) -> NoVigResponse:
+@limiter.limit(settings.rate_limit_props)
+async def calculate_no_vig(request: Request, body: NoVigRequest) -> NoVigResponse:
     """
     Calculate no-vig probability for player props
 
@@ -280,59 +283,59 @@ async def calculate_no_vig(request: NoVigRequest) -> NoVigResponse:
     try:
         snapshot = await odds_gateway.get_market_snapshot(
             sport="basketball_nba",
-            event_id=request.event_id,
-            regions=request.regions,
-            markets=request.market,
-            odds_format=request.odds_format,
-            bookmakers=request.bookmakers,
+            event_id=body.event_id,
+            regions=body.regions,
+            markets=body.market,
+            odds_format=body.odds_format,
+            bookmakers=body.bookmakers,
             priority="interactive",
         )
         bookmakers_data = snapshot.data.get("bookmakers", [])
-        all_player_names = _collect_player_names(bookmakers_data, request.market)
-        
+        all_player_names = _collect_player_names(bookmakers_data, body.market)
+
         # 3. Match player name
         matched_player = find_player(
-            request.player_name,
+            body.player_name,
             all_player_names
         )
-        
+
         if not matched_player:
-            suggestions = suggest_player_names(request.player_name, all_player_names, limit=5, threshold=70)
+            suggestions = suggest_player_names(body.player_name, all_player_names, limit=5, threshold=70)
             if suggestions:
                 hint = ", ".join(f"{name} ({score})" for name, score in suggestions)
-                message = f"Player '{request.player_name}' not found. Closest names: {hint}"
+                message = f"Player '{body.player_name}' not found. Closest names: {hint}"
             else:
-                message = f"Player '{request.player_name}' not found. Available players: {all_player_names[:10]}"
+                message = f"Player '{body.player_name}' not found. Available players: {all_player_names[:10]}"
             return NoVigResponse(
-                event_id=request.event_id,
-                player_name=request.player_name,
-                market=request.market,
+                event_id=body.event_id,
+                player_name=body.player_name,
+                market=body.market,
                 results=[],
                 consensus=None,
                 message=message,
                 **_snapshot_metadata(snapshot),
             )
-        
+
         # 4. Calculate no-vig probabilities for each bookmaker
         results: List[BookmakerResult] = []
         fair_probs_for_consensus = []
-        
+
         for bookmaker in bookmakers_data:
             bookmaker_key = bookmaker.get("key", "unknown")
-            
+
             for market in bookmaker.get("markets", []):
-                if market.get("key") != request.market:
+                if market.get("key") != body.market:
                     continue
-                
+
                 # Find Over and Under outcomes for player
                 over_outcome = None
                 under_outcome = None
                 line = None
-                
+
                 for outcome in market.get("outcomes", []):
                     if outcome.get("description") == matched_player:
                         outcome_name = outcome.get("name", "").lower()
-                        
+
                         if outcome_name == "over":
                             over_outcome = outcome
                             line = outcome.get("point")
@@ -340,29 +343,29 @@ async def calculate_no_vig(request: NoVigRequest) -> NoVigResponse:
                             under_outcome = outcome
                             if line is None:
                                 line = outcome.get("point")
-                
+
                 # Require both Over and Under to calculate
                 if over_outcome is None or under_outcome is None or line is None:
                     continue
-                
+
                 over_odds = over_outcome.get("price", 0)
                 under_odds = under_outcome.get("price", 0)
-                
+
                 if over_odds == 0 or under_odds == 0:
                     continue
-                
+
                 # 5. Calculate probabilities
                 try:
                     # Implied probabilities (with vig)
                     p_over_imp = american_to_prob(over_odds)
                     p_under_imp = american_to_prob(under_odds)
-                    
+
                     # Vig (house edge)
                     vig = calculate_vig(p_over_imp, p_under_imp)
-                    
+
                     # No-vig (fair) probabilities
                     p_over_fair, p_under_fair = devig(p_over_imp, p_under_imp)
-                    
+
                     # Build result
                     result = BookmakerResult(
                         bookmaker=bookmaker_key,
@@ -378,11 +381,11 @@ async def calculate_no_vig(request: NoVigRequest) -> NoVigResponse:
                     )
                     results.append(result)
                     fair_probs_for_consensus.append((p_over_fair, p_under_fair))
-                    
+
                 except (ValueError, ZeroDivisionError):
                     # Calculation error, skip this bookmaker
                     continue
-        
+
         # 6. Calculate market consensus
         consensus = None
         if fair_probs_for_consensus:
@@ -393,12 +396,12 @@ async def calculate_no_vig(request: NoVigRequest) -> NoVigResponse:
                     p_over_fair=round(consensus_probs[0], 4),
                     p_under_fair=round(consensus_probs[1], 4)
                 )
-        
+
         # 7. Build response
         return NoVigResponse(
-            event_id=request.event_id,
+            event_id=body.event_id,
             player_name=matched_player,  # Use the matched name
-            market=request.market,
+            market=body.market,
             results=results,
             consensus=consensus,
             message=None if results else "No props data for this player at the selected bookmakers",

@@ -36,6 +36,12 @@ httpx==0.27.0
 # - 減少外部 API 呼叫次數
 redis==5.0.0
 
+# ==================== Rate Limiting ====================
+# slowapi: Rate limiting for FastAPI/Starlette
+# - Per-IP request throttling
+# - Redis-backed distributed counters
+slowapi==0.1.9
+
 # ==================== 字串匹配 ====================
 # RapidFuzz: 高效能的模糊字串匹配
 # - 用於球員名稱匹配
