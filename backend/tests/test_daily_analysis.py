@@ -319,12 +319,18 @@ class TestAnalyzeSingleEvent:
         )
 
         assert player_count == 1
-        # 4 supported markets
-        assert prop_count == 4
-        assert len(picks) == 4
+        # 11 supported markets after SPO-16 Phase 1 expansion (4 baseline +
+        # 7 new continuous: 3PM, STL, FTM, FGM, R+A, P+R, P+A). DD is binary
+        # and lives in BINARY_MARKETS, not SUPPORTED_MARKETS, so it is NOT
+        # counted here. The mock _get_props_for_market returns the same
+        # bookmaker payload for every metric, so each market produces a pick.
+        from app.services.daily_analysis import SUPPORTED_MARKETS
+        assert prop_count == len(SUPPORTED_MARKETS) == 11
+        assert len(picks) == 11
         assert all(p.player_team == "GSW" for p in picks)
         assert all(p.player_team_code == "GSW" for p in picks)
-        # edge should be projected_value - mode_threshold (28.5 mode)
+        # edge should still be projected_value - mode_threshold (28.5 mode)
+        # for the 4 baseline metrics — the contract for those is unchanged.
         points_pick = [p for p in picks if p.metric == "points"][0]
         assert points_pick.has_projection is True
         assert points_pick.projected_value == 30.1

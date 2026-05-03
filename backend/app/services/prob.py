@@ -108,6 +108,74 @@ def devig(p_over: float, p_under: float) -> Tuple[float, float]:
     return (p_over_fair, p_under_fair)
 
 
+# League-average vig assumption for binary single-leg props.
+#
+# When a bookmaker only posts the `Yes` side of a binary market (e.g. DD,
+# triple-double), there is no `No` price to derive the vig from. We therefore
+# assume the book applied roughly the league-average margin for binary props,
+# and de-vig under that assumption.
+#
+# Source: 4.5% is the rough industry consensus for major-book NBA player-prop
+# vig (per `docs/decisions/event-page-stat-expansion/decision_20260502_market-key-feasibility.md`
+# §4.3 — DraftKings/FanDuel binary-prop overround averages 4-5%). It's a
+# *prior*, not a measurement; if a `No` price is later posted, derive the
+# actual vig from the leg pair instead via `devig()`.
+#
+# ⚠ Calling code MUST treat the resulting `over_fair_prob` as best-effort, not
+# ground truth. The decision log mandates: "Do NOT publish a fair probability
+# if vig cannot be estimated" — so when even this prior cannot be applied
+# (e.g. extreme prices), `single_leg_devig` returns None and callers must
+# leave the fair-prob field NULL in the API response.
+DEFAULT_BINARY_VIG = 0.045
+
+
+def single_leg_devig(
+    p_implied: float,
+    assumed_vig: float = DEFAULT_BINARY_VIG,
+) -> Optional[float]:
+    """
+    De-vig a single-leg implied probability using an assumed vig prior.
+
+    For two-leg markets we use `devig(p_over, p_under)` which derives the vig
+    from the leg pair. For single-leg binary markets (only `Yes` posted) we
+    have to assume a vig; the league-average (`DEFAULT_BINARY_VIG`) is the
+    best available prior.
+
+    Approach: assume the book's posted (Yes_implied + hidden_No_implied) sums
+    to (1 + assumed_vig). The fair probability for Yes is then:
+
+        p_yes_fair = p_yes_implied / (1 + assumed_vig)
+
+    This is the simplest unbiased de-vigging assumption that matches the
+    two-leg formula's behavior in the limit (where Yes_imp ≈ No_imp ≈ 0.5
+    and total = 1 + vig).
+
+    Args:
+        p_implied: implied probability for the posted leg (0..1)
+        assumed_vig: vig assumption (default: league average for binary props)
+
+    Returns:
+        Fair probability (0..1), or None if the assumption breaks (e.g.
+        negative or > 1 result, which would indicate the input is outside
+        the band where the prior is valid). Per the decision log, callers
+        must surface None as a NULL `over_fair_prob` rather than fabricating.
+
+    Example:
+        >>> single_leg_devig(0.62)   # Yes posted at -163 implies ~0.62
+        0.5933  # rounds vary; the actual fair prob ≈ 0.62 / 1.045
+    """
+    if p_implied < 0 or p_implied > 1:
+        return None
+    if assumed_vig <= 0:
+        return None
+
+    fair = p_implied / (1.0 + assumed_vig)
+    if fair <= 0 or fair >= 1:
+        # Likely caller passed something pathological; refuse to publish.
+        return None
+    return fair
+
+
 def calculate_consensus_mean(fair_probs: List[Tuple[float, float]]) -> Optional[Tuple[float, float]]:
     """
     Calculate market consensus (simple average).

@@ -20,9 +20,74 @@ CSV column mapping:
 
 import csv
 import os
-from typing import List, Optional, Dict, Any, Set, Tuple
+from typing import List, Optional, Dict, Any, Set, Tuple, Callable
 from datetime import datetime
 import statistics
+
+
+# ===========================================================================
+# Metric dispatch table (SPO-16 Phase 1 expansion)
+# ===========================================================================
+# Maps a metric key (the snake-case identifier accepted by `get_player_stats`)
+# to a callable that pulls that metric's per-game value from a game-log dict.
+#
+# 💡 Why a dispatch table instead of a giant if/elif: each new metric becomes
+# a one-line addition, and the metric key ↔ extractor mapping stays in one
+# auditable place. The standard Over/Under flow in `_extract_metric_value`
+# delegates here; combos are computed on the fly from the canonical CSV
+# columns (sums) and threshold-based metrics like `dd` are routed elsewhere.
+#
+# The keys here are what `daily_analysis.SUPPORTED_MARKETS` (right-hand
+# tuple element) emits and what the frontend metric selector posts.
+def _coalesce(*values: Optional[float]) -> Optional[float]:
+    """Return the first non-None value, or None if all are None."""
+    for v in values:
+        if v is not None:
+            return v
+    return None
+
+
+def _sum_optional(*values: Optional[float]) -> Optional[float]:
+    """Sum a list of optional floats, returning None if EVERY value is None.
+
+    Treats present-but-zero as 0 (a player can score 0 points). The "all None"
+    case happens when the CSV row is missing all relevant columns — those
+    rows must NOT contribute a 0 to the histogram or they'd skew probabilities.
+    """
+    present = [v for v in values if v is not None]
+    if not present:
+        return None
+    return sum(present)
+
+
+# Mapping: metric_key -> (game_log_dict -> Optional[float])
+# Order is informational; lookup is O(1).
+CONTINUOUS_METRIC_EXTRACTORS: Dict[str, Callable[[Dict[str, Any]], Optional[float]]] = {
+    # Original 4 — unchanged behavior
+    "points": lambda g: g.get("points"),
+    "rebounds": lambda g: g.get("rebounds"),
+    "assists": lambda g: g.get("assists"),
+    "pra": lambda g: g.get("pra"),
+    # New singles (SPO-16): CSV loader stores 3PM as `tpm`, FTM as `ftm`,
+    # FGM as `fgm`, STL as `stl`. Frontend uses the more readable
+    # `threes_made` / `steals` aliases.
+    "threes_made": lambda g: g.get("tpm"),
+    "steals": lambda g: g.get("stl"),
+    "ftm": lambda g: g.get("ftm"),
+    "fgm": lambda g: g.get("fgm"),
+    # New combos (SPO-16): no double-count concern in the historical layer
+    # because we are summing actual game results, not vig-laden odds.
+    "ra": lambda g: _sum_optional(g.get("rebounds"), g.get("assists")),
+    "pr": lambda g: _sum_optional(g.get("points"), g.get("rebounds")),
+    "pa": lambda g: _sum_optional(g.get("points"), g.get("assists")),
+}
+
+# Stats that contribute to a "double" for DD computation.
+# Uses canonical CSV column keys (snake_case as stored by `load_csv`).
+# blocks live under "blk" in the CSV loader.
+_DD_COMPONENT_KEYS = ("points", "rebounds", "assists", "stl", "blk")
+_DD_THRESHOLD = 10  # ≥10 in a stat = a "double" in that stat
+_DD_REQUIRED_COMPONENTS = 2  # ≥2 doubles = double-double
 
 # CSV file path
 # Prefer environment variable, otherwise use default path
@@ -527,8 +592,16 @@ class CSVPlayerHistoryService:
                         if any(t in lineup for t in validated_teammate_filter):
                             continue
 
-            # Get value for the specified metric
-            value = game.get(metric)
+            # Get value for the specified metric.
+            # 💡 Dispatch via CONTINUOUS_METRIC_EXTRACTORS so new metrics added
+            # to the dispatch table (e.g. SPO-16's threes_made/ra/pr/pa) Just
+            # Work without touching this loop. Falls back to direct `game[key]`
+            # lookup for any legacy callers passing a raw column name.
+            extractor = CONTINUOUS_METRIC_EXTRACTORS.get(metric)
+            if extractor is not None:
+                value = extractor(game)
+            else:
+                value = game.get(metric)
             if value is not None:
                 values.append(value)
 
@@ -609,6 +682,127 @@ class CSVPlayerHistoryService:
             "teammate_filter": validated_teammate_filter,
             "teammate_played": teammate_played,
             "message": None
+        }
+
+    def player_dd_history(
+        self,
+        player_name: str,
+        season: Optional[str] = None,
+        threshold: Any = None,
+    ) -> Dict[str, Any]:
+        """
+        Historical Double-Double rate for a player.
+
+        DD definition: a game in which the player records ≥10 in at least
+        2 of {PTS, REB, AST, STL, BLK}. This is the standard NBA convention.
+        Fields are pulled from the CSV's canonical columns; the loader
+        normalizes them to snake_case (`points`, `rebounds`, `assists`,
+        `stl`, `blk`).
+
+        ⚠ DD is binary (0/1). A `threshold` argument makes no sense here —
+        if a caller passes a non-None threshold this method REJECTS the call
+        with a ValueError. This is the "reject any non-null threshold" rule
+        from §2.4 of the SPO-16 ticket; silently dropping the threshold
+        would mask a likely caller bug (e.g. wiring DD through the
+        Over/Under flow by mistake).
+
+        Args:
+            player_name: player name (fuzzy-matched if exact match fails)
+            season: optional CSV "Season" filter (e.g. "2024-25"); None
+                    means use all seasons available in the CSV
+            threshold: must be None — provided so the call signature matches
+                       the over/under flow's keyword name; non-None raises
+
+        Returns:
+            dict with:
+              - player: resolved (post-fuzzy) player name
+              - season: the season filter actually applied (None = all)
+              - games: count of games considered (post DNP exclusion)
+              - dd_games: count of those games that were DDs
+              - prob_dd: dd_games / games (None if games == 0)
+              - n_games: alias for `games`, matches the schema other
+                callers use (DailyPicksResponse etc.)
+              - message: error/explanatory string, None on success
+
+        Example:
+            >>> svc.player_dd_history("Nikola Jokic", season="2024-25")
+            {"player": "Nikola Jokic", "season": "2024-25",
+             "games": 65, "dd_games": 50, "prob_dd": 0.769, "n_games": 65,
+             "message": None}
+        """
+        # ⚠ Hard-reject misuse: DD is 0/1, threshold is meaningless.
+        if threshold is not None:
+            raise ValueError(
+                "player_dd_history(): DD is a binary outcome (0/1); "
+                "threshold must be None. If you wanted Over/Under semantics, "
+                "you reached for the wrong method — DD has no `point` field."
+            )
+
+        self.load_csv()
+
+        # Reuse the same fuzzy-match logic as get_player_stats so callers
+        # behave consistently across metrics.
+        player_games = self._cache.get(player_name, [])
+        if not player_games:
+            player_lower = player_name.lower()
+            for p in self._all_players:
+                if player_lower in p.lower() or p.lower() in player_lower:
+                    player_games = self._cache.get(p, [])
+                    player_name = p
+                    break
+
+        if not player_games:
+            return {
+                "player": player_name,
+                "season": season,
+                "games": 0,
+                "dd_games": 0,
+                "prob_dd": None,
+                "n_games": 0,
+                "message": f"Player '{player_name}' not found",
+            }
+
+        games_count = 0
+        dd_count = 0
+
+        for game in player_games:
+            # Exclude DNPs — a player who didn't play can't have a DD,
+            # but counting those games would dilute the rate.
+            if game.get("minutes", 0) == 0:
+                continue
+            if season and game.get("season") != season:
+                continue
+
+            games_count += 1
+
+            # Count how many of {PTS, REB, AST, STL, BLK} are ≥ 10 this game.
+            # _coalesce(... or 0) so a CSV row missing one stat doesn't blow up
+            # the comparison; a missing stat in this column simply doesn't
+            # qualify as a "double" — equivalent to it being 0, which is the
+            # right default for stat-tracking edge cases.
+            doubles = sum(
+                1
+                for key in _DD_COMPONENT_KEYS
+                if (game.get(key) or 0) >= _DD_THRESHOLD
+            )
+            if doubles >= _DD_REQUIRED_COMPONENTS:
+                dd_count += 1
+
+        prob_dd = round(dd_count / games_count, 4) if games_count > 0 else None
+
+        return {
+            "player": player_name,
+            "season": season,
+            "games": games_count,
+            "dd_games": dd_count,
+            "prob_dd": prob_dd,
+            # Alias kept so downstream serializers (DailyPick / response
+            # schemas that have `n_games`) can pick this up uniformly.
+            "n_games": games_count,
+            "message": None if games_count > 0 else (
+                f"No qualifying games for {player_name}"
+                + (f" in season {season}" if season else "")
+            ),
         }
 
     def _calculate_histogram(

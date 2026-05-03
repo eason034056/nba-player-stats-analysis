@@ -37,13 +37,59 @@ from app.models.schemas import DailyPick, DailyPicksResponse, AnalysisStats
 
 
 # Supported market types (metrics)
-# Corresponds to The Odds API market keys
+# Corresponds to The Odds API market keys (left) and CSV metric keys (right).
+# The CSV metric key is what `csv_player_service.get_player_stats(metric=...)`
+# accepts — see `csv_player_history.get_player_stats` docstring.
+#
+# Phase 1 expansion (SPO-10, decision §Addendum 1) — adds 7 single/combo
+# Over/Under markets on top of the original 4. The DD binary market is in
+# `BINARY_MARKETS` below (separate parser path) so this list stays usable as
+# "all the markets that follow the standard Over/Under flow".
 SUPPORTED_MARKETS = [
-    ("player_points", "points"),      # Points
-    ("player_rebounds", "rebounds"),  # Rebounds
-    ("player_assists", "assists"),    # Assists
-    ("player_points_rebounds_assists", "pra"),  # PRA
+    # Original 4
+    ("player_points", "points"),
+    ("player_rebounds", "rebounds"),
+    ("player_assists", "assists"),
+    ("player_points_rebounds_assists", "pra"),
+    # Single Over/Under (new in SPO-16)
+    ("player_threes", "threes_made"),
+    ("player_steals", "steals"),
+    # Tier B graceful-degrade (schema-valid + currently empty inventory).
+    # Adding to SUPPORTED_MARKETS is safe: the API call still works and costs
+    # 0 units while empty; when bookmakers eventually post, the tile lights up
+    # automatically without any code change.
+    ("player_frees_made", "ftm"),
+    ("player_field_goals", "fgm"),  # working hypothesis: FGM (made), per Override 3
+    # Native combo Over/Under (no derive math — the bookmaker posts the line)
+    ("player_rebounds_assists", "ra"),
+    ("player_points_rebounds", "pr"),
+    ("player_points_assists", "pa"),
 ]
+
+# Binary Yes/No markets handled via the DD parser path (see §4 of decision log).
+# Listed separately because the standard Over/Under flow in
+# `_analyze_single_event` would silently drop them (no `point` field).
+# DailyAnalysis Phase 1 leaves DD analysis to the historical-only pipeline —
+# no edge-vs-line picks because there's no projection (Phase 2).
+BINARY_MARKETS = [
+    ("player_double_double", "dd"),
+]
+
+
+# Alias map: CSV metric key -> SportsDataIO projection field name.
+# Most metrics use the same key in both places (points, rebounds, etc.) but
+# a handful diverge — chiefly the SPO-16 additions where the CSV key is the
+# concise frontend label (`threes_made`) but the projection field follows the
+# SportsDataIO API convention (`three_pointers_made`). Without this map, the
+# `edge` column on new-metric picks would be permanently None even when a
+# projection exists.
+PROJECTION_FIELD_ALIASES: Dict[str, str] = {
+    "threes_made": "three_pointers_made",
+    "ftm": "free_throws_made",
+    "fgm": "field_goals_made",
+    # ra/pr/pa: projection_provider.normalize_projection() exposes these
+    # exact keys as derived fields, so no alias needed.
+}
 
 # High probability threshold
 HIGH_PROBABILITY_THRESHOLD = 0.65
@@ -502,9 +548,12 @@ class DailyAnalysisService:
                             player_team = game_logs[0].get("team", "")
                     player_team_code = canonical_team_code(player_team)
 
-                    # Get projection value for this metric
-                    # metric_key matches projection field (points, rebounds, assists, pra)
-                    projected_value = proj.get(metric_key) if proj else None
+                    # Get projection value for this metric.
+                    # 💡 Translate via PROJECTION_FIELD_ALIASES because the
+                    # CSV/frontend metric key isn't always the projection-API
+                    # field name (e.g. `threes_made` ↔ `three_pointers_made`).
+                    projection_field = PROJECTION_FIELD_ALIASES.get(metric_key, metric_key)
+                    projected_value = proj.get(projection_field) if proj else None
                     projected_minutes = proj.get("minutes") if proj else None
                     opponent_rank = proj.get("opponent_rank") if proj else None
                     opponent_position_rank = proj.get("opponent_position_rank") if proj else None
