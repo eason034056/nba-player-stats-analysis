@@ -83,12 +83,17 @@ BINARY_MARKETS = [
 # SportsDataIO API convention (`three_pointers_made`). Without this map, the
 # `edge` column on new-metric picks would be permanently None even when a
 # projection exists.
+# ⚠ ra/pr/pa: projection_provider.normalize_projection() writes these combos
+# as r_a / p_r / p_a (underscored). Forgetting the alias here silently nulls
+# `edge` and `projected_value` on every R+A / P+R / P+A pick — the SPO-17
+# regression. Keep these three rows in sync with normalize_projection.
 PROJECTION_FIELD_ALIASES: Dict[str, str] = {
     "threes_made": "three_pointers_made",
     "ftm": "free_throws_made",
     "fgm": "field_goals_made",
-    # ra/pr/pa: projection_provider.normalize_projection() exposes these
-    # exact keys as derived fields, so no alias needed.
+    "ra": "r_a",
+    "pr": "p_r",
+    "pa": "p_a",
 }
 
 # High probability threshold

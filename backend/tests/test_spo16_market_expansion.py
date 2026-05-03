@@ -527,8 +527,46 @@ class TestProjectionFieldAliases:
     def test_fgm_aliased(self):
         assert PROJECTION_FIELD_ALIASES["fgm"] == "field_goals_made"
 
-    def test_combos_not_aliased(self):
-        # ra/pr/pa are exposed by normalize_projection() under those exact
-        # keys, so no alias mapping is needed (and would just be noise).
-        for key in ("ra", "pr", "pa"):
-            assert key not in PROJECTION_FIELD_ALIASES
+    def test_combos_aliased(self):
+        # ⚠ Regression guard for SPO-17: ra/pr/pa must map to r_a/p_r/p_a
+        # because normalize_projection() writes the underscored derived keys.
+        # Forgetting these aliases silently nulls `edge` and `projected_value`
+        # on every R+A / P+R / P+A pick.
+        assert PROJECTION_FIELD_ALIASES["ra"] == "r_a"
+        assert PROJECTION_FIELD_ALIASES["pr"] == "p_r"
+        assert PROJECTION_FIELD_ALIASES["pa"] == "p_a"
+
+    def test_every_supported_market_metric_resolves_in_projection(self):
+        """End-to-end alias coverage: for every (market, metric) that
+        daily_analysis flows through, a fully-populated synthetic projection
+        payload must yield a non-None value via the alias-resolved key.
+
+        💡 This is the test that *would have caught the SPO-17 bug*. Walking
+        SUPPORTED_MARKETS makes the next combo / single-stat addition fail
+        loudly the moment its alias is missing, instead of silently nulling
+        `edge` in production.
+        """
+        # Synthetic raw payload populating every component field that any
+        # SUPPORTED_MARKETS metric depends on. PascalCase keys mirror the
+        # SportsDataIO projection API (FIELD_MAPPING).
+        raw = {
+            "Name": "Alice",
+            "Points": 25,
+            "Rebounds": 8,
+            "Assists": 7,
+            "Steals": 1.5,
+            "ThreePointersMade": 3,
+            "FreeThrowsMade": 4,
+            "FieldGoalsMade": 9,
+        }
+        proj = projection_provider.normalize_projection(raw)
+
+        for market_key, metric_key in SUPPORTED_MARKETS:
+            projection_field = PROJECTION_FIELD_ALIASES.get(metric_key, metric_key)
+            value = proj.get(projection_field)
+            assert value is not None, (
+                f"market={market_key} metric={metric_key} resolved to "
+                f"projection_field={projection_field!r} but normalize_projection "
+                f"returned None — alias is missing or projection_provider does "
+                f"not expose this field."
+            )

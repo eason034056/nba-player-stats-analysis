@@ -1,6 +1,6 @@
 # SPO-16 — Forge backend stat expansion (Phase 2B)
 
-**Status:** ready for review · **Branch:** `feature/SPO-16-backend-stat-expansion`
+**Status:** must-fix addressed (SPO-17) — re-review pending · **Branch:** `feature/SPO-16-backend-stat-expansion`
 **Parent epic:** [SPO-10](/SPO/issues/SPO-10) · **Plan:** [SPO-11 v3](/SPO/issues/SPO-11#document-plan)
 **Decision log:** `docs/decisions/event-page-stat-expansion/decision_20260502_market-key-feasibility.md` (Phase 1.5 + Addendum 1)
 
@@ -169,3 +169,89 @@ $ grep -r "compute_over_probability" backend/ scripts/
 CTO can:
 1. Open the Forge-frontend Phase 3 ticket — backend contract is now stable for `MarketSelect.tsx` to consume the 12 markets + binary DD shape.
 2. Schedule the FGM disambiguation integration test to run on the next event with populated `player_field_goals` inventory. If it fails the `median(point) < 10` assertion, the next-action is plan v4 with a "FGA-attempted historical-only UX class" path (per Override 3).
+
+---
+
+## Lens review (2026-05-02)
+
+### Verdict: NEEDS CHANGES
+
+One concrete edge-calculation bug for 3 of the 7 new continuous markets (R+A, P+R, P+A) — `daily_analysis` looks up combo projections with the wrong key, so `edge` and `projected_value` will be silently `None` for every pick on those three markets even when the projection is fully populated. Everything else is solid: the constants/dispatch split is clean, the DD binary path is genuinely separate (grep-verified), `single_leg_devig` math checks out, and the integration tests + exploration script satisfy the External-API-Wrappers anti-hallucination policy.
+
+### Must-fix
+
+- **`backend/app/services/daily_analysis.py:86-91` — `PROJECTION_FIELD_ALIASES` is missing `ra → r_a`, `pr → p_r`, `pa → p_a`.** `projection_provider.normalize_projection()` writes the underscored keys (`projection_provider.py:386,391,396`); `daily_analysis._analyze_single_event()` reads with `proj.get(metric_key)` where `metric_key ∈ {"ra","pr","pa"}`. Reproduced live:
+
+  ```
+  market=player_rebounds_assists  metric=ra -> proj_field=ra  value=None   ← projection has "r_a"=15.0
+  market=player_points_rebounds   metric=pr -> proj_field=pr  value=None   ← projection has "p_r"=28.0
+  market=player_points_assists    metric=pa -> proj_field=pa  value=None   ← projection has "p_a"=27.0
+  ```
+
+  Net effect: every R+A / P+R / P+A pick will publish with `edge=None` and `projected_value=None`, defeating the value-edge component for the new combo markets. Acceptance criterion 7 is met at the projection layer but broken at the consumption layer.
+
+  Fix: add the three entries to `PROJECTION_FIELD_ALIASES` and **delete or invert** `test_spo16_market_expansion.py::TestProjectionFieldAliases::test_combos_not_aliased` (lines 530–534) — that test currently codifies the bug as a "feature" by asserting the absence of the very aliases that need to exist. Add a positive assertion: walk every `(market, metric)` in `SUPPORTED_MARKETS`, run a sample raw payload through `normalize_projection()`, and confirm `proj.get(PROJECTION_FIELD_ALIASES.get(metric, metric)) is not None` for every metric whose components were provided. That single test would have caught this.
+
+### Suggestions
+
+- **`backend/app/services/odds_snapshot_service.py:389-401` — tighten the dispatcher.** `if market_key in BINARY_MARKET_KEYS: ... else: <Over/Under>` falls through to the OU parser for any unknown market key. Today this is safe because `SNAPSHOT_MARKETS` is the only writer, but a typo in a future market addition would produce silent `point=None` rows. Prefer `elif market_key in OVER_UNDER_MARKET_KEYS: ... else: log.warning("unknown market key %s", market_key); continue`. Test `test_union_covers_all_snapshot_markets` already enforces the invariant on the constants side; this would enforce it on the runtime side too.
+- **`backend/app/services/prob.py:174` — `single_leg_devig` docstring example output `0.5933` is shown with `# rounds vary` but the function returns the unrounded float; the actual return is `0.5933014...`. Either round in the function or correct the example to match the unrounded result. Cosmetic.
+- **`backend/app/services/odds_snapshot_service.py:494-500` — `line=0.5` sentinel for DD.** Accepted in trade-offs §1, but the docstring's "Frontend/API consumers must dispatch on `market` and ignore `line` for binary markets" is an unenforced invariant. A `line_kind` enum or making `line` nullable in a follow-up migration would be safer; for now, please add a `# pragma: SPO-17 follow-up — replace 0.5 sentinel with line_kind column` marker so the deferred work is grep-able.
+
+### Praise
+
+- **DD parser separation is real, not nominal.** The `_parse_binary_market` method, the `BINARY_MARKET_KEYS` frozenset, the dispatch site, and the `test_grep_no_over_under_compute_for_dd` regression-guard collectively make it structurally impossible to silently funnel DD through the OU parser. This is exactly the discipline decision §4 demanded.
+- **`player_dd_history` rejecting non-null `threshold` with a `ValueError`** instead of silently dropping is the right call — surfaces the misuse loudly. Good docstring `⚠`.
+- **Single source of truth for the 12-market set.** `odds_history.py` importing `OVER_UNDER_MARKET_KEYS | BINARY_MARKET_KEYS` from the snapshot service kills the duplicate-allow-list class of bug. Extending the markets set is now a one-place change.
+- **`single_leg_devig` returns `None` for pathological inputs** rather than fabricating a probability — exactly the discipline decision §4 step 3 mandates.
+
+### Patterns observed
+
+- Strategy / dispatch table (`CONTINUOUS_METRIC_EXTRACTORS` in `csv_player_history.py`)
+- Dispatcher by type-tag (`BINARY_MARKET_KEYS` vs `OVER_UNDER_MARKET_KEYS`)
+- Defensive sentinel + invariant doc (`line=0.5` for DD with explicit "consumers must dispatch on `market`" contract)
+- Negative invariant guarded by source-grep test (`test_grep_no_over_under_compute_for_dd`)
+- Anti-hallucination layered defence (exploration script + RUN_INTEGRATION-gated live test + skip-on-empty + escalate-on-failure-with-saved-sample)
+
+### Fixture grounding check: PASS
+
+- New external API surface in this PR: extension of existing `OddsGateway.get_market_snapshot()` call with a longer `markets=` string. No new client.
+- `scripts/explore_odds_api_extensions.py` — present (CLAUDE.md rule #1).
+- `backend/tests/test_spo16_integration.py::test_player_threes_returns_populated_payload` — RUN_INTEGRATION-gated live hit on a Tier-A market new in this ticket (CLAUDE.md rule #2). Asserts the full outcome shape the parser depends on.
+- `backend/tests/test_spo16_integration.py::test_player_field_goals_disambiguation_fgm_signature` — additional live probe with a populated-vs-empty branch and an escalate-to-CTO message that pins the next-action if FGM hypothesis fails.
+- `docs/research/event-page-stat-expansion/research_odds_api_markets.md` — Scout's curl-evidenced research already cited in the task summary (CLAUDE.md rule #3).
+- Unit tests construct synthetic CSVs and inline payload dicts rather than loading from `tests/fixtures/`. Acceptable here because the unit tests cover deterministic logic on synthetic input sets, not parser-of-known-external-response — and the integration test does exercise the live wire format.
+
+### Out-of-scope observations (not blocking)
+
+- `test_prob.py` carries 2 pre-existing failures (Chinese localization regex vs English raise messages). Forge correctly flagged this as pre-existing in the task summary §Trade-offs item 5; out of scope per ticket §7. Sentinel can decide whether to file a separate cleanup ticket.
+
+---
+
+## SPO-17 Forge fix (2026-05-02)
+
+### What changed
+
+- `backend/app/services/daily_analysis.py:86-99` — added `ra → r_a`, `pr → p_r`, `pa → p_a` to `PROJECTION_FIELD_ALIASES`, replaced the stale comment with a `⚠`-flagged invariant note that ties the alias map to `normalize_projection`'s underscored derived keys.
+- `backend/tests/test_spo16_market_expansion.py` — replaced `test_combos_not_aliased` (which codified the bug) with two positive checks:
+  - `test_combos_aliased` — direct assertion that the three new aliases exist with the correct underscored target.
+  - `test_every_supported_market_metric_resolves_in_projection` — walks every `(market, metric)` in `SUPPORTED_MARKETS`, runs a fully-populated synthetic raw payload through `normalize_projection()`, and asserts `proj.get(PROJECTION_FIELD_ALIASES.get(metric, metric)) is not None`. This is the single test that would have caught the original bug, and it will catch any future combo / single-stat addition that forgets its alias.
+
+### Verification
+
+- `pytest backend/tests/test_spo16_market_expansion.py backend/tests/test_daily_analysis.py -v` → **106 passed, 1 warning** (Pydantic v2 class-Config deprecation, pre-existing).
+- Live reproduction (mirrors Lens's failing snippet, post-fix):
+  ```
+  market=player_rebounds_assists  metric=ra -> proj_field=r_a  value=15
+  market=player_points_rebounds   metric=pr -> proj_field=p_r  value=33
+  market=player_points_assists    metric=pa -> proj_field=p_a  value=32
+  ```
+  All three combos now resolve to non-None values, so `edge = projected_value - mode_threshold` will compute correctly for every R+A / P+R / P+A pick.
+
+### Suggestions deferred to a follow-up
+
+The three Lens `[SUGGESTION]` items (`odds_snapshot_service` dispatcher tightening, `single_leg_devig` docstring rounding, SPO-17 sentinel TODO marker) are intentionally not in this commit — keeping the fix surgical so re-review is fast. CTO can fold them into a follow-up ticket or wave them in at next epic close.
+
+### Handoff
+
+Branch ready for Lens re-review on the must-fix only. No new commits expected from Forge until Lens responds.
