@@ -25,8 +25,9 @@ import csv
 import os
 import sys
 import tempfile
-from datetime import datetime
-from unittest.mock import patch
+from datetime import datetime, timezone
+from types import SimpleNamespace
+from unittest.mock import AsyncMock, patch
 
 import pytest
 
@@ -570,3 +571,155 @@ class TestProjectionFieldAliases:
                 f"returned None — alias is missing or projection_provider does "
                 f"not expose this field."
             )
+
+
+# ===========================================================================
+# 8. SPO-18 dispatcher hardening — unknown market key path
+# ===========================================================================
+
+class TestDispatcherUnknownMarketKey:
+    """Acceptance criterion (SPO-18 §2): an unknown `market_key` in
+    `bookmakers_data` must be skipped with a warning and write zero rows,
+    never silently funneled into the Over/Under parser.
+
+    Constants-side coverage already exists via
+    `test_union_covers_all_snapshot_markets` (Forge / Phase 2B). This test
+    is the *runtime-side* guard — defense-in-depth against a future typo
+    in `SNAPSHOT_MARKETS` that would otherwise produce `point=None` rows
+    via the OU parser fallback before hitting any caller. See Lens review
+    2026-05-02 §Suggestions for the original raise.
+    """
+
+    @pytest.mark.asyncio
+    async def test_unknown_market_writes_zero_rows_and_warns(self, capsys):
+        svc = OddsSnapshotService()
+
+        # Construct a snapshot whose ONLY market is one the dispatcher does
+        # not recognize. The outcomes deliberately mimic the OU shape
+        # (`name=Over|Under`, `point=5.5`) — if the old `if BINARY else OU`
+        # branch were still in place, the OU parser would happily emit a
+        # row with point=5.5. The new explicit `elif OVER_UNDER` + `else
+        # log+skip` shape must reject this.
+        fake_snapshot = SimpleNamespace(
+            data={
+                "bookmakers": [
+                    {
+                        "key": "draftkings",
+                        "markets": [
+                            {
+                                "key": "player_made_up_metric",
+                                "outcomes": [
+                                    {
+                                        "name": "Over",
+                                        "description": "Player X",
+                                        "point": 5.5,
+                                        "price": -110,
+                                    },
+                                    {
+                                        "name": "Under",
+                                        "description": "Player X",
+                                        "point": 5.5,
+                                        "price": -110,
+                                    },
+                                ],
+                            },
+                        ],
+                    },
+                ],
+            },
+        )
+
+        mock_get = AsyncMock(return_value=fake_snapshot)
+        with patch(
+            "app.services.odds_snapshot_service.odds_gateway.get_market_snapshot",
+            new=mock_get,
+        ):
+            rows = await svc._process_event(
+                event_id="evt-spo18-test",
+                home_team="A",
+                away_team="B",
+                date="2026-05-03",
+                snapshot_at=datetime(2026, 5, 3, tzinfo=timezone.utc),
+            )
+
+        # 1. Zero rows written — the OU fallback did NOT swallow the
+        #    unknown key.
+        assert rows == [], (
+            f"Unknown market key produced {len(rows)} rows; expected 0. "
+            f"This means the dispatcher fell through to the OU parser and "
+            f"wrote `point=None` (or worse, `point=5.5` from the synthetic "
+            f"outcome) for an unrecognized key. See SPO-18 §1.1."
+        )
+
+        # 2. Warning printed to stdout (matches existing print()-based log
+        #    style in this file). The market key must appear in the message
+        #    so a future debugger can grep for the typo.
+        captured = capsys.readouterr().out
+        assert "unknown market key" in captured, (
+            f"Expected the dispatcher warning in stdout; got: {captured!r}"
+        )
+        assert "player_made_up_metric" in captured, (
+            f"Warning must include the offending market key; got: {captured!r}"
+        )
+
+    @pytest.mark.asyncio
+    async def test_known_ou_market_still_writes_rows(self, capsys):
+        """Regression guard: the new `elif OVER_UNDER_MARKET_KEYS` branch
+        must not break the standard OU path. A real OU market with a real
+        Over/Under outcome pair should still produce one row per player.
+        """
+        svc = OddsSnapshotService()
+
+        fake_snapshot = SimpleNamespace(
+            data={
+                "bookmakers": [
+                    {
+                        "key": "fanduel",
+                        "markets": [
+                            {
+                                "key": "player_points",
+                                "outcomes": [
+                                    {
+                                        "name": "Over",
+                                        "description": "Stephen Curry",
+                                        "point": 24.5,
+                                        "price": -110,
+                                    },
+                                    {
+                                        "name": "Under",
+                                        "description": "Stephen Curry",
+                                        "point": 24.5,
+                                        "price": -110,
+                                    },
+                                ],
+                            },
+                        ],
+                    },
+                ],
+            },
+        )
+
+        mock_get = AsyncMock(return_value=fake_snapshot)
+        with patch(
+            "app.services.odds_snapshot_service.odds_gateway.get_market_snapshot",
+            new=mock_get,
+        ):
+            rows = await svc._process_event(
+                event_id="evt-spo18-ou-regression",
+                home_team="GSW",
+                away_team="LAL",
+                date="2026-05-03",
+                snapshot_at=datetime(2026, 5, 3, tzinfo=timezone.utc),
+            )
+
+        assert len(rows) == 1
+        row = rows[0]
+        # Sanity-check the OU row shape — line is the bookmaker point,
+        # not the 0.5 binary sentinel. Tuple layout matches UPSERT_LINE_SQL
+        # $1..$14 (snapshot_at, date, event_id, home, away, player, market,
+        # bookmaker, line, over_odds, under_odds, vig, over_fair, under_fair).
+        assert row[5] == "Stephen Curry"   # player_name
+        assert row[6] == "player_points"   # market
+        assert row[8] == 24.5              # line (real OU point, not 0.5 sentinel)
+        # No "unknown market key" warning should fire on the happy path.
+        assert "unknown market key" not in capsys.readouterr().out

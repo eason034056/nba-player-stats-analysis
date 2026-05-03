@@ -162,7 +162,7 @@ def single_leg_devig(
 
     Example:
         >>> single_leg_devig(0.62)   # Yes posted at -163 implies ~0.62
-        0.5933  # rounds vary; the actual fair prob ≈ 0.62 / 1.045
+        0.5933014354066986  # = 0.62 / 1.045 (DEFAULT_BINARY_VIG)
     """
     if p_implied < 0 or p_implied > 1:
         return None

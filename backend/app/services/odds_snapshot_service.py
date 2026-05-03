@@ -381,11 +381,16 @@ class OddsSnapshotService:
             for market in bookmaker.get("markets", []):
                 market_key = market.get("key", "")
 
-                # 💡 Dispatch by market type. Binary markets (DD) have a
-                # different outcome shape (`name=Yes|No`, no `point`) and
-                # MUST NOT go through the Over/Under parser — the decision
-                # log §4 mandates a separate code path. Anything else is
-                # treated as Over/Under (the standard 11-market case).
+                # 💡 Explicit dispatch by market type (SPO-18 hardening).
+                # Binary markets (DD) have a different outcome shape
+                # (`name=Yes|No`, no `point`) and MUST NOT go through the
+                # Over/Under parser — the decision log §4 mandates a
+                # separate code path. Unknown keys are explicitly skipped
+                # rather than silently fed into the OU parser, which would
+                # produce `point=None` rows on a typo'd future addition to
+                # SNAPSHOT_MARKETS. Defense-in-depth: today the constants-
+                # side invariant `test_union_covers_all_snapshot_markets`
+                # guards the call site, this guards the runtime side.
                 if market_key in BINARY_MARKET_KEYS:
                     rows.extend(self._parse_binary_market(
                         market=market,
@@ -397,6 +402,16 @@ class OddsSnapshotService:
                         home_team=home_team,
                         away_team=away_team,
                     ))
+                    continue
+
+                if market_key not in OVER_UNDER_MARKET_KEYS:
+                    # ⚠ Reached only if SNAPSHOT_MARKETS picks up a key that
+                    # neither set knows how to parse — i.e. a typo or an
+                    # un-classified addition. Skip rather than corrupt.
+                    print(
+                        f"⚠️ [OddsSnapshot] unknown market key "
+                        f"{market_key!r}; skipping"
+                    )
                     continue
 
                 # Standard Over/Under flow.
@@ -554,6 +569,9 @@ class OddsSnapshotService:
                     if p_yes_fair is None:
                         # Refuse to publish fair-prob — store the implied
                         # values only, downstream callers see NULL.
+                        # pragma: SPO-18 follow-up — replace 0.5 sentinel with explicit line_kind column.
+                        # Frontend/API consumers MUST dispatch on `market` and ignore `line` for binary markets.
+                        # See task-summaries/SPO-16-backend-stat-expansion.md Trade-offs §1.
                         rows.append((
                             snapshot_at, date_obj, event_id,
                             home_team, away_team, player_name,
@@ -569,6 +587,9 @@ class OddsSnapshotService:
                     p_no_fair = 1.0 - p_yes_fair
                     vig = DEFAULT_BINARY_VIG
 
+                # pragma: SPO-18 follow-up — replace 0.5 sentinel with explicit line_kind column.
+                # Frontend/API consumers MUST dispatch on `market` and ignore `line` for binary markets.
+                # See task-summaries/SPO-16-backend-stat-expansion.md Trade-offs §1.
                 rows.append((
                     snapshot_at,
                     date_obj,
