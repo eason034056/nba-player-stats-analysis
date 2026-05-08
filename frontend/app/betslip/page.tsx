@@ -663,7 +663,7 @@ export default function BetSlipPage() {
   return (
     <div className="min-h-screen page-enter">
       <div className="mx-auto max-w-6xl px-6 py-10">
-        <section className="grid gap-6 lg:grid-cols-[1.15fr_0.85fr] mb-8">
+        <section className="grid gap-6 md:grid-cols-[1.15fr_0.85fr] mb-8">
           <div className="card">
             <div className="section-eyebrow">
               <ClipboardList className="mr-2 h-3.5 w-3.5" />
@@ -702,7 +702,7 @@ export default function BetSlipPage() {
 
         {count > 0 && (
           <>
-            <div className="flex items-center justify-between mb-8">
+            <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between mb-8">
               <div className="flex items-center gap-3">
                 <h2 className="text-xl font-semibold text-dark">
                   Your Picks
@@ -711,14 +711,15 @@ export default function BetSlipPage() {
                   {count} {count === 1 ? "pick" : "picks"}
                 </span>
               </div>
-              
-              <div className="flex items-center gap-3">
+
+              <div className="flex flex-wrap items-center gap-2 sm:gap-3">
                 <button
                   onClick={() => void handleReviewSlip()}
                   className="btn-refresh"
                 >
                   <Bot className="w-4 h-4 text-red" />
-                  <span>Review My Slip</span>
+                  <span className="hidden sm:inline">Review My Slip</span>
+                  <span className="sm:hidden">Review</span>
                 </button>
 
                 <button
@@ -726,9 +727,10 @@ export default function BetSlipPage() {
                   className="btn-refresh"
                 >
                   <ImageIcon className="w-4 h-4" />
-                  <span>{showPreview ? "Hide Preview" : "Preview Image"}</span>
+                  <span className="hidden sm:inline">{showPreview ? "Hide Preview" : "Preview Image"}</span>
+                  <span className="sm:hidden">{showPreview ? "Hide" : "Preview"}</span>
                 </button>
-                
+
                 <button
                   onClick={clearAll}
                   className="flex items-center gap-2 px-4 py-2 rounded-full text-sm font-bold text-red hover:bg-red/10 transition-colors"

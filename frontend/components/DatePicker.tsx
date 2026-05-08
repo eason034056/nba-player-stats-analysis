@@ -47,7 +47,7 @@ export function DatePicker({ value, onChange }: DatePickerProps) {
   const isTomorrow = checkIsTomorrow(value);
 
   return (
-    <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-center lg:gap-6">
+    <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-center md:gap-6">
       {/* Date navigation */}
       <div className="flex items-center justify-center gap-3">
         {/* Previous day button */}
@@ -98,7 +98,7 @@ export function DatePicker({ value, onChange }: DatePickerProps) {
       </div>
 
       {/* Divider */}
-      <div className="hidden h-10 w-px bg-white/10 lg:block" />
+      <div className="hidden h-10 w-px bg-white/10 md:block" />
 
       {/* Quick buttons */}
       <div className="flex items-center justify-center gap-2">

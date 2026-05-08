@@ -82,7 +82,7 @@ export default function HomePage() {
   return (
     <div className="min-h-screen page-enter">
       <div className="mx-auto max-w-6xl px-6 py-10">
-        <section className="grid gap-6 lg:grid-cols-[1.3fr_0.7fr] lg:items-end mb-10">
+        <section className="grid gap-6 md:grid-cols-[1.3fr_0.7fr] md:items-end mb-10">
           <div className="card">
             <div className="section-eyebrow">
               <Sparkles className="mr-2 h-3.5 w-3.5" />
@@ -90,7 +90,7 @@ export default function HomePage() {
             </div>
 
             <h1 className="hero-title mb-5">
-              Tonight's Slate
+              Tonight&apos;s Slate
             </h1>
 
             <div className="accent-line mb-6" />
@@ -115,7 +115,7 @@ export default function HomePage() {
                 </div>
               </div>
 
-              <div className="grid grid-cols-3 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                 <div className="rounded-[22px] border border-white/8 bg-white/4 p-4">
                   <p className="text-xs uppercase tracking-[0.2em] text-light">Games</p>
                   <p className="mt-2 text-3xl font-semibold text-dark">{eventCount}</p>
@@ -203,7 +203,7 @@ export default function HomePage() {
           isLoading={isLoading}
         />
 
-        <section className="mt-10 grid gap-4 md:grid-cols-3">
+        <section className="mt-10 grid gap-4 sm:grid-cols-2 md:grid-cols-3">
           <div className="card">
             <p className="text-xs uppercase tracking-[0.22em] text-light mb-2">Step 1</p>
             <h3 className="text-xl font-semibold text-dark mb-2">Choose a game</h3>

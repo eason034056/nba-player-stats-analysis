@@ -54,6 +54,20 @@ class Settings(BaseSettings):
     
     # 日誌等級
     log_level: str = "info"
+
+    # Rate limiting (requests per window, slowapi format)
+    rate_limit_default: str = "60/minute"
+    rate_limit_props: str = "20/minute"
+
+    # Odds API quota alert thresholds (percent remaining)
+    odds_quota_warn_percent: int = 30
+    odds_quota_critical_percent: int = 10
+
+    # Bot API keys (comma-separated)
+    bot_api_keys: str = ""          # Free-tier bot API keys
+    bot_api_keys_premium: str = ""  # Premium-tier bot API keys
+    bot_picks_free_delay_minutes: int = 60  # Delay for free-tier picks (minutes)
+    rate_limit_bot_picks: str = "12/minute"  # Rate limit for bot picks endpoint
     
     @property
     def allowed_origins_list(self) -> List[str]:
@@ -63,6 +77,23 @@ class Settings(BaseSettings):
         """
         return [origin.strip() for origin in self.allowed_origins.split(",")]
     
+    @property
+    def bot_api_keys_set(self) -> set:
+        """All valid bot API keys (free + premium)."""
+        keys = set()
+        if self.bot_api_keys:
+            keys.update(k.strip() for k in self.bot_api_keys.split(",") if k.strip())
+        if self.bot_api_keys_premium:
+            keys.update(k.strip() for k in self.bot_api_keys_premium.split(",") if k.strip())
+        return keys
+
+    @property
+    def bot_api_keys_premium_set(self) -> set:
+        """Premium-tier bot API keys only."""
+        if not self.bot_api_keys_premium:
+            return set()
+        return {k.strip() for k in self.bot_api_keys_premium.split(",") if k.strip()}
+
     class Config:
         """
         pydantic-settings 配置

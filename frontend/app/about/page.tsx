@@ -18,7 +18,7 @@ export const metadata: Metadata = {
 export default function AboutPage() {
   return (
     <div className="mx-auto max-w-5xl px-6 py-12 page-enter">
-      <div className="grid gap-6 lg:grid-cols-[1.2fr_0.8fr] mb-10">
+      <div className="grid gap-6 md:grid-cols-[1.2fr_0.8fr] mb-10">
         <div className="card">
           <div className="section-eyebrow">Methodology</div>
           <h1 className="hero-title mb-4">

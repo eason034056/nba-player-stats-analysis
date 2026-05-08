@@ -265,7 +265,7 @@ export function ResultsTable({ data, isLoading }: ResultsTableProps) {
       </div>
 
       {/* Table */}
-      <div className="table-container">
+      <div className="table-container overflow-hint">
         <table className="table">
           <thead>
             <tr>

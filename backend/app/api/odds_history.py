@@ -25,7 +25,11 @@ from collections import defaultdict
 from fastapi import APIRouter, HTTPException, Query
 
 from app.services.db import db_service
-from app.services.odds_snapshot_service import odds_snapshot_service
+from app.services.odds_snapshot_service import (
+    odds_snapshot_service,
+    BINARY_MARKET_KEYS,
+    OVER_UNDER_MARKET_KEYS,
+)
 from app.models.schemas import (
     OddsLineSnapshot,
     OddsConsensus,
@@ -83,7 +87,16 @@ async def get_odds_history(
     ),
     market: str = Query(
         ...,
-        description="Market type (player_points, player_rebounds, player_assists, player_points_rebounds_assists)"
+        description=(
+            "Market type. Supported (Phase 1 expansion, SPO-10): "
+            "single — player_points, player_rebounds, player_assists, "
+            "player_threes, player_steals, player_frees_made, "
+            "player_field_goals; "
+            "combo — player_points_rebounds_assists, "
+            "player_rebounds_assists, player_points_rebounds, "
+            "player_points_assists; "
+            "binary — player_double_double (Yes/No, no `point` field)"
+        ),
     ),
     date: Optional[str] = Query(
         default=None,
@@ -117,15 +130,18 @@ async def get_odds_history(
     if date is None:
         date = datetime.now(timezone.utc).strftime("%Y-%m-%d")
 
-    # Validate market
-    valid_markets = [
-        "player_points", "player_rebounds",
-        "player_assists", "player_points_rebounds_assists",
-    ]
+    # 💡 Validate against the same allow-list `odds_snapshot_service` writes —
+    # single source of truth means there's no chance of querying a market that
+    # the snapshot job never persists. Includes both Over/Under and binary
+    # (DD) keys: the GET handler is parser-agnostic and just reads rows.
+    valid_markets = OVER_UNDER_MARKET_KEYS | BINARY_MARKET_KEYS
     if market not in valid_markets:
         raise HTTPException(
             status_code=400,
-            detail=f"Invalid market: {market}. Valid values: {valid_markets}"
+            detail=(
+                f"Invalid market: {market}. Valid values: "
+                f"{sorted(valid_markets)}"
+            ),
         )
 
     try:

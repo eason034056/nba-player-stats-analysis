@@ -12,7 +12,9 @@ main.py - FastAPI 應用程式主入口點
 from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from app.api import agent, health, nba, daily_picks, projections, odds_history, lineups
+from app.api import agent, health, metrics, nba, daily_picks, picks, projections, odds_history, lineups
+from app.middleware.logging_config import RequestLoggingMiddleware, setup_logging
+from app.middleware.rate_limit import install_rate_limiter
 from app.services.cache import cache_service
 from app.services.db import db_service
 from app.services.scheduler import scheduler_service
@@ -40,6 +42,7 @@ async def lifespan(app: FastAPI):
         app = FastAPI(lifespan=lifespan)
     """
     # 啟動時執行
+    setup_logging()
     print("🚀 Starting No-Vig NBA API...")
     print(f"📊 Odds API Base URL: {settings.odds_api_base_url}")
     print(f"🔴 Redis URL: {settings.redis_url}")
@@ -117,13 +120,21 @@ app.add_middleware(
     allow_headers=["*"],  # 允許所有標頭
 )
 
+# Request logging middleware (structured JSON logs + in-process metrics)
+app.add_middleware(RequestLoggingMiddleware)
+
+# Rate limiting (slowapi)
+install_rate_limiter(app)
+
 # 註冊路由器（Routers）
 # include_router: 將路由器的所有端點加入應用
 # 這樣組織代碼可以讓不同功能模組分開管理
 app.include_router(health.router)
+app.include_router(metrics.router)
 app.include_router(nba.router)
 app.include_router(agent.router)
 app.include_router(daily_picks.router)  # 每日高機率球員分析
+app.include_router(picks.router)  # Discord bot AI picks API
 app.include_router(projections.router)  # 球員投影資料（SportsDataIO）
 app.include_router(odds_history.router)  # 盤口歷史快照（Line Movement Tracking）
 app.include_router(lineups.router)  # 免費先發預測共識

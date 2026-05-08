@@ -9,7 +9,7 @@
  * - Clean structure
  */
 
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Cormorant_Garamond, Manrope } from "next/font/google";
 import "./globals.css";
 import { Providers } from "./providers";
@@ -29,6 +29,14 @@ const display = Cormorant_Garamond({
 /**
  * Metadata Settings
  */
+export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
+  maximumScale: 5,
+  viewportFit: "cover",
+  themeColor: "#07101d",
+};
+
 export const metadata: Metadata = {
   title: {
     default: "No-Vig NBA | No-Vig Probability Calculator",
@@ -47,8 +55,15 @@ export const metadata: Metadata = {
     "betting",
   ],
   authors: [{ name: "No-Vig NBA" }],
+  manifest: "/manifest.json",
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: "black-translucent",
+    title: "No-Vig NBA",
+  },
   icons: {
-    icon: "/favicon.ico",
+    icon: "/icon.svg",
+    apple: "/icon.svg",
   },
 };
 

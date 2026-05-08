@@ -363,13 +363,46 @@ class SportsDataProjectionProvider:
             else:
                 result[internal_field] = None
         
-        # Derived field: PRA (Points + Rebounds + Assists)
+        # Derived combo fields (SPO-16 Phase 1 expansion).
+        # 💡 We sum the components on our side because the SportsDataIO
+        # projection API exposes the single stats but not the combos. This
+        # is safe arithmetic (not vig/odds math) — there is no double-count
+        # concern. Compare with The Odds API where combos ship as native
+        # markets (player_rebounds_assists etc) and we MUST NOT sum the
+        # single-stat odds.
         points = result.get("points") or 0
         rebounds = result.get("rebounds") or 0
         assists = result.get("assists") or 0
-        result["pra"] = round(points + rebounds + assists, 2) if any([
-            result.get("points"), result.get("rebounds"), result.get("assists")
-        ]) else None
+        has_p = result.get("points") is not None
+        has_r = result.get("rebounds") is not None
+        has_a = result.get("assists") is not None
+
+        # PRA (Points + Rebounds + Assists)
+        result["pra"] = (
+            round(points + rebounds + assists, 2)
+            if (has_p or has_r or has_a) else None
+        )
+        # R + A (combo for player_rebounds_assists market)
+        result["r_a"] = (
+            round(rebounds + assists, 2)
+            if (has_r or has_a) else None
+        )
+        # P + R (combo for player_points_rebounds market)
+        result["p_r"] = (
+            round(points + rebounds, 2)
+            if (has_p or has_r) else None
+        )
+        # P + A (combo for player_points_assists market)
+        result["p_a"] = (
+            round(points + assists, 2)
+            if (has_p or has_a) else None
+        )
+        # ⚠ Intentionally NO `dd` derived field. DD is a multi-variate joint
+        # probability (≥2 of {PTS, REB, AST, STL, BLK} ≥ 10) which cannot be
+        # estimated from marginal projections without correlation data. Per
+        # decision_20260502_phase0-research-first-and-derive-strategy.md §4,
+        # DD ML projection is Phase 2 scope. Phase 1 DD tiles render
+        # "ML projection N/A (Phase 2)" on the frontend.
         
         # Parse game date (extract YYYY-MM-DD from Day field)
         day_value = result.get("day")

@@ -1,0 +1,62 @@
+name: Deploy to Production
+
+on:
+  push:
+    tags:
+      - "v*"
+
+concurrency:
+  group: deploy-prod
+  cancel-in-progress: false
+
+jobs:
+  ci:
+    name: CI Checks
+    uses: ./.github/workflows/ci.yml
+
+  deploy:
+    name: Deploy to Production
+    needs: ci
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: docker/setup-buildx-action@v3
+
+      - uses: docker/login-action@v3
+        with:
+          registry: ${{ vars.DOCKER_REGISTRY }}
+          username: ${{ secrets.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKER_PASSWORD }}
+
+      - name: Extract version from tag
+        id: version
+        run: echo "version=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
+
+      - name: Build and push backend image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: backend/Dockerfile
+          push: true
+          tags: |
+            ${{ vars.DOCKER_REGISTRY }}/no-vig-nba-backend:latest
+            ${{ vars.DOCKER_REGISTRY }}/no-vig-nba-backend:${{ steps.version.outputs.version }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Deploy to production server
+        env:
+          DEPLOY_HOST: ${{ secrets.PROD_HOST }}
+          DEPLOY_KEY: ${{ secrets.PROD_SSH_KEY }}
+        run: |
+          echo "Production deploy triggered for ${{ github.ref_name }}"
+          echo "Image: ${{ vars.DOCKER_REGISTRY }}/no-vig-nba-backend:${{ steps.version.outputs.version }}"
+          # TODO: Add actual deployment commands (SSH, kubectl, etc.)
+          # Example SSH deploy:
+          # mkdir -p ~/.ssh
+          # echo "$DEPLOY_KEY" > ~/.ssh/deploy_key
+          # chmod 600 ~/.ssh/deploy_key
+          # ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=no user@$DEPLOY_HOST \
+          #   "cd /app && docker compose pull && docker compose up -d"

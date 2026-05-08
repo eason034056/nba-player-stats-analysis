@@ -367,7 +367,7 @@ function PickCard({
               type="button"
               onClick={handleToggleBetSlip}
               className={`
-                inline-flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-bold transition-colors
+                inline-flex items-center gap-2 rounded-lg px-3 py-2.5 text-sm font-bold transition-colors min-h-[44px]
                 ${isAdded && !isReversedInSlip
                   ? "bg-green-500 text-white"
                   : "bg-dark text-cream hover:bg-dark/85"
@@ -382,7 +382,7 @@ function PickCard({
               type="button"
               onClick={handleAddReverseBet}
               className={`
-                inline-flex items-center gap-2 rounded-lg border px-3 py-2 text-sm font-semibold transition-colors
+                inline-flex items-center gap-2 rounded-lg border px-3 py-2.5 text-sm font-semibold transition-colors min-h-[44px]
                 ${isReversedInSlip
                   ? "border-blue-500 bg-blue-500 text-white"
                   : "border-dark/20 bg-white text-dark hover:border-blue-500 hover:text-blue-600"
@@ -396,7 +396,7 @@ function PickCard({
             <button
               type="button"
               onClick={() => void handleAskAgent()}
-              className="inline-flex items-center gap-2 rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm font-semibold text-dark transition-colors hover:border-white/20 hover:bg-white/10"
+              className="inline-flex items-center gap-2 rounded-lg border border-white/10 bg-white/5 px-3 py-2.5 text-sm font-semibold text-dark transition-colors hover:border-white/20 hover:bg-white/10 min-h-[44px]"
               aria-label={`Ask Agent about ${pick.player_name}`}
             >
               <Bot className="w-4 h-4 text-red" />
@@ -807,7 +807,7 @@ export default function PicksPage() {
   return (
     <div className="min-h-screen page-enter">
       <div className="mx-auto max-w-6xl px-6 py-10">
-        <section className="grid gap-6 lg:grid-cols-[1.2fr_0.8fr] mb-8">
+        <section className="grid gap-6 md:grid-cols-[1.2fr_0.8fr] mb-8">
           <div className="card">
             <div className="section-eyebrow">
               <Target className="mr-2 h-3.5 w-3.5" />
@@ -912,30 +912,31 @@ export default function PicksPage() {
         )}
 
         {/* Actions section */}
-        <div className="flex items-center justify-between mb-8">
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between mb-8">
           <div className="flex items-center gap-4">
-            <h2 className="text-2xl font-bold text-dark">
+            <h2 className="text-xl sm:text-2xl font-bold text-dark">
               {dateTitle} Picks
             </h2>
             {!isLoading && (
               <span className="badge-neutral">
-                {selectedTeams.size > 0 
+                {selectedTeams.size > 0
                   ? `${picks.length} / ${allPicks.length} picks`
                   : `${picks.length} picks`
                 }
               </span>
             )}
           </div>
-          
-          <div className="flex items-center gap-3">
+
+          <div className="flex items-center gap-2 sm:gap-3">
             <button
               onClick={() => void handleReviewBoard()}
               className="btn-refresh"
             >
               <Bot className="w-4 h-4 text-red" />
-              <span>Review Board</span>
+              <span className="hidden sm:inline">Review Board</span>
+              <span className="sm:hidden">Review</span>
             </button>
-            
+
             <button
               onClick={handleTriggerAnalysis}
               disabled={isTriggering || isFetching}
