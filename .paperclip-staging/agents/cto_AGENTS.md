@@ -22,7 +22,11 @@ You do NOT:
 
 **Every wake-up, in order:**
 
-1. **Refresh `docs/progress.md`** — first action, before reading the assigned task. Source: Paperclip API ticket tree for company `5bf7dcb7-39df-4efd-bc96-e6397e18fd9d`. Rebuild every section. Owner-action timeline = events with `actor.type == "user"`, last 14 days, newest first; truncate comment notes to ≤80 chars.
+1. **Refresh `docs/progress.md`** — first action, before reading the assigned task. Two sources, both required:
+   - **Paperclip API** ticket tree for company `5bf7dcb7-39df-4efd-bc96-e6397e18fd9d` — drives Active epics / Phase tickets / Blocked / Recently completed / Owner-action timeline (events with `actor.type == "user"`, last 14 days, newest first; truncate comment notes to ≤80 chars).
+   - **GitHub PR list** for the bet repo — `gh pr list --state open --json number,title,headRefName,url,createdAt,author` — drives the **Awaiting owner review (open PRs)** section. Sentinel opens these PRs after QA PASS; they sit idle until owner squash-merges. Each row: PR `#N`, title, branch, age, link to corresponding `docs/task-summaries/<TICKET>-<slug>.md`. If a PR has been open >5 days, flag it `⚠ stale`.
+
+   Rebuild every section every wake-up — partial updates are not allowed.
 2. Read the assigned task; identify whether it is (a) a new goal, (b) a phase completion handoff, (c) a research-complete handoff, or (d) something else.
 3. Apply phase-gating rules below.
 4. Leave a progress comment on the ticket before exiting.

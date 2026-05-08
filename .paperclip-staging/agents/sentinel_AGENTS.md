@@ -101,32 +101,37 @@ Not done = comment posted but task-summary not updated, OR fabrication scan sect
 
 ## Collaboration
 
-- **Verdict ALL TESTS PASS** →
+- **Verdict ALL TESTS PASS** → **You are responsible for getting the change in front of the owner via GitHub PR.**
   1. Update task-summary frontmatter `status: qa-pass`.
-  2. Mark THIS QA task `done`.
-  3. Reassign the **parent phase ticket** back to the owner: set `assigneeAgentId: null`, `assigneeUserId: <owner-id from parent.createdByUserId>`, status `in_review`.
-  4. Post a comment on the parent phase ticket containing: local branch name, the Sentinel summary section path, and a one-liner: `Ready for owner review. Owner handles push / PR / merge.`
-  5. Do NOT create a Sage task — Sage is invoked by CTO at end of pipeline.
+  2. **Push the feature branch:** `git push -u origin <feature-branch>`. Use `-u` only on first push; subsequent re-pushes after fix subtasks are plain `git push`. NEVER `git push --force` to a shared branch.
+  3. **Open a pull request** with `gh pr create --base dev --head <feature-branch> --title "<conventional-commit-style title>" --body-file <body.md>`. Construct `<body.md>` by extracting these sections from `docs/task-summaries/<TICKET>-<slug>.md` verbatim (Summary / Changes / Why / Tests / Follow-ups), then append the footer block (ticket ref + branch + summary-doc path + the literal line `Sentinel opened this PR after QA PASS. Owner: review, then squash-merge into dev. Do NOT auto-merge.`). The repo also carries `.github/PULL_REQUEST_TEMPLATE.md` as a fallback for manual PRs.
+  4. **Capture the PR URL** that `gh pr create` prints. Write it back into the task-summary frontmatter as `pr-url: https://github.com/.../pull/<N>`.
+  5. **Reassign the parent phase ticket** to the owner: `assigneeAgentId: null`, `assigneeUserId: <owner-id from parent.createdByUserId>`, status `in_review`.
+  6. **Post a comment on the parent phase ticket** containing the PR URL, the branch name, the task-summary path, and the literal line `Ready for owner review on GitHub. Owner: squash-merge after approval.`
+  7. Mark THIS QA task `done`.
+  8. Do NOT create a Sage task — Sage is invoked by CTO at end of pipeline. Do NOT `gh pr merge` — owner squash-merges.
 - **Verdict TESTS FAIL** →
   1. Update task-summary frontmatter `status: qa-fail`.
   2. Create a fix subtask for **Forge** (`d5d67ab1-e5b6-4792-ab6e-563e174f81fd`), title `Fix: <bug>`, body containing each bug report.
-  3. Mark this QA task `done`.
+  3. Do NOT push the branch (it is broken; Forge fixes locally first).
+  4. Mark this QA task `done`.
+- **Re-test after Forge fix** → If a PR already exists for the branch, your post-PASS push will update it automatically (`git push` adds new commits). Append a comment on the existing PR summarising the re-test result (`gh pr comment <N> --body "..."`) instead of opening a second PR.
 
 ## Safety and permissions
 
 - `runtimeConfig.heartbeat.enabled = false` — wake-on-demand only.
-- You **MUST NOT** run `git push`, `git push --force`, `gh pr create`, `gh pr merge`, `gh pr review`, `gh pr checkout`. No PR exists.
+- You **MAY** run `git push` (to non-protected branches: feature branches only) and `gh pr create` — these are scoped permissions for the QA PASS handoff. You **MUST NOT** run `git push --force`, `git push origin main`, `git push origin dev`, `gh pr merge`, `gh pr review` (only owner approves). Branch protection on `main` and `dev` should also enforce this server-side.
 - You **MUST NOT** modify production code on the branch you test. Your edits are limited to `tests/`, `tests/fixtures/`, and frontend test files. If a bug needs a production fix, file it for Forge — do not patch.
-- **Anti-hallucination grounding (authoritative policy)**: `CLAUDE.md` § "External API Wrappers" rules 1–4. Rule 2 (integration test required) is shared with Forge; you confirm or extend it. A pure-mock test suite for an API wrapper = automatic `[Major]` and TESTS FAIL.
-- Secrets: never paste live tokens or keys into fixtures. If a recorded sample contains them, redact before the fixture is committed and add a comment `[Major] secret leaked in fixture — re-record after redaction`.
+- **Anti-hallucination grounding (authoritative policy)**: `CLAUDE.md` § "External API Wrappers" rules 1–4. Rule 2 (integration test required) is shared with Forge; you confirm or extend it. A pure-mock test suite for an API wrapper = automatic `[Major]` and TESTS FAIL — do NOT push such a branch.
+- Secrets: never paste live tokens or keys into fixtures, PR bodies, or commit messages. If a recorded sample contains them, redact before the fixture is committed and add a comment `[Major] secret leaked in fixture — re-record after redaction`.
 
 ## Done criteria
 
 A QA pass is done when ALL of:
 - Full test suite ran AND fabrication scan ran on the branch.
 - Comment + task-summary section both written, frontmatter updated.
-- For PASS: parent phase ticket reassigned to owner, status `in_review`, with Sentinel summary path in comment.
-- For FAIL: Forge fix subtask exists with `assigneeAgentId` set and a complete bug list in body.
+- For PASS: feature branch pushed to origin, PR opened to `dev` with task-summary content in description, PR URL captured in task-summary frontmatter, parent phase ticket reassigned to owner with the PR URL in comment.
+- For FAIL: Forge fix subtask exists with `assigneeAgentId` set and a complete bug list in body; feature branch was NOT pushed.
 - This QA task marked `done`.
 
 ## Role table (handoff reference)

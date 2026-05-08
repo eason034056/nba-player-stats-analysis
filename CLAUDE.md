@@ -119,9 +119,23 @@ Each Settings must explicitly declare every key it accesses via `settings.X`; `g
 
 - Branches: `main` (production), `dev` (integration), `feature/<ticket-id>-<desc>`
 - Branch from: `git fetch origin && git checkout --no-track -b feature/SPO-<NN>-<desc> origin/dev`
-- PR target: `dev`. Merge: squash. Commits: conventional (`feat:` / `fix:` / `refactor:` / `test:` / `docs:`)
-- PR body: `## What` / `## Why` / `## How` / `## Testing` / `## Trade-offs`
+- Commits: conventional (`feat:` / `fix:` / `refactor:` / `test:` / `docs:`). Squash-merge into `dev`.
 - `dev` branch was created on 2026-05-01 from `main` and is empty of new commits — first feature merge will populate it.
+
+**Push & PR responsibility chain (since 2026-05-08):**
+
+| Stage | Actor | Action | Allowed git/gh commands |
+|---|---|---|---|
+| Implement | Forge   | Local commit only | `git checkout -b`, `git commit` (no push) |
+| Review    | Lens    | Inspect local diff | (read-only — no remote calls) |
+| QA PASS   | **Sentinel** | `git push -u origin <branch>` + `gh pr create --base dev` (PR description = task-summary content) | `git push` to feature branches, `gh pr create`, `gh pr comment` |
+| Merge     | **Owner** | review on GitHub → squash-merge → delete branch | (everything) |
+
+PR description is **auto-populated by Sentinel from `docs/task-summaries/<TICKET>-<slug>.md`** — Summary, Changes table, Why, Tests, Follow-ups. The repo also keeps `.github/PULL_REQUEST_TEMPLATE.md` as a fallback when the owner opens a PR manually.
+
+Sentinel does NOT `gh pr merge`; only the owner squash-merges. Sentinel does NOT push to `main` or `dev` directly. Forge does NOT push at all — Sentinel is the single push actor in the agent workflow.
+
+If Sentinel returns TESTS FAIL, the branch is NOT pushed; Forge fixes locally, then re-runs Lens → Sentinel. If a PR already exists from a prior PASS and Sentinel is re-testing after a fix, the next push to that branch updates the existing PR — do not open a second PR.
 
 ### Docs Organization
 

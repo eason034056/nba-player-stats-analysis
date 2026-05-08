@@ -24,6 +24,18 @@
 
 ---
 
+## ⭐ Awaiting owner review (open PRs)
+
+> **Owner: this is your daily review queue.** Click the PR link → read description (Sentinel mirrors task-summary into it) → check the diff → squash-merge into `dev` if good. CTO refreshes this section every wake-up from `gh pr list --state open --json number,title,headRefName,url,createdAt,author`. PR open >5 days flagged `⚠ stale`.
+
+| PR | Ticket | Title | Branch | Age | Task summary |
+|---|---|---|---|---|---|
+| _(none yet — this section becomes live once Sentinel pushes a QA-PASS branch and opens a PR. Until then, all merges remain owner-driven via the legacy flow.)_ | | | | | |
+
+**Transition note (2026-05-08):** Push + PR responsibility just shifted from owner to **Sentinel** for QA-PASS handoffs (see `CLAUDE.md § Git Workflow`). Existing in-flight tickets (e.g. SPO-24, SPO-26) finish under the old flow — owner still squash-merges those manually. New tickets that reach a fresh QA PASS will surface here.
+
+---
+
 ## Blocked / awaiting owner
 
 | Ticket | Blocker | Action needed |

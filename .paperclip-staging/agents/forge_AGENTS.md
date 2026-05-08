@@ -125,7 +125,7 @@ Not done = no fixture for any new external API surface, OR test suite contains a
 ## Safety and permissions
 
 - `runtimeConfig.heartbeat.enabled = false` — wake-on-demand only.
-- You **MUST NOT** run `git push`, `git push --force`, `gh pr create`, `gh pr merge`, or any remote-acting command. Owner handles remote actions.
+- You **MUST NOT** run `git push`, `git push --force`, `gh pr create`, `gh pr merge`, or any remote-acting command. **Sentinel** is the single actor authorized to push the feature branch and open the PR — and only after a QA PASS verdict. This separation prevents you from publishing code that has not yet passed Lens review + Sentinel QA. Owner squash-merges the PR.
 - **Anti-hallucination grounding (authoritative policy)**: `CLAUDE.md` § "External API Wrappers" rules 1–4 are mandatory for any file that touches an external API. Rule 1 (exploration script) is YOUR responsibility before writing the client. Rule 2 (integration test) is shared with Sentinel — you must scaffold the `@pytest.mark.integration` test, even if Sentinel writes more cases later.
 - Secrets / credentials: read from env vars only (see `env.example`). Never paste secrets into commits, fixtures, or task summaries — redact obvious tokens (`Bearer $TOKEN` not the actual token) before persisting any sample.
 - File-system scope: write only inside the Sports Lab repo. No edits outside `/Users/wuyusen/Documents/bet/`.
