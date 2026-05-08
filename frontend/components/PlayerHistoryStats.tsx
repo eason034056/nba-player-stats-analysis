@@ -45,31 +45,68 @@ import {
   type PlayerProjection,
 } from "@/lib/schemas";
 import { cn } from "@/lib/utils";
+import { PlayerDDTile } from "@/components/PlayerDDTile";
 
 /**
  * Map market key to history metric
+ *
+ * SPO-20: 12-tile selector. New mappings cover the 8 new tiles.
+ * Backend csv_player_history.CONTINUOUS_METRIC_EXTRACTORS accepts the
+ * RHS (history-side) keys exactly. DD is binary; we map it through here
+ * for completeness but the DD code path is dispatched on `marketKey`,
+ * not on `metric`, because there is no continuous DD metric.
  */
 function marketToHistoryMetric(marketKey?: string): HistoryMetricKey {
   switch (marketKey) {
     case "player_points": return "points";
-    case "player_assists": return "assists";
     case "player_rebounds": return "rebounds";
+    case "player_assists": return "assists";
+    case "player_threes": return "threes_made";
+    case "player_steals": return "steals";
+    case "player_frees_made": return "ftm";
+    case "player_field_goals": return "fgm";
     case "player_points_rebounds_assists": return "pra";
+    case "player_rebounds_assists": return "ra";
+    case "player_points_rebounds": return "pr";
+    case "player_points_assists": return "pa";
+    case "player_double_double": return "dd";
     default: return "points";
   }
 }
 
 /**
  * Map history metric to market key
+ *
+ * Inverse of marketToHistoryMetric. Used when fetching odds for the line
+ * threshold off the history-side dropdown selection.
  */
 function historyMetricToMarket(metricKey: HistoryMetricKey): string {
   switch (metricKey) {
     case "points": return "player_points";
-    case "assists": return "player_assists";
     case "rebounds": return "player_rebounds";
+    case "assists": return "player_assists";
+    case "threes_made": return "player_threes";
+    case "steals": return "player_steals";
+    case "ftm": return "player_frees_made";
+    case "fgm": return "player_field_goals";
     case "pra": return "player_points_rebounds_assists";
+    case "ra": return "player_rebounds_assists";
+    case "pr": return "player_points_rebounds";
+    case "pa": return "player_points_assists";
+    case "dd": return "player_double_double";
     default: return "player_points";
   }
+}
+
+/**
+ * DD is a binary outcome — it has no continuous threshold, no Over/Under
+ * histogram, and (per decision §4 step 4) no Phase-1 ML projection. The
+ * history endpoint's continuous flow does not understand `dd`; the DD
+ * tile renders its own component shape elsewhere. This helper centralizes
+ * the dispatch so we don't string-compare in five places.
+ */
+function isBinaryHistoryMetric(metric: HistoryMetricKey): boolean {
+  return metric === "dd";
 }
 
 /**
@@ -123,6 +160,17 @@ function getProjectionValueForMetric(
     case "rebounds": return projection.rebounds ?? null;
     case "assists": return projection.assists ?? null;
     case "pra": return projection.pra ?? null;
+    case "ra": return projection.r_a ?? null;
+    case "pr": return projection.p_r ?? null;
+    case "pa": return projection.p_a ?? null;
+    case "threes_made": return projection.three_pointers_made ?? null;
+    case "steals": return projection.steals ?? null;
+    case "ftm": return projection.free_throws_made ?? null;
+    case "fgm": return projection.field_goals_made ?? null;
+    // ⚠ DD has NO Phase-1 projection (decision §4 step 4). Returning null
+    // here is intentional — never fabricate a number, never derive from
+    // marginals (DD is a multivariate joint probability).
+    case "dd": return null;
     default: return null;
   }
 }
@@ -215,14 +263,27 @@ export function PlayerHistoryStats({
         teammate_filter: teammateFilter.length > 0 ? teammateFilter : undefined,
         teammate_played: teammatePlayedFilter === "all" ? undefined : teammatePlayedFilter === "with",
       }),
-    enabled: !!selectedPlayer && !!threshold && !isNaN(parseFloat(threshold)),
+    // DD is a binary metric — the /player-history endpoint speaks Over/Under only,
+    // and DD historical is served by `csv_player_history.player_dd_history()`
+    // (a different code path with no public API endpoint as of SPO-16).
+    // Disabling the query for DD avoids 400/500 noise; the DD branch renders
+    // its own placeholder below.
+    enabled:
+      !!selectedPlayer &&
+      !!threshold &&
+      !isNaN(parseFloat(threshold)) &&
+      !isBinaryHistoryMetric(metric),
     staleTime: 30 * 1000,
   });
 
   const fetchOddsAndSetThreshold = useCallback(
     async (playerName: string, metricKey: HistoryMetricKey) => {
       if (!eventId) return;
-      
+      // ⚠ DD has no `point` threshold (Yes/No outcome). Calling the no-vig
+      // endpoint for it returns 0.5 sentinel rows that must NOT be surfaced
+      // as a threshold. Skip the auto-fetch entirely for the binary path.
+      if (isBinaryHistoryMetric(metricKey)) return;
+
       setIsFetchingOdds(true);
       
       try {
@@ -382,27 +443,41 @@ export function PlayerHistoryStats({
             </select>
           </div>
 
-          {/* Threshold */}
-          <div>
-            <label className="block text-sm font-bold text-dark mb-2">
-              <Calculator className="inline w-4 h-4 mr-1" />
-              Threshold
-            </label>
-            <div className="relative">
-              <input
-                type="number"
-                step="0.5"
-                value={threshold}
-                onChange={(e) => handleThresholdChange(e.target.value)}
-                placeholder="e.g., 24.5"
-                className="input w-full"
-                disabled={isFetchingOdds}
-              />
-              {isFetchingOdds && (
-                <Loader2 className="absolute right-3 top-1/2 -translate-y-1/2 w-5 h-5 text-red animate-spin" />
-              )}
+          {/* Threshold — hidden for binary (DD) metric since DD has no `point`.
+              ⚠ Per CLAUDE.md anti-hallucination rule #3 (and SPO-20 §7.1) we
+              MUST NOT render a fake threshold value for DD. */}
+          {isBinaryHistoryMetric(metric) ? (
+            <div>
+              <label className="block text-sm font-bold text-dark mb-2">
+                <Calculator className="inline w-4 h-4 mr-1" />
+                Threshold
+              </label>
+              <div className="input w-full flex items-center text-sm text-gray italic">
+                Not applicable (binary outcome)
+              </div>
             </div>
-          </div>
+          ) : (
+            <div>
+              <label className="block text-sm font-bold text-dark mb-2">
+                <Calculator className="inline w-4 h-4 mr-1" />
+                Threshold
+              </label>
+              <div className="relative">
+                <input
+                  type="number"
+                  step="0.5"
+                  value={threshold}
+                  onChange={(e) => handleThresholdChange(e.target.value)}
+                  placeholder="e.g., 24.5"
+                  className="input w-full"
+                  disabled={isFetchingOdds}
+                />
+                {isFetchingOdds && (
+                  <Loader2 className="absolute right-3 top-1/2 -translate-y-1/2 w-5 h-5 text-red animate-spin" />
+                )}
+              </div>
+            </div>
+          )}
 
           {/* Game range */}
           <div>
@@ -586,8 +661,29 @@ export function PlayerHistoryStats({
         </div>
       )}
 
-      {/* Results */}
-      {selectedPlayer && historyData && (
+      {/* Binary (DD) panel — replaces the Over/Under chart for the binary path. */}
+      {selectedPlayer && isBinaryHistoryMetric(metric) && (
+        <PlayerDDTile
+          playerName={selectedPlayer}
+          // ⚠ All four data props are intentionally null here. The DD odds
+          //   + DD historical computations exist at the service layer
+          //   (`odds_snapshot_service._parse_binary_market` and
+          //   `csv_player_history.player_dd_history`) but no API endpoint
+          //   currently surfaces them — see SPO-20 backend gap escalation.
+          //   This component's contract is fully populated when the API
+          //   ships; until then the placeholder copy explicitly tells the
+          //   user the data is pending (NOT zero, NOT fabricated).
+          yesPrice={null}
+          yesImpliedProb={null}
+          yesFairProb={null}
+          historicalProbDD={null}
+          historicalGames={null}
+        />
+      )}
+
+      {/* Over/Under results — only the continuous metric path renders the
+          chart + threshold-driven probability cards. */}
+      {selectedPlayer && historyData && !isBinaryHistoryMetric(metric) && (
         <div className="space-y-6 animate-fade-in">
           {/* Stats cards */}
           {/* 
@@ -911,8 +1007,9 @@ export function PlayerHistoryStats({
         </div>
       )}
 
-      {/* Loading */}
-      {isLoadingHistory && selectedPlayer && (
+      {/* Loading — suppressed for the binary path because the history query
+          is intentionally disabled there (DD has no continuous history). */}
+      {isLoadingHistory && selectedPlayer && !isBinaryHistoryMetric(metric) && (
         <div className="flex items-center justify-center py-12">
           <Loader2 className="w-8 h-8 text-red animate-spin" />
           <span className="ml-3 text-gray font-medium">Calculating historical data...</span>

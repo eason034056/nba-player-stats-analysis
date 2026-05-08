@@ -144,13 +144,34 @@ export default function EventPage() {
   // marketToProjectionMetric: 把 MarketKey 轉成投影面板用的 metric key
   // MarketKey 是完整的 market 名稱（如 "player_points"）
   // 投影面板需要簡短的 metric key（如 "points"）
+  //
+  // SPO-20 12-tile expansion note: PlayerProjectionPanel today only highlights
+  // one of {points, rebounds, assists, pra} (it always renders all four cards
+  // regardless). New tiles (3PM/STL/FTM/FGM/R+A/P+R/P+A/DD) fall through to
+  // the closest single stat — the underlying projection chart in
+  // PlayerHistoryStats already uses `getProjectionValueForMetric` to draw
+  // the correct projection reference line for the selected new metric.
+  // Expanding the panel's highlight set is intentional out-of-scope here.
   const projectionMetric = (() => {
     switch (selectedMarket) {
-      case "player_points": return "points" as const;
-      case "player_rebounds": return "rebounds" as const;
-      case "player_assists": return "assists" as const;
-      case "player_points_rebounds_assists": return "pra" as const;
-      default: return "points" as const;
+      case "player_points":
+      case "player_threes":
+      case "player_steals":
+      case "player_frees_made":
+      case "player_field_goals":
+        return "points" as const;
+      case "player_rebounds":
+        return "rebounds" as const;
+      case "player_assists":
+        return "assists" as const;
+      case "player_points_rebounds_assists":
+      case "player_rebounds_assists":
+      case "player_points_rebounds":
+      case "player_points_assists":
+      case "player_double_double":
+        return "pra" as const;
+      default:
+        return "points" as const;
     }
   })();
 
