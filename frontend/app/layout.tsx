@@ -1,49 +1,76 @@
 /**
- * layout.tsx - 根佈局（極簡風版本）
+ * layout.tsx - Root Layout (Minimalist Version)
  * 
- * Next.js App Router 的根佈局檔案
+ * Root layout file for Next.js App Router
  * 
- * 設計理念：
- * - 純米色背景 (#FFF2DF)
- * - 無裝飾元素
- * - 簡潔的結構
+ * Design Philosophy:
+ * - Pure beige background (#FFF2DF)
+ * - No decorative elements
+ * - Clean structure
  */
 
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
+import { Cormorant_Garamond, Manrope } from "next/font/google";
 import "./globals.css";
 import { Providers } from "./providers";
 import { Navbar } from "@/components/Navbar";
 
+const sans = Manrope({
+  subsets: ["latin"],
+  variable: "--font-sans",
+});
+
+const display = Cormorant_Garamond({
+  subsets: ["latin"],
+  weight: ["500", "600", "700"],
+  variable: "--font-display",
+});
+
 /**
- * Metadata 設定
+ * Metadata Settings
  */
+export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
+  maximumScale: 5,
+  viewportFit: "cover",
+  themeColor: "#07101d",
+};
+
 export const metadata: Metadata = {
   title: {
-    default: "No-Vig NBA | 去水機率計算器",
+    default: "No-Vig NBA | No-Vig Probability Calculator",
     template: "%s | No-Vig NBA",
   },
   description:
-    "計算 NBA 球員得分 Props 的去水機率，移除博彩公司水錢，取得公平的市場機率估計",
+    "Calculate vig-free probabilities for NBA player score props, remove bookmaker margin, and obtain fair market probability estimates.",
   keywords: [
     "NBA",
-    "去水",
     "no-vig",
-    "賠率",
-    "機率",
-    "球員得分",
+    "vig-free",
+    "odds",
+    "probability",
+    "player score",
     "props",
-    "博彩",
+    "betting",
   ],
   authors: [{ name: "No-Vig NBA" }],
+  manifest: "/manifest.json",
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: "black-translucent",
+    title: "No-Vig NBA",
+  },
   icons: {
-    icon: "/favicon.ico",
+    icon: "/icon.svg",
+    apple: "/icon.svg",
   },
 };
 
 /**
- * 根佈局元件
+ * Root Layout Component
  * 
- * 極簡設計：純色背景、無裝飾
+ * Minimalist design: solid color background, no decoration
  */
 export default function RootLayout({
   children,
@@ -51,26 +78,25 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="zh-TW">
-      <body>
+    <html lang="en">
+      <body className={`${sans.variable} ${display.variable}`}>
         <Providers>
-          {/* 導航欄 */}
           <Navbar />
-          
-          {/* 主要內容區域 */}
-          <main className="min-h-screen pt-20">
+
+          <main className="page-shell min-h-screen pt-28">
             {children}
           </main>
-          
-          {/* 頁尾 - 極簡風格 */}
+
           <footer className="footer">
-            <div className="max-w-4xl mx-auto px-6">
-              <p className="text-sm mb-1">
-                本站為資訊與數據分析用途，不構成投注建議
-              </p>
-              <p className="text-xs text-light">
-                資料可能延遲或缺漏，以外部供應商為準
-              </p>
+            <div className="mx-auto max-w-6xl px-6">
+              <div className="rounded-[28px] border border-white/8 bg-white/4 px-6 py-6 backdrop-blur-xl">
+                <p className="text-sm text-dark mb-2">
+                  No-Vig NBA organizes schedules, probabilities, projections, and historical performances into a more readable analytical experience.
+                </p>
+                <p className="text-xs text-light">
+                  The content on this site is for informational and research purposes only and does not constitute betting advice. Live odds and data may be delayed or missing; please refer to official sources for accuracy.
+                </p>
+              </div>
             </div>
           </footer>
         </Providers>

@@ -1,12 +1,3 @@
-/**
- * tailwind.config.ts - Tailwind CSS 配置檔（極簡風版本）
- * 
- * 配色方案 (60-30-10 Rule):
- * - #FFF2DF (60%) - 暖米色背景
- * - #E92016 (30%) - 紅色強調
- * - #F9DC24 (10%) - 黃色點綴
- */
-
 import type { Config } from "tailwindcss";
 
 const config: Config = {
@@ -18,74 +9,76 @@ const config: Config = {
   
   theme: {
     extend: {
-      // 極簡配色
       colors: {
-        // 主色調：暖米色系
         cream: {
-          DEFAULT: "#FFF2DF",
-          light: "#FFFAF5",
-          dark: "#F5E6D0",
+          DEFAULT: "#F6EFE2",
+          light: "#FFFAF2",
+          dark: "#D6CAB7",
         },
-        // 強調色：紅色
         red: {
-          DEFAULT: "#E92016",
-          light: "#FF3B2F",
-          dark: "#C41A12",
+          DEFAULT: "#FF886C",
+          light: "#FFD0C1",
+          dark: "#DF6B52",
         },
-        // 點綴色：黃色
         yellow: {
-          DEFAULT: "#F9DC24",
-          light: "#FFE94E",
-          dark: "#E5C81A",
+          DEFAULT: "#F3C775",
+          light: "#FAE3AB",
+          dark: "#E0B55D",
         },
-        // 中性色
         dark: {
-          DEFAULT: "#1A1A1A",
-          light: "#2D2D2D",
+          DEFAULT: "#08101D",
+          light: "#15233A",
         },
         gray: {
-          DEFAULT: "#6B6B6B",
-          light: "#A0A0A0",
+          DEFAULT: "#95A6C5",
+          light: "#CAD4E6",
         },
       },
-      
-      // 字體
+
       fontFamily: {
-        sans: ["DM Sans", "system-ui", "sans-serif"],
+        sans: ["var(--font-sans)", "system-ui", "sans-serif"],
+        display: ["var(--font-display)", "serif"],
         mono: ["JetBrains Mono", "monospace"],
       },
-      
-      // 動畫
+
       animation: {
-        "fade-in": "fadeIn 0.2s ease-out forwards",
-        "slide-up": "slideUp 0.25s ease-out",
+        "fade-in": "fadeIn 0.35s ease-out forwards",
+        "slide-up": "slideUp 0.4s cubic-bezier(0.22, 1, 0.36, 1)",
+        "soft-pulse": "softPulse 4s ease-in-out infinite",
       },
-      
+
       keyframes: {
         fadeIn: {
-          "0%": { opacity: "0" },
-          "100%": { opacity: "1" },
-        },
-        slideUp: {
           "0%": { opacity: "0", transform: "translateY(8px)" },
           "100%": { opacity: "1", transform: "translateY(0)" },
         },
+        slideUp: {
+          "0%": { opacity: "0", transform: "translateY(18px)" },
+          "100%": { opacity: "1", transform: "translateY(0)" },
+        },
+        softPulse: {
+          "0%, 100%": { opacity: "0.85", transform: "scale(1)" },
+          "50%": { opacity: "1", transform: "scale(1.02)" },
+        },
       },
-      
-      // 邊框半徑
+
       borderRadius: {
-        "sm": "4px",
-        "md": "8px",
-        "lg": "12px",
-        "xl": "16px",
+        sm: "10px",
+        md: "16px",
+        lg: "24px",
+        xl: "32px",
       },
-      
-      // 邊框寬度
+
       borderWidth: {
-        "DEFAULT": "2px",
+        DEFAULT: "1px",
         "1": "1px",
-        "2": "2px",
-        "3": "3px",
+        "2": "1px",
+        "3": "1px",
+      },
+
+      boxShadow: {
+        glow: "0 24px 70px rgba(2, 8, 20, 0.35)",
+        panel: "0 28px 90px rgba(2, 8, 20, 0.4)",
       },
     },
   },

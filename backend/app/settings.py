@@ -37,12 +37,37 @@ class Settings(BaseSettings):
     cache_ttl_props: int = 60    # Props 資料快取時間（1分鐘）
     cache_ttl_players: int = 300 # 球員建議快取時間（5分鐘）
     cache_ttl_projections: int = 7200  # 投影資料快取時間（2小時）
+    cache_ttl_lineups: int = 3600
+    cache_ttl_market_fresh: int = 600
+    cache_ttl_market_stale: int = 900
+    odds_refresh_lock_ttl: int = 10
+    odds_wait_for_refresh_ms: int = 300
+    odds_quota_protect_percent: int = 15
+    odds_hot_keys_limit: int = 10
+    lineup_stale_minutes: int = 20
+    lineup_refresh_lock_ttl: int = 60
+    lineup_active_refresh_interval_minutes: int = 15
+    lineup_pre_tipoff_refresh_interval_minutes: int = 5
     
     # CORS 設定
     allowed_origins: str = "http://localhost:3000"  # 允許的前端來源，逗號分隔
     
     # 日誌等級
     log_level: str = "info"
+
+    # Rate limiting (requests per window, slowapi format)
+    rate_limit_default: str = "60/minute"
+    rate_limit_props: str = "20/minute"
+
+    # Odds API quota alert thresholds (percent remaining)
+    odds_quota_warn_percent: int = 30
+    odds_quota_critical_percent: int = 10
+
+    # Bot API keys (comma-separated)
+    bot_api_keys: str = ""          # Free-tier bot API keys
+    bot_api_keys_premium: str = ""  # Premium-tier bot API keys
+    bot_picks_free_delay_minutes: int = 60  # Delay for free-tier picks (minutes)
+    rate_limit_bot_picks: str = "12/minute"  # Rate limit for bot picks endpoint
     
     @property
     def allowed_origins_list(self) -> List[str]:
@@ -52,6 +77,23 @@ class Settings(BaseSettings):
         """
         return [origin.strip() for origin in self.allowed_origins.split(",")]
     
+    @property
+    def bot_api_keys_set(self) -> set:
+        """All valid bot API keys (free + premium)."""
+        keys = set()
+        if self.bot_api_keys:
+            keys.update(k.strip() for k in self.bot_api_keys.split(",") if k.strip())
+        if self.bot_api_keys_premium:
+            keys.update(k.strip() for k in self.bot_api_keys_premium.split(",") if k.strip())
+        return keys
+
+    @property
+    def bot_api_keys_premium_set(self) -> set:
+        """Premium-tier bot API keys only."""
+        if not self.bot_api_keys_premium:
+            return set()
+        return {k.strip() for k in self.bot_api_keys_premium.split(",") if k.strip()}
+
     class Config:
         """
         pydantic-settings 配置
@@ -60,8 +102,8 @@ class Settings(BaseSettings):
         """
         env_file = ".env"
         case_sensitive = False
+        extra = "ignore"
 
 
 # 建立全域設定實例，供其他模組引用
 settings = Settings()
-

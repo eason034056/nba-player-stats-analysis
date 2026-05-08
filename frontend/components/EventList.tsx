@@ -13,11 +13,13 @@
 import Link from "next/link";
 import { Clock, ChevronRight, CalendarOff } from "lucide-react";
 import { type NBAEvent } from "@/lib/schemas";
+import { buildEventDetailHref } from "@/lib/event-detail-link";
 import { formatGameTime } from "@/lib/utils";
 import { TeamLogo } from "./TeamLogo";
 
 interface EventListProps {
   events: NBAEvent[];
+  selectedDate: string;
   isLoading?: boolean;
 }
 
@@ -30,10 +32,13 @@ interface EventListProps {
  * - 文字列：三欄對齊（Away Text | Time | Home Text）
  * - 這樣確保 Logo 永遠在同一水平線上
  */
-function EventCard({ event }: { event: NBAEvent }) {
+function EventCard({ event, selectedDate }: { event: NBAEvent; selectedDate: string }) {
   return (
     <Link
-      href={`/event/${event.event_id}`}
+      href={buildEventDetailHref({
+        eventId: event.event_id,
+        date: selectedDate,
+      })}
       className="group block"
     >
       <div className="card-game">
@@ -158,7 +163,7 @@ function EventSkeleton() {
 /**
  * EventList 元件
  */
-export function EventList({ events, isLoading }: EventListProps) {
+export function EventList({ events, selectedDate, isLoading }: EventListProps) {
   // Loading state
   if (isLoading) {
     return (
@@ -198,7 +203,7 @@ export function EventList({ events, isLoading }: EventListProps) {
           className="animate-fade-in"
           style={{ animationDelay: `${index * 50}ms` }}
         >
-          <EventCard event={event} />
+          <EventCard event={event} selectedDate={selectedDate} />
         </div>
       ))}
     </div>

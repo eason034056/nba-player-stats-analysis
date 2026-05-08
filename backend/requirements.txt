@@ -36,6 +36,12 @@ httpx==0.27.0
 # - 減少外部 API 呼叫次數
 redis==5.0.0
 
+# ==================== Rate Limiting ====================
+# slowapi: Rate limiting for FastAPI/Starlette
+# - Per-IP request throttling
+# - Redis-backed distributed counters
+slowapi==0.1.9
+
 # ==================== 字串匹配 ====================
 # RapidFuzz: 高效能的模糊字串匹配
 # - 用於球員名稱匹配
@@ -70,3 +76,14 @@ pytest-asyncio==0.24.0
 # - 開發時使用
 python-dotenv==1.0.0
 
+# ==================== 資料集生成（scripts/dataset）====================
+# openai: OpenAI API 客戶端
+# - Phase 3 用於生成 Tree-of-Thought 結構化答案
+openai>=1.0.0
+
+# ==================== Agent runtime（scripts/agents）====================
+# LangGraph: Multi-step agent orchestration
+langgraph==1.1.2
+
+# LangChain OpenAI: ChatOpenAI runtime used by scripts/agents
+langchain-openai==1.1.11

@@ -36,16 +36,18 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 # ==================== Python 依賴 ====================
 # 先複製依賴檔案（利用 Docker 快取機制）
-# 如果 requirements.txt 沒變，這一層會使用快取
-COPY requirements.txt .
+# 如果 backend/requirements.txt 沒變，這一層會使用快取
+COPY backend/requirements.txt ./requirements.txt
 
 # 安裝 Python 依賴
 # --no-cache-dir: 不快取下載的套件（減少映像大小）
 RUN pip install --no-cache-dir -r requirements.txt
 
 # ==================== 複製應用程式 ====================
-# 複製應用程式代碼到容器
-COPY . .
+# 複製 backend 應用、agent runtime 與資料目錄到容器
+COPY backend/ ./
+COPY scripts/agents ./scripts/agents
+COPY data ./data
 
 # ==================== 暴露端口 ====================
 # 聲明容器會使用的端口
@@ -68,4 +70,3 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
 # --host 0.0.0.0: 監聽所有介面（容器內需要）
 # --port 8000: 監聽端口
 CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
-

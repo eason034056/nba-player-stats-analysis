@@ -1,18 +1,18 @@
 """
-csv_player_history.py - CSV 球員歷史數據服務
+csv_player_history.py - CSV Player History Data Service
 
-從 data/nba_player_game_logs.csv 讀取球員歷史比賽數據
-並計算經驗機率（empirical probability）
+Reads player historical game data from data/nba_player_game_logs.csv
+and computes empirical probabilities.
 
-功能：
-1. 讀取並快取 CSV 資料
-2. 取得所有球員名單
-3. 計算指定球員的歷史數據分佈和機率
+Functions:
+1. Load and cache CSV data
+2. Retrieve the list of all player names
+3. Calculate the statistical distribution and probabilities of a specified player's historical data
 
-CSV 欄位對應：
+CSV column mapping:
 - Player -> player_name
 - PTS -> points
-- AST -> assists  
+- AST -> assists
 - REB -> rebounds (ORB + DRB)
 - Date -> game_date
 - MIN -> minutes
@@ -20,37 +20,102 @@ CSV 欄位對應：
 
 import csv
 import os
-from typing import List, Optional, Dict, Any, Tuple
+from typing import List, Optional, Dict, Any, Set, Tuple, Callable
 from datetime import datetime
 import statistics
 
-# CSV 檔案路徑
-# 優先使用環境變數，否則使用預設路徑
-# 在 Docker 環境中，data 目錄會被掛載到 /app/data
-# 在本地開發中，路徑相對於專案根目錄
+
+# ===========================================================================
+# Metric dispatch table (SPO-16 Phase 1 expansion)
+# ===========================================================================
+# Maps a metric key (the snake-case identifier accepted by `get_player_stats`)
+# to a callable that pulls that metric's per-game value from a game-log dict.
+#
+# 💡 Why a dispatch table instead of a giant if/elif: each new metric becomes
+# a one-line addition, and the metric key ↔ extractor mapping stays in one
+# auditable place. The standard Over/Under flow in `_extract_metric_value`
+# delegates here; combos are computed on the fly from the canonical CSV
+# columns (sums) and threshold-based metrics like `dd` are routed elsewhere.
+#
+# The keys here are what `daily_analysis.SUPPORTED_MARKETS` (right-hand
+# tuple element) emits and what the frontend metric selector posts.
+def _coalesce(*values: Optional[float]) -> Optional[float]:
+    """Return the first non-None value, or None if all are None."""
+    for v in values:
+        if v is not None:
+            return v
+    return None
+
+
+def _sum_optional(*values: Optional[float]) -> Optional[float]:
+    """Sum a list of optional floats, returning None if EVERY value is None.
+
+    Treats present-but-zero as 0 (a player can score 0 points). The "all None"
+    case happens when the CSV row is missing all relevant columns — those
+    rows must NOT contribute a 0 to the histogram or they'd skew probabilities.
+    """
+    present = [v for v in values if v is not None]
+    if not present:
+        return None
+    return sum(present)
+
+
+# Mapping: metric_key -> (game_log_dict -> Optional[float])
+# Order is informational; lookup is O(1).
+CONTINUOUS_METRIC_EXTRACTORS: Dict[str, Callable[[Dict[str, Any]], Optional[float]]] = {
+    # Original 4 — unchanged behavior
+    "points": lambda g: g.get("points"),
+    "rebounds": lambda g: g.get("rebounds"),
+    "assists": lambda g: g.get("assists"),
+    "pra": lambda g: g.get("pra"),
+    # New singles (SPO-16): CSV loader stores 3PM as `tpm`, FTM as `ftm`,
+    # FGM as `fgm`, STL as `stl`. Frontend uses the more readable
+    # `threes_made` / `steals` aliases.
+    "threes_made": lambda g: g.get("tpm"),
+    "steals": lambda g: g.get("stl"),
+    "ftm": lambda g: g.get("ftm"),
+    "fgm": lambda g: g.get("fgm"),
+    # New combos (SPO-16): no double-count concern in the historical layer
+    # because we are summing actual game results, not vig-laden odds.
+    "ra": lambda g: _sum_optional(g.get("rebounds"), g.get("assists")),
+    "pr": lambda g: _sum_optional(g.get("points"), g.get("rebounds")),
+    "pa": lambda g: _sum_optional(g.get("points"), g.get("assists")),
+}
+
+# Stats that contribute to a "double" for DD computation.
+# Uses canonical CSV column keys (snake_case as stored by `load_csv`).
+# blocks live under "blk" in the CSV loader.
+_DD_COMPONENT_KEYS = ("points", "rebounds", "assists", "stl", "blk")
+_DD_THRESHOLD = 10  # ≥10 in a stat = a "double" in that stat
+_DD_REQUIRED_COMPONENTS = 2  # ≥2 doubles = double-double
+
+# CSV file path
+# Prefer environment variable, otherwise use default path
+# In Docker environment, data directory is mounted to /app/data
+# In local development, path is relative to project root
 def _get_csv_path() -> str:
     """
-    取得 CSV 檔案路徑
-    
-    優先順序：
-    1. 環境變數 CSV_DATA_PATH
-    2. /app/data/nba_player_game_logs.csv（Docker 環境）
-    3. 相對於專案根目錄的 data/nba_player_game_logs.csv
-    
+    Get CSV file path
+
+    Search order:
+    1. Environment variable CSV_DATA_PATH
+    2. /app/data/nba_player_game_logs.csv (Docker environment)
+    3. data/nba_player_game_logs.csv relative to project root
+
     Returns:
-        str: CSV 檔案的絕對路徑
+        str: Absolute file path to CSV
     """
-    # 1. 優先使用環境變數
+    # 1. Prefer environment variable
     env_path = os.environ.get("CSV_DATA_PATH")
     if env_path and os.path.exists(env_path):
         return env_path
-    
-    # 2. Docker 環境路徑（/app/data/）
+
+    # 2. Docker environment path (/app/data/)
     docker_path = "/app/data/nba_player_game_logs.csv"
     if os.path.exists(docker_path):
         return docker_path
-    
-    # 3. 本地開發路徑（相對於專案根目錄）
+
+    # 3. Local development path (relative to project root)
     local_path = os.path.join(
         os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(__file__)))),
         "data",
@@ -64,59 +129,61 @@ CSV_PATH = _get_csv_path()
 
 class CSVPlayerHistoryService:
     """
-    CSV 球員歷史數據服務
-    
-    使用模組級快取（module-level cache）避免每次請求都重新讀取 CSV
-    這是一個單例模式（Singleton Pattern）的實現
-    
+    CSV Player History Data Service
+
+    Uses a module-level cache to avoid reloading the CSV on every request
+    This is a singleton pattern implementation
+
     Attributes:
-        _cache: 快取的 CSV 資料（球員名稱為 key）
-        _all_players: 所有球員名單（排序後）
-        _loaded: 是否已載入資料
+        _cache: cached CSV data (keyed by player name)
+        _all_players: all player names (sorted)
+        _loaded: whether the data has been loaded
     """
-    
+
     def __init__(self):
         self._cache: Dict[str, List[Dict[str, Any]]] = {}  # player_name -> game_logs
-        self._all_players: List[str] = []  # 所有球員名單
-        self._loaded: bool = False  # 是否已載入
-    
+        self._all_players: List[str] = []  # all player names
+        self._lineup_cache: Dict[Tuple[str, str], Set[str]] = {}  # (team, date_str) -> {player_names}
+        self._loaded: bool = False  # whether data has been loaded
+
     def reload(self) -> None:
         """
-        強制重新載入 CSV 資料
-        
-        清除所有快取並重新讀取 CSV 檔案
-        用於：
-        - CSV 檔案更新後重新載入
-        - 開發時修改程式碼後刷新資料
+        Force reload CSV data
+
+        Clear all caches and reload the CSV file.
+        Used for:
+        - Reloading after CSV file updates
+        - Refreshing data during development after code changes
         """
-        print("🔄 正在重新載入 CSV 資料...")
+        print("🔄 Reloading CSV data...")
         self._cache = {}
         self._all_players = []
+        self._lineup_cache = {}
         self._loaded = False
         self.load_csv()
-        print(f"✅ 重新載入完成，共 {len(self._all_players)} 位球員")
-    
+        print(f"✅ Reload complete, total {len(self._all_players)} players")
+
     def _parse_minutes(self, min_str: str) -> float:
         """
-        解析分鐘欄位（格式：MM:SS 或數字）
-        
+        Parse minutes field (format: MM:SS or numeric)
+
         Args:
-            min_str: 分鐘字串，例如 "32:15" 或 "32.5"
-        
+            min_str: minute string, e.g. "32:15" or "32.5"
+
         Returns:
-            float: 總分鐘數
-        
+            float: total minutes
+
         Example:
-            "32:15" -> 32.25 (32分鐘 + 15秒 = 32.25分鐘)
+            "32:15" -> 32.25 (32 minutes + 15 seconds = 32.25)
             "32" -> 32.0
             "" -> 0.0
         """
         if not min_str or min_str.strip() == "":
             return 0.0
-        
+
         min_str = min_str.strip()
-        
-        # 處理 MM:SS 格式
+
+        # Handle MM:SS format
         if ":" in min_str:
             parts = min_str.split(":")
             try:
@@ -125,22 +192,22 @@ class CSVPlayerHistoryService:
                 return minutes + seconds / 60
             except ValueError:
                 return 0.0
-        
-        # 處理純數字格式
+
+        # Handle pure numeric format
         try:
             return float(min_str)
         except ValueError:
             return 0.0
-    
+
     def _parse_float(self, value: str) -> Optional[float]:
         """
-        安全地將字串轉換為浮點數
-        
+        Safely convert string to float
+
         Args:
-            value: 要轉換的字串
-        
+            value: the string to convert
+
         Returns:
-            Optional[float]: 轉換後的數值，如果無法轉換則返回 None
+            Optional[float]: the converted value, or None if conversion fails
         """
         if not value or value.strip() == "":
             return None
@@ -148,159 +215,245 @@ class CSVPlayerHistoryService:
             return float(value.strip())
         except ValueError:
             return None
-    
+
     def load_csv(self) -> None:
         """
-        載入 CSV 檔案到記憶體
-        
-        只在第一次呼叫時執行，後續呼叫會直接返回（因為 _loaded 為 True）
-        
-        流程：
-        1. 檢查檔案是否存在
-        2. 讀取 CSV 檔案
-        3. 解析每一行資料
-        4. 按球員名稱分組存入快取
-        5. 建立球員名單
-        
+        Load CSV file into memory
+
+        Only runs the first time it is called. Subsequent calls return immediately if _loaded is True.
+
+        Steps:
+        1. Check if file exists
+        2. Read the CSV file
+        3. Parse each row of data
+        4. Group by player name into cache
+        5. Build player name list
+
         Raises:
-            FileNotFoundError: 當 CSV 檔案不存在時
+            FileNotFoundError: if CSV file does not exist
         """
         if self._loaded:
             return
-        
+
         if not os.path.exists(CSV_PATH):
-            raise FileNotFoundError(f"CSV 檔案不存在: {CSV_PATH}")
-        
-        # 讀取 CSV
-        # 使用 utf-8-sig 編碼自動處理 BOM (Byte Order Mark)
-        # 常見於從 Excel 匯出的 UTF-8 CSV 檔案
+            raise FileNotFoundError(f"CSV file does not exist: {CSV_PATH}")
+
+        # Read CSV
+        # Use utf-8-sig encoding to automatically handle BOM (Byte Order Mark)
+        # Common when exported from Excel as UTF-8 CSV
         with open(CSV_PATH, 'r', encoding='utf-8-sig') as f:
             reader = csv.DictReader(f)
-            
+
             for row in reader:
-                # 解析球員名稱
+                # Parse player name
                 player_name = row.get("Player", "").strip()
                 if not player_name:
                     continue
-                
-                # 解析數值欄位
+
+                # Parse numeric fields
                 pts = self._parse_float(row.get("PTS", ""))
                 ast = self._parse_float(row.get("AST", ""))
                 orb = self._parse_float(row.get("ORB", ""))
                 drb = self._parse_float(row.get("DRB", ""))
                 reb = self._parse_float(row.get("REB", ""))
-                
-                # 如果 REB 欄位沒有值，則用 ORB + DRB 計算
+
+                # If REB column is empty, use ORB + DRB
                 if reb is None and orb is not None and drb is not None:
                     reb = orb + drb
-                
-                # 解析分鐘數
+
+                # Parse minutes
                 minutes = self._parse_minutes(row.get("MIN", ""))
-                
-                # 解析日期
+
+                # Parse date
                 date_str = row.get("Date", "")
                 game_date = None
                 if date_str:
                     try:
-                        # 嘗試解析日期格式：M/D/YYYY
+                        # Try format: M/D/YYYY
                         game_date = datetime.strptime(date_str, "%m/%d/%Y")
                     except ValueError:
                         try:
-                            # 嘗試其他格式：YYYY-MM-DD
+                            # Try alternative format: YYYY-MM-DD
                             game_date = datetime.strptime(date_str, "%Y-%m-%d")
                         except ValueError:
                             pass
-                
-                # 解析先發狀態
+
+                # Parse starting status
                 status = row.get("Status", "").strip()
                 is_starter = status.lower() == "starter"
-                
-                # 建構比賽記錄
+
+                # Parse all 28 CSV columns
+                season = row.get("Season", "").strip()
+                wl = row.get("W/L", "").strip()
+                pos = row.get("Pos", "").strip()
+
+                fgm = self._parse_float(row.get("FGM", ""))
+                fga = self._parse_float(row.get("FGA", ""))
+                fg_pct = self._parse_float(row.get("FG%", ""))
+                tpm = self._parse_float(row.get("3PM", ""))
+                tpa = self._parse_float(row.get("3PA", ""))
+                tp_pct = self._parse_float(row.get("3P%", ""))
+                ftm = self._parse_float(row.get("FTM", ""))
+                fta = self._parse_float(row.get("FTA", ""))
+                ft_pct = self._parse_float(row.get("FT%", ""))
+                stl = self._parse_float(row.get("STL", ""))
+                blk = self._parse_float(row.get("BLK", ""))
+                tov = self._parse_float(row.get("TOV", ""))
+                pf = self._parse_float(row.get("PF", ""))
+                fic = self._parse_float(row.get("FIC", ""))
+
                 game_log = {
                     "player_name": player_name,
                     "game_date": game_date,
+                    "season": season,
                     "points": pts,
                     "assists": ast,
                     "rebounds": reb,
                     "minutes": minutes,
-                    # PRA（Points + Rebounds + Assists）
                     "pra": (pts or 0) + (reb or 0) + (ast or 0) if pts is not None else None,
-                    # 原始資料（用於除錯和顯示）
-                    "team": row.get("Team", ""),
-                    "opponent": row.get("Opponent", ""),
-                    "status": status,  # "Starter" 或 "Bench"
-                    "is_starter": is_starter,  # 布林值，方便判斷
+                    "team": row.get("Team", "").strip(),
+                    "opponent": row.get("Opponent", "").strip(),
+                    "status": status,
+                    "is_starter": is_starter,
+                    "wl": wl,
+                    "pos": pos,
+                    "fgm": fgm, "fga": fga, "fg_pct": fg_pct,
+                    "tpm": tpm, "tpa": tpa, "tp_pct": tp_pct,
+                    "ftm": ftm, "fta": fta, "ft_pct": ft_pct,
+                    "orb": orb, "drb": drb,
+                    "stl": stl, "blk": blk, "tov": tov, "pf": pf,
+                    "fic": fic,
                 }
-                
-                # 按球員分組
+
+                # Group by player
                 if player_name not in self._cache:
                     self._cache[player_name] = []
                 self._cache[player_name].append(game_log)
-        
-        # 建立球員名單（排序）
+
+                # Build lineup cache: (team, date_str) -> set of players who played
+                if minutes > 0 and game_date is not None:
+                    team = row.get("Team", "").strip()
+                    date_key = game_date.strftime("%Y-%m-%d")
+                    lineup_key = (team, date_key)
+                    if lineup_key not in self._lineup_cache:
+                        self._lineup_cache[lineup_key] = set()
+                    self._lineup_cache[lineup_key].add(player_name)
+
+        # Build player name list (sorted)
         self._all_players = sorted(self._cache.keys())
-        
-        # 對每個球員的比賽記錄按日期排序（最新的在前面）
+
+        # Sort game logs by date (most recent first)
         for player in self._cache:
             self._cache[player].sort(
                 key=lambda x: x["game_date"] or datetime.min,
-                reverse=True  # 最新的在前面
+                reverse=True  # most recent first
             )
-        
+
         self._loaded = True
-        print(f"✅ 已載入 CSV，共 {len(self._all_players)} 位球員")
-    
+        print(f"✅ CSV loaded, total {len(self._all_players)} players")
+
     def get_all_players(self, search: Optional[str] = None) -> List[str]:
         """
-        取得所有球員名單
-        
+        Retrieve all player names
+
         Args:
-            search: 搜尋關鍵字（可選），用於過濾球員名稱
-        
+            search: search keyword (optional) to filter player names
+
         Returns:
-            List[str]: 球員名稱列表（已排序）
-        
+            List[str]: player name list (sorted)
+
         Example:
-            get_all_players()  # 返回所有球員
-            get_all_players("curry")  # 返回包含 "curry" 的球員
+            get_all_players()  # returns all players
+            get_all_players("curry")  # returns players whose name contains "curry"
         """
         self.load_csv()
-        
+
         if not search:
             return self._all_players
-        
-        # 過濾（不區分大小寫）
+
+        # Case-insensitive filter
         search_lower = search.lower()
         return [p for p in self._all_players if search_lower in p.lower()]
-    
+
     def get_player_opponents(self, player_name: str) -> List[str]:
         """
-        取得球員曾經對戰過的所有對手
-        
+        Get all opponents the player has played against
+
         Args:
-            player_name: 球員名稱
-        
+            player_name: player name
+
         Returns:
-            List[str]: 對手球隊名稱列表（已去重並排序）
+            List[str]: list of opponent team names (deduplicated and sorted)
         """
         self.load_csv()
-        
+
         player_games = self._cache.get(player_name, [])
         if not player_games:
-            # 嘗試模糊匹配
+            # Try fuzzy match
             player_lower = player_name.lower()
             for p in self._all_players:
                 if player_lower in p.lower() or p.lower() in player_lower:
                     player_games = self._cache.get(p, [])
                     break
-        
+
         opponents = set()
         for game in player_games:
             opponent = game.get("opponent", "")
             if opponent:
                 opponents.add(opponent)
-        
+
         return sorted(list(opponents))
+
+    def get_players_in_game(self, team: str, date: datetime) -> Set[str]:
+        """
+        Get set of players who played for a team on a specific date
+
+        Args:
+            team: team name (e.g. "Bucks")
+            date: game date
+
+        Returns:
+            Set[str]: set of player names who played
+        """
+        self.load_csv()
+        date_key = date.strftime("%Y-%m-%d")
+        return self._lineup_cache.get((team, date_key), set())
+
+    def get_teammates(self, player_name: str) -> List[str]:
+        """
+        Get all teammates who have played for the same team as the player
+
+        Traverses all game logs of the player and collects teammates from _lineup_cache.
+
+        Args:
+            player_name: player name
+
+        Returns:
+            List[str]: list of teammate names (deduplicated and sorted, excluding the player themself)
+        """
+        self.load_csv()
+
+        player_games = self._cache.get(player_name, [])
+        if not player_games:
+            player_lower = player_name.lower()
+            for p in self._all_players:
+                if player_lower in p.lower() or p.lower() in player_lower:
+                    player_games = self._cache.get(p, [])
+                    player_name = p
+                    break
+
+        teammates: Set[str] = set()
+        for game in player_games:
+            team = game.get("team", "")
+            game_date = game.get("game_date")
+            if not team or game_date is None:
+                continue
+            date_key = game_date.strftime("%Y-%m-%d")
+            lineup = self._lineup_cache.get((team, date_key), set())
+            teammates.update(lineup)
+
+        teammates.discard(player_name)
+        return sorted(teammates)
 
     def get_player_stats(
         self,
@@ -311,62 +464,67 @@ class CSVPlayerHistoryService:
         bins: int = 15,
         exclude_dnp: bool = True,
         opponent: Optional[str] = None,
-        is_starter: Optional[bool] = None
+        is_starter: Optional[bool] = None,
+        teammate_filter: Optional[List[str]] = None,
+        teammate_played: Optional[bool] = None
     ) -> Dict[str, Any]:
         """
-        計算球員歷史數據統計
-        
-        這是核心功能！計算指定球員在指定指標上的歷史機率分佈。
-        
+        Calculate player historical statistics
+
+        This is the core functionality! Calculates historical probability distribution for a given player and metric.
+
         Args:
-            player_name: 球員名稱
-            metric: 統計指標（points/assists/rebounds/pra）
-            threshold: 閾值（例如 24.5）
-            n: 最近 N 場比賽（0 表示全部）
-            bins: 直方圖分箱數（預設 15）
-            exclude_dnp: 是否排除 DNP（Did Not Play，分鐘數為 0 的場次）
-            opponent: 對手篩選（可選，None 表示全部）
-            is_starter: 先發狀態篩選（True=僅先發、False=僅替補、None=全部）
-        
+            player_name: player name
+            metric: statistical metric (points/assists/rebounds/pra)
+            threshold: threshold value (e.g. 24.5)
+            n: last N games (0 means all)
+            bins: histogram bins (default 15)
+            exclude_dnp: exclude DNP (Did Not Play, games with 0 minutes)
+            opponent: filter by opponent (optional, None for all)
+            is_starter: filter by starting status (True=starters only, False=bench only, None=all)
+            teammate_filter: star teammate name list (optional, e.g. ["Giannis Antetokounmpo"])
+            teammate_played: True=only games where all teammates played, False=all did not play, None=no filter
+
         Returns:
-            Dict 包含：
-            - player: 球員名稱
-            - metric: 統計指標
-            - threshold: 閾值
-            - n_games: 樣本場次
-            - p_over: Over 機率（value > threshold）
-            - p_under: Under 機率（value < threshold）
-            - mean: 平均值
-            - std: 標準差
-            - histogram: 直方圖資料（已棄用，保留兼容性）
-            - game_logs: 每場比賽詳細資料（新增）
-            - opponents: 對手列表（新增）
-        
+            Dict containing:
+            - player: player name
+            - metric: metric name
+            - threshold: threshold value
+            - n_games: sample size
+            - p_over: Over probability (value > threshold)
+            - p_under: Under probability (value < threshold)
+            - mean: mean value
+            - std: standard deviation
+            - histogram: histogram data (deprecated, kept for compatibility)
+            - game_logs: per-game detailed data
+            - opponents: list of opponents
+            - teammates: list of teammates (for frontend multi-select)
+
         Example:
             get_player_stats("Stephen Curry", "points", 24.5, n=20)
-            # 返回 Curry 最近 20 場比賽得分超過 24.5 的機率
-            
-            get_player_stats("Stephen Curry", "points", 24.5, n=20, is_starter=True)
-            # 返回 Curry 最近 20 場「先發」比賽得分超過 24.5 的機率
+
+            get_player_stats("A.J. Green", "points", 10.5,
+                             teammate_filter=["Giannis Antetokounmpo"], teammate_played=False)
+            # Returns stats of A.J. Green for games when Giannis did not play
         """
         self.load_csv()
-        
-        # 取得球員的比賽記錄
+
+        # Get player's game logs
         player_games = self._cache.get(player_name, [])
-        
+
         if not player_games:
-            # 嘗試模糊匹配
+            # Try fuzzy match
             player_lower = player_name.lower()
             matched_player = None
             for p in self._all_players:
                 if player_lower in p.lower() or p.lower() in player_lower:
                     matched_player = p
                     break
-            
+
             if matched_player:
                 player_games = self._cache.get(matched_player, [])
                 player_name = matched_player
-        
+
         if not player_games:
             return {
                 "player": player_name,
@@ -380,43 +538,78 @@ class CSVPlayerHistoryService:
                 "histogram": [],
                 "game_logs": [],
                 "opponents": [],
-                "message": f"找不到球員 '{player_name}'"
+                "teammates": [],
+                "message": f"Player '{player_name}' not found"
             }
-        
-        # 取得所有對手（用於篩選器）
+
+        # Get all opponents (for filters)
         all_opponents = self.get_player_opponents(player_name)
-        
-        # 收集有效的比賽記錄
+        # Get all teammates (for star teammate selector, only those on the same team)
+        all_teammates = self.get_teammates(player_name)
+
+        # Validate teammate_filter: only accept teammates from the same team, remove non-teammates
+        validated_teammate_filter = None
+        if teammate_filter:
+            teammate_set = set(all_teammates)
+            validated_teammate_filter = [t for t in teammate_filter if t in teammate_set]
+            if not validated_teammate_filter and teammate_filter:
+                validated_teammate_filter = None
+
+        # Collect valid game logs
         valid_games: List[Dict[str, Any]] = []
         values: List[float] = []
-        
+
         for game in player_games:
-            # 排除 DNP
+            # Exclude DNP
             if exclude_dnp and game.get("minutes", 0) == 0:
                 continue
-            
-            # 對手篩選
+
+            # Opponent filter
             if opponent and game.get("opponent", "") != opponent:
                 continue
-            
-            # 先發狀態篩選
-            # is_starter=True: 只要先發場次
-            # is_starter=False: 只要替補場次
-            # is_starter=None: 全部場次
+
+            # Starter status filter
+            # is_starter=True: only starter games
+            # is_starter=False: only bench games
+            # is_starter=None: all games
             if is_starter is not None:
                 if game.get("is_starter", False) != is_starter:
                     continue
-            
-            # 取得對應指標的值
-            value = game.get(metric)
+
+            # Star teammate filter (same-team only)
+            # teammate_played=True: all selected teammates played
+            # teammate_played=False: all selected teammates did not play
+            if validated_teammate_filter and teammate_played is not None:
+                game_team = game.get("team", "")
+                game_date = game.get("game_date")
+                if game_team and game_date:
+                    date_key = game_date.strftime("%Y-%m-%d")
+                    lineup = self._lineup_cache.get((game_team, date_key), set())
+                    if teammate_played:
+                        if not all(t in lineup for t in validated_teammate_filter):
+                            continue
+                    else:
+                        if any(t in lineup for t in validated_teammate_filter):
+                            continue
+
+            # Get value for the specified metric.
+            # 💡 Dispatch via CONTINUOUS_METRIC_EXTRACTORS so new metrics added
+            # to the dispatch table (e.g. SPO-16's threes_made/ra/pr/pa) Just
+            # Work without touching this loop. Falls back to direct `game[key]`
+            # lookup for any legacy callers passing a raw column name.
+            extractor = CONTINUOUS_METRIC_EXTRACTORS.get(metric)
+            if extractor is not None:
+                value = extractor(game)
+            else:
+                value = game.get(metric)
             if value is not None:
                 values.append(value)
-                
-                # 建構 game log 資料
+
+                # Build game log data
                 game_date = game.get("game_date")
                 minutes = game.get("minutes", 0)
                 game_is_starter = game.get("is_starter", False)
-                
+
                 valid_games.append({
                     "date": game_date.strftime("%m/%d") if game_date else "",
                     "date_full": game_date.strftime("%Y-%m-%d") if game_date else "",
@@ -424,15 +617,15 @@ class CSVPlayerHistoryService:
                     "value": value,
                     "is_over": value > threshold,
                     "team": game.get("team", ""),
-                    "minutes": round(minutes, 1),  # 上場時間（分鐘）
-                    "is_starter": game_is_starter,  # 是否先發
+                    "minutes": round(minutes, 1),  # minutes played
+                    "is_starter": game_is_starter,  # whether started
                 })
-        
-        # 取最近 N 場
+
+        # Take the most recent N games
         if n > 0 and len(valid_games) > n:
             valid_games = valid_games[:n]
             values = values[:n]
-        
+
         if not values:
             return {
                 "player": player_name,
@@ -446,30 +639,31 @@ class CSVPlayerHistoryService:
                 "histogram": [],
                 "game_logs": [],
                 "opponents": all_opponents,
-                "message": f"球員 '{player_name}' 沒有 {metric} 的有效資料"
+                "teammates": all_teammates,
+                "message": f"Player '{player_name}' has no valid {metric} stats"
             }
-        
-        # 計算 Over/Under 機率
+
+        # Calculate Over/Under probabilities
         # Over: value > threshold
         # Under: value < threshold
         over_count = sum(1 for v in values if v > threshold)
         under_count = sum(1 for v in values if v < threshold)
         equal_count = sum(1 for v in values if v == threshold)
-        
+
         n_games = len(values)
         p_over = over_count / n_games if n_games > 0 else None
         p_under = under_count / n_games if n_games > 0 else None
-        
-        # 計算平均值和標準差
+
+        # Compute mean and standard deviation
         mean_val = statistics.mean(values)
         std_val = statistics.stdev(values) if len(values) > 1 else 0.0
-        
-        # 計算直方圖（保留兼容性）
+
+        # Calculate histogram (for compatibility)
         histogram = self._calculate_histogram(values, bins)
-        
-        # 反轉 game_logs 順序，讓最舊的在前（用於時間序列圖表）
+
+        # Reverse game_logs order so the oldest is first (for time series charts)
         game_logs_for_chart = list(reversed(valid_games))
-        
+
         return {
             "player": player_name,
             "metric": metric,
@@ -477,79 +671,203 @@ class CSVPlayerHistoryService:
             "n_games": n_games,
             "p_over": round(p_over, 4) if p_over is not None else None,
             "p_under": round(p_under, 4) if p_under is not None else None,
-            "equal_count": equal_count,  # threshold 剛好相等的場次
+            "equal_count": equal_count,
             "mean": round(mean_val, 2),
             "std": round(std_val, 2),
             "histogram": histogram,
-            "game_logs": game_logs_for_chart,  # 每場比賽詳細資料
-            "opponents": all_opponents,  # 對手列表
-            "opponent_filter": opponent,  # 當前篩選的對手
+            "game_logs": game_logs_for_chart,
+            "opponents": all_opponents,
+            "teammates": all_teammates,
+            "opponent_filter": opponent,
+            "teammate_filter": validated_teammate_filter,
+            "teammate_played": teammate_played,
             "message": None
         }
-    
+
+    def player_dd_history(
+        self,
+        player_name: str,
+        season: Optional[str] = None,
+        threshold: Any = None,
+    ) -> Dict[str, Any]:
+        """
+        Historical Double-Double rate for a player.
+
+        DD definition: a game in which the player records ≥10 in at least
+        2 of {PTS, REB, AST, STL, BLK}. This is the standard NBA convention.
+        Fields are pulled from the CSV's canonical columns; the loader
+        normalizes them to snake_case (`points`, `rebounds`, `assists`,
+        `stl`, `blk`).
+
+        ⚠ DD is binary (0/1). A `threshold` argument makes no sense here —
+        if a caller passes a non-None threshold this method REJECTS the call
+        with a ValueError. This is the "reject any non-null threshold" rule
+        from §2.4 of the SPO-16 ticket; silently dropping the threshold
+        would mask a likely caller bug (e.g. wiring DD through the
+        Over/Under flow by mistake).
+
+        Args:
+            player_name: player name (fuzzy-matched if exact match fails)
+            season: optional CSV "Season" filter (e.g. "2024-25"); None
+                    means use all seasons available in the CSV
+            threshold: must be None — provided so the call signature matches
+                       the over/under flow's keyword name; non-None raises
+
+        Returns:
+            dict with:
+              - player: resolved (post-fuzzy) player name
+              - season: the season filter actually applied (None = all)
+              - games: count of games considered (post DNP exclusion)
+              - dd_games: count of those games that were DDs
+              - prob_dd: dd_games / games (None if games == 0)
+              - n_games: alias for `games`, matches the schema other
+                callers use (DailyPicksResponse etc.)
+              - message: error/explanatory string, None on success
+
+        Example:
+            >>> svc.player_dd_history("Nikola Jokic", season="2024-25")
+            {"player": "Nikola Jokic", "season": "2024-25",
+             "games": 65, "dd_games": 50, "prob_dd": 0.769, "n_games": 65,
+             "message": None}
+        """
+        # ⚠ Hard-reject misuse: DD is 0/1, threshold is meaningless.
+        if threshold is not None:
+            raise ValueError(
+                "player_dd_history(): DD is a binary outcome (0/1); "
+                "threshold must be None. If you wanted Over/Under semantics, "
+                "you reached for the wrong method — DD has no `point` field."
+            )
+
+        self.load_csv()
+
+        # Reuse the same fuzzy-match logic as get_player_stats so callers
+        # behave consistently across metrics.
+        player_games = self._cache.get(player_name, [])
+        if not player_games:
+            player_lower = player_name.lower()
+            for p in self._all_players:
+                if player_lower in p.lower() or p.lower() in player_lower:
+                    player_games = self._cache.get(p, [])
+                    player_name = p
+                    break
+
+        if not player_games:
+            return {
+                "player": player_name,
+                "season": season,
+                "games": 0,
+                "dd_games": 0,
+                "prob_dd": None,
+                "n_games": 0,
+                "message": f"Player '{player_name}' not found",
+            }
+
+        games_count = 0
+        dd_count = 0
+
+        for game in player_games:
+            # Exclude DNPs — a player who didn't play can't have a DD,
+            # but counting those games would dilute the rate.
+            if game.get("minutes", 0) == 0:
+                continue
+            if season and game.get("season") != season:
+                continue
+
+            games_count += 1
+
+            # Count how many of {PTS, REB, AST, STL, BLK} are ≥ 10 this game.
+            # _coalesce(... or 0) so a CSV row missing one stat doesn't blow up
+            # the comparison; a missing stat in this column simply doesn't
+            # qualify as a "double" — equivalent to it being 0, which is the
+            # right default for stat-tracking edge cases.
+            doubles = sum(
+                1
+                for key in _DD_COMPONENT_KEYS
+                if (game.get(key) or 0) >= _DD_THRESHOLD
+            )
+            if doubles >= _DD_REQUIRED_COMPONENTS:
+                dd_count += 1
+
+        prob_dd = round(dd_count / games_count, 4) if games_count > 0 else None
+
+        return {
+            "player": player_name,
+            "season": season,
+            "games": games_count,
+            "dd_games": dd_count,
+            "prob_dd": prob_dd,
+            # Alias kept so downstream serializers (DailyPick / response
+            # schemas that have `n_games`) can pick this up uniformly.
+            "n_games": games_count,
+            "message": None if games_count > 0 else (
+                f"No qualifying games for {player_name}"
+                + (f" in season {season}" if season else "")
+            ),
+        }
+
     def _calculate_histogram(
         self,
         values: List[float],
         bins: int
     ) -> List[Dict[str, Any]]:
         """
-        計算直方圖（histogram）
-        
-        將數值分成 bins 個區間，計算每個區間的數量
-        
+        Calculate histogram
+
+        Divide values into `bins` intervals and count the number in each interval
+
         Args:
-            values: 數值列表
-            bins: 分箱數
-        
+            values: list of float values
+            bins: number of bins
+
         Returns:
-            List[Dict] 每個元素包含：
-            - binStart: 區間起始值
-            - binEnd: 區間結束值
-            - count: 該區間的數量
-        
-        分箱策略：
-        - 計算 min 和 max
+            List[Dict], each element contains:
+            - binStart: interval start value
+            - binEnd: interval end value
+            - count: count of values in this interval
+
+        Binning strategy:
+        - Calculate min and max
         - bin_width = (max - min) / bins
-        - 最後一個 bin 包含 max 值
+        - Last bin includes the max value
         """
         if not values or bins < 1:
             return []
-        
+
         min_val = min(values)
         max_val = max(values)
-        
-        # 避免 max == min 導致除以 0
+
+        # Avoid division by zero if max == min
         if max_val == min_val:
             return [{
                 "binStart": min_val,
                 "binEnd": max_val,
                 "count": len(values)
             }]
-        
+
         bin_width = (max_val - min_val) / bins
         histogram = []
-        
+
         for i in range(bins):
             bin_start = min_val + i * bin_width
             bin_end = min_val + (i + 1) * bin_width
-            
-            # 計算落在此區間的數量
-            # 最後一個 bin 包含等於 max 的值
+
+            # Count number of values in this interval
+            # Last bin includes values equal to max
             if i == bins - 1:
                 count = sum(1 for v in values if bin_start <= v <= bin_end)
             else:
                 count = sum(1 for v in values if bin_start <= v < bin_end)
-            
+
             histogram.append({
                 "binStart": round(bin_start, 2),
                 "binEnd": round(bin_end, 2),
                 "count": count
             })
-        
+
         return histogram
 
 
-# 建立單例實例
-# 這個實例會在模組被 import 時建立，之後都使用同一個實例
+# Create singleton instance
+# This instance is created when the module is imported; always use the same instance afterward
 csv_player_service = CSVPlayerHistoryService()
 

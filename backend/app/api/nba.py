@@ -1,18 +1,20 @@
 """
-nba.py - NBA 相關 API 端點
+nba.py - NBA related API endpoints
 
-包含：
-1. 賽事列表 API（GET /api/nba/events）
-2. 去水機率計算 API（POST /api/nba/props/no-vig）
-3. 球員建議 API（GET /api/nba/players/suggest）
+Includes:
+1. Game List API (GET /api/nba/events)
+2. No-Vig Probability Calculation API (POST /api/nba/props/no-vig)
+3. Player Suggestions API (GET /api/nba/players/suggest)
 
-這是整個應用的核心功能模組
+This is the core functional module of the application.
 """
 
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, HTTPException, Query, Request
 from datetime import datetime, timezone, timedelta, time
 from typing import List, Optional
 from zoneinfo import ZoneInfo
+
+from app.middleware.rate_limit import limiter
 from app.models.schemas import (
     EventsResponse,
     NBAEvent,
@@ -23,72 +25,286 @@ from app.models.schemas import (
     PlayerSuggestResponse,
     CSVPlayersResponse,
     PlayerHistoryResponse,
+    PlayerDDHistoryResponse,
     HistogramBin,
     GameLog
 )
 from app.services.odds_theoddsapi import odds_provider
 from app.services.odds_provider import OddsAPIError
 from app.services.cache import cache_service, CacheService
+from app.services.odds_gateway import odds_gateway, MarketSnapshotResult
+from app.services.odds_snapshot_service import BINARY_MARKET_KEYS
 from app.services.prob import (
     american_to_prob,
     calculate_vig,
     devig,
-    calculate_consensus_mean
+    calculate_consensus_mean,
+    single_leg_devig,
+    DEFAULT_BINARY_VIG,
 )
-from app.services.normalize import find_player, extract_player_names
-from app.services.csv_player_history import csv_player_service
+from app.services.normalize import extract_player_names, find_player, suggest_players as suggest_player_names
+# CONTINUOUS_METRIC_EXTRACTORS is the canonical 11-key continuous-metric
+# dispatch table (SPO-16). Importing it directly keeps the API route's
+# valid_metrics in lockstep with the services layer — adding a new metric
+# to the extractor table automatically flows through to the route, removing
+# a place to forget. Binary metrics (currently `dd`) flow through their own
+# `/player-dd-history` endpoint, not this route.
+from app.services.csv_player_history import csv_player_service, CONTINUOUS_METRIC_EXTRACTORS
 from app.settings import settings
 
-# 建立路由器
+
+# Binary-market sentinel for line value (no real bookmaker threshold for
+# Yes/No bets). Mirrors `odds_snapshot_service._parse_binary_market`'s
+# convention so /props/no-vig responses agree with snapshot-stored rows.
+_BINARY_LINE_SENTINEL = 0.5
+
+# Initialize router
 router = APIRouter(
     prefix="/api/nba",
     tags=["nba"]
 )
 
 
+def _snapshot_metadata(snapshot: MarketSnapshotResult) -> dict:
+    return {
+        "fetched_at": snapshot.fetched_at,
+        "data_age_seconds": snapshot.data_age_seconds,
+        "cache_state": snapshot.cache_state,
+        "source": snapshot.source,
+    }
+
+
+def _collect_player_names(
+    bookmakers_data: list[dict],
+    market_key: str,
+) -> list[str]:
+    player_set = set()
+    for bookmaker in bookmakers_data:
+        for market in bookmaker.get("markets", []):
+            if market.get("key") != market_key:
+                continue
+            for outcome in market.get("outcomes", []):
+                if "description" in outcome:
+                    player_set.add(outcome["description"])
+    return sorted(player_set)
+
+
+def _build_binary_no_vig_response(
+    body: NoVigRequest,
+    snapshot: MarketSnapshotResult,
+    bookmakers_data: list[dict],
+    matched_player: str,
+) -> NoVigResponse:
+    """
+    Build a NoVigResponse for a binary Yes/No market (e.g. DD).
+
+    Mirrors the Over/Under flow's per-bookmaker loop, but:
+      1. Outcomes are matched by ``name in {"yes", "no"}`` (not over/under).
+      2. There is no `point` field — the response uses the
+         `_BINARY_LINE_SENTINEL` (0.5) and consumers must dispatch on
+         `body.market`, not the line value.
+      3. When only the Yes leg is posted, vig is approximated via
+         `single_leg_devig(p_yes_imp, DEFAULT_BINARY_VIG)`. If the prior
+         cannot be safely applied (extreme prices), THIS ROW IS NOT
+         EMITTED — the route does not surface a fabricated fair-prob
+         (anti-hallucination guard, decision §4 step 3). The aggregate
+         message names the omission so callers know data was withheld.
+
+    Both new explicit binary fields (`yes_price`, `p_yes_imp`,
+    `yes_fair_prob`, etc.) AND the legacy over/under fields are populated
+    on each emitted row. The legacy fields use the convention
+    "over = Yes leg, under = No leg" so existing frontend Zod parsers
+    keep working without schema changes.
+    """
+    results: List[BookmakerResult] = []
+    fair_probs_for_consensus: List[tuple] = []
+    rows_dropped_due_to_prior = 0
+
+    for bookmaker in bookmakers_data:
+        bookmaker_key = bookmaker.get("key", "unknown")
+
+        for market in bookmaker.get("markets", []):
+            if market.get("key") != body.market:
+                continue
+
+            # Collect Yes/No outcomes for the matched player.
+            yes_outcome: Optional[dict] = None
+            no_outcome: Optional[dict] = None
+            for outcome in market.get("outcomes", []):
+                if outcome.get("description") != matched_player:
+                    continue
+                outcome_name = outcome.get("name", "").lower()
+                if outcome_name == "yes":
+                    yes_outcome = outcome
+                elif outcome_name == "no":
+                    no_outcome = outcome
+
+            # Without a Yes price there is nothing to anchor any de-vig
+            # calculation on; skip this bookmaker rather than fabricate.
+            if yes_outcome is None:
+                continue
+
+            yes_price = yes_outcome.get("price", 0)
+            if yes_price == 0:
+                continue
+            no_price_raw = no_outcome.get("price", 0) if no_outcome is not None else 0
+
+            try:
+                p_yes_imp = american_to_prob(yes_price)
+                no_price: Optional[float]
+                p_no_imp: Optional[float]
+
+                if no_price_raw != 0:
+                    # Both legs posted — derive vig directly from the leg
+                    # pair, matching the Over/Under flow's higher-fidelity
+                    # path. No prior assumption needed.
+                    no_price = float(no_price_raw)
+                    p_no_imp = american_to_prob(no_price_raw)
+                    vig = calculate_vig(p_yes_imp, p_no_imp)
+                    p_yes_fair, p_no_fair = devig(p_yes_imp, p_no_imp)
+                else:
+                    # Only Yes posted — apply the league-average prior.
+                    # When the prior cannot be safely applied (extreme
+                    # prices, see prob.single_leg_devig), DO NOT publish
+                    # a fabricated fair-prob — drop the row instead.
+                    no_price = None
+                    p_no_imp = None
+                    p_yes_fair = single_leg_devig(p_yes_imp, DEFAULT_BINARY_VIG)
+                    if p_yes_fair is None:
+                        rows_dropped_due_to_prior += 1
+                        continue
+                    # Once Yes fair is computed, No fair is the exact
+                    # mathematical complement (probabilities of a binary
+                    # outcome must sum to 1) — not a fabrication.
+                    p_no_fair = 1.0 - p_yes_fair
+                    vig = DEFAULT_BINARY_VIG  # the prior we assumed
+
+                # Build the row. Legacy over/under fields encode
+                # "over = Yes" / "under = No" so the existing schema
+                # surface keeps working; new explicit yes_*/no_* fields
+                # provide self-documenting access for SPO-26-aware callers.
+                # `under_odds` falls back to `yes_price` as a non-null
+                # placeholder ONLY when the No leg isn't posted; consumers
+                # MUST dispatch on `market` and ignore under_odds for
+                # binary markets in that case (mirrors the snapshot
+                # service's 0.5/None convention).
+                under_odds_for_legacy = float(no_price) if no_price is not None else float(yes_price)
+                p_under_imp_for_legacy = p_no_imp if p_no_imp is not None else (1.0 - p_yes_imp)
+
+                results.append(
+                    BookmakerResult(
+                        bookmaker=bookmaker_key,
+                        line=_BINARY_LINE_SENTINEL,
+                        over_odds=float(yes_price),
+                        under_odds=under_odds_for_legacy,
+                        p_over_imp=round(p_yes_imp, 4),
+                        p_under_imp=round(p_under_imp_for_legacy, 4),
+                        vig=round(vig, 4),
+                        p_over_fair=round(p_yes_fair, 4),
+                        p_under_fair=round(p_no_fair, 4),
+                        fetched_at=snapshot.fetched_at,
+                        # Explicit binary mirrors — preferred for new
+                        # consumers (e.g. SPO-20 PlayerDDTile).
+                        yes_price=float(yes_price),
+                        no_price=no_price,
+                        p_yes_imp=round(p_yes_imp, 4),
+                        p_no_imp=round(p_no_imp, 4) if p_no_imp is not None else None,
+                        yes_fair_prob=round(p_yes_fair, 4),
+                        no_fair_prob=round(p_no_fair, 4),
+                    )
+                )
+                fair_probs_for_consensus.append((p_yes_fair, p_no_fair))
+
+            except (ValueError, ZeroDivisionError):
+                # american_to_prob rejects 0 odds; defensive fallthrough.
+                continue
+
+    # Consensus across bookmakers. For binary markets, the legacy
+    # p_over_fair/p_under_fair carry Yes/No values; we ALSO populate the
+    # explicit p_yes_fair/p_no_fair mirrors.
+    consensus: Optional[Consensus] = None
+    if fair_probs_for_consensus:
+        consensus_probs = calculate_consensus_mean(fair_probs_for_consensus)
+        if consensus_probs:
+            yes_fair_consensus = round(consensus_probs[0], 4)
+            no_fair_consensus = round(consensus_probs[1], 4)
+            consensus = Consensus(
+                method="mean",
+                p_over_fair=yes_fair_consensus,
+                p_under_fair=no_fair_consensus,
+                p_yes_fair=yes_fair_consensus,
+                p_no_fair=no_fair_consensus,
+            )
+
+    # Aggregate message: distinguish "no inventory at all" from "inventory
+    # existed but the prior could not safely be applied". The latter is the
+    # honest equivalent of "yes_fair_prob is null" — we drop the row rather
+    # than fabricate, and surface the omission explicitly.
+    if results:
+        message = None
+    elif rows_dropped_due_to_prior > 0:
+        message = (
+            f"Single-leg Yes posted by {rows_dropped_due_to_prior} bookmaker(s), "
+            "but the league-average vig prior could not be safely applied; "
+            "fair probability withheld (not fabricated)."
+        )
+    else:
+        message = "No props data for this player at the selected bookmakers"
+
+    return NoVigResponse(
+        event_id=body.event_id,
+        player_name=matched_player,
+        market=body.market,
+        results=results,
+        consensus=consensus,
+        message=message,
+        **_snapshot_metadata(snapshot),
+    )
+
+
 @router.get(
     "/events",
     response_model=EventsResponse,
-    summary="取得 NBA 賽事列表",
-    description="取得指定日期的 NBA 賽事列表"
+    summary="Get NBA games list",
+    description="Get NBA games list for a specified date"
 )
 async def get_events(
     date: Optional[str] = Query(
         default=None,
-        description="查詢日期（YYYY-MM-DD），預設今天",
+        description="Query date (YYYY-MM-DD), defaults to today",
         pattern=r"^\d{4}-\d{2}-\d{2}$"
     ),
     regions: str = Query(
         default="us",
-        description="地區代碼（us, uk, eu, au）"
+        description="Region code (us, uk, eu, au)"
     ),
     tz_offset: Optional[int] = Query(
         default=None,
-        description="時區偏移量（分鐘），例如 UTC-6 傳 -360，UTC+8 傳 480。用於過濾本地日期的比賽。"
+        description="Timezone offset (minutes), e.g. UTC-6 send -360, UTC+8 send 480. Used for filtering local date games."
     )
 ) -> EventsResponse:
     """
-    取得 NBA 賽事列表
-    
+    Get NBA games list
+
     GET /api/nba/events?date=YYYY-MM-DD&regions=us
-    
-    流程：
-    1. 檢查 Redis 快取
-    2. 若快取命中（cache hit），直接返回
-    3. 若快取未命中（cache miss），呼叫 The Odds API
-    4. 將結果存入快取
-    5. 返回結果
-    
+
+    Flow:
+    1. Check Redis cache
+    2. If cache hit, return directly
+    3. If cache miss, call The Odds API
+    4. Store result in cache
+    5. Return result
+
     Args:
-        date: 查詢日期（YYYY-MM-DD），預設今天
-        regions: 地區代碼，影響可用的博彩公司
-    
+        date: Query date (YYYY-MM-DD), defaults to today
+        regions: Region code, affects available bookmakers
+
     Returns:
-        EventsResponse: 賽事列表
-    
+        EventsResponse: Games list
+
     Raises:
-        HTTPException: 當 API 呼叫失敗時返回對應的錯誤
-    
+        HTTPException: API call fails
+
     Example Response:
         {
             "date": "2026-01-14",
@@ -103,41 +319,41 @@ async def get_events(
             ]
         }
     """
-    # 處理日期參數：預設今天
+    # Handle date param: defaults to today
     if date is None:
         date = datetime.now(timezone.utc).strftime("%Y-%m-%d")
     
-    # 處理時區偏移量：預設 UTC（0 分鐘）
-    # 注意：JavaScript 的 getTimezoneOffset() 返回的是「UTC - 本地時間」的分鐘數
-    # 例如：UTC-6 返回 360（正數），UTC+8 返回 -480（負數）
-    # 但前端傳來的是正常的偏移量（UTC-6 傳 -360，UTC+8 傳 480）
+    # Handle timezone offset: default UTC (0 minutes)
+    # Note: JavaScript's getTimezoneOffset() returns "UTC - Local" minutes
+    # Example: UTC-6 returns 360 (positive), UTC+8 returns -480 (negative)
+    # But front-end should send "normal" offset (UTC-6 send -360, UTC+8 send 480)
     offset_minutes = tz_offset if tz_offset is not None else 0
     
-    # 1. 檢查快取（包含時區偏移量以區分不同時區的請求）
+    # 1. Check cache (include timezone offset to distinguish different local time requests)
     cache_key = f"{CacheService.build_events_key(date, regions)}:tz{offset_minutes}"
     cached_data = await cache_service.get(cache_key)
     
     if cached_data:
-        # 快取命中
+        # Cache hit
         return EventsResponse(**cached_data)
     
-    # 2. 快取未命中，呼叫外部 API
+    # 2. Cache miss, call external API
     try:
-        # 計算用戶本地日期對應的 UTC 時間範圍
-        # 例如：用戶在 UTC-6 選擇 "2026-01-17"
-        # 本地 2026-01-17 00:00:00 = UTC 2026-01-17 06:00:00
-        # 本地 2026-01-17 23:59:59 = UTC 2026-01-18 05:59:59
+        # Calculate UTC time range for user's local date
+        # Example: If user is UTC-6 and selects "2026-01-17"
+        # Local 2026-01-17 00:00:00 = UTC 2026-01-17 06:00:00
+        # Local 2026-01-17 23:59:59 = UTC 2026-01-18 05:59:59
         date_obj = datetime.strptime(date, "%Y-%m-%d")
         
-        # 本地時間 00:00:00 轉換為 UTC
+        # Local 00:00:00 to UTC
         local_start = datetime.combine(date_obj.date(), datetime.min.time())
         utc_start = local_start - timedelta(minutes=offset_minutes)
         
-        # 本地時間 23:59:59 轉換為 UTC（不使用 datetime.max.time() 以避免微秒）
+        # Local 23:59:59 to UTC (avoid datetime.max.time to skip microseconds)
         local_end = datetime.combine(date_obj.date(), time(23, 59, 59))
         utc_end = local_end - timedelta(minutes=offset_minutes)
         
-        # 查詢範圍擴大一點以確保涵蓋邊界情況
+        # Expand search range to cover boundary cases
         date_from = utc_start - timedelta(hours=1)
         date_to = utc_end + timedelta(hours=1)
         
@@ -148,26 +364,26 @@ async def get_events(
             date_to=date_to
         )
         
-        # 3. 轉換資料格式並過濾日期
-        # 過濾邏輯：只返回比賽開始時間在用戶本地日期範圍內的比賽
+        # 3. Transform and filter data by date
+        # Filter: return only games whose commence time falls within local date
         events = []
         for raw_event in raw_events:
             commence_time_str = raw_event.get("commence_time", "")
             
             if commence_time_str:
-                # 解析 UTC 時間（格式：2026-01-17T00:10:00Z）
+                # Parse UTC time (e.g. 2026-01-17T00:10:00Z)
                 try:
                     commence_utc = datetime.fromisoformat(commence_time_str.replace('Z', '+00:00'))
-                    # 轉換為用戶本地時間
+                    # Convert to local time
                     commence_local = commence_utc + timedelta(minutes=offset_minutes)
-                    # 取得本地日期
+                    # Get local date
                     commence_local_date = commence_local.strftime("%Y-%m-%d")
                     
-                    # 只返回本地日期等於用戶選擇日期的比賽
+                    # Only return games where local date matches request
                     if commence_local_date != date:
                         continue
                 except ValueError:
-                    # 無法解析時間，跳過過濾
+                    # Couldn't parse time, skip filter
                     pass
             
             events.append(NBAEvent(
@@ -178,13 +394,13 @@ async def get_events(
                 commence_time=commence_time_str
             ))
         
-        # 4. 建構回應
+        # 4. Build response
         response = EventsResponse(
             date=date,
             events=events
         )
         
-        # 5. 存入快取
+        # 5. Store in cache
         await cache_service.set(
             cache_key,
             response.model_dump(mode='json'),
@@ -208,41 +424,42 @@ async def get_events(
 @router.post(
     "/props/no-vig",
     response_model=NoVigResponse,
-    summary="計算去水機率",
-    description="查詢指定球員的 props 並計算去水機率"
+    summary="Calculate no-vig probabilities",
+    description="Query specific player props and calculate no-vig probabilities"
 )
-async def calculate_no_vig(request: NoVigRequest) -> NoVigResponse:
+@limiter.limit(settings.rate_limit_props)
+async def calculate_no_vig(request: Request, body: NoVigRequest) -> NoVigResponse:
     """
-    計算球員 props 的去水機率
-    
+    Calculate no-vig probability for player props
+
     POST /api/nba/props/no-vig
-    
-    這是整個應用的核心功能！
-    
-    流程：
-    1. 檢查快取（以 event_id + market + regions + bookmakers 為 key）
-    2. 若快取未命中，呼叫 The Odds API 取得 props 資料
-    3. 在 outcomes 中搜尋指定球員（使用模糊匹配）
-    4. 對每個博彩公司：
-       a. 取得 line（門檻）、over_odds、under_odds
-       b. 計算隱含機率（implied probability）
-       c. 計算水錢（vig）
-       d. 計算去水機率（fair probability）
-    5. 計算市場共識（多家博彩公司的平均）
-    6. 存入快取並返回
-    
+
+    This is a core feature of the application!
+
+    Flow:
+    1. Check cache (using event_id + market + regions + bookmakers as key)
+    2. If cache miss, call The Odds API for props data
+    3. Search for specified player in outcomes (fuzzy matching)
+    4. For each bookmaker:
+       a. Get line (threshold), over_odds, under_odds
+       b. Calculate implied probability
+       c. Calculate vig
+       d. Calculate fair probability (no-vig)
+    5. Calculate market consensus (average of all bookmakers)
+    6. Store in cache and return
+
     Args:
-        request: NoVigRequest 包含：
-            - event_id: 賽事 ID
-            - player_name: 球員名稱
-            - market: 市場類型（預設 player_points）
-            - regions: 地區代碼
-            - bookmakers: 指定博彩公司（可選）
-            - odds_format: 賠率格式
-    
+        request: NoVigRequest containing:
+            - event_id: Game ID
+            - player_name: Player name
+            - market: Market type (default player_points)
+            - regions: Region code
+            - bookmakers: Specific bookmakers (optional)
+            - odds_format: Odds format
+
     Returns:
-        NoVigResponse: 包含各博彩公司結果和市場共識
-    
+        NoVigResponse: Contains results from each bookmaker and market consensus
+
     Example Request:
         {
             "event_id": "abc123",
@@ -253,66 +470,76 @@ async def calculate_no_vig(request: NoVigRequest) -> NoVigResponse:
         }
     """
     try:
-        # 1. 呼叫 The Odds API 取得 props 資料
-        raw_odds = await odds_provider.get_event_odds(
+        snapshot = await odds_gateway.get_market_snapshot(
             sport="basketball_nba",
-            event_id=request.event_id,
-            regions=request.regions,
-            markets=request.market,
-            odds_format=request.odds_format,
-            bookmakers=request.bookmakers
+            event_id=body.event_id,
+            regions=body.regions,
+            markets=body.market,
+            odds_format=body.odds_format,
+            bookmakers=body.bookmakers,
+            priority="interactive",
         )
-        
-        # 2. 解析並收集所有球員名稱（用於匹配）
-        all_player_names = set()
-        bookmakers_data = raw_odds.get("bookmakers", [])
-        
-        for bookmaker in bookmakers_data:
-            for market in bookmaker.get("markets", []):
-                if market.get("key") == request.market:
-                    for outcome in market.get("outcomes", []):
-                        # outcomes 的 description 欄位包含球員名稱
-                        if "description" in outcome:
-                            all_player_names.add(outcome["description"])
-        
-        # 3. 匹配球員名稱
+        bookmakers_data = snapshot.data.get("bookmakers", [])
+        all_player_names = _collect_player_names(bookmakers_data, body.market)
+
+        # 3. Match player name
         matched_player = find_player(
-            request.player_name,
-            list(all_player_names)
+            body.player_name,
+            all_player_names
         )
-        
+
         if not matched_player:
+            suggestions = suggest_player_names(body.player_name, all_player_names, limit=5, threshold=70)
+            if suggestions:
+                hint = ", ".join(f"{name} ({score})" for name, score in suggestions)
+                message = f"Player '{body.player_name}' not found. Closest names: {hint}"
+            else:
+                message = f"Player '{body.player_name}' not found. Available players: {all_player_names[:10]}"
             return NoVigResponse(
-                event_id=request.event_id,
-                player_name=request.player_name,
-                market=request.market,
+                event_id=body.event_id,
+                player_name=body.player_name,
+                market=body.market,
                 results=[],
                 consensus=None,
-                message=f"找不到球員 '{request.player_name}'。可用球員：{list(all_player_names)[:10]}"
+                message=message,
+                **_snapshot_metadata(snapshot),
             )
-        
-        # 4. 對每個博彩公司計算去水機率
+
+        # ⚠ Dispatch on market shape: binary Yes/No markets (e.g.
+        # `player_double_double`) have a fundamentally different outcome
+        # shape (`name=Yes|No`, no `point` field) and cannot share the
+        # Over/Under parsing path below. Force them through the dedicated
+        # helper, which handles single-leg-only quotes via
+        # `single_leg_devig` and refuses to fabricate fair probabilities
+        # when the prior fails (decision_20260502_market-key-feasibility §4).
+        if body.market in BINARY_MARKET_KEYS:
+            return _build_binary_no_vig_response(
+                body=body,
+                snapshot=snapshot,
+                bookmakers_data=bookmakers_data,
+                matched_player=matched_player,
+            )
+
+        # 4. Calculate no-vig probabilities for each bookmaker
         results: List[BookmakerResult] = []
         fair_probs_for_consensus = []
-        
-        now = datetime.now(timezone.utc)
-        
+
         for bookmaker in bookmakers_data:
             bookmaker_key = bookmaker.get("key", "unknown")
-            
+
             for market in bookmaker.get("markets", []):
-                if market.get("key") != request.market:
+                if market.get("key") != body.market:
                     continue
-                
-                # 找出該球員的 Over 和 Under
+
+                # Find Over and Under outcomes for player
                 over_outcome = None
                 under_outcome = None
                 line = None
-                
+
                 for outcome in market.get("outcomes", []):
                     if outcome.get("description") == matched_player:
                         outcome_name = outcome.get("name", "").lower()
-                        
+
                         if outcome_name == "over":
                             over_outcome = outcome
                             line = outcome.get("point")
@@ -320,30 +547,30 @@ async def calculate_no_vig(request: NoVigRequest) -> NoVigResponse:
                             under_outcome = outcome
                             if line is None:
                                 line = outcome.get("point")
-                
-                # 需要同時有 Over 和 Under 才能計算
+
+                # Require both Over and Under to calculate
                 if over_outcome is None or under_outcome is None or line is None:
                     continue
-                
+
                 over_odds = over_outcome.get("price", 0)
                 under_odds = under_outcome.get("price", 0)
-                
+
                 if over_odds == 0 or under_odds == 0:
                     continue
-                
-                # 5. 計算機率
+
+                # 5. Calculate probabilities
                 try:
-                    # 隱含機率（含水）
+                    # Implied probabilities (with vig)
                     p_over_imp = american_to_prob(over_odds)
                     p_under_imp = american_to_prob(under_odds)
-                    
-                    # 水錢
+
+                    # Vig (house edge)
                     vig = calculate_vig(p_over_imp, p_under_imp)
-                    
-                    # 去水機率
+
+                    # No-vig (fair) probabilities
                     p_over_fair, p_under_fair = devig(p_over_imp, p_under_imp)
-                    
-                    # 建構結果
+
+                    # Build result
                     result = BookmakerResult(
                         bookmaker=bookmaker_key,
                         line=line,
@@ -354,16 +581,16 @@ async def calculate_no_vig(request: NoVigRequest) -> NoVigResponse:
                         vig=round(vig, 4),
                         p_over_fair=round(p_over_fair, 4),
                         p_under_fair=round(p_under_fair, 4),
-                        fetched_at=now
+                        fetched_at=snapshot.fetched_at
                     )
                     results.append(result)
                     fair_probs_for_consensus.append((p_over_fair, p_under_fair))
-                    
+
                 except (ValueError, ZeroDivisionError):
-                    # 計算錯誤，跳過此博彩公司
+                    # Calculation error, skip this bookmaker
                     continue
-        
-        # 6. 計算市場共識
+
+        # 6. Calculate market consensus
         consensus = None
         if fair_probs_for_consensus:
             consensus_probs = calculate_consensus_mean(fair_probs_for_consensus)
@@ -373,15 +600,16 @@ async def calculate_no_vig(request: NoVigRequest) -> NoVigResponse:
                     p_over_fair=round(consensus_probs[0], 4),
                     p_under_fair=round(consensus_probs[1], 4)
                 )
-        
-        # 7. 建構回應
+
+        # 7. Build response
         return NoVigResponse(
-            event_id=request.event_id,
-            player_name=matched_player,  # 使用匹配後的正確名稱
-            market=request.market,
+            event_id=body.event_id,
+            player_name=matched_player,  # Use the matched name
+            market=body.market,
             results=results,
             consensus=consensus,
-            message=None if results else "此球員在選定的博彩公司中沒有 props 資料"
+            message=None if results else "No props data for this player at the selected bookmakers",
+            **_snapshot_metadata(snapshot),
         )
         
     except OddsAPIError as e:
@@ -399,115 +627,91 @@ async def calculate_no_vig(request: NoVigRequest) -> NoVigResponse:
 @router.get(
     "/players/suggest",
     response_model=PlayerSuggestResponse,
-    summary="球員名稱建議",
-    description="取得指定賽事中可用的球員列表（用於 autocomplete）"
+    summary="Player name suggestion",
+    description="Get available player names for a specific game (for autocomplete)"
 )
 async def suggest_players(
-    event_id: str = Query(..., description="賽事 ID"),
-    q: str = Query(default="", description="搜尋關鍵字（可選）"),
-    market: str = Query(default="player_points", description="市場類型")
+    event_id: str = Query(..., description="Game ID"),
+    q: str = Query(default="", description="Search keyword (optional)"),
+    market: str = Query(default="player_points", description="Market type")
 ) -> PlayerSuggestResponse:
     """
-    取得球員名稱建議（用於 Autocomplete）
-    
+    Get player name suggestions (for Autocomplete)
+
     GET /api/nba/players/suggest?event_id=abc123&q=cur
-    
-    流程：
-    1. 檢查快取
-    2. 若快取未命中，呼叫 The Odds API 取得該場比賽的 props
-    3. 從 outcomes 中提取所有球員名稱
-    4. 若有搜尋關鍵字，進行過濾
-    5. 存入快取並返回
-    
+
+    Flow:
+    1. Check cache
+    2. If cache miss, call The Odds API for game props
+    3. Extract all player names from outcomes
+    4. Filter by keyword if given
+    5. Store in cache and return
+
     Args:
-        event_id: 賽事 ID
-        q: 搜尋關鍵字（用於過濾）
-        market: 市場類型
-    
+        event_id: Game ID
+        q: Search keyword (for filtering)
+        market: Market type
+
     Returns:
-        PlayerSuggestResponse: 球員名稱列表
-    
+        PlayerSuggestResponse: List of player names
+
     Example Response:
         {
             "players": ["Stephen Curry", "Seth Curry", "LeBron James"]
         }
     """
-    # 1. 檢查快取
-    cache_key = CacheService.build_players_key(event_id)
-    cached_data = await cache_service.get(cache_key)
+    try:
+        snapshot = await odds_gateway.get_market_snapshot(
+            sport="basketball_nba",
+            event_id=event_id,
+            regions="us",
+            markets=market,
+            odds_format="american",
+            priority="interactive",
+        )
+        all_players = _collect_player_names(snapshot.data.get("bookmakers", []), market)
+    except OddsAPIError as e:
+        raise HTTPException(
+            status_code=e.status_code or 500,
+            detail=str(e)
+        )
     
-    all_players: List[str] = []
-    
-    if cached_data:
-        all_players = cached_data.get("players", [])
-    else:
-        # 2. 快取未命中，呼叫 API
-        try:
-            raw_odds = await odds_provider.get_event_odds(
-                sport="basketball_nba",
-                event_id=event_id,
-                regions="us",
-                markets=market,
-                odds_format="american"
-            )
-            
-            # 3. 提取球員名稱
-            player_set = set()
-            for bookmaker in raw_odds.get("bookmakers", []):
-                for mkt in bookmaker.get("markets", []):
-                    if mkt.get("key") == market:
-                        for outcome in mkt.get("outcomes", []):
-                            if "description" in outcome:
-                                player_set.add(outcome["description"])
-            
-            all_players = sorted(list(player_set))
-            
-            # 4. 存入快取
-            await cache_service.set(
-                cache_key,
-                {"players": all_players},
-                ttl=settings.cache_ttl_players
-            )
-            
-        except OddsAPIError as e:
-            raise HTTPException(
-                status_code=e.status_code or 500,
-                detail=str(e)
-            )
-    
-    # 5. 過濾（如果有搜尋關鍵字）
+    # 5. Filter if keyword is given
     if q:
         q_lower = q.lower()
         all_players = [p for p in all_players if q_lower in p.lower()]
     
-    return PlayerSuggestResponse(players=all_players)
+    return PlayerSuggestResponse(
+        players=all_players,
+        **_snapshot_metadata(snapshot),
+    )
 
 
-# ==================== CSV 球員歷史數據 API ====================
+# ==================== CSV Player History Data API ====================
 
 @router.get(
     "/csv/players",
     response_model=CSVPlayersResponse,
-    summary="取得 CSV 球員名單",
-    description="從 CSV 檔案中取得所有球員名單（用於 autocomplete）"
+    summary="Get CSV player list",
+    description="Get all player names from CSV file (for autocomplete)"
 )
 async def get_csv_players(
-    q: str = Query(default="", description="搜尋關鍵字（可選）")
+    q: str = Query(default="", description="Search keyword (optional)")
 ) -> CSVPlayersResponse:
     """
-    取得 CSV 檔案中的球員名單
-    
+    Get player names from the CSV file
+
     GET /api/nba/csv/players?q=curry
-    
-    此端點從 data/nba_player_game_logs.csv 讀取球員名單
-    用於前端球員選擇器的 autocomplete 功能
-    
+
+    This endpoint reads player names from data/nba_player_game_logs.csv
+    Used for frontend player autocomplete
+
     Args:
-        q: 搜尋關鍵字（不區分大小寫）
-    
+        q: Search keyword (case-insensitive)
+
     Returns:
-        CSVPlayersResponse: 球員名稱列表
-    
+        CSVPlayersResponse: List of player names
+
     Example Response:
         {
             "players": ["Stephen Curry", "Seth Curry"],
@@ -528,107 +732,115 @@ async def get_csv_players(
     except Exception as e:
         raise HTTPException(
             status_code=500,
-            detail=f"讀取 CSV 失敗: {str(e)}"
+            detail=f"Failed to read CSV: {str(e)}"
         )
 
 
 @router.post(
     "/csv/reload",
-    summary="重新載入 CSV 資料",
-    description="強制清除快取並重新讀取 CSV 檔案"
+    summary="Reload CSV data",
+    description="Force clear cache and reload CSV file"
 )
 async def reload_csv():
     """
-    強制重新載入 CSV 資料
-    
-    用於：
-    - CSV 檔案更新後刷新數據
-    - 修改程式碼後清除快取
-    
+    Force reload CSV data
+
+    Used for:
+    - Refreshing data after CSV file updates
+    - Clearing cache after code changes
+
     POST /api/nba/csv/reload
-    
+
     Returns:
-        dict: 重新載入結果，包含球員數量
+        dict: Reload result, including player count
     """
     try:
         csv_player_service.reload()
         return {
             "success": True,
-            "message": "CSV 資料已重新載入",
+            "message": "CSV data reloaded",
             "total_players": len(csv_player_service.get_all_players())
         }
     except Exception as e:
         raise HTTPException(
             status_code=500,
-            detail=f"重新載入失敗: {str(e)}"
+            detail=f"Reload failed: {str(e)}"
         )
 
 
 @router.get(
     "/player-history",
     response_model=PlayerHistoryResponse,
-    summary="取得球員歷史數據統計",
-    description="計算球員在指定指標上的歷史經驗機率和分佈"
+    summary="Get player historical stats",
+    description="Calculate empirical probability and distribution for player historical data on a specified metric"
 )
 async def get_player_history(
-    player: str = Query(..., description="球員名稱"),
+    player: str = Query(..., description="Player name"),
     metric: str = Query(
         default="points",
-        description="統計指標：points（得分）、assists（助攻）、rebounds（籃板）、pra（得分+籃板+助攻）"
+        description="Stat metric: points, assists, rebounds, pra (points+rebounds+assists)"
     ),
-    threshold: float = Query(..., description="閾值（例如 24.5）"),
+    threshold: float = Query(..., description="Threshold (e.g. 24.5)"),
     n: int = Query(
         default=0,
         ge=0,
-        description="最近 N 場比賽，0 表示全部"
+        description="Last N games, 0 means all"
     ),
     bins: int = Query(
         default=15,
         ge=5,
         le=50,
-        description="直方圖分箱數（5-50）"
+        description="Histogram bins (5-50)"
     ),
     exclude_dnp: bool = Query(
         default=True,
-        description="是否排除 DNP（Did Not Play，分鐘數為 0 的場次）"
+        description="Exclude DNP (Did Not Play, 0 minutes) games"
     ),
     opponent: Optional[str] = Query(
         default=None,
-        description="對手篩選（球隊名稱），None 表示全部對手"
+        description="Opponent filter (team name), None means all"
     ),
     is_starter: Optional[bool] = Query(
         default=None,
-        description="先發篩選：True（僅先發）、False（僅替補）、None（全部）"
+        description="Starter filter: True (starter only), False (bench only), None (all)"
+    ),
+    teammate_filter: Optional[str] = Query(
+        default=None,
+        description="Star teammate filter, comma separated (e.g. 'Giannis Antetokounmpo,Khris Middleton')"
+    ),
+    teammate_played: Optional[bool] = Query(
+        default=None,
+        description="Star teammate played filter: True (all played), False (all DNP), None (no filter)"
     )
 ) -> PlayerHistoryResponse:
     """
-    取得球員歷史數據統計
-    
+    Get player historical statistical summary
+
     GET /api/nba/player-history?player=Stephen+Curry&metric=points&threshold=24.5
     GET /api/nba/player-history?player=Stephen+Curry&metric=points&threshold=24.5&opponent=Lakers
     GET /api/nba/player-history?player=Stephen+Curry&metric=points&threshold=24.5&is_starter=true
-    
-    此端點計算球員在指定指標上的「經驗機率」（empirical probability）
-    這是基於歷史數據的統計，不是模型預測！
-    
-    機率定義（符合運彩 props 直覺）：
-    - Over: value > threshold（嚴格大於）
-    - Under: value < threshold（嚴格小於）
-    - 若 value == threshold，則不計入 Over 也不計入 Under
-    
+
+    This endpoint computes the "empirical probability" of a player on a statistic,
+    based on historical data, not model predictions!
+
+    Probability definition (aligned with sportsbook props):
+    - Over: value > threshold (strictly greater)
+    - Under: value < threshold (strictly less)
+    - If value == threshold, does not count toward Over or Under
+
     Args:
-        player: 球員名稱
-        metric: 統計指標（points/assists/rebounds/pra）
-        threshold: 閾值（可以是小數，如 24.5）
-        n: 最近 N 場比賽（0 表示使用全部歷史資料）
-        bins: 直方圖分箱數
-        exclude_dnp: 是否排除 DNP 場次
-        opponent: 對手篩選（可選）
-        is_starter: 先發狀態篩選（True=僅先發、False=僅替補、None=全部）
-    
+        player: Player name
+        metric: Statistical metric (points/assists/rebounds/pra)
+        threshold: Threshold (can be decimal, e.g. 24.5)
+        n: Last N games (0 means use all history)
+        bins: Histogram bin number
+        exclude_dnp: Whether to exclude DNP games
+        opponent: Opponent filter (optional)
+        is_starter: Starter status filter (True=only starter, False=only bench, None=all)
+
     Returns:
-        PlayerHistoryResponse: 包含機率、平均值、標準差、game_logs、對手列表
-    
+        PlayerHistoryResponse: Contains probabilities, mean, stddev, game_logs, opponent list
+
     Example Response:
         {
             "player": "Stephen Curry",
@@ -647,16 +859,34 @@ async def get_player_history(
             "histogram": [...]
         }
     """
-    # 驗證 metric 參數
-    valid_metrics = ["points", "assists", "rebounds", "pra"]
+    # 💡 Validate metric param against the services-layer dispatch table
+    # so the route stays in lockstep with whatever continuous metrics the
+    # service supports. SPO-16 expanded this to 11 continuous keys; future
+    # additions to CONTINUOUS_METRIC_EXTRACTORS flow through automatically.
+    # Binary metrics (currently only `dd`) flow through `/player-dd-history`,
+    # not this route — the error message points there explicitly so a
+    # mistaken `metric=dd` caller doesn't silently fail.
+    valid_metrics = sorted(CONTINUOUS_METRIC_EXTRACTORS.keys())
     if metric not in valid_metrics:
+        hint = ""
+        # ⚠ Catch the most likely caller bug: passing a binary key here.
+        if metric == "dd" or metric == "double_double":
+            hint = (
+                " — DD is a binary outcome (Yes/No), not Over/Under. "
+                "Use GET /api/nba/player-dd-history instead."
+            )
         raise HTTPException(
             status_code=400,
-            detail=f"無效的 metric: {metric}。有效值: {valid_metrics}"
+            detail=f"Invalid metric: {metric}. Valid: {valid_metrics}{hint}"
         )
     
     try:
-        # 呼叫 CSV 服務計算統計
+        # Parse teammate_filter comma-separated string to list
+        teammate_list = None
+        if teammate_filter:
+            teammate_list = [t.strip() for t in teammate_filter.split(",") if t.strip()]
+        
+        # Call CSV service for statistics
         stats = csv_player_service.get_player_stats(
             player_name=player,
             metric=metric,
@@ -665,10 +895,12 @@ async def get_player_history(
             bins=bins,
             exclude_dnp=exclude_dnp,
             opponent=opponent,
-            is_starter=is_starter
+            is_starter=is_starter,
+            teammate_filter=teammate_list,
+            teammate_played=teammate_played
         )
         
-        # 轉換 histogram 為 Pydantic 模型
+        # Convert histogram to Pydantic model
         histogram_bins = [
             HistogramBin(
                 binStart=bin_data["binStart"],
@@ -678,7 +910,7 @@ async def get_player_history(
             for bin_data in stats.get("histogram", [])
         ]
         
-        # 轉換 game_logs 為 Pydantic 模型
+        # Convert game_logs to Pydantic model
         game_logs = [
             GameLog(
                 date=log["date"],
@@ -687,8 +919,8 @@ async def get_player_history(
                 value=log["value"],
                 is_over=log["is_over"],
                 team=log.get("team", ""),
-                minutes=log.get("minutes", 0.0),  # 上場時間
-                is_starter=log.get("is_starter", False)  # 是否先發
+                minutes=log.get("minutes", 0.0),  # Playing time
+                is_starter=log.get("is_starter", False)  # Starter status
             )
             for log in stats.get("game_logs", [])
         ]
@@ -706,7 +938,10 @@ async def get_player_history(
             histogram=histogram_bins,
             game_logs=game_logs,
             opponents=stats.get("opponents", []),
+            teammates=stats.get("teammates", []),
             opponent_filter=stats.get("opponent_filter"),
+            teammate_filter=stats.get("teammate_filter"),
+            teammate_played=stats.get("teammate_played"),
             message=stats.get("message")
         )
         
@@ -718,6 +953,76 @@ async def get_player_history(
     except Exception as e:
         raise HTTPException(
             status_code=500,
-            detail=f"計算失敗: {str(e)}"
+            detail=f"Calculation failed: {str(e)}"
         )
 
+
+@router.get(
+    "/player-dd-history",
+    response_model=PlayerDDHistoryResponse,
+    summary="Get player Double-Double historical rate",
+    description=(
+        "Compute historical P(DD = 1) for a player from CSV game logs. "
+        "DD is binary (Yes/No) — there is no threshold; use this endpoint "
+        "instead of /player-history when the user picks the DD market."
+    ),
+)
+async def get_player_dd_history(
+    player: str = Query(..., description="Player name (fuzzy-matched if exact match fails)"),
+    season: Optional[str] = Query(
+        default=None,
+        description="Season filter (e.g. '2024-25'); None means use all seasons",
+    ),
+) -> PlayerDDHistoryResponse:
+    """
+    Get player Double-Double historical rate.
+
+    GET /api/nba/player-dd-history?player=Nikola+Jokic&season=2024-25
+
+    Delegates to ``csv_player_history.player_dd_history()``. DD definition
+    follows the standard NBA convention (≥10 in at least 2 of
+    {PTS, REB, AST, STL, BLK}). DNP games are excluded.
+
+    Args:
+        player: Player name
+        season: Optional season filter (e.g. "2024-25")
+
+    Returns:
+        PlayerDDHistoryResponse with prob_dd, dd_games, n_games, message.
+    """
+    # ⚠ Anti-hallucination guard: DO NOT accept a `threshold` query param —
+    # the services-layer method explicitly rejects non-None threshold to
+    # catch callers wiring DD through the Over/Under flow by mistake.
+    try:
+        stats = csv_player_service.player_dd_history(
+            player_name=player,
+            season=season,
+        )
+
+        return PlayerDDHistoryResponse(
+            player=stats["player"],
+            season=stats.get("season"),
+            n_games=stats.get("n_games", 0),
+            dd_games=stats.get("dd_games", 0),
+            prob_dd=stats.get("prob_dd"),
+            message=stats.get("message"),
+        )
+
+    except FileNotFoundError as e:
+        raise HTTPException(
+            status_code=404,
+            detail=str(e),
+        )
+    except ValueError as e:
+        # 💡 Defensive: services-layer raises ValueError on misuse (e.g.
+        # threshold passed). The route doesn't expose threshold today,
+        # but surface the error rather than 500 if it ever leaks.
+        raise HTTPException(
+            status_code=400,
+            detail=str(e),
+        )
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"DD history calculation failed: {str(e)}",
+        )

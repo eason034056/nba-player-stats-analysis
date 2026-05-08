@@ -17,7 +17,9 @@
 
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { ReactQueryDevtools } from "@tanstack/react-query-devtools";
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { AgentWidget } from "@/components/AgentWidget";
+import { AgentWidgetProvider } from "@/contexts/AgentWidgetContext";
 import { BetSlipProvider } from "@/contexts/BetSlipContext";
 
 /**
@@ -59,6 +61,15 @@ export function Providers({ children }: { children: React.ReactNode }) {
       })
   );
 
+  // Register service worker for PWA support
+  useEffect(() => {
+    if ("serviceWorker" in navigator) {
+      navigator.serviceWorker.register("/sw.js").catch(() => {
+        // SW registration failed silently - not critical
+      });
+    }
+  }, []);
+
   return (
     // QueryClientProvider: React Query 的 context provider
     // 讓所有子元件都能使用 useQuery、useMutation 等 hooks
@@ -66,7 +77,10 @@ export function Providers({ children }: { children: React.ReactNode }) {
       {/* BetSlipProvider: 下注列表的 context provider
           讓所有子元件都能使用 useBetSlip hook 管理下注列表 */}
       <BetSlipProvider>
-        {children}
+        <AgentWidgetProvider>
+          {children}
+          <AgentWidget />
+        </AgentWidgetProvider>
       </BetSlipProvider>
       
       {/* React Query Devtools: 開發工具
@@ -75,4 +89,3 @@ export function Providers({ children }: { children: React.ReactNode }) {
     </QueryClientProvider>
   );
 }
-

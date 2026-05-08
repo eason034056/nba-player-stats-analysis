@@ -20,8 +20,8 @@ services:
   backend:
     # 建置設定
     build:
-      context: ./backend  # Dockerfile 所在目錄
-      dockerfile: Dockerfile
+      context: .  # 需要包含 backend + scripts/agents + data
+      dockerfile: ./backend/Dockerfile
     
     # 容器名稱
     container_name: no-vig-nba-backend
@@ -37,6 +37,7 @@ services:
       # The Odds API 設定
       - ODDS_API_KEY=${ODDS_API_KEY}
       - ODDS_API_BASE_URL=${ODDS_API_BASE_URL:-https://api.the-odds-api.com}
+      - OPENAI_API_KEY=${OPENAI_API_KEY:-}
       
       # Redis 連線（指向同一 network 中的 redis 服務）
       - REDIS_URL=redis://redis:6379
@@ -45,6 +46,12 @@ services:
       - CACHE_TTL_EVENTS=${CACHE_TTL_EVENTS:-300}
       - CACHE_TTL_PROPS=${CACHE_TTL_PROPS:-60}
       - CACHE_TTL_PLAYERS=${CACHE_TTL_PLAYERS:-300}
+      - CACHE_TTL_MARKET_FRESH=${CACHE_TTL_MARKET_FRESH:-600}
+      - CACHE_TTL_MARKET_STALE=${CACHE_TTL_MARKET_STALE:-900}
+      - ODDS_REFRESH_LOCK_TTL=${ODDS_REFRESH_LOCK_TTL:-10}
+      - ODDS_WAIT_FOR_REFRESH_MS=${ODDS_WAIT_FOR_REFRESH_MS:-300}
+      - ODDS_QUOTA_PROTECT_PERCENT=${ODDS_QUOTA_PROTECT_PERCENT:-15}
+      - ODDS_HOT_KEYS_LIMIT=${ODDS_HOT_KEYS_LIMIT:-10}
       
       # CORS 設定（允許前端來源）
       - ALLOWED_ORIGINS=${ALLOWED_ORIGINS:-http://localhost:3000}
@@ -186,4 +193,3 @@ volumes:
   # PostgreSQL 資料持久化 volume
   pg-data:
     driver: local
-

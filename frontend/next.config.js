@@ -9,8 +9,16 @@
  * - 等等
  */
 
+const { PHASE_DEVELOPMENT_SERVER } = require("next/constants");
+
+const getDistDir = (phase) =>
+  phase === PHASE_DEVELOPMENT_SERVER ? ".next-dev" : ".next";
+
 /** @type {import('next').NextConfig} */
-const nextConfig = {
+const createNextConfig = (phase) => ({
+  // 將 dev 與 build 的輸出分開，避免共用快取造成 chunk 對不上。
+  distDir: getDistDir(phase),
+
   // reactStrictMode: 啟用 React 嚴格模式
   // 有助於發現潛在問題（如副作用）
   reactStrictMode: true,
@@ -42,7 +50,6 @@ const nextConfig = {
     // 啟用 Server Actions（用於伺服器端操作）
     // 這是 Next.js 13.4+ 的功能
   },
-};
+});
 
-module.exports = nextConfig;
-
+module.exports = createNextConfig;

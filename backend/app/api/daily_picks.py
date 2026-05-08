@@ -1,13 +1,13 @@
 """
-daily_picks.py - 每日高機率球員 API 端點
+daily_picks.py - Daily High-Probability Player API Endpoints
 
-提供以下端點：
-1. GET /api/nba/daily-picks - 獲取當日高機率球員列表
-2. POST /api/nba/daily-picks/trigger - 手動觸發分析（開發/管理用）
+Provides the following endpoints:
+1. GET /api/nba/daily-picks - Get the list of today's high-probability player picks
+2. POST /api/nba/daily-picks/trigger - Manually trigger analysis (for development/administrative use)
 
-這些端點讓前端可以：
-- 獲取已分析的高機率球員數據
-- 在需要時手動觸發重新分析
+These endpoints allow the frontend to:
+- Retrieve already analyzed high-probability player data
+- Manually trigger re-analysis when needed
 """
 
 from fastapi import APIRouter, HTTPException, Query, BackgroundTasks
@@ -19,9 +19,9 @@ from app.services.daily_analysis import daily_analysis_service
 from app.services.cache import cache_service
 
 
-# 建立路由器
-# prefix: 所有路由都會加上 /api/nba 前綴
-# tags: 用於 API 文檔分類
+# Create the router
+# prefix: All routes will have the /api/nba prefix
+# tags: For API documentation grouping
 router = APIRouter(
     prefix="/api/nba",
     tags=["daily-picks"]
@@ -31,58 +31,58 @@ router = APIRouter(
 @router.get(
     "/daily-picks",
     response_model=DailyPicksResponse,
-    summary="取得每日高機率球員",
-    description="取得指定日期發生機率超過 65% 的球員投注選擇"
+    summary="Get daily high-probability player picks",
+    description="Retrieve player picks for a given date with probabilities higher than 65%"
 )
 async def get_daily_picks(
     date: Optional[str] = Query(
         default=None,
-        description="查詢日期（YYYY-MM-DD），預設今天",
+        description="Query date (YYYY-MM-DD), default is today",
         pattern=r"^\d{4}-\d{2}-\d{2}$"
     ),
     tz_offset: Optional[int] = Query(
         default=None,
-        description="時區偏移量（分鐘），例如 UTC+8 傳 480，UTC-6 傳 -360"
+        description="Timezone offset (minutes), e.g., 480 for UTC+8, -360 for UTC-6"
     ),
     refresh: bool = Query(
         default=False,
-        description="是否強制重新分析（忽略快取）"
+        description="Whether to force re-analysis (ignore cache)"
     ),
     min_probability: float = Query(
         default=0.65,
         ge=0.5,
         le=0.95,
-        description="最低機率門檻（0.5-0.95）"
+        description="Minimum probability threshold (0.5-0.95)"
     ),
     min_games: int = Query(
         default=10,
         ge=5,
         le=100,
-        description="最少樣本場次（5-100）"
+        description="Minimum number of sample games (5-100)"
     )
 ) -> DailyPicksResponse:
     """
-    取得每日高機率球員
+    Get daily high-probability player picks
     
     GET /api/nba/daily-picks?date=2026-01-24
-    GET /api/nba/daily-picks?refresh=true  # 強制重新分析
+    GET /api/nba/daily-picks?refresh=true  # Force re-analysis
     
-    此端點返回當日所有發生機率超過門檻的球員投注選擇。
-    分析流程：
-    1. 獲取當日所有 NBA 賽事
-    2. 對每場賽事，獲取所有球員的 props（得分、籃板、助攻、PRA）
-    3. 計算博彩公司 line 的眾數作為門檻
-    4. 從歷史數據計算 over/under 機率
-    5. 篩選機率超過門檻的結果
+    This endpoint returns all player picks for the day that meet or exceed the probability threshold.
+    Analysis process:
+    1. Get all NBA games for the given day
+    2. For each game, get all player props (points, rebounds, assists, PRA)
+    3. Calculate the mode of bookmaker lines as the threshold
+    4. Compute over/under probabilities from historical data
+    5. Filter for results above the probability threshold
     
     Args:
-        date: 查詢日期（YYYY-MM-DD），預設今天
-        refresh: 是否強制重新分析
-        min_probability: 最低機率門檻
-        min_games: 最少樣本場次
+        date: The query date (YYYY-MM-DD), default is today
+        refresh: Whether to force re-analysis
+        min_probability: Minimum probability threshold
+        min_games: Minimum number of sample games
     
     Returns:
-        DailyPicksResponse: 高機率球員列表
+        DailyPicksResponse: List of high-probability player picks
     
     Example Response:
         {
@@ -105,22 +105,22 @@ async def get_daily_picks(
             "stats": {...}
         }
     """
-    # 確定查詢日期
+    # Determine query date
     if date is None:
         date = datetime.now(timezone.utc).strftime("%Y-%m-%d")
     
-    # 時區偏移量預設為 UTC+8（台北時間）
+    # Default timezone offset is UTC+8 (Taipei time)
     offset_minutes = tz_offset if tz_offset is not None else 480
     
     try:
-        # 執行分析（會自動使用快取，除非 refresh=True）
+        # Run analysis (uses cache automatically, unless refresh=True)
         result = await daily_analysis_service.run_daily_analysis(
             date=date,
             use_cache=not refresh,
             tz_offset_minutes=offset_minutes
         )
         
-        # 根據參數過濾結果
+        # Filter results by parameters
         if result.picks:
             filtered_picks = [
                 pick for pick in result.picks
@@ -135,54 +135,54 @@ async def get_daily_picks(
     except Exception as e:
         raise HTTPException(
             status_code=500,
-            detail=f"分析失敗: {str(e)}"
+            detail=f"Analysis failed: {str(e)}"
         )
 
 
 @router.post(
     "/daily-picks/trigger",
     response_model=DailyPicksResponse,
-    summary="手動觸發每日分析",
-    description="手動觸發重新分析（開發/管理用途）"
+    summary="Manually trigger daily analysis",
+    description="Manually trigger re-analysis (for development/administrative purposes)"
 )
 async def trigger_daily_analysis(
     date: Optional[str] = Query(
         default=None,
-        description="分析日期（YYYY-MM-DD），預設今天",
+        description="Analysis date (YYYY-MM-DD), default is today",
         pattern=r"^\d{4}-\d{2}-\d{2}$"
     ),
     tz_offset: Optional[int] = Query(
         default=None,
-        description="時區偏移量（分鐘），例如 UTC+8 傳 480"
+        description="Timezone offset (minutes), e.g., 480 for UTC+8"
     )
 ) -> DailyPicksResponse:
     """
-    手動觸發每日分析
+    Manually trigger daily analysis
     
     POST /api/nba/daily-picks/trigger?date=2026-01-24
     
-    此端點用於手動觸發重新分析，會忽略快取。
-    主要用於：
-    - 開發測試
-    - 管理員需要強制更新數據
-    - 定時任務呼叫
+    This endpoint is used to manually trigger a re-analysis, ignoring cache.
+    Mainly used for:
+    - Development testing
+    - Administrators needing to force update data
+    - Called by scheduled jobs
     
     Args:
-        date: 分析日期（YYYY-MM-DD），預設今天
-        tz_offset: 時區偏移量（分鐘）
+        date: Analysis date (YYYY-MM-DD), default is today
+        tz_offset: Timezone offset (minutes)
     
     Returns:
-        DailyPicksResponse: 新的分析結果
+        DailyPicksResponse: New analysis result
     """
-    # 確定分析日期
+    # Determine analysis date
     if date is None:
         date = datetime.now(timezone.utc).strftime("%Y-%m-%d")
     
-    # 時區偏移量預設為 UTC+8（台北時間）
+    # Default timezone offset is UTC+8 (Taipei time)
     offset_minutes = tz_offset if tz_offset is not None else 480
     
     try:
-        # 強制重新分析（不使用快取）
+        # Force re-analysis (ignore cache)
         result = await daily_analysis_service.run_daily_analysis(
             date=date,
             use_cache=False,
@@ -194,34 +194,34 @@ async def trigger_daily_analysis(
     except Exception as e:
         raise HTTPException(
             status_code=500,
-            detail=f"分析失敗: {str(e)}"
+            detail=f"Analysis failed: {str(e)}"
         )
 
 
 @router.delete(
     "/daily-picks/cache",
-    summary="清除分析快取",
-    description="清除指定日期的分析快取"
+    summary="Clear analysis cache",
+    description="Clear analysis cache for a specified date"
 )
 async def clear_daily_picks_cache(
     date: Optional[str] = Query(
         default=None,
-        description="要清除的日期（YYYY-MM-DD），預設今天",
+        description="Date to clear the cache for (YYYY-MM-DD), default is today",
         pattern=r"^\d{4}-\d{2}-\d{2}$"
     ),
     tz_offset: Optional[int] = Query(
         default=None,
-        description="時區偏移量（分鐘），例如 UTC+8 傳 480"
+        description="Timezone offset (minutes), e.g., 480 for UTC+8"
     )
 ) -> dict:
     """
-    清除每日分析快取
+    Clear daily analysis cache
     
     DELETE /api/nba/daily-picks/cache?date=2026-01-24
     
     Args:
-        date: 要清除的日期
-        tz_offset: 時區偏移量
+        date: The date to clear the cache for
+        tz_offset: Timezone offset
     
     Returns:
         {"success": True, "message": "..."}
@@ -229,12 +229,12 @@ async def clear_daily_picks_cache(
     if date is None:
         date = datetime.now(timezone.utc).strftime("%Y-%m-%d")
     
-    # 時區偏移量預設為 UTC+8
+    # Default timezone offset is UTC+8
     offset_minutes = tz_offset if tz_offset is not None else 480
     
-    # 清除新格式的快取 key
+    # Clear new-style cache key
     cache_key_new = f"daily_picks:{date}:tz{offset_minutes}"
-    # 也清除舊格式的快取 key（向下兼容）
+    # Also clear old-style cache key (for backward compatibility)
     cache_key_old = f"daily_picks:{date}"
     
     try:
@@ -242,11 +242,11 @@ async def clear_daily_picks_cache(
         await cache_service.delete(cache_key_old)
         return {
             "success": True,
-            "message": f"已清除 {date} 的分析快取"
+            "message": f"Cleared analysis cache for {date}"
         }
     except Exception as e:
         raise HTTPException(
             status_code=500,
-            detail=f"清除快取失敗: {str(e)}"
+            detail=f"Failed to clear cache: {str(e)}"
         )
 

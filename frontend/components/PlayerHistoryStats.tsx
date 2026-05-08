@@ -28,11 +28,13 @@ import {
   Calculator,
   Search,
   User,
+  Users,
   Loader2,
   AlertCircle,
   Info,
   Filter,
   Target,
+  X,
 } from "lucide-react";
 import { getCSVPlayers, getPlayerHistory, calculateNoVig } from "@/lib/api";
 import {
@@ -43,31 +45,68 @@ import {
   type PlayerProjection,
 } from "@/lib/schemas";
 import { cn } from "@/lib/utils";
+import { PlayerDDTile } from "@/components/PlayerDDTile";
 
 /**
  * Map market key to history metric
+ *
+ * SPO-20: 12-tile selector. New mappings cover the 8 new tiles.
+ * Backend csv_player_history.CONTINUOUS_METRIC_EXTRACTORS accepts the
+ * RHS (history-side) keys exactly. DD is binary; we map it through here
+ * for completeness but the DD code path is dispatched on `marketKey`,
+ * not on `metric`, because there is no continuous DD metric.
  */
 function marketToHistoryMetric(marketKey?: string): HistoryMetricKey {
   switch (marketKey) {
     case "player_points": return "points";
-    case "player_assists": return "assists";
     case "player_rebounds": return "rebounds";
+    case "player_assists": return "assists";
+    case "player_threes": return "threes_made";
+    case "player_steals": return "steals";
+    case "player_frees_made": return "ftm";
+    case "player_field_goals": return "fgm";
     case "player_points_rebounds_assists": return "pra";
+    case "player_rebounds_assists": return "ra";
+    case "player_points_rebounds": return "pr";
+    case "player_points_assists": return "pa";
+    case "player_double_double": return "dd";
     default: return "points";
   }
 }
 
 /**
  * Map history metric to market key
+ *
+ * Inverse of marketToHistoryMetric. Used when fetching odds for the line
+ * threshold off the history-side dropdown selection.
  */
 function historyMetricToMarket(metricKey: HistoryMetricKey): string {
   switch (metricKey) {
     case "points": return "player_points";
-    case "assists": return "player_assists";
     case "rebounds": return "player_rebounds";
+    case "assists": return "player_assists";
+    case "threes_made": return "player_threes";
+    case "steals": return "player_steals";
+    case "ftm": return "player_frees_made";
+    case "fgm": return "player_field_goals";
     case "pra": return "player_points_rebounds_assists";
+    case "ra": return "player_rebounds_assists";
+    case "pr": return "player_points_rebounds";
+    case "pa": return "player_points_assists";
+    case "dd": return "player_double_double";
     default: return "player_points";
   }
+}
+
+/**
+ * DD is a binary outcome — it has no continuous threshold, no Over/Under
+ * histogram, and (per decision §4 step 4) no Phase-1 ML projection. The
+ * history endpoint's continuous flow does not understand `dd`; the DD
+ * tile renders its own component shape elsewhere. This helper centralizes
+ * the dispatch so we don't string-compare in five places.
+ */
+function isBinaryHistoryMetric(metric: HistoryMetricKey): boolean {
+  return metric === "dd";
 }
 
 /**
@@ -121,6 +160,17 @@ function getProjectionValueForMetric(
     case "rebounds": return projection.rebounds ?? null;
     case "assists": return projection.assists ?? null;
     case "pra": return projection.pra ?? null;
+    case "ra": return projection.r_a ?? null;
+    case "pr": return projection.p_r ?? null;
+    case "pa": return projection.p_a ?? null;
+    case "threes_made": return projection.three_pointers_made ?? null;
+    case "steals": return projection.steals ?? null;
+    case "ftm": return projection.free_throws_made ?? null;
+    case "fgm": return projection.field_goals_made ?? null;
+    // ⚠ DD has NO Phase-1 projection (decision §4 step 4). Returning null
+    // here is intentional — never fabricate a number, never derive from
+    // marginals (DD is a multivariate joint probability).
+    case "dd": return null;
     default: return null;
   }
 }
@@ -160,6 +210,10 @@ export function PlayerHistoryStats({
   const [threshold, setThreshold] = useState<string>(initialThreshold || "24.5");
   const [selectedOpponent, setSelectedOpponent] = useState<string>("");
   const [starterFilter, setStarterFilter] = useState<string>("all");
+  const [teammateFilter, setTeammateFilter] = useState<string[]>([]);
+  const [teammatePlayedFilter, setTeammatePlayedFilter] = useState<string>("all");
+  const [teammateSearchInput, setTeammateSearchInput] = useState<string>("");
+  const [isTeammateDropdownOpen, setIsTeammateDropdownOpen] = useState(false);
   const [isFetchingOdds, setIsFetchingOdds] = useState(false);
 
   useEffect(() => {
@@ -168,7 +222,7 @@ export function PlayerHistoryStats({
       setSearchInput(initialPlayer);
       setSelectedOpponent("");
     }
-  }, [initialPlayer]);
+  }, [initialPlayer, selectedPlayer]);
 
   useEffect(() => {
     if (initialMarket) {
@@ -177,7 +231,7 @@ export function PlayerHistoryStats({
         setMetric(mappedMetric);
       }
     }
-  }, [initialMarket]);
+  }, [initialMarket, metric]);
   
   const [recentN, setRecentN] = useState<number>(0);
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
@@ -195,7 +249,7 @@ export function PlayerHistoryStats({
     isError: isHistoryError,
     error: historyError,
   } = useQuery({
-    queryKey: ["playerHistory", selectedPlayer, metric, threshold, recentN, selectedOpponent, starterFilter],
+    queryKey: ["playerHistory", selectedPlayer, metric, threshold, recentN, selectedOpponent, starterFilter, teammateFilter, teammatePlayedFilter],
     queryFn: () =>
       getPlayerHistory({
         player: selectedPlayer,
@@ -206,17 +260,32 @@ export function PlayerHistoryStats({
         exclude_dnp: true,
         opponent: selectedOpponent || undefined,
         is_starter: starterFilter === "all" ? undefined : starterFilter === "starter",
+        teammate_filter: teammateFilter.length > 0 ? teammateFilter : undefined,
+        teammate_played: teammatePlayedFilter === "all" ? undefined : teammatePlayedFilter === "with",
       }),
-    enabled: !!selectedPlayer && !!threshold && !isNaN(parseFloat(threshold)),
+    // DD is a binary metric — the /player-history endpoint speaks Over/Under only,
+    // and DD historical is served by `csv_player_history.player_dd_history()`
+    // (a different code path with no public API endpoint as of SPO-16).
+    // Disabling the query for DD avoids 400/500 noise; the DD branch renders
+    // its own placeholder below.
+    enabled:
+      !!selectedPlayer &&
+      !!threshold &&
+      !isNaN(parseFloat(threshold)) &&
+      !isBinaryHistoryMetric(metric),
     staleTime: 30 * 1000,
   });
 
   const fetchOddsAndSetThreshold = useCallback(
     async (playerName: string, metricKey: HistoryMetricKey) => {
       if (!eventId) return;
-      
+      // ⚠ DD has no `point` threshold (Yes/No outcome). Calling the no-vig
+      // endpoint for it returns 0.5 sentinel rows that must NOT be surfaced
+      // as a threshold. Skip the auto-fetch entirely for the binary path.
+      if (isBinaryHistoryMetric(metricKey)) return;
+
       setIsFetchingOdds(true);
-      
+
       try {
         const marketKey = historyMetricToMarket(metricKey);
         const result = await calculateNoVig({
@@ -227,11 +296,11 @@ export function PlayerHistoryStats({
           bookmakers: null,
           odds_format: "american",
         });
-        
+
         if (result.results && result.results.length > 0) {
           const lines = result.results.map((r) => r.line);
           const modeValue = calculateMode(lines);
-          
+
           if (modeValue !== null) {
             setThreshold(modeValue.toString());
           }
@@ -245,19 +314,33 @@ export function PlayerHistoryStats({
     [eventId]
   );
 
+  // 💡 Single source of truth for threshold auto-fill: any change to
+  // (selectedPlayer, metric, eventId) — whether triggered by parent props
+  // (EventPage's MarketSelect / PlayerInput) or by this component's own
+  // dropdowns — funnels through this effect. Replaces previously scattered
+  // manual fetch calls in handleSelectPlayer / handleMetricChange that
+  // missed the parent-driven path.
+  useEffect(() => {
+    if (!selectedPlayer || !eventId) return;
+    if (isBinaryHistoryMetric(metric)) return;
+    fetchOddsAndSetThreshold(selectedPlayer, metric);
+  }, [selectedPlayer, metric, eventId, fetchOddsAndSetThreshold]);
+
   const handleSelectPlayer = useCallback(
     (playerName: string) => {
       setSelectedPlayer(playerName);
       setSearchInput(playerName);
       setIsDropdownOpen(false);
       setSelectedOpponent("");
+      setTeammateFilter([]);
+      setTeammatePlayedFilter("all");
+      setTeammateSearchInput("");
       onPlayerSelect?.(playerName);
-      
-      if (eventId) {
-        fetchOddsAndSetThreshold(playerName, metric);
-      }
+      // ⚠ Do NOT call fetchOddsAndSetThreshold here — the effect above
+      // handles it via setSelectedPlayer's state change. Calling here would
+      // double-fire the no-vig request.
     },
-    [onPlayerSelect, eventId, metric, fetchOddsAndSetThreshold]
+    [onPlayerSelect]
   );
 
   const handleThresholdChange = (value: string) => {
@@ -265,15 +348,22 @@ export function PlayerHistoryStats({
   };
 
   const handleMetricChange = (newMetric: HistoryMetricKey) => {
+    // ⚠ Same as above — the unified effect picks up the metric change.
     setMetric(newMetric);
-    if (selectedPlayer && eventId) {
-      fetchOddsAndSetThreshold(selectedPlayer, newMetric);
-    }
   };
 
   const playerList = playersData?.players || [];
   const opponentList = historyData?.opponents || [];
+  const teammateList = historyData?.teammates || [];
   const gameLogs = historyData?.game_logs || [];
+
+  const filteredTeammateList = teammateSearchInput
+    ? teammateList.filter(
+        (t) =>
+          t.toLowerCase().includes(teammateSearchInput.toLowerCase()) &&
+          !teammateFilter.includes(t)
+      )
+    : teammateList.filter((t) => !teammateFilter.includes(t));
 
   // 從投影資料取得當前 metric 的投影數值
   // projectedValue 用於：(1) 圖表的藍色參考線 (2) 第 5 張 stat card
@@ -293,12 +383,12 @@ export function PlayerHistoryStats({
       <div className="space-y-4">
         {/* Player search */}
         <div className="relative">
-          <label className="block text-sm font-bold text-dark mb-2">
-            <User className="inline w-4 h-4 mr-1.5" />
+          <label className="control-label mb-2">
+            <User className="h-4 w-4 text-red" />
             Select Player (from CSV database)
           </label>
           <div className="relative">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray" />
+            <Search className="pointer-events-none absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-light" />
             <input
               type="text"
               value={searchInput}
@@ -308,33 +398,33 @@ export function PlayerHistoryStats({
               }}
               onFocus={() => setIsDropdownOpen(true)}
               placeholder="Search player name..."
-              className="input pl-10 w-full"
+              className="control-input w-full pl-12"
             />
             {isLoadingPlayers && (
-              <Loader2 className="absolute right-3 top-1/2 -translate-y-1/2 w-5 h-5 text-red animate-spin" />
+              <Loader2 className="absolute right-4 top-1/2 h-5 w-5 -translate-y-1/2 animate-spin text-red" />
             )}
           </div>
 
           {/* Dropdown */}
           {isDropdownOpen && playerList.length > 0 && (
-            <ul className="absolute z-50 w-full mt-2 max-h-60 overflow-auto bg-white border-2 border-dark rounded-lg">
+            <ul className="control-popover absolute z-50 mt-2 max-h-60 w-full">
               {playerList.slice(0, 50).map((player) => (
                 <li
                   key={player}
                   onClick={() => handleSelectPlayer(player)}
                   className={cn(
-                    "px-4 py-3 cursor-pointer flex items-center gap-3 transition-colors",
+                    "control-option flex items-center gap-3 px-4 py-3",
                     player === selectedPlayer
-                      ? "bg-yellow text-dark"
-                      : "text-dark hover:bg-cream"
+                      ? "control-option-active"
+                      : "text-dark"
                   )}
                 >
-                  <User className="w-4 h-4 text-gray" />
-                  <span className="font-medium">{player}</span>
+                  <User className="h-4 w-4 text-light" />
+                  <span className="font-medium text-inherit">{player}</span>
                 </li>
               ))}
               {playerList.length > 50 && (
-                <li className="px-4 py-2 text-sm text-gray text-center">
+                <li className="px-4 py-2 text-center text-sm text-light">
                   Showing first 50, please enter keywords to narrow down
                 </li>
               )}
@@ -362,27 +452,41 @@ export function PlayerHistoryStats({
             </select>
           </div>
 
-          {/* Threshold */}
-          <div>
-            <label className="block text-sm font-bold text-dark mb-2">
-              <Calculator className="inline w-4 h-4 mr-1" />
-              Threshold
-            </label>
-            <div className="relative">
-              <input
-                type="number"
-                step="0.5"
-                value={threshold}
-                onChange={(e) => handleThresholdChange(e.target.value)}
-                placeholder="e.g., 24.5"
-                className="input w-full"
-                disabled={isFetchingOdds}
-              />
-              {isFetchingOdds && (
-                <Loader2 className="absolute right-3 top-1/2 -translate-y-1/2 w-5 h-5 text-red animate-spin" />
-              )}
+          {/* Threshold — hidden for binary (DD) metric since DD has no `point`.
+              ⚠ Per CLAUDE.md anti-hallucination rule #3 (and SPO-20 §7.1) we
+              MUST NOT render a fake threshold value for DD. */}
+          {isBinaryHistoryMetric(metric) ? (
+            <div>
+              <label className="block text-sm font-bold text-dark mb-2">
+                <Calculator className="inline w-4 h-4 mr-1" />
+                Threshold
+              </label>
+              <div className="input w-full flex items-center text-sm text-gray italic">
+                Not applicable (binary outcome)
+              </div>
             </div>
-          </div>
+          ) : (
+            <div>
+              <label className="block text-sm font-bold text-dark mb-2">
+                <Calculator className="inline w-4 h-4 mr-1" />
+                Threshold
+              </label>
+              <div className="relative">
+                <input
+                  type="number"
+                  step="0.5"
+                  value={threshold}
+                  onChange={(e) => handleThresholdChange(e.target.value)}
+                  placeholder="e.g., 24.5"
+                  className="input w-full"
+                  disabled={isFetchingOdds}
+                />
+                {isFetchingOdds && (
+                  <Loader2 className="absolute right-3 top-1/2 -translate-y-1/2 w-5 h-5 text-red animate-spin" />
+                )}
+              </div>
+            </div>
+          )}
 
           {/* Game range */}
           <div>
@@ -440,6 +544,111 @@ export function PlayerHistoryStats({
             </select>
           </div>
         </div>
+
+        {/* Teammate Impact Filter - 僅限同隊隊友 */}
+        {selectedPlayer && teammateList.length > 0 && (
+          <div className="space-y-3 pt-2">
+            <div>
+              <label className="control-label">
+                <Users className="h-4 w-4 text-red" />
+                Teammate Impact Filter
+              </label>
+              <p className="control-hint mt-1">
+                Only teammates from the same team can be selected
+              </p>
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {/* Teammate search + multi-select */}
+              <div className="relative">
+                <div className="relative">
+                  <Search className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-light" />
+                  <input
+                    type="text"
+                    value={teammateSearchInput}
+                    onChange={(e) => {
+                      setTeammateSearchInput(e.target.value);
+                      setIsTeammateDropdownOpen(true);
+                    }}
+                    onFocus={() => setIsTeammateDropdownOpen(true)}
+                    placeholder="Search teammate to add..."
+                    className="control-input w-full pl-11 text-sm"
+                  />
+                </div>
+
+                {isTeammateDropdownOpen && filteredTeammateList.length > 0 && (
+                  <ul className="control-popover absolute z-50 mt-1 max-h-48 w-full">
+                    {filteredTeammateList.slice(0, 30).map((teammate) => (
+                      <li
+                        key={teammate}
+                        onClick={() => {
+                          setTeammateFilter((prev) => [...prev, teammate]);
+                          setTeammateSearchInput("");
+                          setIsTeammateDropdownOpen(false);
+                          if (teammatePlayedFilter === "all") {
+                            setTeammatePlayedFilter("without");
+                          }
+                        }}
+                        className="control-option flex items-center gap-2 px-3 py-2 text-sm text-dark"
+                      >
+                        <User className="h-3 w-3 text-light" />
+                        {teammate}
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+
+              {/* With / Without toggle */}
+              <div>
+                <select
+                  value={teammatePlayedFilter}
+                  onChange={(e) => setTeammatePlayedFilter(e.target.value)}
+                  className="input w-full text-sm"
+                  disabled={teammateFilter.length === 0}
+                >
+                  <option value="all">All Games (no teammate filter)</option>
+                  <option value="with">With selected teammates</option>
+                  <option value="without">Without selected teammates</option>
+                </select>
+              </div>
+            </div>
+
+            {/* Selected teammate chips */}
+            {teammateFilter.length > 0 && (
+              <div className="flex flex-wrap gap-2">
+                {teammateFilter.map((t) => (
+                  <span
+                    key={t}
+                    className="control-chip-active inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold"
+                  >
+                    {t}
+                    <button
+                      onClick={() => {
+                        const next = teammateFilter.filter((x) => x !== t);
+                        setTeammateFilter(next);
+                        if (next.length === 0) {
+                          setTeammatePlayedFilter("all");
+                        }
+                      }}
+                      className="transition-colors hover:text-white/70"
+                    >
+                      <X className="w-3 h-3" />
+                    </button>
+                  </span>
+                ))}
+                <button
+                  onClick={() => {
+                    setTeammateFilter([]);
+                    setTeammatePlayedFilter("all");
+                  }}
+                  className="text-xs text-red font-bold hover:underline"
+                >
+                  Clear all
+                </button>
+              </div>
+            )}
+          </div>
+        )}
       </div>
 
       {/* Error */}
@@ -461,8 +670,29 @@ export function PlayerHistoryStats({
         </div>
       )}
 
-      {/* Results */}
-      {selectedPlayer && historyData && (
+      {/* Binary (DD) panel — replaces the Over/Under chart for the binary path. */}
+      {selectedPlayer && isBinaryHistoryMetric(metric) && (
+        <PlayerDDTile
+          playerName={selectedPlayer}
+          // ⚠ All four data props are intentionally null here. The DD odds
+          //   + DD historical computations exist at the service layer
+          //   (`odds_snapshot_service._parse_binary_market` and
+          //   `csv_player_history.player_dd_history`) but no API endpoint
+          //   currently surfaces them — see SPO-20 backend gap escalation.
+          //   This component's contract is fully populated when the API
+          //   ships; until then the placeholder copy explicitly tells the
+          //   user the data is pending (NOT zero, NOT fabricated).
+          yesPrice={null}
+          yesImpliedProb={null}
+          yesFairProb={null}
+          historicalProbDD={null}
+          historicalGames={null}
+        />
+      )}
+
+      {/* Over/Under results — only the continuous metric path renders the
+          chart + threshold-driven probability cards. */}
+      {selectedPlayer && historyData && !isBinaryHistoryMetric(metric) && (
         <div className="space-y-6 animate-fade-in">
           {/* Stats cards */}
           {/* 
@@ -519,13 +749,16 @@ export function PlayerHistoryStats({
               <p className="text-sm font-bold text-dark mb-1">Sample Games</p>
               <p className="text-xl font-bold text-dark">
                 {historyData.n_games} games
-                {(selectedOpponent || starterFilter !== "all") && (
+                {(selectedOpponent || starterFilter !== "all" || teammateFilter.length > 0) && (
                   <span className="text-sm text-gray ml-1">
                     (
                     {selectedOpponent && `vs ${selectedOpponent}`}
-                    {selectedOpponent && starterFilter !== "all" && ", "}
+                    {selectedOpponent && (starterFilter !== "all" || teammateFilter.length > 0) && ", "}
                     {starterFilter === "starter" && "Starter"}
                     {starterFilter === "bench" && "Bench"}
+                    {starterFilter !== "all" && teammateFilter.length > 0 && ", "}
+                    {teammateFilter.length > 0 && teammatePlayedFilter === "with" && `w/ ${teammateFilter.join(", ")}`}
+                    {teammateFilter.length > 0 && teammatePlayedFilter === "without" && `w/o ${teammateFilter.join(", ")}`}
                     )
                   </span>
                 )}
@@ -568,13 +801,16 @@ export function PlayerHistoryStats({
               <h4 className="text-sm font-bold text-dark mb-4 flex items-center gap-2">
                 <BarChart3 className="w-4 h-4" />
                 {HISTORY_METRICS.find((m) => m.key === metric)?.name} Historical Trend
-                {(selectedOpponent || starterFilter !== "all") && (
+                {(selectedOpponent || starterFilter !== "all" || teammateFilter.length > 0) && (
                   <span className="text-red ml-2">
                     (
                     {selectedOpponent && `vs ${selectedOpponent}`}
-                    {selectedOpponent && starterFilter !== "all" && ", "}
+                    {selectedOpponent && (starterFilter !== "all" || teammateFilter.length > 0) && ", "}
                     {starterFilter === "starter" && "Starter Only"}
                     {starterFilter === "bench" && "Bench Only"}
+                    {starterFilter !== "all" && teammateFilter.length > 0 && ", "}
+                    {teammateFilter.length > 0 && teammatePlayedFilter === "with" && `w/ ${teammateFilter.join(", ")}`}
+                    {teammateFilter.length > 0 && teammatePlayedFilter === "without" && `w/o ${teammateFilter.join(", ")}`}
                     )
                   </span>
                 )}
@@ -739,7 +975,7 @@ export function PlayerHistoryStats({
               <Info className="w-5 h-5 text-gray shrink-0 mt-0.5" />
               <div className="text-xs text-gray space-y-1">
                 <p>
-                  📊 The above data is calculated based on CSV historical game records, representing "empirical probability"
+                  📊 The above data is calculated based on CSV historical game records, representing &quot;empirical probability&quot;
                 </p>
                 <p>
                   ⚠️ This data is for reference only and does not represent actual prediction results, please bet responsibly
@@ -764,14 +1000,25 @@ export function PlayerHistoryStats({
                     🪑 Currently showing only bench games
                   </p>
                 )}
+                {teammateFilter.length > 0 && teammatePlayedFilter === "with" && (
+                  <p>
+                    👥 Currently showing games where {teammateFilter.join(", ")} played
+                  </p>
+                )}
+                {teammateFilter.length > 0 && teammatePlayedFilter === "without" && (
+                  <p>
+                    👤 Currently showing games where {teammateFilter.join(", ")} did NOT play
+                  </p>
+                )}
               </div>
             </div>
           </div>
         </div>
       )}
 
-      {/* Loading */}
-      {isLoadingHistory && selectedPlayer && (
+      {/* Loading — suppressed for the binary path because the history query
+          is intentionally disabled there (DD has no continuous history). */}
+      {isLoadingHistory && selectedPlayer && !isBinaryHistoryMetric(metric) && (
         <div className="flex items-center justify-center py-12">
           <Loader2 className="w-8 h-8 text-red animate-spin" />
           <span className="ml-3 text-gray font-medium">Calculating historical data...</span>

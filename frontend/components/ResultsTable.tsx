@@ -232,7 +232,12 @@ export function ResultsTable({ data, isLoading }: ResultsTableProps) {
     return null;
   }
 
-  if (data.message && data.results.length === 0) {
+  // Empty-bookmakers UX (SPO-20 §3): some markets like FTM / FGM are schema-
+  // valid but currently have no bookmaker inventory. The backend returns
+  // `results: []` (and possibly a "Player not found" message because the
+  // player-name list is built off bookmaker outcomes). Surface this as a
+  // graceful empty state — NOT as an error, NEVER as a fabricated `point`.
+  if (data.results.length === 0) {
     return (
       <div className="card border-yellow">
         <div className="flex items-start gap-4">
@@ -241,11 +246,22 @@ export function ResultsTable({ data, isLoading }: ResultsTableProps) {
           </div>
           <div>
             <h3 className="font-bold text-dark mb-1">
-              No Data Found
+              No bookmaker line right now
             </h3>
             <p className="text-gray text-sm">
-              {data.message}
+              No bookmaker has posted{" "}
+              <span className="font-semibold">
+                {getMarketDisplayName(data.market)}
+              </span>{" "}
+              for this game. Historical and projection panels remain
+              available below; the odds tile lights up automatically on the
+              next snapshot fetch when inventory appears.
             </p>
+            {data.message && (
+              <p className="text-gray text-xs mt-2 italic">
+                Backend note: {data.message}
+              </p>
+            )}
           </div>
         </div>
       </div>
@@ -265,7 +281,7 @@ export function ResultsTable({ data, isLoading }: ResultsTableProps) {
       </div>
 
       {/* Table */}
-      <div className="table-container">
+      <div className="table-container overflow-hint">
         <table className="table">
           <thead>
             <tr>
@@ -291,7 +307,7 @@ export function ResultsTable({ data, isLoading }: ResultsTableProps) {
 
       {/* Note */}
       <p className="mt-4 text-xs text-gray">
-        * Lower vig indicates the bookmaker's odds are closer to fair;
+        * Lower vig indicates the bookmaker&apos;s odds are closer to fair;
         No-vig probability is the fair probability estimate after removing vig
       </p>
     </div>

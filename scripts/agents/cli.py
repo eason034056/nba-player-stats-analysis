@@ -1,0 +1,242 @@
+#!/usr/bin/env python3
+"""
+cli.py – CLI frontend for the NBA Multi-Agent Betting Advisor.
+
+Usage:
+  python cli.py                           # interactive mode
+  python cli.py "Should I bet Curry over 28.5 points tonight?"   # one-shot mode
+  python cli.py --log-data "query"         # 輸出 Agent 抓取的所有資料（含解釋）
+"""
+
+import argparse
+import asyncio
+import json
+import os
+import sys
+
+_AGENTS_DIR = os.path.dirname(os.path.abspath(__file__))
+_PROJECT_ROOT = os.path.abspath(os.path.join(_AGENTS_DIR, "..", ".."))
+if _AGENTS_DIR not in sys.path:
+    sys.path.insert(0, _AGENTS_DIR)
+
+from dotenv import load_dotenv
+load_dotenv(os.path.join(_PROJECT_ROOT, ".env"))
+
+from graph import compile_graph
+from data_logger import log_all_agent_data
+
+
+def _print_header():
+    print("\n" + "=" * 64)
+    print("  NBA Multi-Agent Betting Advisor (Assignment 4)")
+    print("  6 LLM Agents + Deterministic Scoring | 7 Dimensions")
+    print("=" * 64)
+
+
+def _format_scorecard(sc: dict) -> str:
+    lines = []
+    lines.append(f"  Decision       : {sc.get('decision', '?').upper()}")
+    lines.append(f"  Confidence     : {sc.get('confidence', 0):.1%}")
+    lines.append(f"  Model Prob     : {sc.get('model_probability', 0):.1%}")
+    mip = sc.get('market_implied_probability')
+    lines.append(f"  Market Implied : {mip:.1%}" if mip else "  Market Implied : N/A")
+    ev = sc.get('expected_value_pct', 0)
+    lines.append(f"  Expected Value : {ev:+.2%}" if ev is not None else "  Expected Value : N/A")
+    lines.append(f"  Pricing Mode   : {sc.get('market_pricing_mode', 'unavailable')}")
+    bb = sc.get('best_book')
+    bl = sc.get('best_line')
+    if bb:
+        best_odds = sc.get('best_odds')
+        odds_suffix = f" ({best_odds:+d})" if isinstance(best_odds, int) else ""
+        lines.append(f"  Best Book      : {bb} @ {bl}{odds_suffix}")
+    available_lines = sc.get('available_lines') or []
+    if available_lines:
+        lines.append(f"  Available Lines: {', '.join(str(line) for line in available_lines)}")
+    lines.append(f"  Eligible       : {'YES' if sc.get('eligible_for_bet') else 'NO'}")
+    pr = sc.get('pass_reason')
+    if pr:
+        lines.append(f"  Pass Reason    : {pr}")
+    flags = sc.get('data_quality_flags', [])
+    if flags:
+        lines.append(f"  Quality Flags  : {', '.join(flags)}")
+    query_ctx = sc.get("query_aligned_context", {}) or {}
+    historical_ctx = query_ctx.get("historical", {}) if isinstance(query_ctx, dict) else {}
+    market_ctx = query_ctx.get("market", {}) if isinstance(query_ctx, dict) else {}
+    historical_query_prob = historical_ctx.get("query_probability")
+    market_query_prob = market_ctx.get("query_probability")
+    if historical_query_prob is not None:
+        lines.append(f"  Hist Query P   : {historical_query_prob:.1%}")
+    if market_query_prob is not None:
+        lines.append(f"  Mkt Query P    : {market_query_prob:.1%}")
+    return "\n".join(lines)
+
+
+def _format_dimensions(dims: dict) -> str:
+    lines = []
+    for name, info in dims.items():
+        if isinstance(info, dict):
+            sig = info.get("signal", "?")
+            rel = info.get("reliability", 0)
+            det = info.get("detail", "")
+            lines.append(f"    {name:15s}  {sig:12s}  rel={rel:.2f}  {det}")
+    return "\n".join(lines) if lines else "    (none)"
+
+
+async def run_query(query: str, app=None, verbose: bool = False, log_data: bool = False) -> dict:
+    if app is None:
+        app = compile_graph()
+
+    initial_state = {
+        "messages": [],
+        "user_query": query,
+        "parsed_query": {},
+        "event_context": {},
+        "availability": {},
+        "historical_signals": {},
+        "projection_signals": {},
+        "market_signals": {},
+        "scorecard": {},
+        "data_quality_flags": [],
+        "critic_notes": [],
+        "final_decision": {},
+        "audit_log": [],
+        "iteration": 0,
+    }
+
+    print(f"\n{'─' * 64}")
+    print(f"  Query: {query}")
+    print(f"{'─' * 64}")
+
+    final_state = initial_state.copy()
+
+    # Stream node events
+    async for event in app.astream(initial_state, stream_mode="updates"):
+        for node_name, update in event.items():
+            final_state.update(update)
+            if node_name == "planner":
+                pq = update.get("parsed_query", {})
+                player = pq.get("player", "?")
+                metric = pq.get("metric", "?")
+                threshold = pq.get("threshold", "?")
+                print(f"  [Planner]    Parsed: {player}, {metric}, {threshold}")
+
+            elif node_name == "historical_agent":
+                n_tools = len(update.get("historical_signals", {}))
+                print(f"  [Stats]      Ran {n_tools} historical/context tools")
+
+            elif node_name == "projection_agent":
+                print(f"  [Projection] Unavailable (SportsDataIO dummy feed excluded)")
+
+            elif node_name == "market_agent":
+                ms = update.get("market_signals", {})
+                cm = ms.get("get_current_market", {})
+                n_books = (cm.get("details") or {}).get("n_books", 0)
+                err = (cm.get("details") or {}).get("error", "")
+                if n_books:
+                    print(f"  [Market]     Loaded {n_books} books")
+                else:
+                    print(f"  [Market]     Loaded 0 books" + (f" — {err}" if err else ""))
+
+            elif node_name == "scoring":
+                sc = update.get("scorecard", {})
+                mp = sc.get("model_probability", 0)
+                mip = sc.get("market_implied_probability")
+                ev = sc.get("expected_value_pct")
+                mip_str = f"{mip:.1%}" if mip else "N/A"
+                direction = sc.get("direction", "over")
+                dir_label = f" ({direction})" if direction and direction != "any" else ""
+                pricing_mode = sc.get("market_pricing_mode", "unavailable")
+                ev_str = f"{ev:+.2%}" if ev is not None else "N/A"
+                print(
+                    f"  [Scoring]    Model {mp:.1%} vs Market {mip_str}{dir_label} "
+                    f"[{pricing_mode}] -> EV {ev_str}"
+                )
+
+            elif node_name == "critic":
+                notes = update.get("critic_notes", [])
+                print(f"  [Critic]     {len(notes)} risk factor(s)")
+
+            elif node_name == "synthesizer":
+                fd = update.get("final_decision", {})
+                dec = fd.get("decision", "?").upper()
+                conf = fd.get("confidence", 0)
+                print(f"  [Synth]      Final: {dec} (confidence {conf:.1%})")
+
+    fd = final_state.get("final_decision", {})
+    sc = final_state.get("scorecard", {})
+
+    print(f"\n{'━' * 64}")
+    print("  SCORECARD")
+    print("━" * 64)
+    print(_format_scorecard(sc))
+
+    dims = fd.get("dimensions", {})
+    if dims:
+        print(f"\n  DIMENSIONS")
+        print(_format_dimensions(dims))
+
+    risks = fd.get("risk_factors", [])
+    if risks:
+        print(f"\n  RISK FACTORS")
+        for r in risks:
+            print(f"    - {r}")
+
+    summary = fd.get("summary", "")
+    if summary:
+        print(f"\n  SUMMARY")
+        print(f"    {summary}")
+
+    print(f"\n{'━' * 64}\n")
+
+    if verbose:
+        print("\n--- FULL FINAL DECISION JSON ---")
+        print(json.dumps(fd, indent=2, default=str))
+        print("\n--- FULL SCORECARD JSON ---")
+        print(json.dumps(sc, indent=2, default=str))
+
+    if log_data:
+        log_all_agent_data(final_state)
+
+    return fd
+
+
+async def main_async():
+    parser = argparse.ArgumentParser(description="NBA Multi-Agent Betting Advisor")
+    parser.add_argument("query", nargs="*", help="Query string (optional, for one-shot mode)")
+    parser.add_argument("--log-data", action="store_true", help="輸出 Agent 抓取的所有資料（含中文解釋）")
+    parser.add_argument("-v", "--verbose", action="store_true", help="輸出完整 JSON")
+    args = parser.parse_args()
+
+    _print_header()
+
+    if args.query:
+        query = " ".join(args.query)
+        await run_query(query, verbose=args.verbose, log_data=args.log_data)
+        return
+
+    print("\nType a question, or 'quit' to exit.")
+    if args.log_data:
+        print("  (--log-data 已啟用：每次查詢都會輸出抓取的資料)")
+    print()
+    app = compile_graph()
+    while True:
+        try:
+            query = (await asyncio.to_thread(input, "> ")).strip()
+        except (EOFError, KeyboardInterrupt):
+            print("\nBye!")
+            break
+
+        if not query:
+            continue
+        if query.lower() in ("quit", "exit", "q"):
+            print("Bye!")
+            break
+
+        try:
+            await run_query(query, app=app, verbose=args.verbose, log_data=args.log_data)
+        except Exception as e:
+            print(f"\n  ERROR: {e}\n")
+
+
+if __name__ == "__main__":
+    asyncio.run(main_async())

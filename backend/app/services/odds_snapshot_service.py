@@ -1,31 +1,31 @@
 """
-odds_snapshot_service.py - 盤口快照服務
+odds_snapshot_service.py - Odds Snapshot Service
 
-定期擷取 The Odds API 的賠率資料，計算 no-vig，並寫入 PostgreSQL。
-用於 Line Movement Tracking（盤口變動追蹤）。
+Periodically capture odds data from The Odds API, calculate no-vig, and write to PostgreSQL.
+Used for Line Movement Tracking.
 
-架構：
-    排程器 → take_snapshot(date)
+Architecture:
+    Scheduler → take_snapshot(date)
             → odds_provider.get_events()           (1 API call)
             → odds_provider.get_event_odds(...)     (N API calls, 4 markets batched)
-            → prob.py 計算 no-vig
+            → prob.py calculates no-vig
             → db_service.executemany()              (bulk write to PostgreSQL)
-            → _log_snapshot()                       (寫入 odds_snapshot_logs)
+            → _log_snapshot()                       (write to odds_snapshot_logs)
 
-每次快照會：
-1. 取得當天所有 NBA 賽事
-2. 對每場賽事，用一次 API call 同時取得 4 個 market 的賠率
-3. 對每個 bookmaker / player / market 組合計算 no-vig
-4. 批量寫入 odds_line_snapshots 表
-5. 記錄快照日誌
+Each snapshot will:
+1. Retrieve all NBA games for the day
+2. For each game, fetch odds for 4 markets in a single API call
+3. Calculate no-vig for each bookmaker / player / market combination
+4. Bulk write to odds_line_snapshots table
+5. Log the snapshot
 
-使用方式：
+Usage:
     from app.services.odds_snapshot_service import odds_snapshot_service
 
-    # 排程器呼叫
+    # Scheduled call
     result = await odds_snapshot_service.take_snapshot("2026-02-08")
 
-    # 手動觸發
+    # Manual trigger
     result = await odds_snapshot_service.take_snapshot()
 """
 
@@ -33,19 +33,88 @@ import time
 from datetime import datetime, timezone, timedelta
 from typing import List, Dict, Any, Optional, Tuple
 
+from app.services.odds_gateway import odds_gateway
 from app.services.odds_theoddsapi import odds_provider
 from app.services.odds_provider import OddsAPIError
-from app.services.prob import american_to_prob, calculate_vig, devig
+from app.services.prob import (
+    american_to_prob,
+    calculate_vig,
+    devig,
+    single_leg_devig,
+    DEFAULT_BINARY_VIG,
+)
 from app.services.db import db_service
 
 
-# 支援的市場類型（逗號分隔，用於一次 API call 取得多個 market）
-# The Odds API v4 支援 comma-separated markets 參數
-SNAPSHOT_MARKETS = "player_points,player_rebounds,player_assists,player_points_rebounds_assists"
+# Supported market types for the periodic odds snapshot job.
+#
+# Phase 1 expansion (SPO-10) — see docs/decisions/event-page-stat-expansion/
+# decision_20260502_market-key-feasibility.md (§ Addendum 1) — adds 8 markets
+# on top of the 4 baseline:
+#   Tier A (populated today): player_threes, player_steals, player_double_double
+#       and the three native combo lines.
+#   Tier B (schema-valid + currently empty inventory, free until populated):
+#       player_frees_made (FTM), player_field_goals (FGM by working hypothesis).
+#
+# Per-market billing: each populated market in this list costs 1 unit per event
+# per call. Empty markets (Tier B today) cost 0. SPO-15 audits the resulting
+# burn separately; merge of this list is not gated on that audit per
+# Override 2 of the decision log Addendum 1.
+#
+# DD note: `player_double_double` is included so the snapshot fetches the data,
+# but its outcome shape (Yes/No, no `point` field) means the standard Over/Under
+# parser in `_process_event` silently drops it. DD lines are written via the
+# dedicated binary path in `_process_event_dd` instead — see §4 of the decision
+# log for the contract.
+SNAPSHOT_MARKETS = (
+    # Single Over/Under markets — original 4 plus 3PM and STL
+    "player_points,"
+    "player_rebounds,"
+    "player_assists,"
+    "player_threes,"
+    "player_steals,"
+    # Tier B (graceful-degrade — empty inventory is rendered as "no line", not
+    # a fake number; see §3 of the SPO-16 ticket and §3 of the Phase-0 decision)
+    "player_frees_made,"
+    "player_field_goals,"
+    # Native combo Over/Under markets — no derive math, the bookmaker posts the
+    # combined line directly (kills v1's vig-double-count concern)
+    "player_points_rebounds_assists,"
+    "player_rebounds_assists,"
+    "player_points_rebounds,"
+    "player_points_assists,"
+    # Binary Yes/No market — separate parser path (DD binary contract §4)
+    "player_double_double"
+)
 
-# UPSERT SQL：插入新資料，若已存在則更新
-# ON CONFLICT 使用 unique constraint (snapshot_at, event_id, player_name, market, bookmaker)
-# 確保同一次快照不會重複寫入相同的 bookmaker/player/market
+# Markets that follow the standard Over/Under outcome shape (`name=Over|Under`,
+# `point=<line>`). Used by `_process_event` to filter what the standard parser
+# touches — DD is excluded because its outcomes use `name=Yes` and have no
+# `point` field, which would silently produce `point=None` rows if forced
+# through the Over/Under parser.
+OVER_UNDER_MARKET_KEYS = frozenset({
+    "player_points",
+    "player_rebounds",
+    "player_assists",
+    "player_threes",
+    "player_steals",
+    "player_frees_made",
+    "player_field_goals",
+    "player_points_rebounds_assists",
+    "player_rebounds_assists",
+    "player_points_rebounds",
+    "player_points_assists",
+})
+
+# Binary Yes/No markets — handled by the DD-style parser path. Listed as a set
+# to make adding future binary markets (e.g. triple-double) a one-line change.
+BINARY_MARKET_KEYS = frozenset({
+    "player_double_double",
+})
+
+# UPSERT SQL: Insert new data or update if exists
+# ON CONFLICT uses unique constraint (snapshot_at, event_id, player_name, market, bookmaker)
+# Ensures the same bookmaker/player/market isn't written twice in the same snapshot
 UPSERT_LINE_SQL = """
 INSERT INTO odds_line_snapshots (
     snapshot_at, date, event_id, home_team, away_team,
@@ -68,7 +137,7 @@ DO UPDATE SET
     under_fair_prob = EXCLUDED.under_fair_prob
 """
 
-# 快照日誌 INSERT SQL
+# Snapshot log INSERT SQL
 INSERT_LOG_SQL = """
 INSERT INTO odds_snapshot_logs (
     date, snapshot_at, event_count, total_lines, status, error_message, duration_ms
@@ -78,13 +147,13 @@ INSERT INTO odds_snapshot_logs (
 
 class OddsSnapshotService:
     """
-    盤口快照服務
+    Odds Snapshot Service
 
-    負責定期擷取所有賽事的賠率資料、計算 no-vig、寫入 PostgreSQL。
-    每天排程 3 次快照（UTC 16:00, 22:00, 23:30），
-    分別對應美東 11AM、5PM、6:30PM，涵蓋開盤 → 封盤的時段。
+    Responsible for periodically capturing odds data for all events, calculating no-vig, and writing to PostgreSQL.
+    Three daily snapshots are scheduled (UTC 16:00, 22:00, 23:30),
+    corresponding to US Eastern 11AM, 5PM, 6:30PM, to cover the open-to-close period.
 
-    使用方式：
+    Usage:
         service = OddsSnapshotService()
         result = await service.take_snapshot("2026-02-08")
     """
@@ -95,29 +164,29 @@ class OddsSnapshotService:
         tz_offset_minutes: int = 480
     ) -> Dict[str, Any]:
         """
-        執行一次完整的盤口快照
+        Execute a complete odds snapshot
 
-        主流程：
-        1. 取得該日期的所有 NBA 賽事
-        2. 對每場賽事取得所有 market 的賠率（4 markets in 1 call）
-        3. 計算每個 bookmaker/player/market 的 no-vig
-        4. 批量寫入 PostgreSQL
-        5. 記錄快照日誌
+        Main flow:
+        1. Get all NBA events on the given date
+        2. Retrieve odds for all markets for each event (4 markets in 1 call)
+        3. Calculate no-vig for each bookmaker/player/market
+        4. Bulk write to PostgreSQL
+        5. Log the snapshot
 
-        叫 "take_snapshot" 因為就像相機「拍攝快照」—
-        記錄某一瞬間所有賠率的狀態。
+        Called "take_snapshot" because it's like a camera "taking a snapshot" —
+        capturing the state of all odds at one moment.
 
         Args:
-            date: 比賽日期（YYYY-MM-DD），None 則使用 UTC 今天
-            tz_offset_minutes: 時區偏移量（分鐘），用於取得正確的當地日期賽事，
-                               預設 480（UTC+8 台北時間）
+            date: event date (YYYY-MM-DD). If None, use today's UTC date
+            tz_offset_minutes: timezone offset in minutes for correct local date events.
+                               Default 480 (UTC+8, Taipei time)
 
         Returns:
-            dict 包含：
-            - date: 快照日期
-            - event_count: 處理的賽事數
-            - total_lines: 寫入的 odds line 總筆數
-            - duration_ms: 耗時（毫秒）
+            dict containing:
+            - date: snapshot date
+            - event_count: number of events processed
+            - total_lines: total odds lines written
+            - duration_ms: duration in milliseconds
         """
         start_time = time.time()
 
@@ -130,14 +199,14 @@ class OddsSnapshotService:
         all_rows: List[tuple] = []
 
         try:
-            # 1. 取得當天所有賽事
+            # 1. Get all events for the day
             events = await self._get_events(date, tz_offset_minutes)
             event_count = len(events)
 
             if not events:
-                print(f"⚠️ [OddsSnapshot] {date} 無賽事")
+                print(f"⚠️ [OddsSnapshot] {date} no events")
                 await self._log_snapshot(
-                    date, snapshot_at, 0, 0, "success", "無賽事", 0
+                    date, snapshot_at, 0, 0, "success", "No events", 0
                 )
                 return {
                     "date": date,
@@ -146,9 +215,9 @@ class OddsSnapshotService:
                     "duration_ms": 0,
                 }
 
-            print(f"📸 [OddsSnapshot] 開始快照 {date}，{event_count} 場賽事")
+            print(f"📸 [OddsSnapshot] Starting snapshot for {date}, {event_count} events")
 
-            # 2. 對每場賽事取得賠率 & 計算 no-vig
+            # 2. For each event, retrieve odds & calculate no-vig
             for event in events:
                 event_id = event.get("id", "")
                 home_team = event.get("home_team", "")
@@ -165,31 +234,31 @@ class OddsSnapshotService:
                     all_rows.extend(rows)
                 except OddsAPIError as e:
                     if e.status_code == 404:
-                        # 該賽事無 props 資料，跳過
+                        # No props data for the event, skip
                         continue
-                    print(f"⚠️ [OddsSnapshot] 賽事 {event_id} API 錯誤: {e}")
+                    print(f"⚠️ [OddsSnapshot] Event {event_id} API error: {e}")
                     continue
                 except Exception as e:
-                    print(f"⚠️ [OddsSnapshot] 賽事 {event_id} 處理失敗: {e}")
+                    print(f"⚠️ [OddsSnapshot] Event {event_id} handling failed: {e}")
                     continue
 
-            # 3. 批量寫入 PostgreSQL
+            # 3. Bulk write to PostgreSQL
             total_lines = len(all_rows)
             if all_rows and db_service.is_connected:
                 try:
                     await db_service.executemany(UPSERT_LINE_SQL, all_rows)
                     print(
-                        f"✅ [OddsSnapshot] 寫入 {total_lines} 筆 odds lines "
-                        f"({event_count} 場賽事)"
+                        f"✅ [OddsSnapshot] Wrote {total_lines} odds lines "
+                        f"({event_count} events)"
                     )
                 except Exception as e:
-                    print(f"❌ [OddsSnapshot] PostgreSQL 寫入失敗: {e}")
+                    print(f"❌ [OddsSnapshot] PostgreSQL write failed: {e}")
             elif not db_service.is_connected:
-                print("⚠️ [OddsSnapshot] PostgreSQL 未連線，跳過寫入")
+                print("⚠️ [OddsSnapshot] PostgreSQL not connected, skipping write")
 
             duration_ms = int((time.time() - start_time) * 1000)
 
-            # 4. 記錄快照日誌
+            # 4. Log the snapshot
             await self._log_snapshot(
                 date, snapshot_at, event_count, total_lines, "success", None, duration_ms
             )
@@ -203,7 +272,7 @@ class OddsSnapshotService:
 
         except Exception as e:
             duration_ms = int((time.time() - start_time) * 1000)
-            print(f"❌ [OddsSnapshot] 快照失敗: {e}")
+            print(f"❌ [OddsSnapshot] Snapshot failed: {e}")
             await self._log_snapshot(
                 date, snapshot_at, event_count, total_lines, "error", str(e), duration_ms
             )
@@ -213,19 +282,19 @@ class OddsSnapshotService:
         self, date: str, tz_offset_minutes: int = 480
     ) -> List[Dict[str, Any]]:
         """
-        取得指定日期的 NBA 賽事
+        Get NBA events for the specified date
 
-        叫 "_get_events" 因為它是 take_snapshot 的內部方法（_ 前綴），
-        負責「取得賽事」這一步。
-        與 daily_analysis._get_events_for_date 邏輯一致，
-        考慮時區偏移量以正確過濾本地日期的比賽。
+        Called "_get_events" because it's an internal method of take_snapshot (_ prefix),
+        responsible for "getting events".
+        Logic is consistent with daily_analysis._get_events_for_date,
+        considering timezone offset to correctly filter local date events.
 
         Args:
-            date: 比賽日期（YYYY-MM-DD）
-            tz_offset_minutes: 時區偏移量（分鐘）
+            date: event date (YYYY-MM-DD)
+            tz_offset_minutes: timezone offset in minutes
 
         Returns:
-            賽事列表
+            List of events
         """
         date_obj = datetime.strptime(date, "%Y-%m-%d")
 
@@ -246,7 +315,7 @@ class OddsSnapshotService:
             date_to=date_to,
         )
 
-        # 過濾：只保留本地日期內的比賽
+        # Filter: keep only events that occur on the local date
         filtered = []
         for event in raw_events:
             commence_str = event.get("commence_time", "")
@@ -272,35 +341,37 @@ class OddsSnapshotService:
         snapshot_at: datetime,
     ) -> List[tuple]:
         """
-        處理單場賽事：取得賠率、計算 no-vig、回傳待寫入的 rows
+        Process a single event: fetch odds, calculate no-vig, and return rows to insert
 
-        叫 "_process_event" 因為它「處理」一場「賽事」——
-        從取得 raw odds 到計算 no-vig 到準備 DB rows 的完整流程。
+        Named "_process_event" because it "processes" one "event" —
+        from fetching raw odds to calculating no-vig to preparing DB rows.
 
-        關鍵優化：用一次 API call 取得 4 個 market 的賠率
-        （player_points,player_rebounds,player_assists,player_points_rebounds_assists），
-        減少 API call 數量從 4 降到 1。
+        Key optimization: batch fetch odds for 4 markets in a single API call
+        (player_points, player_rebounds, player_assists, player_points_rebounds_assists),
+        reducing number of API calls from 4 down to 1.
 
         Args:
-            event_id: The Odds API 賽事 ID
-            home_team: 主場球隊名稱
-            away_team: 客場球隊名稱
-            date: 比賽日期字串（YYYY-MM-DD）
-            snapshot_at: 快照時間戳
+            event_id: The Odds API event ID
+            home_team: Home team name
+            away_team: Away team name
+            date: Event date string (YYYY-MM-DD)
+            snapshot_at: Snapshot timestamp
 
         Returns:
-            待寫入的 row tuples 列表，每個 tuple 對應 UPSERT_LINE_SQL 的 $1-$14
+            List of row tuples for insertion, each tuple matching UPSERT_LINE_SQL $1-$14
         """
-        # 一次取得 4 個 market 的賠率（減少 API call）
-        raw_odds = await odds_provider.get_event_odds(
+        # Fetch odds for 4 markets in one call (reducing API calls)
+        snapshot = await odds_gateway.get_market_snapshot(
             sport="basketball_nba",
             event_id=event_id,
             regions="us",
             markets=SNAPSHOT_MARKETS,
             odds_format="american",
+            priority="background",
+            record_hot_key=False,
         )
 
-        bookmakers_data = raw_odds.get("bookmakers", [])
+        bookmakers_data = snapshot.data.get("bookmakers", [])
         date_obj = datetime.strptime(date, "%Y-%m-%d").date()
         rows: List[tuple] = []
 
@@ -310,17 +381,50 @@ class OddsSnapshotService:
             for market in bookmaker.get("markets", []):
                 market_key = market.get("key", "")
 
-                # 按球員分組 outcomes（Over/Under 成對出現）
-                # outcomes 結構：
+                # 💡 Explicit dispatch by market type (SPO-18 hardening).
+                # Binary markets (DD) have a different outcome shape
+                # (`name=Yes|No`, no `point`) and MUST NOT go through the
+                # Over/Under parser — the decision log §4 mandates a
+                # separate code path. Unknown keys are explicitly skipped
+                # rather than silently fed into the OU parser, which would
+                # produce `point=None` rows on a typo'd future addition to
+                # SNAPSHOT_MARKETS. Defense-in-depth: today the constants-
+                # side invariant `test_union_covers_all_snapshot_markets`
+                # guards the call site, this guards the runtime side.
+                if market_key in BINARY_MARKET_KEYS:
+                    rows.extend(self._parse_binary_market(
+                        market=market,
+                        market_key=market_key,
+                        bookmaker_key=bookmaker_key,
+                        snapshot_at=snapshot_at,
+                        date_obj=date_obj,
+                        event_id=event_id,
+                        home_team=home_team,
+                        away_team=away_team,
+                    ))
+                    continue
+
+                if market_key not in OVER_UNDER_MARKET_KEYS:
+                    # ⚠ Reached only if SNAPSHOT_MARKETS picks up a key that
+                    # neither set knows how to parse — i.e. a typo or an
+                    # un-classified addition. Skip rather than corrupt.
+                    print(
+                        f"⚠️ [OddsSnapshot] unknown market key "
+                        f"{market_key!r}; skipping"
+                    )
+                    continue
+
+                # Standard Over/Under flow.
+                # outcomes structure:
                 #   description = "Stephen Curry"
-                #   name = "Over" 或 "Under"
-                #   point = 24.5（盤口線）
-                #   price = -110（美式賠率）
+                #   name = "Over" or "Under"
+                #   point = 24.5 (line)
+                #   price = -110 (American odds)
                 player_outcomes: Dict[str, Dict[str, Any]] = {}
 
                 for outcome in market.get("outcomes", []):
                     player_name = outcome.get("description", "")
-                    direction = outcome.get("name", "").lower()  # "over" or "under"
+                    direction = outcome.get("name", "").lower()
 
                     if not player_name or direction not in ("over", "under"):
                         continue
@@ -330,7 +434,7 @@ class OddsSnapshotService:
 
                     player_outcomes[player_name][direction] = outcome
 
-                # 對每個有完整 Over + Under 的球員計算 no-vig
+                # For each player with both Over & Under, calculate no-vig
                 for player_name, directions in player_outcomes.items():
                     over_out = directions.get("over")
                     under_out = directions.get("under")
@@ -346,7 +450,7 @@ class OddsSnapshotService:
                         continue
 
                     try:
-                        # 計算 no-vig
+                        # Calculate no-vig
                         p_over_imp = american_to_prob(over_price)
                         p_under_imp = american_to_prob(under_price)
                         vig = calculate_vig(p_over_imp, p_under_imp)
@@ -370,8 +474,142 @@ class OddsSnapshotService:
                         ))
 
                     except (ValueError, ZeroDivisionError):
-                        # 賠率為 0 或其他計算錯誤，跳過
+                        # Odds are 0 or some error occurred in calculation, skip
                         continue
+
+        return rows
+
+    def _parse_binary_market(
+        self,
+        market: Dict[str, Any],
+        market_key: str,
+        bookmaker_key: str,
+        snapshot_at: datetime,
+        date_obj,
+        event_id: str,
+        home_team: str,
+        away_team: str,
+    ) -> List[tuple]:
+        """
+        Parse a binary Yes/No market (DD) into snapshot rows.
+
+        Binary markets differ from Over/Under in three ways (see decision
+        log §4):
+          1. `outcome.name` is `Yes` or `No`, not `Over` / `Under`.
+          2. There is NO `point` field (the bet is 0/1, not threshold-based).
+          3. The book often only posts the `Yes` side; the `No` is implicit.
+             We single-leg-devig in that case using a league-average vig prior.
+             When BOTH legs are posted, derive vig from the leg pair as usual.
+
+        Storage: we write a row per (player, bookmaker) that fits the
+        existing `odds_line_snapshots` schema. To avoid an ALTER TABLE we
+        encode the binary nature as:
+          - line = 0.5  (sentinel — DD is "≥ 1 occurrence", line=0.5 is the
+                         conventional binary marker; downstream readers can
+                         detect DD by `market='player_double_double'`)
+          - over_odds = Yes price  (semantic: "bet that DD happens")
+          - under_odds = No price if posted else None
+          - over_fair_prob = single-leg devigged Yes prob, or None when even
+                             the prior cannot be applied (decision §4 step 3:
+                             do NOT publish fair-prob if vig cannot be
+                             estimated).
+          - under_fair_prob = the (1 - over_fair_prob) complement when known.
+
+        ⚠ The line=0.5 sentinel is a workaround for the existing schema, NOT
+        a bookmaker-published value. Frontend/API consumers must dispatch on
+        `market` and ignore `line` for binary markets. Documented here and in
+        the docstring of the `OddsLineSnapshot` schema.
+
+        Returns:
+            List of row tuples ready for `executemany(UPSERT_LINE_SQL, ...)`.
+        """
+        rows: List[tuple] = []
+
+        # Group outcomes by player. For DD each player has either {Yes}
+        # alone or {Yes, No}; we never see Over/Under here.
+        player_outcomes: Dict[str, Dict[str, Dict[str, Any]]] = {}
+        for outcome in market.get("outcomes", []):
+            player_name = outcome.get("description", "")
+            direction = outcome.get("name", "").lower()  # "yes" or "no"
+            if not player_name or direction not in ("yes", "no"):
+                continue
+            player_outcomes.setdefault(player_name, {})[direction] = outcome
+
+        for player_name, directions in player_outcomes.items():
+            yes_out = directions.get("yes")
+            if not yes_out:
+                # No `Yes` price posted means we have nothing to anchor
+                # the de-vig on; skip rather than fabricate.
+                continue
+
+            yes_price = yes_out.get("price", 0)
+            if yes_price == 0:
+                continue
+
+            no_out = directions.get("no")
+            no_price = no_out.get("price", 0) if no_out else 0
+
+            try:
+                p_yes_imp = american_to_prob(yes_price)
+
+                if no_price != 0:
+                    # Both legs posted — derive vig from the pair, same as
+                    # Over/Under. This is the higher-fidelity path and
+                    # what we want to use whenever it's available.
+                    p_no_imp = american_to_prob(no_price)
+                    vig = calculate_vig(p_yes_imp, p_no_imp)
+                    p_yes_fair, p_no_fair = devig(p_yes_imp, p_no_imp)
+                else:
+                    # Only `Yes` posted — apply the league-average prior.
+                    # `single_leg_devig` returns None when the prior can't
+                    # be safely applied (per decision §4 step 3).
+                    p_yes_fair = single_leg_devig(
+                        p_yes_imp, DEFAULT_BINARY_VIG
+                    )
+                    if p_yes_fair is None:
+                        # Refuse to publish fair-prob — store the implied
+                        # values only, downstream callers see NULL.
+                        # pragma: SPO-18 follow-up — replace 0.5 sentinel with explicit line_kind column.
+                        # Frontend/API consumers MUST dispatch on `market` and ignore `line` for binary markets.
+                        # See task-summaries/SPO-16-backend-stat-expansion.md Trade-offs §1.
+                        rows.append((
+                            snapshot_at, date_obj, event_id,
+                            home_team, away_team, player_name,
+                            market_key, bookmaker_key,
+                            0.5,                       # line sentinel
+                            int(yes_price),            # over_odds = Yes
+                            None,                      # under_odds
+                            round(DEFAULT_BINARY_VIG, 6),  # vig (assumed)
+                            None,                      # over_fair_prob
+                            None,                      # under_fair_prob
+                        ))
+                        continue
+                    p_no_fair = 1.0 - p_yes_fair
+                    vig = DEFAULT_BINARY_VIG
+
+                # pragma: SPO-18 follow-up — replace 0.5 sentinel with explicit line_kind column.
+                # Frontend/API consumers MUST dispatch on `market` and ignore `line` for binary markets.
+                # See task-summaries/SPO-16-backend-stat-expansion.md Trade-offs §1.
+                rows.append((
+                    snapshot_at,
+                    date_obj,
+                    event_id,
+                    home_team,
+                    away_team,
+                    player_name,
+                    market_key,
+                    bookmaker_key,
+                    0.5,                                # line sentinel — see docstring
+                    int(yes_price),                     # over_odds = Yes price
+                    int(no_price) if no_price != 0 else None,  # under_odds = No price (nullable)
+                    round(vig, 6),
+                    round(p_yes_fair, 6),
+                    round(p_no_fair, 6),
+                ))
+
+            except (ValueError, ZeroDivisionError):
+                # american_to_prob rejects 0 odds; defensive fallthrough.
+                continue
 
         return rows
 
@@ -386,19 +624,19 @@ class OddsSnapshotService:
         duration_ms: int,
     ) -> None:
         """
-        記錄快照日誌到 odds_snapshot_logs 表
+        Log a snapshot entry to the odds_snapshot_logs table
 
-        叫 "_log_snapshot" 因為它「記錄」一次「快照」的執行結果。
-        即使寫入失敗也不會拋出例外（non-blocking）。
+        Named "_log_snapshot" because it "logs" the result of a "snapshot".
+        Will not raise exceptions if writing fails (non-blocking).
 
         Args:
-            date: 快照日期
-            snapshot_at: 快照時間戳
-            event_count: 處理的賽事數
-            total_lines: 寫入的 odds line 總筆數
-            status: "success" 或 "error"
-            error_message: 錯誤訊息（成功時為 None）
-            duration_ms: 耗時毫秒
+            date: Snapshot date
+            snapshot_at: Snapshot timestamp
+            event_count: Number of events processed
+            total_lines: Total odds lines written
+            status: "success" or "error"
+            error_message: Error message (None if successful)
+            duration_ms: Duration in milliseconds
         """
         if not db_service.is_connected:
             return
@@ -416,8 +654,8 @@ class OddsSnapshotService:
                 duration_ms,
             )
         except Exception as e:
-            print(f"⚠️ [OddsSnapshot] 寫入日誌失敗: {e}")
+            print(f"⚠️ [OddsSnapshot] Failed writing snapshot log: {e}")
 
 
-# 建立全域服務實例
+# Create global service instance
 odds_snapshot_service = OddsSnapshotService()
