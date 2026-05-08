@@ -285,7 +285,7 @@ export function PlayerHistoryStats({
       if (isBinaryHistoryMetric(metricKey)) return;
 
       setIsFetchingOdds(true);
-      
+
       try {
         const marketKey = historyMetricToMarket(metricKey);
         const result = await calculateNoVig({
@@ -296,11 +296,11 @@ export function PlayerHistoryStats({
           bookmakers: null,
           odds_format: "american",
         });
-        
+
         if (result.results && result.results.length > 0) {
           const lines = result.results.map((r) => r.line);
           const modeValue = calculateMode(lines);
-          
+
           if (modeValue !== null) {
             setThreshold(modeValue.toString());
           }
@@ -314,6 +314,18 @@ export function PlayerHistoryStats({
     [eventId]
   );
 
+  // 💡 Single source of truth for threshold auto-fill: any change to
+  // (selectedPlayer, metric, eventId) — whether triggered by parent props
+  // (EventPage's MarketSelect / PlayerInput) or by this component's own
+  // dropdowns — funnels through this effect. Replaces previously scattered
+  // manual fetch calls in handleSelectPlayer / handleMetricChange that
+  // missed the parent-driven path.
+  useEffect(() => {
+    if (!selectedPlayer || !eventId) return;
+    if (isBinaryHistoryMetric(metric)) return;
+    fetchOddsAndSetThreshold(selectedPlayer, metric);
+  }, [selectedPlayer, metric, eventId, fetchOddsAndSetThreshold]);
+
   const handleSelectPlayer = useCallback(
     (playerName: string) => {
       setSelectedPlayer(playerName);
@@ -324,12 +336,11 @@ export function PlayerHistoryStats({
       setTeammatePlayedFilter("all");
       setTeammateSearchInput("");
       onPlayerSelect?.(playerName);
-      
-      if (eventId) {
-        fetchOddsAndSetThreshold(playerName, metric);
-      }
+      // ⚠ Do NOT call fetchOddsAndSetThreshold here — the effect above
+      // handles it via setSelectedPlayer's state change. Calling here would
+      // double-fire the no-vig request.
     },
-    [onPlayerSelect, eventId, metric, fetchOddsAndSetThreshold]
+    [onPlayerSelect]
   );
 
   const handleThresholdChange = (value: string) => {
@@ -337,10 +348,8 @@ export function PlayerHistoryStats({
   };
 
   const handleMetricChange = (newMetric: HistoryMetricKey) => {
+    // ⚠ Same as above — the unified effect picks up the metric change.
     setMetric(newMetric);
-    if (selectedPlayer && eventId) {
-      fetchOddsAndSetThreshold(selectedPlayer, newMetric);
-    }
   };
 
   const playerList = playersData?.players || [];
