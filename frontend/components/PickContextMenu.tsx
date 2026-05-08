@@ -289,7 +289,7 @@ export function PickContextMenu({ children, pick }: PickContextMenuProps) {
   const menuContent = isOpen && (
     <div
       ref={menuRef}
-      className="fixed min-w-[200px] py-2 bg-white rounded-lg shadow-xl border-2 border-dark/10 animate-fade-in"
+      className="fixed min-w-[200px] py-2 bg-dark rounded-lg shadow-2xl border border-white/10 animate-fade-in"
       style={{
         left: position.x,
         top: position.y,
@@ -297,7 +297,7 @@ export function PickContextMenu({ children, pick }: PickContextMenuProps) {
       }}
     >
       {/* Menu Header */}
-      <div className="px-4 py-2 border-b border-dark/10">
+      <div className="px-4 py-2 border-b border-white/10">
         <p className="text-sm font-bold text-dark truncate">
           {pick.player_name}
         </p>
@@ -316,7 +316,7 @@ export function PickContextMenu({ children, pick }: PickContextMenuProps) {
             transition-colors duration-150
             ${isAdded
               ? "text-red hover:bg-red/10"
-              : "text-dark hover:bg-dark/5"
+              : "text-dark hover:bg-white/5"
             }
           `}
         >
@@ -334,7 +334,7 @@ export function PickContextMenu({ children, pick }: PickContextMenuProps) {
         </button>
 
         {/* Divider */}
-        <div className="mx-3 my-1 border-t border-dark/10" />
+        <div className="mx-3 my-1 border-t border-white/10" />
 
         {/* Reverse bet */}
         <button
@@ -343,8 +343,8 @@ export function PickContextMenu({ children, pick }: PickContextMenuProps) {
             w-full flex items-center gap-3 px-4 py-2.5 text-sm font-medium
             transition-colors duration-150
             ${isReversedInSlip
-              ? "text-orange-600 hover:bg-orange-50"
-              : "text-dark hover:bg-dark/5"
+              ? "text-orange-300 hover:bg-orange-500/10"
+              : "text-dark hover:bg-white/5"
             }
           `}
         >
@@ -362,12 +362,12 @@ export function PickContextMenu({ children, pick }: PickContextMenuProps) {
         </button>
 
         {/* Divider */}
-        <div className="mx-3 my-1 border-t border-dark/10" />
+        <div className="mx-3 my-1 border-t border-white/10" />
 
         {/* View details */}
         <button
           onClick={handleViewDetails}
-          className="w-full flex items-center gap-3 px-4 py-2.5 text-sm font-medium text-dark hover:bg-dark/5 transition-colors duration-150"
+          className="w-full flex items-center gap-3 px-4 py-2.5 text-sm font-medium text-dark hover:bg-white/5 transition-colors duration-150"
         >
           <ExternalLink className="w-4 h-4" />
           <span>View Details</span>
@@ -376,8 +376,8 @@ export function PickContextMenu({ children, pick }: PickContextMenuProps) {
 
       {/* Already added hint */}
       {isAdded && (
-        <div className="px-4 py-2 border-t border-dark/10">
-          <p className={`text-xs flex items-center gap-1.5 ${isReversedInSlip ? "text-orange-600" : "text-green-600"}`}>
+        <div className="px-4 py-2 border-t border-white/10">
+          <p className={`text-xs flex items-center gap-1.5 ${isReversedInSlip ? "text-orange-300" : "text-green-400"}`}>
             {isReversedInSlip ? (
               <>
                 <ArrowLeftRight className="w-3 h-3" />
