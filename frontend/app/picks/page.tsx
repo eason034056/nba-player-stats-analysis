@@ -190,7 +190,7 @@ function PickCard({
             transition-all duration-200
             hover:-translate-y-1
             ${isAdded
-              ? "border-green-500 bg-green-50/50"
+              ? "border-green-500"
               : level === "high"
                 ? "hover:border-green-500"
                 : "hover:border-yellow"
