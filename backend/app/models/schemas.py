@@ -75,26 +75,53 @@ class NoVigRequest(BaseModel):
 
 class BookmakerResult(BaseModel):
     """
-    Single bookmaker calculation result
+    Single bookmaker calculation result.
 
-    - bookmaker: Bookmaker name
-    - line: Threshold value (e.g. 28.5 points)
-    - over_odds / under_odds: Raw odds (American format)
-    - p_over_imp / p_under_imp: Implied probability (with vig)
-    - vig: Vig percentage (bookmaker profit)
-    - p_over_fair / p_under_fair: Fair probability after vig removed
-    - fetched_at: Data fetch time
+    Two market shapes share this model:
+
+    Over/Under markets (e.g. ``player_points``):
+        - line, over_odds/under_odds, p_over_imp/p_under_imp, vig,
+          p_over_fair/p_under_fair are populated as before.
+        - The binary-market fields (yes_*, no_*) stay None.
+
+    Binary Yes/No markets (e.g. ``player_double_double``):
+        - line is the sentinel ``0.5`` (the bet has no threshold; consumers
+          MUST dispatch on ``market`` and not interpret ``0.5`` as a real
+          point). Documented also in
+          ``odds_snapshot_service._parse_binary_market``.
+        - over_odds/p_over_imp/p_over_fair carry the **Yes** leg values; the
+          explicit ``yes_price``/``p_yes_imp``/``yes_fair_prob`` mirrors are
+          provided for self-documenting consumers.
+        - under_odds/p_under_imp/p_under_fair carry the **No** leg values;
+          mirrored as ``no_price``/``p_no_imp``/``no_fair_prob``.
+        - Anti-hallucination guard: rows where ``yes_fair_prob`` cannot be
+          honestly derived (vig prior fails on a single-leg quote) are
+          NOT emitted — the route surfaces that via ``message`` rather
+          than fabricating a number.
     """
     bookmaker: str = Field(..., description="Bookmaker name")
-    line: float = Field(..., description="Threshold value")
-    over_odds: float = Field(..., description="Over odds")
-    under_odds: float = Field(..., description="Under odds")
-    p_over_imp: float = Field(..., description="Over implied probability")
-    p_under_imp: float = Field(..., description="Under implied probability")
+    line: float = Field(..., description="Threshold value (Over/Under) or 0.5 sentinel for binary markets")
+    over_odds: float = Field(..., description="Over odds (or Yes price for binary markets)")
+    under_odds: float = Field(..., description="Under odds (or No price for binary markets)")
+    p_over_imp: float = Field(..., description="Over implied probability (or Yes implied for binary markets)")
+    p_under_imp: float = Field(..., description="Under implied probability (or No implied for binary markets)")
     vig: float = Field(..., description="Vig (bookmaker edge)")
-    p_over_fair: float = Field(..., description="Over fair (no-vig) probability")
-    p_under_fair: float = Field(..., description="Under fair (no-vig) probability")
+    p_over_fair: float = Field(..., description="Over fair (no-vig) probability (or Yes fair for binary markets)")
+    p_under_fair: float = Field(..., description="Under fair (no-vig) probability (or No fair for binary markets)")
     fetched_at: datetime = Field(..., description="Data fetch time")
+
+    # === Binary-market explicit mirrors (SPO-26) ===================
+    # For binary markets the over_*/under_* fields above carry the Yes/No
+    # values via positional convention; these explicit fields exist so
+    # consumers that prefer self-documenting names (e.g. the SPO-20
+    # PlayerDDTile contract) can read directly without having to know the
+    # convention. Stay None for Over/Under markets.
+    yes_price: Optional[float] = Field(default=None, description="Yes leg American odds (binary markets only)")
+    no_price: Optional[float] = Field(default=None, description="No leg American odds (binary markets only)")
+    p_yes_imp: Optional[float] = Field(default=None, description="Yes implied probability (binary markets only)")
+    p_no_imp: Optional[float] = Field(default=None, description="No implied probability (binary markets only)")
+    yes_fair_prob: Optional[float] = Field(default=None, description="Yes single-leg de-vigged probability (binary markets only)")
+    no_fair_prob: Optional[float] = Field(default=None, description="No single-leg de-vigged probability (binary markets only)")
 
 
 class Consensus(BaseModel):
@@ -104,10 +131,14 @@ class Consensus(BaseModel):
     Average the no-vig probabilities from multiple bookmakers to get market consensus
     - method: Calculation method ("mean" or "weighted")
     - p_over_fair / p_under_fair: Consensus probabilities
+    - p_yes_fair / p_no_fair: Binary-market mirrors of p_over_fair / p_under_fair,
+      populated for binary markets (e.g. player_double_double); None for Over/Under
     """
     method: str = Field(..., description="Calculation method")
-    p_over_fair: float = Field(..., description="Consensus over probability")
-    p_under_fair: float = Field(..., description="Consensus under probability")
+    p_over_fair: float = Field(..., description="Consensus over (or Yes for binary) probability")
+    p_under_fair: float = Field(..., description="Consensus under (or No for binary) probability")
+    p_yes_fair: Optional[float] = Field(default=None, description="Consensus Yes probability (binary markets only)")
+    p_no_fair: Optional[float] = Field(default=None, description="Consensus No probability (binary markets only)")
 
 
 class NoVigResponse(BaseModel):
@@ -231,6 +262,34 @@ class PlayerHistoryResponse(BaseModel):
     teammate_filter: Optional[List[str]] = Field(default=None, description="Current star teammate filter")
     teammate_played: Optional[bool] = Field(default=None, description="Star teammate presence filter")
     message: Optional[str] = Field(default=None, description="Additional message")
+
+
+class PlayerDDHistoryResponse(BaseModel):
+    """
+    Player Double-Double historical rate API response model.
+    For GET /api/nba/player-dd-history endpoint.
+
+    DD is a binary outcome (Yes/No), not Over/Under — so this endpoint
+    returns ``prob_dd`` (a single probability), not ``p_over``/``p_under``,
+    and there is no ``threshold`` parameter on the request.
+
+    DD definition (per services layer): a game in which the player records
+    ≥10 in at least 2 of {PTS, REB, AST, STL, BLK}.
+
+    Fields:
+        - player: resolved player name (post fuzzy-match)
+        - season: season filter actually applied (None = all seasons)
+        - n_games: count of games considered (DNPs excluded)
+        - dd_games: count of those games that were DDs
+        - prob_dd: dd_games / n_games (None when n_games == 0)
+        - message: explanatory string when sample is empty; None on success
+    """
+    player: str = Field(..., description="Player name (post fuzzy-match)")
+    season: Optional[str] = Field(default=None, description="Season filter applied (None = all)")
+    n_games: int = Field(..., description="Sample game count (DNPs excluded)")
+    dd_games: int = Field(..., description="Number of DD games in the sample")
+    prob_dd: Optional[float] = Field(default=None, description="Historical P(DD = 1); None when sample is empty")
+    message: Optional[str] = Field(default=None, description="Explanatory message; None on success")
 
 
 # ==================== Player Projection Data ====================
