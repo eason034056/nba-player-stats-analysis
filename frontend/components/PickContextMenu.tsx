@@ -26,6 +26,7 @@ import { useRouter } from "next/navigation";
 import { Plus, Minus, ExternalLink, ClipboardList, ArrowLeftRight } from "lucide-react";
 import { useBetSlip, type BetSlipPick } from "@/contexts/BetSlipContext";
 import { buildEventDetailHref } from "@/lib/event-detail-link";
+import { metricToMarket } from "@/lib/metric-to-market";
 import { type DailyPick } from "@/lib/schemas";
 
 // ==================== Type Definitions ====================
@@ -43,21 +44,6 @@ interface MenuPosition {
 }
 
 // ==================== Helper Functions ====================
-
-/**
- * metric → market mapping
- *
- * Converts a short metric key to the market key used by the API
- */
-function metricToMarket(metric: string): string {
-  switch (metric) {
-    case "points": return "player_points";
-    case "rebounds": return "player_rebounds";
-    case "assists": return "player_assists";
-    case "pra": return "player_points_rebounds_assists";
-    default: return "player_points";
-  }
-}
 
 // ==================== Component ====================
 
