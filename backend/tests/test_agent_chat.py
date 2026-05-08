@@ -750,7 +750,12 @@ async def test_agent_chat_service_builds_under_reasons_from_query_aligned_contex
     assert response.verdict.reasons[1] == (
         "Recent form works against the under: last 5 average is 5.33, above the 4.50 line."
     )
-    assert response.verdict.reasons[2] == (
+    # Assert the market reason's content via breakdown rather than reasons[2] —
+    # _build_legacy_reasons truncates to the first 3 non-unavailable sections, so
+    # market won't always land at index 2 (see SPO-25).
+    assert response.verdict.breakdown is not None
+    sections = {section.key: section for section in response.verdict.breakdown.sections}
+    assert sections["market"].signal_note == (
         "Market prices the under at 53.2% on the 4.50 line, best price at DraftKings (-110)."
     )
     assert "11.4% for going under" not in response.verdict.reasons[0]
@@ -813,9 +818,12 @@ async def test_agent_chat_service_uses_line_moved_reason_from_query_aligned_cont
     response = await service.handle_chat(request)
 
     assert response.verdict is not None
-    assert (
-        response.verdict.reasons[2]
-        == "The original 4.50 line is no longer available; the closest live line is 5.00."
+    # Verify the line_moved market formatter via breakdown — the market reason
+    # is not guaranteed to be reasons[2] under the legacy top-3 truncation (see SPO-25).
+    assert response.verdict.breakdown is not None
+    sections = {section.key: section for section in response.verdict.breakdown.sections}
+    assert sections["market"].signal_note == (
+        "The original 4.50 line is no longer available; the closest live line is 5.00."
     )
 
 
@@ -863,7 +871,11 @@ async def test_agent_chat_service_uses_market_unavailable_reason_from_query_alig
     response = await service.handle_chat(request)
 
     assert response.verdict is not None
-    assert response.verdict.reasons[2] == (
+    # Verify the unavailable market formatter via breakdown — the market reason
+    # is not guaranteed to be reasons[2] under the legacy top-3 truncation (see SPO-25).
+    assert response.verdict.breakdown is not None
+    sections = {section.key: section for section in response.verdict.breakdown.sections}
+    assert sections["market"].signal_note == (
         "No exact same-line market quote is available, so EV is not priced."
     )
 
