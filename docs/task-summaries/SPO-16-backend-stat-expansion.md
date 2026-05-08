@@ -255,3 +255,47 @@ The three Lens `[SUGGESTION]` items (`odds_snapshot_service` dispatcher tighteni
 ### Handoff
 
 Branch ready for Lens re-review on the must-fix only. No new commits expected from Forge until Lens responds.
+
+---
+
+## Lens re-review (2026-05-03)
+
+### Verdict: APPROVED
+
+Branch `feature/SPO-16-backend-stat-expansion` @ `4f250b4`. Must-fix from the 2026-05-02 review is shipped correctly; no new blockers.
+
+### Verification performed
+
+1. **Diff inspection** (`git show 4f250b4`):
+   - `daily_analysis.py:90-97` — three new aliases `ra → r_a`, `pr → p_r`, `pa → p_a` present with correct underscored targets. Replacement comment ties the alias map to `normalize_projection`'s underscored derived keys with a `⚠` invariant note.
+   - `test_spo16_market_expansion.py:530-572` — old `test_combos_not_aliased` replaced with positive `test_combos_aliased` + walking-coverage `test_every_supported_market_metric_resolves_in_projection`.
+2. **Test runs (Lens local, `.venv` Python 3.13.3)**:
+   - `pytest backend/tests/test_spo16_market_expansion.py -v` → **46 passed**, including the two new positive tests.
+   - `pytest backend/tests/test_csv_player_history.py test_daily_analysis.py test_projection_provider.py` → **160 passed**, no contract regression.
+3. **Independent end-to-end repro** (Lens script, separate from pytest):
+   ```
+   market=player_rebounds_assists  metric=ra -> proj_field=r_a  value=15
+   market=player_points_rebounds   metric=pr -> proj_field=p_r  value=33
+   market=player_points_assists    metric=pa -> proj_field=p_a  value=32
+   ```
+   Walked all 11 `SUPPORTED_MARKETS`, 0 None values. The original failing case is resolved.
+
+### What's stronger than I asked for
+
+The walking-coverage test (`test_every_supported_market_metric_resolves_in_projection`) doesn't just assert the three known aliases exist — it constructs a fully-populated synthetic raw payload, runs it through `normalize_projection()`, and asserts every `(market, metric)` in `SUPPORTED_MARKETS` resolves end-to-end. This catches the entire bug **class** (silent-None on missing alias), not just the three known offenders. Future combo / single-stat additions that forget their alias will fail loudly in CI instead of silently nulling `edge` in production. That's exactly the regression-guard discipline §4 of the decision log calls for.
+
+### DD safety check
+
+The walking test is keyed on `SUPPORTED_MARKETS` only, not `SNAPSHOT_MARKETS ∪ BINARY_MARKETS`. Since DD lives in `BINARY_MARKETS` (separate parser path, no Phase 1 projection), the walk doesn't false-pass by skipping DD — DD simply isn't in scope for the alias contract. Verified by reading `daily_analysis.py:48-76`.
+
+### Suggestions deferred (acknowledged, not blocking)
+
+Forge intentionally left the three `[SUGGESTION]` items from the 2026-05-02 review out of this commit (dispatcher tightening, `single_leg_devig` docstring rounding, SPO-17 sentinel TODO marker) — surgical fix discipline. CTO's call whether to fold them into a follow-up ticket or wave them in at next epic close. Lens has no objection to the deferral; the fix branch is clean as shipped.
+
+### Anti-hallucination grounding (CLAUDE.md § External API Wrappers)
+
+No new external API surface in this fix commit — the change is purely internal (alias dict + test rewrite). Original SPO-16 grounding (exploration script, `RUN_INTEGRATION=1` live hit, FGM disambiguation probe) carries through unchanged.
+
+### Next action
+
+→ Branch is ready for CTO sign-off and Eason's squash-merge to `dev`. Lens has nothing more to do on this issue absent new commits.
