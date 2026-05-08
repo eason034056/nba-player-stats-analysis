@@ -1,6 +1,6 @@
 # Sports Lab Progress
 
-> Maintained by CTO. Last refresh: **2026-05-08T01:18Z** (heartbeat: SPO-15 `issue_comment_mentioned` — CEO `[closed]` notification on completed routing chain; CTO closed-issue mention is inert per harness rules, no comment posted; refresh moves SPO-15 → Recently completed and surfaces 5-day SPO-16 squash-merge stall). Prior refreshes: 2026-05-03T02:59Z (SPO-18 rebase decision ack); 02:54Z (SPO-18 rebase decision); 02:46Z (SPO-15 audit reviewed → CEO for Eason heads-up); 02:38Z (SPO-16 Lens APPROVED → SPO-18 polish + Eason squash-merge ask); 2026-05-02T23:27Z (SPO-11 v3 accept → SPO-16 dispatch); 23:20Z (plan v3 + Addendum 1); 23:18Z (SPO-15 stale-summary recovery); 23:16Z (CEO housekeeping).
+> Maintained by CTO. Last refresh: **2026-05-08T08:24Z** (heartbeat: SPO-24 `issue_assigned` — Lens APPROVED test-prob English-regex fix → CTO reassigning to owner (CEO triage → Eason) for squash-merge to `dev`; CTO does NOT push/merge per role). Prior refreshes: 2026-05-08T08:14Z (SPO-27 productivity review closed as productive); 06:11Z (Phase 3 done, Phase 3.5 SPO-26 opened); 01:56Z (Phase 3 dispatch — file later reverted to 01:18Z snapshot); 01:18Z (SPO-15 closed); 2026-05-03T02:59Z–02:38Z (SPO-16 Lens APPROVED chain); 2026-05-02T23:27Z (SPO-11 v3 accept → SPO-16 dispatch); 23:20Z (plan v3 + Addendum 1).
 > Source of truth: Paperclip API. This file is a snapshot — when in doubt, query paperclip directly.
 
 ---
@@ -9,7 +9,7 @@
 
 | Epic | Current phase | Status | Assignee | Updated |
 |---|---|---|---|---|
-| [SPO-10 — State type increment](/SPO/issues/SPO-10) (擴充 event page 球員 prop stat types: 3PM/R+A/P+R/P+A/DD/STL/FTM/FGM) | **Phase 2 nearly closed — Phase 2B squash-merge stalled.** Phase 0 done (plan v3 ✅ Eason 23:19:44Z); **Phase 2A audit ([SPO-15](/SPO/issues/SPO-15)) ✅ `done` 2026-05-08T01:16Z** (Eason ack'd plan-tier upgrade heads-up; rotation of `ODDS_API_KEY` is on Eason's plate, exits Paperclip purview); **Phase 2B parser merge ([SPO-16](/SPO/issues/SPO-16)) `in_review` → Eason — STALLED ~5 days** (Lens APPROVED `4f250b4` 2026-05-03T02:34Z, no `origin/dev` movement since `c2391c3` confirmed via `git log origin/dev | grep SPO-16`); **[SPO-18](/SPO/issues/SPO-18) `blocked` → Forge** (auto-resumes when SPO-16 closes; rebase plan locked, see 02:54Z heartbeat note). Phase 3 (Forge frontend), Phase 4 (Sentinel), Phase 5 (Lens) not yet opened — phase-gated on Phase 2B landing in `origin/dev`. | blocked | CEO (held) | 2026-05-08T01:18Z |
+| [SPO-10 — State type increment](/SPO/issues/SPO-10) (擴充 event page 球員 prop stat types: 3PM/R+A/P+R/P+A/DD/STL/FTM/FGM) | **Phase 3.5 in review.** Phase 0/1/1.5/2A/2B/3 closed; SPO-20 squash-merged at 06:07Z (PR #3, merge `e36cb57`). **Phase 3.5 ([SPO-26](/SPO/issues/SPO-26))** Forge → `in_review` at 06:27Z (Lens to verify backend API-route 12-metric expansion + `/player-dd-history` + `/props/no-vig` DD branch). Phase 4 (Sentinel) and Phase 5 (Lens-final) deferred until SPO-26 closes. | blocked | CEO (held) | 2026-05-08T08:24Z |
 
 ---
 
@@ -17,9 +17,10 @@
 
 | Ticket | Title | Phase | Status | Assignee | Branch |
 |---|---|---|---|---|---|
-| [SPO-11](/SPO/issues/SPO-11) | [CTO] SPO-10 規劃: 擴充 event page 球員 prop stat types | Phase orchestrator. v1 ✅ 20:31Z; v2 ❌ 23:05Z; **v3 ✅ 23:19:44Z**. Monitoring Phase 2; blocked on [SPO-16](/SPO/issues/SPO-16) — auto-unblocks when SPO-16 closes (`issue_blockers_resolved` wake). | blocked (`blockedBy=[SPO-16]`) | CTO | _(no code branch — orchestrator only)_ |
-| [SPO-16](/SPO/issues/SPO-16) | [Forge] SPO-10 Phase 2B: backend implementation (8 markets + DD binary parser + FTM/FGM graceful-degrade) | Phase 2B — backend parser merge. **Lens APPROVED 2026-05-03T02:34Z** (commit `4f250b4`): 46/46 SPO-16 unit tests pass; 160/160 contract tests pass; walking-coverage end-to-end repro 0 None values. Must-fix from 2026-05-02 review (R+A/P+R/P+A alias map) shipped via SPO-17. Branch `feature/SPO-16-backend-stat-expansion` ready for Eason squash-merge → `dev`. **STALL: 5 days no movement** — `git fetch origin && git log origin/dev | grep SPO-16` returns empty as of 2026-05-08T01:18Z; `origin/dev` tip remains `c2391c3 Merge multi-agent into main` (predates SPO-16 entirely). Whole Phase 3+ chain blocked on this single merge. | in_review | Eason (`assigneeUserId=local-board`) | `feature/SPO-16-backend-stat-expansion` |
-| [SPO-18](/SPO/issues/SPO-18) | [Forge] SPO-16 follow-up: dispatcher hardening + line_kind sentinel marker + docstring polish | **Tail polish on Phase 2B**, NOT a phase. 3 deferred Lens `[SUGGESTION]` items consolidated: (1) `if BINARY else OU` → explicit `elif/log+skip` dispatch; (2) `# pragma: SPO-18 follow-up` grep marker above `line=0.5` DD sentinel; (3) `single_leg_devig` docstring rounding fix. **Timing-race state (02:54Z):** Forge committed the 3 polish edits (`5ff02e2` impl + `257591a` task summary) on local unpushed branch `feature/SPO-18-spo16-followup-polish` between CTO's 02:44:34Z defer comment and Forge re-reading the thread; commits are NOT pushed and do NOT touch the SPO-16 PR. **CTO decision (02:54Z):** approve option (a) — `git rebase --onto origin/dev feature/SPO-16-backend-stat-expansion` post-SPO-16-merge, with **stop-on-conflict guardrail** (any conflict → comment, do not auto-resolve). **Still blocked on [SPO-16](/SPO/issues/SPO-16)** (`blockedByIssueIds=[SPO-16]`) — Forge auto-resumes via `issue_blockers_resolved` when SPO-16 closes. | blocked | Forge (auto-wakes) | `feature/SPO-18-spo16-followup-polish` (local, unpushed; rebase onto post-SPO-16 `dev` on unblock) |
+| [SPO-11](/SPO/issues/SPO-11) | [CTO] SPO-10 規劃: 擴充 event page 球員 prop stat types | Phase orchestrator. v1 ✅; v2 ❌; **v3 ✅ 23:19:44Z**. Monitoring Phase 3.5; blocked on [SPO-26](/SPO/issues/SPO-26). | blocked (`blockedBy=[SPO-26]`) | CTO | _(no code branch — orchestrator only)_ |
+| [SPO-26](/SPO/issues/SPO-26) | [Forge] SPO-10 Phase 3 backend gap: API route 12-metric expansion + /player-dd-history + /props/no-vig DD branch | Phase 3.5 implementation. Forge complete; Lens review pending. | in_review | Forge (held; Lens picks up review) | `feature/SPO-26-backend-route-12metric-expansion` |
+| [SPO-21](/SPO/issues/SPO-21) | [Sentinel] Triage 7 pre-existing backend test failures + 3 collection errors | Out-of-epic hygiene. Blocked on its own SPO-24/SPO-25 (SPO-22/23 already closed). SPO-25 closed 08:18Z; SPO-24 awaiting owner squash-merge. Will fully unblock when SPO-24 closes. | blocked | Sentinel | _(triage only — no branch)_ |
+| [SPO-24](/SPO/issues/SPO-24) | [Forge] Update test_prob.py regexes to match English error messages | Sub-ticket of SPO-21. Forge complete on `feature/SPO-24-test-prob-english-regex` (commit `d8f211f`, 25/25 tests pass, prod `prob.py` untouched). **Lens APPROVED 08:22Z** — branch base `35a25dd` is two commits behind `origin/dev` (`e36cb57`) but `git log 35a25dd..origin/dev -- backend/tests/test_prob.py backend/app/services/prob.py` is empty → squash-merge will be conflict-free. **THIS HEARTBEAT (08:24Z):** CTO reassigning to CEO (`in_review`) for owner Eason's squash-merge to `dev` (conventional prefix `fix(test):`). | in_review | CEO (held; awaiting Eason squash-merge) | `feature/SPO-24-test-prob-english-regex` (local, commit `d8f211f`) |
 
 ---
 
@@ -27,9 +28,9 @@
 
 | Ticket | Blocker | Action needed |
 |---|---|---|
-| [SPO-10](/SPO/issues/SPO-10) | Phase 2A done (SPO-15 closed); **Phase 2B squash-merge stalled with Eason ~5 days**. Epic stays blocked until Phase 5 (Lens) closes — by design. | **Eason: squash-merge `feature/SPO-16-backend-stat-expansion` → `origin/dev`.** Lens APPROVED 2026-05-03T02:34Z; tests still green per Lens. After merge lands, CTO auto-wakes on `issue_blockers_resolved` for SPO-11 (→ Phase 3 dispatch) and SPO-18 (→ Forge polish-rebase). Plan-tier upgrade is parallel and on Eason's plate (no agent dependency). |
-| [SPO-11](/SPO/issues/SPO-11) | Blocked on [SPO-16](/SPO/issues/SPO-16). Plan v3 accepted; CTO is phase orchestrator monitoring only. | None for owner. CTO auto-wakes on SPO-16 close. |
-| [SPO-16](/SPO/issues/SPO-16) | Awaiting Eason squash-merge of `feature/SPO-16-backend-stat-expansion` → `dev`. | Eason: review the branch (Lens already verified diff + tests + end-to-end repro), squash-merge, signal back when in `dev`. Phase 3 frontend dispatch is gated on TBD-trunk verification (`git fetch origin dev && git log origin/dev --oneline | grep SPO-16`). |
+| [SPO-24](/SPO/issues/SPO-24) | Lens APPROVED, ready to merge. CTO cannot push/merge per role. | **Owner Eason: squash-merge `feature/SPO-24-test-prob-english-regex` (commit `d8f211f`) into `dev` with conventional prefix `fix(test):`, then close SPO-24 as `done`.** Closing SPO-24 also auto-resolves [SPO-21](/SPO/issues/SPO-21)'s last blocker → Sentinel triage closure unblocks. |
+| [SPO-10](/SPO/issues/SPO-10) | Phase 3.5 in review ([SPO-26](/SPO/issues/SPO-26)). Epic stays blocked until Phase 5 (Lens-final) closes — by design. | None for owner now. CTO auto-wakes on SPO-26 close → opens Phase 4 (Sentinel). |
+| [SPO-11](/SPO/issues/SPO-11) | Blocked on [SPO-26](/SPO/issues/SPO-26). Plan v3 accepted; CTO is phase orchestrator monitoring only. | None for owner. CTO auto-wakes on SPO-26 close. |
 
 ---
 
@@ -37,12 +38,20 @@
 
 | Ticket | Closed | Summary doc |
 |---|---|---|
-| [SPO-15](/SPO/issues/SPO-15) | 2026-05-08 (closed by CEO) | Forge Phase 2A audit: live ground-truth = 500/mo free tier; current 4-mkt scheduler-bound burn = **3 520/mo** (7.04× free); 12-mkt post-merge worst-case = **10 560/mo** (21.1× free). All 4 acceptance criteria met; anti-hallucination guard satisfied; per-market billing model independently confirmed (1-unit live test). Override 2 chain executed: CTO `[audit-reviewed]` 02:46Z → CEO routed to Eason → Eason ack'd 2026-05-08T01:14Z → CEO closed 01:15Z. Plan-tier upgrade and `ODDS_API_KEY` rotation on Eason's plate (Q3 pre-approved). Audit doc: `docs/task-summaries/SPO-15-snapshot-cadence-audit.md` (TL;DR row delta-vs-absolute mislabel fixed by Forge in `bb71d2f`). Audit numbers reflected in [SPO-11 plan v3 Appendix A](/SPO/issues/SPO-11#document-plan) (revision 4). Four §7 follow-ups (hot-key prewarm hardening, daily-analysis bundled-markets URL, cache-TTL Lens reconciliation, periodic snapshot-logs SQL report) deferred to post-SPO-10-close — registered, not yet ticketed. |
-| [SPO-19](/SPO/issues/SPO-19) | 2026-05-03 (auto-resolved) | Paperclip auto-generated productivity review for SPO-15 (`long_active_duration` trigger fired at 6h CEO-active mark while waiting for Eason ack). System housekeeping ticket; auto-closed at 08:55Z when SPO-15 progressed. No CTO action required. |
-| [SPO-17](/SPO/issues/SPO-17) | 2026-05-03 | Forge must-fix for SPO-16: added `ra→r_a`, `pr→p_r`, `pa→p_a` to `daily_analysis.PROJECTION_FIELD_ALIASES`; replaced negative `test_combos_not_aliased` with positive `test_combos_aliased` + walking-coverage `test_every_supported_market_metric_resolves_in_projection`. 106 passed. Lens re-review APPROVED. Recorded inline in `docs/task-summaries/SPO-16-backend-stat-expansion.md` §SPO-17 Forge fix. |
-| [SPO-12](/SPO/issues/SPO-12) | 2026-05-02 | Scout: research The Odds API NBA player props 9 candidate markets (curl-evidenced). 6/9 hard-supported, 2/9 schema-valid+empty (FTM/FGM), 1/9 not in schema (3PA). Per-market billing confirmed. See `docs/research/event-page-stat-expansion/research_odds_api_markets.md` and `docs/task-summaries/SPO-12-odds-api-9-markets-research.md`. |
-| [SPO-13](/SPO/issues/SPO-13) | 2026-05-02 (cancelled by CEO) | Scout-created CTO follow-up duplicate; Phase 1.5 deliverable lives on SPO-11 plan v2 + `decision_20260502_market-key-feasibility.md`. |
-| [SPO-14](/SPO/issues/SPO-14) | 2026-05-02 (cancelled by CEO) | Exact duplicate of SPO-13 (created 42s later by Scout retry collision). |
+| [SPO-25](/SPO/issues/SPO-25) | 2026-05-08T08:18Z (closed) | Forge content-based reason assertions for `test_agent_chat.py`. Sub-ticket of SPO-21 closed cleanly after Forge handoff nudge. |
+| [SPO-27](/SPO/issues/SPO-27) | 2026-05-08T08:20Z (closed) | Productivity review for SPO-24. Manager decision: productive — 6h timer was stale-status artifact (Forge→Lens assignee PATCH missed at run-exit due to branch-thrash), not actual churn. |
+| [SPO-28](/SPO/issues/SPO-28) | 2026-05-08T08:13Z (closed) | Productivity review for SPO-25. Same playbook as SPO-27. |
+| [SPO-23](/SPO/issues/SPO-23) | 2026-05-08T02:31Z (closed) | Forge sys.path fix recovered after branch-thrash; task summary committed at `154cc64` (visible on `origin/dev`). Forge→Lens handoff worked correctly here. |
+| [SPO-22](/SPO/issues/SPO-22) | 2026-05-08T02:18Z (closed) | Forge sys.path off-by-one fix; superseded operationally by SPO-23. |
+| [SPO-20](/SPO/issues/SPO-20) | 2026-05-08T06:09Z (closed by CEO) | Phase 3 Forge frontend: 12-tile `MarketSelect` w/ Single/Combo/Binary visual grouping; `PlayerDDTile.tsx` (NEW); `lib/schemas.ts` extended w/ `r_a/p_r/p_a` (NOT `dd` — anti-hallucination guard intact); FTM/FGM empty-bookmakers UX; 39/39 tests pass, `tsc` clean, lint clean. Eason squash-merged 06:07Z (PR #3, merge `e36cb57`). Discovered backend API-layer gap → spawned [SPO-26](/SPO/issues/SPO-26). |
+| [SPO-18](/SPO/issues/SPO-18) | 2026-05-08T02:07Z (closed) | Tail polish on Phase 2B: dispatcher hardening; `# pragma: SPO-18 follow-up` grep marker; `single_leg_devig` docstring rounding fix. Commits `5ff02e2` + `257591a` landed in `dev` via the post-SPO-16 squash-merge `35a25dd`. |
+| [SPO-16](/SPO/issues/SPO-16) | 2026-05-08T01:50Z (squash-merged + closed) | Phase 2B backend services: 8 new markets, DD binary parser, FTM/FGM empty handling, FGM disambiguation integration test, derived projection fields. Lens MUST FIX → SPO-17. **Gap discovered post-merge** → SPO-26. Branch squash-merged to `dev` (merge `35a25dd`). |
+| [SPO-15](/SPO/issues/SPO-15) | 2026-05-08 (closed by CEO) | Forge Phase 2A audit: live ground-truth = 500/mo free tier; current 4-mkt scheduler-bound burn = **3 520/mo** (7.04× free); 12-mkt post-merge worst-case = **10 560/mo** (21.1× free). Plan-tier upgrade and `ODDS_API_KEY` rotation on Eason's plate (Q3 pre-approved). |
+| [SPO-19](/SPO/issues/SPO-19) | 2026-05-03 (auto-resolved) | Productivity review for SPO-15; auto-closed at 08:55Z when SPO-15 progressed. |
+| [SPO-17](/SPO/issues/SPO-17) | 2026-05-03 | Forge must-fix for SPO-16: `ra→r_a`, `pr→p_r`, `pa→p_a` aliases; positive walking-coverage test. Lens re-review APPROVED. |
+| [SPO-12](/SPO/issues/SPO-12) | 2026-05-02 | Scout: research The Odds API NBA player props 9 candidate markets. 6/9 hard-supported, 2/9 schema-valid+empty (FTM/FGM), 1/9 not in schema (3PA). |
+| [SPO-13](/SPO/issues/SPO-13) | 2026-05-02 (cancelled by CEO) | Scout-created CTO follow-up duplicate. |
+| [SPO-14](/SPO/issues/SPO-14) | 2026-05-02 (cancelled by CEO) | Exact duplicate of SPO-13. |
 | [SPO-1](/SPO/issues/SPO-1) | 2026-05-02 | Hire your first engineer + hiring plan (parent epic). |
 | [SPO-2](/SPO/issues/SPO-2) | 2026-05-02 | Architecture proposal: stack, topology, build-vs-buy. |
 | [SPO-4](/SPO/issues/SPO-4) | 2026-05-02 | Compliance & licensing technical checklist v1. |
@@ -59,97 +68,56 @@
 
 | Time | Ticket | Action | Note |
 |---|---|---|---|
-| 2026-05-08T01:14Z | [SPO-15](/SPO/issues/SPO-15) | comment **ack** (owner Eason via local-board) | Eason ack'd CEO's plan-tier upgrade heads-up — comment `5adb0bec`. CEO treated as "received, will handle" per Override 2 protocol; closed SPO-15 as `done` at 01:15Z. Plan-tier upgrade exits Paperclip purview (Eason rotates `ODDS_API_KEY` directly). |
-| 2026-05-03T08:55Z | [SPO-19](/SPO/issues/SPO-19) | auto-resolved | Paperclip productivity-review system ticket for SPO-15; auto-closed when SPO-15 progressed. Not Eason-authored. |
-| 2026-05-03T02:34Z | [SPO-16](/SPO/issues/SPO-16) | comment via local-board (Lens reviewer agent posting on board persona) | "APPROVED — must-fix verified, ready for CTO sign-off + squash-merge" — re-ran tests (46+160 pass), independent end-to-end repro 0 None values, deferred 3 [SUGGESTION] items handed back to CTO. **Note: SPO-16 has had no Eason action since this comment** — branch still awaiting squash-merge as of 2026-05-08T01:18Z (5 days). |
-| 2026-05-02T23:32Z | [SPO-15](/SPO/issues/SPO-15) | comment via local-board (Forge audit deliverable handoff) | "SPO-15 audit complete — handed off to CTO for Override 2 action" — 500 units/month free tier ground-truth, 10.6× current burn, post-12-market projection. |
-| 2026-05-02T23:19Z | [SPO-11](/SPO/issues/SPO-11) | confirmation **accepted** (owner Eason via local-board) | Plan v3 accepted cleanly. FGM hypothesis implicitly confirmed. CTO opened [SPO-16](/SPO/issues/SPO-16) at 23:26Z. |
-| 2026-05-02T23:12Z | [SPO-11](/SPO/issues/SPO-11) | comment (owner Eason via local-board) | "可以直接執行計劃了" + (separately) reject reason on confirmation `f4fa39da`: "FTM (`player_frees_made`) + FGA (`player_field_goals`) 也要在phase 1做完". |
-| 2026-05-02T23:05Z | [SPO-11](/SPO/issues/SPO-11) | confirmation **rejected** (owner Eason via local-board) | Plan v2 rejected with reason locking FTM/FGA into Phase 1; Q3 ("我之後會升級，現在你先不用管成本問題" → quota plan upgrade pre-approved). |
-| 2026-05-02T23:08Z | [SPO-11](/SPO/issues/SPO-11) | CEO routing comment to Eason re plan v2 | New ask: Q3 budget pre-positioning. Resolved by Eason at 23:05Z reject (pre-approved). |
-| 2026-05-02T22:42Z | [SPO-12](/SPO/issues/SPO-12) | comment (owner Eason via local-board) | "the odds api 的 document其實是有FTM的，但是可能今天這場比賽剛好沒有。其他我看過都沒問題了" — flagged FTM canonical key |
-| 2026-05-02T20:43Z | [SPO-12](/SPO/issues/SPO-12) | comment (owner Eason via local-board) | Scout deliverable summary repost — research signed off |
-| 2026-05-02T20:31Z | [SPO-11](/SPO/issues/SPO-11) | confirmation accepted (owner Eason via local-board) | Phase 0 plan v1 approved; CTO dispatched [SPO-12](/SPO/issues/SPO-12) (Scout) |
-| 2026-05-02T20:00Z | [SPO-10](/SPO/issues/SPO-10) | created (owner Eason) | event page 需 9 個新球員 stat type；先研究、再整合 API |
+| 2026-05-08T06:07Z | [SPO-20](/SPO/issues/SPO-20) | **squash-merge** (owner Eason via GitHub PR #3, merge `e36cb57`) | "merged SPO-20 到 dev了" — Phase 3 frontend landed in `dev`. |
+| 2026-05-08T02:50Z | [SPO-20](/SPO/issues/SPO-20) | comment "現在完成了哪些事情，我現在要做什麼" (owner Eason via local-board) | Eason asked CEO for status. CEO answered with full Phase 3 deliverable summary + flagged backend API-layer gap. |
+| 2026-05-08T~01:54Z | [SPO-16](/SPO/issues/SPO-16) | **squash-merge** (owner Eason via GitHub) | Eason squash-merged `feature/SPO-18-spo16-followup-polish` PR #1 into `origin/dev` (merge `35a25dd`). |
+| 2026-05-08T01:14Z | [SPO-15](/SPO/issues/SPO-15) | comment **ack** (owner Eason via local-board) | Eason ack'd CEO's plan-tier upgrade heads-up — comment `5adb0bec`. |
+| 2026-05-03T08:55Z | [SPO-19](/SPO/issues/SPO-19) | auto-resolved | System-authored productivity review (not Eason). |
+| 2026-05-03T02:34Z | [SPO-16](/SPO/issues/SPO-16) | comment via local-board (Lens reviewer agent posting on board persona) | "APPROVED — must-fix verified, ready for CTO sign-off + squash-merge". |
+| 2026-05-02T23:32Z | [SPO-15](/SPO/issues/SPO-15) | comment via local-board (Forge audit deliverable handoff) | "SPO-15 audit complete — handed off to CTO for Override 2 action". |
+| 2026-05-02T23:19Z | [SPO-11](/SPO/issues/SPO-11) | confirmation **accepted** (owner Eason via local-board) | Plan v3 accepted cleanly. |
+| 2026-05-02T23:12Z | [SPO-11](/SPO/issues/SPO-11) | comment (owner Eason via local-board) | "可以直接執行計劃了" + reject reason on confirmation `f4fa39da`: "FTM + FGA 也要在phase 1做完". |
+| 2026-05-02T23:05Z | [SPO-11](/SPO/issues/SPO-11) | confirmation **rejected** (owner Eason via local-board) | Plan v2 rejected; FTM/FGA into Phase 1; Q3 plan upgrade pre-approved. |
+| 2026-05-02T22:42Z | [SPO-12](/SPO/issues/SPO-12) | comment (owner Eason via local-board) | Flagged FTM canonical key. |
+| 2026-05-02T20:43Z | [SPO-12](/SPO/issues/SPO-12) | comment (owner Eason via local-board) | Scout deliverable summary repost — research signed off. |
+| 2026-05-02T20:31Z | [SPO-11](/SPO/issues/SPO-11) | confirmation accepted (owner Eason via local-board) | Phase 0 plan v1 approved. |
+| 2026-05-02T20:00Z | [SPO-10](/SPO/issues/SPO-10) | created (owner Eason) | event page 需 9 個新球員 stat type；先研究、再整合 API. |
 
-> Owner-created tickets are inferred from `originKind=manual` plus owner-authored description. Note: comments authored via the `local-board` user identity by **reviewer agents** (e.g. Lens) appear with that actor type because the local adapter routes board-persona posts through the same user shim. The Note column disambiguates author when relevant. Latest **Eason-authored** action: 2026-05-08T01:14Z SPO-15 ack. Latest Eason-authored action **on a code merge**: none yet — SPO-16 squash-merge is the open ask.
-
----
-
-## This-heartbeat note (CTO 2026-05-08T01:18Z, run on SPO-15 `issue_comment_mentioned` wake — CEO `[closed]` notification, inert response)
-
-CEO posted `[closed]` on SPO-15 at 2026-05-08T01:15:36Z mentioning CTO + Forge as a CC (per audit §7 "CTO owns four follow-ups, post-SPO-10-close"). The mention is a status note, not a directive. Per harness rules: closed-issue mentions are inert by default; no comment posted; no self-assign.
-
-**Material state changes captured in this refresh:**
-
-1. **[SPO-15](/SPO/issues/SPO-15) closed `done` 2026-05-08T01:16Z** — full Override 2 chain executed cleanly (audit ship → CTO `[audit-reviewed]` → CEO route → Eason ack → CEO close). Moved to Recently completed; removed from Phase tickets in flight. Phase 2A is closed.
-2. **[SPO-16](/SPO/issues/SPO-16) squash-merge has stalled ~5 days with Eason** — verified by `git fetch origin && git log origin/dev | grep SPO-16` returning empty as of 01:18Z (`origin/dev` tip still `c2391c3`, predates SPO-16). Lens APPROVED 2026-05-03T02:34Z; no Eason follow-up since. Whole Phase 3+ chain (SPO-11 → Phase 3 frontend dispatch, SPO-18 → Forge rebase) is gated on this single merge.
-3. **[SPO-19](/SPO/issues/SPO-19)** — Paperclip auto-productivity-review system ticket for SPO-15 (`long_active_duration` trigger), auto-resolved 2026-05-03T08:55Z. System housekeeping; logged in Recently completed for visibility. Not actionable.
-
-**CTO action this heartbeat:** progress.md refresh only. NO comment on closed SPO-15 (inert), NO self-assign (mention is courtesy CC), NO action on SPO-16 (separate wake required — this wake is scoped to SPO-15), NO ticketing of audit §7 follow-ups (CEO comment explicitly says "not now, deferred to post-SPO-10-close per Phase 5 Lens-final").
-
-**Watch-item — SPO-16 stall (high priority, action-pending-on-next-suitable-wake):**
-
-5 days of silence on a Lens-APPROVED branch is worth a gentle CTO nudge to Eason on SPO-16, but **NOT in this heartbeat** (scoped to SPO-15). Trigger options for the nudge: (a) wait for the next CTO wake on any ticket, then comment on SPO-16; (b) Paperclip productivity-review system may auto-fire on SPO-16 if its `long_active_duration` threshold trips (likely already eligible at 5 days); (c) Eason may merge before either of the above. CTO does NOT initiate a heartbeat outside of a wake event — this stays parked on the watch-list, not as a TODO that gets executed without a wake.
-
-**Next-wake watch-items (carried from prior heartbeats, unchanged in substance):**
-
-- SPO-16 squash-merge to `dev` by Eason → triggers TWO `issue_blockers_resolved` wakes: (1) [SPO-11](/SPO/issues/SPO-11) → CTO opens Phase 3 (Forge frontend) ticket; (2) [SPO-18](/SPO/issues/SPO-18) → Forge executes the locked `git rebase --onto` plan (with stop-on-conflict guardrail; see 02:54Z heartbeat note below).
-- If Eason raises questions on SPO-16 before merging, CTO triages comment via wake.
-- Audit §7 follow-up tickets (4) get filed by CTO **after** SPO-10 closes (Phase 5 Lens-final), per the deferral confirmed by CEO in the 01:15Z `[closed]` comment.
+> Owner-created tickets are inferred from `originKind=manual` plus owner-authored description. Latest **Eason-authored** action: 2026-05-08T06:07Z SPO-20 squash-merge.
 
 ---
 
-## Earlier-heartbeat note (CTO 2026-05-03T02:54Z, run on [SPO-18](/SPO/issues/SPO-18) `issue_comment_mentioned` wake — Forge timing-race ack + rebase decision)
+## This-heartbeat note (CTO 2026-05-08T08:24Z, run on SPO-24 `issue_assigned` wake — Lens APPROVED handoff)
 
-Forge posted [comment 532e56ae](/SPO/issues/SPO-18#comment-532e56ae) at 02:52:19Z owning a timing-race procedural miss on SPO-18:
+Lens posted approval comment `d07da26b-…` at 08:22:53Z and reassigned [SPO-24](/SPO/issues/SPO-24) to CTO with status `in_review` for "squash-merge to dev". Lens's evidence:
 
-- 02:44:34Z — CTO defer comment posted (this CTO patched `blockedByIssueIds=[SPO-16]` to prevent Forge committing against pre-merge line numbers).
-- 02:46:52Z — Forge commit `5ff02e2` (impl: 3 polish edits) — Forge run `a096054f` started before the defer comment landed and did not re-read the thread mid-flight before committing.
-- 02:48:20Z — Forge commit `257591a` (task summary).
-- 02:49:37Z — Forge "complete on branch" comment.
-- 02:49:59Z — Forge run exited with `blockedByIssueIds=[SPO-16]` set.
+- Diff: 4 lines in `backend/tests/test_prob.py` (2 regex literals) + 1 new task summary doc (`docs/task-summaries/SPO-24-test-prob-english-regex.md`). Production `backend/app/services/prob.py` **untouched** per acceptance criteria (`git show --stat d8f211f` confirms).
+- Strings exact-match production: `prob.py:36` `"Odds cannot be 0"` ↔ test regex `"Odds cannot be 0"` ✓; `prob.py:103` `"Total probability cannot be 0"` ↔ test regex `"Total probability cannot be 0"` ✓.
+- Test execution local (`backend/.venv`, py3.13): 2/2 targeted PASS, 25/25 full `test_prob.py` PASS — no regressions.
+- Branch base `35a25dd` is two commits behind `origin/dev` (`e36cb57`); `git log 35a25dd..origin/dev -- backend/tests/test_prob.py backend/app/services/prob.py` is empty → squash-merge will be conflict-free.
 
-**Tangling check (verified by Forge, accepted by CTO):** the 2 SPO-18 commits live on a separate, unpushed local branch `feature/SPO-18-spo16-followup-polish` whose base is `feature/SPO-16-backend-stat-expansion` HEAD (`4f250b4`). They are NOT pushed, NOT referenced by any open PR, and Eason's squash-merge of SPO-16 → `dev` only touches the SPO-16 branch. Tangling risk = none.
+**CTO role boundary (refresher for future me):** AGENTS.md is explicit — *"You do NOT push, merge, or open PRs. Owner handles all remote git actions."* So Lens's "handoff for squash-merge" lands on me as a routing decision, not an execution one. The right action is to forward to the owner (Eason) via CEO triage, exactly the same handoff pattern used at every prior phase merge (SPO-16 `35a25dd`, SPO-20 `e36cb57`).
 
-**CTO decision this heartbeat — option (a) with stop-on-conflict guardrail:**
+**CTO actions this heartbeat:**
+- `progress.md` refreshed (this file) — moved SPO-25/27/28 to Recently Completed; updated SPO-24 row to `in_review` / CEO-held; updated SPO-21 row to reflect "only SPO-24 left"; added SPO-24 to Blocked/awaiting owner with the explicit owner action.
+- Reassigning [SPO-24](/SPO/issues/SPO-24) to CEO `27970cac-…` with `status=in_review` for owner Eason's squash-merge to `dev` (conventional prefix `fix(test):` per ticket's branching note).
+- Posting closing comment on SPO-24 documenting Lens approval + the explicit owner action + downstream cascade (SPO-24 done → SPO-21 unblocks).
 
-When [SPO-18](/SPO/issues/SPO-18) auto-wakes via `issue_blockers_resolved` (SPO-16 closes), Forge proceeds with:
+**Decision-log policy check:** No new architectural / library / external-API choice was made this heartbeat — the only "decision" was the routing one (Lens→CTO→CEO/owner), which is mechanical role enforcement, not a design call. So no new entry under `docs/decisions/<epic>/` is required per AGENTS.md output bar.
 
-```bash
-git fetch origin
-git log origin/dev --oneline | grep SPO-16   # verify squash-merge landed
-git checkout feature/SPO-18-spo16-followup-polish
-git rebase --onto origin/dev feature/SPO-16-backend-stat-expansion
-```
+**Watch-items for next wake:**
+- SPO-24 close — once Eason squash-merges, expect CEO to close as `done`. That auto-resolves SPO-21's last blocker (`issue_blockers_resolved` wake to Sentinel) — Sentinel can then close out the SPO-21 triage epic.
+- SPO-26 review by Lens — when Lens approves, CTO reassigns to CEO/owner for squash-merge. When SPO-26 lands in `dev`, CTO auto-wakes (children-completed on SPO-11) and opens Phase 4 (Sentinel) on the SPO-10 epic.
+- FGM disambiguation integration test still wired and waiting for first populated `player_field_goals` response.
+- Audit §7 follow-ups remain registered for post-SPO-10-close.
 
-**Why option (a) over option (b) (Forge's "discard branch + redo from clean `origin/dev`" alternative):**
-
-1. **`--onto` is the canonical replay-onto-different-base move.** Forge's existing 2 commits represent ~1 heartbeat of correct work; redoing them from scratch is waste-for-no-reason. The `--onto` form surgically picks the commit range `feature/SPO-16-backend-stat-expansion..feature/SPO-18-spo16-followup-polish` (i.e. exactly Forge's 2 SPO-18 commits) and replays them onto post-squash `origin/dev`.
-2. **Zero-conflict expected.** Post-squash `origin/dev` will contain identical content to `feature/SPO-16-backend-stat-expansion` HEAD `4f250b4` (squash preserves tree, only collapses commit history). The polish edits target line numbers (`odds_snapshot_service.py:389-415`, `:494`, `:575`, `prob.py:165`) introduced by SPO-16 — those line numbers + surrounding context will resolve cleanly.
-3. **Ticket §4 spec text "branch from `dev` AFTER squash-merge" describes the goal-state, not a literal procedure.** Goal = commits sitting on top of post-squash `dev`. The rebase achieves the same goal-state; literal-text fidelity here would be sunk-cost discipline, not principled discipline.
-
-**Stop-on-conflict guardrail (CTO addition Forge did NOT propose):** if `git rebase --onto` produces ANY conflict — even a trivial one — Forge stops, runs `git rebase --abort`, and posts a comment with conflict details. Conflicts would indicate Eason's squash either (a) edited content during the merge or (b) my premise about identical squash-tree is wrong. In that case we re-evaluate (likely fall back to option b: discard + redo from clean `dev`). Do **not** auto-resolve conflicts — the polish edits are line-targeted and silent semantic drift is the failure mode this guardrail prevents.
-
-**Procedural footnote on the timing race (no escalation):** Forge owned the miss publicly. The wake-payload mid-run-reread expectation is reasonable but has finite latency: Forge's checkout-and-act window started before my defer comment landed. Given (a) zero PR-tangling and (b) the cleanly-recoverable rebase path, this is a heartbeat-mechanics quirk, not a discipline issue. Closing the loop here.
-
-**Next-wake watch-items:**
-
-- SPO-16 squash-merge to `dev` by Eason → triggers TWO `issue_blockers_resolved` wakes: (1) [SPO-11](/SPO/issues/SPO-11) → CTO opens Phase 3 (Forge frontend) ticket; (2) [SPO-18](/SPO/issues/SPO-18) → Forge executes the rebase plan above.
-- SPO-15 close by CEO after Eason ack on plan-tier upgrade heads-up.
-- If Eason raises questions on SPO-16 before merging, CTO triages comment via wake.
+**Pre-existing dirty working-tree note:** the repo at `/Users/wuyusen/Documents/bet` is on branch `feature/SPO-26-backend-route-12metric-expansion` with uncommitted edits (this `progress.md` from prior heartbeat + `frontend/package-lock.json`) and two untracked task-summary files (`SPO-20-frontend-stat-expansion.md`, `SPO-21-test-suite-triage.md`). Those are NOT mine to touch this heartbeat — they pre-date this wake. Owner / appropriate IC will reconcile when SPO-26 merges.
 
 ---
 
-## Earlier-heartbeat note (CTO 2026-05-03T02:46Z, run on SPO-15 transient-retry wake — Override 2 routing chain shipped)
+## Earlier-heartbeat notes
 
-CTO Override 2 actions for SPO-15 audit (Forge handoff at 23:32Z, sat through 4 transient-Claude-rate-limit failed CTO retries before this heartbeat resolved):
-
-1. **`[audit-reviewed]` comment posted on [SPO-15](/SPO/issues/SPO-15)** (NOT `[audit-approved]` — Override 2 protocol). Audit accepted: 4/4 acceptance criteria met; live-counter ground-truth + per-market billing model independently confirmed; anti-hallucination citation chain intact.
-2. **SPO-15 reassigned to CEO** (`assigneeAgentId=27970cac-…`, status `in_review`) for Eason plan-tier upgrade heads-up. Q3 was pre-approved at 23:05Z, so this is a heads-up not a `request_confirmation`. CEO closes SPO-15 as `done` after Eason ack.
-3. **[SPO-11 plan v3 doc Appendix A added](/SPO/issues/SPO-11#document-plan)** (revision 4, `e35d5e3a-…`). Informational only — does not change v3 decisions; v3 stays accepted as-is. Numbers from audit are now reflected in the plan doc per Override 2 step 1, so future Phase 4/5 sub-tickets can reference them without re-deriving.
-4. **Docs-only nit logged**: audit doc's TL;DR row mislabels the delta (5 280) as the absolute current burn (3 520 per §1.1 body math — both numbers vastly exceed plan limit so recommendation unchanged). Forge has been asked (via SPO-15 comment) to fix in a docs-only follow-up commit when convenient. Not blocking SPO-16 / SPO-18 / Phase 3.
-5. **4 audit-§7 follow-up tickets NOT created this heartbeat** — deferred to post-SPO-10-close per audit author's recommendation. Listed in plan v3 Appendix A.5 as the register; CTO opens them after Phase 5 Lens-final closes the epic.
+Prior heartbeat narratives (2026-05-08T06:11Z Phase 3 close + Phase 3.5 spawn; 02:54Z SPO-18 timing-race + rebase decision; 02:46Z SPO-15 Override 2 routing) are preserved in the git history of this file's commits / stashes. Trim live document to current heartbeat + watch-items only.
 
 ---
 
