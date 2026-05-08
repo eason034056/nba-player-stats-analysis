@@ -90,6 +90,68 @@ describe("control readability refresh", () => {
     expect(screen.getByTitle("Player assists")).toHaveClass("control-tile");
   });
 
+  it("renders the SPO-20 12-tile selector with Single/Combo/Binary groups", () => {
+    renderWithProviders(
+      <MarketSelect value="player_points" onChange={vi.fn()} />,
+    );
+
+    // Group sections exist
+    expect(screen.getByText("Single Stats")).toBeInTheDocument();
+    expect(screen.getByText("Combo")).toBeInTheDocument();
+    expect(screen.getByText("Binary")).toBeInTheDocument();
+
+    // 12 tiles in total — pressed state on the selected tile, neutral on the rest
+    const allTiles = screen.getAllByRole("button");
+    expect(allTiles).toHaveLength(12);
+
+    // 7 Single tiles
+    expect(screen.getByTitle("Player points scored")).toBeInTheDocument();
+    expect(screen.getByTitle("Player rebounds")).toBeInTheDocument();
+    expect(screen.getByTitle("Player assists")).toBeInTheDocument();
+    expect(screen.getByTitle("Three-pointers made")).toBeInTheDocument();
+    expect(screen.getByTitle("Player steals")).toBeInTheDocument();
+    expect(screen.getByTitle("Free throws made")).toBeInTheDocument();
+    expect(
+      screen.getByTitle("Field goals made (working hypothesis: FGM)"),
+    ).toBeInTheDocument();
+
+    // 4 Combo tiles
+    expect(screen.getByTitle("Sum of three stats")).toBeInTheDocument();
+    expect(screen.getByTitle("Rebounds + Assists")).toBeInTheDocument();
+    expect(screen.getByTitle("Points + Rebounds")).toBeInTheDocument();
+    expect(screen.getByTitle("Points + Assists")).toBeInTheDocument();
+
+    // 1 Binary tile (DD) — Yes/No, no threshold
+    const ddTile = screen.getByTitle(
+      "Player records a double-double (Yes/No)",
+    );
+    expect(ddTile).toBeInTheDocument();
+    // DD is in the binary group section
+    const binaryGroup = ddTile.closest(
+      '[data-market-group="binary"]',
+    ) as HTMLElement | null;
+    expect(binaryGroup).not.toBeNull();
+    expect(within(binaryGroup!).getAllByRole("button")).toHaveLength(1);
+  });
+
+  it("flags the DD binary tile as selected via aria-pressed when chosen", () => {
+    renderWithProviders(
+      <MarketSelect value="player_double_double" onChange={vi.fn()} />,
+    );
+
+    const ddTile = screen.getByTitle(
+      "Player records a double-double (Yes/No)",
+    );
+    expect(ddTile).toHaveAttribute("aria-pressed", "true");
+    expect(ddTile).toHaveClass("control-tile-active");
+
+    // Other tiles stay neutral
+    expect(screen.getByTitle("Player points scored")).toHaveAttribute(
+      "aria-pressed",
+      "false",
+    );
+  });
+
   it("shows the console dropdown and selected player chip with readable state classes", async () => {
     const user = userEvent.setup();
 
