@@ -36,6 +36,7 @@ import { useAgentWidget } from "@/contexts/AgentWidgetContext";
 import { createAgentPickContextFromBetSlip } from "@/lib/agent-chat";
 import { getLineups } from "@/lib/api";
 import { buildEventDetailHref } from "@/lib/event-detail-link";
+import { metricToMarket } from "@/lib/metric-to-market";
 import { TeamLogo } from "@/components/TeamLogo";
 import { getCanonicalTeamCode, getShortTeamName } from "@/lib/team-logos";
 import { METRIC_DISPLAY_NAMES, DIRECTION_DISPLAY_NAMES, type TeamLineup } from "@/lib/schemas";
@@ -46,19 +47,6 @@ import { LineupStatusBadge } from "@/components/LineupStatusBadge";
 
 const SHARE_FONT_SANS = "system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif";
 const SHARE_FONT_MONO = "ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, monospace";
-
-/**
- * metric → market 轉換
- */
-function metricToMarket(metric: string): string {
-  switch (metric) {
-    case "points": return "player_points";
-    case "rebounds": return "player_rebounds";
-    case "assists": return "player_assists";
-    case "pra": return "player_points_rebounds_assists";
-    default: return "player_points";
-  }
-}
 
 /**
  * 機率等級判斷

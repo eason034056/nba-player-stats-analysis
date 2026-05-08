@@ -52,6 +52,7 @@ import { useBetSlip } from "@/contexts/BetSlipContext";
 import { createAgentPickContextFromDailyPick } from "@/lib/agent-chat";
 import { LineupStatusBadge } from "@/components/LineupStatusBadge";
 import { buildEventDetailHref } from "@/lib/event-detail-link";
+import { metricToMarket } from "@/lib/metric-to-market";
 
 /**
  * Probability confidence level
@@ -91,19 +92,6 @@ function formatEdge(edge: number | null | undefined, direction: string): { text:
   const favorable = direction === "over" ? edge > 0 : edge < 0;
   const sign = edge > 0 ? "+" : "";
   return { text: `${sign}${edge.toFixed(1)}`, favorable };
-}
-
-/**
- * metric → market conversion
- */
-function metricToMarket(metric: string): string {
-  switch (metric) {
-    case "points": return "player_points";
-    case "rebounds": return "player_rebounds";
-    case "assists": return "player_assists";
-    case "pra": return "player_points_rebounds_assists";
-    default: return "player_points";
-  }
 }
 
 /**
