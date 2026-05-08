@@ -1,10 +1,14 @@
-import os
 import sys
+from pathlib import Path
 
 import pytest
 
 
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+BACKEND_DIR = Path(__file__).resolve().parents[1]
+PROJECT_ROOT = BACKEND_DIR.parent
+for path in (str(BACKEND_DIR), str(PROJECT_ROOT)):
+    if path not in sys.path:
+        sys.path.insert(0, path)
 
 from app.services import lineup_source_support as source_support
 from scripts.agents.tools import historical
