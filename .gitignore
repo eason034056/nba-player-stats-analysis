@@ -26,6 +26,13 @@ eggs/
 .eggs/
 lib/
 lib64/
+# SPO-20 note: `lib/` (above) is the Python egg/setuptools convention but it
+# also sweeps up the Next.js frontend's `frontend/lib/` directory (api.ts,
+# schemas.ts, utils.ts, ...). Re-whitelist it explicitly so the frontend's
+# shared module layer is actually tracked. Without this, every PR that
+# touches `frontend/lib/*` silently drops the changes from the diff.
+!frontend/lib/
+!frontend/lib/**
 parts/
 sdist/
 var/

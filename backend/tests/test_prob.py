@@ -85,7 +85,7 @@ class TestAmericanToProb:
         
         美式賠率不能為 0，這是無效值
         """
-        with pytest.raises(ValueError, match="賠率不能為 0"):
+        with pytest.raises(ValueError, match="Odds cannot be 0"):
             american_to_prob(0)
     
     def test_large_negative_odds(self):
@@ -224,7 +224,7 @@ class TestDevig:
         """
         測試總和為 0 時應該拋出例外
         """
-        with pytest.raises(ValueError, match="機率總和不能為 0"):
+        with pytest.raises(ValueError, match="Total probability cannot be 0"):
             devig(0, 0)
 
 

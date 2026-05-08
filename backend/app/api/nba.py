@@ -25,6 +25,7 @@ from app.models.schemas import (
     PlayerSuggestResponse,
     CSVPlayersResponse,
     PlayerHistoryResponse,
+    PlayerDDHistoryResponse,
     HistogramBin,
     GameLog
 )
@@ -32,15 +33,30 @@ from app.services.odds_theoddsapi import odds_provider
 from app.services.odds_provider import OddsAPIError
 from app.services.cache import cache_service, CacheService
 from app.services.odds_gateway import odds_gateway, MarketSnapshotResult
+from app.services.odds_snapshot_service import BINARY_MARKET_KEYS
 from app.services.prob import (
     american_to_prob,
     calculate_vig,
     devig,
-    calculate_consensus_mean
+    calculate_consensus_mean,
+    single_leg_devig,
+    DEFAULT_BINARY_VIG,
 )
 from app.services.normalize import extract_player_names, find_player, suggest_players as suggest_player_names
-from app.services.csv_player_history import csv_player_service
+# CONTINUOUS_METRIC_EXTRACTORS is the canonical 11-key continuous-metric
+# dispatch table (SPO-16). Importing it directly keeps the API route's
+# valid_metrics in lockstep with the services layer — adding a new metric
+# to the extractor table automatically flows through to the route, removing
+# a place to forget. Binary metrics (currently `dd`) flow through their own
+# `/player-dd-history` endpoint, not this route.
+from app.services.csv_player_history import csv_player_service, CONTINUOUS_METRIC_EXTRACTORS
 from app.settings import settings
+
+
+# Binary-market sentinel for line value (no real bookmaker threshold for
+# Yes/No bets). Mirrors `odds_snapshot_service._parse_binary_market`'s
+# convention so /props/no-vig responses agree with snapshot-stored rows.
+_BINARY_LINE_SENTINEL = 0.5
 
 # Initialize router
 router = APIRouter(
@@ -71,6 +87,179 @@ def _collect_player_names(
                 if "description" in outcome:
                     player_set.add(outcome["description"])
     return sorted(player_set)
+
+
+def _build_binary_no_vig_response(
+    body: NoVigRequest,
+    snapshot: MarketSnapshotResult,
+    bookmakers_data: list[dict],
+    matched_player: str,
+) -> NoVigResponse:
+    """
+    Build a NoVigResponse for a binary Yes/No market (e.g. DD).
+
+    Mirrors the Over/Under flow's per-bookmaker loop, but:
+      1. Outcomes are matched by ``name in {"yes", "no"}`` (not over/under).
+      2. There is no `point` field — the response uses the
+         `_BINARY_LINE_SENTINEL` (0.5) and consumers must dispatch on
+         `body.market`, not the line value.
+      3. When only the Yes leg is posted, vig is approximated via
+         `single_leg_devig(p_yes_imp, DEFAULT_BINARY_VIG)`. If the prior
+         cannot be safely applied (extreme prices), THIS ROW IS NOT
+         EMITTED — the route does not surface a fabricated fair-prob
+         (anti-hallucination guard, decision §4 step 3). The aggregate
+         message names the omission so callers know data was withheld.
+
+    Both new explicit binary fields (`yes_price`, `p_yes_imp`,
+    `yes_fair_prob`, etc.) AND the legacy over/under fields are populated
+    on each emitted row. The legacy fields use the convention
+    "over = Yes leg, under = No leg" so existing frontend Zod parsers
+    keep working without schema changes.
+    """
+    results: List[BookmakerResult] = []
+    fair_probs_for_consensus: List[tuple] = []
+    rows_dropped_due_to_prior = 0
+
+    for bookmaker in bookmakers_data:
+        bookmaker_key = bookmaker.get("key", "unknown")
+
+        for market in bookmaker.get("markets", []):
+            if market.get("key") != body.market:
+                continue
+
+            # Collect Yes/No outcomes for the matched player.
+            yes_outcome: Optional[dict] = None
+            no_outcome: Optional[dict] = None
+            for outcome in market.get("outcomes", []):
+                if outcome.get("description") != matched_player:
+                    continue
+                outcome_name = outcome.get("name", "").lower()
+                if outcome_name == "yes":
+                    yes_outcome = outcome
+                elif outcome_name == "no":
+                    no_outcome = outcome
+
+            # Without a Yes price there is nothing to anchor any de-vig
+            # calculation on; skip this bookmaker rather than fabricate.
+            if yes_outcome is None:
+                continue
+
+            yes_price = yes_outcome.get("price", 0)
+            if yes_price == 0:
+                continue
+            no_price_raw = no_outcome.get("price", 0) if no_outcome is not None else 0
+
+            try:
+                p_yes_imp = american_to_prob(yes_price)
+                no_price: Optional[float]
+                p_no_imp: Optional[float]
+
+                if no_price_raw != 0:
+                    # Both legs posted — derive vig directly from the leg
+                    # pair, matching the Over/Under flow's higher-fidelity
+                    # path. No prior assumption needed.
+                    no_price = float(no_price_raw)
+                    p_no_imp = american_to_prob(no_price_raw)
+                    vig = calculate_vig(p_yes_imp, p_no_imp)
+                    p_yes_fair, p_no_fair = devig(p_yes_imp, p_no_imp)
+                else:
+                    # Only Yes posted — apply the league-average prior.
+                    # When the prior cannot be safely applied (extreme
+                    # prices, see prob.single_leg_devig), DO NOT publish
+                    # a fabricated fair-prob — drop the row instead.
+                    no_price = None
+                    p_no_imp = None
+                    p_yes_fair = single_leg_devig(p_yes_imp, DEFAULT_BINARY_VIG)
+                    if p_yes_fair is None:
+                        rows_dropped_due_to_prior += 1
+                        continue
+                    # Once Yes fair is computed, No fair is the exact
+                    # mathematical complement (probabilities of a binary
+                    # outcome must sum to 1) — not a fabrication.
+                    p_no_fair = 1.0 - p_yes_fair
+                    vig = DEFAULT_BINARY_VIG  # the prior we assumed
+
+                # Build the row. Legacy over/under fields encode
+                # "over = Yes" / "under = No" so the existing schema
+                # surface keeps working; new explicit yes_*/no_* fields
+                # provide self-documenting access for SPO-26-aware callers.
+                # `under_odds` falls back to `yes_price` as a non-null
+                # placeholder ONLY when the No leg isn't posted; consumers
+                # MUST dispatch on `market` and ignore under_odds for
+                # binary markets in that case (mirrors the snapshot
+                # service's 0.5/None convention).
+                under_odds_for_legacy = float(no_price) if no_price is not None else float(yes_price)
+                p_under_imp_for_legacy = p_no_imp if p_no_imp is not None else (1.0 - p_yes_imp)
+
+                results.append(
+                    BookmakerResult(
+                        bookmaker=bookmaker_key,
+                        line=_BINARY_LINE_SENTINEL,
+                        over_odds=float(yes_price),
+                        under_odds=under_odds_for_legacy,
+                        p_over_imp=round(p_yes_imp, 4),
+                        p_under_imp=round(p_under_imp_for_legacy, 4),
+                        vig=round(vig, 4),
+                        p_over_fair=round(p_yes_fair, 4),
+                        p_under_fair=round(p_no_fair, 4),
+                        fetched_at=snapshot.fetched_at,
+                        # Explicit binary mirrors — preferred for new
+                        # consumers (e.g. SPO-20 PlayerDDTile).
+                        yes_price=float(yes_price),
+                        no_price=no_price,
+                        p_yes_imp=round(p_yes_imp, 4),
+                        p_no_imp=round(p_no_imp, 4) if p_no_imp is not None else None,
+                        yes_fair_prob=round(p_yes_fair, 4),
+                        no_fair_prob=round(p_no_fair, 4),
+                    )
+                )
+                fair_probs_for_consensus.append((p_yes_fair, p_no_fair))
+
+            except (ValueError, ZeroDivisionError):
+                # american_to_prob rejects 0 odds; defensive fallthrough.
+                continue
+
+    # Consensus across bookmakers. For binary markets, the legacy
+    # p_over_fair/p_under_fair carry Yes/No values; we ALSO populate the
+    # explicit p_yes_fair/p_no_fair mirrors.
+    consensus: Optional[Consensus] = None
+    if fair_probs_for_consensus:
+        consensus_probs = calculate_consensus_mean(fair_probs_for_consensus)
+        if consensus_probs:
+            yes_fair_consensus = round(consensus_probs[0], 4)
+            no_fair_consensus = round(consensus_probs[1], 4)
+            consensus = Consensus(
+                method="mean",
+                p_over_fair=yes_fair_consensus,
+                p_under_fair=no_fair_consensus,
+                p_yes_fair=yes_fair_consensus,
+                p_no_fair=no_fair_consensus,
+            )
+
+    # Aggregate message: distinguish "no inventory at all" from "inventory
+    # existed but the prior could not safely be applied". The latter is the
+    # honest equivalent of "yes_fair_prob is null" — we drop the row rather
+    # than fabricate, and surface the omission explicitly.
+    if results:
+        message = None
+    elif rows_dropped_due_to_prior > 0:
+        message = (
+            f"Single-leg Yes posted by {rows_dropped_due_to_prior} bookmaker(s), "
+            "but the league-average vig prior could not be safely applied; "
+            "fair probability withheld (not fabricated)."
+        )
+    else:
+        message = "No props data for this player at the selected bookmakers"
+
+    return NoVigResponse(
+        event_id=body.event_id,
+        player_name=matched_player,
+        market=body.market,
+        results=results,
+        consensus=consensus,
+        message=message,
+        **_snapshot_metadata(snapshot),
+    )
 
 
 @router.get(
@@ -314,6 +503,21 @@ async def calculate_no_vig(request: Request, body: NoVigRequest) -> NoVigRespons
                 consensus=None,
                 message=message,
                 **_snapshot_metadata(snapshot),
+            )
+
+        # ⚠ Dispatch on market shape: binary Yes/No markets (e.g.
+        # `player_double_double`) have a fundamentally different outcome
+        # shape (`name=Yes|No`, no `point` field) and cannot share the
+        # Over/Under parsing path below. Force them through the dedicated
+        # helper, which handles single-leg-only quotes via
+        # `single_leg_devig` and refuses to fabricate fair probabilities
+        # when the prior fails (decision_20260502_market-key-feasibility §4).
+        if body.market in BINARY_MARKET_KEYS:
+            return _build_binary_no_vig_response(
+                body=body,
+                snapshot=snapshot,
+                bookmakers_data=bookmakers_data,
+                matched_player=matched_player,
             )
 
         # 4. Calculate no-vig probabilities for each bookmaker
@@ -655,12 +859,25 @@ async def get_player_history(
             "histogram": [...]
         }
     """
-    # Validate metric param
-    valid_metrics = ["points", "assists", "rebounds", "pra"]
+    # 💡 Validate metric param against the services-layer dispatch table
+    # so the route stays in lockstep with whatever continuous metrics the
+    # service supports. SPO-16 expanded this to 11 continuous keys; future
+    # additions to CONTINUOUS_METRIC_EXTRACTORS flow through automatically.
+    # Binary metrics (currently only `dd`) flow through `/player-dd-history`,
+    # not this route — the error message points there explicitly so a
+    # mistaken `metric=dd` caller doesn't silently fail.
+    valid_metrics = sorted(CONTINUOUS_METRIC_EXTRACTORS.keys())
     if metric not in valid_metrics:
+        hint = ""
+        # ⚠ Catch the most likely caller bug: passing a binary key here.
+        if metric == "dd" or metric == "double_double":
+            hint = (
+                " — DD is a binary outcome (Yes/No), not Over/Under. "
+                "Use GET /api/nba/player-dd-history instead."
+            )
         raise HTTPException(
             status_code=400,
-            detail=f"Invalid metric: {metric}. Valid: {valid_metrics}"
+            detail=f"Invalid metric: {metric}. Valid: {valid_metrics}{hint}"
         )
     
     try:
@@ -737,4 +954,75 @@ async def get_player_history(
         raise HTTPException(
             status_code=500,
             detail=f"Calculation failed: {str(e)}"
+        )
+
+
+@router.get(
+    "/player-dd-history",
+    response_model=PlayerDDHistoryResponse,
+    summary="Get player Double-Double historical rate",
+    description=(
+        "Compute historical P(DD = 1) for a player from CSV game logs. "
+        "DD is binary (Yes/No) — there is no threshold; use this endpoint "
+        "instead of /player-history when the user picks the DD market."
+    ),
+)
+async def get_player_dd_history(
+    player: str = Query(..., description="Player name (fuzzy-matched if exact match fails)"),
+    season: Optional[str] = Query(
+        default=None,
+        description="Season filter (e.g. '2024-25'); None means use all seasons",
+    ),
+) -> PlayerDDHistoryResponse:
+    """
+    Get player Double-Double historical rate.
+
+    GET /api/nba/player-dd-history?player=Nikola+Jokic&season=2024-25
+
+    Delegates to ``csv_player_history.player_dd_history()``. DD definition
+    follows the standard NBA convention (≥10 in at least 2 of
+    {PTS, REB, AST, STL, BLK}). DNP games are excluded.
+
+    Args:
+        player: Player name
+        season: Optional season filter (e.g. "2024-25")
+
+    Returns:
+        PlayerDDHistoryResponse with prob_dd, dd_games, n_games, message.
+    """
+    # ⚠ Anti-hallucination guard: DO NOT accept a `threshold` query param —
+    # the services-layer method explicitly rejects non-None threshold to
+    # catch callers wiring DD through the Over/Under flow by mistake.
+    try:
+        stats = csv_player_service.player_dd_history(
+            player_name=player,
+            season=season,
+        )
+
+        return PlayerDDHistoryResponse(
+            player=stats["player"],
+            season=stats.get("season"),
+            n_games=stats.get("n_games", 0),
+            dd_games=stats.get("dd_games", 0),
+            prob_dd=stats.get("prob_dd"),
+            message=stats.get("message"),
+        )
+
+    except FileNotFoundError as e:
+        raise HTTPException(
+            status_code=404,
+            detail=str(e),
+        )
+    except ValueError as e:
+        # 💡 Defensive: services-layer raises ValueError on misuse (e.g.
+        # threshold passed). The route doesn't expose threshold today,
+        # but surface the error rather than 500 if it ever leaks.
+        raise HTTPException(
+            status_code=400,
+            detail=str(e),
+        )
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"DD history calculation failed: {str(e)}",
         )
