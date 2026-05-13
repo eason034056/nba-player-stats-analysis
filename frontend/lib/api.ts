@@ -360,7 +360,80 @@ export async function getPlayerHistory(
   const data = await fetchApi<PlayerHistoryResponse>(
     `/api/nba/player-history?${params}`
   );
-  
+
+  return playerHistoryResponseSchema.parse(data);
+}
+
+
+// ==================== WNBA CSV 球員歷史數據 API (SPO-32 Phase 1) ====================
+// 💡 WNBA 端點為 NBA 的姊妹路由：相同 schema、相同回應格式。
+// 之所以不參數化 getCSVPlayers/getPlayerHistory 加 league 參數，是因為
+// Phase 2-6 還會引入 /api/wnba/events、/api/wnba/props 等更多端點，
+// 而 NBA 端點已有 daily-picks/projections 等不在 WNBA 範疇的調用，
+// 強行統一介面會 leak 出兩邊都沒實作的功能。並列函式比假裝對稱乾淨。
+
+/**
+ * Get WNBA player names from CSV.
+ *
+ * GET /api/wnba/csv/players
+ */
+export async function getWNBACSVPlayers(
+  query?: string
+): Promise<CSVPlayersResponse> {
+  const params = new URLSearchParams();
+  if (query) {
+    params.set("q", query);
+  }
+
+  const queryString = params.toString();
+  const url = queryString
+    ? `/api/wnba/csv/players?${queryString}`
+    : "/api/wnba/csv/players";
+
+  const data = await fetchApi<CSVPlayersResponse>(url);
+  return csvPlayersResponseSchema.parse(data);
+}
+
+/**
+ * Get WNBA player historical stats.
+ *
+ * GET /api/wnba/player-history
+ */
+export async function getWNBAPlayerHistory(
+  request: PlayerHistoryRequest
+): Promise<PlayerHistoryResponse> {
+  const params = new URLSearchParams({
+    player: request.player,
+    metric: request.metric,
+    threshold: request.threshold.toString(),
+  });
+
+  if (request.n !== undefined) {
+    params.set("n", request.n.toString());
+  }
+  if (request.bins !== undefined) {
+    params.set("bins", request.bins.toString());
+  }
+  if (request.exclude_dnp !== undefined) {
+    params.set("exclude_dnp", request.exclude_dnp.toString());
+  }
+  if (request.opponent) {
+    params.set("opponent", request.opponent);
+  }
+  if (request.is_starter !== undefined) {
+    params.set("is_starter", request.is_starter.toString());
+  }
+  if (request.teammate_filter && request.teammate_filter.length > 0) {
+    params.set("teammate_filter", request.teammate_filter.join(","));
+  }
+  if (request.teammate_played !== undefined) {
+    params.set("teammate_played", request.teammate_played.toString());
+  }
+
+  const data = await fetchApi<PlayerHistoryResponse>(
+    `/api/wnba/player-history?${params}`
+  );
+
   return playerHistoryResponseSchema.parse(data);
 }
 
