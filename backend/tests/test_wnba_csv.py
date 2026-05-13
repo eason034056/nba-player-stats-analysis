@@ -236,3 +236,109 @@ class TestAnchorPlayerDD:
                 player_name=ANCHOR_PLAYER,
                 threshold=10.5,
             )
+
+
+# ---------------------------------------------------------------------------
+# Route-level coverage (SPO-32 Lens followup)
+# ---------------------------------------------------------------------------
+# Lens flagged that the original test suite only exercised the service
+# layer, which let a wrong-content wnba.py slip past green tests. The
+# tests below assert at the HTTP boundary using FastAPI's TestClient, so
+# a future agent cannot swap the file content for an unrelated route set
+# and still ship green.
+
+
+@pytest.fixture(scope="module")
+def client():
+    """TestClient against the real FastAPI app. Loaded once per module."""
+    from fastapi.testclient import TestClient
+    from app.main import app
+    return TestClient(app)
+
+
+class TestWNBARoutesRegistered:
+    """The four Phase 1 endpoints must be wired into the FastAPI app."""
+
+    def test_all_four_endpoints_in_routes(self, client):
+        # Catches the most catastrophic Lens-found bug: a file with the
+        # right name but wrong content would still pass service-only
+        # tests but fail this assertion.
+        paths = {r.path for r in client.app.routes if hasattr(r, "path")}
+        expected = {
+            "/api/wnba/csv/players",
+            "/api/wnba/csv/reload",
+            "/api/wnba/player-history",
+            "/api/wnba/player-dd-history",
+        }
+        missing = expected - paths
+        assert not missing, f"Missing WNBA routes: {sorted(missing)}"
+
+
+class TestWNBARoutesEndToEnd:
+    """HTTP-level smoke tests against the anchor player."""
+
+    def test_csv_players_returns_anchor(self, client):
+        resp = client.get("/api/wnba/csv/players")
+        assert resp.status_code == 200, resp.text
+        body = resp.json()
+        assert ANCHOR_PLAYER in body["players"]
+        assert body["total"] == len(body["players"])
+
+    def test_csv_players_search_filter(self, client):
+        resp = client.get("/api/wnba/csv/players", params={"q": "wilson"})
+        assert resp.status_code == 200, resp.text
+        body = resp.json()
+        assert all("wilson" in p.lower() for p in body["players"])
+        assert ANCHOR_PLAYER in body["players"]
+
+    def test_player_history_anchor_points(self, client):
+        resp = client.get(
+            "/api/wnba/player-history",
+            params={"player": ANCHOR_PLAYER, "metric": "points", "threshold": 10.5},
+        )
+        assert resp.status_code == 200, resp.text
+        body = resp.json()
+        assert body["player"] == ANCHOR_PLAYER
+        assert body["metric"] == "points"
+        assert body["threshold"] == 10.5
+        assert body["n_games"] > 0
+        assert 0.0 <= body["p_over"] <= 1.0
+        assert body["mean"] > 10.5
+        assert len(body["game_logs"]) > 0
+
+    def test_player_history_rejects_dd_metric(self, client):
+        # metric=dd must redirect callers to /player-dd-history, not 500.
+        resp = client.get(
+            "/api/wnba/player-history",
+            params={"player": ANCHOR_PLAYER, "metric": "dd", "threshold": 0},
+        )
+        assert resp.status_code == 400
+        assert "player-dd-history" in resp.json()["detail"]
+
+    def test_player_history_rejects_unknown_metric(self, client):
+        resp = client.get(
+            "/api/wnba/player-history",
+            params={"player": ANCHOR_PLAYER, "metric": "bogus", "threshold": 0},
+        )
+        assert resp.status_code == 400
+
+    def test_player_dd_history_anchor(self, client):
+        resp = client.get(
+            "/api/wnba/player-dd-history",
+            params={"player": ANCHOR_PLAYER},
+        )
+        assert resp.status_code == 200, resp.text
+        body = resp.json()
+        assert body["player"] == ANCHOR_PLAYER
+        assert body["n_games"] > 0
+        assert body["dd_games"] >= 0
+        assert body["dd_games"] <= body["n_games"]
+        assert body["prob_dd"] is not None
+        assert 0.0 <= body["prob_dd"] <= 1.0
+
+    def test_csv_reload_endpoint(self, client):
+        resp = client.post("/api/wnba/csv/reload")
+        assert resp.status_code == 200, resp.text
+        body = resp.json()
+        assert body["success"] is True
+        assert body["total_players"] > 0
