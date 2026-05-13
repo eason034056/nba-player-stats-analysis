@@ -188,15 +188,32 @@ and `test_lineup_player_context.py` end-to-end to confirm.
 
 This run landed commits on whichever branch the harness placed me on
 (turned out to be `feature/SPO-32-wnba-csv-and-stats-page` due to
-harness flip-flopping mid-run). The SPO-34 work is the 8-commit chain
-from `c476950` back through `285ba89`. Sentinel may need to:
+harness flip-flopping mid-run). At hand-off the work has been moved onto
+`feature/SPO-34-wnba-lineup-ingestion` (HEAD `06675a9`), branched off
+`feature/SPO-32-wnba-csv-and-stats-page`.
 
-```
-git checkout --no-track -b feature/SPO-34-wnba-lineup-ingestion origin/dev
-git cherry-pick 285ba89..c476950   # 8 commits
-```
+**Base relationship:** SPO-34 cannot branch directly off `origin/dev`
+because `backend/app/api/wnba.py` is created in SPO-32 (not yet merged
+to `dev`) — branching off `dev` produced a delete-vs-modify conflict
+on that file. SPO-32 must merge before this PR targets `dev` cleanly.
 
-…or rebase the chain onto `feature/SPO-34-wnba-lineup-research` (which
-still points to Scout's `74ca06b`). Either yields the same diff. The
-8 SPO-34 commits are tagged `(SPO-34)` in their subjects for easy
-identification.
+**SPO-34-only commit range:** `285ba89..06675a9` (11 commits). Listed
+oldest → newest:
+
+| Commit | Subject |
+|---|---|
+| `285ba89` | feat(lineup): add ROTOWIRE_LEAGUE_URLS + bs4 import |
+| `650c3ed` | feat(lineup): WNBA team aliases + league-aware detect_team_code |
+| `1be7197` | feat(lineup): BS4-based parse_rotowire_wnba_html + league dispatch |
+| `237f664` | research(wnba): SPO-34 Phase 4 — sources comparison (Scout, cherry-picked from `74ca06b`) |
+| `a714e9c` | feat(lineup): namespace lineup cache keys by league |
+| `d1696a0` | feat(lineup): LineupConsensusService league-aware + wnba_lineup_service |
+| `dea65cc` | feat(api): /api/wnba/lineups endpoints |
+| `9c47ffe` | feat(scheduler): WNBA lineup jobs independent from NBA |
+| `d95ac94` | test(lineup): RotoWire WNBA parser unit + live integration |
+| `c476950` | deps(backend): add beautifulsoup4 + lxml |
+| `06675a9` | docs(task): SPO-34 task summary (this file) |
+
+`285ba89` adds the URL dispatch table + BS4 import (no use of WNBA
+aliases yet); `650c3ed` adds `WNBA_TEAM_LOOKUP`; `1be7197` is the parser
+that consumes both. Build at every commit in the chain succeeds.
