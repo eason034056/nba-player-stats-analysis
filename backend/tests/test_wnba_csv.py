@@ -250,10 +250,21 @@ class TestAnchorPlayerDD:
 
 @pytest.fixture(scope="module")
 def client():
-    """TestClient against the real FastAPI app. Loaded once per module."""
+    """TestClient against the real FastAPI app.
+
+    Disables the slowapi rate limiter so the test does not require a live
+    Redis at localhost:6379 — the limiter's storage_uri is the production
+    Redis URL, which is not available in unit-test CI. We are not testing
+    the limiter here; route correctness is what matters.
+    """
     from fastapi.testclient import TestClient
     from app.main import app
-    return TestClient(app)
+    from app.middleware.rate_limit import limiter
+    limiter.enabled = False
+    try:
+        yield TestClient(app)
+    finally:
+        limiter.enabled = True
 
 
 class TestWNBARoutesRegistered:
