@@ -34,7 +34,7 @@ from app.services.odds_gateway import odds_gateway
 from app.services.projection_service import projection_service
 from app.services.odds_snapshot_service import odds_snapshot_service
 from app.services.cache import cache_service
-from app.services.lineup_service import lineup_service
+from app.services.lineup_service import lineup_service, wnba_lineup_service
 
 
 class SchedulerService:
@@ -240,6 +240,53 @@ class SchedulerService:
             ),
             id='lineup_fetch_pre_tipoff',
             name='Free Lineup Refresh (every 5 minutes)',
+            replace_existing=True
+        )
+
+        # SPO-34: WNBA lineup jobs.
+        #
+        # Cadence mirrors the NBA jobs above so WNBA tip-off boundaries
+        # (typically earlier than NBA — many 7:00pm ET starts) and the
+        # pre-tip refresh window are both covered. Independent job IDs
+        # ensure WNBA failures don't block NBA refreshes and vice versa.
+        #
+        # The handler is a dedicated method (_run_wnba_lineup_fetch_job)
+        # rather than parameterising _run_lineup_fetch_job because the
+        # latter is wired to the NBA lineup_service singleton and changing
+        # it is out of "NBA path unchanged" scope.
+        self._scheduler.add_job(
+            self._run_wnba_lineup_fetch_job,
+            trigger=CronTrigger(
+                hour=9,
+                minute=30,
+                timezone="America/Chicago",
+            ),
+            id='wnba_lineup_fetch_opening',
+            name='WNBA Lineup Prefetch (baseline)',
+            replace_existing=True
+        )
+
+        self._scheduler.add_job(
+            self._run_wnba_lineup_fetch_job,
+            trigger=CronTrigger(
+                hour="11-21",
+                minute="0,15,30,45",
+                timezone="America/Chicago",
+            ),
+            id='wnba_lineup_fetch_active_window',
+            name='WNBA Lineup Refresh (every 15 minutes)',
+            replace_existing=True
+        )
+
+        self._scheduler.add_job(
+            self._run_wnba_lineup_fetch_job,
+            trigger=CronTrigger(
+                hour="17,18,19",
+                minute="0,5,10,15,20,25,30,35,40,45,50,55",
+                timezone="America/Chicago",
+            ),
+            id='wnba_lineup_fetch_pre_tipoff',
+            name='WNBA Lineup Refresh (every 5 minutes, pre-tipoff)',
             replace_existing=True
         )
         
@@ -495,6 +542,28 @@ class SchedulerService:
             print(f"✅ Free lineup refresh completed! {len(lineups)} teams")
         except Exception as e:
             print(f"❌ Free lineup refresh failed: {e}")
+            import traceback
+            traceback.print_exc()
+
+        print("=" * 50 + "\n")
+
+    async def _run_wnba_lineup_fetch_job(self):
+        """SPO-34: WNBA lineup refresh.
+
+        Independent from the NBA job so a failure here does not block
+        NBA refreshes. RotoWire WNBA only (RotoGrinders WNBA is a JS-only
+        SPA — see comparison doc §3).
+        """
+        print("\n" + "=" * 50)
+        print(f"🧾 Starting WNBA lineup refresh: {datetime.now(timezone.utc).isoformat()}")
+        print("=" * 50)
+
+        try:
+            today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+            lineups = await wnba_lineup_service.fetch_and_store(today)
+            print(f"✅ WNBA lineup refresh completed! {len(lineups)} teams")
+        except Exception as e:
+            print(f"❌ WNBA lineup refresh failed: {e}")
             import traceback
             traceback.print_exc()
 
