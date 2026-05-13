@@ -151,7 +151,7 @@ export function Navbar() {
                   href={link.href}
                   label={link.label}
                   icon={link.icon}
-                  isActive={pathname === link.href}
+                  isActive={isLinkActive(pathname, link.href, link.matchPrefix)}
                 />
               ))}
 
@@ -188,7 +188,7 @@ export function Navbar() {
                     href={link.href}
                     label={link.label}
                     icon={link.icon}
-                    isActive={pathname === link.href}
+                    isActive={isLinkActive(pathname, link.href, link.matchPrefix)}
                     onNavigate={() => setIsMobileMenuOpen(false)}
                   />
                 ))}
