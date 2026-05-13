@@ -15,12 +15,18 @@ from app.services.lineup_provider_rotowire import fetch_rotowire_lineups
 from app.settings import settings
 
 
-def _build_lineups_key(date: str) -> str:
-    return f"lineups:nba:{date}"
+def _build_lineups_key(date: str, league: str = "nba") -> str:
+    """Redis namespace per league.
+
+    Default `league="nba"` preserves the historical key shape so existing
+    NBA cache reads keep hitting the same entries after this change. Pass
+    `league="wnba"` for SPO-34's WNBA service instance.
+    """
+    return f"lineups:{league}:{date}"
 
 
-def _build_lineups_meta_key(date: str) -> str:
-    return f"lineups:nba:{date}:meta"
+def _build_lineups_meta_key(date: str, league: str = "nba") -> str:
+    return f"lineups:{league}:{date}:meta"
 
 
 UPSERT_LINEUP_SQL = """
