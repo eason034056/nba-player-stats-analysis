@@ -23,8 +23,9 @@
 
 "use client";
 
-import { use, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import Link from "next/link";
+import { useParams } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
 import {
   ArrowLeft,
@@ -80,15 +81,15 @@ const DEFAULT_THRESHOLDS: Record<string, number> = {
   pa: 18.5,
 };
 
-export default function WNBAPlayerPage({
-  params,
-}: {
-  // Next.js 15 (App Router) ships dynamic params as a Promise — `use()`
-  // unwraps it synchronously inside a Client Component. Server components
-  // would `await` it instead.
-  params: Promise<{ name: string }>;
-}) {
-  const { name: encodedName } = use(params);
+export default function WNBAPlayerPage() {
+  // ⚠ Next.js 14 ships dynamic route params as a plain object on a
+  // hook — `useParams()` from `next/navigation`. The Next.js 15 idiom
+  // (`params: Promise<...>` + `use(params)`) throws at runtime here
+  // ("unsupported type was passed to use()"). Mirror the existing
+  // `/event/[eventId]/page.tsx` pattern so the next major Next upgrade
+  // only has to migrate one place.
+  const params = useParams();
+  const encodedName = params.name as string;
   const playerName = useMemo(() => decodeURIComponent(encodedName), [encodedName]);
 
   const [metric, setMetric] = useState<string>("points");

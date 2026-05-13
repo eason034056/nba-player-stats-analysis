@@ -5,8 +5,8 @@
 - **Orchestrator:** [SPO-30](/SPO/issues/SPO-30)
 - **Branch:** `feature/SPO-32-wnba-csv-and-stats-page`
 - **Author:** Forge (`d5d67ab1-e5b6-4792-ab6e-563e174f81fd`)
-- **Date:** 2026-05-13 (rev 2 after Lens v1 review)
-- **Status:** Lens-fix complete, ready for Lens re-review
+- **Date:** 2026-05-13 (rev 3 after Sentinel v1 browser-smoke FAIL)
+- **Status:** Sentinel-fix complete, ready for Lens v4 → Sentinel v2 re-run
 
 ## Summary
 
@@ -27,7 +27,9 @@ prefix-based active state.
 5. `7ff9a7d` fix(wnba): correct wnba.py route content for Phase 1 (Lens v1 followup, catastrophic find)
 6. `a4daa6d` test(wnba): add TestClient route assertions (Lens v1 followup)
 7. `9bc0d2b` test(wnba): disable slowapi limiter in TestClient fixture
-8. _(this commit)_ docs(task): updated task summary
+8. `07dd76b` docs(task): rev 2 task summary update
+9. `817455f` docs(task): record Rev 2 branch contamination cleanup
+10. _(this commit)_ fix(wnba): use `useParams()` for Next 14 dynamic params (Sentinel v1 followup)
 
 ## Lens review v1 findings → fixes
 
@@ -40,6 +42,43 @@ Lens's first review caught real bugs hidden by service-only tests during the par
 | **#3** Navbar `matchPrefix` was dead code — `isLinkActive` defined but never called | ✅ Fixed | `e9c29e0` |
 | **#4** Tests only exercised the service layer; no HTTP-boundary coverage let #1 slip past green tests | ✅ Fixed | `a4daa6d` + `9bc0d2b` |
 
+## Sentinel v1 finding → Rev 3 fix
+
+Sentinel's browser-smoke gate (the new safety net added after the SPO-32 Rev 2 cycle) caught a runtime crash that `pytest` + `tsc --noEmit` + HTTP-boundary tests all missed:
+
+| Sentinel v1 finding | Status | Fix commit |
+|---|---|---|
+| **#5** `/wnba/player/[name]` crashed every paint — React error boundary fallback rendered, never the player view. `pageerror`: `An unsupported type was passed to use(): [object Object]` (24×/load) | ✅ Fixed | _(this commit)_ |
+
+**Root cause.** `frontend/app/wnba/player/[name]/page.tsx` was authored against the **Next.js 15** App Router idiom: `params: Promise<{name: string}>` + `const { name } = use(params)`. This project pins Next **14.2.35** (`frontend/package.json: "next": "^14.2.0"`), where dynamic-route `params` arrives as a **plain object** on the function arg. React's `use()` requires a Promise or Context — handed a plain object, it throws synchronously and the page never paints.
+
+**Why the earlier gates stayed green.**
+- `tsc --noEmit` is happy: `params: Promise<...>` is syntactically valid TS, and `use(params)` type-checks. The mismatch is purely a runtime contract Next 14 violates.
+- Pytest + `TestClient` test the FastAPI surface; they say nothing about React rendering.
+- Route-existence tests confirm the route is registered, not that it renders.
+
+**Fix (Sentinel's recommended Option B — mirror project convention).** Swap to `useParams()` from `next/navigation`, matching the existing `frontend/app/event/[eventId]/page.tsx` pattern. Single hook call, no `params` arg, no Promise type. Future Next 15 migration now touches exactly one file (`event/[eventId]/page.tsx` and this one share the same shape).
+
+```tsx
+// before (Next 15 idiom — broke on Next 14)
+import { use, useMemo, useState } from "react";
+export default function WNBAPlayerPage({ params }: { params: Promise<{ name: string }> }) {
+  const { name: encodedName } = use(params);
+
+// after (Next 14 idiom — matches `event/[eventId]/page.tsx`)
+import { useParams } from "next/navigation";
+export default function WNBAPlayerPage() {
+  const params = useParams();
+  const encodedName = params.name as string;
+```
+
+**Browser-smoke verification (post-fix).** Playwright run at `/wnba/player/A%27ja%20Wilson`:
+- Heading "A'ja Wilson" visible ✅
+- Error-boundary text "Something broke inside the workspace" absent ✅
+- Distribution / P(Over) / Game log content renders ✅
+- 0 `console.error`, 0 `pageerror` events (was 24× per render before)
+- Screenshot: `/tmp/spo32-rev4-wilson-after-fix.png`
+
 ## Changes (final state)
 
 | Layer | File | Type | Reason |
@@ -50,7 +89,7 @@ Lens's first review caught real bugs hidden by service-only tests during the par
 | Backend | `backend/tests/test_wnba_csv.py` | New + expanded | **24 tests total**: 16 service-layer (singleton wiring, CSV load, A'ja Wilson smoke, DD path, league isolation) + 8 HTTP-boundary tests via `TestClient` (the gate that should have caught Lens v1 #1). |
 | Frontend | `frontend/lib/api.ts` | Modified | `getWNBACSVPlayers` + `getWNBAPlayerHistory` sibling functions. Reuse existing Zod schemas (response shapes are identical to NBA). |
 | Frontend | `frontend/app/wnba/page.tsx` | New | Read-only player list with client-side search. Links to `/wnba/player/[name]`. |
-| Frontend | `frontend/app/wnba/player/[name]/page.tsx` | New | Per-player history: metric selector + threshold input + Over/Under summary cards + recharts histogram + game-log table. |
+| Frontend | `frontend/app/wnba/player/[name]/page.tsx` | New (rev 3 idiom fix) | Per-player history: metric selector + threshold input + Over/Under summary cards + recharts histogram + game-log table. Rev 3: replaced Next 15 `use(params)` with Next 14 `useParams()` to match project's `event/[eventId]/page.tsx` (Sentinel v1 fix). |
 | Frontend | `frontend/components/Navbar.tsx` | Modified | New WNBA entry. `isLinkActive` helper + `matchPrefix` flag for league-section active state — now **actually called** at the two render sites (Lens v1 #3 fix in `e9c29e0`). |
 
 ## Why (design rationale, unchanged from rev 1)
