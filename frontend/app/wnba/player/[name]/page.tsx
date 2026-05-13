@@ -323,7 +323,13 @@ export default function WNBAPlayerPage({
                         borderRadius: "12px",
                         color: "#fff",
                       }}
-                      formatter={(value: number) => [value, "games"]}
+                      // recharts types `value` as `number | undefined` to
+                      // cover the empty-cell case — coerce defensively so
+                      // the tooltip never renders `undefined`.
+                      formatter={(value) => [
+                        typeof value === "number" ? value : 0,
+                        "games",
+                      ]}
                       labelFormatter={(label) => `value ≈ ${label}`}
                     />
                     <ReferenceLine
