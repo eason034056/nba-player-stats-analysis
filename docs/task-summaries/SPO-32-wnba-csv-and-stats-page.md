@@ -115,12 +115,20 @@ WNBA CSV total players = 184
 
 ## Workflow recovery notes
 
-This task fought two rounds of parallel-agent branch-switch chaos:
+This task fought three rounds of parallel-agent branch-switch chaos:
 
-- **Rev 1 chaos**: commits temporarily landed on SPO-34 twice; recovered via cherry-pick + `git branch -f` reset of SPO-34 to its proper HEAD. Confounded by the same parallel agent overwriting `wnba.py` with SPO-33 Phase 2 content somewhere during the cherry-pick chain — the wrong content got baked into commit `3f30e37` and was caught by Lens v1.
+- **Rev 1 chaos**: commits temporarily landed on SPO-34 twice; recovered via cherry-pick + `git branch -f` reset of SPO-34 to its proper HEAD. Same parallel agent also overwrote `wnba.py` with SPO-33 Phase 2 content somewhere during the cherry-pick chain — the wrong content got baked into commit `3f30e37` and was caught by Lens v1.
 - **Rev 2 fix-cycle**: same dynamics — commits landed on SPO-34 multiple times despite being authored on SPO-32. Each landing was cherry-picked back and SPO-34 reset. All eight SPO-32 commits are correctly attributed and live on `feature/SPO-32-wnba-csv-and-stats-page`.
+- **Rev 2 commit-history contamination (this commit)**: while Forge's Rev 2 commits landed correctly, the parallel SPO-34 agent stacked **11 commits on top of** the legitimate SPO-32 tip (`07dd76b`), making the branch tip `06675a9` (later `ff8d0ed`). `git status` returning empty fooled the Rev 2 handoff into reporting a clean branch — *clean working tree ≠ clean commit history*. Lens caught this on Rev 2 review.
 
-Updated memory note (`parallel_agent_branch_switching.md`) instructs Forge to atomic-batch every write+commit via Bash heredoc to outrun branch flips — this is how rev 2 fixes survived to commit.
+  Cleanup approach:
+  1. Verified all 11 SPO-34 commits also exist on `feature/SPO-34-wnba-lineup-ingestion` (note: `feature/SPO-34-wnba-lineup-research` is the abandoned name; `-ingestion` is the live SPO-34 branch). `git merge-base feature/SPO-32 feature/SPO-34-wnba-lineup-ingestion` = `06675a9`, confirming full overlap.
+  2. Atomic-CAS reset via `git update-ref refs/heads/feature/SPO-32-wnba-csv-and-stats-page 07dd76b <old-sha>` — preferred over `git reset --hard` because it doesn't require a checkout (which would race the parallel agent) and the compare-and-swap fails loudly if the branch moved underneath us.
+  3. Reflog preserves the dropped 11 commits for 90 days as a recovery net; the SPO-34-ingestion branch is the canonical home of that work.
+  4. Re-ran the test suite post-reset: 92/92 still PASS.
+
+Updated memory note (`parallel_agent_branch_switching.md`) now instructs Forge to use `git update-ref` for branch surgery and to always cross-check `git log origin/dev..HEAD` against `git status` — the latter does not reflect commit-history contamination.
+
 
 ## Architectural guardrails honored
 
