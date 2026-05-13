@@ -87,3 +87,13 @@ langgraph==1.1.2
 
 # LangChain OpenAI: ChatOpenAI runtime used by scripts/agents
 langchain-openai==1.1.11
+
+# ==================== HTML 解析 (SPO-34) ====================
+# BeautifulSoup4 + lxml: WNBA lineup HTML parsing (RotoWire WNBA scraper).
+# - WNBA path needs selector-grade parsing of `is-expected`/`is-confirmed`
+#   status, `is-pct-play-N` integers, and `<a title="Full Name">`
+#   attributes — the line-strip approach used for NBA can't access any of
+#   those without losing fidelity.
+# - The existing NBA path is unchanged and does not depend on BS4.
+beautifulsoup4==4.14.3
+lxml==6.0.2
