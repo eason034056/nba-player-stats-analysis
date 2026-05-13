@@ -3,6 +3,7 @@ from __future__ import annotations
 from typing import Any
 
 import requests
+from bs4 import BeautifulSoup, Tag
 
 from app.services.lineup_source_support import (
     detect_team_code,
@@ -14,7 +15,16 @@ from app.services.lineup_source_support import (
 )
 
 
-ROTOWIRE_LINEUPS_URL = "https://www.rotowire.com/basketball/nba-lineups.php"
+# League → RotoWire lineups page URL. The cards share the same selector
+# taxonomy across NBA and WNBA — only the URL and position vocabulary
+# differ. See docs/research/wnba-rollout/lineup_sources_comparison.md §2.4.
+ROTOWIRE_LEAGUE_URLS: dict[str, str] = {
+    "nba": "https://www.rotowire.com/basketball/nba-lineups.php",
+    "wnba": "https://www.rotowire.com/wnba/lineups.php",
+}
+
+# Back-compat alias for the NBA-only constant existing callers may import.
+ROTOWIRE_LINEUPS_URL = ROTOWIRE_LEAGUE_URLS["nba"]
 
 
 def parse_rotowire_html(raw_html: str, date: str) -> dict[str, dict[str, Any]]:
