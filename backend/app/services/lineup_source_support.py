@@ -46,11 +46,47 @@ TEAM_ALIASES: dict[str, tuple[str, ...]] = {
     "WAS": ("Washington Wizards", "Wizards", "WAS"),
 }
 
+# WNBA team aliases — codes match `<div class="lineup__abbr">…</div>` values
+# on the RotoWire WNBA page (verified live 2026-05-13; see
+# docs/research/wnba-rollout/lineup_sources_comparison.md §2.4 and the
+# committed `rotowire_wnba_sample.html`).
+# ⚠ Several codes overlap with NBA codes (CHI, IND, TOR, WAS, ATL, DAL, MIN,
+# NYK, PHX) but refer to different franchises — keep lookups league-namespaced
+# via `LEAGUE_TEAM_LOOKUPS`; never merge into a single global table.
+WNBA_TEAM_ALIASES: dict[str, tuple[str, ...]] = {
+    "ATL": ("Atlanta Dream", "Dream", "ATL"),
+    "CHI": ("Chicago Sky", "Sky", "CHI"),
+    "CON": ("Connecticut Sun", "Sun", "Connecticut", "CON"),
+    "DAL": ("Dallas Wings", "Wings", "DAL"),
+    "GSV": ("Golden State Valkyries", "Valkyries", "GSV"),
+    "IND": ("Indiana Fever", "Fever", "IND"),
+    "LAS": ("Los Angeles Sparks", "Sparks", "LA Sparks", "LAS"),
+    "LVA": ("Las Vegas Aces", "Aces", "Las Vegas", "LVA"),
+    "MIN": ("Minnesota Lynx", "Lynx", "MIN"),
+    "NYL": ("New York Liberty", "Liberty", "NY Liberty", "NYL"),
+    "PHX": ("Phoenix Mercury", "Mercury", "PHX"),
+    "SEA": ("Seattle Storm", "Storm", "SEA"),
+    "TOR": ("Toronto Tempo", "Tempo", "TOR"),
+    "WAS": ("Washington Mystics", "Mystics", "WAS"),
+}
+
+
 TEAM_LOOKUP: dict[str, str] = {}
 for code, aliases in TEAM_ALIASES.items():
     TEAM_LOOKUP[_normalize_lookup_key(code)] = code
     for alias in aliases:
         TEAM_LOOKUP[_normalize_lookup_key(alias)] = code
+
+WNBA_TEAM_LOOKUP: dict[str, str] = {}
+for code, aliases in WNBA_TEAM_ALIASES.items():
+    WNBA_TEAM_LOOKUP[_normalize_lookup_key(code)] = code
+    for alias in aliases:
+        WNBA_TEAM_LOOKUP[_normalize_lookup_key(alias)] = code
+
+LEAGUE_TEAM_LOOKUPS: dict[str, dict[str, str]] = {
+    "nba": TEAM_LOOKUP,
+    "wnba": WNBA_TEAM_LOOKUP,
+}
 
 POSITION_TOKENS = {"PG", "SG", "SF", "PF", "C", "G", "F"}
 SUFFIX_TOKENS = {"JR", "JR.", "SR", "SR.", "II", "III", "IV", "V"}
@@ -111,12 +147,19 @@ def strip_html_lines(raw_html: str) -> list[str]:
     return lines
 
 
-def detect_team_code(raw_line: str) -> str | None:
+def detect_team_code(raw_line: str, league: str = "nba") -> str | None:
+    """Resolve a raw text line to a team code within the given league.
+
+    Default `league="nba"` keeps existing NBA call sites byte-identical.
+    Pass `league="wnba"` to resolve against WNBA codes (e.g. SEA, LVA,
+    Connecticut Sun) without leaking NBA matches.
+    """
+    lookup = LEAGUE_TEAM_LOOKUPS.get(league, TEAM_LOOKUP)
     line = re.sub(r"\(\d+\s*-\s*\d+\)", "", raw_line).strip()
     line = TIME_LINE_RE.sub("", line).strip()
     if not line:
         return None
-    return TEAM_LOOKUP.get(_normalize_lookup_key(line))
+    return lookup.get(_normalize_lookup_key(line))
 
 
 def _is_non_player_line(line: str) -> bool:
