@@ -22,6 +22,7 @@ import {
   ClipboardList,
   Info,
   Menu,
+  Sparkles,
   Target,
   X,
 } from "lucide-react";
@@ -30,12 +31,36 @@ import { useBetSlip } from "@/contexts/BetSlipContext";
 
 /**
  * Navigation links configuration
+ *
+ * 💡 `matchPrefix` enables path-based active state for league sections.
+ * The WNBA entry must light up on `/wnba`, `/wnba/player/<name>`, and any
+ * future `/wnba/*` route (Phase 2-6 will add more). Exact-match (`===`)
+ * worked for Home / Picks / About because they are leaf pages; league
+ * sections aren't.
  */
-const navLinks = [
+const navLinks: {
+  href: string;
+  label: string;
+  icon: typeof Activity;
+  matchPrefix?: boolean;
+}[] = [
   { href: "/", label: "Home", icon: Activity },
   { href: "/picks", label: "Daily Picks", icon: Target },
+  { href: "/wnba", label: "WNBA", icon: Sparkles, matchPrefix: true },
   { href: "/about", label: "About", icon: Info },
 ];
+
+function isLinkActive(
+  pathname: string,
+  href: string,
+  matchPrefix?: boolean
+): boolean {
+  if (!matchPrefix) return pathname === href;
+  // Prefix match — `/wnba` matches itself AND `/wnba/player/A'ja Wilson`.
+  // ⚠ Anchor the trailing slash so `/wnban` (hypothetical) wouldn't
+  // accidentally activate the WNBA entry.
+  return pathname === href || pathname.startsWith(`${href}/`);
+}
 
 function NavItem({
   href,
@@ -126,7 +151,7 @@ export function Navbar() {
                   href={link.href}
                   label={link.label}
                   icon={link.icon}
-                  isActive={pathname === link.href}
+                  isActive={isLinkActive(pathname, link.href, link.matchPrefix)}
                 />
               ))}
 
@@ -163,7 +188,7 @@ export function Navbar() {
                     href={link.href}
                     label={link.label}
                     icon={link.icon}
-                    isActive={pathname === link.href}
+                    isActive={isLinkActive(pathname, link.href, link.matchPrefix)}
                     onNavigate={() => setIsMobileMenuOpen(false)}
                   />
                 ))}

@@ -93,25 +93,65 @@ _DD_REQUIRED_COMPONENTS = 2  # ≥2 doubles = double-double
 # Prefer environment variable, otherwise use default path
 # In Docker environment, data directory is mounted to /app/data
 # In local development, path is relative to project root
-def _get_csv_path() -> str:
-    """
-    Get CSV file path
+#
+# 💡 League dispatch — SPO-32 introduced WNBA. The service is parameterized
+# on `league`, not duplicated. `_LEAGUE_FILE_NAMES` is the single source of
+# truth for "league key → CSV file name"; adding a new league later (e.g.
+# NCAA) is a one-line addition here plus a singleton at the bottom of the
+# module. ⚠ The env var fallback for NBA (`CSV_DATA_PATH`) is intentionally
+# kept under its legacy name to preserve existing test patches and ops
+# scripts; WNBA gets its own env var (`WNBA_CSV_DATA_PATH`) so an operator
+# can override one league without accidentally pointing the other at the
+# wrong file.
+_LEAGUE_FILE_NAMES: Dict[str, str] = {
+    "nba": "nba_player_game_logs.csv",
+    "wnba": "wnba_player_game_logs.csv",
+}
 
-    Search order:
-    1. Environment variable CSV_DATA_PATH
-    2. /app/data/nba_player_game_logs.csv (Docker environment)
-    3. data/nba_player_game_logs.csv relative to project root
+_LEAGUE_ENV_VARS: Dict[str, str] = {
+    "nba": "CSV_DATA_PATH",  # legacy name — unchanged for backward compat
+    "wnba": "WNBA_CSV_DATA_PATH",
+}
+
+
+def _get_csv_path(league: str = "nba") -> str:
+    """
+    Get CSV file path for the given league.
+
+    Search order (per league):
+    1. League-specific environment variable (e.g. CSV_DATA_PATH for NBA,
+       WNBA_CSV_DATA_PATH for WNBA)
+    2. /app/data/<league>_player_game_logs.csv (Docker environment)
+    3. data/<league>_player_game_logs.csv relative to project root
+
+    Args:
+        league: League key (e.g. "nba", "wnba"). Defaults to "nba" so
+                existing callers that pre-date the league parameter
+                continue to resolve to the NBA CSV unchanged.
 
     Returns:
         str: Absolute file path to CSV
+
+    Raises:
+        ValueError: If league is not registered in `_LEAGUE_FILE_NAMES`.
     """
-    # 1. Prefer environment variable
-    env_path = os.environ.get("CSV_DATA_PATH")
+    league = league.lower()
+    if league not in _LEAGUE_FILE_NAMES:
+        raise ValueError(
+            f"Unknown league: {league!r}. "
+            f"Registered: {sorted(_LEAGUE_FILE_NAMES.keys())}"
+        )
+
+    file_name = _LEAGUE_FILE_NAMES[league]
+    env_var_name = _LEAGUE_ENV_VARS[league]
+
+    # 1. Prefer league-specific environment variable
+    env_path = os.environ.get(env_var_name)
     if env_path and os.path.exists(env_path):
         return env_path
 
     # 2. Docker environment path (/app/data/)
-    docker_path = "/app/data/nba_player_game_logs.csv"
+    docker_path = f"/app/data/{file_name}"
     if os.path.exists(docker_path):
         return docker_path
 
@@ -119,28 +159,54 @@ def _get_csv_path() -> str:
     local_path = os.path.join(
         os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(__file__)))),
         "data",
-        "nba_player_game_logs.csv"
+        file_name,
     )
     return local_path
 
 
-CSV_PATH = _get_csv_path()
+# ⚠ Legacy module-level constant. Kept ONLY for backward compatibility
+# with tests that monkeypatch `app.services.csv_player_history.CSV_PATH`
+# (e.g. `test_csv_player_history.py`'s `patch("...CSV_PATH", csv_path)`).
+# New code paths MUST read `self._csv_path` on the service instance, which
+# resolves per-league at construction time. Do NOT use CSV_PATH for new
+# code — it always points at the NBA CSV.
+CSV_PATH = _get_csv_path("nba")
 
 
 class CSVPlayerHistoryService:
     """
     CSV Player History Data Service
 
-    Uses a module-level cache to avoid reloading the CSV on every request
-    This is a singleton pattern implementation
+    Uses a per-instance cache to avoid reloading the CSV on every request.
+    One singleton per league lives at module bottom (`nba_csv_player_service`,
+    `wnba_csv_player_service`); the league parameter selects which CSV file
+    backs each instance.
+
+    💡 Why parameterize on `league` instead of subclassing: the parsing
+    logic is identical (same CSV schema), only the file path differs.
+    Subclassing would add an inheritance hierarchy with no behavioral
+    difference per class. Parameterization keeps one class to maintain
+    and one set of tests to keep in sync.
 
     Attributes:
+        league: League key (e.g. "nba", "wnba") — selects the CSV source
+        _csv_path: Absolute CSV file path resolved at construction
         _cache: cached CSV data (keyed by player name)
         _all_players: all player names (sorted)
         _loaded: whether the data has been loaded
     """
 
-    def __init__(self):
+    def __init__(self, league: str = "nba"):
+        """
+        Args:
+            league: League key. Defaults to "nba" so legacy callers that
+                    instantiated `CSVPlayerHistoryService()` with no args
+                    continue to resolve to the NBA CSV unchanged.
+        """
+        self.league: str = league.lower()
+        # Resolve path eagerly at construction so the path stays stable
+        # for the lifetime of this instance.
+        self._csv_path: str = _get_csv_path(self.league)
         self._cache: Dict[str, List[Dict[str, Any]]] = {}  # player_name -> game_logs
         self._all_players: List[str] = []  # all player names
         self._lineup_cache: Dict[Tuple[str, str], Set[str]] = {}  # (team, date_str) -> {player_names}
@@ -155,13 +221,13 @@ class CSVPlayerHistoryService:
         - Reloading after CSV file updates
         - Refreshing data during development after code changes
         """
-        print("🔄 Reloading CSV data...")
+        print(f"🔄 Reloading CSV data [{self.league}]...")
         self._cache = {}
         self._all_players = []
         self._lineup_cache = {}
         self._loaded = False
         self.load_csv()
-        print(f"✅ Reload complete, total {len(self._all_players)} players")
+        print(f"✅ Reload complete [{self.league}], total {len(self._all_players)} players")
 
     def _parse_minutes(self, min_str: str) -> float:
         """
@@ -235,13 +301,25 @@ class CSVPlayerHistoryService:
         if self._loaded:
             return
 
-        if not os.path.exists(CSV_PATH):
-            raise FileNotFoundError(f"CSV file does not exist: {CSV_PATH}")
+        # 💡 Path resolution: for the NBA service, honor any runtime patch
+        # to the module-level `CSV_PATH` constant. This is the surgical fix
+        # that keeps `test_csv_player_history.py` working unchanged — those
+        # tests do `patch("app.services.csv_player_history.CSV_PATH", ...)`
+        # AFTER instantiation, so binding to `self._csv_path` eagerly in
+        # __init__ would break them. WNBA (and any future league) uses the
+        # per-instance path directly because it has no legacy test surface.
+        if self.league == "nba":
+            csv_path = CSV_PATH
+        else:
+            csv_path = self._csv_path
+
+        if not os.path.exists(csv_path):
+            raise FileNotFoundError(f"CSV file does not exist: {csv_path}")
 
         # Read CSV
         # Use utf-8-sig encoding to automatically handle BOM (Byte Order Mark)
         # Common when exported from Excel as UTF-8 CSV
-        with open(CSV_PATH, 'r', encoding='utf-8-sig') as f:
+        with open(csv_path, 'r', encoding='utf-8-sig') as f:
             reader = csv.DictReader(f)
 
             for row in reader:
@@ -350,7 +428,7 @@ class CSVPlayerHistoryService:
             )
 
         self._loaded = True
-        print(f"✅ CSV loaded, total {len(self._all_players)} players")
+        print(f"✅ CSV loaded [{self.league}], total {len(self._all_players)} players")
 
     def get_all_players(self, search: Optional[str] = None) -> List[str]:
         """
@@ -867,7 +945,16 @@ class CSVPlayerHistoryService:
         return histogram
 
 
-# Create singleton instance
-# This instance is created when the module is imported; always use the same instance afterward
-csv_player_service = CSVPlayerHistoryService()
+# Create singleton instances — one per league.
+# These are created when the module is imported; always use the same
+# instances afterward. The legacy `csv_player_service` name is preserved
+# as an alias to the NBA service so every existing call site
+# (`from app.services.csv_player_history import csv_player_service`) keeps
+# working without modification.
+nba_csv_player_service = CSVPlayerHistoryService(league="nba")
+wnba_csv_player_service = CSVPlayerHistoryService(league="wnba")
+
+# Backward-compatible alias — DO NOT remove without updating every NBA
+# call site. New code should reference `nba_csv_player_service` directly.
+csv_player_service = nba_csv_player_service
 
