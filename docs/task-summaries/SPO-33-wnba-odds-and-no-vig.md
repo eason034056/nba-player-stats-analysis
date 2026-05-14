@@ -26,8 +26,9 @@ that mirrors the NBA home layout (events + players).
 
 Grounded entirely on SPO-31 Phase 0 curl evidence: 9 hard-supported WNBA
 markets, 3 schema-valid+empty (`player_steals`, `player_blocks`,
-`player_turnovers`). The DD-binary path from SPO-26 ports byte-for-byte —
-no new parser branch required.
+`player_turnovers`). The DD-binary path from SPO-26 is a high-fidelity port
+of `nba.py` (one deliberate null-safe divergence on `outcome.name` parsing —
+see `wnba.py` module docstring) — no new parser branch required.
 
 ## Changes
 
@@ -109,7 +110,7 @@ no new parser branch required.
 - [x] `/wnba` shows events list + players list. Dual section with shared `EventList` (league="wnba") and the preserved Phase 1 player search.
 - [x] `/wnba/event/[eventId]` shows no-vig view. 12-tile MarketSelect + autocomplete + bookmaker filter + calculate button + ResultsTable.
 - [x] Integration test passes locally with `RUN_INTEGRATION=1`; skipped by default. Default `pytest tests/test_wnba_odds_integration.py` → `1 skipped` (module-level skip when `RUN_INTEGRATION != "1"`).
-- [x] DD-binary parsing path verified for WNBA — `_build_binary_no_vig_response` ports byte-for-byte from `nba.py`. Integration test asserts the binary shape (`name in {yes, no}`, no `point` field) on a live WNBA event.
+- [x] DD-binary parsing path verified for WNBA — `_build_binary_no_vig_response` is a high-fidelity port of `nba.py._build_binary_no_vig_response` (one deliberate null-safe divergence documented in `wnba.py:315–320`). Integration test asserts the binary shape (`name in {yes, no}`, no `point` field) on a live WNBA event.
 - [x] Task summary at `docs/task-summaries/SPO-33-wnba-odds-and-no-vig.md`.
 
 ## Architectural guardrail check

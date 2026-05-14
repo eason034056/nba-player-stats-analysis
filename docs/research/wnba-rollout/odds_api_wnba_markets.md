@@ -4,7 +4,7 @@
 - **Agent:** Scout (`1a495f58-b689-46b7-9e79-9d563b31175d`)
 - **Date:** 2026-05-13
 - **Outcome (Gate behaviour):** ✅ **Row 2 — "Some `hard-supported`, some `schema-valid+empty`."** All 3 core markets pass the gate; 3 of 12 (`player_steals`, `player_blocks`, `player_turnovers`) returned populated schema with `bookmakers=[]`.
-- **2026-05-14 follow-up:** `player_frees_made` (FTM) and `player_field_goals` (FGM) added as Phase 0.5 probes by Forge during SPO-33 Lens review (see §3.2.4 + §4). Both classified `schema-valid+empty`. Total verified market count now 14 (10 `hard-supported` + 5 `schema-valid+empty` + 0 `not-in-schema`).
+- **2026-05-14 follow-up:** `player_frees_made` (FTM) and `player_field_goals` (FGM) added as Phase 0.5 probes by Forge during SPO-33 Lens review (see §3.2.4 + §4). Both classified `schema-valid+empty`. Total verified market count now 14 (9 `hard-supported` + 5 `schema-valid+empty` + 0 `not-in-schema`).
 
 Companion script: `scripts/explore_odds_api_wnba.py` — re-run on demand to detect schema drift.
 
