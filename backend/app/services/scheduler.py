@@ -86,15 +86,31 @@ class SchedulerService:
             }
         )
         
-        # Add daily analysis job
+        # Add daily analysis job (NBA)
         # CronTrigger: Similar to Linux cron
         # hour=12, minute=0: Run at UTC 12:00 every day
         self._scheduler.add_job(
             self._run_daily_analysis_job,
             trigger=CronTrigger(hour=12, minute=0),
             id='daily_analysis_job',
-            name='Daily High Probability Player Analysis',
+            name='Daily High Probability Player Analysis (NBA)',
             replace_existing=True  # Replace if job already exists
+        )
+
+        # SPO-35: WNBA daily analysis job.
+        #
+        # Independent from the NBA job — different `id` so APScheduler
+        # tracks instances separately, different handler so a WNBA crash
+        # is caught locally and never reaches the NBA job (and vice
+        # versa). Same UTC 12:00 cron cadence; each call writes to its
+        # own cache namespace (`daily_picks:nba:...` vs
+        # `daily_picks:wnba:...`), no shared mutable state.
+        self._scheduler.add_job(
+            self._run_wnba_daily_analysis_job,
+            trigger=CronTrigger(hour=12, minute=0),
+            id='wnba_daily_analysis_job',
+            name='Daily High Probability Player Analysis (WNBA)',
+            replace_existing=True
         )
         
         # Add projection data prefetch jobs (3 times a day)
@@ -237,7 +253,8 @@ class SchedulerService:
         print("   - Projection Data Prefetch: Daily UTC 16:00, 22:00, 23:30")
         print("   - Odds Snapshot: Daily UTC 16:05, 22:05, 23:35")
         print("   - Hot Odds Key Prewarm: Every 30 seconds")
-        print("   - Daily Analysis: Daily UTC 12:00")
+        print("   - Daily Analysis (NBA): Daily UTC 12:00")
+        print("   - Daily Analysis (WNBA): Daily UTC 12:00 (independent of NBA)")
         print("   - CSV Download: Daily 10:00 Chicago time")
         
         # List all scheduled jobs
@@ -295,6 +312,50 @@ class SchedulerService:
         
         print("=" * 50 + "\n")
     
+    async def _run_wnba_daily_analysis_job(self):
+        """SPO-35: WNBA daily analysis job.
+
+        Mirror of `_run_daily_analysis_job` but with `league="wnba"` so
+        the analysis hits `basketball_wnba` events, uses
+        `wnba_csv_player_service` for history, skips projections (not
+        wired today — graceful-degrade per SPO-35 audit §6 step 1), and
+        caches under `daily_picks:wnba:{date}:tz{offset}`.
+
+        Failure isolation: any exception is caught here. The NBA job is
+        registered with a separate `id` and runs through its own
+        coroutine, so a crash here cannot interfere with NBA picks (and
+        vice versa).
+        """
+        print("\n" + "=" * 50)
+        print(f"🚀 [WNBA] Starting daily analysis job: {datetime.now(timezone.utc).isoformat()}")
+        print("=" * 50)
+
+        try:
+            today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+            result = await daily_analysis_service.run_daily_analysis(
+                date=today,
+                use_cache=False,  # Forced re-analysis in scheduled jobs
+                league="wnba",
+            )
+
+            print(f"\n✅ [WNBA] Daily analysis completed!")
+            print(f"   Date: {result.date}")
+            print(f"   Found {result.total_picks} high-probability picks")
+
+            if result.stats:
+                print(f"   Events analyzed: {result.stats.total_events}")
+                print(f"   Players analyzed: {result.stats.total_players}")
+                print(f"   Duration: {result.stats.analysis_duration_seconds:.2f} seconds")
+
+        except Exception as e:
+            # Caught locally so the WNBA job never bubbles into the
+            # scheduler loop and never affects the NBA job.
+            print(f"\n❌ [WNBA] Daily analysis job failed: {e}")
+            import traceback
+            traceback.print_exc()
+
+        print("=" * 50 + "\n")
+
     async def _run_csv_download_job(self):
         """
         Run CSV download job
@@ -475,13 +536,39 @@ class SchedulerService:
     async def trigger_now(self):
         """
         Manually trigger daily analysis job
-        
+
         Used for manual testing or when needing immediate data refresh
-        
+
         Returns:
             Analysis result
         """
         return await self._run_daily_analysis_job()
+
+    async def trigger_wnba_daily_analysis_now(
+        self,
+        date: Optional[str] = None,
+        tz_offset_minutes: int = 480,
+    ):
+        """SPO-35: manually trigger the WNBA daily-picks pipeline.
+
+        Used by ``POST /api/wnba/daily-picks/trigger`` for admin
+        re-runs. Force-refreshes (``use_cache=False``) and returns the
+        :class:`DailyPicksResponse` directly rather than the dict the
+        cron handler logs out — the API needs the model, not the
+        side-effect.
+
+        Args:
+            date: Date (YYYY-MM-DD). ``None`` → today (UTC).
+            tz_offset_minutes: Timezone offset for event-day windowing.
+        """
+        if date is None:
+            date = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+        return await daily_analysis_service.run_daily_analysis(
+            date=date,
+            use_cache=False,
+            tz_offset_minutes=tz_offset_minutes,
+            league="wnba",
+        )
     
     async def trigger_csv_download_now(self) -> bool:
         """

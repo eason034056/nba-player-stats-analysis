@@ -29,11 +29,72 @@ from collections import defaultdict
 from app.services.odds_gateway import odds_gateway
 from app.services.odds_theoddsapi import odds_provider
 from app.services.odds_provider import OddsAPIError
-from app.services.csv_player_history import csv_player_service
+from app.services.csv_player_history import (
+    csv_player_service,
+    wnba_csv_player_service,
+)
 from app.services.prob import calculate_mode_threshold
 from app.services.cache import cache_service
 from app.services.projection_service import projection_service
 from app.models.schemas import DailyPick, DailyPicksResponse, AnalysisStats
+
+
+# ==================== League routing (SPO-35) ====================
+#
+# Single source of truth for "league key → external identifiers / runtime
+# dependencies". Adding a new league later (e.g. NCAA) becomes a one-line
+# addition here — daily_analysis is one function tree, not a fork
+# (CLAUDE.md § Architectural guardrails: "Parameterize, don't fork").
+#
+# Tied tests:
+#   - test_daily_analysis_league_routes_sport_key (NBA vs WNBA dispatch)
+#   - test_daily_analysis_league_routes_csv_service
+#   - test_daily_analysis_league_namespaces_cache_key
+
+# The Odds API sport key per league — proven via curl evidence in
+# docs/research/wnba-rollout/odds_api_wnba_markets.md §3.
+_SPORT_KEY_BY_LEAGUE: Dict[str, str] = {
+    "nba": "basketball_nba",
+    "wnba": "basketball_wnba",
+}
+
+# CSV historical service singletons created in csv_player_history.py
+# (one per league CSV file). Indirection keeps the league dispatch
+# centralized rather than scattered through _analyze_single_event.
+_CSV_SERVICE_BY_LEAGUE: Dict[str, Any] = {
+    "nba": csv_player_service,
+    "wnba": wnba_csv_player_service,
+}
+
+# Leagues with wired projections (SportsDataIO Projection API).
+# WNBA is intentionally absent here: the wrapper hasn't been ported and
+# SPO-35 explicitly defers it (graceful-degrade to history-only, see
+# decision_20260514_db-schema-audit.md §6 step 1). When WNBA projections
+# land, add "wnba" here and the pre-fetch loop below will pick it up
+# without other changes.
+_LEAGUES_WITH_PROJECTIONS: set[str] = {"nba"}
+
+
+def _resolve_sport_key(league: str) -> str:
+    """Look up The Odds API sport key for a league, raising on unknown."""
+    sport_key = _SPORT_KEY_BY_LEAGUE.get(league.lower())
+    if sport_key is None:
+        raise ValueError(
+            f"Unsupported league: {league!r}. "
+            f"Registered: {sorted(_SPORT_KEY_BY_LEAGUE.keys())}"
+        )
+    return sport_key
+
+
+def _resolve_csv_service(league: str):
+    """Return the CSV history service for the given league."""
+    service = _CSV_SERVICE_BY_LEAGUE.get(league.lower())
+    if service is None:
+        raise ValueError(
+            f"Unsupported league: {league!r}. "
+            f"Registered: {sorted(_CSV_SERVICE_BY_LEAGUE.keys())}"
+        )
+    return service
 
 
 # Supported market types (metrics)
@@ -249,7 +310,8 @@ class DailyAnalysisService:
         self,
         date: Optional[str] = None,
         use_cache: bool = True,
-        tz_offset_minutes: int = 480
+        tz_offset_minutes: int = 480,
+        league: str = "nba",
     ) -> DailyPicksResponse:
         """
         Run the full daily analysis
@@ -265,6 +327,12 @@ class DailyAnalysisService:
             date: Analysis date (YYYY-MM-DD), None means today
             use_cache: Whether to use cache, default True
             tz_offset_minutes: Timezone offset in minutes, default 480 (UTC+8, Taipei)
+            league: League key — ``"nba"`` (default) or ``"wnba"``. Controls
+                    The Odds API ``sport_key`` (``basketball_nba`` vs
+                    ``basketball_wnba``), which CSV history service is used
+                    for probability lookup, and the Redis cache namespace.
+                    Default ``"nba"`` preserves existing callers unchanged.
+                    Raises ``ValueError`` on an unknown league.
 
         Returns:
             DailyPicksResponse: Contains all high-probability player picks
@@ -273,28 +341,44 @@ class DailyAnalysisService:
             >>> service = DailyAnalysisService()
             >>> result = await service.run_daily_analysis()
             >>> print(f"Found {result.total_picks} high-probability picks")
+            >>> wnba_result = await service.run_daily_analysis(league="wnba")
         """
         start_time = time.time()
+
+        # Validate the league up front so an invalid value fails fast,
+        # before we hit the cache or the network.
+        league_normalized = league.lower()
+        _resolve_sport_key(league_normalized)
 
         # Determine analysis date
         if date is None:
             date = datetime.now(timezone.utc).strftime("%Y-%m-%d")
 
-        # 1. Check cache (different keys for different timezones)
+        # 1. Check cache (league-namespaced + timezone-scoped, SPO-35)
+        # Pre-SPO-35 keys lived under f"daily_picks:{date}:tz{tz}" and would
+        # have produced cross-league collisions once WNBA shipped. They roll
+        # off naturally within 15 min (DAILY_PICKS_CACHE_TTL).
         if use_cache:
-            cache_key = f"{DAILY_PICKS_CACHE_KEY}:{date}:tz{tz_offset_minutes}"
+            cache_key = (
+                f"{DAILY_PICKS_CACHE_KEY}:{league_normalized}:{date}:tz{tz_offset_minutes}"
+            )
             cached_data = await cache_service.get(cache_key)
             if cached_data:
-                print(f"✅ Using cached analysis result: {date} (tz={tz_offset_minutes})")
+                print(
+                    f"✅ [{league_normalized.upper()}] Using cached analysis result: "
+                    f"{date} (tz={tz_offset_minutes})"
+                )
                 return DailyPicksResponse(**cached_data)
 
-        print(f"🚀 Starting daily analysis: {date}")
+        print(f"🚀 [{league_normalized.upper()}] Starting daily analysis: {date}")
 
         # 2. Get all events for the day
         try:
-            events = await self._get_events_for_date(date, tz_offset_minutes)
+            events = await self._get_events_for_date(
+                date, tz_offset_minutes, league=league_normalized
+            )
         except Exception as e:
-            print(f"❌ Failed to fetch events: {e}")
+            print(f"❌ [{league_normalized.upper()}] Failed to fetch events: {e}")
             return DailyPicksResponse(
                 date=date,
                 analyzed_at=datetime.now(timezone.utc).isoformat(),
@@ -305,7 +389,7 @@ class DailyAnalysisService:
             )
 
         if not events:
-            print(f"⚠️ No events today: {date}")
+            print(f"⚠️ [{league_normalized.upper()}] No events today: {date}")
             return DailyPicksResponse(
                 date=date,
                 analyzed_at=datetime.now(timezone.utc).isoformat(),
@@ -315,19 +399,30 @@ class DailyAnalysisService:
                 message="No events today"
             )
 
-        print(f"📅 Found {len(events)} events")
+        print(f"📅 [{league_normalized.upper()}] Found {len(events)} events")
 
-        # 2.5. Pre-fetch player projections (SportsDataIO)
-        # One API call for all player projections for the date, re-used in analyses
+        # 2.5. Pre-fetch player projections (SportsDataIO).
+        # Only NBA has the projection wrapper wired today (see
+        # _LEAGUES_WITH_PROJECTIONS). For WNBA we skip the network call
+        # entirely and let the per-pick projection lookup degrade
+        # gracefully — `proj.get(...)` returns None, `edge` stays None,
+        # `has_projection` stays False, opponent_rank/injury_status all
+        # null. Tile-side UX already handles this empty state (SPO-26).
         projections: Dict[str, Dict] = {}
-        try:
-            projections = await projection_service.get_projections(date)
-            if projections:
-                print(f"📊 Retrieved {len(projections)} projection records")
-            else:
-                print(f"ℹ️ No projection data available, will use only historical probabilities")
-        except Exception as e:
-            print(f"⚠️ Failed to get projection data (doesn't affect main analysis): {e}")
+        if league_normalized in _LEAGUES_WITH_PROJECTIONS:
+            try:
+                projections = await projection_service.get_projections(date)
+                if projections:
+                    print(f"📊 Retrieved {len(projections)} projection records")
+                else:
+                    print(f"ℹ️ No projection data available, will use only historical probabilities")
+            except Exception as e:
+                print(f"⚠️ Failed to get projection data (doesn't affect main analysis): {e}")
+        else:
+            print(
+                f"ℹ️ [{league_normalized.upper()}] Projections not wired for this "
+                f"league; running history-only (edge / opponent_rank stay None)"
+            )
 
         # 3. Analyze all events
         all_picks: List[DailyPick] = []
@@ -340,7 +435,7 @@ class DailyAnalysisService:
             away_team = event.get("away_team", "")
             commence_time = event.get("commence_time", "")
 
-            print(f"\n🏀 Analyzing event: {away_team} @ {home_team}")
+            print(f"\n🏀 [{league_normalized.upper()}] Analyzing event: {away_team} @ {home_team}")
 
             try:
                 event_picks, players_count, props_count = await self._analyze_single_event(
@@ -348,7 +443,8 @@ class DailyAnalysisService:
                     home_team=home_team,
                     away_team=away_team,
                     commence_time=commence_time,
-                    projections=projections
+                    projections=projections,
+                    league=league_normalized,
                 )
                 all_picks.extend(event_picks)
                 total_players += players_count
@@ -380,22 +476,33 @@ class DailyAnalysisService:
             message=None
         )
 
-        # 7. Store in cache (including timezone offset)
-        # Note: Even if use_cache=False (force-refresh), always store so next GET uses latest result
-        cache_key = f"{DAILY_PICKS_CACHE_KEY}:{date}:tz{tz_offset_minutes}"
+        # 7. Store in cache (league + timezone scoped). Even when
+        # use_cache=False (force-refresh), still write so the next GET
+        # gets the latest analysis without re-triggering the work.
+        cache_key = (
+            f"{DAILY_PICKS_CACHE_KEY}:{league_normalized}:{date}:tz{tz_offset_minutes}"
+        )
         await cache_service.set(
             cache_key,
             response.model_dump(mode='json'),
             ttl=DAILY_PICKS_CACHE_TTL
         )
 
-        print(f"\n✅ Analysis complete! Found {len(all_picks)} high-probability picks in {duration:.2f} sec")
+        print(
+            f"\n✅ [{league_normalized.upper()}] Analysis complete! "
+            f"Found {len(all_picks)} high-probability picks in {duration:.2f} sec"
+        )
 
         return response
 
-    async def _get_events_for_date(self, date: str, tz_offset_minutes: int = 480) -> List[Dict[str, Any]]:
+    async def _get_events_for_date(
+        self,
+        date: str,
+        tz_offset_minutes: int = 480,
+        league: str = "nba",
+    ) -> List[Dict[str, Any]]:
         """
-        Fetch all NBA events for the specified date
+        Fetch all events for the specified date and league
 
         Takes timezone offset into account to fetch events for user-local date.
 
@@ -404,10 +511,15 @@ class DailyAnalysisService:
             tz_offset_minutes: Timezone offset in minutes, default 480 (UTC+8, Taipei)
                                Positive = east (like UTC+8 = 480)
                                Negative = west (like UTC-6 = -360)
+            league: League key ("nba" / "wnba"). Default "nba" preserves
+                    the pre-SPO-35 call shape; ``_resolve_sport_key``
+                    maps to the correct The Odds API ``sport_key``.
 
         Returns:
             List of events
         """
+        sport_key = _resolve_sport_key(league)
+
         # Parse date
         date_obj = datetime.strptime(date, "%Y-%m-%d")
 
@@ -429,11 +541,14 @@ class DailyAnalysisService:
         date_from = utc_start - timedelta(hours=1)
         date_to = utc_end + timedelta(hours=1)
 
-        print(f"📅 Query time range: {date_from.isoformat()} ~ {date_to.isoformat()} (UTC)")
+        print(
+            f"📅 [{league.upper()}/{sport_key}] Query time range: "
+            f"{date_from.isoformat()} ~ {date_to.isoformat()} (UTC)"
+        )
 
         # Call Odds API
         raw_events = await odds_provider.get_events(
-            sport="basketball_nba",
+            sport=sport_key,
             regions="us",
             date_from=date_from,
             date_to=date_to
@@ -469,7 +584,8 @@ class DailyAnalysisService:
         home_team: str,
         away_team: str,
         commence_time: str,
-        projections: Optional[Dict[str, Dict]] = None
+        projections: Optional[Dict[str, Dict]] = None,
+        league: str = "nba",
     ) -> Tuple[List[DailyPick], int, int]:
         """
         Analyze a single event
@@ -484,6 +600,13 @@ class DailyAnalysisService:
             commence_time: Event start time
             projections: Projection dict (keyed by player_name),
                          obtained up front in run_daily_analysis
+            league: League key — picks the CSV history service to query
+                    (``csv_player_service`` for NBA,
+                    ``wnba_csv_player_service`` for WNBA). The market
+                    list ``SUPPORTED_MARKETS`` is shared today because
+                    every entry in it is a hard-supported WNBA market
+                    too (Phase 0 evidence in
+                    ``docs/research/wnba-rollout/odds_api_wnba_markets.md``).
 
         Returns:
             Tuple[List[DailyPick], int, int]: (High probability picks, player count, prop count)
@@ -495,11 +618,26 @@ class DailyAnalysisService:
         if projections is None:
             projections = {}
 
+        # Resolve the league-specific CSV history service once per event.
+        # For the NBA path we keep reading through `self.csv_service` so
+        # existing tests that monkey-patch the instance attribute
+        # (`service.csv_service = MagicMock()`) keep working without
+        # tearing them all up — backward compat for a stable test suite.
+        # For non-NBA leagues we resolve via the league registry, which
+        # is also where future leagues plug in.
+        csv_service = (
+            self.csv_service
+            if league.lower() == "nba"
+            else _resolve_csv_service(league)
+        )
+
         # Analyze each metric
         for market_key, metric_key in SUPPORTED_MARKETS:
             try:
                 # Get all props for this market
-                props_data = await self._get_props_for_market(event_id, market_key)
+                props_data = await self._get_props_for_market(
+                    event_id, market_key, league=league
+                )
 
                 if not props_data:
                     continue
@@ -517,8 +655,8 @@ class DailyAnalysisService:
                     if mode_threshold is None:
                         continue
 
-                    # Historical probability from CSV
-                    history_stats = self.csv_service.get_player_stats(
+                    # Historical probability from CSV (per-league service)
+                    history_stats = csv_service.get_player_stats(
                         player_name=player_name,
                         metric=metric_key,
                         threshold=mode_threshold,
@@ -650,7 +788,8 @@ class DailyAnalysisService:
     async def _get_props_for_market(
         self,
         event_id: str,
-        market: str
+        market: str,
+        league: str = "nba",
     ) -> List[Dict[str, Any]]:
         """
         Fetch all props for a given event and market
@@ -658,13 +797,18 @@ class DailyAnalysisService:
         Args:
             event_id: Event ID
             market: Market type (e.g. player_points)
+            league: League key, mapped to The Odds API ``sport_key`` via
+                    ``_resolve_sport_key``. The Odds API ``event_id``
+                    is globally unique across sport keys, but the gateway
+                    embeds ``sport`` in its snapshot cache key — wrong
+                    league → cache miss + a misleading 404 from the API.
 
         Returns:
             List of bookmaker data
         """
         try:
             snapshot = await odds_gateway.get_market_snapshot(
-                sport="basketball_nba",
+                sport=_resolve_sport_key(league),
                 event_id=event_id,
                 regions="us",
                 markets=market,

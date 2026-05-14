@@ -175,17 +175,32 @@ class CacheService:
             print(f"Cache delete_pattern error: {e}")
             return 0
 
-    async def clear_daily_picks_cache(self) -> int:
+    async def clear_daily_picks_cache(self, league: str | None = None) -> int:
         """
-        Clear all daily picks cache.
+        Clear daily picks cache, optionally scoped to a single league.
 
-        When the CSV data is updated, clear all daily picks cache
-        so the next request will parse and use the latest data.
+        When the CSV data is updated, or fresh projections land, clear
+        the picks cache so the next request parses the latest inputs.
+
+        SPO-35 added league scoping. Cache keys live under
+        ``daily_picks:{league}:{date}:tz{offset}`` so the NBA pipeline
+        (e.g. NBA final-projection refresh) can drop only its own keys
+        without nuking the WNBA cache, and vice versa.
+
+        Args:
+            league: If provided (``"nba"`` / ``"wnba"``), restrict the
+                    sweep to that league's keys. If ``None``, fall back
+                    to the legacy "clear everything" semantic which also
+                    catches any pre-SPO-35 keys lingering under
+                    ``daily_picks:{date}:tz{offset}`` (no league
+                    segment) until their 15-minute TTL expires.
 
         Returns:
             int: number of keys deleted
         """
-        return await self.delete_pattern("daily_picks:*")
+        if league is None:
+            return await self.delete_pattern("daily_picks:*")
+        return await self.delete_pattern(f"daily_picks:{league.lower()}:*")
 
     async def close(self):
         """
