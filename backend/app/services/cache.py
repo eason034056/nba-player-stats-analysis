@@ -259,15 +259,22 @@ class CacheService:
             return False
 
     @staticmethod
-    def build_events_key(date: str, regions: str) -> str:
+    def build_events_key(date: str, regions: str, league: str = "nba") -> str:
         """
         Construct the cache key for the event list.
 
-        Format: events:nba:{date}:{regions}
+        Format: events:{league}:{date}:{regions}
+
+        The league segment isolates Redis namespaces between NBA / WNBA / future
+        leagues so the same date+region request for two leagues doesn't collide.
+        Default ``league="nba"`` preserves the historical NBA-only key shape —
+        every existing NBA caller continues to produce ``events:nba:...`` keys
+        with no source-code change.
 
         Args:
             date: date string (YYYY-MM-DD)
             regions: region code (e.g., "us")
+            league: league segment, default "nba". Pass "wnba" for WNBA.
 
         Returns:
             cache key
@@ -275,8 +282,10 @@ class CacheService:
         Example:
             >>> CacheService.build_events_key("2026-01-14", "us")
             "events:nba:2026-01-14:us"
+            >>> CacheService.build_events_key("2026-05-13", "us", league="wnba")
+            "events:wnba:2026-05-13:us"
         """
-        return f"events:nba:{date}:{regions}"
+        return f"events:{league}:{date}:{regions}"
 
     @staticmethod
     def build_props_key(

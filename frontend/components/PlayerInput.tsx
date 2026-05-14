@@ -15,6 +15,18 @@ import { Search, User, Loader2, Users } from "lucide-react";
 import { getPlayerSuggestions } from "@/lib/api";
 import { cn } from "@/lib/utils";
 import type { MarketKey } from "./MarketSelect";
+import type { PlayerSuggestResponse } from "@/lib/schemas";
+
+/**
+ * Signature for `suggestFn` (SPO-33). Mirrors NBA's `getPlayerSuggestions`
+ * exactly so a WNBA-aware caller can inject `getWNBAPlayerSuggestions`
+ * without forking this component.
+ */
+export type PlayerSuggestFn = (
+  eventId: string,
+  query?: string,
+  market?: string,
+) => Promise<PlayerSuggestResponse>;
 
 interface PlayerInputProps {
   eventId: string;
@@ -22,6 +34,18 @@ interface PlayerInputProps {
   value: string;
   onChange: (value: string) => void;
   disabled?: boolean;
+  /**
+   * Override the player-suggest fetcher (SPO-33). Defaults to NBA's
+   * `getPlayerSuggestions`. WNBA callers pass `getWNBAPlayerSuggestions`.
+   * Backwards-compatible: existing NBA call sites don't change.
+   */
+  suggestFn?: PlayerSuggestFn;
+  /**
+   * Cache namespace token for TanStack Query keys (SPO-33). Defaults to
+   * `"nba"`. WNBA callers pass `"wnba"` so per-league player-list caches
+   * don't collide in a multi-league session.
+   */
+  cacheNamespace?: string;
 }
 
 /**
@@ -33,24 +57,27 @@ export function PlayerInput({
   value,
   onChange,
   disabled = false,
+  suggestFn = getPlayerSuggestions,
+  cacheNamespace = "nba",
 }: PlayerInputProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [highlightedIndex, setHighlightedIndex] = useState(-1);
   const inputRef = useRef<HTMLInputElement>(null);
   const listRef = useRef<HTMLUListElement>(null);
 
-  // Get all players
+  // Get all players (cache key includes `cacheNamespace` so NBA + WNBA
+  // event-level player lists don't collide in the same browser session).
   const { data: allPlayers, isLoading: isLoadingAll } = useQuery({
-    queryKey: ["allPlayers", eventId, market],
-    queryFn: () => getPlayerSuggestions(eventId, "", market),
+    queryKey: ["allPlayers", cacheNamespace, eventId, market],
+    queryFn: () => suggestFn(eventId, "", market),
     enabled: !!eventId,
     staleTime: 60 * 1000,
   });
 
   // Get search suggestions
   const { data: suggestions, isLoading: isLoadingSearch } = useQuery({
-    queryKey: ["playerSuggestions", eventId, market, value],
-    queryFn: () => getPlayerSuggestions(eventId, value, market),
+    queryKey: ["playerSuggestions", cacheNamespace, eventId, market, value],
+    queryFn: () => suggestFn(eventId, value, market),
     enabled: !!eventId && value.length >= 1,
     staleTime: 30 * 1000,
   });
