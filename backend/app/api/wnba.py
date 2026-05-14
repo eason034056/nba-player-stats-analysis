@@ -66,6 +66,9 @@ from app.models.schemas import (
     PlayerDDHistoryResponse,
     PlayerHistoryResponse,
     PlayerSuggestResponse,
+    LineupRefreshResponse,
+    LineupsResponse,
+    TeamLineup,
 )
 from app.services.cache import CacheService, cache_service
 from app.services.csv_player_history import (
@@ -100,6 +103,7 @@ WNBA_SPORT_KEY = "basketball_wnba"
 # _parse_binary_market` writes to the DB, mirrored here so /props/no-vig
 # responses for DD agree with any future snapshot-stored rows.
 _BINARY_LINE_SENTINEL = 0.5
+from app.services.lineup_service import wnba_lineup_service
 
 
 router = APIRouter(prefix="/api/wnba", tags=["wnba"])
@@ -888,3 +892,86 @@ async def clear_wnba_daily_picks_cache() -> dict:
         }
     except Exception as exc:
         raise HTTPException(status_code=500, detail=f"Failed to clear cache: {exc}") from exc
+
+
+# ==================== Lineups (SPO-34, Phase 4) ===============================
+#
+# Mirrors backend/app/api/lineups.py but bound to wnba_lineup_service. The
+# response shape (LineupsResponse / TeamLineup / LineupRefreshResponse) is
+# already league-agnostic, so the NBA Pydantic schemas are reused as-is.
+#
+# Source notes (CLAUDE.md § External API Wrappers anti-hallucination):
+# - Only RotoWire WNBA is fetched (see comparison doc §3 for the
+#   RotoGrinders WNBA negative finding).
+# - source_snapshots['rotowire'] carries extra fields `out_players` and
+#   `questionable_players` for the agent layer's lineup-validity domain
+#   lens. They ride through the existing TeamLineup.model_validate without
+#   schema changes (source_snapshots is `dict[str, dict]` in the schema).
+
+
+@router.get(
+    "/lineups",
+    response_model=LineupsResponse,
+    summary="Get WNBA lineup consensus for a specified date",
+)
+async def get_wnba_lineups(
+    date: Optional[str] = Query(default=None, description="Query date (YYYY-MM-DD), defaults to today UTC"),
+) -> LineupsResponse:
+    target_date = date or datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    try:
+        result = await wnba_lineup_service.get_lineups(target_date)
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"Failed to retrieve WNBA lineup: {exc}") from exc
+
+    lineups = [TeamLineup.model_validate(lineup) for lineup in result.lineups.values()]
+    lineups.sort(key=lambda item: item.team)
+
+    return LineupsResponse(
+        date=target_date,
+        team_count=len(lineups),
+        fetched_at=result.fetched_at,
+        cache_state=result.cache_state,
+        lineups=lineups,
+    )
+
+
+@router.get(
+    "/lineups/{team}",
+    response_model=TeamLineup,
+    summary="Get WNBA lineup consensus for a single team",
+)
+async def get_wnba_team_lineup(
+    team: str,
+    date: Optional[str] = Query(default=None, description="Query date (YYYY-MM-DD), defaults to today UTC"),
+) -> TeamLineup:
+    target_date = date or datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    try:
+        lineup, _cache_state, _fetched_at = await wnba_lineup_service.get_team_lineup(target_date, team)
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"Failed to retrieve WNBA team lineup: {exc}") from exc
+
+    if lineup is None:
+        raise HTTPException(status_code=404, detail=f"No WNBA lineup data found for {team} on {target_date}")
+
+    return TeamLineup.model_validate(lineup)
+
+
+@router.post(
+    "/lineups/refresh",
+    response_model=LineupRefreshResponse,
+    summary="Manually refresh WNBA lineup consensus data",
+)
+async def refresh_wnba_lineups(
+    date: Optional[str] = Query(default=None, description="Refresh date (YYYY-MM-DD), defaults to today UTC"),
+) -> LineupRefreshResponse:
+    target_date = date or datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    try:
+        lineups = await wnba_lineup_service.fetch_and_store(target_date)
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"Failed to refresh WNBA lineup: {exc}") from exc
+
+    return LineupRefreshResponse(
+        date=target_date,
+        team_count=len(lineups),
+        message=f"Successfully refreshed WNBA lineup data for {len(lineups)} teams",
+    )
