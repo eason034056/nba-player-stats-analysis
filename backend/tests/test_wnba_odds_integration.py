@@ -26,11 +26,15 @@ Tests in this file:
    ``point`` field). Verifies the DD-binary parser path established in
    SPO-26 ports to WNBA. Cost: 1 quota unit if populated, 0 if empty.
 
-4. ``test_wnba_player_steals_empty_bookmakers_graceful`` — probe a market
-   Phase 0 classified as ``schema-valid+empty`` (``player_steals``);
-   assert the response is well-formed even when ``bookmakers: []``, so
-   the empty-bookmakers UX guard from SPO-26 fires gracefully (no 500,
-   no schema drift). Cost: 0 quota units.
+4. ``test_wnba_empty_bookmakers_market_graceful`` — parametrized probe over
+   the three ``schema-valid+empty`` WNBA markets confirmed by Phase 0 + the
+   SPO-33 follow-up probe: ``player_steals`` (SPO-31), ``player_frees_made``
+   (FTM — added 2026-05-14 follow-up §3.2.4), ``player_field_goals`` (FGM —
+   same follow-up). Asserts the response is well-formed even when
+   ``bookmakers: []`` so the empty-bookmakers UX guard from SPO-26 fires
+   gracefully (no 500, no schema drift) on every market the shared
+   ``MarketSelect`` exposes that falls in this classification. Cost: 0
+   quota units (empty markets are unbilled — SPO-12 measurement).
 
 Anchor event id captured from SPO-31 Phase 0's research doc
 (``docs/research/wnba-rollout/odds_api_wnba_markets.md`` §3.1) — Storm @
@@ -269,35 +273,61 @@ def test_wnba_double_double_binary_shape(event_id: str) -> None:
 
 
 @pytest.mark.integration
-def test_wnba_player_steals_empty_bookmakers_graceful(event_id: str) -> None:
+@pytest.mark.parametrize(
+    "market_key",
+    [
+        # SPO-31 Phase 0 — classified `schema-valid+empty` on the original 2026-05-13 run.
+        "player_steals",
+        # SPO-33 follow-up — classified `schema-valid+empty` on the 2026-05-14 probe
+        # documented in research doc §3.2.4. Added per Lens-review request to close
+        # the FTM/FGM anti-hallucination gap (the shared 12-tile MarketSelect exposes
+        # both keys on /wnba/event/[eventId], so they must be verified safe).
+        "player_frees_made",
+        "player_field_goals",
+    ],
+)
+def test_wnba_empty_bookmakers_market_graceful(event_id: str, market_key: str) -> None:
     """
-    SPO-33 acceptance criterion: markets Phase 0 classified as
-    ``schema-valid+empty`` (``player_steals`` / ``player_blocks`` /
-    ``player_turnovers``) must return well-formed JSON with ``bookmakers: []``
+    SPO-33 acceptance criterion: markets Phase 0 / SPO-33 follow-up classified
+    as ``schema-valid+empty`` (``player_steals`` / ``player_frees_made`` /
+    ``player_field_goals``) must return well-formed JSON with ``bookmakers: []``
     so the existing SPO-26 empty-bookmakers UX guard fires gracefully —
     NOT a 500 or schema drift.
 
-    Cost: 0 quota units (empty markets are unbilled — SPO-12 measurement).
+    The shared frontend ``MarketSelect`` (`frontend/components/MarketSelect.tsx`)
+    exposes 12 tiles, three of which currently land in this classification on
+    WNBA. The contract for all three is the same — `HTTP 200`, well-formed
+    envelope, `bookmakers: []` — and bookmakers may start posting inventory at
+    any time (WNBA-side bookmaker product launches lag NBA by ~4 weeks per
+    Phase 0). When that happens, the test still passes — we are asserting the
+    schema is well-formed, not that inventory stays empty forever.
 
-    If bookmakers HAVE started posting steals by the time this runs (Phase 0
-    noted WNBA bookmaker product launches lag NBA by ~4 weeks), the test
-    still passes — we are asserting the schema is well-formed, not that
-    inventory stays empty forever.
+    Cost: 0 quota units per parametrized case (empty markets are unbilled
+    per SPO-12 measurement) — but if a market starts posting inventory, the
+    bill rises to 1 unit. Worst case 3 units; expected case 0 units.
+
+    Replaces the pre-Lens-review ``test_wnba_player_steals_empty_bookmakers_graceful``;
+    name change reflects that the contract is market-set-wide, not steals-specific.
     """
     status, data = _http_get_json(
         f"/v4/sports/{SPORT}/events/{event_id}/odds",
         {
             "regions": "us",
-            "markets": "player_steals",
+            "markets": market_key,
             "oddsFormat": "american",
         },
     )
-    assert status == 200, f"Unexpected status {status} body={data!r}"
+    assert status == 200, (
+        f"Unexpected status {status} for market_key={market_key!r} "
+        f"body={data!r}"
+    )
     assert isinstance(data, dict)
     for key in ("id", "sport_key", "home_team", "away_team", "bookmakers"):
-        assert key in data, f"Missing required key {key!r} in steals response"
+        assert key in data, (
+            f"Missing required key {key!r} in {market_key} response: {data!r}"
+        )
     assert data["sport_key"] == SPORT
     assert isinstance(data["bookmakers"], list), (
-        f"bookmakers must be a list (even if empty); got "
+        f"bookmakers must be a list (even if empty) for {market_key}; got "
         f"{type(data['bookmakers']).__name__}"
     )

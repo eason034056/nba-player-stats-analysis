@@ -32,12 +32,18 @@ classified it as `hard-supported` or `schema-valid+empty`. Unknown keys
 return empty `bookmakers=[]` silently, which reads as "no lines" rather
 than an error.
 
-🔗 Drift-risk note: the Phase 2 no-vig handler duplicates `nba.py`'s
-Over/Under and DD-binary bodies to preserve the SPO-33 acceptance criterion
-"existing NBA path unchanged." When a 3rd league joins, factor the shared
-helpers (`_collect_player_names`, `_snapshot_metadata`,
+🔗 Drift-risk note: the Phase 2 no-vig handler is a **high-fidelity port** of
+`nba.py`'s Over/Under and DD-binary bodies — duplicated rather than factored
+out to preserve the SPO-33 acceptance criterion "existing NBA path unchanged."
+One deliberate divergence: the WNBA handler uses
+`(outcome.get("name") or "").lower()` so a `{"name": null}` payload from The
+Odds API degrades to an empty-string skip rather than crashing on
+`AttributeError` (the NBA form `outcome.get("name", "").lower()` would crash).
+Functional behaviour is otherwise identical. When a 3rd league joins, factor
+the shared helpers (`_collect_player_names`, `_snapshot_metadata`,
 `_build_binary_no_vig_response`) into `app.services.no_vig_helpers` —
-rule-of-three lives at 3, not 2.
+rule-of-three lives at 3, not 2. When that extraction happens, apply the
+WNBA hardening to NBA in the same PR so the two parsers stay aligned.
 """
 
 from datetime import datetime, time, timedelta, timezone
@@ -253,9 +259,10 @@ async def get_player_dd_history(
 
 # ==================== Phase 2 — Live odds layer (SPO-33) =====================
 #
-# Helpers below mirror `nba.py` byte-for-byte. Duplication is intentional —
-# SPO-33's acceptance criterion "existing NBA path unchanged" forbids touching
-# `nba.py`. See the drift-risk note in the module docstring.
+# Helpers below are a high-fidelity port of `nba.py` — duplicated rather than
+# factored out so SPO-33's acceptance criterion "existing NBA path unchanged"
+# holds. One deliberate divergence (null-safe `name` parsing) is documented in
+# the module docstring; functional behaviour is otherwise identical.
 
 
 def _snapshot_metadata(snapshot: MarketSnapshotResult) -> dict:
@@ -291,7 +298,7 @@ def _build_binary_no_vig_response(
     """
     Build a NoVigResponse for a binary Yes/No market (e.g. DD).
 
-    Byte-for-byte port of `nba.py._build_binary_no_vig_response`:
+    High-fidelity port of `nba.py._build_binary_no_vig_response`:
     - Requires the Yes leg per bookmaker; rows where only "No" is posted
       are dropped (no honest single-leg anchor).
     - Two-leg path uses `devig(p_yes_imp, p_no_imp)`.
@@ -304,6 +311,13 @@ def _build_binary_no_vig_response(
       frontend Zod parsers keep working; explicit `yes_*/no_*` mirrors are
       populated alongside for SPO-26-aware consumers.
     - `Consensus.p_yes_fair/p_no_fair` mirrors are populated for binary.
+
+    Deliberate divergence from `nba.py` — null-safe `name` parsing
+    (`(outcome.get("name") or "").lower()` vs NBA's
+    `outcome.get("name", "").lower()`): degrades a `{"name": null}` payload
+    to an empty-string skip rather than crashing on `AttributeError`. See
+    the module docstring drift-risk note for the alignment plan when the
+    rule-of-three extraction lands.
     """
     results: List[BookmakerResult] = []
     fair_probs_for_consensus: List[tuple] = []

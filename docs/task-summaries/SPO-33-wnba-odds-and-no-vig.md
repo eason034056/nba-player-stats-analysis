@@ -36,7 +36,9 @@ no new parser branch required.
 | Backend | `backend/app/services/cache.py` | Modified | Add optional `league` parameter to `CacheService.build_events_key` (default `"nba"`). League-namespaces the events cache so NBA + WNBA do not collide in Redis. Strictly additive — every existing NBA caller continues to produce the historical `events:nba:...` key shape with no source-code change. |
 | Backend | `backend/app/api/wnba.py` | Modified | Append three Phase 2 endpoints (`/events`, `/props/no-vig`, `/players/suggest`) on top of SPO-32's four Phase 1 CSV endpoints in the same `APIRouter(prefix="/api/wnba")`. Calls into the existing parameterized `odds_gateway` / `odds_provider` with `sport="basketball_wnba"`. Reuses `BINARY_MARKET_KEYS`, devig math, fuzzy-match helpers, and the `NBAEvent` / `NoVigResponse` schemas (which are sport-agnostic by content). |
 | Backend | `backend/tests/test_cache.py` | Modified | Three new tests: default-league-is-nba regression guard, WNBA-league key shape, namespace isolation between NBA and WNBA for the same date+region. |
-| Backend | `backend/tests/test_wnba_odds_integration.py` | New | Four `@pytest.mark.integration` tests gated on `RUN_INTEGRATION=1`: `/events` schema (free), `player_points` Over/Under shape (1 unit), `player_double_double` binary contract (1 unit if populated), `player_steals` empty-bookmakers graceful shape (0 units). Anchored on the Phase 0 event id `efb5e7faabc4ea9406b9b479ae805b38` (Storm @ Tempo) with a live-event fallback. |
+| Backend | `backend/tests/test_wnba_odds_integration.py` | New | Three `@pytest.mark.integration` tests + one parametrized test, all gated on `RUN_INTEGRATION=1`: `/events` schema (free), `player_points` Over/Under shape (1 unit), `player_double_double` binary contract (1 unit if populated), and a parametrized `test_wnba_empty_bookmakers_market_graceful` covering `player_steals`/`player_frees_made`/`player_field_goals` (0 units while empty). The FTM/FGM cases were added post-Lens-review per the SPO-33 anti-hallucination remediation — see `scripts/explore_odds_api_wnba_ftm_fgm.py` + research doc §3.2.4. Anchored on the Phase 0 event id `efb5e7faabc4ea9406b9b479ae805b38` (Storm @ Tempo) with a live-event fallback. |
+| Scripts | `scripts/explore_odds_api_wnba_ftm_fgm.py` | New | Phase 0 follow-up probe (added 2026-05-14). Targets only `player_frees_made` and `player_field_goals` on `basketball_wnba`. Mirrors `explore_odds_api_wnba.py`'s env-loading + classification logic. Output appended to research doc §3.2.4. Run cost: 0 paid units (both markets classified `schema-valid+empty`, unbilled). |
+| Docs | `docs/research/wnba-rollout/odds_api_wnba_markets.md` | Modified | Added §3.2.4 (FTM/FGM curl evidence with headers + full bodies), extended §4 support table from 12 to 14 rows, replaced §6 "NOT probed this run" lines with verified classifications. Closes the anti-hallucination gap flagged in Lens review of commit `d1b00f3`. |
 | Frontend | `frontend/lib/api.ts` | Modified | Three new exports — `getWNBAEvents`, `calculateWNBANoVig`, `getWNBAPlayerSuggestions`. Reuses existing Zod schemas (`eventsResponseSchema`, `noVigResponseSchema`, `playerSuggestResponseSchema`) which are sport-agnostic by content. |
 | Frontend | `frontend/lib/event-detail-link.ts` | Modified | Add optional `league: "nba" \| "wnba"` parameter to `buildEventDetailHref` (default `"nba"`). NBA produces `/event/<id>` exactly as before; WNBA callers get `/wnba/event/<id>`. Adds an exported `LeagueSegment` type for typed callers. |
 | Frontend | `frontend/components/PlayerInput.tsx` | Modified | Add two optional props: `suggestFn` (default `getPlayerSuggestions`) and `cacheNamespace` (default `"nba"`). NBA call sites untouched. WNBA caller injects `getWNBAPlayerSuggestions` and `"wnba"` so autocomplete + TanStack Query cache keys land in the right namespace. Adds an exported `PlayerSuggestFn` type. |
@@ -66,13 +68,18 @@ no new parser branch required.
    `LeagueEvent` is an unrelated refactor and stays out of scope.
 4. **Route handlers duplicated, not factored.** The DD-binary helper
    (`_build_binary_no_vig_response`) and the standard Over/Under loop are
-   byte-for-byte ports from `nba.py`. The SPO-33 acceptance criterion
-   "existing NBA path unchanged" forbids touching `nba.py` to extract a
-   shared helper. **Drift risk acknowledged**: when a 3rd league joins,
-   factor `_collect_player_names`, `_snapshot_metadata`,
-   `_build_binary_no_vig_response` into
+   **high-fidelity ports** from `nba.py` — duplicated rather than factored
+   out because SPO-33's acceptance criterion "existing NBA path unchanged"
+   forbids touching `nba.py`. One deliberate divergence in the WNBA copy:
+   `(outcome.get("name") or "").lower()` (both binary and OU paths) is
+   null-safe against a `{"name": null}` payload from The Odds API, where
+   NBA's `outcome.get("name", "").lower()` would crash on `AttributeError`.
+   Functional behaviour is otherwise identical. **Drift risk acknowledged**:
+   when a 3rd league joins, factor `_collect_player_names`,
+   `_snapshot_metadata`, `_build_binary_no_vig_response` into
    `backend/app/services/no_vig_helpers.py` — rule-of-three lives at 3,
-   not 2. Both module docstrings flag this trigger.
+   not 2 — and apply the WNBA null-safe hardening to NBA in the same PR so
+   the two parsers stay aligned. Both module docstrings flag this trigger.
 5. **`PlayerInput` gets optional injection, not a hardcoded league switch.**
    Adding `suggestFn` (default = NBA's `getPlayerSuggestions`) and
    `cacheNamespace` keeps NBA call sites untouched. The alternative — a
@@ -108,7 +115,7 @@ no new parser branch required.
 ## Architectural guardrail check
 
 - **One gateway, one provider, parameterized.** ✓ No new file under `app/services/odds_*`. WNBA route calls the same `odds_gateway` and `odds_provider` instances NBA uses.
-- **No new market keys.** ✓ Every market the WNBA route accepts matches a key Phase 0's research doc classified as `hard-supported` or `schema-valid+empty`. The anti-hallucination guard is the WNBA route reusing exactly the constants `BINARY_MARKET_KEYS` and the validation surface from the NBA route, not a parallel WNBA-specific market enum.
+- **No new market keys.** ✓ All 14 markets reachable on the WNBA route via the shared `MarketSelect` are classified `hard-supported` or `schema-valid+empty` in Phase 0's research doc — the original 12 in SPO-31's ticket scope plus `player_frees_made` and `player_field_goals` added in the 2026-05-14 SPO-33 follow-up probe (§3.2.4 of [`odds_api_wnba_markets.md`](../research/wnba-rollout/odds_api_wnba_markets.md), prompted by Lens review of commit `d1b00f3`). Both follow-up markets returned `bookmakers=[]` with `x-requests-last: 0` — same Tier-B graceful-degrade contract as `player_steals`/`blocks`/`turnovers` and as NBA's existing FTM/FGM path. The anti-hallucination guard is the WNBA route reusing exactly the constants `BINARY_MARKET_KEYS` and the validation surface from the NBA route, not a parallel WNBA-specific market enum.
 - **Existing NBA path unchanged.** ✓ `nba.py` is byte-for-byte unchanged. `cache.build_events_key` default behavior preserved (regression test enforces this). `PlayerInput` NBA defaults preserved. `EventList`/`buildEventDetailHref` NBA defaults preserved. Frontend NBA home page produces identical paths/links.
 
 ## Verification commands
@@ -151,11 +158,17 @@ owner runs `RUN_INTEGRATION=1` locally before merge.
 ## Cost & quota
 
 - Phase 0 (SPO-31) verification burned 9 units total — already paid.
-- This Phase 2 integration test burns **at most 2 paid units per run**
+- 2026-05-14 SPO-33 follow-up probe (FTM + FGM) burned 0 units — both markets
+  classified `schema-valid+empty`, unbilled.
+- This Phase 2 integration test burns **at most 2 paid units per typical run**
   (`player_points` + `player_double_double`) when `RUN_INTEGRATION=1`.
-  `/events` and `player_steals` are 0 units. Per the per-market billing
-  model from SPO-12, full local verification costs ≤ 0.4% of the monthly
-  quota — well within `[Minor]` budget.
+  `/events` is free; the three parametrized `schema-valid+empty` markets
+  (`player_steals`/`player_frees_made`/`player_field_goals`) cost 0 while
+  bookmakers haven't started posting them. Worst case (all three start
+  posting between the Phase 0 probe and the test run) raises the bill to 5
+  units. Per the per-market billing model from SPO-12, full local
+  verification still costs ≤ 1% of the monthly quota — well within
+  `[Minor]` budget.
 - Default (no env var set) → 0 units burned in dev/CI runs.
 
 ## Workflow handoff
