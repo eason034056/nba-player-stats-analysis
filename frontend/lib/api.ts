@@ -611,7 +611,88 @@ export async function triggerDailyAnalysis(
   const data = await fetchApi<DailyPicksResponse>(url, {
     method: "POST",
   });
-  
+
+  return dailyPicksResponseSchema.parse(data);
+}
+
+// ==================== WNBA Daily Picks (SPO-35) ====================
+//
+// Sibling of getDailyPicks / triggerDailyAnalysis bound to the
+// /api/wnba/daily-picks* endpoints. Same response shape — the schema
+// is league-agnostic — so the same zod parser validates both leagues.
+// Kept as separate functions (rather than a `league` parameter on the
+// existing helpers) so call sites stay obviously league-scoped and
+// neither league silently inherits the other's defaults.
+
+/**
+ * Fetch WNBA daily high-probability picks.
+ *
+ * GET /api/wnba/daily-picks
+ *
+ * Mirror of `getDailyPicks` against the WNBA pipeline. Picks are
+ * filtered server-side by `min_probability` and `min_games`; the
+ * response uses the same `DailyPicksResponse` shape so it renders in
+ * the same UI components as NBA picks.
+ *
+ * Note: `has_projection` will be False / `edge` will be null on every
+ * WNBA pick — SportsDataIO projections are not wired for WNBA today
+ * (see SPO-35 task summary).
+ */
+export async function getWnbaDailyPicks(
+  request?: DailyPicksRequest
+): Promise<DailyPicksResponse> {
+  const params = new URLSearchParams();
+
+  if (request?.date) {
+    params.set("date", request.date);
+  }
+  if (request?.refresh) {
+    params.set("refresh", "true");
+  }
+  if (request?.min_probability !== undefined) {
+    params.set("min_probability", request.min_probability.toString());
+  }
+  if (request?.min_games !== undefined) {
+    params.set("min_games", request.min_games.toString());
+  }
+
+  const tzOffset = -new Date().getTimezoneOffset();
+  params.set("tz_offset", tzOffset.toString());
+
+  const queryString = params.toString();
+  const url = `/api/wnba/daily-picks?${queryString}`;
+
+  const data = await fetchApi<DailyPicksResponse>(url);
+  return dailyPicksResponseSchema.parse(data);
+}
+
+/**
+ * Force a WNBA daily-picks re-analysis.
+ *
+ * POST /api/wnba/daily-picks/trigger
+ *
+ * Bypasses the Redis cache and recomputes end-to-end. Mirror of
+ * `triggerDailyAnalysis`.
+ */
+export async function triggerWnbaDailyAnalysis(
+  date?: string
+): Promise<DailyPicksResponse> {
+  const params = new URLSearchParams();
+
+  if (date) {
+    params.set("date", date);
+  }
+
+  const tzOffset = -new Date().getTimezoneOffset();
+  params.set("tz_offset", tzOffset.toString());
+
+  const queryString = params.toString();
+  const url = `/api/wnba/daily-picks/trigger?${queryString}`;
+
+  const data = await fetchApi<DailyPicksResponse>(url, {
+    method: "POST",
+  });
+
   return dailyPicksResponseSchema.parse(data);
 }
 

@@ -214,6 +214,60 @@ CREATE TABLE IF NOT EXISTS lineup_fetch_logs (
     duration_ms INTEGER NOT NULL DEFAULT 0,
     source_statuses JSONB NOT NULL DEFAULT '{}'::jsonb
 );
+
+
+-- ==================== SPO-35: WNBA league-aware migration =================
+--
+-- Strictly additive. See:
+--   docs/decisions/wnba-rollout/decision_20260514_db-schema-audit.md
+--
+-- Closes the SPO-34 deferred follow-up that left WNBA lineups Redis-only
+-- because team_lineup_snapshots' UNIQUE(date, team) collided on shared
+-- codes (ATL/CHI/DAL/IND/MIN/PHO/SEA/WAS/GS).
+--
+-- The replacement UNIQUE constraint (date, team, league) is strictly more
+-- permissive than the old one — every previously-legal NBA row remains
+-- legal, and WNBA rows that previously could not coexist now can. PK is
+-- untouched, no column drop, no type change → not Gate 2.
+--
+-- Backfill: pre-existing NBA rows get league='nba' via the column DEFAULT.
+-- New WNBA writes must pass league='wnba' (lineup_service handles this).
+--
+-- All statements are idempotent — safe to run multiple times via
+-- db_service.init() on every startup.
+
+ALTER TABLE team_lineup_snapshots
+    ADD COLUMN IF NOT EXISTS league TEXT NOT NULL DEFAULT 'nba';
+
+ALTER TABLE team_lineup_snapshots
+    DROP CONSTRAINT IF EXISTS team_lineup_snapshots_date_team_key;
+
+-- 💡 ADD CONSTRAINT IF NOT EXISTS for table-level constraints isn't
+-- portable across PG versions; gate via pg_constraint introspection in a
+-- DO block so re-running init() doesn't error on the second startup.
+DO $spo35_unique$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1
+        FROM pg_constraint
+        WHERE conrelid = 'team_lineup_snapshots'::regclass
+          AND conname = 'team_lineup_snapshots_date_team_league_key'
+    ) THEN
+        ALTER TABLE team_lineup_snapshots
+            ADD CONSTRAINT team_lineup_snapshots_date_team_league_key
+            UNIQUE (date, team, league);
+    END IF;
+END
+$spo35_unique$;
+
+-- Optional additive — per-league observability (owner explicitly opted
+-- in via the request_confirmation rejection reason: "Include observability
+-- tables (lineup_fetch_logs, odds_snapshot_logs) in this PR").
+ALTER TABLE lineup_fetch_logs
+    ADD COLUMN IF NOT EXISTS league TEXT NOT NULL DEFAULT 'nba';
+
+ALTER TABLE odds_snapshot_logs
+    ADD COLUMN IF NOT EXISTS league TEXT NOT NULL DEFAULT 'nba';
 """
 
 

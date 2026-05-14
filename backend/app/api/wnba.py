@@ -56,6 +56,7 @@ from app.models.schemas import (
     BookmakerResult,
     Consensus,
     CSVPlayersResponse,
+    DailyPicksResponse,
     EventsResponse,
     GameLog,
     HistogramBin,
@@ -71,6 +72,7 @@ from app.services.csv_player_history import (
     CONTINUOUS_METRIC_EXTRACTORS,
     wnba_csv_player_service,
 )
+from app.services.daily_analysis import daily_analysis_service
 from app.services.normalize import (
     find_player,
     suggest_players as suggest_player_names,
@@ -742,3 +744,147 @@ async def suggest_players(
         players=all_players,
         **_snapshot_metadata(snapshot),
     )
+
+
+# ==================== Phase 3 — Daily picks (SPO-35) =====================
+#
+# Sibling of `backend/app/api/daily_picks.py`. Same response model
+# (`DailyPicksResponse`) because the schema is league-agnostic — the
+# difference is which CSV history service + Odds API sport key the
+# underlying `daily_analysis_service.run_daily_analysis(league="wnba")`
+# call routes to.
+#
+# Failure isolation from NBA picks lives at the scheduler layer (see
+# `scheduler.SchedulerService` — `_run_daily_analysis_job` and
+# `_run_wnba_daily_analysis_job` are independently registered with their
+# own ids). The API endpoints below are user-triggered, so isolation is
+# implicit per request.
+
+
+@router.get(
+    "/daily-picks",
+    response_model=DailyPicksResponse,
+    summary="Get WNBA daily high-probability player picks",
+    description=(
+        "Player picks for the day whose historical p(over) or p(under) "
+        "≥ `min_probability` (default 0.65) given the bookmaker modal line. "
+        "Calls `daily_analysis_service.run_daily_analysis(league=\"wnba\")` "
+        "under the hood — same logic tree as NBA, league-scoped CSV history "
+        "(`wnba_player_game_logs.csv`) and Odds API sport key "
+        "(`basketball_wnba`). Projections are not wired for WNBA today; "
+        "`has_projection` will be False and `edge` / `opponent_rank` will be "
+        "null on every pick — frontend already handles this state."
+    ),
+)
+async def get_wnba_daily_picks(
+    date: Optional[str] = Query(
+        default=None,
+        description="Query date (YYYY-MM-DD), default is today",
+        pattern=r"^\d{4}-\d{2}-\d{2}$",
+    ),
+    tz_offset: Optional[int] = Query(
+        default=None,
+        description="Timezone offset (minutes), e.g., 480 for UTC+8",
+    ),
+    refresh: bool = Query(
+        default=False,
+        description="Force re-analysis (ignore cache)",
+    ),
+    min_probability: float = Query(
+        default=0.65,
+        ge=0.5,
+        le=0.95,
+        description="Minimum probability threshold (0.5-0.95)",
+    ),
+    min_games: int = Query(
+        default=10,
+        ge=5,
+        le=100,
+        description="Minimum number of historical games (5-100)",
+    ),
+) -> DailyPicksResponse:
+    """WNBA mirror of `GET /api/nba/daily-picks`."""
+    if date is None:
+        date = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+
+    offset_minutes = tz_offset if tz_offset is not None else 480
+
+    try:
+        result = await daily_analysis_service.run_daily_analysis(
+            date=date,
+            use_cache=not refresh,
+            tz_offset_minutes=offset_minutes,
+            league="wnba",
+        )
+
+        # Apply the same probability + sample-size filters as NBA so the
+        # board can use the same Query params (`min_probability`,
+        # `min_games`) across both leagues.
+        if result.picks:
+            filtered = [
+                p for p in result.picks
+                if p.probability >= min_probability
+                and p.n_games >= min_games
+            ]
+            result.picks = filtered
+            result.total_picks = len(filtered)
+
+        return result
+
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"WNBA daily analysis failed: {exc}") from exc
+
+
+@router.post(
+    "/daily-picks/trigger",
+    response_model=DailyPicksResponse,
+    summary="Manually trigger WNBA daily analysis (admin)",
+    description=(
+        "Force-refresh — bypasses the Redis cache and re-runs the "
+        "analysis end-to-end. Mirror of `POST /api/nba/daily-picks/trigger`."
+    ),
+)
+async def trigger_wnba_daily_analysis(
+    date: Optional[str] = Query(
+        default=None,
+        description="Analysis date (YYYY-MM-DD), default is today",
+        pattern=r"^\d{4}-\d{2}-\d{2}$",
+    ),
+    tz_offset: Optional[int] = Query(
+        default=None,
+        description="Timezone offset (minutes), e.g., 480 for UTC+8",
+    ),
+) -> DailyPicksResponse:
+    """WNBA mirror of `POST /api/nba/daily-picks/trigger`."""
+    if date is None:
+        date = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+
+    offset_minutes = tz_offset if tz_offset is not None else 480
+
+    try:
+        return await daily_analysis_service.run_daily_analysis(
+            date=date,
+            use_cache=False,
+            tz_offset_minutes=offset_minutes,
+            league="wnba",
+        )
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"WNBA daily analysis failed: {exc}") from exc
+
+
+@router.delete(
+    "/daily-picks/cache",
+    summary="Clear WNBA daily picks cache",
+    description="Drops all `daily_picks:wnba:*` keys (does NOT touch NBA).",
+)
+async def clear_wnba_daily_picks_cache() -> dict:
+    """Scoped cache flush — does not affect NBA's `daily_picks:nba:*` keys."""
+    try:
+        deleted = await cache_service.clear_daily_picks_cache(league="wnba")
+        return {
+            "success": True,
+            "message": f"Cleared {deleted} WNBA daily picks cache key(s)",
+            "deleted": deleted,
+        }
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"Failed to clear cache: {exc}") from exc

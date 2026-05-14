@@ -854,7 +854,7 @@ class TestRunDailyAnalysis:
 
         call_count = 0
 
-        async def mock_analyze(event_id, home_team, away_team, commence_time, projections):
+        async def mock_analyze(event_id, home_team, away_team, commence_time, projections, league="nba"):
             nonlocal call_count
             call_count += 1
             if event_id == "evt-bad":

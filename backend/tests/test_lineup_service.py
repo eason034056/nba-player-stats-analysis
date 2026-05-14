@@ -25,6 +25,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 from app.services.lineup_service import (
+    UPSERT_LINEUP_SQL,
     LineupConsensusService,
     LineupReadResult,
     _build_lineups_key,
@@ -34,6 +35,24 @@ from app.services.lineup_service import (
     _parse_iso_timestamp,
     _unresolved_starters,
 )
+
+
+# ---------------------------------------------------------------------------
+# SPO-35 regression: UPSERT must target the widened UNIQUE constraint
+# (date, team, league). PostgreSQL ON CONFLICT requires an exact
+# column-tuple match against an existing unique/exclusion constraint, so
+# leaving `ON CONFLICT (date, team)` here after the SPO-35 migration
+# drops that constraint would raise 42P10 at runtime — silently breaking
+# every scheduled `lineup_fetch_job` after deploy. The test suite mocks
+# `db_service.executemany`, so a string check on the prepared SQL is the
+# only place this regression can be caught without spinning up Postgres.
+# ---------------------------------------------------------------------------
+
+
+def test_upsert_lineup_sql_targets_widened_unique_constraint():
+    """ON CONFLICT must reference (date, team, league) post SPO-35 migration."""
+    assert "ON CONFLICT (date, team, league)" in UPSERT_LINEUP_SQL
+    assert "ON CONFLICT (date, team)\n" not in UPSERT_LINEUP_SQL
 
 
 # ---------------------------------------------------------------------------

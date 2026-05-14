@@ -255,9 +255,12 @@ class CSVDownloaderService:
         try:
             from app.services.cache import cache_service
             
-            # Clear daily picks cache
-            # The next /api/daily-picks request will re-analyze
-            deleted = await cache_service.clear_daily_picks_cache()
+            # Clear daily picks cache (NBA only — this downloader only
+            # refreshes the NBA CSV; WNBA CSV refresh lives elsewhere).
+            # SPO-35: scope by league so an NBA download doesn't blast
+            # the WNBA picks cache and double-charge The Odds API quota.
+            # The next /api/nba/daily-picks request will re-analyze.
+            deleted = await cache_service.clear_daily_picks_cache(league="nba")
             
             if deleted > 0:
                 print(f"🗑️ Cleared {deleted} Redis cache entries")
