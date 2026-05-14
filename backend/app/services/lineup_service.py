@@ -33,7 +33,13 @@ INSERT INTO team_lineup_snapshots (
     $6::jsonb, $7::jsonb, $8::jsonb,
     $9, $10, $11, $12::jsonb, $13
 )
-ON CONFLICT (date, team)
+-- ⚠️ Must match the SPO-35 widened UNIQUE constraint
+-- (date, team, league) — Postgres ON CONFLICT requires an exact
+-- column-tuple match. The league column is omitted from the column
+-- list above, so the DEFAULT 'nba' fills it in for NBA writes and
+-- the inference resolves against the existing NBA row. WNBA writes
+-- (SPO-34) will pass league='wnba' in their own column list.
+ON CONFLICT (date, team, league)
 DO UPDATE SET
     opponent = EXCLUDED.opponent,
     home_or_away = EXCLUDED.home_or_away,
@@ -273,7 +279,10 @@ class LineupConsensusService:
             except Exception as exc:
                 print(f"⚠️ 寫入 lineup PostgreSQL 失敗（不影響主流程）: {exc}")
 
-            deleted = await cache_service.clear_daily_picks_cache()
+            # SPO-35: this service only writes NBA lineups today. Scope the
+            # invalidation to NBA so a lineup refresh doesn't nuke the
+            # WNBA daily-picks cache (and the WNBA quota on regen).
+            deleted = await cache_service.clear_daily_picks_cache(league="nba")
             if deleted > 0:
                 print(f"🗑️ lineup refresh cleared {deleted} daily picks cache keys")
 

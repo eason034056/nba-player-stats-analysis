@@ -56,6 +56,7 @@ from app.models.schemas import (
     BookmakerResult,
     Consensus,
     CSVPlayersResponse,
+    DailyPicksResponse,
     EventsResponse,
     GameLog,
     HistogramBin,
@@ -71,6 +72,7 @@ from app.services.csv_player_history import (
     CONTINUOUS_METRIC_EXTRACTORS,
     wnba_csv_player_service,
 )
+from app.services.daily_analysis import daily_analysis_service
 from app.services.normalize import (
     find_player,
     suggest_players as suggest_player_names,
@@ -757,10 +759,6 @@ async def suggest_players(
 # `_run_wnba_daily_analysis_job` are independently registered with their
 # own ids). The API endpoints below are user-triggered, so isolation is
 # implicit per request.
-
-
-from app.models.schemas import DailyPicksResponse  # noqa: E402  (Phase 3 import block)
-from app.services.daily_analysis import daily_analysis_service  # noqa: E402
 
 
 @router.get(

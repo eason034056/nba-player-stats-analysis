@@ -429,8 +429,11 @@ class SchedulerService:
             
             print(f"✅ Final projection data prefetch completed! {len(projections)} players")
             
-            # Clear daily picks cache so the next analysis uses new projections
-            deleted = await cache_service.clear_daily_picks_cache()
+            # SPO-35: scope to NBA — projection prefetch only writes
+            # NBA projections (no SportsDataIO WNBA wrapper today, see
+            # daily_analysis._LEAGUES_WITH_PROJECTIONS), so the WNBA
+            # picks cache must NOT be invalidated here.
+            deleted = await cache_service.clear_daily_picks_cache(league="nba")
             if deleted > 0:
                 print(f"🗑️ Cleared {deleted} daily picks cache")
         
@@ -544,32 +547,6 @@ class SchedulerService:
         """
         return await self._run_daily_analysis_job()
 
-    async def trigger_wnba_daily_analysis_now(
-        self,
-        date: Optional[str] = None,
-        tz_offset_minutes: int = 480,
-    ):
-        """SPO-35: manually trigger the WNBA daily-picks pipeline.
-
-        Used by ``POST /api/wnba/daily-picks/trigger`` for admin
-        re-runs. Force-refreshes (``use_cache=False``) and returns the
-        :class:`DailyPicksResponse` directly rather than the dict the
-        cron handler logs out — the API needs the model, not the
-        side-effect.
-
-        Args:
-            date: Date (YYYY-MM-DD). ``None`` → today (UTC).
-            tz_offset_minutes: Timezone offset for event-day windowing.
-        """
-        if date is None:
-            date = datetime.now(timezone.utc).strftime("%Y-%m-%d")
-        return await daily_analysis_service.run_daily_analysis(
-            date=date,
-            use_cache=False,
-            tz_offset_minutes=tz_offset_minutes,
-            league="wnba",
-        )
-    
     async def trigger_csv_download_now(self) -> bool:
         """
         Manually trigger CSV download job
