@@ -4,6 +4,7 @@
 - **Agent:** Scout (`1a495f58-b689-46b7-9e79-9d563b31175d`)
 - **Date:** 2026-05-13
 - **Outcome (Gate behaviour):** ✅ **Row 2 — "Some `hard-supported`, some `schema-valid+empty`."** All 3 core markets pass the gate; 3 of 12 (`player_steals`, `player_blocks`, `player_turnovers`) returned populated schema with `bookmakers=[]`.
+- **2026-05-14 follow-up:** `player_frees_made` (FTM) and `player_field_goals` (FGM) added as Phase 0.5 probes by Forge during SPO-33 Lens review (see §3.2.4 + §4). Both classified `schema-valid+empty`. Total verified market count now 14 (9 `hard-supported` + 5 `schema-valid+empty` + 0 `not-in-schema`).
 
 Companion script: `scripts/explore_odds_api_wnba.py` — re-run on demand to detect schema drift.
 
@@ -117,7 +118,45 @@ curl -sS "https://api.the-odds-api.com/v4/sports/basketball_wnba/events/efb5e7fa
 
 **Shape match with NBA's DD parser:** identical — `name=Yes` outcomes with `price` only and **no `point` field**. The WNBA DD path can reuse `BINARY_MARKET_KEYS` from `odds_snapshot_service.py` unchanged. Note: in this snapshot only `Yes` legs are present; if `No` legs surface intermittently in later snapshots, the NBA-side handler already tolerates both — no special-casing needed.
 
-## 4. 12-market support table
+#### 3.2.4 Follow-up probes — `player_frees_made` (FTM) + `player_field_goals` (FGM)
+
+**Added 2026-05-14 by Forge during SPO-33 Lens review.** Originally skipped in §6 because the two keys were not in the SPO-31 ticket §Scope list. Lens flagged them as **anti-hallucination unverified** — the shared frontend `MarketSelect` exposes 12 tiles, two of which were FTM/FGM, and the WNBA route accepts `body.market` as pass-through. Verifying both on the live API closes the gap without any UI gating change.
+
+The Phase 0 anchor event (`efb5e7faabc4ea9406b9b479ae805b38`, Storm @ Tempo, 2026-05-13T23:00:00Z) had concluded by the follow-up run, so the helper script `scripts/explore_odds_api_wnba_ftm_fgm.py` auto-fell-back to the next live event: `9eb12a90128ff851c6046262b5c96292` (Indiana Fever @ Los Angeles Sparks, 2026-05-14T02:38:00Z UTC).
+
+**Command — FTM:**
+
+```bash
+curl -sSi "https://api.the-odds-api.com/v4/sports/basketball_wnba/events/9eb12a90128ff851c6046262b5c96292/odds?regions=us&markets=player_frees_made&oddsFormat=american&apiKey=${ODDS_API_KEY}"
+```
+
+**Response (full body — under 500 bytes):**
+
+```json
+{"id":"9eb12a90128ff851c6046262b5c96292","sport_key":"basketball_wnba","sport_title":"WNBA","commence_time":"2026-05-14T02:38:00Z","home_team":"Los Angeles Sparks","away_team":"Indiana Fever","bookmakers":[]}
+```
+
+**Headers — FTM:** `HTTP 200`, `x-requests-last: 0` (unbilled — same `schema-valid+empty` shape as `player_steals` / `player_blocks` / `player_turnovers`), `x-requests-used: 199 → 199`.
+
+**Command — FGM:**
+
+```bash
+curl -sSi "https://api.the-odds-api.com/v4/sports/basketball_wnba/events/9eb12a90128ff851c6046262b5c96292/odds?regions=us&markets=player_field_goals&oddsFormat=american&apiKey=${ODDS_API_KEY}"
+```
+
+**Response (full body — under 500 bytes):**
+
+```json
+{"id":"9eb12a90128ff851c6046262b5c96292","sport_key":"basketball_wnba","sport_title":"WNBA","commence_time":"2026-05-14T02:38:00Z","home_team":"Los Angeles Sparks","away_team":"Indiana Fever","bookmakers":[]}
+```
+
+**Headers — FGM:** `HTTP 200`, `x-requests-last: 0`, `x-requests-used: 199 → 199`.
+
+**Classification (both):** `schema-valid+empty`. The WNBA sport key accepts both market keys, the response is well-formed (`bookmakers: []`), and the call is unbilled — identical Tier-B graceful-degrade contract as NBA-side FTM/FGM and as WNBA `player_steals`/`blocks`/`turnovers`. The existing SPO-26 empty-bookmakers UX guard handles them without code change.
+
+**Total cost of this follow-up:** 0 paid units (both probes unbilled; `/sports` quota readback also free).
+
+## 4. Support table (14 markets verified — 12 in SPO-31 ticket scope + 2 in SPO-33 follow-up)
 
 | # | Market key | Classification | Bookmakers (snapshot) | Notes / Forge implication |
 |---|---|---|---|---|
@@ -133,8 +172,10 @@ curl -sS "https://api.the-odds-api.com/v4/sports/basketball_wnba/events/efb5e7fa
 | 10 | `player_points_assists` | **hard-supported** | 1 | Native combo. |
 | 11 | `player_rebounds_assists` | **hard-supported** | 1 | Native combo. Only FanDuel posting. |
 | 12 | `player_points_rebounds_assists` | **hard-supported** | 3 | Native combo. |
+| 13 | `player_frees_made` (FTM) | `schema-valid+empty` | 0 | Added 2026-05-14 follow-up — §3.2.4. Empty on WNBA same way as NBA's Tier-B graceful path. |
+| 14 | `player_field_goals` (FGM) | `schema-valid+empty` | 0 | Added 2026-05-14 follow-up — §3.2.4. Empty on WNBA same way as NBA's Tier-B graceful path. |
 
-**Counts:** 9 `hard-supported`, 3 `schema-valid+empty`, **0 `not-in-schema`**.
+**Counts:** 9 `hard-supported`, 5 `schema-valid+empty`, **0 `not-in-schema`**.
 
 ## 5. Gate-1 disposition (per SPO-31 §Gate behaviour)
 
@@ -150,19 +191,19 @@ Phase 2 (Forge, SPO-32) inherits the graceful-degrade contract — no new branch
 
 The 12-market list in the SPO-31 ticket scope is **not identical** to `backend/app/services/daily_analysis.SUPPORTED_MARKETS` (the actual production NBA market set). Specifically:
 
-| Ticket-listed | In NBA `SUPPORTED_MARKETS`? | Status this run (WNBA) |
+| Market | In NBA `SUPPORTED_MARKETS`? | Status on WNBA |
 |---|---|---|
-| `player_blocks`   | ❌ Not yet wired in NBA | `schema-valid+empty` on WNBA |
-| `player_turnovers`| ❌ Not yet wired in NBA | `schema-valid+empty` on WNBA |
-| `player_frees_made` (FTM) | ✅ Yes (Tier B) | **NOT probed this run** — was not in ticket §Scope list |
-| `player_field_goals` (FGM/FGA) | ✅ Yes (Tier B) | **NOT probed this run** — was not in ticket §Scope list |
+| `player_blocks`   | ❌ Not yet wired in NBA | `schema-valid+empty` on WNBA (SPO-31 run, 2026-05-13) |
+| `player_turnovers`| ❌ Not yet wired in NBA | `schema-valid+empty` on WNBA (SPO-31 run, 2026-05-13) |
+| `player_frees_made` (FTM) | ✅ Yes (Tier B) | `schema-valid+empty` on WNBA (2026-05-14 follow-up — §3.2.4) |
+| `player_field_goals` (FGM/FGA) | ✅ Yes (Tier B) | `schema-valid+empty` on WNBA (2026-05-14 follow-up — §3.2.4) |
 
-Why this matters: when Forge builds the WNBA `SUPPORTED_MARKETS` (or its league-scoped equivalent) in Phase 2, the canonical set is **not yet decided** — the ticket lists 12 markets that include `blocks` / `turnovers` (which NBA doesn't expose to the picks pipeline today) and omits `player_frees_made` / `player_field_goals` (which NBA does). Forge will likely need a one-line CTO decision in Phase 2 on whether the WNBA-side `SUPPORTED_MARKETS` follows the ticket list (12 = 11 OU + 1 binary) or mirrors NBA's current production list (11 = 10 OU + 1 binary, FTM/FGM in / BLK/TOV out).
+Why this matters: when Forge builds the WNBA `SUPPORTED_MARKETS` (or its league-scoped equivalent) in Phase 2, the canonical set is **not yet decided** — the ticket lists 12 markets that include `blocks` / `turnovers` (which NBA doesn't expose to the picks pipeline today) and the NBA production list (FTM/FGM in / BLK/TOV out) differs. Forge will likely need a one-line CTO decision in Phase 2 on whether the WNBA-side `SUPPORTED_MARKETS` follows the ticket list (12 = 11 OU + 1 binary) or mirrors NBA's current production list (11 = 10 OU + 1 binary), or — now that FTM/FGM are verified safe (`schema-valid+empty`, unbilled) — a superset including all 14 verified markets.
 
 Scout recommendation (non-binding — CTO chooses):
 
 - **Ship the WNBA-side list per the ticket** (BLK + TOV included as `schema-valid+empty` from day 1) so when WNBA bookmakers start posting blocks/steals/turnovers (likely as the season progresses — many WNBA bookmaker product launches lag NBA by ~4 weeks), the tile lights up with zero code change.
-- **Defer FTM/FGM to a follow-up if needed.** Not in ticket scope, no Phase-0 evidence collected. If owner wants WNBA FTM/FGM, that's a small "Phase 0.5" Scout probe (~3 min, 0 cost since they're likely empty).
+- **Expose FTM/FGM too** — verified `schema-valid+empty` post-Lens-review (§3.2.4). They cost 0 paid units when probed empty and reuse the same SPO-26 empty-bookmakers UX guard. Reachable today via the shared 12-tile MarketSelect; no additional gating required.
 
 ## 7. Quota burn
 

@@ -438,6 +438,88 @@ export async function getWNBAPlayerHistory(
 }
 
 
+// ==================== WNBA Live Odds API (SPO-33 Phase 2) ====================
+// 💡 Mirrors the NBA odds endpoints. Response shapes are sport-agnostic
+// (we reuse `eventsResponseSchema`, `noVigResponseSchema`, `playerSuggestResponseSchema`).
+// Three separate exports rather than a league-parameterized helper, matching
+// SPO-32's decision: NBA has daily-picks / projections / lineups that do
+// not exist on WNBA, so a unified API would lie about the surface.
+
+/**
+ * Get WNBA games for a date.
+ *
+ * GET /api/wnba/events
+ *
+ * Mirror of `getEvents`. Backend uses the league-namespaced cache key
+ * `events:wnba:...` so NBA + WNBA event lists never collide in Redis.
+ */
+export async function getWNBAEvents(
+  date?: string,
+  regions: string = "us"
+): Promise<EventsResponse> {
+  const params = new URLSearchParams({ regions });
+  if (date) {
+    params.set("date", date);
+  }
+
+  // Same tz-offset convention as `getEvents` — see comment there.
+  const tzOffset = -new Date().getTimezoneOffset();
+  params.set("tz_offset", tzOffset.toString());
+
+  const data = await fetchApi<EventsResponse>(`/api/wnba/events?${params}`);
+  return eventsResponseSchema.parse(data);
+}
+
+/**
+ * Calculate no-vig probability for a WNBA player prop.
+ *
+ * POST /api/wnba/props/no-vig
+ *
+ * Mirror of `calculateNoVig`. Dispatches on `request.market`:
+ * - Over/Under markets (8 hard-supported per SPO-31 Phase 0) → standard devig.
+ * - `player_double_double` (binary) → single-leg-aware DD path.
+ * - Empty markets (steals/blocks/turnovers per Phase 0) return empty `results`
+ *   with a message — same UX as NBA's FTM/FGM Tier-B path.
+ */
+export async function calculateWNBANoVig(
+  request: NoVigRequest
+): Promise<NoVigResponse> {
+  const data = await fetchApi<NoVigResponse>("/api/wnba/props/no-vig", {
+    method: "POST",
+    body: JSON.stringify(request),
+  });
+  return noVigResponseSchema.parse(data);
+}
+
+/**
+ * Get WNBA player name suggestions for autocomplete.
+ *
+ * GET /api/wnba/players/suggest
+ *
+ * Mirror of `getPlayerSuggestions`. Names derived from the LIVE odds
+ * snapshot — only players with a posted prop for this event surface.
+ * For the full historical roster (any WNBA player), use `getWNBACSVPlayers`.
+ */
+export async function getWNBAPlayerSuggestions(
+  eventId: string,
+  query?: string,
+  market: string = "player_points"
+): Promise<PlayerSuggestResponse> {
+  const params = new URLSearchParams({
+    event_id: eventId,
+    market,
+  });
+  if (query) {
+    params.set("q", query);
+  }
+
+  const data = await fetchApi<PlayerSuggestResponse>(
+    `/api/wnba/players/suggest?${params}`
+  );
+  return playerSuggestResponseSchema.parse(data);
+}
+
+
 // ==================== 每日高機率球員 API ====================
 
 /**

@@ -521,6 +521,33 @@ class TestBuildKeys:
         key = CacheService.build_events_key("2026-03-01", "eu")
         assert key == "events:nba:2026-03-01:eu"
 
+    def test_build_events_key_default_league_is_nba(self):
+        """
+        SPO-33 regression guard: default league must stay ``"nba"`` so every
+        existing NBA caller continues to produce the historical
+        ``events:nba:...`` key shape with no source-code change. Protects
+        against an accidental default flip.
+        """
+        key = CacheService.build_events_key("2026-05-13", "us")
+        assert key.startswith("events:nba:"), (
+            f"Default league must be 'nba'; got key={key!r}"
+        )
+
+    def test_build_events_key_wnba_league(self):
+        """SPO-33: WNBA callers get a separate Redis namespace."""
+        key = CacheService.build_events_key("2026-05-13", "us", league="wnba")
+        assert key == "events:wnba:2026-05-13:us"
+
+    def test_build_events_key_league_namespace_isolation(self):
+        """
+        SPO-33: same date + region must NOT collide between leagues.
+        Without this, NBA + WNBA event-list caches would overwrite each
+        other in Redis whenever the same day has games in both leagues.
+        """
+        nba_key = CacheService.build_events_key("2026-05-13", "us")
+        wnba_key = CacheService.build_events_key("2026-05-13", "us", league="wnba")
+        assert nba_key != wnba_key
+
     def test_build_props_key_with_bookmakers(self):
         key = CacheService.build_props_key(
             event_id="abc123",
