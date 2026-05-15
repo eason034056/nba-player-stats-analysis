@@ -9,10 +9,13 @@ Using structured dicts (not free-form strings) enables:
 """
 
 import operator
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Literal, Optional
 from typing_extensions import Annotated, TypedDict
 
 from langgraph.graph.message import add_messages
+
+LeagueId = Literal["nba", "wnba"]
+DEFAULT_LEAGUE: LeagueId = "nba"
 
 
 def _merge_dicts(left: dict, right: dict) -> dict:
@@ -26,6 +29,7 @@ def _merge_dicts(left: dict, right: dict) -> dict:
 class BettingState(TypedDict):
     messages: Annotated[list, add_messages]
     user_query: str
+    league: LeagueId
     parsed_query: Dict[str, Any]
     event_context: Dict[str, Any]
     availability: Dict[str, bool]

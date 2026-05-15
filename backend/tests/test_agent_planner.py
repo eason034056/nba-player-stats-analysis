@@ -81,3 +81,53 @@ async def test_planner_node_overrides_llm_parse_with_selected_pick_context(monke
     assert parsed["home_team"] == "Los Angeles Lakers"
     assert parsed["away_team"] == "Golden State Warriors"
     assert parsed["opponent"] == "Los Angeles Lakers"
+
+
+_MINIMAL_LLM_JSON = """
+{
+  "player": "Some Player",
+  "metric": "points",
+  "threshold": 10.5,
+  "date": "",
+  "opponent": "",
+  "direction": "any",
+  "needs_market": true,
+  "needs_historical": true,
+  "needs_projection": false,
+  "comparison_players": []
+}
+"""
+
+
+@pytest.mark.asyncio
+async def test_planner_node_defaults_league_to_nba_when_event_context_has_no_league(monkeypatch):
+    monkeypatch.setattr(
+        agent_module, "_get_llm", lambda: _FakeLLM(_MINIMAL_LLM_JSON)
+    )
+
+    result = await agent_module.planner_node(
+        {
+            "user_query": "Lakers at home tomorrow?",
+            "event_context": {"action": "general"},
+            "audit_log": [],
+        }
+    )
+
+    assert result["league"] == "nba"
+
+
+@pytest.mark.asyncio
+async def test_planner_node_threads_wnba_from_event_context(monkeypatch):
+    monkeypatch.setattr(
+        agent_module, "_get_llm", lambda: _FakeLLM(_MINIMAL_LLM_JSON)
+    )
+
+    result = await agent_module.planner_node(
+        {
+            "user_query": "A'ja Wilson points over 24.5?",
+            "event_context": {"action": "general", "league": "wnba"},
+            "audit_log": [],
+        }
+    )
+
+    assert result["league"] == "wnba"
