@@ -65,6 +65,17 @@ def _get_llm():
     return _LLM
 
 
+def _get_league(state: Dict[str, Any]) -> LeagueId:
+    """Return the league for this graph run, defaulting to NBA.
+
+    Threaded into BettingState by the planner (5a). All downstream nodes
+    consult this helper so the fallback rule lives in one place — legacy
+    callers (cli.py, backtest harnesses) that omit state["league"] keep
+    the pre-5a NBA behaviour unchanged.
+    """
+    return state.get("league") or DEFAULT_LEAGUE
+
+
 def _merge_selected_pick_context(
     parsed: Dict[str, Any],
     event_context: Dict[str, Any],
@@ -184,6 +195,7 @@ async def planner_node(state: Dict[str, Any]) -> Dict[str, Any]:
 async def historical_agent_node(state: Dict[str, Any]) -> Dict[str, Any]:
     pq = state.get("parsed_query", {})
     event_context = state.get("event_context", {})
+    league = _get_league(state)
     player = pq.get("player", "")
     metric = pq.get("metric", "points")
     threshold = pq.get("threshold", 0)
@@ -247,8 +259,9 @@ async def historical_agent_node(state: Dict[str, Any]) -> Dict[str, Any]:
         )
 
     return {
+        "league": league,
         "historical_signals": signals,
-        "audit_log": state.get("audit_log", []) + [{"node": "historical_agent", "tools_run": list(signals.keys())}],
+        "audit_log": state.get("audit_log", []) + [{"node": "historical_agent", "league": league, "tools_run": list(signals.keys())}],
     }
 
 
@@ -258,6 +271,7 @@ async def historical_agent_node(state: Dict[str, Any]) -> Dict[str, Any]:
 
 def projection_agent_node(state: Dict[str, Any]) -> Dict[str, Any]:
     pq = state.get("parsed_query", {})
+    league = _get_league(state)
     player = pq.get("player", "")
     date = pq.get("date", "")
     threshold = pq.get("threshold", 0)
@@ -270,8 +284,9 @@ def projection_agent_node(state: Dict[str, Any]) -> Dict[str, Any]:
     }
 
     return {
+        "league": league,
         "projection_signals": signals,
-        "audit_log": state.get("audit_log", []) + [{"node": "projection_agent", "status": "all_unavailable"}],
+        "audit_log": state.get("audit_log", []) + [{"node": "projection_agent", "league": league, "status": "all_unavailable"}],
     }
 
 
@@ -281,6 +296,7 @@ def projection_agent_node(state: Dict[str, Any]) -> Dict[str, Any]:
 
 async def market_agent_node(state: Dict[str, Any]) -> Dict[str, Any]:
     pq = state.get("parsed_query", {})
+    league = _get_league(state)
     player = pq.get("player", "")
     metric = pq.get("metric", "points")
     threshold = pq.get("threshold", 0)
@@ -298,8 +314,9 @@ async def market_agent_node(state: Dict[str, Any]) -> Dict[str, Any]:
     signals["get_bookmaker_spread"] = await get_bookmaker_spread(player, metric, date, event_id=event_id)
 
     return {
+        "league": league,
         "market_signals": signals,
-        "audit_log": state.get("audit_log", []) + [{"node": "market_agent", "tools_run": list(signals.keys())}],
+        "audit_log": state.get("audit_log", []) + [{"node": "market_agent", "league": league, "tools_run": list(signals.keys())}],
     }
 
 
@@ -373,6 +390,7 @@ async def critic_node(state: Dict[str, Any]) -> Dict[str, Any]:
     hist = state.get("historical_signals", {})
     market = state.get("market_signals", {})
     flags = state.get("data_quality_flags", [])
+    league = _get_league(state)
 
     tm_details = hist.get("auto_teammate_impact", {}).get("details") or {}
     own_inj = hist.get("get_own_team_injury_report", {}).get("details") or {}
@@ -394,7 +412,7 @@ async def critic_node(state: Dict[str, Any]) -> Dict[str, Any]:
     }, indent=2, default=str)
 
     resp = await _get_llm().ainvoke([
-        SystemMessage(content=_CRITIC_SYSTEM),
+        SystemMessage(content=_build_critic_system(league)),
         HumanMessage(content=summary),
     ])
     text = resp.content.strip()
@@ -409,8 +427,9 @@ async def critic_node(state: Dict[str, Any]) -> Dict[str, Any]:
     notes = critic.get("risk_factors", [])
 
     return {
+        "league": league,
         "critic_notes": notes,
-        "audit_log": state.get("audit_log", []) + [{"node": "critic", "output": critic}],
+        "audit_log": state.get("audit_log", []) + [{"node": "critic", "league": league, "output": critic}],
     }
 
 
@@ -474,12 +493,74 @@ Do NOT retry just because you feel uncertain.
 """
 
 
+# ---------------------------------------------------------------------------
+# League-aware prompt builders (SPO-52, Phase 5b)
+# ---------------------------------------------------------------------------
+# Contract: the NBA path MUST return `_CRITIC_SYSTEM` / `_SYNTH_SYSTEM`
+# byte-identically (asserted in scripts/agents/tests/test_phase5b_league.py).
+# That is what protects the SPO-25 NBA golden flow and the existing
+# backend/tests/test_agent_chat.py expectations from any 5b regression.
+#
+# Only the WNBA path diverges. The diff is intentionally minimal:
+#   1. first-sentence label swap "NBA" → "WNBA" (with article fix:
+#      "an NBA" → "a WNBA"),
+#   2. a short context block calling out the three structural differences
+#      a critic / synthesizer must reason about — game length, season
+#      cadence, roster depth — that are NOT already captured by the
+#      per-dimension checks below (those apply unchanged across leagues).
+
+_WNBA_LEAGUE_CONTEXT = """\
+WNBA league context (always relevant):
+- Games are 40 minutes (4 × 10), not 48 — per-minute production scales differently than NBA, so do not import NBA-magnitude expectations.
+- Season runs May–October; schedule density and rest patterns differ from the NBA cadence (fewer back-to-backs early, condensed late-season stretches).
+- Active rosters are 11–12 players; bench depth is shallow, so a single OUT/QUE on a key teammate shifts usage more sharply than in the NBA.
+
+"""
+
+# ⚠️ Article matters: "an NBA" (vowel-sound 'N') vs "a WNBA" (consonant-sound 'W').
+# Storing the full first line keeps `str.replace(...)` surgical — we replace exactly
+# the sentence we want to swap, no risk of catching the word "NBA" elsewhere
+# in the prompt (e.g. inside an example).
+_NBA_CRITIC_FIRST_LINE = "You are the Critic of an NBA player-prop betting advisor."
+_WNBA_CRITIC_FIRST_LINE = "You are the Critic of a WNBA player-prop betting advisor."
+
+_NBA_SYNTH_FIRST_LINE = "You are the Synthesizer of an NBA player-prop betting advisor."
+_WNBA_SYNTH_FIRST_LINE = "You are the Synthesizer of a WNBA player-prop betting advisor."
+
+
+def _build_critic_system(league: LeagueId) -> str:
+    """Return the critic system prompt for the given league.
+
+    NBA returns `_CRITIC_SYSTEM` by reference (byte-identical regression
+    contract). WNBA swaps the first line and inserts the league context
+    block immediately after it.
+    """
+    if league != "wnba":
+        return _CRITIC_SYSTEM
+    wnba_header = _WNBA_CRITIC_FIRST_LINE + "\n\n" + _WNBA_LEAGUE_CONTEXT.rstrip()
+    return _CRITIC_SYSTEM.replace(_NBA_CRITIC_FIRST_LINE, wnba_header, 1)
+
+
+def _build_synthesizer_system(league: LeagueId) -> str:
+    """Return the synthesizer system prompt for the given league.
+
+    NBA returns `_SYNTH_SYSTEM` by reference (byte-identical regression
+    contract). WNBA swaps the first line and inserts the league context
+    block immediately after it.
+    """
+    if league != "wnba":
+        return _SYNTH_SYSTEM
+    wnba_header = _WNBA_SYNTH_FIRST_LINE + "\n\n" + _WNBA_LEAGUE_CONTEXT.rstrip()
+    return _SYNTH_SYSTEM.replace(_NBA_SYNTH_FIRST_LINE, wnba_header, 1)
+
+
 async def synthesizer_node(state: Dict[str, Any]) -> Dict[str, Any]:
     scorecard = state.get("scorecard", {})
     hist = state.get("historical_signals", {})
     market = state.get("market_signals", {})
     proj = state.get("projection_signals", {})
     critic_notes = state.get("critic_notes", [])
+    league = _get_league(state)
 
     payload = json.dumps({
         "scorecard": scorecard,
@@ -502,7 +583,7 @@ async def synthesizer_node(state: Dict[str, Any]) -> Dict[str, Any]:
     }, indent=2, default=str)
 
     resp = await _get_llm().ainvoke([
-        SystemMessage(content=_SYNTH_SYSTEM),
+        SystemMessage(content=_build_synthesizer_system(league)),
         HumanMessage(content=payload),
     ])
     text = resp.content.strip()
@@ -550,7 +631,8 @@ async def synthesizer_node(state: Dict[str, Any]) -> Dict[str, Any]:
         needs_retry = False
 
     return {
+        "league": league,
         "final_decision": final,
         "iteration": iteration + 1,
-        "audit_log": state.get("audit_log", []) + [{"node": "synthesizer", "decision": final.get("decision")}],
+        "audit_log": state.get("audit_log", []) + [{"node": "synthesizer", "league": league, "decision": final.get("decision")}],
     }
