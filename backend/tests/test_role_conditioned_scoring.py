@@ -235,7 +235,8 @@ def test_get_role_conditioned_base_stats_filters_starter_and_bench_games(monkeyp
         {"points": 14, "minutes": 20, "is_starter": False},
         {"points": 11, "minutes": 17, "is_starter": False},
     ]
-    monkeypatch.setattr(historical_tools, "_games_for", lambda player, n=0: games)
+    # SPO-58: `_games_for` gained `league` kwarg in 5c; the fake must accept it.
+    monkeypatch.setattr(historical_tools, "_games_for", lambda player, n=0, **kwargs: games)
 
     starter = historical_tools.get_role_conditioned_base_stats("Test Player", "points", 18.5, True)
     bench = historical_tools.get_role_conditioned_base_stats("Test Player", "points", 18.5, False)
@@ -386,7 +387,8 @@ async def test_historical_agent_node_adds_role_conditioned_signal_when_role_is_k
 ):
     captured: dict[str, object] = {}
 
-    def fake_role_conditioned(player: str, metric: str, threshold: float, is_starter: bool, n: int = 0):
+    def fake_role_conditioned(player: str, metric: str, threshold: float, is_starter: bool, n: int = 0, **kwargs):
+        # SPO-58: production gained `league` kwarg in 5c; accept it.
         captured["args"] = (player, metric, threshold, is_starter, n)
         return _stub_signal(
             shrunk_rate=0.6,
@@ -417,7 +419,8 @@ async def test_historical_agent_node_adds_role_conditioned_signal_when_role_is_k
     async def fake_injury_report(*args, **kwargs):
         return _stub_signal(team="BOS", injuries=[])
 
-    async def fake_projected_lineup(team: str, date: str = ""):
+    async def fake_projected_lineup(team: str, date: str = "", **kwargs):
+        # SPO-58: production gained `league` kwarg in 5c; accept it here.
         return _stub_signal(team=team, status="projected", confidence="high", source_disagreement=False, starters=[])
 
     async def fake_player_lineup_context(*args, **kwargs):
@@ -471,7 +474,8 @@ async def test_historical_agent_node_skips_role_conditioned_signal_when_role_is_
     async def fake_injury_report(*args, **kwargs):
         return _stub_signal(team="BOS", injuries=[])
 
-    async def fake_projected_lineup(team: str, date: str = ""):
+    async def fake_projected_lineup(team: str, date: str = "", **kwargs):
+        # SPO-58: production gained `league` kwarg in 5c; accept it here.
         return _stub_signal(team=team, status="projected", confidence="high", source_disagreement=False, starters=[])
 
     async def fake_player_lineup_context(*args, **kwargs):

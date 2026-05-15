@@ -29,15 +29,46 @@ for _p in (_BACKEND_DIR, _RAG_DIR):
     if _p not in sys.path:
         sys.path.insert(0, _p)
 
-from app.services.csv_player_history import CSVPlayerHistoryService
+from app.services.csv_player_history import (
+    CSVPlayerHistoryService,
+    nba_csv_player_service,
+    wnba_csv_player_service,
+)
 
 _STAR_PLAYERS_PATH = os.path.join(_PROJECT_ROOT, "data", "star_players.json")
 
 # ---------------------------------------------------------------------------
-# Singleton CSV service shared by all tools
+# Per-league CSV singletons (SPO-58, Phase 5c)
 # ---------------------------------------------------------------------------
-_csv_svc = CSVPlayerHistoryService()
-_csv_svc.load_csv()
+# `nba_csv_player_service` / `wnba_csv_player_service` are the canonical
+# module-level singletons published by `csv_player_history.py` (Phase 1 work
+# in SPO-32). `_csv_for(league)` is the single routing point in this module —
+# every tool dispatches through it so that adding a third league later only
+# touches one map.
+_CSV_SVCS: Dict[str, CSVPlayerHistoryService] = {
+    "nba": nba_csv_player_service,
+    "wnba": wnba_csv_player_service,
+}
+
+
+def _csv_for(league: str = "nba") -> CSVPlayerHistoryService:
+    """Pick the CSV singleton for the given league.
+
+    Falls back to NBA on empty / unknown so legacy callers that pre-date the
+    `league` parameter stay on the NBA path (the SPO-25 regression contract).
+    """
+    return _CSV_SVCS.get((league or "nba").lower(), nba_csv_player_service)
+
+
+# Eagerly load both CSV singletons at module import. This matches the prior
+# behaviour (`_csv_svc.load_csv()` at import time) and keeps cold-start
+# latency contained at server boot rather than at first request.
+nba_csv_player_service.load_csv()
+wnba_csv_player_service.load_csv()
+
+# Backward-compatibility alias for any out-of-tree caller that still imports
+# `_csv_svc` directly. New code in this module must use `_csv_for(league)`.
+_csv_svc = nba_csv_player_service
 
 # ---------------------------------------------------------------------------
 # Star-players registry
@@ -90,15 +121,21 @@ def _shrink(raw_rate: float, n: int, prior: float = 0.5, k: float = 15.0) -> flo
     return (raw_rate * n + prior * k) / (n + k)
 
 
-def _games_for(player: str, n: int = 0) -> List[Dict[str, Any]]:
-    """Return game logs, newest-first, optionally limited to last *n*."""
-    _csv_svc.load_csv()
-    logs = _csv_svc._cache.get(player, [])
+def _games_for(player: str, n: int = 0, league: str = "nba") -> List[Dict[str, Any]]:
+    """Return game logs, newest-first, optionally limited to last *n*.
+
+    `league` selects which per-league CSV singleton to read. Defaults to NBA
+    so any legacy in-tree caller that hasn't been updated yet stays on the
+    pre-5c NBA path.
+    """
+    csv = _csv_for(league)
+    csv.load_csv()
+    logs = csv._cache.get(player, [])
     if not logs:
         low = player.lower()
-        for p in _csv_svc._all_players:
+        for p in csv._all_players:
             if low in p.lower() or p.lower() in low:
-                logs = _csv_svc._cache.get(p, [])
+                logs = csv._cache.get(p, [])
                 break
     active = [g for g in logs if g.get("minutes", 0) > 0]
     if n > 0:
@@ -180,8 +217,8 @@ def _build_base_rate_signal(
 # DIMENSION 1 – Base Distribution / Role Splits
 # ===================================================================
 
-def get_base_stats(player: str, metric: str, threshold: float, n: int = 0) -> Dict[str, Any]:
-    games = _games_for(player, n)
+def get_base_stats(player: str, metric: str, threshold: float, n: int = 0, league: str = "nba") -> Dict[str, Any]:
+    games = _games_for(player, n, league=league)
     result = _build_base_rate_signal(
         games,
         metric,
@@ -200,6 +237,7 @@ def get_role_conditioned_base_stats(
     threshold: float,
     is_starter: Optional[bool],
     n: int = 0,
+    league: str = "nba",
 ) -> Dict[str, Any]:
     if is_starter is None:
         return _signal_payload(
@@ -214,7 +252,7 @@ def get_role_conditioned_base_stats(
 
     role = "starter" if is_starter else "bench"
     role_label = "projected_starter" if is_starter else "projected_bench"
-    games = [g for g in _games_for(player, n) if bool(g.get("is_starter")) is is_starter]
+    games = [g for g in _games_for(player, n, league=league) if bool(g.get("is_starter")) is is_starter]
     result = _build_base_rate_signal(
         games,
         metric,
@@ -241,8 +279,8 @@ def get_role_conditioned_base_stats(
     return result
 
 
-def get_starter_bench_split(player: str, metric: str, threshold: float) -> Dict[str, Any]:
-    all_games = _games_for(player)
+def get_starter_bench_split(player: str, metric: str, threshold: float, league: str = "nba") -> Dict[str, Any]:
+    all_games = _games_for(player, league=league)
     starter = [g for g in all_games if g.get("is_starter")]
     bench = [g for g in all_games if not g.get("is_starter")]
 
@@ -264,8 +302,8 @@ def get_starter_bench_split(player: str, metric: str, threshold: float) -> Dict[
     return _signal_payload(sig, diff, total, rel, "season", "csv", {"starter": s, "bench": b})
 
 
-def get_opponent_history(player: str, metric: str, threshold: float, opponent: str) -> Dict[str, Any]:
-    games = [g for g in _games_for(player) if g.get("opponent", "").lower() == opponent.lower()]
+def get_opponent_history(player: str, metric: str, threshold: float, opponent: str, league: str = "nba") -> Dict[str, Any]:
+    games = [g for g in _games_for(player, league=league) if g.get("opponent", "").lower() == opponent.lower()]
     vals = _values(games, metric)
     if not vals:
         return _signal_payload("unavailable", 0, 0, 0, f"vs_{opponent}", "csv", {"error": "no games vs opponent"})
@@ -279,15 +317,16 @@ def get_opponent_history(player: str, metric: str, threshold: float, opponent: s
                            {"hit_rate": round(rate, 4), "mean": round(mean, 2), "games": total})
 
 
-def get_teammate_impact(player: str, metric: str, threshold: float, teammate: str, played: bool) -> Dict[str, Any]:
-    all_games = _games_for(player)
+def get_teammate_impact(player: str, metric: str, threshold: float, teammate: str, played: bool, league: str = "nba") -> Dict[str, Any]:
+    all_games = _games_for(player, league=league)
+    csv = _csv_for(league)
     filtered = []
     for g in all_games:
         team = g.get("team", "")
         gd = g.get("game_date")
         if not team or gd is None:
             continue
-        lineup = _csv_svc._lineup_cache.get((team, gd.strftime("%Y-%m-%d")), set())
+        lineup = csv._lineup_cache.get((team, gd.strftime("%Y-%m-%d")), set())
         present = teammate in lineup
         if played and present:
             filtered.append(g)
@@ -353,12 +392,23 @@ def _today_date_string() -> str:
     return datetime.now(timezone.utc).strftime("%Y-%m-%d")
 
 
-async def _infer_opponent_from_schedule(player: str, date: str) -> str:
+_LEAGUE_TO_SPORT_KEY: Dict[str, str] = {
+    "nba": "basketball_nba",
+    "wnba": "basketball_wnba",
+}
+
+
+def _sport_key_for(league: str = "nba") -> str:
+    """Map league → The Odds API sport_key (parameterized in SPO-33)."""
+    return _LEAGUE_TO_SPORT_KEY.get((league or "nba").lower(), "basketball_nba")
+
+
+async def _infer_opponent_from_schedule(player: str, date: str, league: str = "nba") -> str:
     """
     當 query 未指定對手時，從 The Odds API 賽程推斷對手球隊。
     流程：取得今日賽事 → 逐一查該球員的賠率 → 找到該場即得 home/away，用 CSV 球員所屬隊判斷對手。
     """
-    games = _games_for(player)
+    games = _games_for(player, league=league)
     if not games:
         return "unknown"
     player_team = games[0].get("team", "")  # CSV 格式如 "Warriors", "Bucks"
@@ -370,9 +420,10 @@ async def _infer_opponent_from_schedule(player: str, date: str) -> str:
     except ImportError:
         return "unknown"
 
+    sport_key = _sport_key_for(league)
     now = datetime.now(timezone.utc)
     events = await odds_provider.get_events(
-        sport="basketball_nba",
+        sport=sport_key,
         regions="us",
         date_from=now - timedelta(hours=6),
         date_to=now + timedelta(hours=18),
@@ -388,7 +439,7 @@ async def _infer_opponent_from_schedule(player: str, date: str) -> str:
             from app.services.odds_gateway import odds_gateway
 
             snapshot = await odds_gateway.get_market_snapshot(
-                sport="basketball_nba",
+                sport=sport_key,
                 event_id=ev["id"],
                 regions="us",
                 markets="player_points",
@@ -415,11 +466,11 @@ async def _infer_opponent_from_schedule(player: str, date: str) -> str:
     return "unknown"
 
 
-async def get_official_injury_report(team: str, date: str = "", player: str = "") -> Dict[str, Any]:
+async def get_official_injury_report(team: str, date: str = "", player: str = "", league: str = "nba") -> Dict[str, Any]:
     # 當 query 未指定對手時，從 The Odds API 賽程推斷
     effective_team = team
     if (not team or team == "unknown") and player:
-        effective_team = await _infer_opponent_from_schedule(player, date)
+        effective_team = await _infer_opponent_from_schedule(player, date, league=league)
         if effective_team == "unknown":
             effective_team = team or "unknown"  # 保持原值以便 details 顯示
 
@@ -436,15 +487,18 @@ async def get_official_injury_report(team: str, date: str = "", player: str = ""
     )
 
 
-async def get_projected_lineup_consensus(team: str, date: str = "") -> Dict[str, Any]:
+async def get_projected_lineup_consensus(team: str, date: str = "", league: str = "nba") -> Dict[str, Any]:
+    # SPO-34 published `lineup_service` (NBA default) and `wnba_lineup_service`
+    # as separate module singletons. We import both and route based on league.
     try:
-        from app.services.lineup_service import lineup_service
+        from app.services.lineup_service import lineup_service, wnba_lineup_service
     except ImportError:
         return _signal_payload("unavailable", 0, 0, 0.0, "today", "lineup_consensus", {"error": "service unavailable"})
 
+    svc = wnba_lineup_service if (league or "nba").lower() == "wnba" else lineup_service
     effective_date = date or _today_date_string()
     code = _team_code_from_name(team)
-    lineup, cache_state, _fetched_at = await lineup_service.get_team_lineup(effective_date, code)
+    lineup, cache_state, _fetched_at = await svc.get_team_lineup(effective_date, code)
     if not lineup:
         return _signal_payload(
             "unavailable",
@@ -489,15 +543,15 @@ async def get_projected_lineup_consensus(team: str, date: str = "") -> Dict[str,
     )
 
 
-async def get_player_lineup_context(player: str, date: str = "", team: str = "", opponent: str = "") -> Dict[str, Any]:
+async def get_player_lineup_context(player: str, date: str = "", team: str = "", opponent: str = "", league: str = "nba") -> Dict[str, Any]:
     target_team = team
     if not target_team:
-        games = _games_for(player, 1)
+        games = _games_for(player, 1, league=league)
         if games:
             target_team = games[0].get("team", "")
 
-    own_lineup = await get_projected_lineup_consensus(target_team, date)
-    opponent_lineup = await get_projected_lineup_consensus(opponent, date) if opponent else _signal_payload(
+    own_lineup = await get_projected_lineup_consensus(target_team, date, league=league)
+    opponent_lineup = await get_projected_lineup_consensus(opponent, date, league=league) if opponent else _signal_payload(
         "neutral", 0, 0, 0.0, "today", "lineup_consensus", {}
     )
 
@@ -560,8 +614,8 @@ async def get_player_lineup_context(player: str, date: str = "", team: str = "",
     )
 
 
-def get_availability_context(player: str, date: str = "") -> Dict[str, Any]:
-    games = _games_for(player, 10)
+def get_availability_context(player: str, date: str = "", league: str = "nba") -> Dict[str, Any]:
+    games = _games_for(player, 10, league=league)
     if not games:
         return _signal_payload("unavailable", 0, 0, 0, "last_10", "csv", {"error": "no games"})
     team = games[0].get("team", "")
@@ -584,8 +638,8 @@ def _position_group(pos: str) -> str:
     return "frontcourt"
 
 
-def auto_teammate_impact(player: str, metric: str, threshold: float) -> Dict[str, Any]:
-    games = _games_for(player)
+def auto_teammate_impact(player: str, metric: str, threshold: float, league: str = "nba") -> Dict[str, Any]:
+    games = _games_for(player, league=league)
     if not games:
         return _signal_payload("unavailable", 0, 0, 0, "season", "csv", {"error": "no data"})
 
@@ -605,8 +659,8 @@ def auto_teammate_impact(player: str, metric: str, threshold: float) -> Dict[str
 
     chemistry = []
     for star in stars:
-        with_data = get_teammate_impact(player, metric, threshold, star, played=True)
-        without_data = get_teammate_impact(player, metric, threshold, star, played=False)
+        with_data = get_teammate_impact(player, metric, threshold, star, played=True, league=league)
+        without_data = get_teammate_impact(player, metric, threshold, star, played=False, league=league)
 
         w_mean = with_data["details"].get("mean", 0) or 0
         wo_mean = without_data["details"].get("mean", 0) or 0
@@ -616,7 +670,7 @@ def auto_teammate_impact(player: str, metric: str, threshold: float) -> Dict[str
         inj_status = star_injury["status"] if star_injury else "Healthy"
         inj_detail = star_injury.get("injury", "") if star_injury else ""
 
-        star_games_sample = _games_for(star, 5)
+        star_games_sample = _games_for(star, 5, league=league)
         star_pos = star_games_sample[0].get("pos", "") if star_games_sample else ""
         pg_match = _position_group(player_pos) == _position_group(star_pos) if player_pos and star_pos else None
 
@@ -665,8 +719,8 @@ def auto_teammate_impact(player: str, metric: str, threshold: float) -> Dict[str
 # DIMENSION 2 – Form / Trend / Role Change
 # ===================================================================
 
-def get_trend_analysis(player: str, metric: str) -> Dict[str, Any]:
-    games = _games_for(player)
+def get_trend_analysis(player: str, metric: str, league: str = "nba") -> Dict[str, Any]:
+    games = _games_for(player, league=league)
     vals = _values(games, metric)
     if len(vals) < 5:
         return _signal_payload("unavailable", 0, len(vals), 0, "season", "csv", {"error": "not enough games"})
@@ -691,8 +745,8 @@ def get_trend_analysis(player: str, metric: str) -> Dict[str, Any]:
                            {"rolling_averages": avgs, "season_avg": season_avg, "recent_vs_season_pct": round(pct, 4)})
 
 
-def get_streak_info(player: str, metric: str, threshold: float) -> Dict[str, Any]:
-    games = _games_for(player)
+def get_streak_info(player: str, metric: str, threshold: float, league: str = "nba") -> Dict[str, Any]:
+    games = _games_for(player, league=league)
     vals = _values(games, metric)
     if not vals:
         return _signal_payload("unavailable", 0, 0, 0, "season", "csv", {"error": "no data"})
@@ -729,8 +783,8 @@ def get_streak_info(player: str, metric: str, threshold: float) -> Dict[str, Any
                            {"current_streak": streak, "longest_over_streak": longest_over, "longest_under_streak": longest_under})
 
 
-def get_minutes_role_trend(player: str) -> Dict[str, Any]:
-    games = _games_for(player)
+def get_minutes_role_trend(player: str, league: str = "nba") -> Dict[str, Any]:
+    games = _games_for(player, league=league)
     mins = _values(games, "minutes")
     if len(mins) < 5:
         return _signal_payload("unavailable", 0, len(mins), 0, "season", "csv", {"error": "not enough games"})
@@ -748,8 +802,8 @@ def get_minutes_role_trend(player: str) -> Dict[str, Any]:
                             "starter_pct_last10": round(starter_pct, 2)})
 
 
-def get_usage_touches_profile(player: str, date: str = "") -> Dict[str, Any]:
-    games = _games_for(player, 20)
+def get_usage_touches_profile(player: str, date: str = "", league: str = "nba") -> Dict[str, Any]:
+    games = _games_for(player, 20, league=league)
     if len(games) < 5:
         return _signal_payload("unavailable", 0, len(games), 0, "last_20", "csv", {"error": "not enough games"})
 
@@ -772,8 +826,8 @@ def get_usage_touches_profile(player: str, date: str = "") -> Dict[str, Any]:
                             "avg_ast_last5": round(statistics.mean(ast_vals[:5]), 1) if len(ast_vals) >= 5 else None})
 
 
-def get_opportunity_profile(player: str, metric: str, date: str = "") -> Dict[str, Any]:
-    games = _games_for(player, 20)
+def get_opportunity_profile(player: str, metric: str, date: str = "", league: str = "nba") -> Dict[str, Any]:
+    games = _games_for(player, 20, league=league)
     vals = _values(games, metric)
     mins = _values(games, "minutes")
     if len(vals) < 5 or len(mins) < 5:
@@ -796,8 +850,8 @@ def get_opportunity_profile(player: str, metric: str, date: str = "") -> Dict[st
 # DIMENSION 3 – Shooting Efficiency
 # ===================================================================
 
-def get_shooting_profile(player: str) -> Dict[str, Any]:
-    games = _games_for(player)
+def get_shooting_profile(player: str, league: str = "nba") -> Dict[str, Any]:
+    games = _games_for(player, league=league)
     if len(games) < 5:
         return _signal_payload("unavailable", 0, len(games), 0, "season", "csv", {"error": "not enough games"})
 
@@ -831,8 +885,8 @@ def get_shooting_profile(player: str) -> Dict[str, Any]:
                            {"season": season, "last_5": last5, "fg_diff": round(fg_diff, 3), "flags": flags})
 
 
-def get_shooting_mix_profile(player: str, date: str = "") -> Dict[str, Any]:
-    games = _games_for(player, 20)
+def get_shooting_mix_profile(player: str, date: str = "", league: str = "nba") -> Dict[str, Any]:
+    games = _games_for(player, 20, league=league)
     if len(games) < 5:
         return _signal_payload("unavailable", 0, len(games), 0, "last_20", "csv", {"error": "not enough"})
 
@@ -859,8 +913,8 @@ def get_shooting_mix_profile(player: str, date: str = "") -> Dict[str, Any]:
 # DIMENSION 4 – Variance / Consistency
 # ===================================================================
 
-def get_variance_profile(player: str, metric: str) -> Dict[str, Any]:
-    games = _games_for(player)
+def get_variance_profile(player: str, metric: str, league: str = "nba") -> Dict[str, Any]:
+    games = _games_for(player, league=league)
     vals = _values(games, metric)
     if len(vals) < 5:
         return _signal_payload("unavailable", 0, len(vals), 0, "season", "csv", {"error": "not enough"})
@@ -884,8 +938,8 @@ def get_variance_profile(player: str, metric: str) -> Dict[str, Any]:
 # DIMENSION 5 – Schedule / Context
 # ===================================================================
 
-def get_schedule_context(player: str, date: str = "") -> Dict[str, Any]:
-    games = _games_for(player)
+def get_schedule_context(player: str, date: str = "", league: str = "nba") -> Dict[str, Any]:
+    games = _games_for(player, league=league)
     if not games:
         return _signal_payload("unavailable", 0, 0, 0, "season", "csv", {"error": "no data"})
 
@@ -914,8 +968,8 @@ def get_schedule_context(player: str, date: str = "") -> Dict[str, Any]:
                             "avg_minutes_by_rest": avg_by_rest})
 
 
-def get_game_script_splits(player: str, metric: str, threshold: float) -> Dict[str, Any]:
-    games = _games_for(player)
+def get_game_script_splits(player: str, metric: str, threshold: float, league: str = "nba") -> Dict[str, Any]:
+    games = _games_for(player, league=league)
     wins = [g for g in games if g.get("wl", "").upper() == "W"]
     losses = [g for g in games if g.get("wl", "").upper() == "L"]
 
@@ -938,17 +992,18 @@ def get_game_script_splits(player: str, metric: str, threshold: float) -> Dict[s
                            {"wins": w, "losses": l, "diff": round(diff, 2)})
 
 
-def get_lineup_context(player: str, date: str = "") -> Dict[str, Any]:
-    games = _games_for(player, 10)
+def get_lineup_context(player: str, date: str = "", league: str = "nba") -> Dict[str, Any]:
+    games = _games_for(player, 10, league=league)
     if not games:
         return _signal_payload("unavailable", 0, 0, 0, "last_10", "csv", {"error": "no data"})
 
     team = games[0].get("team", "")
+    csv = _csv_for(league)
     lineups = []
     for g in games:
         gd = g.get("game_date")
         if gd and team:
-            lineup = _csv_svc._lineup_cache.get((team, gd.strftime("%Y-%m-%d")), set())
+            lineup = csv._lineup_cache.get((team, gd.strftime("%Y-%m-%d")), set())
             lineups.append(lineup)
 
     if not lineups:
@@ -965,8 +1020,8 @@ def get_lineup_context(player: str, date: str = "") -> Dict[str, Any]:
                            {"team": team, "games_sampled": len(lineups), "frequent_teammates": frequent})
 
 
-def get_rotation_absorption_map(player: str, metric: str, date: str = "") -> Dict[str, Any]:
-    games = _games_for(player)
+def get_rotation_absorption_map(player: str, metric: str, date: str = "", league: str = "nba") -> Dict[str, Any]:
+    games = _games_for(player, league=league)
     if not games:
         return _signal_payload("unavailable", 0, 0, 0, "season", "csv", {"error": "no data"})
 
@@ -979,8 +1034,8 @@ def get_rotation_absorption_map(player: str, metric: str, date: str = "") -> Dic
 
     absorptions = []
     for star in stars:
-        with_data = get_teammate_impact(player, metric, 0, star, played=True)
-        without_data = get_teammate_impact(player, metric, 0, star, played=False)
+        with_data = get_teammate_impact(player, metric, 0, star, played=True, league=league)
+        without_data = get_teammate_impact(player, metric, 0, star, played=False, league=league)
         w_mean = with_data["details"].get("mean", 0) or 0
         wo_mean = without_data["details"].get("mean", 0) or 0
         absorptions.append({

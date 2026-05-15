@@ -39,6 +39,19 @@ MARKET_MAP = {
     "pra": "player_points_rebounds_assists",
 }
 
+# SPO-58 (Phase 5c) — league → sport_key mapping. The Odds API parameterizes
+# every basketball league as a separate sport_key (SPO-33 added "basketball_wnba"
+# alongside the existing "basketball_nba"). Keeping the map here means the rest
+# of the file just forwards `league` and never duplicates the string literal.
+_LEAGUE_TO_SPORT_KEY: Dict[str, str] = {
+    "nba": "basketball_nba",
+    "wnba": "basketball_wnba",
+}
+
+
+def _sport_key_for(league: str = "nba") -> str:
+    return _LEAGUE_TO_SPORT_KEY.get((league or "nba").lower(), "basketball_nba")
+
 
 def _signal_payload(signal, effect_size, sample_size, reliability, window, source, details):
     return {
@@ -165,12 +178,14 @@ def _build_market_quote_for_line(
 # Async helpers to call The Odds API
 # ---------------------------------------------------------------------------
 
-async def _get_events(date: str = ""):
+async def _get_events(date: str = "", league: str = "nba"):
     """
-    Fetch NBA events. The Odds API 使用 UTC。
+    Fetch league events from The Odds API. The Odds API 使用 UTC。
 
     - date 為空：查 now-6h ~ now+18h（UTC）
     - date 為 YYYY-MM-DD：視為本地日期，轉成 UTC 區間後查詢
+    - league: maps to sport_key via `_sport_key_for(...)`. Default "nba" keeps
+      legacy callers on the pre-5c path.
     """
     from app.services.odds_theoddsapi import odds_provider
     now = datetime.now(timezone.utc)
@@ -189,7 +204,7 @@ async def _get_events(date: str = ""):
                 date_to = max(date_to, end_utc)
 
     return await odds_provider.get_events(
-        sport="basketball_nba",
+        sport=_sport_key_for(league),
         regions="us",
         date_from=date_from,
         date_to=date_to,
@@ -200,11 +215,12 @@ async def _get_player_odds(
     event_id: str,
     market_key: str,
     priority: str = "interactive",
+    league: str = "nba",
 ):
     from app.services.odds_gateway import odds_gateway
     try:
         snapshot = await odds_gateway.get_market_snapshot(
-            sport="basketball_nba",
+            sport=_sport_key_for(league),
             event_id=event_id,
             regions="us",
             markets=market_key,
@@ -288,11 +304,12 @@ async def _fetch_market_data(
     date: str = "",
     event_id: str = "",
     priority: str = "interactive",
+    league: str = "nba",
 ) -> Tuple[List[Dict[str, Any]], Optional[str], Dict[str, Any]]:
     """Returns (lines, market_key, meta). meta contains match/error context for the caller."""
     market_key = MARKET_MAP.get(metric, f"player_{metric}")
     if event_id:
-        odds = await _get_player_odds(event_id, market_key, priority=priority)
+        odds = await _get_player_odds(event_id, market_key, priority=priority, league=league)
         if not odds:
             return [], market_key, {
                 "error": "no market snapshot returned for event",
@@ -319,10 +336,10 @@ async def _fetch_market_data(
             "candidate_count": len(candidates),
         }
 
-    events = await _get_events(date)
+    events = await _get_events(date, league=league)
     if not events:
         return [], None, {
-            "error": "no NBA events in time window (try expanding date or check API)",
+            "error": f"no {league.upper()} events in time window (try expanding date or check API)",
             "query_player_name": player,
             "searched_events": 0,
         }
@@ -333,7 +350,7 @@ async def _fetch_market_data(
     best_suggestions: List[Tuple[str, int]] = []
     matched_event_id = None
     for ev in events:
-        odds = await _get_player_odds(ev["id"], market_key, priority=priority)
+        odds = await _get_player_odds(ev["id"], market_key, priority=priority, league=league)
         lines, matched_name, candidates, suggestions = _extract_player_lines(odds, player)
         all_candidates.update(candidates)
         if suggestions and not best_suggestions:
@@ -372,11 +389,12 @@ async def get_current_market(
     metric: str,
     date: str = "",
     event_id: str = "",
+    league: str = "nba",
 ) -> Dict[str, Any]:
     """All bookmaker lines, no-vig fair probability, consensus."""
     try:
         lines, mkt_key, meta = await _fetch_market_data(
-            player, metric, date, event_id=event_id, priority="interactive"
+            player, metric, date, event_id=event_id, priority="interactive", league=league,
         )
     except Exception as e:
         return _signal_payload("unavailable", 0, 0, 0, "today", "odds_api",
@@ -407,11 +425,12 @@ async def get_line_movement(
     metric: str,
     date: str = "",
     event_id: str = "",
+    league: str = "nba",
 ) -> Dict[str, Any]:
     """Opening vs current line, direction, magnitude."""
     try:
         lines, _, meta = await _fetch_market_data(
-            player, metric, date, event_id=event_id, priority="interactive"
+            player, metric, date, event_id=event_id, priority="interactive", league=league,
         )
     except Exception as e:
         return _signal_payload("unavailable", 0, 0, 0, "today", "odds_api", {"error": str(e)})
@@ -439,11 +458,12 @@ async def get_best_price(
     direction: str,
     date: str = "",
     event_id: str = "",
+    league: str = "nba",
 ) -> Dict[str, Any]:
     """Best currently available line/odds for the intended side (over or under)."""
     try:
         lines, _, meta = await _fetch_market_data(
-            player, metric, date, event_id=event_id, priority="interactive"
+            player, metric, date, event_id=event_id, priority="interactive", league=league,
         )
     except Exception as e:
         return _signal_payload("unavailable", 0, 0, 0, "today", "odds_api", {"error": str(e)})
@@ -477,6 +497,7 @@ async def get_market_quote_for_line(
     direction: str,
     date: str = "",
     event_id: str = "",
+    league: str = "nba",
 ) -> Dict[str, Any]:
     """
     Query-specific market quote.
@@ -487,7 +508,7 @@ async def get_market_quote_for_line(
     """
     try:
         lines, _, meta = await _fetch_market_data(
-            player, metric, date, event_id=event_id, priority="interactive"
+            player, metric, date, event_id=event_id, priority="interactive", league=league,
         )
     except Exception as e:
         return _signal_payload(
@@ -518,11 +539,12 @@ async def get_bookmaker_spread(
     metric: str,
     date: str = "",
     event_id: str = "",
+    league: str = "nba",
 ) -> Dict[str, Any]:
     """Disagreement across books – wide spread = uncertain market."""
     try:
         lines, _, meta = await _fetch_market_data(
-            player, metric, date, event_id=event_id, priority="interactive"
+            player, metric, date, event_id=event_id, priority="interactive", league=league,
         )
     except Exception as e:
         return _signal_payload("unavailable", 0, 0, 0, "today", "odds_api", {"error": str(e)})

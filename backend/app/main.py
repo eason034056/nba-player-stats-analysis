@@ -12,7 +12,7 @@ main.py - FastAPI 應用程式主入口點
 from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from app.api import agent, health, metrics, nba, wnba, daily_picks, picks, projections, odds_history, lineups
+from app.api import agent, health, metrics, nba, wnba, wnba_agent, daily_picks, picks, projections, odds_history, lineups
 from app.middleware.logging_config import RequestLoggingMiddleware, setup_logging
 from app.middleware.rate_limit import install_rate_limiter
 from app.services.cache import cache_service
@@ -134,6 +134,7 @@ app.include_router(metrics.router)
 app.include_router(nba.router)
 app.include_router(wnba.router)  # SPO-32 Phase 1: WNBA CSV + read-only stats
 app.include_router(agent.router)
+app.include_router(wnba_agent.router)  # SPO-58 Phase 5c: WNBA agent chat
 app.include_router(daily_picks.router)  # 每日高機率球員分析
 app.include_router(picks.router)  # Discord bot AI picks API
 app.include_router(projections.router)  # 球員投影資料（SportsDataIO）

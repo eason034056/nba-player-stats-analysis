@@ -30,24 +30,24 @@ def _unavailable_signal(tool_name: str, **kwargs) -> Dict[str, Any]:
     }
 
 
-def get_full_projection(player: str, date: str = "") -> Dict[str, Any]:
+def get_full_projection(player: str, date: str = "", league: str = "nba") -> Dict[str, Any]:
     """Projected points/reb/ast/pra, minutes, usage%, PER, DFS salary."""
-    return _unavailable_signal("get_full_projection", player=player, date=date)
+    return _unavailable_signal("get_full_projection", player=player, date=date, league=league)
 
 
-def calculate_edge(projected_value: float, threshold: float) -> Dict[str, Any]:
+def calculate_edge(projected_value: float, threshold: float, league: str = "nba") -> Dict[str, Any]:
     """Projected value minus threshold, with interpretation."""
-    return _unavailable_signal("calculate_edge", projected_value=projected_value, threshold=threshold)
+    return _unavailable_signal("calculate_edge", projected_value=projected_value, threshold=threshold, league=league)
 
 
-def get_opponent_defense_profile(player: str, date: str = "") -> Dict[str, Any]:
+def get_opponent_defense_profile(player: str, date: str = "", league: str = "nba") -> Dict[str, Any]:
     """Opponent defensive rank and position-specific rank."""
-    return _unavailable_signal("get_opponent_defense_profile", player=player, date=date)
+    return _unavailable_signal("get_opponent_defense_profile", player=player, date=date, league=league)
 
 
-def get_minutes_confidence(player: str, date: str = "") -> Dict[str, Any]:
+def get_minutes_confidence(player: str, date: str = "", league: str = "nba") -> Dict[str, Any]:
     """Compare projected minutes to CSV season average."""
-    return _unavailable_signal("get_minutes_confidence", player=player, date=date)
+    return _unavailable_signal("get_minutes_confidence", player=player, date=date, league=league)
 
 
 ALL_PROJECTION_TOOLS = [
