@@ -979,3 +979,67 @@ def test_resolve_agents_dir_supports_repo_and_container_layouts(tmp_path: Path):
 
     assert _resolve_agents_dir(repo_service_file) == repo_root / "scripts" / "agents"
     assert _resolve_agents_dir(container_service_file) == container_root / "scripts" / "agents"
+
+
+# ---------------------------------------------------------------------------
+# SPO-48 (Phase 5a): event_context must carry `league` from request to graph.
+# The Pydantic model accepts an optional `league` and the service backfills "nba".
+# These two tests are the request-side contract; planner-side contract lives in
+# `test_agent_planner.py`.
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_event_context_defaults_league_to_nba_when_page_omits():
+    captured: dict[str, object] = {}
+
+    async def graph_runner(_query: str, event_context: dict[str, object]):
+        captured.update(event_context)
+        return _make_graph_result()
+
+    service = AgentChatService(graph_runner=graph_runner)
+    request = AgentChatRequest.model_validate(
+        {
+            "thread": "t-nba-default",
+            "message": "Should I bet this?",
+            "action": "analyze_pick",
+            "context": {
+                "page": {"route": "/picks", "date": "2026-03-13"},
+                "selected_pick": _make_pick(),
+            },
+        }
+    )
+
+    await service.handle_chat(request)
+
+    assert captured["league"] == "nba"  # legacy callers stay on NBA
+
+
+@pytest.mark.asyncio
+async def test_event_context_propagates_wnba_when_page_sets_it():
+    captured: dict[str, object] = {}
+
+    async def graph_runner(_query: str, event_context: dict[str, object]):
+        captured.update(event_context)
+        return _make_graph_result()
+
+    service = AgentChatService(graph_runner=graph_runner)
+    request = AgentChatRequest.model_validate(
+        {
+            "thread": "t-wnba",
+            "message": "Should I bet this?",
+            "action": "analyze_pick",
+            "context": {
+                "page": {
+                    "route": "/wnba/picks",
+                    "date": "2026-05-14",
+                    "league": "wnba",
+                },
+                "selected_pick": _make_pick(),
+            },
+        }
+    )
+
+    await service.handle_chat(request)
+
+    assert captured["league"] == "wnba"

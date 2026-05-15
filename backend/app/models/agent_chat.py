@@ -22,6 +22,8 @@ AgentStatus = Literal[
     "error",
 ]
 
+AgentLeague = Literal["nba", "wnba"]
+
 AgentDecision = Literal["over", "under", "avoid"]
 AgentRecommendation = Literal["keep", "recheck", "remove"]
 LineupStatus = Literal["projected", "partial", "unavailable"]
@@ -47,6 +49,10 @@ class AgentPageContext(BaseModel):
     selected_teams: list[str] = Field(
         default_factory=list,
         description="Currently selected teams on the board",
+    )
+    league: AgentLeague | None = Field(
+        default=None,
+        description="League id (\"nba\" or \"wnba\"); backend defaults to nba when omitted",
     )
 
 

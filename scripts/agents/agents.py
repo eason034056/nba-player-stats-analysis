@@ -34,6 +34,7 @@ if os.path.join(_PROJECT_ROOT, "backend") not in sys.path:
     sys.path.insert(0, os.path.join(_PROJECT_ROOT, "backend"))
 
 from date_utils import normalize_date
+from state import DEFAULT_LEAGUE, LeagueId
 from tools.historical import (
     get_base_stats, get_role_conditioned_base_stats, get_starter_bench_split, get_opponent_history,
     get_trend_analysis, get_streak_info, get_minutes_role_trend,
@@ -134,6 +135,7 @@ Rules:
 async def planner_node(state: Dict[str, Any]) -> Dict[str, Any]:
     query = state.get("user_query", "")
     event_context = state.get("event_context", {})
+    league: LeagueId = event_context.get("league") or DEFAULT_LEAGUE
     resp = await _get_llm().ainvoke([
         SystemMessage(content=_PLANNER_SYSTEM),
         HumanMessage(content=query),
@@ -164,6 +166,7 @@ async def planner_node(state: Dict[str, Any]) -> Dict[str, Any]:
     parsed = _merge_selected_pick_context(parsed, event_context)
 
     return {
+        "league": league,
         "parsed_query": parsed,
         "availability": {
             "historical": parsed.get("needs_historical", True),

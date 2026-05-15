@@ -287,6 +287,7 @@ class AgentChatService:
             "route": page.route if page else "",
             "date": page.date if page else "",
             "selected_teams": list(page.selected_teams) if page and page.selected_teams else [],
+            "league": page.league if page and page.league else "nba",
         }
 
         if pick is not None:
