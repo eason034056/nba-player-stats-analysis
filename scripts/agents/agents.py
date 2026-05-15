@@ -204,20 +204,20 @@ async def historical_agent_node(state: Dict[str, Any]) -> Dict[str, Any]:
 
     signals: Dict[str, Any] = {}
 
-    signals["get_base_stats"] = get_base_stats(player, metric, threshold)
-    signals["get_starter_bench_split"] = get_starter_bench_split(player, metric, threshold)
+    signals["get_base_stats"] = get_base_stats(player, metric, threshold, league=league)
+    signals["get_starter_bench_split"] = get_starter_bench_split(player, metric, threshold, league=league)
 
     if opponent:
-        signals["get_opponent_history"] = get_opponent_history(player, metric, threshold, opponent)
+        signals["get_opponent_history"] = get_opponent_history(player, metric, threshold, opponent, league=league)
 
-    signals["get_trend_analysis"] = get_trend_analysis(player, metric)
-    signals["get_streak_info"] = get_streak_info(player, metric, threshold)
-    signals["get_minutes_role_trend"] = get_minutes_role_trend(player)
-    signals["get_shooting_profile"] = get_shooting_profile(player)
-    signals["get_variance_profile"] = get_variance_profile(player, metric)
-    signals["get_schedule_context"] = get_schedule_context(player, date)
-    signals["get_game_script_splits"] = get_game_script_splits(player, metric, threshold)
-    signals["auto_teammate_impact"] = await asyncio.to_thread(auto_teammate_impact, player, metric, threshold)
+    signals["get_trend_analysis"] = get_trend_analysis(player, metric, league=league)
+    signals["get_streak_info"] = get_streak_info(player, metric, threshold, league=league)
+    signals["get_minutes_role_trend"] = get_minutes_role_trend(player, league=league)
+    signals["get_shooting_profile"] = get_shooting_profile(player, league=league)
+    signals["get_variance_profile"] = get_variance_profile(player, metric, league=league)
+    signals["get_schedule_context"] = get_schedule_context(player, date, league=league)
+    signals["get_game_script_splits"] = get_game_script_splits(player, metric, threshold, league=league)
+    signals["auto_teammate_impact"] = await asyncio.to_thread(auto_teammate_impact, player, metric, threshold, league)
 
     # Fetch injury report for the player's OWN team (not the opponent).
     # auto_teammate_impact already does this internally, but we also surface
@@ -227,16 +227,17 @@ async def historical_agent_node(state: Dict[str, Any]) -> Dict[str, Any]:
         selected_pick = event_context.get("selected_pick") or {}
         own_team = selected_pick.get("player_team", "")
     signals["get_own_team_injury_report"] = await get_official_injury_report(
-        own_team or "unknown", date, player=player
+        own_team or "unknown", date, player=player, league=league,
     )
     signals["get_own_team_projected_lineup"] = await get_projected_lineup_consensus(
-        own_team or "unknown", date
+        own_team or "unknown", date, league=league,
     )
     signals["get_player_lineup_context"] = await get_player_lineup_context(
         player,
         date,
         team=own_team or "unknown",
         opponent=opponent or "unknown",
+        league=league,
     )
     player_is_projected_starter = signals["get_player_lineup_context"].get("details", {}).get(
         "player_is_projected_starter"
@@ -247,15 +248,16 @@ async def historical_agent_node(state: Dict[str, Any]) -> Dict[str, Any]:
             metric,
             threshold,
             player_is_projected_starter,
+            league=league,
         )
 
     # Also fetch opponent injury report if we know the opponent
     if opponent:
         signals["get_opponent_injury_report"] = await get_official_injury_report(
-            opponent, date
+            opponent, date, league=league,
         )
         signals["get_opponent_projected_lineup"] = await get_projected_lineup_consensus(
-            opponent, date
+            opponent, date, league=league,
         )
 
     return {
@@ -277,10 +279,10 @@ def projection_agent_node(state: Dict[str, Any]) -> Dict[str, Any]:
     threshold = pq.get("threshold", 0)
 
     signals = {
-        "get_full_projection": get_full_projection(player, date),
-        "calculate_edge": calculate_edge(0, threshold),
-        "get_opponent_defense_profile": get_opponent_defense_profile(player, date),
-        "get_minutes_confidence": get_minutes_confidence(player, date),
+        "get_full_projection": get_full_projection(player, date, league=league),
+        "calculate_edge": calculate_edge(0, threshold, league=league),
+        "get_opponent_defense_profile": get_opponent_defense_profile(player, date, league=league),
+        "get_minutes_confidence": get_minutes_confidence(player, date, league=league),
     }
 
     return {
@@ -305,13 +307,13 @@ async def market_agent_node(state: Dict[str, Any]) -> Dict[str, Any]:
     event_id = pq.get("event_id", "")
 
     signals: Dict[str, Any] = {}
-    signals["get_current_market"] = await get_current_market(player, metric, date, event_id=event_id)
-    signals["get_line_movement"] = await get_line_movement(player, metric, date, event_id=event_id)
-    signals["get_best_price"] = await get_best_price(player, metric, direction, date, event_id=event_id)
+    signals["get_current_market"] = await get_current_market(player, metric, date, event_id=event_id, league=league)
+    signals["get_line_movement"] = await get_line_movement(player, metric, date, event_id=event_id, league=league)
+    signals["get_best_price"] = await get_best_price(player, metric, direction, date, event_id=event_id, league=league)
     signals["get_market_quote_for_line"] = await get_market_quote_for_line(
-        player, metric, threshold, direction, date, event_id=event_id
+        player, metric, threshold, direction, date, event_id=event_id, league=league,
     )
-    signals["get_bookmaker_spread"] = await get_bookmaker_spread(player, metric, date, event_id=event_id)
+    signals["get_bookmaker_spread"] = await get_bookmaker_spread(player, metric, date, event_id=event_id, league=league)
 
     return {
         "league": league,

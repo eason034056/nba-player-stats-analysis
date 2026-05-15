@@ -16,7 +16,8 @@ from scripts.agents.tools import historical
 
 @pytest.mark.asyncio
 async def test_get_player_lineup_context_canonicalizes_player_name_before_matching(monkeypatch):
-    async def fake_get_projected_lineup_consensus(team: str, date: str = ""):
+    async def fake_get_projected_lineup_consensus(team: str, date: str = "", **kwargs):
+        # SPO-58: production `get_projected_lineup_consensus` gained `league` kwarg.
         return {
             "signal": "neutral",
             "effect_size": 0.0,
