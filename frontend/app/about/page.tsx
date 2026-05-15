@@ -7,12 +7,13 @@
  * - Red for important warnings
  */
 
-import { Calculator, AlertTriangle, BookOpen, ExternalLink } from "lucide-react";
+import { Calculator, AlertTriangle, BookOpen, ExternalLink, Sparkles } from "lucide-react";
+import Link from "next/link";
 import type { Metadata } from "next";
 
 export const metadata: Metadata = {
   title: "About",
-  description: "Learn about the principles of no-vig probability calculation and disclaimer",
+  description: "Learn about the principles of no-vig probability calculation, NBA + WNBA coverage, and our disclaimer",
 };
 
 export default function AboutPage() {
@@ -29,6 +30,14 @@ export default function AboutPage() {
           <p className="text-lg leading-8 text-gray max-w-2xl">
             This product is built to turn messy market pricing into something more legible: what the book implies, how much vig sits inside the line, and what the fairer probability looks like after normalization.
           </p>
+          <p className="mt-4 text-sm text-gray max-w-2xl">
+            We cover NBA and{" "}
+            <Link href="/wnba" className="text-red font-semibold hover:underline">
+              WNBA
+            </Link>{" "}
+            player props with a single no-vig pipeline — each league gets its
+            own picks, event pages, and bet slip so the boards stay clean.
+          </p>
         </div>
 
         <div className="card">
@@ -39,6 +48,56 @@ export default function AboutPage() {
           </div>
         </div>
       </div>
+
+      <section className="card mb-6">
+        <div className="flex items-center gap-3 mb-6">
+          <div className="w-10 h-10 rounded-full bg-red flex items-center justify-center">
+            <Sparkles className="w-5 h-5 text-white" />
+          </div>
+          <h2 className="text-xl font-semibold text-dark">
+            NBA + WNBA Coverage
+          </h2>
+        </div>
+
+        <div className="space-y-4 text-dark">
+          <p>
+            Both leagues run through the same no-vig pipeline — same odds
+            normalization, same historical-probability scoring, same shareable
+            bet-slip workflow — but each league has its own independent surface
+            so picks and slips never bleed across.
+          </p>
+
+          <div className="rounded-[24px] p-5 border border-white/8 bg-white/4">
+            <ul className="space-y-2 text-sm">
+              <li>
+                <span className="font-bold">NBA:</span>{" "}
+                <Link href="/picks" className="text-red font-semibold hover:underline">
+                  Daily Picks
+                </Link>
+                {" · "}
+                <Link href="/betslip" className="text-red font-semibold hover:underline">
+                  Bet Slip
+                </Link>
+              </li>
+              <li>
+                <span className="font-bold">WNBA:</span>{" "}
+                <Link href="/wnba/picks" className="text-red font-semibold hover:underline">
+                  WNBA Daily Picks
+                </Link>
+                {" · "}
+                <Link href="/wnba/betslip" className="text-red font-semibold hover:underline">
+                  WNBA Bet Slip
+                </Link>
+              </li>
+            </ul>
+          </div>
+
+          <p className="text-sm text-gray">
+            The Navbar title and the bet-slip badge auto-switch to match the
+            league section you are browsing.
+          </p>
+        </div>
+      </section>
 
       <section className="card mb-6">
         <div className="flex items-center gap-3 mb-6">
