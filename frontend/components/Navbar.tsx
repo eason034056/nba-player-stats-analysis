@@ -28,6 +28,22 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useBetSlip } from "@/contexts/BetSlipContext";
+import { useWnbaBetSlip } from "@/contexts/WnbaBetSlipContext";
+
+/**
+ * 💡 isWnbaPath — single source of truth for "are we inside the WNBA section?".
+ *
+ * Used to switch the Navbar title, the bet-slip badge count, and the bet-slip
+ * link target. Centralising it avoids three slightly-different `startsWith`
+ * checks drifting apart later (and ensures `/wnba/betslip` itself is treated
+ * as a WNBA route, not as the NBA betslip).
+ *
+ * ⚠ Anchor the trailing slash so `/wnban` (hypothetical) doesn't accidentally
+ * activate WNBA mode.
+ */
+function isWnbaPath(pathname: string): boolean {
+  return pathname === "/wnba" || pathname.startsWith("/wnba/");
+}
 
 /**
  * Navigation links configuration
@@ -116,9 +132,22 @@ function NavItem({
  */
 export function Navbar() {
   const pathname = usePathname();
-  const { count } = useBetSlip();
+  // Both hooks are always called — both providers are always mounted, so
+  // both contexts are always available. We only USE one of the counts at a
+  // time, but calling both keeps hook order stable across renders (required
+  // by React's rules of hooks).
+  const { count: nbaCount } = useBetSlip();
+  const { count: wnbaCount } = useWnbaBetSlip();
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
-  const isBetSlipActive = pathname === "/betslip";
+
+  // Path drives league — Navbar is the only place this decision is made
+  // (per SPO-29 guardrail: "Path-based active league inference is in the
+  // Navbar layer. Do not put league state in a root provider.").
+  const isWnba = isWnbaPath(pathname);
+  const betSlipHref = isWnba ? "/wnba/betslip" : "/betslip";
+  const betSlipCount = isWnba ? wnbaCount : nbaCount;
+  const isBetSlipActive = pathname === betSlipHref;
+  const brandTitle = isWnba ? "No-Vig WNBA" : "No-Vig NBA";
 
   return (
     <nav className="fixed left-0 right-0 top-0 z-50 px-4 pt-4 sm:px-6">
@@ -136,7 +165,7 @@ export function Navbar() {
 
               <div className="flex min-w-0 flex-col">
                 <span className="truncate text-lg font-semibold tracking-[0.02em] text-white">
-                  No-Vig NBA
+                  {brandTitle}
                 </span>
                 <span className="truncate text-[10px] uppercase tracking-[0.34em] text-white/45">
                   Cinematic Data Atelier
@@ -156,11 +185,11 @@ export function Navbar() {
               ))}
 
               <NavItem
-                href="/betslip"
+                href={betSlipHref}
                 label="Bet Slip"
                 icon={ClipboardList}
                 isActive={isBetSlipActive}
-                badge={count}
+                badge={betSlipCount}
               />
             </div>
 
@@ -194,11 +223,11 @@ export function Navbar() {
                 ))}
 
                 <NavItem
-                  href="/betslip"
+                  href={betSlipHref}
                   label="Bet Slip"
                   icon={ClipboardList}
                   isActive={isBetSlipActive}
-                  badge={count}
+                  badge={betSlipCount}
                   onNavigate={() => setIsMobileMenuOpen(false)}
                 />
               </div>
