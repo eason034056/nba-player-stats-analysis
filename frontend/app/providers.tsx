@@ -21,6 +21,7 @@ import { useState, useEffect } from "react";
 import { AgentWidget } from "@/components/AgentWidget";
 import { AgentWidgetProvider } from "@/contexts/AgentWidgetContext";
 import { BetSlipProvider } from "@/contexts/BetSlipContext";
+import { WnbaBetSlipProvider } from "@/contexts/WnbaBetSlipContext";
 
 /**
  * Providers 元件
@@ -74,13 +75,18 @@ export function Providers({ children }: { children: React.ReactNode }) {
     // QueryClientProvider: React Query 的 context provider
     // 讓所有子元件都能使用 useQuery、useMutation 等 hooks
     <QueryClientProvider client={queryClient}>
-      {/* BetSlipProvider: 下注列表的 context provider
-          讓所有子元件都能使用 useBetSlip hook 管理下注列表 */}
+      {/* BetSlipProvider + WnbaBetSlipProvider: two independent slips, both
+          visible to the whole tree (Navbar reads both counts; the active one
+          is picked path-based in the Navbar layer per SPO-29). Nesting one
+          inside the other is fine for React; the order does not imply
+          dependence. */}
       <BetSlipProvider>
-        <AgentWidgetProvider>
-          {children}
-          <AgentWidget />
-        </AgentWidgetProvider>
+        <WnbaBetSlipProvider>
+          <AgentWidgetProvider>
+            {children}
+            <AgentWidget />
+          </AgentWidgetProvider>
+        </WnbaBetSlipProvider>
       </BetSlipProvider>
       
       {/* React Query Devtools: 開發工具

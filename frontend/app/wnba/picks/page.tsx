@@ -55,6 +55,7 @@ import {
   DIRECTION_DISPLAY_NAMES,
 } from "@/lib/schemas";
 import { DatePicker } from "@/components/DatePicker";
+import { PickContextMenu } from "@/components/PickContextMenu";
 import { buildEventDetailHref } from "@/lib/event-detail-link";
 import { metricToMarket } from "@/lib/metric-to-market";
 
@@ -96,8 +97,13 @@ function PickCard({
 
   const DirectionIcon = pick.direction === "over" ? ArrowUpRight : ArrowDownRight;
 
+  // 💡 PickContextMenu with league="wnba" routes right-click "Add to Bet Slip"
+  // through `useWnbaBetSlip`, so adding a WNBA leg never increments the NBA
+  // slip count (SPO-29 architectural guardrail: two contexts, fully
+  // independent — see WnbaBetSlipContext header).
   return (
-    <div className="animate-fade-in" style={{ animationDelay }}>
+    <PickContextMenu pick={pick} league="wnba">
+      <div className="animate-fade-in" style={{ animationDelay }}>
       <Link
         href={linkHref}
         className={`
@@ -168,7 +174,8 @@ function PickCard({
           </div>
         </div>
       </Link>
-    </div>
+      </div>
+    </PickContextMenu>
   );
 }
 
