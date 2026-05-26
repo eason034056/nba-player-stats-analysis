@@ -7,6 +7,17 @@
  * piggy-back on Next.js App Router route-segment metadata: any layout
  * deeper in the tree replaces matching keys from the root layout.
  *
+ * Why `title.absolute` instead of `title.default`: the root layout sets
+ * `title.template = "%s | No-Vig NBA"`, which Next.js applies to a child
+ * layout's `default` (a child's `default` is treated as a "child title"
+ * for the parent's template). That produced
+ *   "No-Vig WNBA | No-Vig Probability Calculator | No-Vig NBA"
+ * on every `/wnba/*` route (SPO-62 Sentinel browser smoke). `absolute`
+ * is documented to ignore ancestor templates, so the WNBA segment now
+ * renders the literal string. `template` is kept so future WNBA pages
+ * that export their own `title: "..."` get wrapped with "| No-Vig WNBA"
+ * rather than "| No-Vig NBA".
+ *
  * Scope is deliberately narrow — title + description only. The root
  * layout still owns fonts, providers, navbar, footer, icons, manifest,
  * keywords, and viewport (none of which differ between leagues).
@@ -16,7 +27,7 @@ import type { Metadata } from "next";
 
 export const metadata: Metadata = {
   title: {
-    default: "No-Vig WNBA | No-Vig Probability Calculator",
+    absolute: "No-Vig WNBA | No-Vig Probability Calculator",
     template: "%s | No-Vig WNBA",
   },
   description:
