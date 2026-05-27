@@ -204,7 +204,7 @@ To fully use the project, make sure:
 The frontend exposes two parallel league routes with equivalent prop-pick UI:
 
 - `/` — NBA (default landing page)
-- `/wnba` — WNBA (mirror routes: `/wnba/event/[id]`, `/wnba/player/[name]`, `/wnba/picks`, `/wnba/betslip`)
+- `/wnba` — WNBA (mirror routes: `/wnba/event/[eventId]`, `/wnba/player/[name]`, `/wnba/picks`, `/wnba/betslip`)
 
 After going to <http://localhost:3000>, you can:
 
@@ -262,12 +262,12 @@ python graph.py
 │   └── app/api/
 │       ├── nba.py           # /api/* — NBA events, props/no-vig, player-history, csv/*
 │       ├── wnba.py          # /api/wnba/* — same surface for WNBA (events, props/no-vig, player-history, csv/*)
-│       ├── nba_agent.py     # /api/nba/agent/chat — NBA multi-agent endpoint
+│       ├── agent.py         # /api/nba/agent/chat — NBA multi-agent endpoint
 │       └── wnba_agent.py    # /api/wnba/agent/chat — WNBA multi-agent endpoint (symmetric prefix)
 ├── frontend/                # Next.js frontend (App Router)
 │   └── app/
-│       ├── (NBA routes)     # /, /event/[id], /player/[name], /picks, /betslip
-│       └── wnba/            # /wnba, /wnba/event/[id], /wnba/player/[name], /wnba/picks, /wnba/betslip
+│       ├── (NBA routes)     # /, /event/[eventId], /picks, /betslip, /about
+│       └── wnba/            # /wnba, /wnba/event/[eventId], /wnba/player/[name], /wnba/picks, /wnba/betslip
 ├── scripts/agents/          # LangGraph multi-agent system and CLI (league-parameterized)
 ├── data/                    # Local data files (nba_player_game_logs.csv + wnba_player_game_logs.csv)
 ├── docker-compose.yml       # Backend, Redis, PostgreSQL launch configuration

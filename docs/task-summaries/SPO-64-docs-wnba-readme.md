@@ -12,7 +12,7 @@
 | `README.md` § Project Features | Mentions both NBA + WNBA props, both CSVs, league-aware Agent Widget | Existing bullets were NBA-only |
 | `README.md` § 2.A Historical Data CSV | Adds `data/wnba_player_game_logs.csv` alongside NBA CSV; notes both ship with repo and use the same `_get_csv_path(league=...)` loader | Per task description; verified `data/wnba_player_game_logs.csv` exists, no canonical WNBA URL is documented in-repo so the WNBA bullet stays neutral on re-download path |
 | `README.md` § 3 Web Front-End | Adds `/wnba/*` route family (event, player, picks, betslip) and `/api/wnba/agent/chat` | Verified each route exists under `frontend/app/wnba/` and `backend/app/api/wnba_agent.py:27` |
-| `README.md` § 5 Project Structure | Expands `backend/app/api/` to show `nba.py / wnba.py + nba_agent.py / wnba_agent.py`; expands `frontend/app/` to show NBA and `wnba/` route groups; CSV bullet lists both CSVs | Per task description; endpoint list grounded in `backend/app/api/wnba.py:7–15` docstring (authoritative) |
+| `README.md` § 5 Project Structure | Expands `backend/app/api/` to show `nba.py / wnba.py + agent.py / wnba_agent.py`; expands `frontend/app/` to show NBA and `wnba/` route groups; CSV bullet lists both CSVs | Per task description; endpoint list grounded in `backend/app/api/wnba.py:7–15` docstring (authoritative); NBA agent endpoint lives in `backend/app/api/agent.py` (`prefix="/api/nba/agent"` at line 8) |
 | `docs/dev-doc.md` | Surgical insert (Traditional Chinese) at top — between the lead paragraph and the original `# 開發文檔：NBA ...` title — noting the architecture is league-parameterized, with code-citation evidence | Original doc reads as NBA-only PRD; new contributors need a single signal that `league` flows through state → agents → tools/services. Original body untouched. |
 
 ## Why
@@ -41,7 +41,7 @@ No file outside `README.md` and `docs/dev-doc.md` was modified.
 | `grep -ic wnba docs/dev-doc.md` | ≥ 2 | **3** ✓ |
 | All paths/endpoints exist | yes | verified — see Evidence above |
 | Only README.md + dev-doc.md touched | yes | `git diff --stat origin/dev..HEAD` shows only these two files |
-| Diff total ≤ 200 lines | yes | 50 insertions + 14 deletions = **64 lines** ✓ |
+| Diff total ≤ 200 lines | yes | **≤ 70 lines** (Rev 2 below) ✓ |
 | Branch naming | `feature/SPO-64-...` | `feature/SPO-64-docs-wnba-readme` ✓ |
 
 ## Forbidden-zones audit (per SPO-63 charter)
@@ -71,3 +71,17 @@ Local commits on `feature/SPO-64-docs-wnba-readme` (not pushed):
 
 - `ca7b576` docs(wnba): SPO-64 — README reflects WNBA as first-class league
 - `06e422e` docs(wnba): SPO-64 — dev-doc.md note that architecture is league-parameterized
+- `cc70a5c` docs(wnba): SPO-64 — task summary for README/dev-doc WNBA refresh
+- `(rev2)`  docs(wnba): SPO-64 — fix Lens findings (anti-hallucination cleanup)
+
+## Rev 2 — Lens findings addressed (2026-05-27)
+
+Lens REQUEST CHANGES review flagged two anti-hallucination issues; both fixed plus one extra hallucination found while in the file (same root cause, same policy):
+
+| Finding | Severity | Original (wrong) | Corrected | Evidence |
+|---|---|---|---|---|
+| README § Project Structure tree invents `backend/app/api/nba_agent.py` | **[Major]** (Lens) | `nba_agent.py     # /api/nba/agent/chat` | `agent.py         # /api/nba/agent/chat` | `backend/app/api/agent.py:8` → `prefix="/api/nba/agent"`; registered in `backend/app/main.py:136` |
+| Dynamic segment `/wnba/event/[id]` (2 occurrences) | **[Nit]** (Lens) | `/wnba/event/[id]` | `/wnba/event/[eventId]` | `frontend/app/wnba/event/[eventId]/` |
+| NBA `/event/[id], /player/[name]` line | (caught while fixing above) | `/, /event/[id], /player/[name], /picks, /betslip` | `/, /event/[eventId], /picks, /betslip, /about` | `frontend/app/event/[eventId]/` exists; `frontend/app/player/` does NOT exist; `/about` does |
+
+All three are the same class of bug (LLM-symmetric inference without `ls`-ing the directory). Rev 2 fix is README-only — `docs/dev-doc.md` and the task summary metadata are untouched except for this Rev 2 note. New diff total stays well under the 200-line cap.
