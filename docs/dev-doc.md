@@ -2,6 +2,22 @@
 
 ---
 
+> **【架構更新註記｜2026-05｜SPO-29 epic 收尾】**
+>
+> 本文件最初描述的是 NBA-only MVP，但 2026-05 epic [SPO-29](/SPO/issues/SPO-29) 收尾後，**架構已 league-parameterized，WNBA 與 NBA 同為 first-class league**。本節為 surgical insert，原文以下各章節仍適用 NBA — WNBA 走的是「同一份程式、不同 `league` 參數」的路徑，差異點僅在資料源（CSV 檔名、`sport_key` 字串）。
+>
+> League 流向（程式碼證據）：
+>
+> 1. **State** — `scripts/agents/state.py` 在 `AgentState` TypedDict 加上 `league: LeagueId` 欄位（line 32），由 planner 寫入後沿著 LangGraph 一路傳遞。
+> 2. **Agents** — `scripts/agents/agents.py` 的 `_get_league(state)` helper（line 68）是「讀 league」的單一 entry-point；historical / projection / market / critic / synthesizer 五個 node 都呼叫它（line 198, 276, 301, 395, 565），不再各自做 fallback。
+> 3. **Tool / Service 層** — `backend/app/services/csv_player_history.py` 的 `_get_csv_path(league="nba")`（line 117）以 `data/<league>_player_game_logs.csv` 為 path template；odds gateway / provider 同樣接收 `sport: str` 參數，cache key 內嵌 league（CLAUDE.md §「One gateway, one provider, parameterized」）。
+>
+> 對應的 backend route：`/api/*` 為 NBA、`/api/wnba/*` 為 WNBA（檔案：`backend/app/api/nba.py` vs `backend/app/api/wnba.py`，agent chat 為 `nba_agent.py` vs `wnba_agent.py`）。Frontend route：`/` 為 NBA、`/wnba` 為 WNBA（同樣 mirror 結構）。
+>
+> ⚠ 加新 league 時不要 fork 程式碼 — 改 `LeagueId` 與 `_LEAGUE_FILE_NAMES`、補一份 route module、補對應 CSV 即可。Market keys、odds parser 的 anti-hallucination 規則（CLAUDE.md §「External API Wrappers」）對 WNBA 同樣適用，且新 league 的 hard-supported market keys **必須** 透過 Phase 0 research doc 驗證後才能加入 route。
+
+---
+
 # 開發文檔：NBA 球員得分 Props「去水機率」網站
 
 ## 0. 一句話
