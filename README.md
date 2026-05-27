@@ -1,6 +1,6 @@
-# NBA Multi-Agent Betting Advisor
+# NBA + WNBA Multi-Agent Betting Advisor
 
-This project is an implementation of a multi-agent system for Generative AI Assignment 4. The system uses `LangGraph` to coordinate multiple LLM agents and combines NBA historical data, live odds, and lineup information to provide analysis results for player props. It also features an interactive web front-end for users to input questions and view responses directly.
+This project is an implementation of a multi-agent system for Generative AI Assignment 4. The system uses `LangGraph` to coordinate multiple LLM agents and combines historical data, live odds, and lineup information to provide analysis results for player props. **Both NBA and WNBA are supported as first-class leagues** — the architecture is league-parameterized, so each league has its own routes, CSV, agent context, and UI (see `docs/dev-doc.md` for the league plumbing). It also features an interactive web front-end for users to input questions and view responses directly.
 
 ## System Architecture
 
@@ -30,11 +30,11 @@ This diagram shows the main LangGraph flow used by the project: the planner rout
 
 ## Project Features
 
-- Query NBA games and player props information
+- Query NBA **and WNBA** games and player props information
 - Display vig-free probabilities and market consensus
-- Analyze player historical game data
+- Analyze player historical game data (NBA and WNBA CSVs)
 - Integrate live odds, lineups, and agent analysis results
-- Interact with the multi-agent system via the front-end Agent Widget
+- Interact with the multi-agent system via the front-end Agent Widget (league-aware: each league has its own betslip + agent context)
 
 ## Tech Stack
 
@@ -152,18 +152,24 @@ Assignment 4 requires the README to explain "where to download the data." This p
 
 ### A. Historical Data CSV
 
-The project uses a player game logs data file:
+The project uses one player game logs file **per league**:
 
-- Target path: `data/nba_player_game_logs.csv`
-- Original source: <https://github.com/eason034056/nba-player-stats-scraper/blob/main/nba_player_game_logs.csv>
-- Direct download: <https://raw.githubusercontent.com/eason034056/nba-player-stats-scraper/main/nba_player_game_logs.csv>
+- NBA target path: `data/nba_player_game_logs.csv`
+- WNBA target path: `data/wnba_player_game_logs.csv`
 
-If your cloned repo doesn't have this file, run:
+Both CSVs ship with the repo (committed alongside `data/`). They originate from the same scraper project:
+
+- Original source (NBA): <https://github.com/eason034056/nba-player-stats-scraper/blob/main/nba_player_game_logs.csv>
+- Direct download (NBA): <https://raw.githubusercontent.com/eason034056/nba-player-stats-scraper/main/nba_player_game_logs.csv>
+
+If either file is missing from your clone, re-download via the same scraper repo (or `git lfs` if your clone uses LFS). For the NBA CSV the canonical command is:
 
 ```bash
 mkdir -p data
 curl -L "https://raw.githubusercontent.com/eason034056/nba-player-stats-scraper/main/nba_player_game_logs.csv" -o data/nba_player_game_logs.csv
 ```
+
+The WNBA CSV is loaded by `backend/app/services/csv_player_history.py` via the same `_get_csv_path(league=...)` helper — searching `/app/data/wnba_player_game_logs.csv` (Docker) then `data/wnba_player_game_logs.csv` (local) — so as long as the file exists at one of those paths, the `/api/wnba/csv/*` endpoints work without further configuration.
 
 ### B. Use API to Download CSV Automatically
 
@@ -195,10 +201,16 @@ To fully use the project, make sure:
 
 ### Web Front-End
 
+The frontend exposes two parallel league routes with equivalent prop-pick UI:
+
+- `/` — NBA (default landing page)
+- `/wnba` — WNBA (mirror routes: `/wnba/event/[id]`, `/wnba/player/[name]`, `/wnba/picks`, `/wnba/betslip`)
+
 After going to <http://localhost:3000>, you can:
 
+- Pick a league (NBA at `/`, WNBA at `/wnba`)
 - View games and player props
-- Use Agent Widget to ask analysis questions
+- Use Agent Widget to ask analysis questions (each league has its own agent chat — `/api/nba/agent/chat` vs `/api/wnba/agent/chat`)
 - View odds, lineup, historical context, and more
 
 ### CLI Front-End
@@ -247,9 +259,17 @@ python graph.py
 ```text
 .
 ├── backend/                 # FastAPI backend
-├── frontend/                # Next.js frontend
-├── scripts/agents/          # LangGraph multi-agent system and CLI
-├── data/                    # Local data files (includes nba_player_game_logs.csv)
+│   └── app/api/
+│       ├── nba.py           # /api/* — NBA events, props/no-vig, player-history, csv/*
+│       ├── wnba.py          # /api/wnba/* — same surface for WNBA (events, props/no-vig, player-history, csv/*)
+│       ├── nba_agent.py     # /api/nba/agent/chat — NBA multi-agent endpoint
+│       └── wnba_agent.py    # /api/wnba/agent/chat — WNBA multi-agent endpoint (symmetric prefix)
+├── frontend/                # Next.js frontend (App Router)
+│   └── app/
+│       ├── (NBA routes)     # /, /event/[id], /player/[name], /picks, /betslip
+│       └── wnba/            # /wnba, /wnba/event/[id], /wnba/player/[name], /wnba/picks, /wnba/betslip
+├── scripts/agents/          # LangGraph multi-agent system and CLI (league-parameterized)
+├── data/                    # Local data files (nba_player_game_logs.csv + wnba_player_game_logs.csv)
 ├── docker-compose.yml       # Backend, Redis, PostgreSQL launch configuration
 ├── env.example              # Environment variable example
 └── README.md
