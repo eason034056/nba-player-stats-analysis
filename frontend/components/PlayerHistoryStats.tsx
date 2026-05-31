@@ -43,6 +43,11 @@ import {
   type HistoryMetricKey,
   type GameLog,
   type PlayerProjection,
+  type CSVPlayersResponse,
+  type PlayerHistoryRequest,
+  type PlayerHistoryResponse,
+  type NoVigRequest,
+  type NoVigResponse,
 } from "@/lib/schemas";
 import { cn } from "@/lib/utils";
 import { PlayerDDTile } from "@/components/PlayerDDTile";
@@ -183,12 +188,26 @@ interface PlayerHistoryStatsProps {
   initialThreshold?: string;
   /**
    * 球員投影資料（可選）
-   * 
+   *
    * 當從 Event Detail Page 傳入時，用於：
    * 1. 在圖表上繪製投影值的參考線（藍色實線）
    * 2. 在 stat cards 中新增第 5 張「Projected」卡片
    */
   projection?: PlayerProjection;
+  /**
+   * SPO-83: league-parametrized data sources. All optional and defaulted to the
+   * NBA functions, so existing NBA callers (the event page) keep their exact
+   * behavior with zero prop changes. The WNBA event page passes the `getWNBA*`
+   * siblings — same response schemas, different endpoints.
+   *
+   * ⚠ When two leagues render in one session, the TanStack Query cache keys
+   * MUST be namespaced or NBA results leak into WNBA panels (and vice versa).
+   * That is what `cacheNamespace` guards — it is folded into every queryKey here.
+   */
+  getCSVPlayersFn?: (query?: string) => Promise<CSVPlayersResponse>;
+  getPlayerHistoryFn?: (request: PlayerHistoryRequest) => Promise<PlayerHistoryResponse>;
+  calculateNoVigFn?: (request: NoVigRequest) => Promise<NoVigResponse>;
+  cacheNamespace?: string;
 }
 
 /**
@@ -201,6 +220,10 @@ export function PlayerHistoryStats({
   initialMarket,
   initialThreshold,
   projection,
+  getCSVPlayersFn = getCSVPlayers,
+  getPlayerHistoryFn = getPlayerHistory,
+  calculateNoVigFn = calculateNoVig,
+  cacheNamespace = "nba",
 }: PlayerHistoryStatsProps) {
   const [searchInput, setSearchInput] = useState(initialPlayer);
   const [selectedPlayer, setSelectedPlayer] = useState(initialPlayer);
@@ -237,8 +260,8 @@ export function PlayerHistoryStats({
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
 
   const { data: playersData, isLoading: isLoadingPlayers } = useQuery({
-    queryKey: ["csvPlayers", searchInput],
-    queryFn: () => getCSVPlayers(searchInput),
+    queryKey: ["csvPlayers", cacheNamespace, searchInput],
+    queryFn: () => getCSVPlayersFn(searchInput),
     enabled: isDropdownOpen || searchInput.length > 0,
     staleTime: 60 * 1000,
   });
@@ -249,9 +272,9 @@ export function PlayerHistoryStats({
     isError: isHistoryError,
     error: historyError,
   } = useQuery({
-    queryKey: ["playerHistory", selectedPlayer, metric, threshold, recentN, selectedOpponent, starterFilter, teammateFilter, teammatePlayedFilter],
+    queryKey: ["playerHistory", cacheNamespace, selectedPlayer, metric, threshold, recentN, selectedOpponent, starterFilter, teammateFilter, teammatePlayedFilter],
     queryFn: () =>
-      getPlayerHistory({
+      getPlayerHistoryFn({
         player: selectedPlayer,
         metric,
         threshold: parseFloat(threshold),
@@ -288,7 +311,7 @@ export function PlayerHistoryStats({
 
       try {
         const marketKey = historyMetricToMarket(metricKey);
-        const result = await calculateNoVig({
+        const result = await calculateNoVigFn({
           event_id: eventId,
           player_name: playerName,
           market: marketKey,
@@ -311,7 +334,7 @@ export function PlayerHistoryStats({
         setIsFetchingOdds(false);
       }
     },
-    [eventId]
+    [eventId, calculateNoVigFn]
   );
 
   // 💡 Single source of truth for threshold auto-fill: any change to
