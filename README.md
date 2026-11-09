@@ -245,6 +245,17 @@ cd frontend
 npm test
 ```
 
+### Walk-forward backtest
+
+From the repository root, after the backend and agent dependencies are installed:
+
+```bash
+pip install -r backend/requirements.txt -r scripts/agents/requirements_agents.txt
+python scripts/agents/evaluation/backtest.py --report backtest_report.md
+```
+
+`backtest.py` is the walk-forward harness. It scores every NBA and WNBA player-game using only games dated strictly before that game, writes `backtest_report.md`, and prints the three measurement assumptions (proxy line, assumed -110, no CLV). `--odds-history PATH` loads opening and closing lines so ROI uses the real prices and CLV is computed. With no file, that hook stays inactive. `--guard-only` runs the fast calibration check that CI also runs. `--save-rows DIR` writes the row-level CSV and is gitignored.
+
 ### Export LangGraph Mermaid Diagram
 
 Assignment requires a graph visualization. You can export the LangGraph Mermaid diagram with:

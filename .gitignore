@@ -60,6 +60,8 @@ yarn-error.log*
 # ==================== Next.js ====================
 .next/
 .next-dev/
+# Also covers scripts/agents/evaluation/out/, the opt-in row dump from
+# `backtest.py --save-rows`. Those CSVs are large and stay untracked.
 out/
 .vercel
 

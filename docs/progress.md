@@ -1,7 +1,28 @@
 # Sports Lab Progress
 
-> Maintained by CTO. Last refresh: **2026-05-08T08:24Z** (heartbeat: SPO-24 `issue_assigned` — Lens APPROVED test-prob English-regex fix → CTO reassigning to owner (CEO triage → Eason) for squash-merge to `dev`; CTO does NOT push/merge per role). Prior refreshes: 2026-05-08T08:14Z (SPO-27 productivity review closed as productive); 06:11Z (Phase 3 done, Phase 3.5 SPO-26 opened); 01:56Z (Phase 3 dispatch — file later reverted to 01:18Z snapshot); 01:18Z (SPO-15 closed); 2026-05-03T02:59Z–02:38Z (SPO-16 Lens APPROVED chain); 2026-05-02T23:27Z (SPO-11 v3 accept → SPO-16 dispatch); 23:20Z (plan v3 + Addendum 1).
-> Source of truth: Paperclip API. This file is a snapshot — when in doubt, query paperclip directly.
+> Maintained by CTO. Last refresh: **2026-11-09** — SPO-99 walk-forward backtest (section below). Prior snapshot: **2026-05-08T08:24Z** (heartbeat: SPO-24 `issue_assigned` — Lens APPROVED test-prob English-regex fix → CTO reassigning to owner (CEO triage → Eason) for squash-merge to `dev`; CTO does NOT push/merge per role). Prior refreshes: 2026-05-08T08:14Z (SPO-27 productivity review closed as productive); 06:11Z (Phase 3 done, Phase 3.5 SPO-26 opened); 01:56Z (Phase 3 dispatch — file later reverted to 01:18Z snapshot); 01:18Z (SPO-15 closed); 2026-05-03T02:59Z–02:38Z (SPO-16 Lens APPROVED chain); 2026-05-02T23:27Z (SPO-11 v3 accept → SPO-16 dispatch); 23:20Z (plan v3 + Addendum 1).
+> Source of truth: Paperclip API. This file is a snapshot — when in doubt, query paperclip directly. The May 2026 tables below are that snapshot and were not rewritten.
+
+---
+
+## SPO-99 — walk-forward backtest (2026-11-09)
+
+Status: in review. Branch `feature/SPO-99-walk-forward-backtest`, PR base `dev`. The PR URL is filled in once the pull request exists.
+
+Replaces the in-sample five-player `scripts/agents/evaluation/backtest.py` with a walk-forward harness. Each player-game uses only games dated strictly before it. Daily Picks goes through `choose_daily_pick_side` and a sample of rates is checked against `get_player_stats`. The agent path calls `compute_scorecard` on a prior-only cache. Numbers below are the CSV at `5407401` and match the prototype on that commit.
+
+| League | File dates | Rows / players | Scored window | MED20 picks | Hit (95% CI) | ROI @ -110 | Brier | Naive | Lift |
+|---|---|---|---|---|---|---|---|---|---|
+| NBA | 2021-08-04 → 2026-05-11 | 31,572 / 579 | 2025-10-21 → 2026-05-11 (25,218 player-games) | 55,708 / 277,398 props | 64.9% (64.5–65.3) | +24.0% | 0.227 | 50.8% | +14.2 pp |
+| WNBA | 2025-05-02 → 2026-05-08 | 5,365 / 184 | 2025-06-05 → 2026-05-08 (3,960 player-games) | 7,199 / 43,560 props | 68.4% (67.3–69.5) | +30.6% | 0.210 | 50.9% | +17.5 pp |
+
+Agent path, same MED20 window, market gate ignored: NBA 60,829 picks, hit 57.9% (57.5–58.3), lift +7.9 pp; WNBA 8,590 picks, hit 57.6% (56.5–58.6), lift +7.7 pp. Production decision is avoid on all 116,712 scorecards because no market price is stored.
+
+Command: `python scripts/agents/evaluation/backtest.py --report backtest_report.md`
+
+CI: the `walk-forward-guard` job runs the harness tests, including a 40-player sample (seed 7) that fails if MED20 Brier exceeds 0.30 or the calibration gap exceeds 0.15. Thresholds: `BACKTEST_GUARD_MAX_BRIER`, `BACKTEST_GUARD_MAX_GAP`, `BACKTEST_GUARD_PLAYERS`.
+
+SPO-97 and SPO-98 are not fixed here. Relabeling the Season column alone does not move these tables, because the replay never reads it. Dropping the 3,416 NBA rows dated before 2025-10-21 out of history would move the NBA hit rate, ROI, Brier, calibration, and the October–November months. The Maria Conde duplicate (2026-05-08) is not inside any scored prior window, so the WNBA headlines do not move if it is deleted. The oldest-team fallback and the substring name match are not used by this harness, so these tables do not move when those are fixed. The picks page does.
 
 ---
 
