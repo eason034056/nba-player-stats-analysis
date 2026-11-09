@@ -21,9 +21,12 @@ for _path in (_BACKEND, _AGENTS_DIR):
 
 from app.services.csv_player_history import CSVPlayerHistoryService
 from app.services.game_log_hygiene import (
+    GAME_TYPE_AMBIGUOUS,
+    GAME_TYPE_NBA_CUP,
     GAME_TYPE_PLAY_IN,
     GAME_TYPE_PLAYOFFS,
     GAME_TYPE_REGULAR,
+    GAME_TYPE_UNCLASSIFIED,
 )
 from tools import historical
 
@@ -96,3 +99,38 @@ def test_wnba_games_for_keeps_regular_season_only(tmp_path, monkeypatch):
     assert len(games) == 1
     assert games[0]["game_type"] == GAME_TYPE_REGULAR
     assert games[0]["points"] == 14
+
+
+def test_backtest_hit_rate_excludes_unclassified_and_cup_finals(tmp_path, monkeypatch):
+    """``evaluation/backtest.py`` calls ``get_base_stats``, which calls ``_games_for``.
+
+    Unclassified and ambiguous rows are not loaded. The Cup final is loaded
+    and then dropped, because this tool keeps ``regular_season`` only.
+    A 40-point row of either kind would have made the hit rate 0.5.
+    """
+    template = next(row for row in _shipped("nba_player_game_logs.csv") if row["GameType"] == GAME_TYPE_REGULAR)
+    player = "Backtest Player"
+    rows = [
+        _retagged(template, player, GAME_TYPE_REGULAR, "1/5/2026", "11"),
+        _retagged(template, player, GAME_TYPE_UNCLASSIFIED, "1/6/2026", "40"),
+        _retagged(template, player, GAME_TYPE_AMBIGUOUS, "1/7/2026", "40"),
+        _retagged(template, player, GAME_TYPE_NBA_CUP, "12/17/2024", "40"),
+        _retagged(template, player, GAME_TYPE_PLAYOFFS, "4/20/2026", "40"),
+    ]
+    path = tmp_path / "nba_player_game_logs.csv"
+    _write(path, rows)
+    monkeypatch.setattr("app.services.csv_player_history.CSV_PATH", str(path))
+    fresh = CSVPlayerHistoryService(league="nba")
+    monkeypatch.setitem(historical._CSV_SVCS, "nba", fresh)
+
+    games = historical._games_for(player, league="nba")
+    signal = historical.get_base_stats(player, "points", 20, league="nba")
+
+    assert [game["game_type"] for game in games] == [GAME_TYPE_REGULAR]
+    assert signal["details"]["total"] == 1
+    assert signal["details"]["hit_rate"] == 0
+    assert signal["details"]["mean"] == 11
+    loaded = {game["game_type"] for game in fresh._cache[player]}
+    assert GAME_TYPE_UNCLASSIFIED not in loaded
+    assert GAME_TYPE_AMBIGUOUS not in loaded
+    assert GAME_TYPE_NBA_CUP in loaded

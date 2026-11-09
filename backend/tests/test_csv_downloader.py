@@ -257,6 +257,71 @@ class TestDownloadFailure:
         assert "unclassified" in written
         assert any("unclassified=1" in record.message for record in caplog.records)
 
+    @pytest.mark.asyncio
+    async def test_espn_fetch_failure_keeps_the_previous_file_and_removes_partial(
+        self, tmp_path, monkeypatch
+    ):
+        # The schedule request raises after the body is on disk as *.partial.
+        # The canonical file must stay the previous one, and the partial must go.
+        save_path = tmp_path / "nba_player_game_logs.csv"
+        save_path.write_text("KEEP\n", encoding="utf-8")
+        svc = CSVDownloaderService(url="https://example.com/f.csv", save_path=save_path)
+        fake_response = MagicMock()
+        fake_response.raise_for_status = MagicMock()
+        fake_response.text = (
+            "Player,Season,Date,Team,Opponent\n"
+            "Future Player,2026-2027,10/21/2026,Celtics,Knicks\n"
+        )
+        fake_client = AsyncMock()
+        fake_client.get = AsyncMock(return_value=fake_response)
+        fake_client.__aenter__ = AsyncMock(return_value=fake_client)
+        fake_client.__aexit__ = AsyncMock(return_value=False)
+        monkeypatch.setattr(httpx, "AsyncClient", lambda **kwargs: fake_client)
+        monkeypatch.setattr(
+            "app.services.espn_schedule.fetch_events_for_csv_text",
+            AsyncMock(side_effect=RuntimeError("ESPN schedule fetch failed")),
+        )
+        result = await svc.download()
+        partial = save_path.with_name(save_path.name + ".partial")
+        assert result is False
+        assert save_path.read_text(encoding="utf-8") == "KEEP\n"
+        assert not partial.exists()
+
+    @pytest.mark.asyncio
+    async def test_publish_replaces_a_sibling_partial_on_the_same_filesystem(
+        self, tmp_path, monkeypatch
+    ):
+        # os.replace is atomic only when both paths are on one filesystem.
+        # The partial is the canonical name plus ".partial" in the same directory.
+        save_path = tmp_path / "data" / "file.csv"
+        svc = CSVDownloaderService(url="https://example.com/f.csv", save_path=save_path)
+        fake_response = MagicMock()
+        fake_response.raise_for_status = MagicMock()
+        fake_response.text = "col1,col2\na,b\n"
+        fake_client = AsyncMock()
+        fake_client.get = AsyncMock(return_value=fake_response)
+        fake_client.__aenter__ = AsyncMock(return_value=fake_client)
+        fake_client.__aexit__ = AsyncMock(return_value=False)
+        monkeypatch.setattr(httpx, "AsyncClient", lambda **kwargs: fake_client)
+        monkeypatch.setattr(svc, "_reload_csv_cache", AsyncMock())
+        seen: list[tuple[Path, Path]] = []
+        real_replace = os.replace
+
+        def _spy(src, dst):
+            src_path, dst_path = Path(src), Path(dst)
+            assert src_path.parent == dst_path.parent
+            assert src_path.name == dst_path.name + ".partial"
+            assert src_path.stat().st_dev == dst_path.parent.stat().st_dev
+            seen.append((src_path, dst_path))
+            return real_replace(src, dst)
+
+        monkeypatch.setattr(os, "replace", _spy)
+        result = await svc.download()
+        assert result is True
+        assert seen
+        assert not save_path.with_name(save_path.name + ".partial").exists()
+        assert save_path.read_text(encoding="utf-8") == "col1,col2\na,b\n"
+
 
 # ---------------------------------------------------------------------------
 # CSVDownloaderService.get_last_modified
