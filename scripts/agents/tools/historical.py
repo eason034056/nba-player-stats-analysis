@@ -137,7 +137,14 @@ def _games_for(player: str, n: int = 0, league: str = "nba") -> List[Dict[str, A
             if low in p.lower() or p.lower() in low:
                 logs = csv._cache.get(p, [])
                 break
-    active = [g for g in logs if g.get("minutes", 0) > 0]
+    # Regular season only. Playoffs stay in the CSV (GameType=playoffs)
+    # so a caller of CSVPlayerHistoryService can opt in; this tool is the
+    # props path and must not mix a postseason series into a season rate.
+    # Rows loaded from older fixtures have no game_type and count as regular.
+    active = [
+        g for g in logs
+        if g.get("minutes", 0) > 0 and (g.get("game_type") or "regular_season") == "regular_season"
+    ]
     if n > 0:
         active = active[:n]
     return active

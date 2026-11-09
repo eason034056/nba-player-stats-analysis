@@ -167,9 +167,12 @@ If either file is missing from your clone, re-download via the same scraper repo
 ```bash
 mkdir -p data
 curl -L "https://raw.githubusercontent.com/eason034056/nba-player-stats-scraper/main/nba_player_game_logs.csv" -o data/nba_player_game_logs.csv
+python scripts/hygiene_game_logs.py
 ```
 
-The WNBA CSV is loaded by `backend/app/services/csv_player_history.py` via the same `_get_csv_path(league=...)` helper — searching `/app/data/wnba_player_game_logs.csv` (Docker) then `data/wnba_player_game_logs.csv` (local) — so as long as the file exists at one of those paths, the `/api/wnba/csv/*` endpoints work without further configuration.
+The raw scraper file stamps a single `Season` value on every row and mixes Summer League, preseason, the regular season, and playoffs (RealGM's "All Games" view). `scripts/hygiene_game_logs.py` rewrites `Season` and adds `GameType` from the recorded ESPN schedule in `tests/fixtures/espn/`, and drops Summer League and preseason so they cannot feed props. `POST /api/trigger-csv-download` runs the same pass after it saves the file. Refresh the schedule fixture with `python scripts/explore_espn_schedule_api.py` when a new season starts.
+
+The WNBA CSV is loaded by `backend/app/services/csv_player_history.py` via the same `_get_csv_path(league=...)` helper — searching `/app/data/wnba_player_game_logs.csv` (Docker) then `data/wnba_player_game_logs.csv` (local) — so as long as the file exists at one of those paths, the `/api/wnba/csv/*` endpoints work without further configuration. The same hygiene script covers `data/wnba_player_game_logs.csv`.
 
 ### B. Use API to Download CSV Automatically
 

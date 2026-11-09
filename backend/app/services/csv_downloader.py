@@ -164,6 +164,12 @@ class CSVDownloaderService:
                 # write_text(): Path method to directly write text content
                 # encoding='utf-8': Use UTF-8 encoding to support special characters
                 self.save_path.write_text(content, encoding='utf-8')
+                # The upstream scraper stamps one season on every row and
+                # keeps Summer League / preseason in the same file. Rewrite
+                # season + GameType from the recorded schedule before the
+                # cache reload, so a fresh download does not put those rows
+                # back into the props path.
+                self._hygiene_game_log()
                 
                 # Get file size for logging
                 # stat(): get file status info
@@ -220,6 +226,18 @@ class CSVDownloaderService:
         mtime = self.save_path.stat().st_mtime
         return datetime.fromtimestamp(mtime, timezone.utc).isoformat()
     
+    def _hygiene_game_log(self) -> None:
+        """Relabel season and drop non-canonical game types after a download.
+
+        Files that are not player game logs (the downloader unit tests
+        write tiny CSVs) are left untouched. A real game log is rewritten
+        in place from the recorded ESPN schedule fixture.
+        """
+        from app.services.game_log_hygiene import hygiene_csv_file
+
+        league = "wnba" if "wnba" in self.save_path.name.lower() else "nba"
+        hygiene_csv_file(self.save_path, league=league)
+
     async def _reload_csv_cache(self) -> None:
         """
         Reload CSV memory cache and clear related Redis cache
