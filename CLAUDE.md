@@ -61,11 +61,13 @@ This codebase calls multiple live external APIs: **The Odds API**, **SportsData.
 
 1. **Exploration script first (engineer).** Before implementing `backend/app/services/<provider>_gateway.py` or any new external API client, create `scripts/explore_<provider>_api.py` that calls 2–3 real endpoints and pretty-prints raw responses. Commit this script alongside the client — it is the ground-truth reference for API shape and the first place to check when the API changes (e.g., when The Odds API renames a market key).
 
-2. **Recorded fixtures (engineer).** Persist the real responses from that exploration run under `tests/fixtures/` (one file per variant: success, empty, error). Naming: `<provider>_<endpoint>__<variant>.json`. Unit-test mocks load from these files. A hand-typed mock dict is not a fixture — it only proves the code runs against an assumed shape.
+2. **Integration test required (engineer).** Every external API wrapper ships at least one `@pytest.mark.integration` test that hits the live endpoint. Gate CI execution behind `RUN_INTEGRATION=1` (default skip). The author runs that test locally before the PR. A pure-mock suite is not acceptable — a mock only proves the code runs against an assumed shape.
 
-3. **Research must cite curl output.** When research recommends an external API or a new endpoint within an existing provider, the research doc must include (a) the `curl` command used and (b) the first ~500 bytes of actual response, pasted under the Sources section. Claims with no curl evidence are "unverified" and not grounds for implementation.
+3. **Recorded fixtures (engineer).** In addition to rule 2, persist the real responses from the exploration run under `tests/fixtures/` (one file per variant: success, empty, error). Naming: `<provider>_<endpoint>__<variant>.json`. Unit-test mocks load from these files. A hand-typed mock dict is not a fixture.
 
-4. **QA requires proof of a real run.** Reviewing API-wrapper code requires proof that rule 1 or rule 2 is in the diff, and that a live call was actually made: the committed exploration output, a recorded fixture from that run, or a `@pytest.mark.integration` test gated behind `RUN_INTEGRATION=1` (default skip; the author runs it locally before the PR). "The code logic looks right" is insufficient — plausible clients call endpoints that do not exist, use stale market keys, or assume vig-free probability fields the API does not return. A pure-mock test suite for an API wrapper is not acceptable.
+4. **Research must cite curl output.** When research recommends an external API or a new endpoint within an existing provider, the research doc must include (a) the `curl` command used and (b) the first ~500 bytes of actual response, pasted under the Sources section. Claims with no curl evidence are "unverified" and not grounds for implementation.
+
+5. **QA requires proof the integration test was run.** Reviewing an API wrapper requires proof the rule-2 test was actually executed locally with `RUN_INTEGRATION=1`, and that the exploration script and the recorded fixtures are in the diff. "The code logic looks right" is insufficient — plausible clients call endpoints that do not exist, use stale market keys, or assume vig-free probability fields the API does not return.
 
 ### Python Standards
 
@@ -113,6 +115,7 @@ Each Settings must explicitly declare every key it accesses via `settings.X`; `g
 - The engineer opens one pull request into `dev`. The PR description is the task summary at `docs/task-summaries/<TICKET>-<slug>.md` (Summary, Changes table, Why, Tests, Follow-ups). `.github/PULL_REQUEST_TEMPLATE.md` is the same shape when the PR is opened by hand.
 - QA Reviewer tests and reviews the PR.
 - The owner (Eason) squash-merges into `dev` and deletes the feature branch.
+- `dev` is promoted to `master` only by the owner (Eason).
 - Only the owner merges. Pushes go to feature branches only — `master` and `dev` are not pushed to directly.
 - If QA reports failing tests, the engineer fixes on the same branch and pushes again. That push updates the existing PR. Open one PR per ticket.
 
@@ -145,3 +148,7 @@ These lenses apply to any change that touches odds, sizing, backtests, lineups, 
 - **API rate-limit / cost-per-call**: The Odds API quota is monthly and finite. Cache + dedupe before calling. Budget per query > 1 cent is a `[Major]` cost regression.
 - **Bookmaker line freshness**: the same market can move 5+ points between books in 30 s. Cache TTL ≤ 30 s during game windows. Stale-line bets are not accurate EV.
 - **Bet legitimacy**: DNP, blowout (garbage time), stat-padding all distort props. Tools that compute "expected stat" must mark these explicitly.
+
+## Owner preferences
+
+Owner: Eason. Bilingual (Chinese / English). Prefer Traditional Chinese for explanations unless the task says otherwise. Explain the why and the trade-offs. Skip a step-by-step narration of what was coded.

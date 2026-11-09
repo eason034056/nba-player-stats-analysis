@@ -30,10 +30,8 @@ Phases 0–3.5 are done. Phases 4 and 5 are still open.
 | 2 backend services | SPO-16 / SPO-17 / SPO-18, PR #1 (`35a25dd`) |
 | 3 frontend | SPO-20, PR #3 (`e36cb57`) |
 | 3.5 API route gap | SPO-26, PR #4 (`490b9be`) |
-| 4 integration-test pass | still open — no task summary, no merge |
-| 5 final check that the exploration script and integration test are in the diff | still open — no task summary, no merge |
-
-Phase 4 and Phase 5 names come from `docs/decisions/event-page-stat-expansion/decision_20260502_phase0-research-first-and-derive-strategy.md`. No ticket numbers for those two phases were found in the repo.
+| 4 integration tests | SPO-101, open. Gated integration tests for the `/event` 12 tiles and the DD round-trip. No merge yet. |
+| 5 final review | SPO-103, open. Final review; closes SPO-10 and SPO-11. No merge yet. |
 
 ## Abandoned
 
@@ -65,7 +63,11 @@ Stale pull requests the owner is closing. Not merged.
 | SPO-96 | This docs rewrite (`feature/SPO-96-claude-md-workflow-rewrite`). |
 | SPO-97 | CSV season hygiene. No task summary on `dev` yet. |
 | SPO-98 | Team attribution and exact name matching. No task summary on `dev` yet. |
-| SPO-99 – SPO-103 | In flight. Titles were not in `docs/task-summaries/` or `git log` on `dev`. |
+| SPO-99 | In flight. Title not in `docs/task-summaries/` or `git log` on `dev`. |
+| SPO-100 | Junk pass (repo junk / gitignore). In flight. |
+| SPO-101 | SPO-10 Phase 4 integration tests. Open. |
+| SPO-102 | In flight. Title not in `docs/task-summaries/` or `git log` on `dev`. |
+| SPO-103 | SPO-10 Phase 5 final review. Open. |
 
 ## Not classified
 
