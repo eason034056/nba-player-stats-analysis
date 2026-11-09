@@ -1,5 +1,9 @@
 # Sports Lab Progress
 
+## SPO-95 — CI branch triggers (2026-11-09)
+
+`ci.yml` and `deploy-staging.yml` filtered on `main`. This repo has no `main` ref; `origin/HEAD` is `master`, and integrated work lands on `dev`. CI now runs on push to `master` and `dev`, and on pull requests that target either branch. Staging deploy runs on push to `master` (the branch the workflow called `main`). Production deploy stays on `v*` tags (that file never named `main`). Neither deploy workflow runs on pull requests.
+
 > Maintained by CTO. Last refresh: **2026-05-08T08:24Z** (heartbeat: SPO-24 `issue_assigned` — Lens APPROVED test-prob English-regex fix → CTO reassigning to owner (CEO triage → Eason) for squash-merge to `dev`; CTO does NOT push/merge per role). Prior refreshes: 2026-05-08T08:14Z (SPO-27 productivity review closed as productive); 06:11Z (Phase 3 done, Phase 3.5 SPO-26 opened); 01:56Z (Phase 3 dispatch — file later reverted to 01:18Z snapshot); 01:18Z (SPO-15 closed); 2026-05-03T02:59Z–02:38Z (SPO-16 Lens APPROVED chain); 2026-05-02T23:27Z (SPO-11 v3 accept → SPO-16 dispatch); 23:20Z (plan v3 + Addendum 1).
 > Source of truth: Paperclip API. This file is a snapshot — when in doubt, query paperclip directly.
 
