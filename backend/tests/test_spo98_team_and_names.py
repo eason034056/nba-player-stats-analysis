@@ -177,6 +177,8 @@ class TestTeamAttribution:
         assert team_from_game_logs(chart) == "Hawks"
         # Raw cache is newest-first; the helper must not depend on that.
         assert team_from_game_logs(logs, "2025-11-01") == "Warriors"
+        # A date before every log is the earliest known club, not the latest.
+        assert team_from_game_logs(logs, "2020-01-01") == "Warriors"
         assert team_from_game_logs(logs) == "Hawks"
 
     def test_round_trip_player_uses_team_on_that_day(self, nba_service):

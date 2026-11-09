@@ -22,6 +22,7 @@ import csv
 import os
 from typing import List, Optional, Dict, Any, Set, Tuple, Callable
 from datetime import datetime, date
+from zoneinfo import ZoneInfo
 import statistics
 
 from app.services.normalize import match_player_name
@@ -166,17 +167,40 @@ def _get_csv_path(league: str = "nba") -> str:
     return local_path
 
 
+# CSV ``Date`` values are the US game date, not the UTC calendar day of
+# tip. Jayson Kent is Remix on 2026-03-15 (vs Lakers) and Trail Blazers on
+# 2026-03-16. A US evening tip on the 15th is ``2026-03-16T00:30:00Z``,
+# which is 20:30 in America/New_York on the 15th. Eastern is the zone that
+# lines that timestamp up with the CSV row. Naive datetimes and date-only
+# strings are already that game date (the loader stores them that way) and
+# are not shifted.
+_US_GAME_DATE_TZ = ZoneInfo("America/New_York")
+
+
+def _as_us_game_date(moment: datetime) -> date:
+    """Calendar day of a timestamp on the US game-date clock.
+
+    A naive ``datetime`` is already a CSV game date (midnight, no zone).
+    An aware timestamp, including Odds API ``commence_time``, is converted
+    to America/New_York before the day is taken.
+    """
+    if moment.tzinfo is None:
+        return moment.date()
+    return moment.astimezone(_US_GAME_DATE_TZ).date()
+
+
 def _coerce_date(value: Any) -> Optional[date]:
     """Parse a calendar day from a log field or an event timestamp.
 
     Accepts ``datetime`` / ``date``, ``YYYY-MM-DD``, ``M/D/YYYY``, and ISO
-    timestamps (``2026-02-09T03:00:00Z``). Year-less chart labels such as
-    ``"02/09"`` are rejected so they cannot be mistaken for a real day.
+    timestamps (``2026-03-16T00:30:00Z``). Aware timestamps use the US game
+    date (America/New_York). Year-less chart labels such as ``"02/09"`` are
+    rejected so they cannot be mistaken for a real day.
     """
     if value is None or value == "":
         return None
     if isinstance(value, datetime):
-        return value.date()
+        return _as_us_game_date(value)
     if isinstance(value, date):
         return value
     if not isinstance(value, str):
@@ -186,9 +210,10 @@ def _coerce_date(value: Any) -> Optional[date]:
         return None
     if "T" in text:
         try:
-            return datetime.fromisoformat(text.replace("Z", "+00:00")).date()
+            parsed = datetime.fromisoformat(text.replace("Z", "+00:00"))
         except ValueError:
             return None
+        return _as_us_game_date(parsed)
     for fmt in ("%Y-%m-%d", "%m/%d/%Y"):
         try:
             return datetime.strptime(text, fmt).date()
@@ -224,9 +249,12 @@ def team_from_game_logs(
     Rules:
     1. A log whose calendar day equals ``event_day`` supplies the team.
     2. Otherwise the latest log on or before ``event_day`` (the club they
-       were on heading into that day, including a future slate).
-    3. When ``event_day`` is missing, or every dated log is after it, use
-       the most recent log's team.
+       were on heading into that day, including a future slate and a
+       gap day between games).
+    3. When ``event_day`` is missing, use the most recent log's team.
+    4. When every dated log is after ``event_day``, use the earliest
+       known team. That is the first club in the file, which is the one
+       they were already on when the log starts.
 
     Rows with no parseable day (the one-team fixtures in the daily-picks
     tests) fall back to that row's team.
@@ -261,6 +289,8 @@ def team_from_game_logs(
         if prior:
             prior.sort()
             return prior[-1][2]
+        dated.sort()
+        return dated[0][2]
 
     dated.sort()
     return dated[-1][2]

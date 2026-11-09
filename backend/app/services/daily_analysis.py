@@ -686,10 +686,10 @@ class DailyAnalysisService:
                     if proj and proj.get("team"):
                         player_team = proj.get("team")
                     else:
-                        # Chart logs are oldest-first, so index 0 is the
-                        # first club in the file. Take the team on the
-                        # event day, or the most recent team when the
-                        # player did not play that day.
+                        # Chart logs are oldest-first. ``commence_time`` is
+                        # UTC; ``team_from_game_logs`` converts it to the US
+                        # game date, then uses that day's club or the latest
+                        # club on or before it (a gap day keeps the prior club).
                         game_logs = history_stats.get("game_logs", [])
                         player_team = team_from_game_logs(game_logs, commence_time)
                     player_team_code = canonical_team_code(player_team)

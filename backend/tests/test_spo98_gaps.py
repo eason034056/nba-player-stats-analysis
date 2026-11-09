@@ -341,16 +341,6 @@ class TestTradeDayTeams:
         assert team_from_game_logs(logs, "2026-03-15T23:00:00Z") == "Remix"
         assert team_from_game_logs(logs, "2026-03-16") == "Trail Blazers"
 
-    @pytest.mark.xfail(
-        strict=True,
-        reason=(
-            "ISO commence times are UTC. Jayson Kent played for Remix on "
-            "2026-03-15 and Trail Blazers on 2026-03-16. A US evening tip "
-            "on the 15th is 2026-03-16T00:30:00Z, and _coerce_date keeps "
-            "the UTC day, so the helper returns Trail Blazers. CSV dates "
-            "are US game dates. daily_analysis passes the raw commence_time."
-        ),
-    )
     def test_post_midnight_utc_commence_stays_on_us_game_date(self, nba_service):
         logs = nba_service._cache["Jayson Kent"]
         chart = nba_service.get_player_stats("Jayson Kent", "points", 8.5)["game_logs"]
@@ -404,15 +394,6 @@ class TestHistoricalTeamCallSites:
         )
         assert result["details"]["team"] == "Hawks"
 
-    @pytest.mark.xfail(
-        strict=True,
-        reason=(
-            "get_lineup_context applies date only to the team label. The "
-            "last-10 sample is always the newest games, so Buddy Hield on "
-            "2025-11-01 is labeled Warriors while the teammates are the "
-            "same Hawks-heavy window as the undated call."
-        ),
-    )
     def test_lineup_sample_follows_the_event_day(self):
         historical = _historical()
         early = historical.get_lineup_context("Buddy Hield", "2025-11-01", league="nba")
@@ -421,15 +402,6 @@ class TestHistoricalTeamCallSites:
         assert latest["details"]["team"] == "Hawks"
         assert early["details"]["frequent_teammates"] != latest["details"]["frequent_teammates"]
 
-    @pytest.mark.xfail(
-        strict=True,
-        reason=(
-            "Star exclusion compares the raw query with str.lower. "
-            "'Jaren Jackson Jr' resolves to 'Jaren Jackson, Jr.' for the "
-            "logs, then stays on the Jazz star list because the comma "
-            "survives lower()."
-        ),
-    )
     def test_resolved_player_is_not_his_own_star(self, monkeypatch):
         historical = _historical()
         monkeypatch.setattr(historical, "_fetch_injury_report_for_team", lambda _code: [])
@@ -455,16 +427,6 @@ class TestRosterAndSampleContexts:
         assert "Mo Bamba" in cache["UTA"]
         assert "Mo Bamba" not in cache["TOR"]
 
-    @pytest.mark.xfail(
-        strict=True,
-        reason=(
-            "_build_team_roster_cache constructs CSVPlayerHistoryService() "
-            "with no league and detect_team_code defaults to NBA. DiJonai "
-            "Carrington's latest club is the Lynx (MIN in the WNBA table) "
-            "and she is absent from that roster. historical.py still calls "
-            "resolve_canonical_player_name for both leagues."
-        ),
-    )
     def test_wnba_player_is_on_her_own_roster(self):
         from app.services.lineup_source_support import (
             _build_team_roster_cache,
