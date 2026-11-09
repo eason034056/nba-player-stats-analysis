@@ -4,21 +4,11 @@ NBA player props betting advisor. Multi-agent in-process LangGraph system + Fast
 
 Tech stack: Python 3.11+ / FastAPI / LangGraph / Pydantic v2 / Redis / PostgreSQL / pytest / Next.js 14 / TypeScript / Tailwind CSS / TanStack Query / Docker Compose.
 
-Project path: `/Users/wuyusen/Documents/bet/`
-Ticket prefix: `SPO` (Sports Lab — paperclip auto-assigned)
-Paperclip company ID: `5bf7dcb7-39df-4efd-bc96-e6397e18fd9d`
+Ticket prefix: `SPO`
 
-## Two layers of "agents" — DO NOT confuse them
+## Product agents (LangGraph nodes)
 
-This codebase contains agents at two completely different layers. Every contributor must know which one a comment refers to:
-
-1. **Product agents (in-process LangGraph nodes)** — live in `scripts/agents/` and `backend/`. They are LLM-orchestrated nodes that answer end-user betting queries. Names: `planner`, `historical_agent`, `projection_agent`, `market_agent`, `critic`, `synthesizer`. They run inside one Python process per user request.
-
-2. **Paperclip dev agents** — defined in Paperclip (`~/.paperclip/.../companies/<sports-lab-id>/agents/<...>/instructions/AGENTS.md`). They are autonomous LLM agents that **build and maintain this codebase**. Names: `CTO`, `Scout`, `Forge`, `Lens`, `Sentinel`, `Sage`. They run on Paperclip wake-ups, not inside user requests.
-
-When CLAUDE.md / ticket comments / decision logs say "agent" without qualification:
-- inside `scripts/agents/`, `backend/`, or any product code path → **product agent** (LangGraph node)
-- in `docs/task-summaries/`, `docs/decisions/`, `docs/progress.md`, AGENTS.md → **paperclip dev agent**
+"Agent" in this codebase means an in-process LangGraph node that answers an end-user betting query. They live in `scripts/agents/` and `backend/`. Names: `planner`, `historical_agent`, `projection_agent`, `market_agent`, `critic`, `synthesizer`. They run inside one Python process per user request.
 
 ## Sub-Projects
 
@@ -65,17 +55,17 @@ Key existing docs: `README.md`, `docs/dev-doc.md`, `docs/multi-agent-dev.md`, `d
 
 ### External API Wrappers (strict — LLMs hallucinate API shapes)
 
-> ⚠ This is the **authoritative anti-hallucination policy** for Sports Lab. Every paperclip dev agent's `AGENTS.md` references this section in its Safety block — do not duplicate the rules elsewhere; cite them.
+> ⚠ This is the **authoritative anti-hallucination policy** for Sports Lab. Do not duplicate the rules elsewhere; cite this section.
 
-This codebase calls multiple live external APIs: **The Odds API**, **SportsData.io**, **RotoWire** (lineup), **RotoGrinders** (lineup / DFS), **OpenAI** (LLM). Each has rate limits, paid quotas, and a documented track record of silent schema drift. These rules exist because dev agents — Scout, Forge, Sentinel, Lens, and Claude itself — consistently assume API response shapes from training data without ever calling the real endpoint, and a sports-betting product where the odds parser silently breaks is a product that loses money.
+This codebase calls multiple live external APIs: **The Odds API**, **SportsData.io**, **RotoWire** (lineup), **RotoGrinders** (lineup / DFS), **OpenAI** (LLM). Each has rate limits, paid quotas, and a documented track record of silent schema drift. These rules exist because response shapes get assumed from memory without a call to the real endpoint, and a sports-betting product where the odds parser silently breaks is a product that loses money.
 
-1. **Exploration script first (Forge).** Before implementing `backend/app/services/<provider>_gateway.py` or any new external API client, create `scripts/explore_<provider>_api.py` that calls 2–3 real endpoints and pretty-prints raw responses. Commit this script alongside the client — it is the ground-truth reference for API shape and the first place to check when the API changes (e.g., when The Odds API renames a market key).
+1. **Exploration script first (engineer).** Before implementing `backend/app/services/<provider>_gateway.py` or any new external API client, create `scripts/explore_<provider>_api.py` that calls 2–3 real endpoints and pretty-prints raw responses. Commit this script alongside the client — it is the ground-truth reference for API shape and the first place to check when the API changes (e.g., when The Odds API renames a market key).
 
-2. **Integration test required (Sentinel).** Ship at least one `@pytest.mark.integration` test that hits the live endpoint. Gate CI execution behind `RUN_INTEGRATION=1` env var (default skip; developer must run locally before PR). A pure-mock test suite for an API wrapper is NOT acceptable — the mock only proves the code runs against assumptions, not reality.
+2. **Recorded fixtures (engineer).** Persist the real responses from that exploration run under `tests/fixtures/` (one file per variant: success, empty, error). Naming: `<provider>_<endpoint>__<variant>.json`. Unit-test mocks load from these files. A hand-typed mock dict is not a fixture — it only proves the code runs against an assumed shape.
 
-3. **Research must cite curl output (Scout).** When research recommends an external API or a new endpoint within an existing provider, the research doc must include (a) the `curl` command used and (b) the first ~500 bytes of actual response, pasted under the Sources section. Claims with no curl evidence are "unverified" and not grounds for implementation.
+3. **Research must cite curl output.** When research recommends an external API or a new endpoint within an existing provider, the research doc must include (a) the `curl` command used and (b) the first ~500 bytes of actual response, pasted under the Sources section. Claims with no curl evidence are "unverified" and not grounds for implementation.
 
-4. **Review demands proof of run (Lens).** Reviewing API-wrapper code requires checking that item 1 or 2 is present in the diff. "The code logic looks right" is insufficient — LLMs write plausible-looking code that calls endpoints that don't exist (or use stale market keys, or assume vig-free probability fields the API doesn't return).
+4. **QA requires proof of a real run.** Reviewing API-wrapper code requires proof that rule 1 or rule 2 is in the diff, and that a live call was actually made: the committed exploration output, a recorded fixture from that run, or a `@pytest.mark.integration` test gated behind `RUN_INTEGRATION=1` (default skip; the author runs it locally before the PR). "The code logic looks right" is insufficient — plausible clients call endpoints that do not exist, use stale market keys, or assume vig-free probability fields the API does not return. A pure-mock test suite for an API wrapper is not acceptable.
 
 ### Python Standards
 
@@ -117,25 +107,14 @@ Each Settings must explicitly declare every key it accesses via `settings.X`; `g
 
 ### Git Workflow
 
-- Branches: `main` (production), `dev` (integration), `feature/<ticket-id>-<desc>`
-- Branch from: `git fetch origin && git checkout --no-track -b feature/SPO-<NN>-<desc> origin/dev`
-- Commits: conventional (`feat:` / `fix:` / `refactor:` / `test:` / `docs:`). Squash-merge into `dev`.
-- `dev` branch was created on 2026-05-01 from `main` and is empty of new commits — first feature merge will populate it.
-
-**Push & PR responsibility chain (since 2026-05-08):**
-
-| Stage | Actor | Action | Allowed git/gh commands |
-|---|---|---|---|
-| Implement | Forge   | Local commit only | `git checkout -b`, `git commit` (no push) |
-| Review    | Lens    | Inspect local diff | (read-only — no remote calls) |
-| QA PASS   | **Sentinel** | `git push -u origin <branch>` + `gh pr create --base dev` (PR description = task-summary content) | `git push` to feature branches, `gh pr create`, `gh pr comment` |
-| Merge     | **Owner** | review on GitHub → squash-merge → delete branch | (everything) |
-
-PR description is **auto-populated by Sentinel from `docs/task-summaries/<TICKET>-<slug>.md`** — Summary, Changes table, Why, Tests, Follow-ups. The repo also keeps `.github/PULL_REQUEST_TEMPLATE.md` as a fallback when the owner opens a PR manually.
-
-Sentinel does NOT `gh pr merge`; only the owner squash-merges. Sentinel does NOT push to `main` or `dev` directly. Forge does NOT push at all — Sentinel is the single push actor in the agent workflow.
-
-If Sentinel returns TESTS FAIL, the branch is NOT pushed; Forge fixes locally, then re-runs Lens → Sentinel. If a PR already exists from a prior PASS and Sentinel is re-testing after a fix, the next push to that branch updates the existing PR — do not open a second PR.
+- Branches: `master` (production, default), `dev` (integration), `feature/SPO-<NN>-<slug>`.
+- Branch from: `git fetch origin && git checkout --no-track -b feature/SPO-<NN>-<slug> origin/dev`
+- Commits: conventional (`feat:` / `fix:` / `refactor:` / `test:` / `docs:`).
+- The engineer opens one pull request into `dev`. The PR description is the task summary at `docs/task-summaries/<TICKET>-<slug>.md` (Summary, Changes table, Why, Tests, Follow-ups). `.github/PULL_REQUEST_TEMPLATE.md` is the same shape when the PR is opened by hand.
+- QA Reviewer tests and reviews the PR.
+- The owner (Eason) squash-merges into `dev` and deletes the feature branch.
+- Only the owner merges. Pushes go to feature branches only — `master` and `dev` are not pushed to directly.
+- If QA reports failing tests, the engineer fixes on the same branch and pushes again. That push updates the existing PR. Open one PR per ticket.
 
 ### Docs Organization
 
@@ -144,17 +123,19 @@ If Sentinel returns TESTS FAIL, the branch is NOT pushed; Forge fixes locally, t
 - **Epic naming**: `<domain>-<phase>` in kebab-case (e.g., `odds-api-v5-migration`, `lineup-rag-revamp`, `kelly-sizing-rework`).
 - **Categories (fixed list)**:
   - **Active (write here)**:
-    - `decisions/<epic>/` — CTO's decision logs
-    - `research/<epic>/` — Scout's research reports
-    - `task-summaries/` — flat dir, file per ticket: `<TICKET>-<kebab-slug>.md` (e.g., `SPO-12-odds-cache-ttl.md`). NO epic subdir — ticket key is the index. Used by Forge / Lens / Sentinel / Sage / Scout for end-of-task summaries.
-    - `progress.md` — single file at `docs/` root, maintained by CTO every wake-up.
+    - `decisions/<epic>/` — decision logs
+    - `research/<epic>/` — research reports
+    - `task-summaries/` — flat dir, file per ticket: `<TICKET>-<kebab-slug>.md` (e.g., `SPO-12-odds-cache-ttl.md`). NO epic subdir — ticket key is the index. The engineer writes it with the PR; QA and the owner read it.
+    - `progress.md` — single file at `docs/` root. The engineer updates their ticket's row in the PR that changes that ticket's state.
   - **Pre-existing project docs (keep as historical reference, do not migrate)**:
-    - `dev-doc.md`, `multi-agent-dev.md`, `new-function-dev-doc.md`, `player-stats-projection-api.md`, `team-logos-implementation.md` — written before the paperclip dev-agent setup; treat as background reading, do not append.
+    - `dev-doc.md`, `multi-agent-dev.md`, `new-function-dev-doc.md`, `player-stats-projection-api.md`, `team-logos-implementation.md` — early project docs; treat as background reading, do not append.
+  - **Archive**:
+    - `archive/` — retired process records. Do not add new work here.
 - **Cross-epic docs** stay at `docs/` root.
 
 ## Domain Lenses (sports-betting specific)
 
-These lenses guide Scout / Forge / Lens / Sentinel judgment on sports-betting-specific code:
+These lenses apply to any change that touches odds, sizing, backtests, lineups, or prop math:
 
 - **Vig-free probability**: bookmaker odds embed margin (vig). Any "probability" computed from raw odds without removing vig is wrong by 4–8%.
 - **Closing-line value (CLV)**: long-term EV correlates with beating the closing line, not with single-bet outcomes. Backtests must report CLV, not just win rate.
@@ -164,32 +145,3 @@ These lenses guide Scout / Forge / Lens / Sentinel judgment on sports-betting-sp
 - **API rate-limit / cost-per-call**: The Odds API quota is monthly and finite. Cache + dedupe before calling. Budget per query > 1 cent is a `[Major]` cost regression.
 - **Bookmaker line freshness**: the same market can move 5+ points between books in 30 s. Cache TTL ≤ 30 s during game windows. Stale-line bets are not accurate EV.
 - **Bet legitimacy**: DNP, blowout (garbage time), stat-padding all distort props. Tools that compute "expected stat" must mark these explicitly.
-
-## Agent Routing Table (paperclip dev agents)
-
-These are the **dev** agents — they build this codebase. Do not confuse with product LangGraph nodes.
-
-| Agent | UUID | Role |
-|-------|------|------|
-| CEO (delegating exec)            | `27970cac-91a1-4188-96ba-46a46fcba62e`              | Owner-facing triage; routes to CTO/specialists |
-| CTO (Tech leadership)            | `b81d5848-bb55-487e-9a58-e584dfe3c93b`              | Phase planning, delegation, `docs/progress.md` |
-| Scout (Researcher)               | `1a495f58-b689-46b7-9e79-9d563b31175d`    | Research, live API sample collection |
-| Forge (Engineer)                 | `d5d67ab1-e5b6-4792-ab6e-563e174f81fd`    | Implementation on local feature branches |
-| Lens (Reviewer)                  | `a1022b1c-16cb-4284-b0b1-94636b8f3744`     | Code review of local diffs (no PR) |
-| Sentinel (QA)                    | `2df4c7c3-9ed0-4405-a813-b822e153ef62` | Pytest authoring, fixture grounding scan |
-| Sage (Mentor)                    | `6faee58a-d432-4fdc-8ec9-7a4dbbe777b2`     | One mentor doc per closed parent epic |
-
-> UUIDs are filled in after Phase B paperclip hire. The placeholder strings above must all be replaced before any agent is dispatched.
-
-## Handoff: Creating Subtasks
-
-All handoffs use the Paperclip API. Every subtask MUST set `assigneeAgentId` to wake the next agent:
-
-```
-POST /api/companies/{companyId}/issues
-{ "title": "...", "parentId": "...", "goalId": "...", "assigneeAgentId": "<UUID>", "status": "todo", "description": "..." }
-```
-
-## Owner profile (for Sage)
-
-Owner: Eason. Bilingual (Chinese / English), prefers Traditional Chinese for explanations unless task says otherwise. Northwestern MLDS student. First-principles learner — wants WHY and trade-offs, not step-by-step narration of what was coded.
