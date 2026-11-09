@@ -46,6 +46,8 @@ import {
   type CSVPlayersResponse,
   type PlayerHistoryRequest,
   type PlayerHistoryResponse,
+  type PlayerDDHistoryRequest,
+  type PlayerDDHistoryResponse,
   type NoVigRequest,
   type NoVigResponse,
 } from "@/lib/schemas";
@@ -106,9 +108,10 @@ function historyMetricToMarket(metricKey: HistoryMetricKey): string {
 /**
  * DD is a binary outcome — it has no continuous threshold, no Over/Under
  * histogram, and (per decision §4 step 4) no Phase-1 ML projection. The
- * history endpoint's continuous flow does not understand `dd`; the DD
- * tile renders its own component shape elsewhere. This helper centralizes
- * the dispatch so we don't string-compare in five places.
+ * history endpoint's continuous flow does not understand `dd` (it returns
+ * HTTP 400 and points at /player-dd-history). PlayerDDTile loads that
+ * route itself. This helper centralizes the dispatch so we don't
+ * string-compare in five places.
  */
 function isBinaryHistoryMetric(metric: HistoryMetricKey): boolean {
   return metric === "dd";
@@ -207,6 +210,14 @@ interface PlayerHistoryStatsProps {
   getCSVPlayersFn?: (query?: string) => Promise<CSVPlayersResponse>;
   getPlayerHistoryFn?: (request: PlayerHistoryRequest) => Promise<PlayerHistoryResponse>;
   calculateNoVigFn?: (request: NoVigRequest) => Promise<NoVigResponse>;
+  /**
+   * SPO-102: binary history route. Defaults inside PlayerDDTile from
+   * `cacheNamespace` (NBA → `/api/nba/player-dd-history`, WNBA → the
+   * `/api/wnba` sibling). Pass an override in tests.
+   */
+  getPlayerDDHistoryFn?: (
+    request: PlayerDDHistoryRequest,
+  ) => Promise<PlayerDDHistoryResponse>;
   cacheNamespace?: string;
 }
 
@@ -223,6 +234,7 @@ export function PlayerHistoryStats({
   getCSVPlayersFn = getCSVPlayers,
   getPlayerHistoryFn = getPlayerHistory,
   calculateNoVigFn = calculateNoVig,
+  getPlayerDDHistoryFn,
   cacheNamespace = "nba",
 }: PlayerHistoryStatsProps) {
   const [searchInput, setSearchInput] = useState(initialPlayer);
@@ -286,11 +298,10 @@ export function PlayerHistoryStats({
         teammate_filter: teammateFilter.length > 0 ? teammateFilter : undefined,
         teammate_played: teammatePlayedFilter === "all" ? undefined : teammatePlayedFilter === "with",
       }),
-    // DD is a binary metric — the /player-history endpoint speaks Over/Under only,
-    // and DD historical is served by `csv_player_history.player_dd_history()`
-    // (a different code path with no public API endpoint as of SPO-16).
-    // Disabling the query for DD avoids 400/500 noise; the DD branch renders
-    // its own placeholder below.
+    // DD is binary. /player-history answers Over/Under only and returns 400
+    // for metric=dd, with a pointer to /player-dd-history. PlayerDDTile
+    // issues that request. This query stays off so a continuous chart is
+    // not painted for a Yes/No market.
     enabled:
       !!selectedPlayer &&
       !!threshold &&
@@ -302,9 +313,9 @@ export function PlayerHistoryStats({
   const fetchOddsAndSetThreshold = useCallback(
     async (playerName: string, metricKey: HistoryMetricKey) => {
       if (!eventId) return;
-      // ⚠ DD has no `point` threshold (Yes/No outcome). Calling the no-vig
-      // endpoint for it returns 0.5 sentinel rows that must NOT be surfaced
-      // as a threshold. Skip the auto-fetch entirely for the binary path.
+      // Binary no-vig rows carry line=0.5 as a sentinel, not a stat line.
+      // Copying that into the threshold input would look like a real number.
+      // PlayerDDTile requests market=player_double_double on its own.
       if (isBinaryHistoryMetric(metricKey)) return;
 
       setIsFetchingOdds(true);
@@ -697,19 +708,16 @@ export function PlayerHistoryStats({
       {selectedPlayer && isBinaryHistoryMetric(metric) && (
         <PlayerDDTile
           playerName={selectedPlayer}
-          // ⚠ All four data props are intentionally null here. The DD odds
-          //   + DD historical computations exist at the service layer
-          //   (`odds_snapshot_service._parse_binary_market` and
-          //   `csv_player_history.player_dd_history`) but no API endpoint
-          //   currently surfaces them — see SPO-20 backend gap escalation.
-          //   This component's contract is fully populated when the API
-          //   ships; until then the placeholder copy explicitly tells the
-          //   user the data is pending (NOT zero, NOT fabricated).
-          yesPrice={null}
-          yesImpliedProb={null}
-          yesFairProb={null}
-          historicalProbDD={null}
-          historicalGames={null}
+          league={
+            cacheNamespace === "wnba"
+              ? "wnba"
+              : cacheNamespace === "nba"
+                ? "nba"
+                : null
+          }
+          eventId={eventId}
+          getPlayerDDHistoryFn={getPlayerDDHistoryFn}
+          calculateNoVigFn={calculateNoVigFn}
         />
       )}
 
