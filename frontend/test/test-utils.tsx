@@ -5,6 +5,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { AgentWidget } from "@/components/AgentWidget";
 import { AgentWidgetProvider } from "@/contexts/AgentWidgetContext";
 import { BetSlipProvider, type BetSlipPick } from "@/contexts/BetSlipContext";
+import { WnbaBetSlipProvider } from "@/contexts/WnbaBetSlipContext";
 
 const STORAGE_KEY = "betslip_picks";
 
@@ -64,10 +65,12 @@ export function renderWithProviders(
     return (
       <QueryClientProvider client={queryClient}>
         <BetSlipProvider>
-          <AgentWidgetProvider>
-            {children}
-            {withAgentWidget ? <AgentWidget /> : null}
-          </AgentWidgetProvider>
+          <WnbaBetSlipProvider>
+            <AgentWidgetProvider>
+              {children}
+              {withAgentWidget ? <AgentWidget /> : null}
+            </AgentWidgetProvider>
+          </WnbaBetSlipProvider>
         </BetSlipProvider>
       </QueryClientProvider>
     );
