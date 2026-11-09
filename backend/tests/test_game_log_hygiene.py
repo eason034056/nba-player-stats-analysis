@@ -1,15 +1,16 @@
 """Season labels and game-type hygiene for the player game-log CSVs.
 
-The cases here use the same JSON shape ``scripts/explore_espn_schedule_api.py``
-records (season.displayName, seasonType.abbreviation, competitor
-shortDisplayName). One test also reads the committed fixture and the
-shipped CSVs, so a regression that puts Summer League back into the
+Schedule rows come from ``tests/fixtures/espn/``: the compact index plus
+the raw team-schedule responses recorded with curl. One test also reads
+the shipped CSVs, so a regression that puts Summer League back into the
 canonical file fails without a network call.
 """
 
 from __future__ import annotations
 
 import csv
+import json
+import logging
 import os
 import sys
 from datetime import datetime
@@ -20,12 +21,16 @@ import pytest
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from app.services.csv_player_history import CSVPlayerHistoryService
+from app.services.espn_schedule import compact_event
 from app.services.game_log_hygiene import (
+    GAME_TYPE_GLEAGUE,
+    GAME_TYPE_NBA_CUP,
     GAME_TYPE_PLAY_IN,
     GAME_TYPE_PLAYOFFS,
     GAME_TYPE_PRESEASON,
     GAME_TYPE_REGULAR,
     GAME_TYPE_SUMMER,
+    GAME_TYPE_UNCLASSIFIED,
     _local_dates,
     _parse_event_instant,
     hygiene_rows,
@@ -41,54 +46,57 @@ _COLUMNS = [
 ]
 
 
-def _event(
-    event_id: str,
-    *,
-    league: str,
-    when: str,
-    display: str,
-    year: int,
-    abbrev: str,
-    home: str,
-    away: str,
-) -> dict:
-    """One recorded-shape schedule event."""
-    return {
-        "id": event_id,
-        "league": league,
-        "date": when,
-        "name": f"{away} at {home}",
-        "shortName": "",
-        "season": {"year": year, "displayName": display},
-        "seasonType": {
-            "id": abbrev,
-            "type": 2,
-            "name": abbrev,
-            "abbreviation": abbrev,
-        },
-        "competitors": [
-            {
-                "homeAway": "home",
-                "team": {
-                    "abbreviation": home[:3].upper(),
-                    "shortDisplayName": home,
-                    "displayName": home,
-                    "name": home,
-                    "location": "",
-                },
-            },
-            {
-                "homeAway": "away",
-                "team": {
-                    "abbreviation": away[:3].upper(),
-                    "shortDisplayName": away,
-                    "displayName": away,
-                    "name": away,
-                    "location": "",
-                },
-            },
-        ],
-    }
+# Recorded event ids in tests/fixtures/espn/schedule_events.json, except
+# the 2026-27 Celtics games, which are folded in from the raw curl file.
+_REGULAR_OPENER = "401809243"  # Rockets at Thunder
+_PRESEASON = "401812731"  # Nets at Raptors
+_SUMMER = "401352125"  # Grizzlies at Jazz Blue
+_PLAYOFFS = "401869187"  # Raptors at Cavaliers
+_PLAY_IN = "401866755"  # Heat at Hornets
+_GLEAGUE = "401693177"  # MEGA MIS at G League United
+_SIXERS = "401704632"  # Bucks at Philadelphia 76ers
+_NBA_SAME_NIGHT = "401810710"  # Lakers / Suns, NBA
+_GLEAGUE_SAME_NIGHT = "401819340"  # Lakers / Suns, G League
+_WNBA_REGULAR = "401856891"  # Mystics at Tempo
+_CELTICS_2027_RAW = "nba_team_2_schedule_2027_type_2.json"
+
+
+def _recorded(event_id: str) -> dict:
+    """One event from the fixture. Fails if that id was dropped."""
+    found = next(
+        (event for event in load_schedule_events() if str(event.get("id")) == event_id),
+        None,
+    )
+    assert found is not None, event_id
+    return found
+
+
+def _csv_date(event: dict) -> str:
+    """One arena-local date for a recorded kickoff, formatted M/D/YYYY."""
+    instant = _parse_event_instant(str(event.get("date") or ""))
+    assert instant is not None
+    iso = sorted(_local_dates(instant))[0]
+    parsed = datetime.strptime(iso, "%Y-%m-%d")
+    return f"{parsed.month}/{parsed.day}/{parsed.year}"
+
+
+def _sides(event: dict) -> tuple[str, str]:
+    """``(home shortDisplayName, away shortDisplayName)`` from the recording."""
+    home = away = ""
+    for competitor in event.get("competitors") or []:
+        name = str((competitor.get("team") or {}).get("shortDisplayName") or "")
+        if competitor.get("homeAway") == "home":
+            home = name
+        else:
+            away = name
+    assert home and away, event.get("id")
+    return home, away
+
+
+def _row_for(event: dict, player: str, *, season: str = "1999-2000", pts: str = "10") -> dict:
+    """A CSV row whose clubs and date are copied off ``event``."""
+    home, away = _sides(event)
+    return _row(player, season, _csv_date(event), home, away, pts=pts)
 
 
 def _row(player: str, season: str, date: str, team: str, opponent: str, pts: str = "10") -> dict:
@@ -108,87 +116,105 @@ def _row(player: str, season: str, date: str, team: str, opponent: str, pts: str
     return row
 
 
-def _schedule() -> list[dict]:
-    """Tiny schedule covering every game type the hygiene pass branches on."""
-    return [
-        _event("reg", league="nba", when="2025-10-22T02:00Z", display="2025-26", year=2026, abbrev="reg", home="Lakers", away="Warriors"),
-        _event("pre", league="nba", when="2025-10-04T23:00Z", display="2025-26", year=2026, abbrev="pre", home="Lakers", away="Warriors"),
-        _event("sum", league="nba-summer-las-vegas", when="2025-07-11T02:00Z", display="2025", year=2025, abbrev="reg", home="Lakers", away="Kings"),
-        _event("post", league="nba", when="2026-04-20T00:00Z", display="2025-26", year=2026, abbrev="post", home="Lakers", away="Rockets"),
-        _event("pin", league="nba", when="2026-04-15T00:00Z", display="2025-26", year=2026, abbrev="playin", home="Hawks", away="Magic"),
-        _event("glg", league="nba-development", when="2026-01-05T00:00Z", display="2025-26", year=2026, abbrev="reg", home="Remix", away="Stars"),
-        _event("phi", league="nba", when="2026-01-10T00:00Z", display="2025-26", year=2026, abbrev="reg", home="76ers", away="Celtics"),
-        _event("wreg", league="wnba", when="2026-05-08T23:00Z", display="2026", year=2026, abbrev="reg", home="Mystics", away="Tempo"),
-        # Same nicknames on the same night in the G League and the NBA.
-        _event("nba-dup", league="nba", when="2026-02-26T03:00Z", display="2025-26", year=2026, abbrev="reg", home="Lakers", away="Suns"),
-        _event("g-dup", league="nba-development", when="2026-02-26T03:00Z", display="2025-26", year=2026, abbrev="reg", home="Lakers", away="Suns"),
-    ]
-
-
-def _local(when: str) -> str:
-    """One arena-local date for a UTC kickoff, formatted M/D/YYYY."""
-    instant = _parse_event_instant(when)
-    assert instant is not None
-    iso = sorted(_local_dates(instant))[0]
-    parsed = datetime.strptime(iso, "%Y-%m-%d")
-    return f"{parsed.month}/{parsed.day}/{parsed.year}"
-
-
 class TestHygieneRules:
-    """Schedule join, drop rules, and the cross-season duplicate."""
+    """Schedule join, drop rules, and the cross-season duplicate.
+
+    Every event is loaded from the recorded fixture. The CSV row copies
+    that event's clubs and local date.
+    """
 
     def test_regular_season_label_expands_display_name(self):
         # ESPN records "2025-26". The CSV column keeps the scraper's
         # four-digit form "2025-2026", derived from that displayName.
-        rows = [_row("Player A", "2025-2026", _local("2025-10-22T02:00Z"), "Lakers", "Warriors")]
-        report = hygiene_rows(rows, _schedule(), league="nba")
+        event = _recorded(_REGULAR_OPENER)
+        assert event["season"]["displayName"] == "2025-26"
+        report = hygiene_rows([_row_for(event, "Player A")], [event], league="nba")
         assert report.output_rows == 1
         assert report.rows[0]["Season"] == "2025-2026"
         assert report.rows[0]["GameType"] == GAME_TYPE_REGULAR
 
     def test_summer_league_and_preseason_are_dropped(self):
+        summer = _recorded(_SUMMER)
+        preseason = _recorded(_PRESEASON)
+        regular = _recorded(_REGULAR_OPENER)
         rows = [
-            _row("Player A", "2025-2026", _local("2025-07-11T02:00Z"), "Lakers", "Kings"),
-            _row("Player A", "2025-2026", _local("2025-10-04T23:00Z"), "Lakers", "Warriors"),
-            _row("Player A", "2025-2026", _local("2025-10-22T02:00Z"), "Lakers", "Warriors"),
+            _row_for(summer, "Player A"),
+            _row_for(preseason, "Player A", pts="11"),
+            _row_for(regular, "Player A", pts="12"),
         ]
-        report = hygiene_rows(rows, _schedule(), league="nba")
+        report = hygiene_rows(rows, [summer, preseason, regular], league="nba")
         assert report.output_rows == 1
         assert report.rows[0]["GameType"] == GAME_TYPE_REGULAR
         assert report.dropped[GAME_TYPE_SUMMER] == 1
         assert report.dropped[GAME_TYPE_PRESEASON] == 1
 
     def test_playoffs_and_play_in_stay_and_are_labeled(self):
-        rows = [
-            _row("Player A", "2025-2026", _local("2026-04-20T00:00Z"), "Lakers", "Rockets"),
-            _row("Player B", "2025-2026", _local("2026-04-15T00:00Z"), "Hawks", "Magic"),
-        ]
-        report = hygiene_rows(rows, _schedule(), league="nba")
+        playoffs = _recorded(_PLAYOFFS)
+        play_in = _recorded(_PLAY_IN)
+        report = hygiene_rows(
+            [
+                _row_for(playoffs, "Player A"),
+                _row_for(play_in, "Player B", pts="11"),
+            ],
+            [playoffs, play_in],
+            league="nba",
+        )
         by_type = {row["GameType"]: row for row in report.rows}
         assert set(by_type) == {GAME_TYPE_PLAYOFFS, GAME_TYPE_PLAY_IN}
         assert by_type[GAME_TYPE_PLAYOFFS]["Season"] == "2025-2026"
         assert by_type[GAME_TYPE_PLAY_IN]["Season"] == "2025-2026"
 
-    def test_g_league_and_unmatched_college_rows_are_dropped(self):
-        rows = [
-            _row("Player G", "2025-2026", _local("2026-01-05T00:00Z"), "Remix", "Stars"),
-            _row("Player C", "2025-2026", "2/15/2025", "Georgetown", "Butler"),
-        ]
-        report = hygiene_rows(rows, _schedule(), league="nba")
-        assert report.output_rows == 0
+    def test_g_league_drops_and_unmatched_rows_are_kept(self, caplog: pytest.LogCaptureFixture):
+        # A classified G League game leaves the file. A row that joins
+        # nothing stays, labeled unclassified, and the count is logged.
+        # Deleting that row is how a short fixture erased a new season.
+        g_league = _recorded(_GLEAGUE)
+        assert g_league["league"] == "nba-development"
+        opener = _recorded(_REGULAR_OPENER)
+        college = _row(
+            "Player C",
+            "2025-2026",
+            _csv_date(opener),
+            "Georgetown",
+            "Butler",
+        )
+        with caplog.at_level(logging.WARNING):
+            report = hygiene_rows(
+                [_row_for(g_league, "Player G"), college],
+                [g_league, opener],
+                league="nba",
+            )
+        assert report.output_rows == 1
+        assert report.rows[0]["Player"] == "Player C"
+        assert report.rows[0]["GameType"] == GAME_TYPE_UNCLASSIFIED
+        assert report.dropped[GAME_TYPE_GLEAGUE] == 1
+        assert report.unclassified == 1
+        assert any(
+            "1 row(s) unclassified" in record.message for record in caplog.records
+        )
 
     def test_sixers_alias_joins_recorded_76ers_name(self):
         # team_directory.json records shortDisplayName "76ers". The scraper
         # writes "Sixers". The row still has to find the event.
-        rows = [_row("Player S", "2025-2026", _local("2026-01-10T00:00Z"), "Sixers", "Celtics")]
-        report = hygiene_rows(rows, _schedule(), league="nba")
+        event = _recorded(_SIXERS)
+        home, away = _sides(event)
+        assert home == "76ers"
+        row = _row("Player S", "2025-2026", _csv_date(event), "Sixers", away)
+        report = hygiene_rows([row], [event], league="nba")
         assert report.output_rows == 1
         assert report.rows[0]["GameType"] == GAME_TYPE_REGULAR
         assert report.rows[0]["Team"] == "Sixers"
 
     def test_parent_league_wins_when_g_league_shares_nicknames(self):
-        rows = [_row("Austin Reaves", "2025-2026", _local("2026-02-26T03:00Z"), "Lakers", "Suns", pts="20")]
-        report = hygiene_rows(rows, _schedule(), league="nba")
+        nba = _recorded(_NBA_SAME_NIGHT)
+        g_league = _recorded(_GLEAGUE_SAME_NIGHT)
+        assert nba["league"] == "nba"
+        assert g_league["league"] == "nba-development"
+        report = hygiene_rows(
+            [_row_for(nba, "Austin Reaves", pts="20")],
+            [nba, g_league],
+            league="nba",
+        )
         assert report.output_rows == 1
         assert report.rows[0]["GameType"] == GAME_TYPE_REGULAR
         assert report.ambiguous == 0
@@ -196,17 +222,32 @@ class TestHygieneRules:
     def test_cross_season_duplicate_keeps_the_schedule_season(self):
         # Same box score stored once under the wrong season and once under
         # the season the schedule assigns. Keep the matching copy.
-        date = _local("2026-05-08T23:00Z")
+        event = _recorded(_WNBA_REGULAR)
+        home, away = _sides(event)
+        date = _csv_date(event)
         rows = [
-            _row("Maria Conde", "2025", date, "Tempo", "Mystics", pts="2"),
-            _row("Maria Conde", "2026", date, "Tempo", "Mystics", pts="2"),
+            _row("Maria Conde", "2025", date, home, away, pts="2"),
+            _row("Maria Conde", "2026", date, home, away, pts="2"),
         ]
-        report = hygiene_rows(rows, _schedule(), league="wnba")
+        report = hygiene_rows(rows, [event], league="wnba")
         assert report.output_rows == 1
         assert report.duplicates_removed == 1
         assert report.rows[0]["Season"] == "2026"
         assert report.rows[0]["GameType"] == GAME_TYPE_REGULAR
         assert report.rows[0]["Player"] == "Maria Conde"
+
+    def test_recorded_2027_schedule_labels_the_current_regular_season(self):
+        # The Celtics 2026-27 regular season is a curl of the site API,
+        # not a row typed into schedule_events.json.
+        raw_path = _REPO / "tests" / "fixtures" / "espn" / _CELTICS_2027_RAW
+        payload = json.loads(raw_path.read_text(encoding="utf-8"))
+        assert payload["requestedSeason"]["displayName"] == "2026-27"
+        assert payload["requestedSeason"]["name"] == "Regular Season"
+        compact = compact_event("nba", payload["events"][0])
+        report = hygiene_rows([_row_for(compact, "Celtics Player")], [compact], league="nba")
+        assert report.output_rows == 1
+        assert report.rows[0]["Season"] == "2026-2027"
+        assert report.rows[0]["GameType"] == GAME_TYPE_REGULAR
 
 
 class TestLoaderExcludesNonRegular:
@@ -255,6 +296,21 @@ class TestLoaderExcludesNonRegular:
         opted = service.player_dd_history("Pat Player", include_play_in=True)
         assert default["n_games"] == 1
         assert opted["n_games"] == 2
+
+    def test_nba_cup_championship_stays_out_of_the_default_sample(self, tmp_path, monkeypatch):
+        regular = _row("Pat Player", "2025-2026", "10/22/2025", "Lakers", "Warriors", pts="10")
+        regular["GameType"] = GAME_TYPE_REGULAR
+        cup = _row("Pat Player", "2024-2025", "12/17/2024", "Thunder", "Bucks", pts="40")
+        cup["GameType"] = GAME_TYPE_NBA_CUP
+        service, path = self._service(tmp_path, [regular, cup])
+        monkeypatch.setattr("app.services.csv_player_history.CSV_PATH", str(path))
+        stats = service.get_player_stats("Pat Player", "points", 10.5)
+        assert stats["n_games"] == 1
+        assert stats["mean"] == 10
+        with_playoffs = service.get_player_stats(
+            "Pat Player", "points", 10.5, include_playoffs=True
+        )
+        assert with_playoffs["n_games"] == 1
 
 
 class TestShippedCsv:
@@ -347,3 +403,26 @@ def test_live_scoreboard_has_the_fields_the_parser_reads():
     assert "type" in event["season"] or "slug" in event["season"]
     team = event["competitions"][0]["competitors"][0]["team"]
     assert team.get("shortDisplayName")
+
+
+@pytest.mark.skipif(
+    os.environ.get("RUN_INTEGRATION") != "1",
+    reason="Live ESPN schedule fetch — set RUN_INTEGRATION=1 to enable.",
+)
+def test_live_2027_celtics_schedule_matches_the_recorded_file():
+    """The 2026-27 fixture was recorded from this team-schedule URL."""
+    import json
+    import urllib.request
+
+    url = (
+        "https://site.api.espn.com/apis/site/v2/sports/basketball/nba/teams/2/"
+        "schedule?season=2027&seasontype=2"
+    )
+    request = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0"})
+    with urllib.request.urlopen(request, timeout=30) as response:
+        payload = json.loads(response.read().decode("utf-8"))
+    assert payload["requestedSeason"]["displayName"] == "2026-27"
+    assert payload["events"]
+    competition = payload["events"][0]["competitions"][0]
+    assert "notes" in competition
+    assert "type" in competition

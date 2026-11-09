@@ -7,14 +7,18 @@ schedule event on local date plus both team names, then:
 
 - replaces ``Season`` with the label derived from that event
 - writes ``GameType`` (``regular_season``, ``playoffs``, ``play_in``,
-  ``preseason``, ``summer_league``, ``g_league``)
-- drops Summer League, preseason, G League, and rows that do not join
-  to any event (college logs, exhibitions the schedule does not list)
+  ``preseason``, ``summer_league``, ``g_league``, ``nba_cup_championship``,
+  ``unclassified``)
+- drops Summer League, preseason, and G League
+- keeps rows that do not join any event, labeled ``unclassified``, so a
+  schedule that does not list a date cannot delete that game
 - collapses duplicate rows of the same game (the WNBA file recorded
   Maria Conde's 2026-05-08 game once per season dropdown)
 
 The schedule file is produced by ``scripts/explore_espn_schedule_api.py``.
-Nothing here invents a season boundary from a calendar constant.
+Raw team-schedule responses recorded with curl are folded in at load
+time (``tests/fixtures/espn/*_team_*_schedule_*_type_*.json``). Nothing
+here invents a season boundary from a calendar constant.
 """
 
 from __future__ import annotations
@@ -40,13 +44,31 @@ GAME_TYPE_PLAY_IN = "play_in"
 GAME_TYPE_PRESEASON = "preseason"
 GAME_TYPE_SUMMER = "summer_league"
 GAME_TYPE_GLEAGUE = "g_league"
+GAME_TYPE_NBA_CUP = "nba_cup_championship"
 GAME_TYPE_UNCLASSIFIED = "unclassified"
 GAME_TYPE_AMBIGUOUS = "ambiguous"
 
-# Kept in the canonical file. Callers opt into playoffs and the play-in.
+# Kept in the canonical file and loaded into the stats cache.
+# The default sample is ``regular_season`` only. Playoffs and the
+# play-in are opt-in. The NBA Cup championship is its own token, so it
+# stays out of that default sample.
 CANONICAL_GAME_TYPES = frozenset(
-    {GAME_TYPE_REGULAR, GAME_TYPE_PLAYOFFS, GAME_TYPE_PLAY_IN}
+    {
+        GAME_TYPE_REGULAR,
+        GAME_TYPE_PLAYOFFS,
+        GAME_TYPE_PLAY_IN,
+        GAME_TYPE_NBA_CUP,
+    }
 )
+
+# Written to the file. Unclassified and ambiguous rows are not deleted:
+# a miss is not evidence the game was Summer League. ``load_csv`` still
+# skips any token outside ``CANONICAL_GAME_TYPES``, so they do not feed
+# props. Summer League, preseason, and G League are classified and dropped.
+_RETAINED_GAME_TYPES = CANONICAL_GAME_TYPES | {
+    GAME_TYPE_UNCLASSIFIED,
+    GAME_TYPE_AMBIGUOUS,
+}
 
 # ESPN seasonType.abbreviation values, copied from the recorded payloads
 # (pre / reg / post / playin). Unknown abbreviations stay unclassified.
@@ -161,19 +183,45 @@ def season_label_for_event(event: dict[str, Any]) -> str:
     return f"{int(year) - 1}-{int(year)}"
 
 
+def _is_nba_cup_championship(event: dict[str, Any]) -> bool:
+    """True when the recorded competition is the NBA Cup final.
+
+    Group play, quarterfinals, and semifinals stay regular season: ESPN
+    gives them ``seasonType.abbreviation`` ``reg`` and a Standard
+    competition type. The championship uses the same season type, and
+    the recorded competition type is ``CC`` / ``commissioners-cup``,
+    with notes headline ``NBA Cup Championship``. Both signals are read
+    off the payload. Event ids are not a list in this module.
+    """
+    competition = event.get("competition") or {}
+    comp_type = competition.get("type") or {}
+    abbreviation = str(comp_type.get("abbreviation") or "").upper()
+    slug = str(comp_type.get("slug") or "")
+    if abbreviation == "CC" or slug == "commissioners-cup":
+        return True
+    for note in competition.get("notes") or []:
+        headline = str((note or {}).get("headline") or "").strip()
+        if headline == "NBA Cup Championship":
+            return True
+    return False
+
+
 def game_type_for_event(event: dict[str, Any]) -> str:
     """Map a recorded event to our game-type token.
 
     Summer League and the G League reuse ESPN's own ``reg`` / ``pre``
     abbreviations for *their* seasons. The league slug on the fixture
     (the endpoint that returned the event) distinguishes them from the
-    NBA regular season.
+    NBA regular season. The NBA Cup championship also reuses ``reg``;
+    :func:`_is_nba_cup_championship` reads the recorded competition.
     """
     league = str(event.get("league") or "")
     if "summer" in league:
         return GAME_TYPE_SUMMER
     if league == "nba-development":
         return GAME_TYPE_GLEAGUE
+    if league == "nba" and _is_nba_cup_championship(event):
+        return GAME_TYPE_NBA_CUP
     abbrev = str((event.get("seasonType") or {}).get("abbreviation") or "").lower()
     return _SEASON_TYPE_ABBREV.get(abbrev, GAME_TYPE_UNCLASSIFIED)
 
@@ -288,13 +336,49 @@ class ScheduleIndex:
         return matched
 
 
+_SCHEDULE_CACHE: dict[str, list[dict[str, Any]]] = {}
+
+
+def _overlay_recorded_team_schedules(
+    schedule_path: Path, events: list[dict[str, Any]]
+) -> list[dict[str, Any]]:
+    """Fold curl-recorded team schedules onto the compact index.
+
+    Files named ``{league}_team_{id}_schedule_{season}_type_{n}.json``
+    are unmodified site-API responses. Compacted events replace the
+    same id (so a championship gains its competition notes) and new
+    ids are added (the 2026-27 Celtics schedule is not in the older
+    compact file).
+    """
+    from app.services.espn_schedule import compact_event
+
+    by_id = {str(event.get("id")): event for event in events}
+    pattern = "*_team_*_schedule_*_type_*.json"
+    for raw_path in sorted(schedule_path.parent.glob(pattern)):
+        league = raw_path.name.split("_team_", 1)[0]
+        payload = json.loads(raw_path.read_text(encoding="utf-8"))
+        if not isinstance(payload, dict):
+            continue
+        for event in payload.get("events") or []:
+            if not isinstance(event, dict) or not event.get("id"):
+                continue
+            compact = compact_event(league, event)
+            by_id[compact["id"]] = compact
+    return list(by_id.values())
+
+
 def load_schedule_events(path: Path | None = None) -> list[dict[str, Any]]:
     """Load the recorded event list. ``path`` overrides the default fixture."""
-    schedule_path = path or default_schedule_path()
+    schedule_path = (path or default_schedule_path()).resolve()
+    cached = _SCHEDULE_CACHE.get(str(schedule_path))
+    if cached is not None:
+        return cached
     payload = json.loads(schedule_path.read_text(encoding="utf-8"))
     if not isinstance(payload, list):
         raise ValueError(f"Schedule fixture must be a list of events: {schedule_path}")
-    return payload
+    merged = _overlay_recorded_team_schedules(schedule_path, payload)
+    _SCHEDULE_CACHE[str(schedule_path)] = merged
+    return merged
 
 
 def build_schedule_index(
@@ -469,7 +553,7 @@ def _finish_hygiene(
         chosen = _choose_duplicate_group(group)
         duplicates_removed += len(group) - len(chosen)
         for row in chosen:
-            if row.get("GameType") not in CANONICAL_GAME_TYPES:
+            if row.get("GameType") not in _RETAINED_GAME_TYPES:
                 continue
             clean = {
                 column: value
@@ -482,12 +566,24 @@ def _finish_hygiene(
     kept_counts: dict[str, int] = defaultdict(int)
     seasons: dict[str, int] = defaultdict(int)
     for game_type, count in classified_counts.items():
-        if game_type not in CANONICAL_GAME_TYPES:
+        if game_type not in _RETAINED_GAME_TYPES:
             dropped[game_type] = count
     for row in kept_rows:
         kept_counts[row["GameType"]] += 1
         seasons[row["Season"]] += 1
     input_fieldnames = list(rows[0].keys()) if rows else ["Player", "Season", "Date"]
+    if unclassified:
+        logger.warning(
+            "Game-log hygiene left %s row(s) unclassified; kept as %s",
+            unclassified,
+            GAME_TYPE_UNCLASSIFIED,
+        )
+    if ambiguous:
+        logger.warning(
+            "Game-log hygiene left %s row(s) ambiguous; kept as %s",
+            ambiguous,
+            GAME_TYPE_AMBIGUOUS,
+        )
     return HygieneReport(
         input_rows=len(rows),
         output_rows=len(kept_rows),

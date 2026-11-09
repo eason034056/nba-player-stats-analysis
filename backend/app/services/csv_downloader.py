@@ -19,11 +19,17 @@ Cache update strategy:
 - Optionally: Clear daily analysis cache in Redis (if needed)
 """
 
+import csv
+import io
+import logging
+import os
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 import httpx
+
+logger = logging.getLogger(__name__)
 
 # Use TYPE_CHECKING to avoid circular imports
 # This import only executes during type checking, not at runtime
@@ -159,32 +165,45 @@ class CSVDownloaderService:
                 #   parents=True: create any intermediate directories as needed
                 #   exist_ok=True: do not raise exception if directory exists
                 self.save_path.parent.mkdir(parents=True, exist_ok=True)
-                
-                # Write file
-                # write_text(): Path method to directly write text content
-                # encoding='utf-8': Use UTF-8 encoding to support special characters
-                self.save_path.write_text(content, encoding='utf-8')
-                # The upstream scraper stamps one season on every row and
-                # keeps Summer League / preseason in the same file. Rewrite
-                # season + GameType from the recorded schedule before the
-                # cache reload, so a fresh download does not put those rows
-                # back into the props path.
-                self._hygiene_game_log()
-                
-                # Get file size for logging
-                # stat(): get file status info
-                # st_size: file size in bytes
+                # Hygiene runs on a sibling temp file. os.replace publishes
+                # it only after that pass returns. An exception or a failed
+                # ESPN fetch leaves the previous canonical file in place,
+                # instead of a half-written CSV whose blank GameType would
+                # be read as the regular season.
+                partial = self.save_path.with_name(self.save_path.name + ".partial")
+                partial.write_text(content, encoding="utf-8")
+                try:
+                    report = await self._prepare_downloaded_csv(partial, content)
+                except Exception:
+                    logger.exception(
+                        "Game-log hygiene failed for %s; keeping the previous file",
+                        self.save_path,
+                    )
+                    partial.unlink(missing_ok=True)
+                    return False
+                os.replace(partial, self.save_path)
+
                 file_size = self.save_path.stat().st_size
                 file_size_mb = file_size / (1024 * 1024)  # Bytes to MB
-                
+                await self._reload_csv_cache()
+
+                if report is not None and (report.unclassified or report.ambiguous):
+                    logger.error(
+                        "Game-log download for %s could not classify every row "
+                        "(unclassified=%s ambiguous=%s); unmatched rows were kept",
+                        self.save_path,
+                        report.unclassified,
+                        report.ambiguous,
+                    )
+                    print(
+                        f"⚠️ CSV saved, but {report.unclassified} row(s) could not be classified "
+                        f"(ambiguous={report.ambiguous})"
+                    )
+                    return False
+
                 print(f"✅ CSV downloaded successfully!")
                 print(f"   File size: {file_size_mb:.2f} MB")
                 print(f"   Download time: {datetime.now(timezone.utc).isoformat()}")
-                
-                # Reload memory cache
-                # So subsequent frontend requests get the newest CSV data
-                await self._reload_csv_cache()
-                
                 return True
                 
         except httpx.HTTPStatusError as e:
@@ -226,17 +245,56 @@ class CSVDownloaderService:
         mtime = self.save_path.stat().st_mtime
         return datetime.fromtimestamp(mtime, timezone.utc).isoformat()
     
-    def _hygiene_game_log(self) -> None:
-        """Relabel season and drop non-canonical game types after a download.
+    def _csv_header(self, content: str) -> list[str]:
+        """Column names from the first row of ``content``."""
+        reader = csv.reader(io.StringIO(content.lstrip("\ufeff")))
+        try:
+            return next(reader)
+        except StopIteration:
+            return []
 
-        Files that are not player game logs (the downloader unit tests
-        write tiny CSVs) are left untouched. A real game log is rewritten
-        in place from the recorded ESPN schedule fixture.
+    async def _prepare_downloaded_csv(self, partial: Path, content: str) -> Any:
+        """Fetch the live schedule when ``content`` is a game log, then hygiene it.
+
+        Non-game-log files (the downloader unit tests) skip the network
+        and skip the rewrite. A game log is classified against the ESPN
+        schedules that cover its dates. The fixture is what tests and
+        ``_hygiene_game_log`` use when no live events are passed.
+        """
+        from app.services.game_log_hygiene import looks_like_game_log
+
+        if not looks_like_game_log(self._csv_header(content)):
+            return None
+        from app.services.espn_schedule import (
+            dates_in_game_log,
+            fetch_events_for_csv_text,
+        )
+
+        league = "wnba" if "wnba" in self.save_path.name.lower() else "nba"
+        if not dates_in_game_log(content):
+            events: list[dict[str, Any]] = []
+        else:
+            events = await fetch_events_for_csv_text(content, league=league)
+            if not events:
+                raise RuntimeError(f"ESPN schedule fetch for {league} returned no events")
+        return self._hygiene_game_log(partial, events)
+
+    def _hygiene_game_log(
+        self,
+        path: Path | None = None,
+        events: list[dict[str, Any]] | None = None,
+    ) -> Any:
+        """Relabel season and game type on ``path`` (default: the save path).
+
+        Files that are not player game logs are left untouched. A real
+        game log is rewritten in place. ``events`` defaults to the
+        recorded fixture, which is what the offline tests call.
         """
         from app.services.game_log_hygiene import hygiene_csv_file
 
+        target = path or self.save_path
         league = "wnba" if "wnba" in self.save_path.name.lower() else "nba"
-        hygiene_csv_file(self.save_path, league=league)
+        return hygiene_csv_file(target, league=league, events=events)
 
     async def _reload_csv_cache(self) -> None:
         """

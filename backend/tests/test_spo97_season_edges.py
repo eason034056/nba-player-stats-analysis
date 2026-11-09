@@ -23,6 +23,7 @@ from app.services.csv_player_history import CSVPlayerHistoryService
 from app.services.daily_analysis import DailyAnalysisService
 from app.services.game_log_hygiene import (
     GAME_TYPE_GLEAGUE,
+    GAME_TYPE_NBA_CUP,
     GAME_TYPE_PLAY_IN,
     GAME_TYPE_PLAYOFFS,
     GAME_TYPE_PRESEASON,
@@ -220,34 +221,15 @@ class TestFixtureSeasonEdges:
         assert report.seasons_kept == {"2024-2025": 60}
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason=(
-        "ESPN records the NBA Cup championship with seasonType.abbreviation "
-        "'reg', and game_type_for_event maps that to regular_season. The "
-        "championship does not count as a regular-season game (group play, "
-        "quarterfinals, and semifinals do). 401734908 is Bucks at Thunder "
-        "on 2024-12-17; 401809839 is Spurs at Knicks on 2025-12-16."
-    ),
-)
 @pytest.mark.parametrize("event_id", [_CUP_FINAL_2024_12_17, _CUP_FINAL_2025_12_16])
 def test_nba_cup_championship_is_not_regular_season(event_id: str):
     """The championship must not enter the default regular-season sample."""
     report = hygiene_rows([_raw_row(_event(event_id), "Final Player")], _schedule(), league="nba")
     kept_regular = [row for row in report.rows if row["GameType"] == GAME_TYPE_REGULAR]
     assert kept_regular == []
+    assert [row["GameType"] for row in report.rows] == [GAME_TYPE_NBA_CUP]
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason=(
-        "A row whose date is absent from schedule_events.json is classified "
-        "unclassified and deleted. CSVDownloaderService.download calls "
-        "_hygiene_game_log and still returns success. The fixture has no NBA "
-        "event on or after 2026-10-01, so a 2026-27 game downloaded today "
-        "would be removed."
-    ),
-)
 def test_downloader_keeps_games_the_fixture_does_not_list(tmp_path: Path):
     """Current-season games missing from the fixture must survive a download rewrite."""
     future = {column: "" for column in _RAW_COLUMNS}

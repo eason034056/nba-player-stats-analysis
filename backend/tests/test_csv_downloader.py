@@ -1,3 +1,4 @@
+import json
 import os
 import sys
 
@@ -81,6 +82,14 @@ class TestDownloadSuccess:
 
         reload_mock = AsyncMock()
         monkeypatch.setattr(svc, "_reload_csv_cache", reload_mock)
+
+        def _no_schedule_fetch(*args, **kwargs):
+            raise AssertionError("non-game-log download must not fetch ESPN")
+
+        monkeypatch.setattr(
+            "app.services.espn_schedule.fetch_events_for_csv_text",
+            _no_schedule_fetch,
+        )
 
         result = await svc.download()
 
@@ -175,6 +184,78 @@ class TestDownloadFailure:
 
         result = await svc.download()
         assert result is False
+
+    @pytest.mark.asyncio
+    async def test_hygiene_exception_keeps_the_previous_file(self, tmp_path, monkeypatch):
+        save_path = tmp_path / "nba_player_game_logs.csv"
+        save_path.write_text("KEEP\n", encoding="utf-8")
+        svc = CSVDownloaderService(url="https://example.com/f.csv", save_path=save_path)
+
+        fake_response = MagicMock()
+        fake_response.raise_for_status = MagicMock()
+        fake_response.text = (
+            "Player,Season,Date,Team,Opponent\n"
+            "Future Player,2026-2027,10/21/2026,Celtics,Knicks\n"
+        )
+        fake_client = AsyncMock()
+        fake_client.get = AsyncMock(return_value=fake_response)
+        fake_client.__aenter__ = AsyncMock(return_value=fake_client)
+        fake_client.__aexit__ = AsyncMock(return_value=False)
+        monkeypatch.setattr(httpx, "AsyncClient", lambda **kwargs: fake_client)
+        monkeypatch.setattr(
+            "app.services.espn_schedule.fetch_events_for_csv_text",
+            AsyncMock(return_value=[{"id": "recorded"}]),
+        )
+
+        def _boom(*args, **kwargs):
+            raise RuntimeError("hygiene failed")
+
+        monkeypatch.setattr("app.services.game_log_hygiene.hygiene_csv_file", _boom)
+        result = await svc.download()
+        assert result is False
+        assert save_path.read_text(encoding="utf-8") == "KEEP\n"
+        assert not save_path.with_name(save_path.name + ".partial").exists()
+
+    @pytest.mark.asyncio
+    async def test_unclassified_rows_fail_the_download_and_are_kept(
+        self, tmp_path, monkeypatch, caplog
+    ):
+        save_path = tmp_path / "nba_player_game_logs.csv"
+        svc = CSVDownloaderService(url="https://example.com/f.csv", save_path=save_path)
+        fake_response = MagicMock()
+        fake_response.raise_for_status = MagicMock()
+        fake_response.text = (
+            "Player,Season,Date,Team,Opponent\n"
+            "Future Player,2026-2027,10/21/2026,Celtics,Knicks\n"
+        )
+        fake_client = AsyncMock()
+        fake_client.get = AsyncMock(return_value=fake_response)
+        fake_client.__aenter__ = AsyncMock(return_value=fake_client)
+        fake_client.__aexit__ = AsyncMock(return_value=False)
+        monkeypatch.setattr(httpx, "AsyncClient", lambda **kwargs: fake_client)
+        monkeypatch.setattr(svc, "_reload_csv_cache", AsyncMock())
+        # A real recorded 2026-27 event that is not Celtics vs Knicks.
+        # The unmatched row must stay, and the download must not report success.
+        from app.services.espn_schedule import compact_event
+
+        raw = json.loads(
+            (Path(__file__).resolve().parents[2] / "tests" / "fixtures" / "espn" / "nba_team_2_schedule_2027_type_2.json").read_text(
+                encoding="utf-8"
+            )
+        )
+        monkeypatch.setattr(
+            "app.services.espn_schedule.fetch_events_for_csv_text",
+            AsyncMock(return_value=[compact_event("nba", raw["events"][0])]),
+        )
+        import logging
+
+        with caplog.at_level(logging.ERROR):
+            result = await svc.download()
+        assert result is False
+        written = save_path.read_text(encoding="utf-8")
+        assert "Future Player" in written
+        assert "unclassified" in written
+        assert any("unclassified=1" in record.message for record in caplog.records)
 
 
 # ---------------------------------------------------------------------------

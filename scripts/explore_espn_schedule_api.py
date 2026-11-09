@@ -20,11 +20,17 @@ Recorded endpoints (curl equivalents)::
       'https://site.api.espn.com/apis/site/v2/sports/basketball/nba/teams/13/schedule?season=2026&seasontype=2'
 
     curl -sS -A 'Mozilla/5.0' \\
+      'https://site.api.espn.com/apis/site/v2/sports/basketball/nba/teams/2/schedule?season=2027&seasontype=2'
+
+    curl -sS -A 'Mozilla/5.0' \\
       'https://sports.core.api.espn.com/v2/sports/basketball/leagues/nba/seasons/2026/types/2?lang=en&region=us'
 
 Re-run this script when a new season starts so ``schedule_events.json``
-covers dates the downloader has not seen yet. The hygiene module does not
-call the network itself; it reads the fixture this script writes.
+covers dates the fixture has not seen yet. Tests read that fixture.
+``CSVDownloaderService.download`` fetches the live team schedules for
+the seasons present in the file it just downloaded. Raw responses
+recorded with curl (``*_team_*_schedule_*_type_*.json``) are folded
+onto the compact index at load time.
 """
 
 from __future__ import annotations
@@ -45,7 +51,7 @@ CORE_API = "https://sports.core.api.espn.com/v2/sports/basketball/leagues"
 # where the year is the calendar season), seasontype ids observed on
 # /seasons/{year}/types.
 LEAGUE_REQUESTS: list[tuple[str, list[str], list[int]]] = [
-    ("nba", ["2025", "2026"], [1, 2, 3, 5]),
+    ("nba", ["2025", "2026", "2027"], [1, 2, 3, 5]),
     ("wnba", ["2025", "2026"], [1, 2, 3]),
     ("nba-development", ["2025", "2026"], [1, 2, 3]),
     ("nba-summer-las-vegas", ["2021", "2024", "2025"], [1, 2]),
@@ -58,6 +64,11 @@ LEAGUE_REQUESTS: list[tuple[str, list[str], list[int]]] = [
 def repo_root() -> Path:
     """Directory that contains ``data/`` and ``tests/``."""
     return Path(__file__).resolve().parent.parent
+
+
+_BACKEND = repo_root() / "backend"
+if str(_BACKEND) not in sys.path:
+    sys.path.insert(0, str(_BACKEND))
 
 
 def fixture_dir() -> Path:
@@ -98,56 +109,12 @@ def _team_directory(league: str) -> list[dict[str, Any]]:
     return directory
 
 
-def _compact_event(league: str, event: dict[str, Any]) -> dict[str, Any]:
-    """Keep the event fields the hygiene parser reads.
-
-    ``league`` is the slug of the endpoint that returned the event. ESPN's
-    team-schedule payload does not repeat that slug on the event object.
-    """
-    competitions = event.get("competitions") or []
-    competitors_out: list[dict[str, Any]] = []
-    if competitions:
-        for competitor in competitions[0].get("competitors") or []:
-            team = competitor.get("team") or {}
-            competitors_out.append(
-                {
-                    "homeAway": competitor.get("homeAway"),
-                    "team": {
-                        "id": team.get("id"),
-                        "abbreviation": team.get("abbreviation"),
-                        "shortDisplayName": team.get("shortDisplayName"),
-                        "displayName": team.get("displayName"),
-                        "name": team.get("name"),
-                        "location": team.get("location"),
-                    },
-                }
-            )
-    season = event.get("season") or {}
-    season_type = event.get("seasonType") or {}
-    return {
-        "id": str(event.get("id")),
-        "league": league,
-        "date": event.get("date"),
-        "name": event.get("name"),
-        "shortName": event.get("shortName"),
-        "season": {
-            "year": season.get("year"),
-            "displayName": season.get("displayName"),
-        },
-        "seasonType": {
-            "id": season_type.get("id"),
-            "type": season_type.get("type"),
-            "name": season_type.get("name"),
-            "abbreviation": season_type.get("abbreviation"),
-        },
-        "competitors": competitors_out,
-    }
-
-
 def _fetch_team_schedule(
     league: str, team_id: str, season: str, season_type: int
 ) -> list[dict[str, Any]]:
     """One team-season-type schedule, compacted. Empty when ESPN has none."""
+    from app.services.espn_schedule import compact_event
+
     url = (
         f"{SITE_API}/{league}/teams/{team_id}/schedule"
         f"?season={season}&seasontype={season_type}"
@@ -159,7 +126,7 @@ def _fetch_team_schedule(
             return []
         raise
     events = payload.get("events") or []
-    return [_compact_event(league, event) for event in events if event.get("id")]
+    return [compact_event(league, event) for event in events if event.get("id")]
 
 
 def fetch_schedule_fixtures() -> dict[str, Any]:
