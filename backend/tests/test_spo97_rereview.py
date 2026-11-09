@@ -34,6 +34,7 @@ from app.services.game_log_hygiene import (
     GAME_TYPE_UNCLASSIFIED,
     _local_dates,
     _parse_event_instant,
+    game_type_for_event,
     hygiene_rows,
     load_schedule_events,
 )
@@ -304,6 +305,50 @@ def test_wnba_commissioners_cup_championship_is_not_regular_season():
     report = hygiene_rows([_joined_row(event, "Cup Final", pts="30")], [event], league="wnba")
     assert report.output_rows == 1
     assert report.rows[0]["GameType"] != GAME_TYPE_REGULAR
+    assert report.rows[0]["GameType"] == "cup_championship"
+    assert report.rows[0]["GameType"] == GAME_TYPE_NBA_CUP
+
+
+def test_recorded_schedules_label_only_cc_finals_as_cup_championship():
+    """Pool games, quarterfinals, and semifinals stay regular season.
+
+    The three NBA curl files and the Fever recording are unmodified
+    site-API responses. A Standard competition that mentions the Cup
+    is not the final. Only abbreviation CC / slug commissioners-cup
+    becomes ``cup_championship``, and those ids are the three finals.
+    """
+    sources = (
+        (_ESPN / "nba_team_15_schedule_2025_type_2.json", "nba"),
+        (_ESPN / "nba_team_18_schedule_2026_type_2.json", "nba"),
+        (_ESPN / "nba_team_2_schedule_2027_type_2.json", "nba"),
+        (_ESPN / "recorded" / "wnba_team_5_schedule_2025_type_2.json", "wnba"),
+    )
+    cup_ids: list[str] = []
+    for path, league in sources:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+        for raw in payload["events"]:
+            event = compact_event(league, raw)
+            game_type = game_type_for_event(event)
+            comp_type = (event.get("competition") or {}).get("type") or {}
+            abbreviation = str(comp_type.get("abbreviation") or "").upper()
+            slug = str(comp_type.get("slug") or "")
+            headlines = [
+                str((note or {}).get("headline") or "")
+                for note in (event.get("competition") or {}).get("notes") or []
+            ]
+            text = " ".join(headlines).lower()
+            if abbreviation == "CC" or slug == "commissioners-cup":
+                assert game_type == "cup_championship"
+                assert game_type == GAME_TYPE_NBA_CUP
+                assert any("championship" in headline.lower() for headline in headlines)
+                cup_ids.append(str(raw["id"]))
+                continue
+            if "cup" in text or "commissioner" in text:
+                assert abbreviation == "STD"
+                assert slug == "standard"
+                assert "championship" not in text
+                assert game_type == GAME_TYPE_REGULAR
+    assert cup_ids == ["401734908", "401809839", "401736430"]
 
 
 def test_recorded_team_schedules_match_their_urls_and_isolate_the_cup_final():

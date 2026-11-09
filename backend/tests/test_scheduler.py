@@ -544,6 +544,25 @@ class TestJobSuccessPaths:
         await svc._run_csv_download_job()
 
     @pytest.mark.asyncio
+    async def test_unclassified_download_is_not_reported_as_a_network_error(
+        self, scheduler_cls, mock_services, capsys
+    ):
+        """A False download saved the file. Unclassified rows are not a network miss.
+
+        ``download()`` returns False both when the HTTP call fails and when
+        the file was written but a row stayed unclassified. The job log must
+        not tell the operator to check the network in that second case.
+        """
+        svc = scheduler_cls()
+        mock_csv = mock_services["app.services.scheduler.csv_downloader_service"]
+        mock_csv.download = AsyncMock(return_value=False)
+        await svc._run_csv_download_job()
+        out = capsys.readouterr().out
+        assert "CSV download job did not report success" in out
+        assert "network" not in out.lower()
+        assert "please check" not in out.lower()
+
+    @pytest.mark.asyncio
     async def test_projection_fetch_final_clears_cache(
         self, scheduler_cls, mock_services
     ):

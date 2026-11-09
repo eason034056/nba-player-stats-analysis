@@ -322,6 +322,35 @@ class TestDownloadFailure:
         assert not save_path.with_name(save_path.name + ".partial").exists()
         assert save_path.read_text(encoding="utf-8") == "col1,col2\na,b\n"
 
+    @pytest.mark.asyncio
+    async def test_replace_failure_keeps_the_previous_file_and_removes_partial(
+        self, tmp_path, monkeypatch
+    ):
+        # os.replace can fail after the body is already on disk as *.partial.
+        # The previous canonical file must stay, and the partial must go.
+        save_path = tmp_path / "nba_player_game_logs.csv"
+        save_path.write_text("KEEP\n", encoding="utf-8")
+        svc = CSVDownloaderService(url="https://example.com/f.csv", save_path=save_path)
+        fake_response = MagicMock()
+        fake_response.raise_for_status = MagicMock()
+        fake_response.text = "col1,col2\na,b\n"
+        fake_client = AsyncMock()
+        fake_client.get = AsyncMock(return_value=fake_response)
+        fake_client.__aenter__ = AsyncMock(return_value=fake_client)
+        fake_client.__aexit__ = AsyncMock(return_value=False)
+        monkeypatch.setattr(httpx, "AsyncClient", lambda **kwargs: fake_client)
+        monkeypatch.setattr(svc, "_reload_csv_cache", AsyncMock())
+
+        def _fail(src, dst):
+            raise OSError("replace failed")
+
+        monkeypatch.setattr(os, "replace", _fail)
+        result = await svc.download()
+        partial = save_path.with_name(save_path.name + ".partial")
+        assert result is False
+        assert save_path.read_text(encoding="utf-8") == "KEEP\n"
+        assert not partial.exists()
+
 
 # ---------------------------------------------------------------------------
 # CSVDownloaderService.get_last_modified
