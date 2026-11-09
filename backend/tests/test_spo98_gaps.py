@@ -12,7 +12,8 @@ import json
 import os
 import sys
 from collections import defaultdict
-from datetime import date, datetime
+from datetime import date, datetime, timezone
+from zoneinfo import ZoneInfo
 
 import pytest
 
@@ -481,3 +482,145 @@ class TestRosterAndSampleContexts:
             )
             == "Warriors"
         )
+
+
+class TestReReviewEdges:
+    """Clocks and shared team codes the 096ad42 fixes did not cover."""
+
+    def test_naive_datetime_and_date_only_string_are_not_shifted(self, nba_service):
+        logs = nba_service._cache["Jayson Kent"]
+        # A naive clock is already the CSV game date. 00:30 with no zone
+        # stays on the 16th even though the same clock in UTC is the 15th
+        # in New York.
+        assert team_from_game_logs(logs, datetime(2026, 3, 16, 0, 30)) == "Trail Blazers"
+        assert team_from_game_logs(logs, date(2026, 3, 16)) == "Trail Blazers"
+        assert team_from_game_logs(logs, "2026-03-16") == "Trail Blazers"
+        assert team_from_game_logs(logs, "03/16/2026") == "Trail Blazers"
+        assert team_from_game_logs(logs, "2026-03-16T00:30:00") == "Trail Blazers"
+        aware = datetime(2026, 3, 16, 0, 30, tzinfo=timezone.utc)
+        assert team_from_game_logs(logs, aware) == "Remix"
+        assert team_from_game_logs(logs, "2026-03-16T00:30:00Z") == "Remix"
+
+    def test_eastern_evening_lineup_uses_the_converted_day(self):
+        historical = _historical()
+        evening = historical.get_lineup_context(
+            "Jayson Kent", "2026-03-16T00:30:00Z", league="nba"
+        )
+        next_day = historical.get_lineup_context(
+            "Jayson Kent", "2026-03-16", league="nba"
+        )
+        assert evening["details"]["team"] == "Remix"
+        assert next_day["details"]["team"] == "Trail Blazers"
+
+    def test_date_before_every_wnba_log_is_the_earliest_club(self, wnba_service):
+        logs = wnba_service._cache["DiJonai Carrington"]
+        assert team_from_game_logs(logs, "2020-01-01") == "Wings"
+
+    @pytest.mark.xfail(
+        strict=True,
+        reason=(
+            "America/New_York moves a late Pacific tip onto the next morning. "
+            "2026-03-16T06:30:00Z is 10:30pm PST on 2026-03-15, and "
+            "2026-03-15 22:30 America/Los_Angeles is 10:30pm local that night "
+            "(05:30Z, because March 15 2026 is PDT). Kent's CSV row for that "
+            "night is Remix vs Lakers. Both clocks return Trail Blazers, and "
+            "get_lineup_context labels the same tip Trail Blazers."
+        ),
+    )
+    def test_pacific_late_tip_stays_on_the_us_game_date(self, nba_service):
+        logs = nba_service._cache["Jayson Kent"]
+        assert team_from_game_logs(logs, "2026-03-16T06:30:00Z") == "Remix"
+        pacific = datetime(2026, 3, 15, 22, 30, tzinfo=ZoneInfo("America/Los_Angeles"))
+        assert team_from_game_logs(logs, pacific) == "Remix"
+        historical = _historical()
+        late = historical.get_lineup_context(
+            "Jayson Kent", "2026-03-16T06:30:00Z", league="nba"
+        )
+        assert late["details"]["team"] == "Remix"
+
+    def test_star_list_matches_suffix_and_comma_variants(self, monkeypatch):
+        historical = _historical()
+        monkeypatch.setattr(historical, "_fetch_injury_report_for_team", lambda _code: [])
+        queries = (
+            "Jaren Jackson Jr",
+            "Jaren Jackson Jr.",
+            "Jaren Jackson, Jr.",
+            "Jaren Jackson, Jr",
+            "JAREN JACKSON JR",
+        )
+        for query in queries:
+            impact = historical.auto_teammate_impact(
+                query, "points", 12.5, league="nba"
+            )
+            rotation = historical.get_rotation_absorption_map(
+                query, "points", league="nba"
+            )
+            impact_stars = [row["star"] for row in impact["details"]["teammate_chemistry"]]
+            rotation_stars = [row["absent_star"] for row in rotation["details"]["absorptions"]]
+            assert impact_stars == ["Lauri Markkanen"], query
+            assert rotation_stars == ["Lauri Markkanen"], query
+            assert "Jaren Jackson, Jr." not in impact_stars
+            assert "Jaren Jackson, Jr." not in rotation_stars
+
+    def test_injury_row_matches_suffix_and_comma_spelling(self, monkeypatch):
+        historical = _historical()
+
+        def _injuries(_code):
+            return [
+                {
+                    "player": "Jaren Jackson, Jr.",
+                    "position": "PF",
+                    "status": "Out",
+                    "injury": "ankle",
+                    "source": "test",
+                }
+            ]
+
+        monkeypatch.setattr(historical, "_fetch_injury_report_for_team", _injuries)
+        availability = historical.get_availability_context(
+            "Jaren Jackson Jr", "2026-03-01", league="nba"
+        )
+        assert availability["details"]["status"] == "Out"
+        # The odds-board scan uses this same helper on outcome descriptions.
+        assert historical._is_same_player("Nikola Jokić", "Nikola Jokic")
+        assert historical._is_same_player("Gary Trent, Jr.", "gary trent jr")
+        assert not historical._is_same_player("Nikola Jokić", "Nikola Jovic")
+
+    @pytest.mark.xfail(
+        strict=True,
+        reason=(
+            "Shared codes are one list. TOR holds Tyreke Key (Raptors) and "
+            "Teonni Key (Tempo). resolve_canonical_player_name('T. Key', 'TOR') "
+            "returns ambiguous_team_match. Each league has only one T. Key."
+        ),
+    )
+    def test_shared_team_code_initials_do_not_cross_leagues(self):
+        from app.services.lineup_source_support import (
+            _build_team_roster_cache,
+            resolve_canonical_player_name,
+        )
+
+        cache = _build_team_roster_cache()
+        assert "Tyreke Key" in cache["TOR"]
+        resolved = resolve_canonical_player_name("T. Key", "TOR")
+        assert resolved["resolution_status"] == "team_resolved"
+        assert resolved["canonical_name"] == "Tyreke Key"
+        assert "Teonni Key" not in cache["TOR"]
+
+    @pytest.mark.xfail(
+        strict=True,
+        reason=(
+            "canonical_team_code and historical._team_code_from_name only "
+            "know NBA aliases. WNBA daily picks and the injury/odds paths "
+            "send nicknames through them, so Lynx stays 'LYNX' / 'Lynx' "
+            "instead of MIN and Wings stays 'WINGS'."
+        ),
+    )
+    def test_wnba_nickname_uses_the_wnba_team_code(self):
+        from app.services.daily_analysis import canonical_team_code
+
+        historical = _historical()
+        assert canonical_team_code("Lynx") == "MIN"
+        assert canonical_team_code("Wings") == "DAL"
+        assert historical._team_code_from_name("Lynx") == "MIN"
+        assert historical._team_code_from_name("Wings") == "DAL"
