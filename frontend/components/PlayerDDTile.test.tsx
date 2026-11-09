@@ -457,6 +457,56 @@ describe("PlayerDDTile", () => {
     },
   );
 
+  it("does not load history or odds for an empty player name", () => {
+    const historyFn = vi.fn();
+    const oddsFn = vi.fn();
+    renderTile({
+      playerName: "",
+      eventId: "evt-spo26-smoke",
+      getPlayerDDHistoryFn: historyFn,
+      calculateNoVigFn: oddsFn,
+    });
+
+    expect(screen.queryByText("Loading double-double history")).not.toBeInTheDocument();
+    expect(screen.queryByText("Loading double-double odds")).not.toBeInTheDocument();
+    expect(screen.queryByText(/select a game/i)).not.toBeInTheDocument();
+    expect(historyFn).not.toHaveBeenCalled();
+    expect(oddsFn).not.toHaveBeenCalled();
+    expect(screen.getByText(/enter a player/i)).toBeInTheDocument();
+  });
+
+  it("keeps recorded prices and hides the stale warning when age and cache state are absent", async () => {
+    const { cache_state: _cacheState, data_age_seconds: _age, ...withoutMeta } =
+      recordedNoVig;
+    renderTile({
+      getPlayerDDHistoryFn: vi.fn().mockResolvedValue(jokicHistory),
+      calculateNoVigFn: vi.fn().mockResolvedValue({
+        ...withoutMeta,
+        data_age_seconds: null,
+      }),
+    });
+
+    expect(await screen.findByText("-250")).toBeInTheDocument();
+    expect(screen.getByText("+200")).toBeInTheDocument();
+    expect(screen.getByText("81.3%")).toBeInTheDocument();
+    expect(screen.queryByText(/stale line/i)).not.toBeInTheDocument();
+  });
+
+  it("warns at 31 seconds of age while the recorded Yes price stays visible", async () => {
+    renderTile({
+      getPlayerDDHistoryFn: vi.fn().mockResolvedValue(jokicHistory),
+      calculateNoVigFn: vi.fn().mockResolvedValue({
+        ...recordedNoVig,
+        cache_state: "fresh",
+        data_age_seconds: 31,
+      }),
+    });
+
+    expect(await screen.findByText("-250")).toBeInTheDocument();
+    expect(screen.getByText(/stale line/i)).toBeInTheDocument();
+    expect(screen.getByText(/31 seconds old/)).toBeInTheDocument();
+  });
+
   it(
     "warns when the no-vig snapshot is stale instead of presenting it as a live price",
     async () => {
