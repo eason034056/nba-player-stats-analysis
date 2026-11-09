@@ -9,10 +9,12 @@ the old club.
 """
 
 import asyncio
+import json
 import os
 import sys
 from datetime import datetime
-from unittest.mock import AsyncMock, MagicMock
+from pathlib import Path
+from unittest.mock import MagicMock
 
 import pytest
 
@@ -213,24 +215,46 @@ class TestTeamAttribution:
         assert team_from_game_logs([]) == ""
 
 
+# Recorded The Odds API bodies. See tests/fixtures/README.md.
+# Only player_points was captured. Other markets are left empty.
+_FIXTURES = Path(__file__).resolve().parent / "fixtures"
+_EVENT_ODDS_PATH = _FIXTURES / "odds_api_event_odds__player_points.json"
+_EVENTS_PATH = _FIXTURES / "odds_api_events__basketball_nba.json"
+
+
+def _load_recorded_event() -> dict:
+    """The Lakers @ Hawks player_points response, unchanged."""
+    return json.loads(_EVENT_ODDS_PATH.read_text())
+
+
+def _outcome_names(event: dict) -> set[str]:
+    names: set[str] = set()
+    for book in event["bookmakers"]:
+        for market in book["markets"]:
+            for outcome in market["outcomes"]:
+                description = outcome.get("description") or ""
+                if description:
+                    names.add(description)
+    return names
+
+
 class TestDailyAnalysisWiring:
     def _picks(self, game_logs, commence_time, projections=None):
+        event = _load_recorded_event()
+        events = json.loads(_EVENTS_PATH.read_text())
+        assert any(row["id"] == event["id"] for row in events)
+        assert len(event["bookmakers"]) == 6
+        assert {m["key"] for b in event["bookmakers"] for m in b["markets"]} == {
+            "player_points"
+        }
+
+        async def props_for_market(event_id, market, league="nba"):
+            if event_id != event["id"] or market != "player_points":
+                return []
+            return event["bookmakers"]
+
         service = DailyAnalysisService(probability_threshold=0.65)
-        service._get_props_for_market = AsyncMock(
-            return_value=[
-                {
-                    "key": "testbook",
-                    "markets": [
-                        {
-                            "outcomes": [
-                                {"description": "Buddy Hield", "point": 15.5},
-                                {"description": "Buddy Hield", "point": 15.5},
-                            ]
-                        }
-                    ],
-                }
-            ]
-        )
+        service._get_props_for_market = props_for_market
         service.csv_service = MagicMock()
         service.csv_service.get_player_stats = MagicMock(
             return_value={
@@ -242,22 +266,29 @@ class TestDailyAnalysisWiring:
         )
         picks, _, _ = asyncio.run(
             service._analyze_single_event(
-                event_id="evt-spo98",
-                home_team="Atlanta Hawks",
-                away_team="Boston Celtics",
+                event_id=event["id"],
+                home_team=event["home_team"],
+                away_team=event["away_team"],
                 commence_time=commence_time,
                 projections=projections or {},
             )
         )
-        return picks
+        return picks, event
 
     def test_event_after_trade_uses_new_team_not_oldest_log(self):
         logs = [
             {"team": "Warriors", "date_full": "2025-10-05"},
             {"team": "Hawks", "date_full": "2026-02-09"},
         ]
-        picks = self._picks(logs, "2026-04-30T23:00:00Z")
+        event = _load_recorded_event()
+        # Recorded tip is 2026-11-10T00:10:00Z (2026-11-09 in New York),
+        # after the synthetic Hawks log.
+        picks, loaded = self._picks(logs, event["commence_time"])
+        assert loaded["id"] == event["id"]
         assert picks
+        assert {p.player_name for p in picks} <= _outcome_names(event)
+        assert all(p.home_team == "Atlanta Hawks" for p in picks)
+        assert all(p.away_team == "Los Angeles Lakers" for p in picks)
         assert all(p.player_team == "Hawks" for p in picks)
         assert all(p.player_team_code == "ATL" for p in picks)
 
@@ -266,8 +297,11 @@ class TestDailyAnalysisWiring:
             {"team": "Warriors", "date_full": "2025-10-05"},
             {"team": "Hawks", "date_full": "2026-02-09"},
         ]
-        picks = self._picks(logs, "2025-11-01T02:00:00Z")
+        # The recorded tip is after this trade. The earlier commence is the
+        # clock under test; the bookmaker body stays the recorded one.
+        picks, event = self._picks(logs, "2025-11-01T02:00:00Z")
         assert picks
+        assert {p.player_name for p in picks} <= _outcome_names(event)
         assert all(p.player_team == "Warriors" for p in picks)
         assert all(p.player_team_code == "GSW" for p in picks)
 
@@ -276,13 +310,20 @@ class TestDailyAnalysisWiring:
             {"team": "Warriors", "date_full": "2025-10-05"},
             {"team": "Hawks", "date_full": "2026-02-09"},
         ]
-        picks = self._picks(
+        event = _load_recorded_event()
+        projected = "Jalen Johnson"
+        assert projected in _outcome_names(event)
+        picks, _ = self._picks(
             logs,
-            "2026-04-30T23:00:00Z",
-            projections={"Buddy Hield": {"team": "GSW"}},
+            event["commence_time"],
+            projections={projected: {"team": "GSW"}},
         )
-        assert picks
-        assert all(p.player_team == "GSW" for p in picks)
+        projected_picks = [p for p in picks if p.player_name == projected]
+        other_picks = [p for p in picks if p.player_name != projected]
+        assert projected_picks
+        assert other_picks
+        assert all(p.player_team == "GSW" for p in projected_picks)
+        assert all(p.player_team == "Hawks" for p in other_picks)
 
 
 class TestHistoricalGamesFor:

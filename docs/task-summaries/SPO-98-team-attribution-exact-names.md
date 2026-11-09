@@ -9,7 +9,7 @@ Daily picks took a player's team from `game_logs[0]` after `get_player_stats` re
 
 Team is now the club on the US game date of the event (America/New_York, which is how the CSV `Date` column lines up with an Odds API `commence_time`), or the latest club on or before that day. A date before every log uses the earliest known club. Names match only when a shared normalizer produces the same key on both sides. NBA and WNBA go through the same league-parameterized service.
 
-QA review on PR #28 (tests in `0ee1fb5`) is addressed below. `ODDS_API_KEY` is not set in this environment and the repo has no complete captured Odds API body, so the daily-picks wiring test still builds its bookmaker list inline. That payload was not replaced with a hand-written stand-in file.
+QA review on PR #28 (tests in `0ee1fb5`) is addressed below. The daily-picks wiring test loads a recorded Odds API `player_points` body. Other markets were not recorded, so those calls return an empty list.
 
 ## Changes
 
@@ -23,6 +23,7 @@ QA review on PR #28 (tests in `0ee1fb5`) is addressed below. `ODDS_API_KEY` is n
 | Training contexts | `scripts/dataset/01_sample_contexts.py` | Scenario team is the most recent club in that scenario's logs, not the oldest row. |
 | API copy | `backend/app/api/nba.py`, `backend/app/api/wnba.py` | DD-history query text no longer promises fuzzy match. |
 | Tests | `backend/tests/test_spo98_team_and_names.py`, `backend/tests/test_spo98_gaps.py` | Real CSV rows. The four QA xfails are normal tests. A date before Buddy Hield's first log expects Warriors. |
+| Odds fixture | `backend/tests/fixtures/odds_api_event_odds__player_points.json`, `backend/tests/fixtures/odds_api_events__basketball_nba.json` | Byte-for-byte Odds API v4 responses (2026-11-09 ~15:35 America/Chicago). Lakers @ Hawks, event `07361a8381206817e27bd2697fad7479`, 6 bookmakers, `player_points` only. Provenance is in `backend/tests/fixtures/README.md`. |
 
 ## Why
 
@@ -47,7 +48,7 @@ QA's `test_spo98_gaps.py` was 22 passed and 4 xfailed. All four xfails now pass:
 - `test_resolved_player_is_not_his_own_star`
 - `test_wnba_player_is_on_her_own_roster`
 
-Odds fixture: no `ODDS_API_KEY` in the environment, no `.env`, and no complete Odds API response saved under `tests/fixtures/` or elsewhere in the repo (research docs keep the first ~500 bytes, cut mid-string). `TestDailyAnalysisWiring._picks` is unchanged. A new hand-written JSON file was not added.
+`TestDailyAnalysisWiring._picks` reads `bookmakers` from `odds_api_event_odds__player_points.json`. The recorded players (including Jalen Johnson) replace the old Buddy Hield payload. The CSV logs in that test stay synthetic so the trade clock is controlled. The post-trade case uses the recorded `commence_time` (`2026-11-10T00:10:00Z`). The pre-trade case still passes `2025-11-01T02:00:00Z` as the clock under test. `player_rebounds` and the other daily markets were not in the capture, so the helper returns `[]` for them.
 
 SPO-98 tests: `tests/test_spo98_team_and_names.py` (real NBA and WNBA rows), plus the updated substring cases in `test_csv_player_history.py` and `test_spo16_market_expansion.py`. Covered:
 
@@ -77,5 +78,5 @@ Left untouched (SPO-95).
 - `get_all_players(search)` is still a substring search box. It is not an identity lookup.
 - `teammate_filter` still requires the stored spelling, so `Gary Trent Jr.` does not filter the teammate `Gary Trent, Jr.`.
 - Wiring `canonical_name` nicknames (`Steph` → `Stephen`) into `resolve_player_name` should be an explicit alias table if product wants it, not a return to containment.
-- Record one real Odds API event body into `backend/tests/fixtures/` once a key is available, and point `TestDailyAnalysisWiring._picks` at `bookmakers` from that file.
+- Record the other `SUPPORTED_MARKETS` (`player_rebounds`, `player_assists`, and the rest) for the same event if the wiring test should exercise more than `player_points`. Do not hand-type those bodies.
 - A tip after midnight Eastern (late Pacific) is the next America/New_York date. The CSV row for Kent vs Lakers is 2026-03-15, which matches an Eastern-evening commence (`00:30Z`). A 10:30pm Pacific tip would need `America/Los_Angeles` to stay on that local date.
