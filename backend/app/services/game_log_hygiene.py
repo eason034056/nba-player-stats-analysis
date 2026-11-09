@@ -7,7 +7,7 @@ schedule event on local date plus both team names, then:
 
 - replaces ``Season`` with the label derived from that event
 - writes ``GameType`` (``regular_season``, ``playoffs``, ``play_in``,
-  ``preseason``, ``summer_league``, ``g_league``, ``nba_cup_championship``,
+  ``preseason``, ``summer_league``, ``g_league``, ``cup_championship``,
   ``unclassified``)
 - drops Summer League, preseason, and G League
 - keeps rows that do not join any event, labeled ``unclassified``, so a
@@ -44,20 +44,25 @@ GAME_TYPE_PLAY_IN = "play_in"
 GAME_TYPE_PRESEASON = "preseason"
 GAME_TYPE_SUMMER = "summer_league"
 GAME_TYPE_GLEAGUE = "g_league"
-GAME_TYPE_NBA_CUP = "nba_cup_championship"
+# One token for both leagues. ESPN marks the NBA Cup final and the WNBA
+# Commissioner's Cup final with the same competition type (``CC`` /
+# ``commissioners-cup``) while ``seasonType`` stays ``reg``. ``GAME_TYPE_NBA_CUP``
+# is the earlier name for that same token.
+GAME_TYPE_CUP = "cup_championship"
+GAME_TYPE_NBA_CUP = GAME_TYPE_CUP
 GAME_TYPE_UNCLASSIFIED = "unclassified"
 GAME_TYPE_AMBIGUOUS = "ambiguous"
 
 # Kept in the canonical file and loaded into the stats cache.
 # The default sample is ``regular_season`` only. Playoffs and the
-# play-in are opt-in. The NBA Cup championship is its own token, so it
-# stays out of that default sample.
+# play-in are opt-in. ``cup_championship`` is its own token, so an NBA
+# or WNBA Cup final stays out of that default sample.
 CANONICAL_GAME_TYPES = frozenset(
     {
         GAME_TYPE_REGULAR,
         GAME_TYPE_PLAYOFFS,
         GAME_TYPE_PLAY_IN,
-        GAME_TYPE_NBA_CUP,
+        GAME_TYPE_CUP,
     }
 )
 
@@ -183,15 +188,27 @@ def season_label_for_event(event: dict[str, Any]) -> str:
     return f"{int(year) - 1}-{int(year)}"
 
 
-def _is_nba_cup_championship(event: dict[str, Any]) -> bool:
-    """True when the recorded competition is the NBA Cup final.
+# Exact notes headlines on the recorded championship events. Group-stage
+# headlines ("NBA Cup - Group Play", "WNBA Commissioner's Cup") are different
+# strings, and those competitions are type Standard.
+_CUP_CHAMPIONSHIP_HEADLINES = frozenset(
+    {
+        "NBA Cup Championship",
+        "WNBA Commissioner's Cup Championship",
+    }
+)
 
-    Group play, quarterfinals, and semifinals stay regular season: ESPN
-    gives them ``seasonType.abbreviation`` ``reg`` and a Standard
-    competition type. The championship uses the same season type, and
-    the recorded competition type is ``CC`` / ``commissioners-cup``,
-    with notes headline ``NBA Cup Championship``. Both signals are read
-    off the payload. Event ids are not a list in this module.
+
+def _is_cup_championship(event: dict[str, Any]) -> bool:
+    """True when the recorded competition is a Cup final.
+
+    NBA group play through the semifinals, and WNBA Commissioner's Cup
+    pool games, stay regular season: ESPN gives them
+    ``seasonType.abbreviation`` ``reg`` and a Standard competition type.
+    The championship uses the same season type. The recorded competition
+    type is ``CC`` / ``commissioners-cup`` on both the NBA Cup final and
+    the WNBA Commissioner's Cup final. The notes headline is the other
+    signal. Event ids are not a list in this module.
     """
     competition = event.get("competition") or {}
     comp_type = competition.get("type") or {}
@@ -201,7 +218,7 @@ def _is_nba_cup_championship(event: dict[str, Any]) -> bool:
         return True
     for note in competition.get("notes") or []:
         headline = str((note or {}).get("headline") or "").strip()
-        if headline == "NBA Cup Championship":
+        if headline in _CUP_CHAMPIONSHIP_HEADLINES:
             return True
     return False
 
@@ -212,16 +229,16 @@ def game_type_for_event(event: dict[str, Any]) -> str:
     Summer League and the G League reuse ESPN's own ``reg`` / ``pre``
     abbreviations for *their* seasons. The league slug on the fixture
     (the endpoint that returned the event) distinguishes them from the
-    NBA regular season. The NBA Cup championship also reuses ``reg``;
-    :func:`_is_nba_cup_championship` reads the recorded competition.
+    NBA regular season. A Cup championship in either league also reuses
+    ``reg``; :func:`_is_cup_championship` reads the recorded competition.
     """
     league = str(event.get("league") or "")
     if "summer" in league:
         return GAME_TYPE_SUMMER
     if league == "nba-development":
         return GAME_TYPE_GLEAGUE
-    if league == "nba" and _is_nba_cup_championship(event):
-        return GAME_TYPE_NBA_CUP
+    if league in {"nba", "wnba"} and _is_cup_championship(event):
+        return GAME_TYPE_CUP
     abbrev = str((event.get("seasonType") or {}).get("abbreviation") or "").lower()
     return _SEASON_TYPE_ABBREV.get(abbrev, GAME_TYPE_UNCLASSIFIED)
 

@@ -292,19 +292,6 @@ def test_wnba_commissioners_cup_group_games_stay_regular_season():
     assert report.rows[0]["Season"] == "2025"
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason=(
-        "WNBA Commissioner's Cup championship 401736430 (Fever at Lynx, "
-        "2025-07-02T00:00Z) is competition abbreviation CC / commissioners-cup, "
-        "the same signal as an NBA Cup final, and seasonType abbreviation reg. "
-        "game_type_for_event only reads that signal when league == 'nba', so "
-        "the row is stored as regular_season and would enter the default "
-        "sample. Group-stage Cup games are type Standard and stay regular. "
-        "The shipped WNBA CSV has no row for this game. The task summary does "
-        "not mark the WNBA final out of scope."
-    ),
-)
 def test_wnba_commissioners_cup_championship_is_not_regular_season():
     """The extra championship game must not count as a regular-season game."""
     event = _fever_event("401736430")

@@ -181,7 +181,15 @@ class CSVDownloaderService:
                     )
                     partial.unlink(missing_ok=True)
                     return False
-                os.replace(partial, self.save_path)
+                try:
+                    os.replace(partial, self.save_path)
+                except Exception:
+                    logger.exception(
+                        "Replacing %s failed; keeping the previous file",
+                        self.save_path,
+                    )
+                    partial.unlink(missing_ok=True)
+                    return False
 
                 file_size = self.save_path.stat().st_size
                 file_size_mb = file_size / (1024 * 1024)  # Bytes to MB

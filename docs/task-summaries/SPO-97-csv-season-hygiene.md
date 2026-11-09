@@ -90,7 +90,7 @@ Season and game type come from `tests/fixtures/espn/schedule_events.json`, recor
 
 The Celtics file is the 2026-27 regular season (`requestedSeason.displayName` `2026-27`, 80 events). Opening night in that payload is 2026-10-20 at Detroit, not Celtics vs Knicks on 2026-10-21, which is why the QA row for that fake matchup stays `unclassified` and is kept. The Bucks 2024-25 file contains event `401734908` (Bucks at Thunder) and the Knicks 2025-26 file contains `401809839` (Spurs at Knicks).
 
-**NBA Cup championship is not the regular season.** ESPN's `seasonType.abbreviation` is `reg` for group play, the quarterfinals, the semifinals, and the championship. The recorded competition type on the two finals is abbreviation `CC`, slug `commissioners-cup`, and the notes headline is `NBA Cup Championship`. Group play, quarterfinals, and semifinals in the same payloads are type Standard. The finals are stored as `nba_cup_championship`. They stay in the file so the game is identifiable, and they are outside the default regular-season sample. Group, quarterfinal, and semifinal games stay `regular_season` (they count toward the 82). The shipped CSVs have no championship rows, so the row counts above do not move.
+**Cup championships are not the regular season.** ESPN's `seasonType.abbreviation` is `reg` for NBA group play, the quarterfinals, the semifinals, and the championship, and for WNBA Commissioner's Cup pool games and the final. The recorded competition type on the NBA finals (`401734908`, `401809839`) and the WNBA final (`401736430`, Fever at Lynx, in `tests/fixtures/espn/recorded/wnba_team_5_schedule_2025_type_2.json`) is abbreviation `CC`, slug `commissioners-cup`. The notes headlines are `NBA Cup Championship` and `WNBA Commissioner's Cup Championship`. Pool games, quarterfinals, and semifinals in those payloads are type Standard. Both finals are stored as `cup_championship`. They stay in the file so the game is identifiable, and `load_csv` keeps that one token in the canonical set while the default sample stays `regular_season` only. Group, quarterfinal, and semifinal games stay `regular_season`. The shipped CSVs have no championship rows, so the row counts above do not move.
 
 **Hit rates move because the default sample is the regular season.** Playoffs and the play-in stay in the file and stay out of `get_player_stats`, daily picks, and the historical agent unless the caller passes `include_playoffs` or `include_play_in`. Both flags already exist on the player-history APIs and default off. There is no new UI control, and the historical agent has no opt-in: a regular-season prop is not a playoff series. Summer League and preseason never enter that sample. That is why a player's hit rate on this branch differs from a sample that still mixed those games in.
 
@@ -98,7 +98,7 @@ The Celtics file is the 2026-27 regular season (`requestedSeason.displayName` `2
 
 `cd backend && pytest` (this environment, no Redis), after the review fixes:
 
-- **639 passed, 8 skipped, 2 failed**
+- **650 passed, 9 skipped, 2 failed** (after the WNBA Cup final fix; the previous strict xfail now passes)
 - Skipped: `RUN_INTEGRATION=1` live tests (scoreboard shape, and the 2026-27 Celtics schedule URL against the recorded file)
 - Failed, not changed here (both die in slowapi before the handler, Redis `ConnectionError`, and this environment has no Redis):
   - `tests/test_agent_chat.py::test_agent_chat_endpoint_validates_action_and_uses_service`
