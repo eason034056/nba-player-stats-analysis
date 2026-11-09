@@ -3,6 +3,12 @@
 > Maintained by CTO. Last refresh: **2026-05-08T08:24Z** (heartbeat: SPO-24 `issue_assigned` — Lens APPROVED test-prob English-regex fix → CTO reassigning to owner (CEO triage → Eason) for squash-merge to `dev`; CTO does NOT push/merge per role). Prior refreshes: 2026-05-08T08:14Z (SPO-27 productivity review closed as productive); 06:11Z (Phase 3 done, Phase 3.5 SPO-26 opened); 01:56Z (Phase 3 dispatch — file later reverted to 01:18Z snapshot); 01:18Z (SPO-15 closed); 2026-05-03T02:59Z–02:38Z (SPO-16 Lens APPROVED chain); 2026-05-02T23:27Z (SPO-11 v3 accept → SPO-16 dispatch); 23:20Z (plan v3 + Addendum 1).
 > Source of truth: Paperclip API. This file is a snapshot — when in doubt, query paperclip directly.
 
+## SPO-100 junk-file pass (2026-11-09)
+
+| Ticket | Branch | Status | Note |
+|---|---|---|---|
+| SPO-100 | `feature/SPO-100-junk-pass` | PR open against `dev` | Untrack `nba_lineup_rag/RAG_evaluation.html`, `RAG_evaluation.pdf`, and `outputs/notebook_results_*.json`. `frontend/tsconfig.tsbuildinfo` was already gitignored and untracked. `data/*.jsonl` stays in git; `.dockerignore` keeps it out of the backend image. |
+
 ---
 
 ## Active epics
