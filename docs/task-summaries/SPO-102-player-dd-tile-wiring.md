@@ -37,7 +37,7 @@ A disabled TanStack Query v5 query with no data reports `isPending`. The tile us
 
 Percents use half-up rounding at one decimal place. `(0.6755 * 100).toFixed(1)` prints `67.5` because the product is `67.549999999999997` in IEEE-754. The helper scales, nudges by a few units in the last place, then rounds half away from zero, so FanDuel’s recorded `yes_fair_prob` of `0.6755` displays `67.6%`. The other recorded probabilities stay on the same displayed values (`81.3%`, `71.4%`, `68.2%`, `67.9%`, `32.5%`, `+13.5 pts`).
 
-The stale-line warning uses the in-game freshness budget: live odds are cached for 30 seconds or less while a game is on, because a book can move several points inside that window. The no-vig payload does not say whether the game has tipped, so the tile cannot switch to the quieter 5-minute budget. A snapshot is warned when `data_age_seconds` is greater than 30 or `cache_state` is `"stale"`. Age of exactly 30 stays quiet, matching a TTL that is still inside the 30-second budget. The recorded fixture (`fresh`, 12 seconds) does not warn. Prices stay on screen under the warning.
+The warning names the age of the odds response. It does not say a game is underway. The 30-second cutoff is still the in-game cache budget: live odds are kept for 30 seconds or less while a game is on, because a book can move several points in that window, and the payload does not say whether the game has tipped. A response is warned when `data_age_seconds` is greater than 30 or `cache_state` is `"stale"`. Age of exactly 30 stays quiet. The recorded fixture (`fresh`, 12 seconds) does not warn. Prices stay on screen under the warning.
 
 ## Tests / Verification
 
@@ -51,7 +51,7 @@ The stale-line warning uses the in-game freshness budget: live odds are cached f
 - `npx tsc --noEmit` — passed.
 - `npm run lint` — passed.
 - Integration test: SKIPPED (no new external API client; the tile calls the existing backend routes).
-- Manual screenshots below were taken against the earlier hand-typed mock (Jokic 80.0%, consensus 68.0% / 32.0%, edge +12.0 pts). The suite now asserts the recorded fixture: Jokic 81.3% (61 of 75), DraftKings -250 / +200, FanDuel No price unavailable, FanDuel fair Yes 67.6%, consensus 67.9% / 32.1%, edge +13.5 pts. The empty screenshot still matches the empty-history and empty-odds copy.
+- Manual: the populated screenshot is the recorded Jokic fixture (`jokic.json` and `player-double-double.json`): 81.3% (61 of 75 games), DraftKings -250 / +200, FanDuel No price unavailable, FanDuel fair Yes 67.6%, consensus 67.9% / 32.1%, edge +13.5 pts. The empty screenshot is the unavailable history and odds state and was already current, so it was left in place.
 
 Screenshots:
 
