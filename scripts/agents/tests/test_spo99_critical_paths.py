@@ -368,7 +368,34 @@ def test_push_at_the_line_is_refunded_and_left_out_of_the_hit_rate():
     summary = summarize([row])
     assert summary.picks == 0
     assert math.isnan(summary.hit_rate)
+    assert math.isnan(summary.brier)
+    assert all(math.isnan(value) for value in wilson(summary.hits, summary.picks))
     assert summary.roi == pytest.approx(0.0)
+    assert summary.roi_method == "normal"
+
+    empty = summarize([])
+    assert empty.picks == 0
+    assert math.isnan(empty.hit_rate)
+    assert math.isnan(empty.brier)
+    assert math.isnan(empty.roi)
+    assert empty.roi_method == "none"
+
+    win = _Row(0.7, 1)
+    loss = _Row(0.7, 0)
+    push_row = _Row(0.7, 0)
+    push_row.hit = None
+    push_row.actual = push_row.line
+    mixed = summarize([win, loss, push_row])
+    # Wilson n is the two settled bets. The push stays in the ROI denominator.
+    assert mixed.picks == 2
+    assert mixed.hits == 1
+    assert mixed.hit_rate == pytest.approx(0.5)
+    assert mixed.hit_lo == pytest.approx(wilson(1, 2)[0])
+    assert mixed.hit_hi == pytest.approx(wilson(1, 2)[1])
+    profit = (100 / 110) - 1.0 + 0.0
+    assert mixed.roi == pytest.approx(profit / 3)
+    assert mixed.roi_method == "normal"
+    assert mixed.brier == pytest.approx(((0.7 - 1.0) ** 2 + (0.7 - 0.0) ** 2) / 2)
 
 
 # ---------------------------------------------------------------------------
@@ -429,6 +456,14 @@ def test_guard_fails_only_when_a_stat_is_strictly_above_the_threshold():
     assert gap_result.ok is False
     assert any("calibration gap" in item for item in gap_result.failures)
     assert not any("Brier" in item for item in gap_result.failures)
+
+    # 0.1500001 is far outside the 1e-12 tolerance around a true 0.15 gap.
+    just_over = _summary(brier=0.20, avg_pred=0.50 + 0.1500001, hit_rate=0.50)
+    assert just_over.calibration_gap == pytest.approx(0.1500001)
+    assert just_over.calibration_gap > 0.15 + 1e-12
+    just_result = evaluate_guard([("nba", just_over)], bounds)
+    assert just_result.ok is False
+    assert any("calibration gap" in item for item in just_result.failures)
 
 
 def test_calibration_gap_equal_to_the_threshold_passes():
@@ -702,27 +737,85 @@ def test_scorecard_band_edges_match_the_dev_predicate():
     assert "sample size too small" in small["pass_reason"]
 
 
-@pytest.mark.xfail(
-    reason=(
-        "walk_forward._agent_rows applies decision_from_over_probability to "
-        "card['model_probability'], which compute_scorecard has already rounded "
-        "to 4 decimals (scoring.py returns round(model_prob, 4); walk_forward.py "
-        "reads that value). The scorecard's own pre-gate comparison, on dev and "
-        "on this branch, uses the unrounded model_prob. 0.54995 is avoid before "
-        "rounding and over after round(..., 4), so an agent pick can cross the "
-        "0.55 edge."
-    )
-)
-def test_published_probability_stays_on_the_same_side_as_the_unrounded_candidate():
+def test_agent_row_side_follows_the_unrounded_probability():
+    """The recorded pre-gate side follows model_probability_unrounded.
+
+    AgentRow has no field named side. ``pick`` is that side, and an avoid
+    is stored as None. ``prod_decision`` is the scorecard decision after
+    the market gate. The published ``p_over`` stays rounded to 4 decimals.
+    """
+    from evaluation.odds_history import inactive_history
+    from evaluation.walk_forward import _agent_rows
     from scoring import compute_scorecard, decision_from_over_probability
 
-    raw = 0.54995
-    assert _dev_scorecard_side(raw) == "avoid"
-    card = compute_scorecard(_scorecard_signals(raw), {}, _market(0.30))
-    assert card["model_probability"] == pytest.approx(0.55)
-    # The replay's pre-gate side is this call. It has to agree with the
-    # unrounded comparison the scorecard actually made.
-    assert decision_from_over_probability(card["model_probability"]) == "avoid"
+    class _Historical:
+        def get_shooting_profile(self, *_args, **_kwargs):
+            return {}
+
+        def get_schedule_context(self, *_args, **_kwargs):
+            return {"details": {"is_back_to_back": False}}
+
+        def get_trend_analysis(self, *_args, **_kwargs):
+            return {}
+
+        def get_variance_profile(self, *_args, **_kwargs):
+            return {}
+
+        def get_base_stats(self, *_args, **_kwargs):
+            return {}
+
+    holder = {"raw": 0.5}
+
+    def scorecard(_tools, _injuries, _market_signals, direction="over"):
+        assert direction == "over"
+        return compute_scorecard(_scorecard_signals(holder["raw"]), {}, _market(0.30))
+
+    start = datetime(2025, 11, 1)
+    player = "Test Player"
+    prior = [_game(start + timedelta(days=offset), 10.0) for offset in range(12)]
+    target = _game(start + timedelta(days=20), 11.0)
+    service = _Service({player: prior})
+    # 0.54995 rounds to 0.5500 and would be an over. 0.45005 rounds to
+    # 0.4501, which is still avoid, so it does not cross the band.
+    # 0.45004 rounds to 0.4500 and would be an under.
+    for raw in (0.54995, 0.45005, 0.45004):
+        holder["raw"] = raw
+        card = scorecard(None, None, None)
+        unrounded = float(card["model_probability_unrounded"])
+        assert unrounded == pytest.approx(raw)
+        expected = decision_from_over_probability(unrounded)
+        published = decision_from_over_probability(float(card["model_probability"]))
+        rows = _agent_rows(
+            _Historical(),
+            scorecard,
+            decision_from_over_probability,
+            service,
+            "nba",
+            player,
+            target,
+            target["game_date"].strftime("%Y-%m-%d"),
+            list(reversed(prior)),
+            30.0,
+            ["L10"],
+            10,
+            inactive_history(),
+        )
+        assert rows
+        for row in rows:
+            recorded = "avoid" if row.pick is None else row.pick
+            assert recorded == expected
+            assert row.prod_decision == expected
+            assert row.p_over == pytest.approx(float(card["model_probability"]))
+        if raw == 0.54995:
+            assert expected == "avoid"
+            assert published == "over"
+            assert float(card["model_probability"]) == pytest.approx(0.55)
+        if raw == 0.45005:
+            assert expected == "avoid"
+            assert published == "avoid"
+        if raw == 0.45004:
+            assert expected == "avoid"
+            assert published == "under"
 
 
 # ---------------------------------------------------------------------------
