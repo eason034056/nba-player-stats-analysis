@@ -7,7 +7,7 @@
 
 ## SPO-99 — walk-forward backtest (2026-11-09)
 
-Status: in review. Branch `feature/SPO-99-walk-forward-backtest`, PR base `dev`. The PR URL is filled in once the pull request exists.
+Status: in review. Branch `feature/SPO-99-walk-forward-backtest`, PR base `dev`: https://github.com/eason034056/nba-player-stats-analysis/pull/32
 
 Replaces the in-sample five-player `scripts/agents/evaluation/backtest.py` with a walk-forward harness. Each player-game uses only games dated strictly before it. Daily Picks goes through `choose_daily_pick_side` and a sample of rates is checked against `get_player_stats`. The agent path calls `compute_scorecard` on a prior-only cache. Numbers below are the CSV at `5407401` and match the prototype on that commit.
 
