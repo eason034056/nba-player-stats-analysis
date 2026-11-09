@@ -9,7 +9,7 @@
 
 | Epic | Current phase | Status | Assignee | Updated |
 |---|---|---|---|---|
-| [SPO-10 — State type increment](/SPO/issues/SPO-10) (擴充 event page 球員 prop stat types: 3PM/R+A/P+R/P+A/DD/STL/FTM/FGM) | **Phase 3.5 in review.** Phase 0/1/1.5/2A/2B/3 closed; SPO-20 squash-merged at 06:07Z (PR #3, merge `e36cb57`). **Phase 3.5 ([SPO-26](/SPO/issues/SPO-26))** Forge → `in_review` at 06:27Z (Lens to verify backend API-route 12-metric expansion + `/player-dd-history` + `/props/no-vig` DD branch). Phase 4 (Sentinel) and Phase 5 (Lens-final) deferred until SPO-26 closes. | blocked | CEO (held) | 2026-05-08T08:24Z |
+| [SPO-10 — State type increment](/SPO/issues/SPO-10) (擴充 event page 球員 prop stat types: 3PM/R+A/P+R/P+A/DD/STL/FTM/FGM) | **Phase 4 in review.** [SPO-101](/SPO/issues/SPO-101) adds the `RUN_INTEGRATION=1` live Odds API tests for the 12-tile `/event` surface and the DD round-trip (parser → `/props/no-vig` → `/player-dd-history`). One batched odds call per run (expected 10 paid units when FTM/FGM are empty, ceiling 12). Default suite skips them. Live call was not executed here (`ODDS_API_KEY` unset). Phase 5 (Lens-final) waits on the owner squash-merge. | in_review | owner (awaiting squash-merge) | 2026-11-09 |
 
 ---
 
@@ -19,6 +19,7 @@
 |---|---|---|---|---|---|
 | [SPO-11](/SPO/issues/SPO-11) | [CTO] SPO-10 規劃: 擴充 event page 球員 prop stat types | Phase orchestrator. v1 ✅; v2 ❌; **v3 ✅ 23:19:44Z**. Monitoring Phase 3.5; blocked on [SPO-26](/SPO/issues/SPO-26). | blocked (`blockedBy=[SPO-26]`) | CTO | _(no code branch — orchestrator only)_ |
 | [SPO-26](/SPO/issues/SPO-26) | [Forge] SPO-10 Phase 3 backend gap: API route 12-metric expansion + /player-dd-history + /props/no-vig DD branch | Phase 3.5 implementation. Forge complete; Lens review pending. | in_review | Forge (held; Lens picks up review) | `feature/SPO-26-backend-route-12metric-expansion` |
+| [SPO-101](/SPO/issues/SPO-101) | [Sentinel] SPO-10 Phase 4: live integration tests for the 12-tile event page + DD round-trip | Phase 4. Tests written and skipped unless `RUN_INTEGRATION=1`. Not run live on this machine (no `ODDS_API_KEY`). Production code unchanged. | in_review | owner (awaiting squash-merge) | `feature/SPO-101-spo10-phase4-integration-tests` |
 | [SPO-21](/SPO/issues/SPO-21) | [Sentinel] Triage 7 pre-existing backend test failures + 3 collection errors | Out-of-epic hygiene. Blocked on its own SPO-24/SPO-25 (SPO-22/23 already closed). SPO-25 closed 08:18Z; SPO-24 awaiting owner squash-merge. Will fully unblock when SPO-24 closes. | blocked | Sentinel | _(triage only — no branch)_ |
 | [SPO-24](/SPO/issues/SPO-24) | [Forge] Update test_prob.py regexes to match English error messages | Sub-ticket of SPO-21. Forge complete on `feature/SPO-24-test-prob-english-regex` (commit `d8f211f`, 25/25 tests pass, prod `prob.py` untouched). **Lens APPROVED 08:22Z** — branch base `35a25dd` is two commits behind `origin/dev` (`e36cb57`) but `git log 35a25dd..origin/dev -- backend/tests/test_prob.py backend/app/services/prob.py` is empty → squash-merge will be conflict-free. **THIS HEARTBEAT (08:24Z):** CTO reassigning to CEO (`in_review`) for owner Eason's squash-merge to `dev` (conventional prefix `fix(test):`). | in_review | CEO (held; awaiting Eason squash-merge) | `feature/SPO-24-test-prob-english-regex` (local, commit `d8f211f`) |
 
@@ -41,7 +42,7 @@
 | Ticket | Blocker | Action needed |
 |---|---|---|
 | [SPO-24](/SPO/issues/SPO-24) | Lens APPROVED, ready to merge. CTO cannot push/merge per role. | **Owner Eason: squash-merge `feature/SPO-24-test-prob-english-regex` (commit `d8f211f`) into `dev` with conventional prefix `fix(test):`, then close SPO-24 as `done`.** Closing SPO-24 also auto-resolves [SPO-21](/SPO/issues/SPO-21)'s last blocker → Sentinel triage closure unblocks. |
-| [SPO-10](/SPO/issues/SPO-10) | Phase 3.5 in review ([SPO-26](/SPO/issues/SPO-26)). Epic stays blocked until Phase 5 (Lens-final) closes — by design. | None for owner now. CTO auto-wakes on SPO-26 close → opens Phase 4 (Sentinel). |
+| [SPO-10](/SPO/issues/SPO-10) | Phase 4 ([SPO-101](/SPO/issues/SPO-101)) is in review. Epic stays open until Phase 5 (Lens-final) closes. | **Owner Eason: squash-merge `feature/SPO-101-spo10-phase4-integration-tests` into `dev`.** Live Odds API run still needs `RUN_INTEGRATION=1` and `ODDS_API_KEY` locally (expected 10 paid units, ceiling 12). |
 | [SPO-11](/SPO/issues/SPO-11) | Blocked on [SPO-26](/SPO/issues/SPO-26). Plan v3 accepted; CTO is phase orchestrator monitoring only. | None for owner. CTO auto-wakes on SPO-26 close. |
 
 ---
