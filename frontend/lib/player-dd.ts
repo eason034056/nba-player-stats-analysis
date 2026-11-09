@@ -39,10 +39,11 @@ export interface DDBookQuote {
 }
 
 /**
- * In-game freshness budget. Live odds stay cached for at most 30 seconds
- * while a game is on, because a book can move several points in that
- * window. The no-vig payload does not say whether the game has tipped,
- * so anything older than 30 seconds is treated as past that budget.
+ * Freshness budget for a posted odds response. While a game is on, live
+ * odds are cached for at most 30 seconds, because a book can move several
+ * points in that time. The payload does not say whether the game has
+ * tipped, so the warning uses this cutoff without claiming a game is
+ * underway. It names the age of the odds response.
  */
 export const LIVE_ODDS_FRESH_SECONDS = 30;
 
@@ -165,9 +166,9 @@ export function staleLineWarning(meta: DDSnapshotMeta): string | null {
   if (!tooOld && !markedStale) return null;
   const age =
     meta.dataAgeSeconds !== null
-      ? ` This snapshot is ${meta.dataAgeSeconds} seconds old.`
+      ? ` This odds response is ${meta.dataAgeSeconds} seconds old.`
       : "";
-  return `Stale line.${age} Posted Yes/No prices are only fresh for ${LIVE_ODDS_FRESH_SECONDS} seconds or less during a game window.`;
+  return `Stale line.${age} Posted Yes/No prices are only fresh for ${LIVE_ODDS_FRESH_SECONDS} seconds or less.`;
 }
 
 export type DDHistorySelection =
