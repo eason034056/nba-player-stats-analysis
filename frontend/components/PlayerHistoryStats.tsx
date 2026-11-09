@@ -36,7 +36,7 @@ import {
   Target,
   X,
 } from "lucide-react";
-import { getCSVPlayers, getPlayerHistory, calculateNoVig } from "@/lib/api";
+import { getCSVPlayers, getPlayerHistory, calculateNoVig, calculateWNBANoVig } from "@/lib/api";
 import {
   HISTORY_METRICS,
   RECENT_GAMES_OPTIONS,
@@ -233,10 +233,15 @@ export function PlayerHistoryStats({
   projection,
   getCSVPlayersFn = getCSVPlayers,
   getPlayerHistoryFn = getPlayerHistory,
-  calculateNoVigFn = calculateNoVig,
+  calculateNoVigFn,
   getPlayerDDHistoryFn,
   cacheNamespace = "nba",
 }: PlayerHistoryStatsProps) {
+  // A missing client follows the league. Passing the NBA function into a
+  // WNBA panel would post the binary market to /api/nba/props/no-vig.
+  const resolvedCalculateNoVig =
+    calculateNoVigFn ??
+    (cacheNamespace === "wnba" ? calculateWNBANoVig : calculateNoVig);
   const [searchInput, setSearchInput] = useState(initialPlayer);
   const [selectedPlayer, setSelectedPlayer] = useState(initialPlayer);
   const [metric, setMetric] = useState<HistoryMetricKey>(
@@ -322,7 +327,7 @@ export function PlayerHistoryStats({
 
       try {
         const marketKey = historyMetricToMarket(metricKey);
-        const result = await calculateNoVigFn({
+        const result = await resolvedCalculateNoVig({
           event_id: eventId,
           player_name: playerName,
           market: marketKey,
@@ -345,7 +350,7 @@ export function PlayerHistoryStats({
         setIsFetchingOdds(false);
       }
     },
-    [eventId, calculateNoVigFn]
+    [eventId, resolvedCalculateNoVig]
   );
 
   // 💡 Single source of truth for threshold auto-fill: any change to
@@ -717,7 +722,7 @@ export function PlayerHistoryStats({
           }
           eventId={eventId}
           getPlayerDDHistoryFn={getPlayerDDHistoryFn}
-          calculateNoVigFn={calculateNoVigFn}
+          calculateNoVigFn={resolvedCalculateNoVig}
         />
       )}
 

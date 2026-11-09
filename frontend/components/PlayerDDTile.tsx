@@ -20,10 +20,13 @@ import { AlertCircle, Award, Info, Loader2, Target } from "lucide-react";
 import { SectionUnavailable } from "@/components/SectionUnavailable";
 import { ApiError } from "@/lib/api";
 import {
+  formatPercent,
   historicalEdgeVsFairYes,
   referenceFairYes,
+  roundHalfAwayFromZero,
   selectDDHistory,
   selectDDOdds,
+  staleLineWarning,
   type DDBookQuote,
   type DDHistorySelection,
   type DDOddsSelection,
@@ -41,6 +44,8 @@ import {
   type DDLeague,
 } from "@/lib/use-player-dd";
 
+const MISSING_PLAYER_MESSAGE =
+  "Enter a player name to load double-double history and Yes/No odds.";
 const EMPTY_HISTORY_MESSAGE = "No double-double games are in the sample.";
 const EMPTY_ODDS_MESSAGE =
   "No Yes/No double-double prices are posted for this player.";
@@ -58,7 +63,7 @@ export interface PlayerDDTileProps {
    * route and the binary no-vig branch. `null` renders the unavailable
    * state and does not call either API.
    */
-  league?: DDLeague | null;
+  league: DDLeague | null;
   /** Required for live Yes/No prices. History still loads without it. */
   eventId?: string;
   /** Optional season filter forwarded as the `season` query param. */
@@ -71,10 +76,6 @@ export interface PlayerDDTileProps {
 
 function formatAmericanPrice(price: number): string {
   return price > 0 ? `+${price}` : `${price}`;
-}
-
-function formatPercent(probability: number): string {
-  return `${(probability * 100).toFixed(1)}%`;
 }
 
 function bookLabel(key: string): string {
@@ -328,19 +329,24 @@ function OddsBlock({
       {selection.message && (
         <p className="text-xs text-gray">{selection.message}</p>
       )}
+      {staleLineWarning(selection) && (
+        <p className="text-sm font-semibold text-red" role="status">
+          {staleLineWarning(selection)}
+        </p>
+      )}
     </div>
   );
 }
 
 export function PlayerDDTile({
   playerName,
-  league = "nba",
+  league,
   eventId,
   season,
   getPlayerDDHistoryFn,
   calculateNoVigFn,
 }: PlayerDDTileProps) {
-  const { historyQuery, oddsQuery, leagueSupported, canQueryOdds } =
+  const { historyQuery, oddsQuery, leagueSupported, canQueryHistory, canQueryOdds } =
     usePlayerDDTileData({
       playerName,
       league,
@@ -382,17 +388,27 @@ export function PlayerDDTile({
           title="Double-double"
           message={UNSUPPORTED_LEAGUE_MESSAGE}
         />
+      ) : !canQueryHistory ? (
+        <SectionUnavailable
+          eyebrow="Double double"
+          title="Double-double"
+          message={MISSING_PLAYER_MESSAGE}
+        />
       ) : (
         <>
           <HistoryBlock
-            isLoading={historyQuery.isPending}
+            isLoading={
+              historyQuery.isFetching && historyQuery.data === undefined
+            }
             isError={historyQuery.isError}
             error={historyQuery.error}
             selection={historySelection}
           />
           <OddsBlock
-            hasEvent={canQueryOdds}
-            isLoading={canQueryOdds && oddsQuery.isPending}
+            hasEvent={Boolean(eventId)}
+            isLoading={
+              canQueryOdds && oddsQuery.isFetching && oddsQuery.data === undefined
+            }
             isError={oddsQuery.isError}
             error={oddsQuery.error}
             selection={oddsSelection}
@@ -418,7 +434,7 @@ export function PlayerDDTile({
                 )}
               >
                 {edge >= 0 ? "+" : ""}
-                {(edge * 100).toFixed(1)} pts
+                {roundHalfAwayFromZero(edge * 100, 1).toFixed(1)} pts
               </p>
             </div>
           )}

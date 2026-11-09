@@ -38,19 +38,34 @@ export interface DDBookQuote {
   noFair: number | null;
 }
 
+/**
+ * In-game freshness budget. Live odds stay cached for at most 30 seconds
+ * while a game is on, because a book can move several points in that
+ * window. The no-vig payload does not say whether the game has tipped,
+ * so anything older than 30 seconds is treated as past that budget.
+ */
+export const LIVE_ODDS_FRESH_SECONDS = 30;
+
+export interface DDSnapshotMeta {
+  cacheState: string | null;
+  dataAgeSeconds: number | null;
+  fetchedAt: string | null;
+  source: string | null;
+}
+
 export type DDOddsSelection =
-  | {
+  | ({
       status: "ready";
       books: DDBookQuote[];
       consensusYesFair: number | null;
       consensusNoFair: number | null;
       message: string | null;
-    }
-  | {
+    } & DDSnapshotMeta)
+  | ({
       status: "unavailable";
       reason: "empty" | "null-fields";
       message: string | null;
-    };
+    } & DDSnapshotMeta);
 
 function explanatoryMessage(message: string | null | undefined): string | null {
   if (typeof message !== "string") return null;
@@ -77,8 +92,28 @@ function quoteFromRow(row: BookmakerResult): DDBookQuote | null {
   };
 }
 
+function snapshotMeta(response: NoVigResponse): DDSnapshotMeta {
+  const age = response.data_age_seconds;
+  return {
+    cacheState:
+      typeof response.cache_state === "string" && response.cache_state.length > 0
+        ? response.cache_state
+        : null,
+    dataAgeSeconds: typeof age === "number" && Number.isFinite(age) ? age : null,
+    fetchedAt:
+      typeof response.fetched_at === "string" && response.fetched_at.length > 0
+        ? response.fetched_at
+        : null,
+    source:
+      typeof response.source === "string" && response.source.length > 0
+        ? response.source
+        : null,
+  };
+}
+
 export function selectDDOdds(response: NoVigResponse): DDOddsSelection {
   const message = explanatoryMessage(response.message);
+  const meta = snapshotMeta(response);
   const books = response.results
     .map(quoteFromRow)
     .filter((row): row is DDBookQuote => row !== null);
@@ -88,6 +123,7 @@ export function selectDDOdds(response: NoVigResponse): DDOddsSelection {
       status: "unavailable",
       reason: response.results.length === 0 ? "empty" : "null-fields",
       message,
+      ...meta,
     };
   }
 
@@ -102,7 +138,36 @@ export function selectDDOdds(response: NoVigResponse): DDOddsSelection {
       ? consensus.p_no_fair
       : null,
     message,
+    ...meta,
   };
+}
+
+/**
+ * Round half away from zero. `Number#toFixed` turns 0.6755 * 100 into
+ * "67.5" because the product is 67.549999999999997 in binary.
+ */
+export function roundHalfAwayFromZero(value: number, digits: number): number {
+  const factor = 10 ** digits;
+  const sign = value < 0 ? -1 : 1;
+  const scaled = Math.abs(value) * factor;
+  const nudged = scaled + Number.EPSILON * scaled * 32;
+  return (sign * Math.round(nudged)) / factor;
+}
+
+export function formatPercent(probability: number): string {
+  return `${roundHalfAwayFromZero(probability * 100, 1).toFixed(1)}%`;
+}
+
+export function staleLineWarning(meta: DDSnapshotMeta): string | null {
+  const tooOld =
+    meta.dataAgeSeconds !== null && meta.dataAgeSeconds > LIVE_ODDS_FRESH_SECONDS;
+  const markedStale = meta.cacheState === "stale";
+  if (!tooOld && !markedStale) return null;
+  const age =
+    meta.dataAgeSeconds !== null
+      ? ` This snapshot is ${meta.dataAgeSeconds} seconds old.`
+      : "";
+  return `Stale line.${age} Posted Yes/No prices are only fresh for ${LIVE_ODDS_FRESH_SECONDS} seconds or less during a game window.`;
 }
 
 export type DDHistorySelection =

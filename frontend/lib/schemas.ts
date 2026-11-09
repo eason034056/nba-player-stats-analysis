@@ -139,6 +139,12 @@ export const noVigResponseSchema = z.object({
   results: z.array(bookmakerResultSchema),
   consensus: consensusSchema.nullable().optional(),
   message: z.string().nullable().optional(),
+  // NoVigResponse 快照年齡。後端是 Optional[datetime] / Optional[int] / Optional[str]。
+  // 缺席時維持 undefined，舊的 Over/Under 回應仍能通過。
+  fetched_at: z.string().nullable().optional(),
+  data_age_seconds: z.number().int().nullable().optional(),
+  cache_state: z.string().nullable().optional(),
+  source: z.string().nullable().optional(),
 });
 
 export type NoVigResponse = z.infer<typeof noVigResponseSchema>;

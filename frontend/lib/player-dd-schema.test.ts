@@ -289,7 +289,7 @@ describe("recorded double-double payloads", () => {
     ).toThrow();
   });
 
-  it.fails(
+  it(
     "keeps cache_state and data_age_seconds so a stale /props/no-vig snapshot can be detected",
     () => {
       const parsed = noVigResponseSchema.parse({
