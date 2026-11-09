@@ -25,7 +25,7 @@ backend_path = project_root / "backend"
 if str(backend_path) not in sys.path:
     sys.path.insert(0, str(backend_path))
 
-from app.services.csv_player_history import csv_player_service
+from app.services.csv_player_history import csv_player_service, team_from_game_logs
 
 # 預設路徑
 DEFAULT_STAR_PLAYERS_PATH = project_root / "data" / "star_players.json"
@@ -139,17 +139,18 @@ def _get_team_for_context(
     stats: dict,
     star_players: dict[str, list[str]],
 ) -> str:
-    """取得 context 的 team 欄位：有 teammate_filter 時從 star_players 反查；否則從 stats 第一筆 game 取得（反映該情境的球隊）。"""
+    """Context team: star-teammate scenarios use that star's club; otherwise the most recent team in the scenario logs.
+
+    ``get_player_stats`` returns ``game_logs`` oldest-first, so the first
+    row is the player's earliest club, not the club for this scenario.
+    """
     _, _, _, teammate_filter, _ = scenario
     if teammate_filter:
         for team, stars in star_players.items():
             if teammate_filter[0] in stars:
                 return team
         return ""
-    game_logs = stats.get("game_logs", [])
-    if game_logs:
-        return game_logs[0].get("team", "")
-    return ""
+    return team_from_game_logs(stats.get("game_logs", []))
 
 
 def build_context_record(

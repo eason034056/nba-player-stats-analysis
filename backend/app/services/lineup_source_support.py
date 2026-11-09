@@ -275,7 +275,7 @@ def normalize_rotogrinders_player_candidate(raw_name: str) -> str | None:
 
 
 def _build_team_roster_cache() -> dict[str, list[str]]:
-    from app.services.csv_player_history import CSVPlayerHistoryService
+    from app.services.csv_player_history import CSVPlayerHistoryService, team_from_game_logs
 
     service = CSVPlayerHistoryService()
     service.load_csv()
@@ -284,7 +284,9 @@ def _build_team_roster_cache() -> dict[str, list[str]]:
     for player_name, logs in service._cache.items():
         if not logs:
             continue
-        latest_team = detect_team_code(logs[0].get("team", "") or "")
+        # Cache order is newest-first today; resolve by date so a future
+        # sort change cannot put a traded player on their old club.
+        latest_team = detect_team_code(team_from_game_logs(logs) or "")
         if not latest_team:
             continue
         roster_map.setdefault(latest_team, []).append(player_name)
