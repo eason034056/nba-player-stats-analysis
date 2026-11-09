@@ -14,7 +14,7 @@ concurrency:
 
 jobs:
   backend-lint:
-    name: Backend syntax check
+    name: Backend Lint
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -24,10 +24,10 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.11"
-      # Repo has no ruff config. Latest ruff (0.17.4) reports 792 findings under its
-      # default rules, and the historical E4/E7/E9/F subset still reports 49
-      # (F401, F541, E402, F841). `ruff format --check` wants 68 files rewritten.
-      # Clearing that means editing production code, which this ticket does not do.
+      # Fatal syntax and undefined-name rules only. The broader E4/E7/E9/F
+      # set still has 49 pre-existing findings and is a follow-up.
+      - run: pip install ruff==0.17.4
+      - run: ruff check . --select E9,F63,F7,F82
       - name: Confirm the backend tree parses
         run: python -m compileall -q .
 
@@ -110,14 +110,7 @@ jobs:
           cache: npm
           cache-dependency-path: frontend/package-lock.json
       - run: npm ci
-      # These files render Navbar / PickContextMenu, which call useWnbaBetSlip.
-      # The test wrapper never mounts WnbaBetSlipProvider, so every test in the
-      # file throws before an assertion. Pre-existing on dev; not fixed here.
-      - run: >
-          npm test --
-          --exclude components/Navbar.test.tsx
-          --exclude components/PickContextMenu.test.tsx
-          --exclude app/picks/page.test.tsx
+      - run: npm test
 
   docker-build:
     name: Docker Build
