@@ -166,10 +166,10 @@ MIN_SAMPLE_GAMES = 10
 
 
 def choose_daily_pick_side(
-    p_over: Optional[float],
-    p_under: Optional[float],
+    p_over: float | None,
+    p_under: float | None,
     threshold: float = HIGH_PROBABILITY_THRESHOLD,
-) -> Tuple[Optional[str], Optional[float]]:
+) -> tuple[str | None, float | None]:
     """Choose the Daily Picks side from empirical over/under rates.
 
     OVER wins when both rates clear `threshold`. That is the order in

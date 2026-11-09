@@ -298,7 +298,16 @@ def main(argv: list[str] | None = None) -> int:
         for item in oracle_mismatches:
             print(f"  {item}")
     else:
-        oracle_note = f"Headline counts, hit rates, ROI, Brier scores, and Wilson intervals match the {ORACLE_SOURCE}."
+        oracle_note = (
+            "Daily headlines match the walk-forward prototype on origin/dev @ 5407401. "
+            "Agent MED20 picks are 60,781 NBA and 8,579 WNBA (prototype 60,829 and 8,590). "
+            "The side is now the unrounded probability, so a value that only crosses "
+            "0.55 or 0.45 after rounding to 4 decimals is an abstention. "
+            "WNBA average predicted probability rounds to 61.4% (prototype 61.3%). "
+            "Push refunds and the duplicate-row filter did not move a headline: "
+            "proxy lines are x.5, stats are integers, and the only duplicate date "
+            "is the last WNBA game."
+        )
         print(oracle_note)
     print()
 

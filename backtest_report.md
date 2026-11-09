@@ -1,6 +1,6 @@
 # Sports Lab walk-forward backtest
 
-Generated 2026-11-09 21:32 UTC. Command: `python scripts/agents/evaluation/backtest.py --report backtest_report.md`. Elapsed 72s.
+Generated 2026-11-09 22:02 UTC. Command: `python scripts/agents/evaluation/backtest.py --report backtest_report.md`. Elapsed 73s.
 
 The previous `scripts/agents/evaluation/backtest.py` scored five hard-coded players
 in-sample: the "actual rate" was the same history the model had just fit.
@@ -54,9 +54,12 @@ on a cache that has been swapped to those same prior games, for points,
 rebounds, assists, and pra. There is no stored market price, lineup, or
 injury report, so the returned decision is avoid and `eligible_for_bet`
 is false. The tables below the avoid rate use the pre-gate side:
-`decision_from_over_probability` on the rounded model probability
-(over at or above 0.55, under at or below 0.45). That is the market gate
-ignored, and nothing else.
+`decision_from_over_probability` on the unrounded model probability
+(over at or above 0.55, under at or below 0.45). The published probability
+is rounded to 4 decimals and that rounding can cross the band, so the side
+is decided before rounding. That is the market gate ignored, and nothing else.
+A push (`actual == line`) refunds the stake: profit is 0, and the bet is left
+out of the hit rate and the Brier score.
 
 **Naive baseline.** `naive = (over picks × over-rate of every prop in the group
 + under picks × under-rate of every prop) / picks`. Lift is the pick hit rate
@@ -246,40 +249,40 @@ lower than the headline because the headline includes the 0.5 lines.
 
 ## Agent scorecard, proxy MED20
 
-Production avoid rate: 116,712 / 116,712 (100.0%). Decisions: {'avoid': 116712}. Eligible: {False: 116712}. Pass reasons: {'no market price available': 116712}. With the market gate ignored, the probability band itself abstains on 47,293 / 116,712 props (P(over) strictly between 0.45 and 0.55).
+Production avoid rate: 116,712 / 116,712 (100.0%). Decisions: {'avoid': 116712}. Eligible: {False: 116712}. Pass reasons: {'no market price available': 116712}. With the market gate ignored, the probability band itself abstains on 47,352 / 116,712 props (P(over) strictly between 0.45 and 0.55).
 
 ### Pre-gate results (market gate ignored)
 
 | Group | Props | Picks | Hit% (95% CI) | ROI% (95% CI) | Brier (95% CI) | Avg pred% | Naive% | Lift pp |
 |---|---|---|---|---|---|---|---|---|
-| nba | 100872 | 60829 | 57.9 (57.5–58.3) | +10.6 (+9.8–+11.3) | 0.245 (0.244–0.246) | 62.0 | 50.1 | +7.9 |
-| wnba | 15840 | 8590 | 57.6 (56.5–58.6) | +9.9 (+7.9–+11.9) | 0.244 (0.241–0.246) | 61.3 | 49.9 | +7.7 |
+| nba | 100872 | 60781 | 57.9 (57.5–58.3) | +10.6 (+9.9–+11.3) | 0.245 (0.244–0.246) | 62.0 | 50.1 | +7.9 |
+| wnba | 15840 | 8579 | 57.6 (56.5–58.6) | +10.0 (+7.9–+11.9) | 0.244 (0.241–0.246) | 61.4 | 49.9 | +7.7 |
 
 ### By market
 
 | Group | Props | Picks | Hit% (95% CI) | ROI% (95% CI) | Brier (95% CI) | Avg pred% | Naive% | Lift pp |
 |---|---|---|---|---|---|---|---|---|
-| nba / assists | 25218 | 16890 | 59.1 (58.4–59.9) | +12.9 (+11.4–+14.3) | 0.242 (0.240–0.244) | 63.3 | 50.3 | +8.8 |
-| nba / points | 25218 | 14395 | 57.1 (56.3–57.9) | +8.9 (+7.4–+10.5) | 0.247 (0.245–0.249) | 61.3 | 50.0 | +7.1 |
-| nba / pra | 25218 | 13775 | 57.2 (56.3–58.0) | +9.2 (+7.6–+10.7) | 0.246 (0.244–0.249) | 61.1 | 50.0 | +7.2 |
-| nba / rebounds | 25218 | 15769 | 58.1 (57.3–58.9) | +10.9 (+9.4–+12.4) | 0.244 (0.242–0.246) | 62.0 | 50.0 | +8.1 |
-| wnba / assists | 3960 | 2509 | 57.9 (55.9–59.8) | +10.5 (+6.8–+14.1) | 0.242 (0.237–0.247) | 62.9 | 50.0 | +7.9 |
-| wnba / points | 3960 | 1999 | 58.2 (56.0–60.3) | +11.1 (+6.9–+15.2) | 0.244 (0.239–0.249) | 60.6 | 49.9 | +8.3 |
-| wnba / pra | 3960 | 1780 | 56.1 (53.8–58.4) | +7.1 (+2.7–+11.5) | 0.246 (0.241–0.251) | 60.0 | 49.7 | +6.4 |
-| wnba / rebounds | 3960 | 2302 | 57.9 (55.9–59.9) | +10.5 (+6.7–+14.4) | 0.243 (0.238–0.248) | 61.3 | 50.0 | +7.9 |
+| nba / assists | 25218 | 16882 | 59.1 (58.4–59.9) | +12.9 (+11.4–+14.3) | 0.242 (0.240–0.244) | 63.3 | 50.3 | +8.8 |
+| nba / points | 25218 | 14381 | 57.1 (56.3–57.9) | +9.0 (+7.4–+10.5) | 0.247 (0.245–0.249) | 61.4 | 50.0 | +7.1 |
+| nba / pra | 25218 | 13758 | 57.2 (56.3–58.0) | +9.2 (+7.6–+10.7) | 0.247 (0.244–0.249) | 61.1 | 50.0 | +7.2 |
+| nba / rebounds | 25218 | 15760 | 58.1 (57.3–58.9) | +10.9 (+9.4–+12.4) | 0.244 (0.242–0.246) | 62.0 | 50.0 | +8.1 |
+| wnba / assists | 3960 | 2507 | 57.9 (55.9–59.8) | +10.5 (+6.8–+14.2) | 0.242 (0.237–0.247) | 62.9 | 50.0 | +7.9 |
+| wnba / points | 3960 | 1996 | 58.2 (56.0–60.3) | +11.0 (+6.9–+15.1) | 0.244 (0.239–0.249) | 60.6 | 49.9 | +8.3 |
+| wnba / pra | 3960 | 1775 | 56.2 (53.8–58.5) | +7.2 (+2.8–+11.6) | 0.246 (0.241–0.251) | 60.1 | 49.7 | +6.4 |
+| wnba / rebounds | 3960 | 2301 | 57.9 (55.9–59.9) | +10.5 (+6.6–+14.3) | 0.243 (0.238–0.248) | 61.3 | 50.0 | +7.9 |
 
 ### By scorecard confidence
 
 | Group | Props | Picks | Hit% (95% CI) | ROI% (95% CI) | Brier (95% CI) | Avg pred% | Naive% | Lift pp |
 |---|---|---|---|---|---|---|---|---|
-| nba / [0.0, 0.3) | 30936 | 14813 | 57.8 (57.0–58.6) | +10.3 (+8.8–+11.8) | 0.246 (0.244–0.248) | 60.8 | 50.0 | +7.7 |
-| nba / [0.3, 0.5) | 18816 | 11734 | 57.4 (56.5–58.3) | +9.7 (+7.9–+11.4) | 0.244 (0.242–0.247) | 61.6 | 49.9 | +7.5 |
-| nba / [0.5, 0.6) | 7956 | 5110 | 57.7 (56.4–59.1) | +10.2 (+7.6–+12.8) | 0.245 (0.242–0.249) | 62.1 | 49.8 | +7.9 |
-| nba / [0.6, 0.7) | 8948 | 5927 | 59.0 (57.8–60.3) | +12.7 (+10.3–+15.0) | 0.241 (0.238–0.245) | 62.5 | 50.1 | +9.0 |
-| nba / [0.7, 0.76) | 34216 | 23245 | 58.0 (57.4–58.7) | +10.8 (+9.6–+12.0) | 0.245 (0.243–0.247) | 62.8 | 50.2 | +7.9 |
-| wnba / [0.0, 0.3) | 7776 | 3636 | 57.7 (56.1–59.3) | +10.2 (+7.1–+13.2) | 0.245 (0.241–0.248) | 60.9 | 49.8 | +7.9 |
+| nba / [0.0, 0.3) | 30936 | 14800 | 57.8 (57.0–58.6) | +10.3 (+8.8–+11.8) | 0.246 (0.244–0.248) | 60.8 | 50.0 | +7.7 |
+| nba / [0.3, 0.5) | 18816 | 11727 | 57.5 (56.6–58.4) | +9.7 (+8.0–+11.4) | 0.244 (0.242–0.247) | 61.6 | 49.9 | +7.6 |
+| nba / [0.5, 0.6) | 7956 | 5098 | 57.7 (56.4–59.1) | +10.2 (+7.6–+12.8) | 0.245 (0.242–0.249) | 62.1 | 49.8 | +7.9 |
+| nba / [0.6, 0.7) | 8948 | 5926 | 59.0 (57.8–60.3) | +12.7 (+10.3–+15.0) | 0.241 (0.238–0.245) | 62.5 | 50.1 | +9.0 |
+| nba / [0.7, 0.76) | 34216 | 23230 | 58.0 (57.4–58.7) | +10.8 (+9.6–+12.0) | 0.245 (0.243–0.247) | 62.8 | 50.2 | +7.9 |
+| wnba / [0.0, 0.3) | 7776 | 3631 | 57.7 (56.1–59.3) | +10.1 (+7.0–+13.1) | 0.245 (0.241–0.248) | 60.9 | 49.8 | +7.9 |
 | wnba / [0.3, 0.5) | 4508 | 2722 | 58.0 (56.2–59.9) | +10.8 (+7.3–+14.3) | 0.243 (0.239–0.248) | 61.4 | 50.1 | +7.9 |
-| wnba / [0.5, 0.6) | 1556 | 997 | 56.8 (53.7–59.8) | +8.4 (+2.5–+14.2) | 0.242 (0.234–0.250) | 62.1 | 50.2 | +6.6 |
+| wnba / [0.5, 0.6) | 1556 | 991 | 56.9 (53.8–60.0) | +8.7 (+2.7–+14.5) | 0.242 (0.234–0.249) | 62.1 | 50.2 | +6.7 |
 | wnba / [0.6, 0.7) | 1340 | 865 | 59.3 (56.0–62.5) | +13.2 (+6.9–+19.4) | 0.238 (0.229–0.246) | 62.1 | 50.5 | +8.8 |
 | wnba / [0.7, 0.76) | 660 | 370 | 51.4 (46.3–56.4) | -2.0 (-11.7–+7.7) | 0.257 (0.244–0.270) | 61.7 | 50.1 | +1.3 |
 
@@ -287,10 +290,10 @@ Production avoid rate: 116,712 / 116,712 (100.0%). Decisions: {'avoid': 116712}.
 
 | Group | Props | Picks | Hit% (95% CI) | ROI% (95% CI) | Brier (95% CI) | Avg pred% | Naive% | Lift pp |
 |---|---|---|---|---|---|---|---|---|
-| nba / b2b | 14536 | 9087 | 55.8 (54.8–56.8) | +6.6 (+4.6–+8.5) | 0.251 (0.248–0.254) | 62.2 | 48.7 | +7.1 |
-| nba / not b2b | 86336 | 51742 | 58.3 (57.9–58.7) | +11.3 (+10.5–+12.1) | 0.244 (0.243–0.245) | 62.0 | 50.1 | +8.2 |
+| nba / b2b | 14536 | 9081 | 55.8 (54.8–56.8) | +6.5 (+4.6–+8.5) | 0.251 (0.248–0.254) | 62.2 | 48.7 | +7.1 |
+| nba / not b2b | 86336 | 51700 | 58.3 (57.9–58.7) | +11.3 (+10.5–+12.1) | 0.244 (0.243–0.245) | 62.0 | 50.1 | +8.2 |
 | wnba / b2b | 796 | 469 | 53.1 (48.6–57.6) | +1.4 (-7.3–+9.9) | 0.257 (0.246–0.268) | 61.1 | 48.7 | +4.4 |
-| wnba / not b2b | 15044 | 8121 | 57.9 (56.8–58.9) | +10.4 (+8.4–+12.5) | 0.243 (0.240–0.246) | 61.4 | 49.9 | +7.9 |
+| wnba / not b2b | 15044 | 8110 | 57.9 (56.8–58.9) | +10.4 (+8.4–+12.5) | 0.243 (0.240–0.246) | 61.4 | 49.9 | +7.9 |
 
 ### Calibration of model p_over
 
@@ -331,15 +334,15 @@ These four data bugs are left for SPO-97 and SPO-98. This run does not correct t
 
 **Season label.** The NBA cache has 31,572 rows and season counts {'2025-2026': 31572}. 3,416 of those rows are dated before 2025-10-21 (2021-08=4, 2024-07=5, 2024-10=72, 2024-11=127, 2024-12=116, 2025-01=158, 2025-02=99, 2025-03=117, 2025-04=70, 2025-05=22, 2025-06=7, 2025-07=849, 2025-10=1770). `get_player_stats(n=0)` does not read the Season column, and neither does this replay, so correcting the label by itself does not move a hit rate, an ROI, a Brier score, or a calibration bucket. What does move them is the natural companion of that fix: dropping Summer League, preseason, and the stray older rows out of the history the model consumes. 23,937 of 25,218 scored NBA player-games have at least one such row in their prior window, and 6,832 have one inside the last 20 games that MED20 and the rotation split look at. Those are the NBA tables that shift: the MED20 and L10 hit rates, ROI, Brier, calibration, monthly rates (October and November most of all, because the short window is still full of pre-cutoff games), and the proxy-sensitivity table. WNBA is a separate file and does not move because of the NBA label.
 
-**Duplicate WNBA row.** Duplicate player-dates in the WNBA cache: Maria Conde 2026-05-08 ×2. A second copy of the same date is not scored as its own target, and it enters a later game's history only when that later game exists. Scored player-games whose prior window contains a duplicated date: 0. Deleting the duplicate therefore does not move the WNBA headline hit rate, ROI, Brier, or calibration on this file. It would move a later game, if one is appended without removing the extra row, by one doubled game in that player's history.
+**Duplicate WNBA row.** Duplicate player-dates in the WNBA cache: Maria Conde 2026-05-08 ×2. A second copy of the same date is not scored as its own target. When that copy is the same box score (these two rows differ only in Season), the replay keeps one copy, so a later game does not count it twice. A same-day row with a different box score, such as a doubleheader, stays in the later prior. Scored player-games whose prior still contains a date that had a duplicate row: 0. Deleting the extra row therefore does not move the WNBA headline hit rate, ROI, Brier, or calibration on this file. The replay has already stopped the double count.
 
 **Team taken from the oldest game.** Daily Picks falls back to `game_logs[0]` when there is no projection, and `get_player_stats` returns logs oldest-first, so a traded player is labelled with their oldest team. 126 NBA and 52 WNBA players in this cache have more than one team. This replay never reads the team. Hit rate, ROI, Brier, calibration, monthly rates, under share, and the 0.5-line share do not move. The team badge on the picks page does.
 
 **Substring name match.** `get_player_stats` and `_games_for` accept a name when either string contains the other. This replay iterates the CSV's own player keys and looks them up exactly, so the fuzzy branch does not fire. None of the tables in this report move when matching gets stricter. A live request that passes a partial or overlapping name can change, because that request is the one that uses the fuzzy branch.
 
-## Check against the prototype
+## Check against the recorded headlines
 
-Headline counts, hit rates, ROI, Brier scores, and Wilson intervals match the walk-forward prototype on origin/dev @ 5407401.
+Daily headlines match the walk-forward prototype on origin/dev @ 5407401. Agent MED20 picks are 60,781 NBA and 8,579 WNBA (prototype 60,829 and 8,590). The side is now the unrounded probability, so a value that only crosses 0.55 or 0.45 after rounding to 4 decimals is an abstention. WNBA average predicted probability rounds to 61.4% (prototype 61.3%). Push refunds and the duplicate-row filter did not move a headline: proxy lines are x.5, stats are integers, and the only duplicate date is the last WNBA game.
 
 ## Calibration guard
 

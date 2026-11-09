@@ -8,9 +8,16 @@ directions had been applied at the group's base rates, with no selection:
 ``P(over)`` and ``P(under)`` are measured on every prop in the group, not
 only on the picks. Lift is the pick hit rate minus that baseline.
 
-ROI at assumed -110 is a monotone function of the hit rate, because every
-winning bet pays ``100/110`` and every losing bet costs 1, and an x.5 line
-does not push on an integer stat:
+A push (``actual == line``) refunds the stake: profit is 0. It is not a
+hit and not a loss. The hit rate is wins / (wins + losses). Pushes are
+omitted from that count and from the Brier score. They stay in the ROI
+denominator, so the -110 identity below holds only when the group has no
+pushes. An x.5 proxy does not push on an integer stat, which is why the
+proxy headlines have none.
+
+ROI at assumed -110, with no pushes and no real price, is a monotone
+function of the hit rate, because every winning bet pays ``100/110`` and
+every losing bet costs 1:
 
     roi = hit_rate * (210/110) - 1
 
@@ -143,6 +150,7 @@ class Accumulator:
     p_over_sum: float = 0.0
     p_over_brier_sum: float = 0.0
     assumed_profit_picks: int = 0
+    pushes: int = 0
 
     def add(self, row: object) -> None:
         """Add one daily or agent row. Missing prices fall back to -110."""
@@ -160,10 +168,20 @@ class Accumulator:
         pick = row.pick  # type: ignore[attr-defined]
         if pick is None:
             return
-        hit = int(row.hit)  # type: ignore[attr-defined]
-        prob = float(row.prob)  # type: ignore[attr-defined]
         price = row.price  # type: ignore[attr-defined]
         odds = ASSUMED_AMERICAN_ODDS if price is None else int(price)
+        hit = row.hit  # type: ignore[attr-defined]
+        if hit is None:
+            # Push. The stake is refunded. Leave it out of the hit rate.
+            profit = unit_profit(odds, None)
+            self.pushes += 1
+            self.profit_sum += profit
+            self.profit_sq += profit * profit
+            if price is not None:
+                self.priced_picks += 1
+            return
+        hit = int(hit)
+        prob = float(row.prob)  # type: ignore[attr-defined]
         profit = unit_profit(odds, bool(hit))
         se = prob - hit
         self.picks += 1
@@ -212,16 +230,17 @@ class Accumulator:
             lift = hit_rate - naive
         else:
             naive = lift = float("nan")
-        if picks and self.priced_picks == 0:
+        settled = picks + self.pushes
+        if picks and self.priced_picks == 0 and self.pushes == 0:
             roi = roi_from_hit_rate(hit_rate)
             roi_lo = roi_from_hit_rate(hit_lo)
             roi_hi = roi_from_hit_rate(hit_hi)
             # Wilson endpoints can arrive unordered if a caller passes a
             # decreasing transform. -110 ROI increases with the hit rate.
             roi_method = "wilson"
-        elif picks:
-            roi = self.profit_sum / picks
-            roi_lo, roi_hi = _normal_ci(self.profit_sum, self.profit_sq, picks)
+        elif settled:
+            roi = self.profit_sum / settled
+            roi_lo, roi_hi = _normal_ci(self.profit_sum, self.profit_sq, settled)
             roi_method = "normal"
         else:
             roi = roi_lo = roi_hi = float("nan")

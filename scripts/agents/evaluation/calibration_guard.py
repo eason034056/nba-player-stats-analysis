@@ -98,7 +98,10 @@ def evaluate_guard(
             result.lines.append(f"FAIL {detail}")
             continue
         brier_ok = brier <= bounds.max_brier
-        gap_ok = gap <= bounds.max_calibration_gap
+        # abs(0.65 - 0.50) is 0.15000000000000002, so a gap that is the
+        # threshold in decimal arithmetic sits one ulp above the literal.
+        # The extra 1e-12 lets that boundary pass and still rejects 0.15 + 1e-9.
+        gap_ok = gap <= bounds.max_calibration_gap + 1e-12
         status = "ok" if brier_ok and gap_ok else "FAIL"
         result.lines.append(
             f"{status} {league}: Brier {brier:.3f}, calibration gap {gap:.3f} ({source})"

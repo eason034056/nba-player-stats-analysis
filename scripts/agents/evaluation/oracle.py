@@ -1,10 +1,20 @@
-"""Headline counts from the walk-forward prototype on origin/dev @ 5407401.
+"""Recorded headline counts for this CSV.
 
-The prototype replayed this repository's CSVs as they are on that commit.
-``compare_oracle`` checks a fresh run against those counts. It is a
-same-data check, not a promise that the numbers survive a later edit to
-the CSV. SPO-97 and SPO-98 change that file; the report says which
-tables move when they do.
+Daily MED20, L10, L5, and ALL counts are the walk-forward prototype on
+origin/dev @ 5407401. They did not move when pushes became refunds or when
+an identical same-day row stopped being counted twice. Proxy lines are
+x.5, the box score is an integer, and the only duplicate date is the last
+WNBA game.
+
+Agent MED20 pick counts are lower than that prototype. The pre-gate side
+is the unrounded model probability. A value in [0.54995, 0.55) used to
+round to 0.5500 and become an over; it is now avoid. The same thing
+happens just above 0.45, where rounding used to create an under. NBA
+picks went from 60,829 to 60,781. WNBA picks went from 8,590 to 8,579,
+and the WNBA average predicted probability rounds to 61.4% instead of 61.3%.
+
+``compare_oracle`` is a same-data check. SPO-97 and SPO-98 change the CSV;
+the report says which tables move when they do.
 """
 
 from __future__ import annotations
@@ -43,8 +53,8 @@ _MARKET_PICKS = {
 
 # props, picks, hit%, Wilson low, Wilson high, avg pred%, lift pp, Brier of model p_over
 _AGENT = {
-    ("nba", "MED20"): (100872, 60829, 57.9, 57.5, 58.3, 62.0, 7.9, 0.2467),
-    ("wnba", "MED20"): (15840, 8590, 57.6, 56.5, 58.6, 61.3, 7.7, 0.2463),
+    ("nba", "MED20"): (100872, 60781, 57.9, 57.5, 58.3, 62.0, 7.9, 0.2467),
+    ("wnba", "MED20"): (15840, 8579, 57.6, 56.5, 58.6, 61.4, 7.7, 0.2463),
 }
 
 _TARGETS = {
@@ -57,7 +67,7 @@ _COMPOSITION = {
     "wnba": (73.6, 60.5),
 }
 
-ORACLE_SOURCE = "walk-forward prototype on origin/dev @ 5407401"
+ORACLE_SOURCE = "recorded headlines for this CSV"
 
 
 def _near(got: float, expected: float, digits: int) -> bool:

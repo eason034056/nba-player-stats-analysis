@@ -226,9 +226,12 @@ def render_report(
     add("rebounds, assists, and pra. There is no stored market price, lineup, or")
     add("injury report, so the returned decision is avoid and `eligible_for_bet`")
     add("is false. The tables below the avoid rate use the pre-gate side:")
-    add("`decision_from_over_probability` on the rounded model probability")
-    add("(over at or above 0.55, under at or below 0.45). That is the market gate")
-    add("ignored, and nothing else.")
+    add("`decision_from_over_probability` on the unrounded model probability")
+    add("(over at or above 0.55, under at or below 0.45). The published probability")
+    add("is rounded to 4 decimals and that rounding can cross the band, so the side")
+    add("is decided before rounding. That is the market gate ignored, and nothing else.")
+    add("A push (`actual == line`) refunds the stake: profit is 0, and the bet is left")
+    add("out of the hit rate and the Brier score.")
     add("")
     add(
         "**Naive baseline.** `naive = (over picks × over-rate of every prop in the group"
@@ -403,7 +406,7 @@ def render_report(
     add("")
     add(_shift_section(inventories, replays))
     add("")
-    add("## Check against the prototype")
+    add("## Check against the recorded headlines")
     add("")
     add(oracle_note)
     add("")
@@ -653,12 +656,13 @@ def _shift_section(
             "sensitivity table. WNBA is a separate file and does not move because of the NBA label.",
             "",
             f"**Duplicate WNBA row.** Duplicate player-dates in the WNBA cache: {dup_text}. "
-            "A second copy of the same date is not scored as its own target, and it enters a "
-            "later game's history only when that later game exists. "
-            f"Scored player-games whose prior window contains a duplicated date: {dup_in_prior}. "
-            "Deleting the duplicate therefore does not move the WNBA headline hit rate, ROI, "
-            "Brier, or calibration on this file. It would move a later game, if one is appended "
-            "without removing the extra row, by one doubled game in that player's history.",
+            "A second copy of the same date is not scored as its own target. When that copy "
+            "is the same box score (these two rows differ only in Season), the replay keeps "
+            "one copy, so a later game does not count it twice. A same-day row with a different "
+            "box score, such as a doubleheader, stays in the later prior. "
+            f"Scored player-games whose prior still contains a date that had a duplicate row: {dup_in_prior}. "
+            "Deleting the extra row therefore does not move the WNBA headline hit rate, ROI, "
+            "Brier, or calibration on this file. The replay has already stopped the double count.",
             "",
             "**Team taken from the oldest game.** Daily Picks falls back to `game_logs[0]` when "
             "there is no projection, and `get_player_stats` returns logs oldest-first, so a traded "

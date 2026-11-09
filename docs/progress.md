@@ -16,7 +16,7 @@ Replaces the in-sample five-player `scripts/agents/evaluation/backtest.py` with 
 | NBA | 2021-08-04 → 2026-05-11 | 31,572 / 579 | 2025-10-21 → 2026-05-11 (25,218 player-games) | 55,708 / 277,398 props | 64.9% (64.5–65.3) | +24.0% | 0.227 | 50.8% | +14.2 pp |
 | WNBA | 2025-05-02 → 2026-05-08 | 5,365 / 184 | 2025-06-05 → 2026-05-08 (3,960 player-games) | 7,199 / 43,560 props | 68.4% (67.3–69.5) | +30.6% | 0.210 | 50.9% | +17.5 pp |
 
-Agent path, same MED20 window, market gate ignored: NBA 60,829 picks, hit 57.9% (57.5–58.3), lift +7.9 pp; WNBA 8,590 picks, hit 57.6% (56.5–58.6), lift +7.7 pp. Production decision is avoid on all 116,712 scorecards because no market price is stored.
+Agent path, same MED20 window, market gate ignored: NBA 60,781 picks, hit 57.9% (57.5–58.3), lift +7.9 pp; WNBA 8,579 picks, hit 57.6% (56.5–58.6), average predicted probability 61.4%, lift +7.7 pp. The prototype counted 60,829 and 8,590 because it decided the side on the rounded probability. Production decision is avoid on all 116,712 scorecards because no market price is stored. Daily MED20 headlines are unchanged from the prototype.
 
 Command: `python scripts/agents/evaluation/backtest.py --report backtest_report.md`
 

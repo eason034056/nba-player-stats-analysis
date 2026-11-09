@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 import math
+import re
 from datetime import datetime, timedelta
+from pathlib import Path
 
 import pytest
 
@@ -11,7 +13,6 @@ from evaluation.assumptions import ASSUMPTION_A, ASSUMPTION_B, ASSUMPTION_C
 from evaluation.metrics import roi_from_hit_rate, summarize, wilson
 from evaluation.odds_history import (
     ASSUMED_AMERICAN_ODDS,
-    PropOddsQuote,
     closing_line_value,
     load_odds_history,
     open_close_from_snapshots,
@@ -19,6 +20,73 @@ from evaluation.odds_history import (
 )
 from evaluation.proxy_lines import proxy_line
 from evaluation.walk_forward import replay_league
+
+# Recorded Odds API bodies. The first 500 bytes of each response, copied from
+# the research notes. Tests parse these files. They do not type prices.
+WNBA_POINTS_CAPTURE = (
+    Path(__file__).resolve().parent
+    / "fixtures"
+    / "odds_api_wnba_player_points_head500.json"
+)
+NBA_THREES_CAPTURE = (
+    Path(__file__).resolve().parent
+    / "fixtures"
+    / "odds_api_nba_player_threes_head500.json"
+)
+
+
+def _recorded_pair(path: Path) -> dict[str, object]:
+    """First complete Over/Under pair in a truncated Odds API body."""
+    text = path.read_text(encoding="utf-8")
+    assert len(text.encode()) == 500
+    sport = re.search(r'"sport_key":"([^"]+)"', text)
+    commence = re.search(r'"commence_time":"([^"]+)"', text)
+    pair = re.search(
+        r'"key":"(?P<book>[^"]+)","title":"[^"]+","markets":\[\{"key":"(?P<market>[^"]+)",'
+        r'"last_update":"(?P<updated>[^"]+)","outcomes":\['
+        r'\{"name":"Over","description":"(?P<player>[^"]+)","price":(?P<over>-?\d+),"point":(?P<line>\d+(?:\.\d+)?)\}'
+        r',\{"name":"Under","description":"(?P<player_under>[^"]+)","price":(?P<under>-?\d+),"point":(?P<line_under>\d+(?:\.\d+)?)\}',
+        text,
+    )
+    assert sport and commence and pair
+    assert pair.group("player") == pair.group("player_under")
+    assert pair.group("line") == pair.group("line_under")
+    league = "wnba" if sport.group(1).endswith("wnba") else "nba"
+    return {
+        "league": league,
+        "player": pair.group("player"),
+        "game_date": commence.group(1)[:10],
+        "market": pair.group("market"),
+        "line": float(pair.group("line")),
+        "over": int(pair.group("over")),
+        "under": int(pair.group("under")),
+        "book": pair.group("book"),
+        "snapshot_at": pair.group("updated"),
+    }
+
+
+def _quote_csv_row(captured: dict[str, object], *, over: int | None = None) -> str:
+    """One open/close row. Open and close are the same captured quote."""
+    over_price = captured["over"] if over is None else over
+    return (
+        f"{captured['league']},{captured['player']},{captured['game_date']},{captured['market']},"
+        f"{captured['line']},{over_price},{captured['under']},"
+        f"{captured['line']},{over_price},{captured['under']},{captured['book']}"
+    )
+
+
+def _snapshot(captured: dict[str, object]) -> dict[str, object]:
+    return {
+        "player_name": captured["player"],
+        "date": captured["game_date"],
+        "market": captured["market"],
+        "line": captured["line"],
+        "over_odds": captured["over"],
+        "under_odds": captured["under"],
+        "snapshot_at": captured["snapshot_at"],
+        "bookmaker": captured["book"],
+        "league": captured["league"],
+    }
 
 
 class _Service:
@@ -127,45 +195,67 @@ def test_duplicate_player_date_is_not_scored_twice():
     assert rows[0].actual == 10.0
 
 
-def test_opening_line_replaces_the_proxy_and_prices_the_bet():
-    points = [10.0] * 14
-    target = (datetime(2025, 11, 1) + timedelta(days=12)).strftime("%Y-%m-%d")
-    quote = PropOddsQuote(
-        league="nba",
-        player="Test Player",
-        game_date=target,
-        market="points",
-        open_line=2.5,
-        open_over_price=-150,
-        open_under_price=130,
-        close_line=4.5,
-        close_over_price=-180,
-        close_under_price=150,
-        book="draftkings",
+def test_identical_same_day_row_is_kept_once_in_a_later_prior():
+    games = [_game(day, 10.0) for day in range(12)]
+    duplicate = _game(11, 10.0)
+    later = _game(12, 12.0)
+    replay = replay_league(
+        _Service({"Test Player": games + [duplicate, later]}),
+        "nba",
+        ["L10"],
+        eval_start=datetime(2025, 11, 1),
+        markets=[("player_points", "points")],
+        threshold=0.65,
+        min_games=10,
+        do_agent=False,
+        validate=0,
     )
-    from evaluation.odds_history import OddsHistory, player_key
+    later_date = later["game_date"].strftime("%Y-%m-%d")
+    row = next(item for item in replay.daily if item.date == later_date)
+    # 12 distinct games. The second copy of day 11 is the same box score.
+    assert row.n_games == 12
+    assert row.actual == 12.0
 
-    history = OddsHistory(
-        quotes={
-            (
-                quote.league,
-                player_key(quote.player),
-                quote.game_date,
-                quote.market,
-            ): quote
-        },
-        source="test",
+
+def test_opening_line_replaces_the_proxy_and_prices_the_bet(tmp_path):
+    captured = _recorded_pair(WNBA_POINTS_CAPTURE)
+    target = datetime.strptime(str(captured["game_date"]), "%Y-%m-%d")
+    player = str(captured["player"])
+    # Every prior total is below the captured line, so the priced side is under.
+    logs = []
+    for offset in range(14):
+        game = _game(offset, 10.0, player=player)
+        game["game_date"] = target - timedelta(days=13 - offset)
+        logs.append(game)
+    path = tmp_path / "open_close.csv"
+    path.write_text(
+        "league,player,game_date,market,open_line,open_over_price,open_under_price,"
+        "close_line,close_over_price,close_under_price,book\n" + _quote_csv_row(captured) + "\n",
+        encoding="utf-8",
     )
-    replay = _replay(points, odds=history)
-    matched = [row for row in replay.daily if row.date == target]
-    other = [row for row in replay.daily if row.date != target]
+    history = load_odds_history(str(path))
+    replay = replay_league(
+        _Service({player: logs}),
+        str(captured["league"]),
+        ["L10"],
+        eval_start=target - timedelta(days=30),
+        markets=[("player_points", "points")],
+        threshold=0.65,
+        min_games=10,
+        do_agent=False,
+        validate=0,
+        odds=history,
+    )
+    matched = [row for row in replay.daily if row.date == captured["game_date"]]
+    other = [row for row in replay.daily if row.date != captured["game_date"]]
     assert len(matched) == 1
-    assert matched[0].line == 2.5
+    assert matched[0].line == captured["line"]
     assert matched[0].line_source == "open"
-    assert matched[0].pick == "over"
-    assert matched[0].price == -150
-    assert matched[0].clv_prob is not None
-    assert matched[0].clv_line == pytest.approx(2.0)
+    assert matched[0].pick == "under"
+    assert matched[0].price == captured["under"]
+    # The capture is one snapshot, so open and close are that quote. CLV is 0.
+    assert matched[0].clv_prob == pytest.approx(0.0)
+    assert matched[0].clv_line == pytest.approx(0.0)
     assert other
     assert all(row.line_source == "proxy" and row.price is None for row in other)
 
@@ -181,6 +271,7 @@ def test_wilson_interval_contains_the_rate_and_matches_a_known_case():
 def test_roi_at_minus_110_matches_unit_profit():
     assert unit_profit(ASSUMED_AMERICAN_ODDS, True) == pytest.approx(100 / 110)
     assert unit_profit(ASSUMED_AMERICAN_ODDS, False) == -1
+    assert unit_profit(ASSUMED_AMERICAN_ODDS, None) == 0.0
     assert unit_profit(-150, True) == pytest.approx(100 / 150)
     assert unit_profit(130, True) == pytest.approx(1.30)
     # 60 wins and 40 losses.
@@ -224,89 +315,73 @@ def test_inactive_odds_hook_and_missing_file(tmp_path):
 
 
 def test_csv_loader_and_snapshot_reducer_and_clv(tmp_path):
+    captured = _recorded_pair(WNBA_POINTS_CAPTURE)
+    other = _recorded_pair(NBA_THREES_CAPTURE)
     path = tmp_path / "odds.csv"
-    path.write_text(
+    header = (
         "league,player,game_date,market,open_line,open_over_price,open_under_price,"
         "close_line,close_over_price,close_under_price,book\n"
-        "nba,Stephen Curry,2026-01-15,player_points,24.5,-110,-110,26.5,-150,130,draftkings\n"
-        "nba,Stephen Curry,2026-01-15,player_points,99.5,-110,-110,99.5,-110,-110,draftkings\n"
-        "nba,Bad Row,2026-01-15,points,10.5,0,-110,10.5,0,-110,\n",
+    )
+    # The captured row twice, then the same row with a zero price so the loader
+    # skips it. The zero is not a quoted price.
+    path.write_text(
+        header
+        + _quote_csv_row(captured)
+        + "\n"
+        + _quote_csv_row(captured)
+        + "\n"
+        + _quote_csv_row(captured, over=0)
+        + "\n",
         encoding="utf-8",
     )
     history = load_odds_history(str(path))
     assert history.active
     assert history.skipped_rows == 1
     assert history.duplicate_keys == 1
-    quote = history.lookup("NBA", "stephen curry", "2026-01-15", "points")
+    quote = history.lookup(
+        str(captured["league"]),
+        str(captured["player"]),
+        str(captured["game_date"]),
+        "points",
+    )
     assert quote is not None
-    assert quote.open_line == 99.5  # last valid row wins
+    assert quote.open_line == captured["line"]
+    assert quote.open_over_price == captured["over"]
+    assert quote.open_under_price == captured["under"]
     assert quote.market == "points"
+    assert quote.book == captured["book"]
 
-    fresh = PropOddsQuote(
-        league="nba",
-        player="Stephen Curry",
-        game_date="2026-01-15",
-        market="points",
-        open_line=24.5,
-        open_over_price=-110,
-        open_under_price=-110,
-        close_line=26.5,
-        close_over_price=-150,
-        close_under_price=130,
+    # One captured snapshot is both the open and the close, so both CLVs are 0.
+    # A line move at a constant price would still have line CLV, but this body
+    # has no second timestamp to take that move from.
+    clv_prob, clv_line = closing_line_value(quote, "over")
+    assert clv_prob == pytest.approx(0.0)
+    assert clv_line == pytest.approx(0.0)
+    under_prob, under_line = closing_line_value(quote, "under")
+    assert under_prob == pytest.approx(0.0)
+    assert under_line == pytest.approx(0.0)
+
+    reduced = open_close_from_snapshots([_snapshot(captured), _snapshot(other)])
+    kept = reduced.lookup(
+        str(captured["league"]),
+        str(captured["player"]),
+        str(captured["game_date"]),
+        "points",
     )
-    clv_prob, clv_line = closing_line_value(fresh, "over")
-    # Open is a symmetric -110/-110, so the vig-free probability is 0.5.
-    # Close -150 / +130 is not symmetric.
-    from app.services.prob import american_to_prob, devig
-
-    fair_over, _fair_under = devig(american_to_prob(-150), american_to_prob(130))
-    assert clv_prob == pytest.approx(fair_over - 0.5)
-    assert clv_line == pytest.approx(2.0)
-    under_prob, under_line = closing_line_value(fresh, "under")
-    assert under_line == pytest.approx(-2.0)
-    assert under_prob == pytest.approx(-clv_prob)
-
-    snapshots = open_close_from_snapshots(
-        [
-            {
-                "player_name": "Stephen Curry",
-                "date": "2026-01-15",
-                "market": "player_points",
-                "line": 24.5,
-                "over_odds": -110,
-                "under_odds": -110,
-                "snapshot_at": "2026-01-15T12:00:00Z",
-                "bookmaker": "fanduel",
-            },
-            {
-                "player_name": "Stephen Curry",
-                "date": "2026-01-15",
-                "market": "player_points",
-                "line": 26.5,
-                "over_odds": -150,
-                "under_odds": 130,
-                "snapshot_at": "2026-01-15T23:00:00Z",
-                "bookmaker": "fanduel",
-            },
-            {
-                "player_name": "Stephen Curry",
-                "date": "2026-01-15",
-                "market": "player_points",
-                "line": 1.5,
-                "over_odds": -110,
-                "under_odds": -110,
-                "snapshot_at": "2026-01-15T10:00:00Z",
-                "bookmaker": "caesars",
-            },
-        ]
+    assert kept is not None
+    assert kept.book == captured["book"]
+    assert kept.open_line == captured["line"]
+    assert kept.close_line == captured["line"]
+    assert kept.open_over_price == captured["over"]
+    threes = reduced.lookup(
+        str(other["league"]),
+        str(other["player"]),
+        str(other["game_date"]),
+        "threes_made",
     )
-    # Alphabetical bookmaker wins: caesars before fanduel, so the only
-    # caesars snapshot is both the open and the close.
-    reduced = snapshots.lookup("nba", "Stephen Curry", "2026-01-15", "points")
-    assert reduced is not None
-    assert reduced.book == "caesars"
-    assert reduced.open_line == 1.5
-    assert reduced.close_line == 1.5
+    assert threes is not None
+    assert threes.book == other["book"]
+    assert threes.open_line == other["line"]
 
 
 def test_report_states_the_three_assumptions_when_no_odds_are_loaded():

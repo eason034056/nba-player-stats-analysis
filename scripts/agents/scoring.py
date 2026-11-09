@@ -569,6 +569,10 @@ def compute_scorecard(
         "direction": dir_lower,  # 用戶問的方向，供 CLI 顯示
         "confidence": round(confidence, 3),
         "model_probability": round(model_prob_display, 4),
+        # Unrounded P(over) after the clamp. The pre-gate side is this value,
+        # not the 4-decimal model_probability. Rounding 0.54995 becomes 0.5500
+        # and would cross the 0.55 band.
+        "model_probability_unrounded": model_prob,
         "market_implied_probability": round(market_implied, 4) if market_implied is not None else None,
         "expected_value_pct": round(ev_pct, 4) if ev_pct is not None else None,
         "market_pricing_mode": pricing_mode,

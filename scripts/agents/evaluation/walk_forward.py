@@ -12,9 +12,9 @@ cannot see the target or anything after it.
 There is no historical market, lineup, or injury feed. ``compute_scorecard``
 therefore gates every agent row to ``avoid`` with ``no market price
 available``. The row's ``pick`` is the pre-gate candidate,
-``decision_from_over_probability`` applied to the rounded model
-probability the scorecard returns. That is the decision a caller sees
-before the market gate rewrites it.
+``decision_from_over_probability`` applied to
+``model_probability_unrounded``. The published ``model_probability`` is
+already rounded to 4 decimals, and that rounding can cross 0.55.
 """
 
 from __future__ import annotations
@@ -234,6 +234,36 @@ class LeagueReplay:
     validation: dict = field(default_factory=dict)
 
 
+def _box_identity(game: dict) -> tuple:
+    """Identity of a game log, ignoring the season label.
+
+    Maria Conde's two 2026-05-08 rows differ only in Season. A doubleheader
+    has a different box score, so it stays a separate game.
+    """
+    return (
+        game.get("game_date"),
+        game.get("minutes"),
+        game.get("points"),
+        game.get("rebounds"),
+        game.get("assists"),
+        game.get("team"),
+    )
+
+
+def _grade(side: str | None, actual: float, line: float) -> int | None:
+    """1 for a win, 0 for a loss, None for no bet or a push.
+
+    A push is ``actual == line``. The stake is refunded (profit 0) and the
+    bet is left out of the hit rate. ``metrics.Accumulator`` treats a picked
+    row whose hit is None as that refund.
+    """
+    if side is None or actual == line:
+        return None
+    if side == "over":
+        return int(actual > line)
+    return int(actual < line)
+
+
 def empirical_rates(values: np.ndarray, line: float) -> tuple[float, float, int]:
     """Over/under rates rounded the way ``get_player_stats`` rounds them.
 
@@ -428,19 +458,23 @@ def replay_league(
         for index, game in enumerate(active):
             game_date = game["game_date"]
             if game_date in seen_dates:
-                # Same player-date twice. The second row is not a new game,
-                # and it is not strictly before the first, so it is not a
-                # target and it is not prior for that date. A later game
-                # still sees both copies, because both are strictly before it.
+                # Same player-date twice. The second row is not its own target.
                 continue
             seen_dates.add(game_date)
             if game_date < start:
                 continue
-            prior = [
-                earlier
-                for earlier in active[:index]
-                if earlier["game_date"] < game_date
-            ]
+            prior = []
+            seen_boxes: set[tuple] = set()
+            for earlier in active[:index]:
+                if earlier["game_date"] >= game_date:
+                    continue
+                identity = _box_identity(earlier)
+                if identity in seen_boxes:
+                    # Identical box score on that date. Keep one copy so a
+                    # duplicated row is not counted twice in a later prior.
+                    continue
+                seen_boxes.add(identity)
+                prior.append(earlier)
             if len(prior) < min_games:
                 continue
             prior_nf = prior[::-1]
@@ -487,11 +521,7 @@ def replay_league(
                         quote, side, graded_line
                     )
                     over_hit = int(actual > line)
-                    hit = (
-                        None
-                        if side is None
-                        else int(over_hit if side == "over" else actual < line)
-                    )
+                    hit = _grade(side, float(actual), line)
                     prob = (
                         None
                         if side is None
@@ -626,22 +656,18 @@ def _agent_rows(
                     {},
                     direction="over",
                 )
-                # The returned probability is already rounded to 4 decimals.
-                # The pre-gate side is read off that returned value, which is
-                # what a caller of compute_scorecard can see. The market gate
-                # has already rewritten `decision` to avoid.
-                p_over = float(card["model_probability"])
-                side = decide(p_over)
+                # model_probability is rounded to 4 decimals. The pre-gate side
+                # uses the unrounded P(over), which is what compute_scorecard
+                # compared before the market gate rewrote decision to avoid.
+                raw_over = float(card["model_probability_unrounded"])
+                side = decide(raw_over)
                 pick = None if side == "avoid" else side
+                p_over = float(card["model_probability"])
                 line, line_source, price, clv_prob, clv_line = _price_fields(
                     quote, pick, graded_line
                 )
                 over_hit = int(actual > line)
-                hit = (
-                    None
-                    if pick is None
-                    else int(over_hit if pick == "over" else actual < line)
-                )
+                hit = _grade(pick, float(actual), line)
                 prob = (
                     None
                     if pick is None

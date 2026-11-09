@@ -353,12 +353,8 @@ def test_brier_and_calibration_gap_are_the_pick_mean_squared_error():
     assert summary.p_over_brier == summary.brier
 
 
-def test_push_at_the_line_is_graded_as_a_loss():
-    """actual == line is neither an over nor an under, so the bet loses 1 unit.
-
-    A real -110 book returns the stake on a push. unit_profit only sees the
-    boolean the replay already decided, and that boolean is false on a tie.
-    """
+def test_push_at_the_line_is_refunded_and_left_out_of_the_hit_rate():
+    """actual == line refunds the stake. Profit is 0, and the hit rate skips it."""
     start = datetime(2025, 11, 1)
     # Eleven 10s, then a target of 10.5 so it lands on the L10 line 10.5.
     logs = [_game(start + timedelta(days=offset), 10.0) for offset in range(11)]
@@ -367,8 +363,12 @@ def test_push_at_the_line_is_graded_as_a_loss():
     assert row.line == 10.5
     assert row.actual == 10.5
     assert row.pick == "under"
-    assert row.hit == 0
-    assert unit_profit(ASSUMED_AMERICAN_ODDS, bool(row.hit)) == -1.0
+    assert row.hit is None
+    assert unit_profit(ASSUMED_AMERICAN_ODDS, None) == 0.0
+    summary = summarize([row])
+    assert summary.picks == 0
+    assert math.isnan(summary.hit_rate)
+    assert summary.roi == pytest.approx(0.0)
 
 
 # ---------------------------------------------------------------------------
@@ -431,14 +431,6 @@ def test_guard_fails_only_when_a_stat_is_strictly_above_the_threshold():
     assert not any("Brier" in item for item in gap_result.failures)
 
 
-@pytest.mark.xfail(
-    reason=(
-        "evaluate_guard treats a gap as a failure only when it is strictly "
-        "greater than the threshold (gap <= max). abs(0.65 - 0.50) is "
-        "0.15000000000000002, which is greater than the literal 0.15, so a "
-        "calibration gap of 0.15 fails and the message prints '0.150 > 0.150'."
-    )
-)
 def test_calibration_gap_equal_to_the_threshold_passes():
     bounds = Thresholds(max_brier=0.30, max_calibration_gap=0.15)
     on_the_line = _summary(brier=0.20, avg_pred=0.65, hit_rate=0.50)

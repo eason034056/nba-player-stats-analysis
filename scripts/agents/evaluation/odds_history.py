@@ -12,12 +12,21 @@ that starts working once that history exists. Two inputs are accepted:
 When the loader returns no quotes, ``OddsHistory.active`` is false. Callers
 skip pricing and CLV and keep the assumed -110 proxy-line accounting.
 
-CLV is the closing vig-free probability of the side that was bet, minus the
-opening vig-free probability of that same side. Positive means the close
-moved toward the bet: the number taken at the open beat the close. Line CLV
-is the closing line minus the opening line for an over, and the opposite
-for an under. Vig is removed with ``prob.devig`` (multiplicative
-normalization), which is the same function the live odds path uses.
+Probability CLV and line CLV answer different questions.
+
+Probability CLV is the closing vig-free probability of the side that was
+bet, minus the opening vig-free probability of that same side. It changes
+only when the two-sided price changes. A line can move while both the open
+and the close are -110/-110. After ``prob.devig`` each fair probability is
+0.5, so probability CLV is 0. That is not "the bet beat the close"; the
+close was the same price.
+
+Line CLV is the closing line minus the opening line for an over, and the
+opposite for an under. Positive means the line moved in the bettor's favor.
+It can be non-zero on the same quote whose probability CLV is 0.
+
+Vig is removed with ``prob.devig`` (multiplicative normalization), the same
+function the live odds path uses.
 """
 
 from __future__ import annotations
@@ -106,7 +115,7 @@ def inactive_history() -> OddsHistory:
     return OddsHistory()
 
 
-def unit_profit(american_odds: int, won: bool) -> float:
+def unit_profit(american_odds: int, won: bool | None) -> float:
     """Profit on a 1-unit stake at American odds.
 
     A loss returns -1. A win at negative odds returns ``100 / abs(odds)``
@@ -114,8 +123,8 @@ def unit_profit(american_odds: int, won: bool) -> float:
 
     Args:
         american_odds: Price of the side that was bet. Zero is invalid.
-        won: True when the stat landed on the bet side. A push is a loss;
-            x.5 lines do not push on integer stats.
+        won: True for a win, False for a loss, None for a push. A push
+            refunds the stake, so the profit is 0. It is not a loss.
 
     Returns:
         Profit in stake units.
@@ -125,6 +134,8 @@ def unit_profit(american_odds: int, won: bool) -> float:
     """
     if american_odds == 0:
         raise ValueError("Odds cannot be 0")
+    if won is None:
+        return 0.0
     if not won:
         return -1.0
     if american_odds < 0:
