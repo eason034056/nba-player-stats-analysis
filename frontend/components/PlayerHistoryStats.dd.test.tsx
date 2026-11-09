@@ -1,8 +1,10 @@
 import { screen } from "@testing-library/react";
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { PlayerHistoryStats } from "@/components/PlayerHistoryStats";
 import type { NoVigResponse, PlayerDDHistoryResponse } from "@/lib/schemas";
+import wilsonHistory from "@/test/fixtures/player-dd-history/wilson.json";
+import recordedNoVig from "@/test/fixtures/props-no-vig/player-double-double.json";
 import { renderWithProviders } from "@/test/test-utils";
 
 const history: PlayerDDHistoryResponse = {
@@ -82,4 +84,39 @@ describe("PlayerHistoryStats double-double wiring", () => {
     expect(continuousHistory).not.toHaveBeenCalled();
     expect(screen.queryByText("0.5")).not.toBeInTheDocument();
   });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it.fails(
+    "uses the WNBA no-vig route when cacheNamespace is wnba and no odds client is passed",
+    async () => {
+      const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+        const url = String(input);
+        if (url.includes("/player-dd-history")) return Response.json(wilsonHistory);
+        if (url.includes("/props/no-vig")) return Response.json(recordedNoVig);
+        if (url.includes("/csv/players")) {
+          return Response.json({ players: ["A'ja Wilson"], total: 1 });
+        }
+        return Response.json({ detail: url }, { status: 500 });
+      });
+      vi.stubGlobal("fetch", fetchMock);
+
+      renderWithProviders(
+        <PlayerHistoryStats
+          eventId="wnba-evt"
+          initialPlayer="A'ja Wilson"
+          initialMarket="player_double_double"
+          cacheNamespace="wnba"
+        />,
+      );
+
+      expect(await screen.findByText("47.3%")).toBeInTheDocument();
+      const urls = fetchMock.mock.calls.map((call) => String(call[0]));
+      expect(urls.some((url) => url.includes("/api/wnba/player-dd-history"))).toBe(true);
+      expect(urls.some((url) => url.includes("/api/wnba/props/no-vig"))).toBe(true);
+      expect(urls.some((url) => url.includes("/api/nba/props/no-vig"))).toBe(false);
+    },
+  );
 });

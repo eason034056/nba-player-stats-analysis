@@ -12,6 +12,9 @@ import type {
   NoVigResponse,
   PlayerDDHistoryResponse,
 } from "@/lib/schemas";
+import jokicHistory from "@/test/fixtures/player-dd-history/jokic.json";
+import jokicEmptySeason from "@/test/fixtures/player-dd-history/jokic-empty-season.json";
+import recordedNoVig from "@/test/fixtures/props-no-vig/player-double-double.json";
 import { renderWithProviders } from "@/test/test-utils";
 
 vi.mock("@/lib/api", () => {
@@ -338,4 +341,179 @@ describe("PlayerDDTile", () => {
     expect(screen.queryByText("80.0%")).not.toBeInTheDocument();
     expect(screen.queryByText("0.0%")).not.toBeInTheDocument();
   });
+
+  it("renders the recorded Jokic rate and the route's yes/no prices", async () => {
+    renderTile({
+      getPlayerDDHistoryFn: vi.fn().mockResolvedValue(jokicHistory),
+      calculateNoVigFn: vi.fn().mockResolvedValue(recordedNoVig),
+    });
+
+    expect(await screen.findByText("81.3%")).toBeInTheDocument();
+    expect(screen.getByText("61 of 75 games")).toBeInTheDocument();
+    expect(screen.getByText("-250")).toBeInTheDocument();
+    expect(screen.getByText("+200")).toBeInTheDocument();
+    expect(screen.getByText("71.4%")).toBeInTheDocument();
+    expect(screen.getByText("33.3%")).toBeInTheDocument();
+    expect(screen.getByText("68.2%")).toBeInTheDocument();
+    expect(screen.getByText("31.8%")).toBeInTheDocument();
+    expect(screen.getByText("-240")).toBeInTheDocument();
+    expect(screen.getByText("No leg not posted")).toBeInTheDocument();
+    expect(screen.getByText("70.6%")).toBeInTheDocument();
+    expect(screen.getByText("32.5%")).toBeInTheDocument();
+    expect(screen.getByText("67.9%")).toBeInTheDocument();
+    expect(screen.getByText("32.1%")).toBeInTheDocument();
+    expect(screen.getByText("+13.5 pts")).toBeInTheDocument();
+    expect(screen.queryByText("0.5")).not.toBeInTheDocument();
+    expect(screen.queryByText("0.0%")).not.toBeInTheDocument();
+  });
+
+  it("shows an explicit empty state for a real zero-game season", async () => {
+    renderTile({
+      getPlayerDDHistoryFn: vi.fn().mockResolvedValue(jokicEmptySeason),
+      calculateNoVigFn: vi.fn().mockResolvedValue({
+        ...recordedNoVig,
+        results: [],
+        consensus: null,
+        message: "No props data for this player at the selected bookmakers",
+      }),
+    });
+
+    expect(
+      await screen.findByText(
+        "No qualifying games for Nikola Jokic in season 1999-00",
+      ),
+    ).toBeInTheDocument();
+    expect(screen.queryByText("0.0%")).not.toBeInTheDocument();
+    expect(screen.queryByText("0 of 0 games")).not.toBeInTheDocument();
+    expect(screen.queryByText("-250")).not.toBeInTheDocument();
+  });
+
+  it("does not invent a hit rate when prob_dd is null and games were played", async () => {
+    renderTile({
+      getPlayerDDHistoryFn: vi.fn().mockResolvedValue({
+        ...jokicHistory,
+        prob_dd: null,
+        message: null,
+      }),
+      calculateNoVigFn: vi.fn().mockResolvedValue(recordedNoVig),
+    });
+
+    expect(
+      await screen.findByText("No double-double games are in the sample."),
+    ).toBeInTheDocument();
+    expect(screen.queryByText("81.3%")).not.toBeInTheDocument();
+    expect(screen.queryByText("61 of 75 games")).not.toBeInTheDocument();
+    expect(await screen.findByText("-250")).toBeInTheDocument();
+  });
+
+  it("does not show a No-only row as a posted price", async () => {
+    const yesOnlyBook = recordedNoVig.results[0];
+    renderTile({
+      getPlayerDDHistoryFn: vi.fn().mockResolvedValue(jokicEmptySeason),
+      calculateNoVigFn: vi.fn().mockResolvedValue({
+        ...recordedNoVig,
+        results: [
+          {
+            ...yesOnlyBook,
+            yes_price: null,
+            p_yes_imp: null,
+            yes_fair_prob: null,
+          },
+        ],
+        consensus: {
+          method: "mean",
+          p_over_fair: yesOnlyBook.p_over_fair,
+          p_under_fair: yesOnlyBook.p_under_fair,
+          p_yes_fair: null,
+          p_no_fair: null,
+        },
+        message: null,
+      }),
+    });
+
+    expect(
+      await screen.findByText(/Over\/Under numbers are not shown in their place/),
+    ).toBeInTheDocument();
+    expect(screen.queryByText("-250")).not.toBeInTheDocument();
+    expect(screen.queryByText("+200")).not.toBeInTheDocument();
+    expect(screen.queryByText("31.8%")).not.toBeInTheDocument();
+    expect(screen.queryByText("68.2%")).not.toBeInTheDocument();
+  });
+
+  it("does not renormalize yes and no fair probabilities", async () => {
+    const book = recordedNoVig.results[0];
+    renderTile({
+      getPlayerDDHistoryFn: vi.fn().mockResolvedValue(jokicHistory),
+      calculateNoVigFn: vi.fn().mockResolvedValue({
+        ...recordedNoVig,
+        results: [
+          {
+            ...book,
+            p_yes_imp: 0.7,
+            p_no_imp: 0.7,
+            yes_fair_prob: 0.7,
+            no_fair_prob: 0.7,
+          },
+        ],
+        consensus: {
+          method: "mean",
+          p_over_fair: 0.7,
+          p_under_fair: 0.7,
+          p_yes_fair: 0.7,
+          p_no_fair: 0.7,
+        },
+      }),
+    });
+
+    expect(await screen.findByText("81.3%")).toBeInTheDocument();
+    expect(screen.getAllByText("70.0%").length).toBeGreaterThanOrEqual(4);
+    expect(screen.queryByText("50.0%")).not.toBeInTheDocument();
+  });
+
+  it.fails(
+    "rounds a published 0.6755 fair probability half-up to 67.6%",
+    async () => {
+      renderTile({
+        getPlayerDDHistoryFn: vi.fn().mockResolvedValue(jokicHistory),
+        calculateNoVigFn: vi.fn().mockResolvedValue(recordedNoVig),
+      });
+
+      expect(await screen.findByText("81.3%")).toBeInTheDocument();
+      expect(screen.getByText("67.6%")).toBeInTheDocument();
+    },
+  );
+
+  it.fails(
+    "treats a blank player name as unavailable instead of a permanent loading spinner",
+    async () => {
+      const historyFn = vi.fn();
+      renderTile({
+        playerName: "   ",
+        getPlayerDDHistoryFn: historyFn,
+        calculateNoVigFn: vi.fn(),
+      });
+
+      expect(screen.queryByText("Loading double-double history")).not.toBeInTheDocument();
+      expect(historyFn).not.toHaveBeenCalled();
+      expect(screen.getByText(/enter a player/i)).toBeInTheDocument();
+    },
+  );
+
+  it.fails(
+    "warns when the no-vig snapshot is stale instead of presenting it as a live price",
+    async () => {
+      renderTile({
+        getPlayerDDHistoryFn: vi.fn().mockResolvedValue(jokicHistory),
+        calculateNoVigFn: vi.fn().mockResolvedValue({
+          ...recordedNoVig,
+          cache_state: "stale",
+          data_age_seconds: 90,
+        }),
+      });
+
+      expect(await screen.findByText("81.3%")).toBeInTheDocument();
+      expect(screen.getByText(/stale/i)).toBeInTheDocument();
+      expect(screen.getByText(/90/)).toBeInTheDocument();
+    },
+  );
 });
