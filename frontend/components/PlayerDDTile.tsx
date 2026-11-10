@@ -102,10 +102,12 @@ function FieldValue({
   value,
   kind,
   missingLabel,
+  valueClassName = "text-dark",
 }: {
   value: number | null;
   kind: "price" | "percent";
   missingLabel: string;
+  valueClassName?: string;
 }) {
   if (value === null) {
     return (
@@ -113,7 +115,7 @@ function FieldValue({
     );
   }
   return (
-    <p className="text-xl font-bold font-mono text-dark">
+    <p className={cn("text-xl font-bold font-mono", valueClassName)}>
       {kind === "price" ? formatAmericanPrice(value) : formatPercent(value)}
     </p>
   );
@@ -307,6 +309,7 @@ function OddsBlock({
                 value={selection.consensusYesFair}
                 kind="percent"
                 missingLabel="Unavailable"
+                valueClassName="text-green-800"
               />
             </div>
             <div>
@@ -315,6 +318,7 @@ function OddsBlock({
                 value={selection.consensusNoFair}
                 kind="percent"
                 missingLabel="Unavailable"
+                valueClassName="text-green-800"
               />
             </div>
           </div>

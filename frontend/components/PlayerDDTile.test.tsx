@@ -135,6 +135,21 @@ describe("PlayerDDTile", () => {
     });
   });
 
+  it("renders consensus fair probabilities in text-green-800", async () => {
+    renderTile({
+      getPlayerDDHistoryFn: vi.fn().mockResolvedValue(jokicHistory),
+      calculateNoVigFn: vi.fn().mockResolvedValue(recordedNoVig),
+    });
+
+    const yesFair = await screen.findByText("67.9%");
+    const noFair = screen.getByText("32.1%");
+    expect(yesFair).toHaveClass("text-green-800");
+    expect(noFair).toHaveClass("text-green-800");
+    expect(yesFair).not.toHaveClass("text-dark");
+    expect(noFair).not.toHaveClass("text-dark");
+    expect(screen.getByText("68.2%")).toHaveClass("text-dark");
+  });
+
   it("does not backfill null yes/no fields from over/under stand-ins", async () => {
     renderTile({
       getPlayerDDHistoryFn: vi.fn().mockResolvedValue(jokicHistory),
@@ -503,8 +518,11 @@ describe("PlayerDDTile", () => {
     });
 
     expect(await screen.findByText("-250")).toBeInTheDocument();
-    expect(screen.getByText(/stale line/i)).toBeInTheDocument();
-    expect(screen.getByText(/31 seconds old/)).toBeInTheDocument();
+    const warning = screen.getByText(
+      "Stale line. This odds response is 31 seconds old. Posted Yes/No prices are only fresh for 30 seconds or less.",
+    );
+    expect(warning).toBeInTheDocument();
+    expect(warning).not.toHaveTextContent(/game window/i);
   });
 
   it(
