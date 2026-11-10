@@ -1,0 +1,15 @@
+{
+  "source": "site.api.espn.com team schedule + one raw scoreboard",
+  "request_count": 782,
+  "event_count": 4882,
+  "events_by_league": {
+    "nba-summer-utah": 15,
+    "nba-summer-sacramento": 16,
+    "nba-summer-las-vegas": 228,
+    "nba-development": 1121,
+    "nba": 2797,
+    "wnba": 699,
+    "nba-summer-california": 6
+  },
+  "errors": []
+}

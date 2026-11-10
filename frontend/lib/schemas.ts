@@ -98,6 +98,15 @@ export const bookmakerResultSchema = z.object({
   p_over_fair: z.number(),   // Over 去水機率
   p_under_fair: z.number(),  // Under 去水機率
   fetched_at: z.string(),    // 資料取得時間
+  // SPO-26 二元市場（player_double_double）的顯式 Yes/No 欄位。
+  // Over/Under 市場維持缺席或 null。DD tile 只讀這些名字，
+  // 不把 over_odds / p_over_fair 當成 Yes 的替身。
+  yes_price: z.number().nullable().optional(),
+  no_price: z.number().nullable().optional(),
+  p_yes_imp: z.number().nullable().optional(),
+  p_no_imp: z.number().nullable().optional(),
+  yes_fair_prob: z.number().nullable().optional(),
+  no_fair_prob: z.number().nullable().optional(),
 });
 
 export type BookmakerResult = z.infer<typeof bookmakerResultSchema>;
@@ -111,6 +120,9 @@ export const consensusSchema = z.object({
   method: z.string(),        // 計算方法（"mean" 或 "weighted"）
   p_over_fair: z.number(),   // 共識 Over 機率
   p_under_fair: z.number(),  // 共識 Under 機率
+  // 二元市場共識。Over/Under 回應裡這兩個欄位是 null 或缺席。
+  p_yes_fair: z.number().nullable().optional(),
+  p_no_fair: z.number().nullable().optional(),
 });
 
 export type Consensus = z.infer<typeof consensusSchema>;
@@ -127,6 +139,12 @@ export const noVigResponseSchema = z.object({
   results: z.array(bookmakerResultSchema),
   consensus: consensusSchema.nullable().optional(),
   message: z.string().nullable().optional(),
+  // NoVigResponse 快照年齡。後端是 Optional[datetime] / Optional[int] / Optional[str]。
+  // 缺席時維持 undefined，舊的 Over/Under 回應仍能通過。
+  fetched_at: z.string().nullable().optional(),
+  data_age_seconds: z.number().int().nullable().optional(),
+  cache_state: z.string().nullable().optional(),
+  source: z.string().nullable().optional(),
 });
 
 export type NoVigResponse = z.infer<typeof noVigResponseSchema>;
@@ -268,6 +286,8 @@ export const gameLogSchema = z.object({
   team: z.string().optional().default(""),  // 球員所屬球隊
   minutes: z.number().optional().default(0),  // 上場時間（分鐘）
   is_starter: z.boolean().optional().default(false),  // 是否先發
+  game_type: z.string().optional(),  // regular_season / playoffs / play_in
+  season: z.string().optional(),  // 賽季標籤，例如 2025-2026
 });
 
 export type GameLog = z.infer<typeof gameLogSchema>;
@@ -299,6 +319,35 @@ export const playerHistoryResponseSchema = z.object({
 });
 
 export type PlayerHistoryResponse = z.infer<typeof playerHistoryResponseSchema>;
+
+/**
+ * Double-Double 歷史命中率
+ *
+ * GET /api/nba/player-dd-history 與 GET /api/wnba/player-dd-history
+ * 對應後端 PlayerDDHistoryResponse（backend/app/models/schemas.py）。
+ *
+ * DD 是二元結果，沒有 threshold、沒有 p_over / p_under。
+ * prob_dd 在樣本為空（n_games == 0）時是 null，呼叫端不得自己補 0。
+ */
+export const playerDDHistoryResponseSchema = z.object({
+  player: z.string(),
+  season: z.string().nullable().optional(),
+  n_games: z.number(),
+  dd_games: z.number(),
+  prob_dd: z.number().nullable().optional(),
+  message: z.string().nullable().optional(),
+});
+
+export type PlayerDDHistoryResponse = z.infer<typeof playerDDHistoryResponseSchema>;
+
+/**
+ * GET /player-dd-history 的查詢參數。
+ * season 省略表示後端使用全部賽季。不要傳 threshold。
+ */
+export interface PlayerDDHistoryRequest {
+  player: string;
+  season?: string;
+}
 
 /**
  * 球員歷史數據查詢請求參數

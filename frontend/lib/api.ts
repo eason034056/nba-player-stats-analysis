@@ -16,6 +16,7 @@ import {
   playerSuggestResponseSchema,
   csvPlayersResponseSchema,
   playerHistoryResponseSchema,
+  playerDDHistoryResponseSchema,
   dailyPicksResponseSchema,
   lineupRefreshResponseSchema,
   lineupsResponseSchema,
@@ -31,6 +32,8 @@ import {
   type CSVPlayersResponse,
   type PlayerHistoryResponse,
   type PlayerHistoryRequest,
+  type PlayerDDHistoryResponse,
+  type PlayerDDHistoryRequest,
   type DailyPicksResponse,
   type DailyPicksRequest,
   type LineupRefreshResponse,
@@ -365,6 +368,40 @@ export async function getPlayerHistory(
 }
 
 
+/**
+ * 取得球員 Double-Double 歷史命中率
+ *
+ * GET /api/nba/player-dd-history
+ *
+ * DD 是二元結果（Yes/No），不是 Over/Under。這個函式對應後端
+ * `PlayerDDHistoryResponse`：`prob_dd`、`n_games`、`dd_games`、`message`。
+ * 樣本為空時後端回 HTTP 200，`prob_dd` 為 null，`message` 說明原因。
+ * 不要把 null 換成 0。
+ *
+ * @param request.player - 球員名稱（後端會做模糊比對）
+ * @param request.season - 可選賽季（例如 "2024-25"）。省略表示全部賽季。
+ *
+ * @example
+ * const dd = await getPlayerDDHistory({ player: "Nikola Jokic" });
+ * console.log(dd.prob_dd, dd.n_games, dd.dd_games);
+ */
+export async function getPlayerDDHistory(
+  request: PlayerDDHistoryRequest
+): Promise<PlayerDDHistoryResponse> {
+  const params = new URLSearchParams({
+    player: request.player,
+  });
+  if (request.season) {
+    params.set("season", request.season);
+  }
+
+  const data = await fetchApi<PlayerDDHistoryResponse>(
+    `/api/nba/player-dd-history?${params}`
+  );
+  return playerDDHistoryResponseSchema.parse(data);
+}
+
+
 // ==================== WNBA CSV 球員歷史數據 API (SPO-32 Phase 1) ====================
 // 💡 WNBA 端點為 NBA 的姊妹路由：相同 schema、相同回應格式。
 // 之所以不參數化 getCSVPlayers/getPlayerHistory 加 league 參數，是因為
@@ -435,6 +472,34 @@ export async function getWNBAPlayerHistory(
   );
 
   return playerHistoryResponseSchema.parse(data);
+}
+
+/**
+ * WNBA Double-Double historical rate.
+ *
+ * GET /api/wnba/player-dd-history
+ *
+ * Same `PlayerDDHistoryResponse` shape as `getPlayerDDHistory`. The WNBA
+ * route delegates to `wnba_csv_player_service.player_dd_history` and does
+ * not accept a threshold.
+ *
+ * @example
+ * const dd = await getWNBAPlayerDDHistory({ player: "A'ja Wilson" });
+ */
+export async function getWNBAPlayerDDHistory(
+  request: PlayerDDHistoryRequest
+): Promise<PlayerDDHistoryResponse> {
+  const params = new URLSearchParams({
+    player: request.player,
+  });
+  if (request.season) {
+    params.set("season", request.season);
+  }
+
+  const data = await fetchApi<PlayerDDHistoryResponse>(
+    `/api/wnba/player-dd-history?${params}`
+  );
+  return playerDDHistoryResponseSchema.parse(data);
 }
 
 
