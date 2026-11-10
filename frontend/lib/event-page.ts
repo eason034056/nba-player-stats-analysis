@@ -943,12 +943,23 @@ function buildNbaRead(args: {
     probability: pick.probability,
     n_games: pick.n_games,
   };
+  // Both Bet Slip sides are the historical pick. They do not mix in the model.
+  // Primary stores pick.probability. The rail and the action bar print that
+  // number, floored with formatTierPercent only when a backend tier is shown.
+  // The other side stores the pick's own opposite field: p_under when this
+  // pick is over, p_over when it is under. That field is the complement from
+  // the same historical source. Do not subtract probability, and do not
+  // subtract combined_probability. If the field is missing, use the /history
+  // rate for that side. The other side has no tier, so its button uses
+  // half-away formatPercent. The model bar is combined_probability only,
+  // labeled Model, and is not stored on either side.
   let other: SlipSeed | null = null;
-  if (finite(pick.combined_probability)) {
+  const oppositeField = otherDirection === "over" ? pick.p_over : pick.p_under;
+  if (finite(oppositeField)) {
     other = {
       ...primary,
       direction: otherDirection,
-      probability: clamp01(1 - pick.combined_probability),
+      probability: clamp01(oppositeField),
     };
   } else {
     const otherSide = historySide(args.history, pick.threshold, otherDirection);

@@ -181,8 +181,11 @@ export function OurRead({
               <p className={cn(nba ? "text-sm md:text-[15px]" : "text-[15px]", "text-ink")}>{model.caption}</p>
             </div>
             {isError ? <p className="text-sm font-semibold text-red">{errorText ?? "The odds request failed."}</p> : null}
-            {model.bar ? <SplitBar bar={model.bar} showSource={!nba} /> : null}
+            {model.bar ? <SplitBar bar={model.bar} showSource /> : null}
             <div className="hidden flex-wrap gap-2.5 md:flex">
+              {nba && (model.primary || model.other) ? (
+                <div className="w-full text-xs font-semibold uppercase tracking-[0.08em] text-muted">History</div>
+              ) : null}
               {model.primary ? (
                 <button
                   type="button"

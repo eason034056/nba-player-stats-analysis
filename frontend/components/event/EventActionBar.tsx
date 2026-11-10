@@ -36,8 +36,15 @@ export function EventActionBar({
   return (
     <div
       data-testid="event-action-bar"
-      className="fixed inset-x-0 bottom-[72px] z-30 flex gap-2 border-t border-line bg-white px-3 py-2.5 md:hidden"
+      className={cn(
+        "fixed inset-x-0 bottom-[72px] z-30 border-t border-line bg-white px-3 py-2.5 md:hidden",
+        nba ? "flex flex-col gap-1" : "flex gap-2",
+      )}
     >
+      {nba && (primary || model.other) ? (
+        <div className="text-[10px] font-semibold uppercase tracking-[0.08em] text-muted">History</div>
+      ) : null}
+      <div className="flex gap-2">
       {primary && mobile ? (
         <button
           type="button"
@@ -81,6 +88,7 @@ export function EventActionBar({
       >
         Ask
       </button>
+      </div>
     </div>
   );
 }

@@ -1,6 +1,8 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
+
+const FOCUSABLE = 'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])';
 
 /**
  * Mobile filter sheet. The controls inside are the current game-log filters.
@@ -15,13 +17,25 @@ export function FilterSheet({
   onClose: () => void;
   children: React.ReactNode;
 }) {
+  const dialogRef = useRef<HTMLDivElement>(null);
+
   useEffect(() => {
     if (!open) return;
+    const trigger = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    const dialog = dialogRef.current;
+    const target = dialog?.querySelector<HTMLElement>(FOCUSABLE) ?? dialog;
+    target?.focus();
     const onKey = (event: KeyboardEvent) => {
-      if (event.key === "Escape") onClose();
+      if (event.key === "Escape") {
+        event.preventDefault();
+        onClose();
+      }
     };
     window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
+    return () => {
+      window.removeEventListener("keydown", onKey);
+      trigger?.focus();
+    };
   }, [open, onClose]);
 
   if (!open) return null;
@@ -34,9 +48,12 @@ export function FilterSheet({
         onClick={onClose}
       />
       <div
+        ref={dialogRef}
         role="dialog"
+        aria-modal="true"
         aria-label="Filter games"
-        className="absolute inset-x-0 bottom-0 flex max-h-[82%] flex-col rounded-t-[24px] bg-white px-[18px] pb-[18px] pt-2.5"
+        tabIndex={-1}
+        className="absolute inset-x-0 bottom-0 flex max-h-[82%] flex-col rounded-t-[24px] bg-white px-[18px] pb-[18px] pt-2.5 outline-none"
       >
         <div className="mx-auto mb-3 h-1 w-10 shrink-0 rounded-full bg-line-strong" />
         <div className="min-h-0 overflow-y-auto">{children}</div>

@@ -146,4 +146,69 @@ describe("tier percent on the game page", () => {
     expect(screen.getByText("O —")).toBeInTheDocument();
     expect(screen.queryByText("O 0%")).not.toBeInTheDocument();
   });
+
+  it("labels history and model when combined_probability is not the pick rate", () => {
+    const model = buildOurRead({
+      player: "Bam Adebayo",
+      marketName: "Points",
+      market: "player_points",
+      binary: false,
+      supportsProjection: true,
+      eventId: "evt-mia-bos",
+      homeTeam: "Miami Heat",
+      awayTeam: "Boston Celtics",
+      commenceTime: "2026-11-11T00:30:00Z",
+      team: "MIA",
+      position: "C",
+      line: 18.5,
+      pick: {
+        ...bam,
+        probability: 0.59,
+        tier: "Lean",
+        p_under: 0.41,
+        combined_probability: 0.673,
+        signals: null,
+      },
+      consensus: null,
+      last10: [],
+      history: null,
+      projection: null,
+      league: "nba",
+    });
+    renderWithProviders(
+      <>
+        <OurRead
+          league="nba"
+          model={model}
+          isLoading={false}
+          isError={false}
+          errorText={null}
+          primaryInSlip={false}
+          otherInSlip={false}
+          onAddPrimary={noop}
+          onAddOther={noop}
+          onAsk={noop}
+        />
+        <EventActionBar
+          league="nba"
+          model={model}
+          primaryInSlip={false}
+          otherInSlip={false}
+          onAddPrimary={noop}
+          onAddOther={noop}
+          onAsk={noop}
+        />
+      </>,
+    );
+
+    expect(screen.getByTestId("read-bar")).toHaveTextContent("Model");
+    expect(screen.getByTestId("read-bar")).toHaveTextContent("Over 67%");
+    expect(screen.getByTestId("read-bar")).toHaveTextContent("Under 33%");
+    expect(screen.getAllByText("History").length).toBeGreaterThan(0);
+    expect(screen.getByRole("button", { name: "Under instead (41%)" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /Under instead \(33%\)/ })).not.toBeInTheDocument();
+    expect(screen.getByTestId("event-action-bar")).toHaveTextContent("59%");
+    expect(screen.getByTestId("event-action-bar")).toHaveTextContent("Under 41%");
+    expect(screen.getByTestId("event-action-bar")).not.toHaveTextContent("Under 33%");
+  });
 });

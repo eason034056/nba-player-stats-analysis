@@ -386,6 +386,7 @@ describe("NBA read uses the backend tier", () => {
         probability: 0.697,
         tier: "Playable",
         combined_probability: 0.697,
+        p_over: 0.28,
         signals: [
           { key: "last10", label: "Last 10 games", value: "7/10", verdict: "supports" },
           { key: "market", label: "Market price", value: "54.0%", verdict: "neutral" },
@@ -397,8 +398,69 @@ describe("NBA read uses the backend tier", () => {
     expect(model.signals[1]?.value).toBe("54.0%");
     expect(model.bar?.underText).toBe("69%");
     expect(model.bar?.overText).toBe("30%");
-    expect(model.other?.probability).toBeCloseTo(0.303);
+    expect(model.other?.probability).toBe(0.28);
+    expect(model.other?.probability).not.toBeCloseTo(0.303);
     expect(model.primary?.probability).toBe(0.697);
+  });
+
+  it("keeps both slip sides on the historical pick when the model disagrees", () => {
+    const model = buildOurRead({
+      ...base,
+      history: bamHistory,
+      pick: pick({
+        probability: 0.59,
+        tier: "Lean",
+        p_under: 0.41,
+        combined_probability: 0.673,
+        signals: null,
+      }),
+    });
+    expect(model.primary?.probability).toBe(0.59);
+    expect(model.leanProbability).toBe(0.59);
+    expect(model.other?.direction).toBe("under");
+    expect(model.other?.probability).toBe(0.41);
+    expect(model.other?.probability).not.toBeCloseTo(1 - 0.673, 2);
+    expect(model.other?.probability).not.toBe(bamHistory.p_under);
+    expect(model.bar?.sourceLabel).toBe("Model");
+    expect(model.bar?.overText).toBe("67%");
+    expect(model.bar?.underText).toBe("33%");
+  });
+
+  it("uses the pick's opposite field for an under before history or the model", () => {
+    const model = buildOurRead({
+      ...base,
+      history: bamHistory,
+      pick: pick({
+        direction: "under",
+        probability: 0.62,
+        p_over: 0.38,
+        combined_probability: 0.7,
+        signals: null,
+      }),
+    });
+    expect(model.primary?.probability).toBe(0.62);
+    expect(model.other?.direction).toBe("over");
+    expect(model.other?.probability).toBe(0.38);
+    expect(model.other?.probability).not.toBeCloseTo(0.3, 2);
+    expect(model.other?.probability).not.toBe(bamHistory.p_over);
+  });
+
+  it("falls back to history when the pick has no opposite field, even if combined is set", () => {
+    const model = buildOurRead({
+      ...base,
+      history: bamHistory,
+      pick: pick({
+        probability: 0.59,
+        p_over: null,
+        p_under: null,
+        combined_probability: 0.673,
+        signals: null,
+      }),
+    });
+    expect(model.other?.probability).toBe(bamHistory.p_under);
+    expect(model.other?.n_games).toBe(bamHistory.n_games);
+    expect(model.other?.probability).not.toBeCloseTo(1 - 0.673, 2);
+    expect(model.other?.probability).not.toBeCloseTo(1 - 0.59, 2);
   });
 
   it("says there is no stored read and does not invent signal rows", () => {
