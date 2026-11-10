@@ -18,12 +18,14 @@ The lookup does not substitute the older Celtics stint. That stint ended before 
 | `backend/app/services/csv_player_history.py` | `team_on_event` keeps a projection or log club only when its code is home or away. `get_teammates(..., only_team=)` limits the walk. `get_player_stats` takes `home_team`, `away_team`, and `as_of`. |
 | `backend/app/services/daily_analysis.py` | Daily picks call `team_on_event` instead of applying `team_from_game_logs` whenever the projection club is empty. |
 | `backend/app/api/nba.py`, `backend/app/api/wnba.py` | Player-history accepts `home_team`, `away_team`, and `as_of`. Omitting them keeps the previous list. |
-| `frontend/lib/event-page.ts` | Lineup side wins for the team label. A code that is neither home nor away is not shown. `eventTeammates` keeps the scoped history list and appends that side's lineup names. |
+| `frontend/lib/event-page.ts` | Lineup side wins for the team label. A code that is neither home nor away is not shown. `eventTeammates` keeps the scoped history list and appends that side's lineup names. The same person with different initials or accents is one name. |
 | `frontend/lib/api.ts`, `frontend/lib/schemas.ts`, `frontend/components/EventDetail.tsx`, `frontend/components/PlayerHistoryStats.tsx` | The event history request sends the two clubs and the tip time. |
 | `backend/tests/fixtures/csv/spo122_anfernee_simons_excerpt.csv` | Real lines copied from `data/nba_player_game_logs.csv`. |
 | `backend/tests/test_spo122_csv_team_attribution.py` | Simons on the recorded Celtics at 76ers tip stays unlabeled, and Josh Giddey is not a teammate. |
 | `backend/tests/test_spo98_team_and_names.py`, `backend/tests/test_daily_analysis.py`, `backend/tests/test_spo113_field_enrichment.py` | Existing callers pass a slate that contains the club under test, or the new history arguments. |
-| `frontend/lib/event-page.test.ts` | CHI is not shown on BOS@PHI. Jaylen Brown stays on the Celtics lineup. A teammate who is out tonight stays in the filter. |
+| `frontend/lib/picks-board.ts`, `frontend/components/picks/DailyPicksBoard.tsx` | An empty player team stays empty. The board draws an em dash instead of the home club. |
+| `frontend/lib/event-page.test.ts` | CHI is not shown on BOS@PHI. Jaylen Brown stays on the Celtics lineup. A teammate who is out tonight stays in the filter. `V.J. Edgecombe` and `Nikola Jokić` are not listed twice. |
+| `backend/tests/test_spo122_qa_review.py`, `frontend/lib/spo122.qa.test.ts` | QA checks for event labels, scoped teammates, and the history query. |
 
 ## Root cause
 
@@ -92,4 +94,8 @@ $ python3 -m pytest -q --tb=line
 ## Follow-ups
 
 - The CSV still ends on 2026-05-11. A blank event label is the honest result until a later game log, or a lineup/projection that names a club in the game, is available. This change does not invent the 2026-27 club.
+- `lineup_source_support._build_team_roster_cache` still takes the latest CSV club, so a player can stay on last season's roster candidates.
+- A player traded between the two clubs in this game can mix the history list from one side with the lineup from the other.
+- WNBA projection codes `LV`, `NY`, `PHO`, `LA`, `GS`, and `WSH` are not aliased, and `Portland Fire` has no alias. WNBA projections are not wired yet.
+- A teammate who appears only on tonight's lineup can filter the history sample down to 0 games. The UI does not say that there is no shared game.
 - The player page still lists every historical stint. That list is not an event.

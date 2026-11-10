@@ -88,6 +88,21 @@ describe("DailyPicksBoard", () => {
     expect(document.body.innerHTML).not.toContain("text-yellow-600");
   });
 
+  it("shows an em dash when the player team is empty", () => {
+    const blank = {
+      ...picks.picks[0],
+      player_name: "Anfernee Simons",
+      player_team: "",
+      player_team_code: "",
+      home_team: "Philadelphia 76ers",
+      away_team: "Boston Celtics",
+    };
+    renderBoard({ picks: [blank], teams: [] });
+    expect(screen.getByText("Anfernee Simons")).toBeInTheDocument();
+    expect(screen.getByText("—")).toBeInTheDocument();
+    expect(screen.queryByText(/^PHI$/)).not.toBeInTheDocument();
+  });
+
   it("hides players that miss the confidence or market chip", async () => {
     const user = userEvent.setup();
     renderBoard();

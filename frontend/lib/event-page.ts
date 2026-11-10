@@ -386,8 +386,21 @@ export interface EventPlayerRow {
   probability: number | null;
 }
 
+/** Fold a name so CSV and lineup spellings compare as the same person. */
+function nameKey(name: string): string {
+  return name
+    .normalize("NFD")
+    .replace(/\p{M}/gu, "")
+    .replace(/[.'’`-]/g, "")
+    .replace(/\s+/g, " ")
+    .trim()
+    .toLowerCase();
+}
+
 function namesMatch(a: string, b: string): boolean {
-  return a.trim().toLowerCase() === b.trim().toLowerCase();
+  const left = nameKey(a);
+  const right = nameKey(b);
+  return left.length > 0 && left === right;
 }
 
 function onRoster(name: string, lineup: TeamLineup | null | undefined): boolean {

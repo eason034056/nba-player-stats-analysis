@@ -211,6 +211,25 @@ describe("player rows and lines", () => {
     expect(unlabeled.find((row) => row.name === "Anfernee Simons")?.team).toBeNull();
   });
 
+  it("folds initials and accents into one teammate", () => {
+    const phi = teamLineupSchema.parse({
+      date: "2026-11-10",
+      team: "PHI",
+      status: "projected",
+      confidence: "medium",
+      starters: ["Tyrese Maxey", "VJ Edgecombe", "Nikola Jokic"],
+      bench_candidates: [],
+    });
+    expect(
+      eventTeammates({
+        player: "Tyrese Maxey",
+        awayLineup: null,
+        homeLineup: phi,
+        historyTeammates: ["V.J. Edgecombe", "VJ Edgecombe", "Nikola Jokić", "Nikola Jokic"],
+      }),
+    ).toEqual(["V.J. Edgecombe", "Nikola Jokić"]);
+  });
+
   it("keeps a teammate who is out and appends lineup names", () => {
     const phi = teamLineupSchema.parse({
       date: "2026-11-10",
