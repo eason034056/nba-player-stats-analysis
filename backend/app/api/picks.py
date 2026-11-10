@@ -17,7 +17,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from pydantic import BaseModel, Field
 
 from app.middleware.rate_limit import limiter
-from app.services.daily_analysis import daily_analysis_service
+from app.services.daily_analysis import MIN_SAMPLE_GAMES, daily_analysis_service
 from app.settings import settings
 
 
@@ -40,6 +40,14 @@ class BotPick(BaseModel):
     edge: Optional[float] = Field(default=None, description="Edge vs line (projected - line)")
     sample_size: int = Field(..., description="Number of historical games used")
     commence_time: str = Field(..., description="Game start time (ISO 8601)")
+    p_over: Optional[float] = Field(
+        default=None,
+        description="Empirical over rate from the stored pick. Null when unknown.",
+    )
+    p_under: Optional[float] = Field(
+        default=None,
+        description="Empirical under rate from the stored pick. Null when unknown.",
+    )
 
 
 class BotPicksResponse(BaseModel):
@@ -161,8 +169,13 @@ async def get_picks_today(
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Analysis unavailable: {e}")
 
-    # Filter by confidence
-    picks = [p for p in result.picks if p.probability >= min_confidence]
+    # Published board. Storage now keeps Lean rows and samples under 10
+    # games. The default confidence is still 0.65, and the sample gate
+    # keeps a 6-game row off this response the way storage used to.
+    picks = [
+        p for p in result.picks
+        if p.probability >= min_confidence and p.n_games >= MIN_SAMPLE_GAMES
+    ]
 
     # Free tier: filter out picks from games starting within the delay window
     delayed_minutes: Optional[int] = None
@@ -212,6 +225,8 @@ async def get_picks_today(
                 edge=p.edge,
                 sample_size=p.n_games,
                 commence_time=p.commence_time,
+                p_over=p.p_over,
+                p_under=p.p_under,
             )
         )
 

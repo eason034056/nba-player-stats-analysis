@@ -219,7 +219,7 @@ class ProjectionService:
             else:
                 print(f"📦 Projection data cache hit (fresh): {date}")
             
-            return cached_data
+            return self._with_defense_ranks(cached_data)
         
         # 2. Cache miss → synchronous fetch
         print(f"📭 Projection data cache miss: {date}, fetching synchronously...")
@@ -232,9 +232,11 @@ class ProjectionService:
             pg_data = await self._read_from_postgres(date)
             if pg_data:
                 print(f"📀 Projections loaded from PostgreSQL: {date} ({len(pg_data)} records)")
-                # Backfill Redis
+                # Backfill Redis with the unfilled rows. A later cache
+                # hit runs _with_defense_ranks again, so a CSV rank is
+                # not stored as if SportsData had sent it.
                 await self._write_to_redis(date, pg_data)
-                return pg_data
+                return self._with_defense_ranks(pg_data)
             
             print(f"❌ Unable to get projections: {date}")
             return {}
@@ -314,7 +316,7 @@ class ProjectionService:
                 print(f"⚠️ Failed to write to PostgreSQL (ignored): {e}")
             
             print(f"✅ Projection data fetched and stored: {date} ({player_count} players)")
-            return projections_dict
+            return self._with_defense_ranks(projections_dict)
         
         except SportsDataProjectionError as e:
             status = "error"
@@ -366,7 +368,18 @@ class ProjectionService:
             return []
     
     # ==================== Internal Methods ====================
-    
+
+    @staticmethod
+    def _with_defense_ranks(projections: Dict[str, Any]) -> Dict[str, Any]:
+        """Fill null opponent ranks from the game log.
+
+        Applied on every read, including a Redis hit that was stored
+        before the fill existed. A rank already on the row is kept.
+        """
+        from app.services.defense_ranks import fill_projection_map
+
+        return fill_projection_map(projections)
+
     def _is_stale(self, meta: Dict[str, Any]) -> bool:
         """
         Determine if cached data is stale

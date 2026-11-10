@@ -455,12 +455,12 @@ export const RECENT_GAMES_OPTIONS = recentGamesOptions("nba");
  * - home_team / away_team: 主客場球隊
  * - commence_time: 比賽開始時間
  * - metric: 統計指標（points/assists/rebounds/pra）
- * - threshold: 眾數門檻（所有博彩公司 line 的眾數）
+ * - threshold: 眾數門檻（每家博彩公司一條主盤的眾數）
  * - direction: "over" 或 "under"
  * - probability: 歷史機率（>= 0.65）
  * - n_games: 樣本場次數
- * - bookmakers_count: 提供此 line 的博彩公司數量
- * - all_lines: 所有博彩公司的 line 列表
+ * - bookmakers_count: 有開出這名球員這個盤口的博彩公司家數（同一家的 Over/Under 與替代盤只算一次）
+ * - all_lines: 每家博彩公司的主盤，一家一條
  */
 export const dailyPickSchema = z.object({
   player_name: z.string(),
@@ -483,8 +483,8 @@ export const dailyPickSchema = z.object({
   projected_value: z.number().nullable().optional(),       // 投影值（如 projected points = 29.3）
   projected_minutes: z.number().nullable().optional(),     // 預計上場分鐘數
   edge: z.number().nullable().optional(),                  // 投影值與盤口差距（正數 = 有利方向）
-  opponent_rank: z.number().nullable().optional(),         // 對手整體防守排名（1-30）
-  opponent_position_rank: z.number().nullable().optional(),// 對手對該位置防守排名
+  opponent_rank: z.number().nullable().optional(),         // 對手整體防守排名。方向見 backend/app/models/schemas.py 第 514–516 行：1 = 最弱
+  opponent_position_rank: z.number().nullable().optional(),// 對手對該位置防守排名。同一契約：1 = 最弱
   injury_status: z.string().nullable().optional(),         // 傷病狀態（Free Trial 為 null）
   lineup_confirmed: z.boolean().nullable().optional(),     // 先發是否已確認
 });
@@ -654,7 +654,7 @@ export const playerProjectionSchema = z.object({
   injury_status: z.string().nullable().optional(),
   injury_body_part: z.string().nullable().optional(),
   
-  // 對位難度
+  // 對位難度。方向見 backend/app/models/schemas.py 第 514–516 行：1 = 最弱防守，數字愈大愈強。
   opponent_rank: z.number().nullable().optional(),
   opponent_position_rank: z.number().nullable().optional(),
   

@@ -69,7 +69,7 @@ function ProbabilityBar({
  */
 function priceClass(text: string): string {
   if (text === MISSING_QUOTE) return "text-gray";
-  return text.startsWith("-") ? "text-red" : "text-green-600";
+  return text.startsWith("-") ? "text-red" : "text-green-800";
 }
 
 function ResultRow({
@@ -114,7 +114,7 @@ function ResultRow({
         <span className={cn(
           "inline-flex items-center px-2.5 py-1 rounded-full text-xs font-bold",
           isHighVig && "bg-red text-white",
-          isLowVig && "bg-green-500 text-white",
+          isLowVig && "bg-green-800 text-white",
           !isHighVig && !isLowVig && "bg-yellow text-dark"
         )}>
           {formatVig(result.vig)}

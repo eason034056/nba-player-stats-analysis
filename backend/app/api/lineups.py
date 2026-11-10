@@ -6,7 +6,19 @@ from typing import Optional
 from fastapi import APIRouter, HTTPException, Query
 
 from app.models.schemas import LineupRefreshResponse, LineupsResponse, TeamLineup
-from app.services.lineup_service import lineup_service
+from app.services.lineup_service import confirmation_status, lineup_service
+
+
+def _with_confirmation(lineup: dict) -> TeamLineup:
+    """Validate one lineup and set the confirmation consensus.
+
+    ``status`` stays the completeness word already on the record.
+    ``confirmation_status`` is computed here so a cached slate from
+    before this field still returns the rule.
+    """
+    payload = dict(lineup)
+    payload["confirmation_status"] = confirmation_status(lineup)
+    return TeamLineup.model_validate(payload)
 
 
 router = APIRouter(
@@ -25,7 +37,7 @@ async def get_lineups(
     except Exception as exc:
         raise HTTPException(status_code=500, detail=f"Failed to retrieve lineup: {exc}") from exc
 
-    lineups = [TeamLineup.model_validate(lineup) for lineup in result.lineups.values()]
+    lineups = [_with_confirmation(lineup) for lineup in result.lineups.values()]
     lineups.sort(key=lambda item: item.team)
 
     return LineupsResponse(
@@ -51,7 +63,7 @@ async def get_team_lineup(
     if lineup is None:
         raise HTTPException(status_code=404, detail=f"No lineup data found for {team} on {target_date}")
 
-    return TeamLineup.model_validate(lineup)
+    return _with_confirmation(lineup)
 
 
 @router.post("/refresh", response_model=LineupRefreshResponse, summary="Manually refresh lineup consensus data")

@@ -219,10 +219,12 @@ def test_fewer_than_min_sample_games_is_not_a_target():
 
 
 def test_real_csv_rows_use_only_strictly_earlier_games():
-    """One real player per league. The ALL line is the mean of earlier games only."""
+    """One real player per league. The ALL line uses earlier regular-season games only."""
+    from app.services.csv_player_history import CSVPlayerHistoryService
     from evaluation.walk_forward import load_historical
 
     historical = load_historical()
+    allowed = CSVPlayerHistoryService._allowed_game_types()
     for league in ("nba", "wnba"):
         service = historical._csv_for(league)
         chosen = None
@@ -231,7 +233,9 @@ def test_real_csv_rows_use_only_strictly_earlier_games():
             games = [
                 game
                 for game in service._cache[name]
-                if game.get("game_date") and (game.get("minutes") or 0) > 0
+                if game.get("game_date")
+                and (game.get("minutes") or 0) > 0
+                and CSVPlayerHistoryService._game_type_of(game) in allowed
             ]
             if len(games) >= 15 and all(game.get("points") is not None for game in games):
                 chosen = name
@@ -745,8 +749,10 @@ def test_agent_row_side_follows_the_unrounded_probability():
     the market gate. The published ``p_over`` stays rounded to 4 decimals.
     """
     from evaluation.odds_history import inactive_history
-    from evaluation.walk_forward import _agent_rows
+    from evaluation.walk_forward import _agent_rows, _game_type
     from scoring import compute_scorecard, decision_from_over_probability
+
+    bootstrap()
 
     class _Historical:
         def get_shooting_profile(self, *_args, **_kwargs):
@@ -799,6 +805,7 @@ def test_agent_row_side_follows_the_unrounded_probability():
             ["L10"],
             10,
             inactive_history(),
+            _game_type(target),
         )
         assert rows
         for row in rows:

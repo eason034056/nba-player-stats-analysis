@@ -1,0 +1,12 @@
+{
+  "date": "2026-11-10",
+  "events": [
+    {
+      "event_id": "evt-lva-nyl",
+      "sport_key": "basketball_wnba",
+      "home_team": "Las Vegas Aces",
+      "away_team": "New York Liberty",
+      "commence_time": "2026-11-11T00:30:00Z"
+    }
+  ]
+}

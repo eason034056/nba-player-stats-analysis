@@ -2,8 +2,9 @@ import { screen } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 
 import { PlayerProjectionPanel } from "@/components/PlayerProjectionPanel";
-import type { PlayerProjection } from "@/lib/schemas";
+import { playerProjectionSchema, type PlayerProjection } from "@/lib/schemas";
 import { renderWithProviders } from "@/test/test-utils";
+import rankFixture from "@/test/fixtures/projections/opponent-defense-rank.json";
 
 const projection = {
   player_name: "Nikola Jokic",
@@ -70,5 +71,84 @@ describe("PlayerProjectionPanel highlights", () => {
     }
     expect(screen.queryByText(/Edge vs Line/)).not.toBeInTheDocument();
     expect(screen.queryByText("0.5")).not.toBeInTheDocument();
+  });
+
+  it("treats rank 1 as the weakest defense and the highest rank as the strongest", () => {
+    const weakest = playerProjectionSchema.parse(rankFixture.weakest);
+    const strongest = playerProjectionSchema.parse(rankFixture.strongest);
+    const missing = playerProjectionSchema.parse(rankFixture.missing);
+
+    const { rerender } = renderWithProviders(
+      <PlayerProjectionPanel projection={weakest} metric="points" threshold={18.5} />,
+    );
+    const easy = screen.getByText("Easy #1");
+    expect(easy).toHaveClass("text-green-700");
+    expect(screen.queryByText("Hard #1")).not.toBeInTheDocument();
+
+    rerender(
+      <PlayerProjectionPanel projection={strongest} metric="points" threshold={29.5} />,
+    );
+    const hard = screen.getByText("Hard #30");
+    expect(hard).toHaveClass("text-red");
+    expect(screen.queryByText("Easy #30")).not.toBeInTheDocument();
+
+    rerender(
+      <PlayerProjectionPanel projection={missing} metric="points" threshold={9.5} />,
+    );
+    expect(screen.getByText("—")).toBeInTheDocument();
+    expect(screen.queryByText(/Easy #|Avg #|Hard #/)).not.toBeInTheDocument();
+  });
+
+  it("keeps the 10/11 and 20/21 cuts, and still labels 0 and 31", () => {
+    const base = playerProjectionSchema.parse(rankFixture.weakest);
+    const cases: Array<[number, string, string]> = [
+      [10, "Easy #10", "text-green-700"],
+      [11, "Avg #11", "text-yellow-700"],
+      [20, "Avg #20", "text-yellow-700"],
+      [21, "Hard #21", "text-red"],
+      [0, "Easy #0", "text-green-700"],
+      [31, "Hard #31", "text-red"],
+    ];
+
+    const { rerender } = renderWithProviders(
+      <PlayerProjectionPanel projection={{ ...base, opponent_rank: 10 }} metric="points" threshold={18.5} />,
+    );
+    for (const [rank, label, color] of cases) {
+      rerender(
+        <PlayerProjectionPanel
+          projection={{ ...base, opponent_rank: rank }}
+          metric="points"
+          threshold={18.5}
+        />,
+      );
+      expect(screen.getByText(label)).toHaveClass(color);
+    }
+
+    // The projection schema does not clamp the documented 1-30 range.
+    expect(playerProjectionSchema.parse({ ...rankFixture.weakest, opponent_rank: 0 }).opponent_rank).toBe(0);
+    expect(playerProjectionSchema.parse({ ...rankFixture.weakest, opponent_rank: 31 }).opponent_rank).toBe(31);
+    expect(
+      playerProjectionSchema.parse({ ...rankFixture.weakest, opponent_rank: Number.POSITIVE_INFINITY }).opponent_rank,
+    ).toBe(Number.POSITIVE_INFINITY);
+
+    rerender(
+      <PlayerProjectionPanel
+        projection={{ ...base, opponent_rank: Number.NaN }}
+        metric="points"
+        threshold={18.5}
+      />,
+    );
+    expect(screen.getByText("—")).toBeInTheDocument();
+    expect(screen.queryByText(/Easy #|Avg #|Hard #/)).not.toBeInTheDocument();
+
+    rerender(
+      <PlayerProjectionPanel
+        projection={{ ...base, opponent_rank: Number.POSITIVE_INFINITY }}
+        metric="points"
+        threshold={18.5}
+      />,
+    );
+    expect(screen.getByText("—")).toBeInTheDocument();
+    expect(screen.queryByText(/Easy #|Avg #|Hard #/)).not.toBeInTheDocument();
   });
 });

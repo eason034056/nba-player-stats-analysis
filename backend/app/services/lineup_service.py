@@ -107,6 +107,42 @@ def _unresolved_starters(lineup: dict[str, Any] | None) -> list[str]:
     return list(snapshot.get("unresolved_starters") or [])
 
 
+def confirmation_status(lineup: dict[str, Any] | None) -> str | None:
+    """Consensus confirmation for one team lineup.
+
+    ``confirmed`` when any ``source_snapshots`` entry has
+    ``status == "confirmed"``. One trusted confirmation is enough.
+    RotoGrinders always writes ``projected`` and must not veto a
+    RotoWire ``confirmed``.
+
+    ``projected`` when the record has a snapshot or a starter and
+    nobody reported confirmed. ``expected`` falls here.
+
+    ``None`` when there is no lineup record.
+
+    The existing ``status`` field is a different word. It stays
+    ``projected``, ``partial``, or ``unavailable`` from the starter
+    count. This function does not change that field.
+    """
+    if not lineup:
+        return None
+    snapshots = lineup.get("source_snapshots") or {}
+    if not isinstance(snapshots, dict):
+        snapshots = {}
+    saw_snapshot = False
+    for snapshot in snapshots.values():
+        if not isinstance(snapshot, dict):
+            continue
+        saw_snapshot = True
+        reported = str(snapshot.get("status") or "").strip().lower()
+        if reported == "confirmed":
+            return "confirmed"
+    starters = lineup.get("starters") or []
+    if saw_snapshot or starters:
+        return "projected"
+    return None
+
+
 def build_consensus_lineups(
     *,
     date: str,
@@ -256,6 +292,26 @@ class LineupConsensusService:
                 await self._write_to_redis(date, pg_lineups)
                 return LineupReadResult(date=date, lineups=pg_lineups, fetched_at=datetime.now(timezone.utc).isoformat(), cache_state="stale")
             return LineupReadResult(date=date, lineups={}, fetched_at=None, cache_state="fresh")
+
+    async def peek_lineups(self, date: str) -> dict[str, dict[str, Any]]:
+        """Lineups already stored for ``date``. Does not scrape.
+
+        The events route reads this so a cold cache does not call
+        RotoWire or RotoGrinders while listing games. A Redis miss falls
+        through to PostgreSQL. Any failure is an empty slate, and the
+        event's lineup status stays null.
+        """
+        try:
+            cached = await cache_service.get(_build_lineups_key(date, league=self.league))
+        except Exception:
+            cached = None
+        if isinstance(cached, dict):
+            return cached
+        try:
+            stored = await self._read_from_postgres(date)
+        except Exception:
+            return {}
+        return stored or {}
 
     async def get_team_lineup(self, date: str, team: str) -> tuple[dict[str, Any] | None, str, str | None]:
         result = await self.get_lineups(date)
