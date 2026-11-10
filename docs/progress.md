@@ -104,6 +104,7 @@ Stale pull requests the owner is closing. Not merged.
 | Ticket | Note |
 |---|---|
 | SPO-110a | Design tokens, app shell, and the Today page (NBA and WNBA). Open on `feature/SPO-110a-design-system-shell-today`. PR into `dev`. Summary: `docs/task-summaries/SPO-110a-design-system-shell-today.md`. Picks, Bet Slip, and Method stay on their current pages until PR C. |
+| SPO-110b | NBA and WNBA game page restyle. Open on `feature/SPO-110b-game-page`. Draft PR into `dev`, stacked on SPO-110a until #39 merges. Summary: `docs/task-summaries/SPO-110b-game-page.md`. |
 | SPO-96 | This docs rewrite (`feature/SPO-96-claude-md-workflow-rewrite`). |
 | SPO-104 | One-sided DD quotes (`under_odds` / `p_under_imp` null, including a JSON null No price; `line_is_synthetic`, `market_kind`, `uses_prior`), league-scoped team codes, and the SPO-97 schedule-index follow-ups. Lands with #36. PR #37 into `dev`. Summary: `docs/task-summaries/SPO-104-dd-one-sided-and-followups.md`. |
 | SPO-102 | Wire `PlayerDDTile` to double-double history and yes/no odds. Open on `feature/SPO-102-player-dd-tile-wiring`. Summary: `docs/task-summaries/SPO-102-player-dd-tile-wiring.md`. |

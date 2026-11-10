@@ -1,267 +1,362 @@
 /**
- * EventDetail.tsx — league-parametrized Event Detail / No-Vig Calculator body.
+ * EventDetail — NBA and WNBA game page.
  *
- * SPO-83 Phase 0 (epic SPO-82). NBA is the reference design. This component is
- * the single source of truth for the event-detail page across leagues: both
- * `app/event/[eventId]/page.tsx` (NBA) and `app/wnba/event/[eventId]/page.tsx`
- * (WNBA) render it with a `league` prop instead of forking the JSX.
- *
- * Why parametrize instead of fork (decision log Decision 1):
- *   The two pages were forked then drifted (NBA 418 LOC vs WNBA 293). A shared
- *   component driven by a `league` prop makes drift structurally impossible —
- *   there is only one layout. League-specific behavior lives in `LEAGUE_CONFIG`
- *   (which endpoints, which labels) and in two capability flags for the data
- *   gaps WNBA genuinely has today.
- *
- * Data-gap handling (decision log Decision 2):
- *   WNBA has events / no-vig / player-suggest / player-history endpoints, so
- *   those sections are wired for real. WNBA has NO projection endpoint and NO
- *   lineup ingestion yet → those two slots render <SectionUnavailable> in place
- *   rather than being dropped, preserving structural parity.
- *
- * Design Philosophy (unchanged from the NBA original):
- * - Cream background (#FFF2DF) / Red accents (#E92016) / Yellow highlights (#F9DC24)
+ * One layout for both leagues. Numbers come from the events, odds,
+ * daily-picks, history, projection, and lineup routes. A missing field
+ * is a labeled empty state.
  */
 
 "use client";
 
-import { useState, useEffect } from "react";
+import { useEffect, useState } from "react";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { useForm, Controller } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
+import { useAgentWidget } from "@/contexts/AgentWidgetContext";
+import { useBetSlip } from "@/contexts/BetSlipContext";
+import { useWnbaBetSlip } from "@/contexts/WnbaBetSlipContext";
 import {
-  ArrowLeft,
-  Calculator,
-  Loader2,
-  AlertCircle,
-  Calendar,
-} from "lucide-react";
-import {
-  getEvents,
   calculateNoVig,
-  getPlayerProjection,
-  getTeamLineup,
-  getPlayerSuggestions,
-  getCSVPlayers,
-  getPlayerHistory,
-  getWNBAEvents,
   calculateWNBANoVig,
-  getWNBAPlayerSuggestions,
-  getWNBACSVPlayers,
-  getWNBAPlayerHistory,
+  getCSVPlayers,
+  getDailyPicks,
+  getEvents,
   getPlayerDDHistory,
+  getPlayerHistory,
+  getPlayerProjection,
+  getPlayerSuggestions,
+  getTeamLineup,
+  getWNBACSVPlayers,
+  getWNBAEvents,
   getWNBAPlayerDDHistory,
+  getWNBAPlayerHistory,
+  getWNBAPlayerSuggestions,
+  getWNBATeamLineup,
+  getWnbaDailyPicks,
 } from "@/lib/api";
-import { TeamLogo } from "@/components/TeamLogo";
+import { createAgentPickContextFromDailyPick } from "@/lib/agent-chat";
+import {
+  buildOurRead,
+  chartLine,
+  errorText,
+  eventPlayerRows,
+  eventWhen,
+  gameLogChart,
+  lineupChip,
+  marketToMetric,
+  postedLine,
+  type EventTab,
+} from "@/lib/event-page";
+import { EventHeader } from "@/components/event/EventHeader";
+import { EventTabs } from "@/components/event/EventTabs";
+import { GameFilters, type LogRange, type LogRole, type MateMode } from "@/components/event/GameFilters";
+import { GameLogChart } from "@/components/event/GameLogChart";
+import { OurRead } from "@/components/event/OurRead";
+import { PlayerRail } from "@/components/event/PlayerRail";
+import { StatChips } from "@/components/event/StatChips";
+import { BookmakerSelect } from "@/components/BookmakerSelect";
+import { PlayerHistoryStats } from "@/components/PlayerHistoryStats";
+import { PlayerInput, type PlayerSuggestFn } from "@/components/PlayerInput";
+import { PlayerProjectionPanel } from "@/components/PlayerProjectionPanel";
+import { ResultsTable } from "@/components/ResultsTable";
+import { SectionUnavailable } from "@/components/SectionUnavailable";
+import { TeamLineupPanel } from "@/components/TeamLineupPanel";
+import { isBinaryMarket, getMarketDisplayName, type MarketKey } from "@/components/MarketSelect";
+import { lineForProjectionEdge, marketToProjectionCard } from "@/lib/projection-metric";
 import {
   calculatorFormSchema,
   type CalculatorFormData,
-  type NoVigResponse,
   type NoVigRequest,
-  type EventsResponse,
-  type CSVPlayersResponse,
+  type NoVigResponse,
   type PlayerHistoryRequest,
   type PlayerHistoryResponse,
-  type PlayerDDHistoryRequest,
-  type PlayerDDHistoryResponse,
 } from "@/lib/schemas";
-import { formatFullDate, getLocalDateString } from "@/lib/utils";
-import { PlayerInput, type PlayerSuggestFn } from "@/components/PlayerInput";
-import { BookmakerSelect } from "@/components/BookmakerSelect";
-import { MarketSelect, type MarketKey } from "@/components/MarketSelect";
-import { ResultsTable } from "@/components/ResultsTable";
-import { PlayerHistoryStats } from "@/components/PlayerHistoryStats";
-import {
-  lineForProjectionEdge,
-  marketToProjectionCard,
-} from "@/lib/projection-metric";
-import { PlayerProjectionPanel } from "@/components/PlayerProjectionPanel";
-import { TeamLineupPanel } from "@/components/TeamLineupPanel";
-import { SectionUnavailable } from "@/components/SectionUnavailable";
-import { getCanonicalTeamCode } from "@/lib/team-logos";
+import { teamAbbr } from "@/lib/team-abbr";
+import { getLocalDateString, getTodayString, cn } from "@/lib/utils";
 
 export type League = "nba" | "wnba";
 
-/**
- * Per-league wiring. Everything that differs between NBA and WNBA is a value
- * here — no `if (league === ...)` scattered through the JSX. `supportsLineup` /
- * `supportsProjection` are the only two genuine data gaps (see file header).
- */
 interface LeagueEventConfig {
-  backLabel: string;
-  workspaceEyebrow: string;
-  /** Third "how to read" bullet — the only copy that differs between leagues. */
-  howToReadStep3: string;
-  /** TanStack Query key root for the events list (keeps NBA/WNBA caches apart). */
   eventsQueryKey: string;
-  getEvents: (date?: string) => Promise<EventsResponse>;
+  picksQueryKey: string;
+  getEvents: (date?: string) => Promise<{ date: string; events: Array<{ event_id: string; sport_key: string; home_team: string; away_team: string; commence_time: string }> }>;
+  getPicks: (date: string) => Promise<{ picks: import("@/lib/schemas").DailyPick[] }>;
   calculateNoVig: (request: NoVigRequest) => Promise<NoVigResponse>;
   suggestFn: PlayerSuggestFn;
+  getLineup: (team: string, date?: string) => Promise<import("@/lib/schemas").TeamLineup>;
   cacheNamespace: League;
-  getCSVPlayersFn: (query?: string) => Promise<CSVPlayersResponse>;
+  getCSVPlayersFn: typeof getCSVPlayers;
   getPlayerHistoryFn: (request: PlayerHistoryRequest) => Promise<PlayerHistoryResponse>;
-  getPlayerDDHistoryFn: (
-    request: PlayerDDHistoryRequest,
-  ) => Promise<PlayerDDHistoryResponse>;
-  supportsLineup: boolean;
+  getPlayerDDHistoryFn: typeof getPlayerDDHistory;
   supportsProjection: boolean;
 }
 
 const LEAGUE_CONFIG: Record<League, LeagueEventConfig> = {
   nba: {
-    backLabel: "Back to Events",
-    workspaceEyebrow: "Event workspace",
-    howToReadStep3:
-      "Compare the result with projection data and historical performance before saving a stance.",
     eventsQueryKey: "events",
+    picksQueryKey: "daily-picks",
     getEvents,
+    getPicks: (date) => getDailyPicks({ date }),
     calculateNoVig,
     suggestFn: getPlayerSuggestions,
+    getLineup: getTeamLineup,
     cacheNamespace: "nba",
     getCSVPlayersFn: getCSVPlayers,
     getPlayerHistoryFn: getPlayerHistory,
     getPlayerDDHistoryFn: getPlayerDDHistory,
-    supportsLineup: true,
     supportsProjection: true,
   },
   wnba: {
-    backLabel: "Back to WNBA",
-    workspaceEyebrow: "WNBA event workspace",
-    howToReadStep3:
-      "Compare the result with historical performance before saving a stance. Projection and lineup panels arrive when the WNBA data layers ship.",
     eventsQueryKey: "wnba-events",
+    picksQueryKey: "wnba-daily-picks",
     getEvents: getWNBAEvents,
+    getPicks: (date) => getWnbaDailyPicks({ date }),
     calculateNoVig: calculateWNBANoVig,
     suggestFn: getWNBAPlayerSuggestions,
+    getLineup: getWNBATeamLineup,
     cacheNamespace: "wnba",
     getCSVPlayersFn: getWNBACSVPlayers,
     getPlayerHistoryFn: getWNBAPlayerHistory,
     getPlayerDDHistoryFn: getWNBAPlayerDDHistory,
-    // No WNBA projection endpoint and no WNBA lineup ingestion yet → empty states.
-    supportsLineup: false,
     supportsProjection: false,
   },
 };
 
-interface EventDetailProps {
-  league: League;
+function historyRequest(
+  player: string,
+  metric: string,
+  line: number,
+  recent: number,
+  role: LogRole,
+  opponent: string,
+  mates: string[],
+  mateMode: MateMode,
+): PlayerHistoryRequest {
+  return {
+    player,
+    metric,
+    threshold: line,
+    n: recent,
+    bins: 15,
+    exclude_dnp: true,
+    opponent: opponent || undefined,
+    is_starter: role === "all" ? undefined : role === "starter",
+    teammate_filter: mates.length > 0 && mateMode !== "all" ? mates : undefined,
+    teammate_played:
+      mates.length === 0 || mateMode === "all" ? undefined : mateMode === "with",
+  };
 }
 
-export function EventDetail({ league }: EventDetailProps) {
+export function EventDetail({ league }: { league: League }) {
   const cfg = LEAGUE_CONFIG[league];
-
   const params = useParams();
   const eventId = params.eventId as string;
-
   const searchParams = useSearchParams();
   const routeDate = searchParams.get("date");
   const initialPlayer = searchParams.get("player") || "";
   const initialMarket = (searchParams.get("market") as MarketKey) || "player_points";
   const initialThreshold = searchParams.get("threshold") || "";
-
+  const requestedTab = searchParams.get("tab");
+  const startingTab: EventTab =
+    requestedTab === "log" || requestedTab === "filters" || requestedTab === "odds" || requestedTab === "read"
+      ? requestedTab
+      : "read";
   const router = useRouter();
+  const nbaSlip = useBetSlip();
+  const wnbaSlip = useWnbaBetSlip();
+  const slip = league === "wnba" ? wnbaSlip : nbaSlip;
+  const { openWidget, setSelectedPickContext } = useAgentWidget();
 
-  const [result, setResult] = useState<NoVigResponse | null>(null);
+  const [tab, setTab] = useState<EventTab>(startingTab);
   const [selectedMarket, setSelectedMarket] = useState<MarketKey>(initialMarket);
+  const [result, setResult] = useState<NoVigResponse | null>(null);
+  const [range, setRange] = useState<LogRange>(10);
+  const [lineSteps, setLineSteps] = useState(0);
+  const [role, setRole] = useState<LogRole>("all");
+  const [opponent, setOpponent] = useState("");
+  const [mates, setMates] = useState<string[]>([]);
+  const [mateMode, setMateMode] = useState<MateMode>("all");
+  const [selectedBar, setSelectedBar] = useState<string | null>(null);
 
-  const {
-    control,
-    handleSubmit,
-    watch,
-    setValue,
-    formState: { errors },
-  } = useForm<CalculatorFormData>({
+  const { control, watch, setValue } = useForm<CalculatorFormData>({
     resolver: zodResolver(calculatorFormSchema),
-    defaultValues: {
-      player_name: initialPlayer,
-      bookmakers: [],
-    },
+    defaultValues: { player_name: initialPlayer, bookmakers: [] },
   });
-
   const playerName = watch("player_name");
+  const bookmakers = watch("bookmakers");
+  const bookmakerKey = (bookmakers ?? []).join(",");
 
   const mutation = useMutation({
     mutationFn: cfg.calculateNoVig,
-    onSuccess: (data) => {
-      setResult(data);
-    },
-    onError: (error) => {
-      console.error("Calculation failed:", error);
-    },
+    onSuccess: (data) => setResult(data),
   });
 
-  // Auto-run when arriving with prefilled query params (deep-link from a picks page).
   useEffect(() => {
-    if (initialPlayer && initialMarket) {
-      mutation.mutate({
-        event_id: eventId,
-        player_name: initialPlayer,
-        market: initialMarket,
-        regions: "us",
-        bookmakers: null,
-        odds_format: "american",
-      });
-    }
+    setResult(null);
+    if (!playerName || playerName.trim().length < 2) return;
+    mutation.mutate({
+      event_id: eventId,
+      player_name: playerName.trim(),
+      market: selectedMarket,
+      regions: "us",
+      bookmakers: bookmakers && bookmakers.length > 0 ? bookmakers : null,
+      odds_format: "american",
+    });
+    // The mutation object is not a trigger. The inputs above are.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [playerName, selectedMarket, bookmakerKey, eventId]);
 
-  const { data: eventsData, isLoading: isEventsLoading } = useQuery({
+  useEffect(() => {
+    setLineSteps(0);
+    setOpponent("");
+    setMates([]);
+    setMateMode("all");
+    setRole("all");
+    setSelectedBar(null);
+  }, [playerName, selectedMarket]);
+
+  const eventsQuery = useQuery({
     queryKey: [cfg.eventsQueryKey, routeDate || "all"],
     queryFn: () => cfg.getEvents(routeDate || undefined),
     staleTime: 5 * 60 * 1000,
+    retry: false,
   });
-
-  const currentEvent = eventsData?.events.find((e) => e.event_id === eventId);
-
-  // 從比賽時間取得日期（YYYY-MM-DD），用於投影 / lineup API 查詢。
-  // commence_time 是 ISO 8601 格式，需轉成本地日期避免 UTC 換日造成錯位。
+  const currentEvent = eventsQuery.data?.events.find((event) => event.event_id === eventId);
   const gameDate = currentEvent?.commence_time
     ? getLocalDateString(currentEvent.commence_time)
     : undefined;
-  const awayTeamCode = currentEvent ? getCanonicalTeamCode(currentEvent.away_team) : "";
-  const homeTeamCode = currentEvent ? getCanonicalTeamCode(currentEvent.home_team) : "";
+  const picksDate = routeDate || gameDate || getTodayString();
+  const awayAbbr = currentEvent ? teamAbbr(currentEvent.away_team, league) : "";
+  const homeAbbr = currentEvent ? teamAbbr(currentEvent.home_team, league) : "";
 
-  // ==================== 投影資料查詢 ====================
-  // Gated on cfg.supportsProjection: WNBA has no projection endpoint, so the
-  // query never fires for it and the panel slot renders <SectionUnavailable>.
-  const {
-    data: projectionData,
-    isLoading: isProjectionLoading,
-  } = useQuery({
+  const picksQuery = useQuery({
+    queryKey: [cfg.picksQueryKey, picksDate],
+    queryFn: () => cfg.getPicks(picksDate),
+    staleTime: 5 * 60 * 1000,
+    retry: false,
+  });
+  const suggestQuery = useQuery({
+    queryKey: ["player-suggest", cfg.cacheNamespace, eventId, selectedMarket],
+    queryFn: () => cfg.suggestFn(eventId, undefined, selectedMarket),
+    enabled: Boolean(eventId),
+    staleTime: 30 * 1000,
+    retry: false,
+  });
+  const awayLineupQuery = useQuery({
+    queryKey: ["teamLineup", cfg.cacheNamespace, awayAbbr, gameDate],
+    queryFn: () => cfg.getLineup(awayAbbr, gameDate),
+    enabled: Boolean(awayAbbr && gameDate),
+    staleTime: 60 * 1000,
+    retry: false,
+  });
+  const homeLineupQuery = useQuery({
+    queryKey: ["teamLineup", cfg.cacheNamespace, homeAbbr, gameDate],
+    queryFn: () => cfg.getLineup(homeAbbr, gameDate),
+    enabled: Boolean(homeAbbr && gameDate),
+    staleTime: 60 * 1000,
+    retry: false,
+  });
+  const projectionQuery = useQuery({
     queryKey: ["playerProjection", cfg.cacheNamespace, playerName, gameDate],
     queryFn: () => getPlayerProjection(playerName, gameDate),
     enabled: cfg.supportsProjection && !!playerName && !!gameDate,
     staleTime: 5 * 60 * 1000,
-    retry: false, // 404（球員無投影）不需重試
-  });
-
-  // ==================== Lineup 查詢 ====================
-  // Gated on cfg.supportsLineup for the same reason as projection.
-  const {
-    data: awayLineup,
-    isLoading: isAwayLineupLoading,
-  } = useQuery({
-    queryKey: ["teamLineup", cfg.cacheNamespace, awayTeamCode, gameDate],
-    queryFn: () => getTeamLineup(awayTeamCode, gameDate),
-    enabled: cfg.supportsLineup && Boolean(awayTeamCode && gameDate),
-    staleTime: 60 * 1000,
     retry: false,
   });
 
-  const {
-    data: homeLineup,
-    isLoading: isHomeLineupLoading,
-  } = useQuery({
-    queryKey: ["teamLineup", cfg.cacheNamespace, homeTeamCode, gameDate],
-    queryFn: () => getTeamLineup(homeTeamCode, gameDate),
-    enabled: cfg.supportsLineup && Boolean(homeTeamCode && gameDate),
-    staleTime: 60 * 1000,
+  const binary = isBinaryMarket(selectedMarket);
+  const metric = marketToMetric(selectedMarket);
+  const pick =
+    picksQuery.data?.picks.find(
+      (item) =>
+        item.event_id === eventId &&
+        item.metric === metric &&
+        item.player_name.trim().toLowerCase() === playerName.trim().toLowerCase(),
+    ) ?? null;
+  const liveLine = postedLine(result?.results);
+  const line = liveLine ?? (pick ? pick.threshold : null);
+  const activeLine = chartLine(line, lineSteps);
+  const historyEnabled = Boolean(playerName) && activeLine != null && !binary;
+  const baseHistoryEnabled = Boolean(playerName) && line != null && !binary;
+
+  const chartQuery = useQuery({
+    queryKey: [
+      "event-chart",
+      cfg.cacheNamespace,
+      playerName,
+      metric,
+      activeLine,
+      range,
+      role,
+      opponent,
+      mates,
+      mateMode,
+    ],
+    queryFn: () =>
+      cfg.getPlayerHistoryFn(
+        historyRequest(playerName, metric, activeLine as number, range, role, opponent, mates, mateMode),
+      ),
+    enabled: historyEnabled,
+    staleTime: 30 * 1000,
+    retry: false,
+  });
+  const sampleQuery = useQuery({
+    queryKey: ["event-sample", cfg.cacheNamespace, playerName, metric, line],
+    queryFn: () =>
+      cfg.getPlayerHistoryFn(
+        historyRequest(playerName, metric, line as number, 0, "all", "", [], "all"),
+      ),
+    enabled: baseHistoryEnabled,
+    staleTime: 30 * 1000,
+    retry: false,
+  });
+  const last10Query = useQuery({
+    queryKey: ["event-last10", cfg.cacheNamespace, playerName, metric, line],
+    queryFn: () =>
+      cfg.getPlayerHistoryFn(
+        historyRequest(playerName, metric, line as number, 10, "all", "", [], "all"),
+      ),
+    enabled: baseHistoryEnabled,
+    staleTime: 30 * 1000,
     retry: false,
   });
 
-  // Each market highlights its own projection card. Double-double has no
-  // card, so nothing is highlighted. The 0.5 sentinel is not an edge.
+  const rows = eventPlayerRows({
+    suggested: suggestQuery.data?.players ?? [],
+    picks: picksQuery.data?.picks ?? [],
+    metric: selectedMarket,
+    eventId,
+    selectedName: playerName,
+    postedLine: line,
+    awayLineup: awayLineupQuery.data ?? null,
+    homeLineup: homeLineupQuery.data ?? null,
+    awayAbbr,
+    homeAbbr,
+    league,
+  });
+  const selectedRow = rows.find((row) => row.name === playerName) ?? null;
+  const position = projectionQuery.data?.position?.trim() || null;
+  const model = buildOurRead({
+    player: playerName.trim(),
+    marketName: getMarketDisplayName(selectedMarket),
+    market: selectedMarket,
+    binary,
+    supportsProjection: cfg.supportsProjection,
+    eventId,
+    homeTeam: currentEvent?.home_team ?? "",
+    awayTeam: currentEvent?.away_team ?? "",
+    commenceTime: currentEvent?.commence_time ?? "",
+    team: selectedRow?.team ?? null,
+    position,
+    line,
+    pick,
+    consensus: result?.consensus ?? null,
+    last10: last10Query.data?.game_logs ?? [],
+    history: sampleQuery.data ?? null,
+    projection: projectionQuery.data ?? null,
+  });
+  const chart = chartQuery.data ? gameLogChart(chartQuery.data.game_logs ?? [], activeLine) : null;
   const projectionMetric = marketToProjectionCard(selectedMarket);
   const firstResult = result?.results?.[0];
   const currentThreshold = lineForProjectionEdge({
@@ -271,122 +366,121 @@ export function EventDetail({ league }: EventDetailProps) {
     marketKind: firstResult?.market_kind,
   });
 
-  const handleMarketChange = (market: MarketKey) => {
-    setSelectedMarket(market);
-    setResult(null);
-    setValue("player_name", "");
+  const existing = slip.picks.find(
+    (item) => item.player_name === model.primary?.player_name && item.metric === model.primary?.metric,
+  );
+  const addSeed = (seed: NonNullable<typeof model.primary>) => {
+    const id = `${seed.player_name}-${seed.metric}`;
+    slip.removePick(id);
+    slip.addPick(seed);
   };
 
-  const onSubmit = (data: CalculatorFormData) => {
-    setResult(null);
-    mutation.mutate({
-      event_id: eventId,
-      player_name: data.player_name,
-      market: selectedMarket,
-      regions: "us",
-      bookmakers: data.bookmakers.length > 0 ? data.bookmakers : null,
-      odds_format: "american",
-    });
+  const chartEmpty = (() => {
+    if (binary) return "Game log bars are for Over/Under stats. Double-double history is in the panel below.";
+    if (!playerName) return "Choose a player to load the game log.";
+    if (line == null && !mutation.isPending) return "No posted line. Over and under are not calculated.";
+    if (chartQuery.isError) return null;
+    if (chartQuery.data && chartQuery.data.n_games === 0) {
+      return chartQuery.data.message?.trim() || "No games match these filters.";
+    }
+    return null;
+  })();
+
+  const show = (id: EventTab | EventTab[]) => {
+    const ids = Array.isArray(id) ? id : [id];
+    return cn(!ids.includes(tab) && "max-md:hidden");
   };
 
   return (
-    <div className="mx-auto max-w-6xl px-6 py-10 page-enter">
-      <button
-        onClick={() => router.back()}
-        className="mb-6 flex items-center gap-2 text-gray transition-colors duration-150 hover:text-dark font-semibold"
-      >
-        <ArrowLeft className="w-5 h-5" />
-        <span>{cfg.backLabel}</span>
-      </button>
+    <div className="mx-auto flex max-w-[1200px] flex-col gap-5 px-4 py-6 md:px-8">
+      <EventHeader
+        awayName={currentEvent?.away_team ?? ""}
+        homeName={currentEvent?.home_team ?? ""}
+        awayAbbr={awayAbbr}
+        homeAbbr={homeAbbr}
+        when={eventWhen(currentEvent?.commence_time)}
+        chips={[
+          lineupChip(awayAbbr, awayLineupQuery.data),
+          lineupChip(homeAbbr, homeLineupQuery.data),
+        ]}
+        isLoading={eventsQuery.isLoading}
+        isError={eventsQuery.isError || (!eventsQuery.isLoading && !currentEvent)}
+        errorText={
+          eventsQuery.isError
+            ? errorText(eventsQuery.error)
+            : "Game information not found"
+        }
+        onBack={() => router.push(league === "wnba" ? "/wnba" : "/")}
+        onRetry={() => eventsQuery.refetch()}
+      />
 
-      <section className="grid gap-6 md:grid-cols-[1.1fr_0.9fr] mb-8">
-        <div className="card">
-          <div className="section-eyebrow">{cfg.workspaceEyebrow}</div>
-          {isEventsLoading ? (
-            <div className="animate-pulse">
-              <div className="skeleton h-8 w-64 mb-4" />
-              <div className="skeleton h-4 w-48" />
-            </div>
-          ) : currentEvent ? (
-            <>
-              <h1 className="hero-title mb-5">
-                {currentEvent.away_team}
-                <span className="text-gradient block">@ {currentEvent.home_team}</span>
-              </h1>
-              <div className="accent-line mb-6" />
-              <div className="flex flex-wrap items-center gap-3 text-gray">
-                <span className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/4 px-3 py-1.5">
-                  <Calendar className="w-4 h-4 text-red" />
-                  {formatFullDate(currentEvent.commence_time)}
-                </span>
-                <span className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/4 px-3 py-1.5">
-                  <TeamLogo teamName={currentEvent.away_team} size={20} />
-                  <span>{currentEvent.away_team}</span>
-                </span>
-                <span className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/4 px-3 py-1.5">
-                  <TeamLogo teamName={currentEvent.home_team} size={20} />
-                  <span>{currentEvent.home_team}</span>
-                </span>
-              </div>
-            </>
-          ) : (
-            <div className="flex items-center gap-3 text-red">
-              <AlertCircle className="w-6 h-6" />
-              <span className="font-semibold">Game information not found</span>
-            </div>
-          )}
-        </div>
+      <EventTabs value={tab} onChange={setTab} />
 
-        <div className="card">
-          <p className="text-xs uppercase tracking-[0.22em] text-light mb-3">How to read this page</p>
-          <div className="space-y-4 text-sm leading-7 text-gray">
-            <p>1. Pick a market, then choose a player and optional bookmakers.</p>
-            <p>2. Run the no-vig calculation to inspect fairer over/under pricing.</p>
-            <p>3. {cfg.howToReadStep3}</p>
-          </div>
-        </div>
-      </section>
-
-      {/* Lineup Status — real panels for NBA; labeled empty state for WNBA. */}
-      {currentEvent ? (
-        <section className="mb-8">
-          <div className="mb-4">
-            <p className="section-eyebrow">Lineup Status</p>
-            <h2 className="mt-2 text-2xl font-semibold text-dark">Projected starters and confidence</h2>
-          </div>
-          {cfg.supportsLineup ? (
-            <div className="grid gap-6 md:grid-cols-2">
+      <div className="flex flex-col gap-5 md:grid md:grid-cols-[minmax(280px,360px)_minmax(0,1fr)] md:items-start">
+        {currentEvent ? (
+          <details
+            className={cn(
+              "order-last rounded-[20px] border border-line bg-white px-4 py-3 md:order-first md:col-span-2",
+              tab !== "read" && "max-md:hidden",
+            )}
+          >
+            <summary className="cursor-pointer text-sm font-semibold text-ink">Starters</summary>
+            <div className="mt-4 grid gap-4 md:grid-cols-2">
               <TeamLineupPanel
-                lineup={awayLineup ?? null}
-                isLoading={isAwayLineupLoading}
-                title={`${awayTeamCode} lineup status`}
+                lineup={awayLineupQuery.data ?? null}
+                isLoading={awayLineupQuery.isLoading}
+                title={`${awayAbbr} lineup`}
               />
               <TeamLineupPanel
-                lineup={homeLineup ?? null}
-                isLoading={isHomeLineupLoading}
-                title={`${homeTeamCode} lineup status`}
+                lineup={homeLineupQuery.data ?? null}
+                isLoading={homeLineupQuery.isLoading}
+                title={`${homeAbbr} lineup`}
               />
             </div>
-          ) : (
-            <SectionUnavailable
-              eyebrow="Lineup Status"
-              title="Projected starters and confidence"
-              message="Lineup and injury data is not available for WNBA yet. This panel will populate once WNBA lineup ingestion ships."
-            />
-          )}
-        </section>
-      ) : null}
+          </details>
+        ) : null}
 
-      <form onSubmit={handleSubmit(onSubmit)}>
-        <div className="card mb-6">
-          <MarketSelect
-            value={selectedMarket}
-            onChange={handleMarketChange}
+        <aside
+          className={cn(
+            "order-1 flex flex-col gap-5 rounded-[24px] border border-line bg-white p-4 md:col-start-1 md:p-5",
+            tab !== "read" && "max-md:hidden",
+          )}
+        >
+          <StatChips value={selectedMarket} onChange={setSelectedMarket} disabled={mutation.isPending} />
+          <PlayerRail
+            rows={rows}
+            selected={playerName}
+            onSelect={(name) => setValue("player_name", name)}
+            isLoading={suggestQuery.isLoading && rows.length === 0}
+            isError={suggestQuery.isError && rows.length === 0}
+            errorText={errorText(suggestQuery.error)}
+            onRetry={() => suggestQuery.refetch()}
           />
-        </div>
+        </aside>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
-          <div className="card">
+        <div className={cn("order-2 min-w-0 md:col-start-2", show("read"))}>
+            <OurRead
+              model={model}
+              isLoading={Boolean(playerName) && mutation.isPending && !pick && !result}
+              isError={mutation.isError}
+              errorText={errorText(mutation.error)}
+              primaryInSlip={existing?.direction === model.primary?.direction}
+              otherInSlip={existing?.direction === model.other?.direction}
+              onAddPrimary={() => model.primary && addSeed(model.primary)}
+              onAddOther={() => model.other && addSeed(model.other)}
+              onAsk={() => {
+                if (pick) setSelectedPickContext(createAgentPickContextFromDailyPick(pick));
+                openWidget();
+              }}
+            />
+          </div>
+
+          <div
+            className={cn(
+              "order-3 rounded-[24px] border border-line bg-white p-4 md:col-start-1 md:p-5",
+              tab !== "read" && "max-md:hidden",
+            )}
+          >
             <Controller
               name="player_name"
               control={control}
@@ -402,126 +496,167 @@ export function EventDetail({ league }: EventDetailProps) {
                 />
               )}
             />
-            {errors.player_name && (
-              <p className="mt-2 text-sm text-red font-medium">
-                {errors.player_name.message}
-              </p>
-            )}
           </div>
 
-          <div className="card">
+          <section className={cn("order-4 flex flex-col gap-5 rounded-[24px] border border-line bg-white p-4 md:col-start-2 md:p-7", show(["log", "filters"]))}>
+            <div className={show("log")}>
+              <GameLogChart
+                model={chart}
+                note={
+                  chartQuery.data
+                    ? `${getMarketDisplayName(selectedMarket)} · ${chartQuery.data.n_games} games`
+                    : getMarketDisplayName(selectedMarket)
+                }
+                selectedKey={selectedBar}
+                onSelect={setSelectedBar}
+                isLoading={chartQuery.isLoading && historyEnabled}
+                isError={chartQuery.isError}
+                errorText={errorText(chartQuery.error)}
+                emptyMessage={chartEmpty}
+              />
+              {chartQuery.data && chartQuery.data.n_games > 0 ? (
+                <div className="mt-4 grid grid-cols-2 gap-2 md:grid-cols-4">
+                  <StatTile label="Over" value={chartQuery.data.p_over == null ? "—" : `${(chartQuery.data.p_over * 100).toFixed(1)}%`} />
+                  <StatTile label="Under" value={chartQuery.data.p_under == null ? "—" : `${(chartQuery.data.p_under * 100).toFixed(1)}%`} />
+                  <StatTile label="Average" value={chartQuery.data.mean == null ? "—" : chartQuery.data.mean.toFixed(1)} />
+                  <StatTile label="Games" value={String(chartQuery.data.n_games)} />
+                </div>
+              ) : null}
+            </div>
+            <div className={show("filters")}>
+              <GameFilters
+                range={range}
+                onRange={setRange}
+                lineText={activeLine == null ? null : String(activeLine)}
+                lineChanged={lineSteps !== 0}
+                lineDisabled={line == null}
+                onMinus={() => setLineSteps((steps) => steps - 1)}
+                onPlus={() => setLineSteps((steps) => steps + 1)}
+                onResetLine={() => setLineSteps(0)}
+                role={role}
+                onRole={setRole}
+                opponent={opponent}
+                opponents={sampleQuery.data?.opponents ?? []}
+                onOpponent={setOpponent}
+                teammates={sampleQuery.data?.teammates ?? []}
+                selectedMates={mates}
+                onToggleMate={(name) =>
+                  setMates((current) =>
+                    current.includes(name) ? current.filter((item) => item !== name) : [...current, name],
+                  )
+                }
+                mateMode={mateMode}
+                onMateMode={setMateMode}
+                gameCount={chartQuery.data?.n_games ?? null}
+              />
+            </div>
+          </section>
+
+          <section className={cn("order-5 rounded-[24px] border border-line bg-white p-4 md:col-start-2 md:p-7", show("odds"))}>
+            <div className="mb-4 flex flex-wrap items-baseline justify-between gap-2">
+              <h3 className="text-lg font-bold text-ink">Sportsbook prices</h3>
+              <p className="text-[13px] text-muted">
+                {result?.consensus
+                  ? `No-vig consensus ${binary ? "yes" : "over"} ${
+                      (binary
+                        ? result.consensus.p_yes_fair
+                        : result.consensus.p_over_fair
+                      ) == null
+                        ? "—"
+                        : `${(((binary ? result.consensus.p_yes_fair : result.consensus.p_over_fair) as number) * 100).toFixed(1)}%`
+                    }`
+                  : "No-vig consensus is not on this response."}
+              </p>
+            </div>
             <Controller
               name="bookmakers"
               control={control}
               render={({ field }) => (
-                <BookmakerSelect
-                  value={field.value}
-                  onChange={field.onChange}
-                  disabled={mutation.isPending}
-                />
+                <BookmakerSelect value={field.value} onChange={field.onChange} disabled={mutation.isPending} />
               )}
             />
-          </div>
-        </div>
+            <div className="mt-4">
+              <ResultsTable data={result} isLoading={mutation.isPending} />
+            </div>
+          </section>
 
-        <div className="flex justify-center">
+          <div className={cn("order-6 md:col-start-2", show("log"))}>
+            <PlayerHistoryStats
+              eventId={eventId}
+              initialPlayer={playerName}
+              initialMarket={selectedMarket}
+              initialThreshold={line == null ? initialThreshold : String(line)}
+              onPlayerSelect={(name) => setValue("player_name", name)}
+              projection={projectionQuery.data ?? undefined}
+              getCSVPlayersFn={cfg.getCSVPlayersFn}
+              getPlayerHistoryFn={cfg.getPlayerHistoryFn}
+              getPlayerDDHistoryFn={cfg.getPlayerDDHistoryFn}
+              calculateNoVigFn={cfg.calculateNoVig}
+              cacheNamespace={cfg.cacheNamespace}
+            />
+          </div>
+
+          <div className={cn("order-7 md:col-start-2", show("read"))}>
+            {playerName ? (
+              cfg.supportsProjection ? (
+                <PlayerProjectionPanel
+                  projection={projectionQuery.data ?? null}
+                  metric={projectionMetric}
+                  threshold={currentThreshold}
+                  isLoading={projectionQuery.isLoading}
+                />
+              ) : (
+                <SectionUnavailable
+                  eyebrow="Today's Projection"
+                  title="Player projection"
+                  message="Projection modeling is not available for WNBA yet. This panel will populate once the WNBA projection source ships."
+                />
+              )
+            ) : null}
+          </div>
+      </div>
+
+      {playerName ? (
+        <div className="fixed inset-x-0 bottom-[72px] z-30 flex gap-2 border-t border-line bg-white px-3 py-2.5 md:hidden">
+          {model.primary ? (
+            <button
+              type="button"
+              onClick={() => addSeed(model.primary!)}
+              className="min-h-12 flex-1 rounded-[14px] bg-brand px-3 text-sm font-bold text-white"
+            >
+              {existing?.direction === model.primary.direction ? "In slip" : model.primary.direction === "under" ? "Add under" : "Add over"}
+            </button>
+          ) : null}
+          {model.other ? (
+            <button
+              type="button"
+              onClick={() => addSeed(model.other!)}
+              className="min-h-12 rounded-[14px] border border-[#D3CCDF] bg-white px-3 text-[13px] font-semibold text-ink"
+            >
+              {model.other.direction === "under" ? "Under" : "Over"}
+            </button>
+          ) : null}
           <button
-            type="submit"
-            disabled={mutation.isPending || !playerName}
-            className="btn-primary flex items-center gap-2 px-6 sm:px-10 py-4 text-base sm:text-lg
-                       disabled:opacity-50 disabled:cursor-not-allowed"
+            type="button"
+            onClick={() => {
+              if (pick) setSelectedPickContext(createAgentPickContextFromDailyPick(pick));
+              openWidget();
+            }}
+            className="min-h-12 rounded-[14px] bg-brand-tint px-3.5 text-[13px] font-bold text-brand"
           >
-            {mutation.isPending ? (
-              <>
-                <Loader2 className="w-5 h-5 animate-spin" />
-                <span>Calculating...</span>
-              </>
-            ) : (
-              <>
-                <Calculator className="w-5 h-5" />
-                <span>Calculate No-Vig Probability</span>
-              </>
-            )}
+            Ask
           </button>
         </div>
-      </form>
+      ) : null}
+    </div>
+  );
+}
 
-      {mutation.isError && (
-        <div className="card mt-6 border-red">
-          <div className="flex items-start gap-4">
-            <div className="w-10 h-10 rounded-lg bg-red flex items-center justify-center shrink-0">
-              <AlertCircle className="w-5 h-5 text-white" />
-            </div>
-            <div>
-              <h3 className="font-bold text-dark mb-1">Calculation Failed</h3>
-              <p className="text-gray text-sm">
-                {mutation.error instanceof Error
-                  ? mutation.error.message
-                  : "Unable to calculate no-vig probability, please try again later"}
-              </p>
-            </div>
-          </div>
-        </div>
-      )}
-
-      <div className="mt-8">
-        <ResultsTable
-          data={result}
-          isLoading={mutation.isPending}
-        />
-      </div>
-
-      {!result && !mutation.isPending && (
-        <div className="mt-8 card">
-          <h3 className="text-sm font-semibold text-dark mb-2">
-            📊 What is No-Vig Probability?
-          </h3>
-          <p className="text-sm text-gray leading-relaxed">
-            Bookmaker odds include &quot;vig&quot; (vig/juice), causing the sum of Over and Under
-            implied probabilities to exceed 100%. No-vig probability normalizes these
-            implied probabilities to derive a fair probability estimate closer to reality.
-            Bookmakers with lower vig have odds closer to true probability.
-          </p>
-        </div>
-      )}
-
-      {/* Player projection — real panel for NBA; labeled empty state for WNBA. */}
-      {playerName && (
-        <div className="mt-8">
-          {cfg.supportsProjection ? (
-            <PlayerProjectionPanel
-              projection={projectionData ?? null}
-              metric={projectionMetric}
-              threshold={currentThreshold}
-              isLoading={isProjectionLoading}
-            />
-          ) : (
-            <SectionUnavailable
-              eyebrow="Today's Projection"
-              title="Player projection"
-              message="Projection modeling is not available for WNBA yet. This panel will populate once the WNBA projection source ships."
-            />
-          )}
-        </div>
-      )}
-
-      <div className="mt-12 pt-8 border-t-2 border-dark/10">
-        <div className="card">
-          <PlayerHistoryStats
-            eventId={eventId}
-            initialPlayer={playerName}
-            initialMarket={selectedMarket}
-            initialThreshold={initialThreshold}
-            onPlayerSelect={(name) => setValue("player_name", name)}
-            projection={projectionData ?? undefined}
-            getCSVPlayersFn={cfg.getCSVPlayersFn}
-            getPlayerHistoryFn={cfg.getPlayerHistoryFn}
-            getPlayerDDHistoryFn={cfg.getPlayerDDHistoryFn}
-            calculateNoVigFn={cfg.calculateNoVig}
-            cacheNamespace={cfg.cacheNamespace}
-          />
-        </div>
-      </div>
+function StatTile({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="rounded-2xl bg-[#F7F6F9] px-3.5 py-3">
+      <div className="text-xs font-semibold text-[#4A4458]">{label}</div>
+      <div className="font-mono text-2xl font-bold leading-tight text-ink">{value}</div>
     </div>
   );
 }

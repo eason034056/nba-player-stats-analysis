@@ -42,9 +42,15 @@ vi.mock("@/components/BookmakerSelect", () => ({
   BookmakerSelect: () => <div>bookmaker select</div>,
 }));
 
-vi.mock("@/components/MarketSelect", () => ({
-  MarketSelect: () => <div>market select</div>,
-}));
+vi.mock("@/components/MarketSelect", async () => {
+  const actual = await vi.importActual<typeof import("@/components/MarketSelect")>(
+    "@/components/MarketSelect",
+  );
+  return {
+    ...actual,
+    MarketSelect: () => <div>market select</div>,
+  };
+});
 
 vi.mock("@/components/ResultsTable", () => ({
   ResultsTable: () => <div>results table</div>,
