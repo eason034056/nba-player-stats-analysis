@@ -1,6 +1,6 @@
 # Sports Lab Progress
 
-> Engineers update the row for their ticket in the pull request that changes that ticket. This file is a snapshot of ticket state, not a heartbeat log. Last updated: **2026-11-10** (SPO-115). Facts below were checked against `docs/task-summaries/`, `git log` on `dev`, and `gh pr list --base dev`. Titles that were not in those sources are left blank.
+> Engineers update the row for their ticket in the pull request that changes that ticket. This file is a snapshot of ticket state, not a heartbeat log. Last updated: **2026-11-10** (SPO-105 on `dev`; SPO-107 added under In flight; SPO-110a; SPO-115). Facts below were checked against `docs/task-summaries/`, `git log` on `dev`, and `gh pr list --base dev`. Titles that were not in those sources are left blank.
 
 ## Shipped
 
@@ -103,11 +103,22 @@ Stale pull requests the owner is closing. Not merged.
 
 | Ticket | Note |
 |---|---|
+| SPO-110a | Design tokens, app shell, and the Today page (NBA and WNBA). Open on `feature/SPO-110a-design-system-shell-today`. PR into `dev`. Summary: `docs/task-summaries/SPO-110a-design-system-shell-today.md`. Picks, Bet Slip, and Method stay on their current pages until PR C. |
+| SPO-110b | NBA and WNBA game page restyle. Open on `feature/SPO-110b-game-page`. Draft PR into `dev`, stacked on SPO-110a until #39 merges. Summary: `docs/task-summaries/SPO-110b-game-page.md`. |
 | SPO-115 | `bookmakers_count` counted Over and Under (and every alt rung). One main line per bookmaker. Branch `feature/SPO-115-bookmakers-count`. PR into `dev`. Summary: `docs/task-summaries/SPO-115-bookmakers-count.md`. |
 | SPO-96 | This docs rewrite (`feature/SPO-96-claude-md-workflow-rewrite`). |
 | SPO-104 | One-sided DD quotes (`under_odds` / `p_under_imp` null, including a JSON null No price; `line_is_synthetic`, `market_kind`, `uses_prior`), league-scoped team codes, and the SPO-97 schedule-index follow-ups. Lands with #36. PR #37 into `dev`. Summary: `docs/task-summaries/SPO-104-dd-one-sided-and-followups.md`. |
+| SPO-107 | Harness game types match production regular season. Playoffs and play-in are a separate report section. Open on `feature/SPO-107-harness-gametype-parity`. Entry below. |
 | SPO-102 | Wire `PlayerDDTile` to double-double history and yes/no odds. Open on `feature/SPO-102-player-dd-tile-wiring`. Summary: `docs/task-summaries/SPO-102-player-dd-tile-wiring.md`. |
 | SPO-103 | SPO-10 Phase 5 final review. Open. |
+
+### SPO-107 — harness game-type parity
+
+Open on `feature/SPO-107-harness-gametype-parity`, base `dev`. Not merged.
+
+`_active_games` uses `CSVPlayerHistoryService._allowed_game_types()` (regular season; a missing game type counts as regular). Headline metrics are regular-season targets scored with that history. Playoffs and the play-in are scored with the same history and reported in their own section, not in the headlines. The CI guard compares 25 daily L10 rates per league (seed 7) with `get_player_stats` and fails on any mismatch. `oracle.py` and `backtest_report.md` are the full run on the post-SPO-97 CSVs.
+
+Decision: `docs/decisions/SPO-107/decision_20261110_regular-season-harness.md`.
 
 ## Not classified
 

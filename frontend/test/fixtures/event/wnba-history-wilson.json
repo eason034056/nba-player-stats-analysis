@@ -1,0 +1,37 @@
+{
+  "player": "A'ja Wilson",
+  "metric": "points",
+  "threshold": 22.5,
+  "n_games": 18,
+  "p_over": 0.58,
+  "p_under": 0.39,
+  "equal_count": 0,
+  "mean": 22.1,
+  "std": 3.4,
+  "histogram": [],
+  "game_logs": [
+    {
+      "date": "09/28",
+      "date_full": "2026-09-28",
+      "opponent": "CON",
+      "value": 20,
+      "is_over": false,
+      "team": "LVA",
+      "minutes": 30,
+      "is_starter": true
+    },
+    {
+      "date": "09/30",
+      "date_full": "2026-09-30",
+      "opponent": "NYL",
+      "value": 25,
+      "is_over": true,
+      "team": "LVA",
+      "minutes": 34,
+      "is_starter": true
+    }
+  ],
+  "opponents": ["NYL", "CON"],
+  "teammates": ["Jackie Young", "Chelsea Gray"],
+  "message": null
+}

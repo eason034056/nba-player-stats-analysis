@@ -151,7 +151,7 @@ function StatCard({
       <p
         className={cn(
           "text-xl font-bold",
-          value === "N/A" ? "text-gray/50" : "text-dark"
+          value === "N/A" ? "text-gray" : "text-dark"
         )}
       >
         {value}
@@ -220,7 +220,7 @@ function EdgeBar({
         <span
           className={cn(
             "text-sm font-bold flex items-center gap-1",
-            isPositive ? "text-green-600" : "text-red"
+            isPositive ? "text-green-800" : "text-red"
           )}
         >
           {isPositive ? (
