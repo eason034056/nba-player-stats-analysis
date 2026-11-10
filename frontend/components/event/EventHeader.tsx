@@ -1,7 +1,8 @@
 "use client";
 
-import { cn } from "@/lib/utils";
+import type { LeagueSegment } from "@/lib/event-detail-link";
 import type { LineupChipModel } from "@/lib/event-page";
+import { cn } from "@/lib/utils";
 
 const CHIP_CLASS: Record<LineupChipModel["tone"], string> = {
   confirmed: "bg-brand-tint text-brand",
@@ -23,6 +24,8 @@ export function EventHeader({
   errorText,
   onBack,
   onRetry,
+  league = "wnba",
+  mobileWhen = null,
 }: {
   awayName: string;
   homeName: string;
@@ -35,9 +38,32 @@ export function EventHeader({
   errorText: string | null;
   onBack: () => void;
   onRetry: () => void;
+  league?: LeagueSegment;
+  mobileWhen?: string | null;
 }) {
+  const nba = league === "nba" && !isLoading && !isError;
+  const matchup = `${awayName} @ ${homeName}`;
   return (
     <div className="flex flex-col gap-4">
+      {nba ? (
+        <div data-testid="event-mobile-header" className="flex items-center gap-3 md:hidden">
+          <button
+            type="button"
+            onClick={onBack}
+            aria-label="All games"
+            className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full border border-line-strong bg-white text-lg text-ink"
+          >
+            ←
+          </button>
+          <div className="min-w-0">
+            <h1 className="truncate text-[19px] font-bold leading-tight tracking-[-0.02em] text-ink">
+              {matchup}
+            </h1>
+            <p className="truncate text-xs text-muted">{mobileWhen || when || "Start time unavailable"}</p>
+          </div>
+        </div>
+      ) : null}
+      <div className={cn("flex flex-col gap-4", nba && "hidden md:flex")}>
       <button
         type="button"
         onClick={onBack}
@@ -65,13 +91,23 @@ export function EventHeader({
                 <div className="flex h-12 w-12 items-center justify-center rounded-full border-[3px] border-white bg-brand font-mono text-[13px] font-bold text-white">
                   {awayAbbr || "—"}
                 </div>
-                <div className="-ml-2.5 flex h-12 w-12 items-center justify-center rounded-full border-[3px] border-white bg-brand font-mono text-[13px] font-bold text-white">
+                <div
+                  className={cn(
+                    "-ml-2.5 flex h-12 w-12 items-center justify-center rounded-full border-[3px] border-white font-mono text-[13px] font-bold text-white",
+                    league === "nba" ? "bg-brand-soft" : "bg-brand",
+                  )}
+                >
                   {homeAbbr || "—"}
                 </div>
               </div>
               <div>
-                <h1 className="text-2xl font-bold leading-none tracking-[-0.03em] text-ink md:text-4xl">
-                  {awayName} @ {homeName}
+                <h1
+                  className={cn(
+                    "font-bold leading-none tracking-[-0.03em] text-ink",
+                    league === "nba" ? "text-[clamp(24px,3.6cqi,36px)]" : "text-2xl md:text-4xl",
+                  )}
+                >
+                  {matchup}
                 </h1>
                 <p className="mt-1 text-sm text-muted">{when ?? "Start time unavailable"}</p>
               </div>
@@ -93,6 +129,7 @@ export function EventHeader({
           </>
         )}
       </section>
+      </div>
     </div>
   );
 }

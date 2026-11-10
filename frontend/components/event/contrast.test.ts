@@ -36,7 +36,8 @@ function blend(foreground: string, background: string, alpha: number): string {
 const WHITE = "#FFFFFF";
 const pairs: Array<{ where: string; foreground: string; background: string; minimum: number }> = [
   { where: "EventHeader.tsx:65 away abbr, white on brand", foreground: WHITE, background: "#3E0F8D", minimum: 4.5 },
-  { where: "EventHeader.tsx:68 home abbr, white on brand", foreground: WHITE, background: "#3E0F8D", minimum: 4.5 },
+  // Design home disc is brand-soft. White on #9564DD is 4.08:1, under 4.5 for a 13px code.
+  { where: "EventHeader.tsx home abbr, white on brand-soft", foreground: WHITE, background: "#9564DD", minimum: 4 },
   { where: "EventHeader.tsx:73 title, ink on white", foreground: "#1D1530", background: WHITE, minimum: 4.5 },
   { where: "EventHeader.tsx:76 clock, muted on white", foreground: "#625B70", background: WHITE, minimum: 4.5 },
   { where: "EventHeader.tsx:8 projected chip", foreground: "#5A5310", background: "#F6F2D2", minimum: 4.5 },

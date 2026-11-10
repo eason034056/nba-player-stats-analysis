@@ -494,6 +494,16 @@ export const RECENT_GAMES_OPTIONS = recentGamesOptions("nba");
  * - bookmakers_count: 有開出這名球員這個盤口的博彩公司家數（同一家的 Over/Under 與替代盤只算一次）
  * - all_lines: 每家博彩公司的主盤，一家一條
  */
+/** One signal on a stored NBA pick. `value` is display text for the pick's side. */
+export const pickSignalSchema = z.object({
+  key: z.string(),
+  label: z.string(),
+  value: z.string().nullable().optional(),
+  verdict: z.enum(["supports", "neutral", "against"]).nullable().optional().catch(null),
+});
+
+export type PickSignal = z.infer<typeof pickSignalSchema>;
+
 export const dailyPickSchema = z.object({
   player_name: z.string(),
   player_team: z.string().optional().default(""),  // 球員所屬球隊（簡短名稱）
@@ -506,9 +516,19 @@ export const dailyPickSchema = z.object({
   threshold: z.number(),
   direction: z.string(),
   probability: z.number(),
-  // Backend bucket for `probability`. Today prints this string and does not
-  // recompute a tier from the percent. Absent on older payloads.
-  tier: z.enum(["Strong play", "Playable", "Lean"]).nullable().optional(),
+  // Backend bucket for `probability`. The event page prints this string
+  // and does not recompute a tier from the percent. Absent on older payloads.
+  // Any string. `tierFromApi` keeps Strong play, Playable, and Lean. Pass and
+  // unknown stay blank on the page instead of failing the whole pick.
+  tier: z.string().nullable().optional().catch(null),
+  // Pos on the player's most recent game log. Null when the payload has none.
+  position: z.string().nullable().optional(),
+  p_over: z.number().nullable().optional(),
+  p_under: z.number().nullable().optional(),
+  // Five NBA verdicts, each relative to `direction`. Null on WNBA and on
+  // older payloads. A broken list becomes null so the pick itself still loads.
+  signals: z.array(pickSignalSchema).nullable().optional().catch(null),
+  combined_probability: z.number().nullable().optional().catch(null),
   n_games: z.number(),
   bookmakers_count: z.number(),
   all_lines: z.array(z.number()).optional().default([]),
