@@ -484,3 +484,18 @@
   padding: 0 6px;
   border-radius: 999px;
 }
+
+/* Light agent panel: verdict cards still use the dark-surface utilities. */
+.agent-surface-light .text-on-dark {
+  color: #1d1530;
+}
+.agent-surface-light .text-on-dark-muted {
+  color: #625b70;
+}
+.agent-surface-light .text-emerald-200,
+.agent-surface-light .text-sky-200,
+.agent-surface-light .text-yellow-100,
+.agent-surface-light .text-emerald-100,
+.agent-surface-light .text-amber-100 {
+  color: #1d1530;
+}

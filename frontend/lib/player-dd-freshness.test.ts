@@ -38,10 +38,12 @@ describe("formatPercent", () => {
     expect(formatPercent(0.0004)).toBe("0.0%");
   });
 
-  it("does not throw or invent 0% when the input is not finite", () => {
-    expect(formatPercent(Number.NaN)).toBe("NaN%");
-    expect(formatPercent(Number.POSITIVE_INFINITY)).toBe("Infinity%");
-    expect(formatPercent(Number.NEGATIVE_INFINITY)).toBe("-Infinity%");
+  it("renders an em dash for NaN and other non-finite values", () => {
+    expect(formatPercent(Number.NaN)).toBe("—");
+    expect(formatPercent(Number.NaN)).not.toBe("NaN%");
+    expect(formatPercent(Number.POSITIVE_INFINITY)).toBe("—");
+    expect(formatPercent(Number.NEGATIVE_INFINITY)).toBe("—");
+    expect(formatPercent(Number.NaN)).not.toBe("0.0%");
   });
 });
 

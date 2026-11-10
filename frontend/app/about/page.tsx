@@ -1,246 +1,197 @@
 /**
- * about/page.tsx - Minimal About Page
- * 
- * Design Philosophy:
- * - Clear information hierarchy
- * - White cards with black borders
- * - Red for important warnings
+ * /about — Method, shared by NBA and WNBA.
+ *
+ * The layout follows the November 2026 prototype. The copy describes
+ * the calculations the app actually runs. A five-signal blend and
+ * signal verdicts are marked planned because the API does not return them.
  */
 
-import { Calculator, AlertTriangle, BookOpen, ExternalLink, Sparkles } from "lucide-react";
-import Link from "next/link";
 import type { Metadata } from "next";
+import Link from "next/link";
 
 export const metadata: Metadata = {
-  title: "About",
-  description: "Learn about the principles of no-vig probability calculation, NBA + WNBA coverage, and our disclaimer",
+  title: "Method",
+  description:
+    "How No-Vig reads a prop: remove the bookmaker margin, then show the historical hit rate and any projection the API returns.",
 };
 
 export default function AboutPage() {
   return (
-    <div className="mx-auto max-w-5xl px-6 py-12 page-enter">
-      <div className="grid gap-6 md:grid-cols-[1.2fr_0.8fr] mb-10">
-        <div className="card">
-          <div className="section-eyebrow">Methodology</div>
-          <h1 className="hero-title mb-4">
-            The pricing notes
-            <span className="text-gradient block">behind the board.</span>
-          </h1>
-          <div className="accent-line mb-6" />
-          <p className="text-lg leading-8 text-gray max-w-2xl">
-            This product is built to turn messy market pricing into something more legible: what the book implies, how much vig sits inside the line, and what the fairer probability looks like after normalization.
-          </p>
-          <p className="mt-4 text-sm text-gray max-w-2xl">
-            We cover NBA and{" "}
-            <Link href="/wnba" className="text-red font-semibold hover:underline">
-              WNBA
-            </Link>{" "}
-            player props with a single no-vig pipeline — each league gets its
-            own picks, event pages, and bet slip so the boards stay clean.
-          </p>
-        </div>
-
-        <div className="card">
-          <p className="text-xs uppercase tracking-[0.22em] text-light mb-3">Why it matters</p>
-          <div className="space-y-4 text-sm leading-7 text-gray">
-            <p>Sportsbooks bake margin into the over/under pair, so raw implied probabilities usually add up to more than 100%.</p>
-            <p>No-vig framing removes that margin so the market can be compared on a fairer baseline before you layer in history or projections.</p>
-          </div>
-        </div>
+    <div className="mx-auto flex w-full max-w-[880px] flex-col gap-[22px] px-4 py-6 md:px-8 md:py-8">
+      <div className="flex flex-col gap-2.5">
+        <h1 className="text-[32px] font-bold leading-none tracking-[-0.035em] md:text-[52px]">
+          How we read a prop
+        </h1>
+        <p className="max-w-[720px] text-base leading-relaxed text-muted">
+          The price and the player&apos;s history are separate reads. The bookmaker margin
+          comes out of the posted odds. The board then shows how often the player cleared
+          that line, plus a projection when the API returns one. Those numbers are not
+          blended into a single probability.
+        </p>
       </div>
 
-      <section className="card mb-6">
-        <div className="flex items-center gap-3 mb-6">
-          <div className="w-10 h-10 rounded-full bg-red flex items-center justify-center">
-            <Sparkles className="w-5 h-5 text-white" />
-          </div>
-          <h2 className="text-xl font-semibold text-dark">
-            NBA + WNBA Coverage
-          </h2>
+      <section className="flex flex-col gap-[18px] rounded-3xl border border-line bg-white p-5 md:p-7">
+        <div className="flex items-baseline gap-3">
+          <div className="font-mono text-[13px] font-bold text-brand">01</div>
+          <h2 className="text-xl font-bold">Remove the vig</h2>
         </div>
-
-        <div className="space-y-4 text-dark">
-          <p>
-            Both leagues run through the same no-vig pipeline — same odds
-            normalization, same historical-probability scoring, same shareable
-            bet-slip workflow — but each league has its own independent surface
-            so picks and slips never bleed across.
-          </p>
-
-          <div className="rounded-[24px] p-5 border border-white/8 bg-white/4">
-            <ul className="space-y-2 text-sm">
-              <li>
-                <span className="font-bold">NBA:</span>{" "}
-                <Link href="/picks" className="text-red font-semibold hover:underline">
-                  Daily Picks
-                </Link>
-                {" · "}
-                <Link href="/betslip" className="text-red font-semibold hover:underline">
-                  Bet Slip
-                </Link>
-              </li>
-              <li>
-                <span className="font-bold">WNBA:</span>{" "}
-                <Link href="/wnba/picks" className="text-red font-semibold hover:underline">
-                  WNBA Daily Picks
-                </Link>
-                {" · "}
-                <Link href="/wnba/betslip" className="text-red font-semibold hover:underline">
-                  WNBA Bet Slip
-                </Link>
-              </li>
-            </ul>
-          </div>
-
-          <p className="text-sm text-gray">
-            The league switch and the bet-slip badge follow the section you
-            are browsing.
-          </p>
-        </div>
-      </section>
-
-      <section className="card mb-6">
-        <div className="flex items-center gap-3 mb-6">
-          <div className="w-10 h-10 rounded-full bg-red flex items-center justify-center">
-            <Calculator className="w-5 h-5 text-white" />
-          </div>
-          <h2 className="text-xl font-semibold text-dark">
-            What is No-Vig Probability?
-          </h2>
-        </div>
-        
-        <div className="space-y-4 text-dark">
-          <p>
-            Bookmaker odds include &quot;vig&quot; (Vig / Vigorish / Juice),
-            which is the bookmaker&apos;s profit margin. Therefore, when you convert
-            Over and Under odds into implied probabilities, the sum exceeds 100%.
-          </p>
-          
-          <div className="rounded-[24px] p-5 border border-white/8 bg-white/4">
-            <p className="text-sm text-gray font-medium mb-3">Example:</p>
-            <ul className="space-y-2 text-sm">
-              <li>
-                <span className="font-bold">Over -110</span> → 
-                Implied probability = 110 / (110 + 100) = <span className="text-red font-bold">52.38%</span>
-              </li>
-              <li>
-                <span className="font-bold">Under -110</span> → 
-                Implied probability = 110 / (110 + 100) = <span className="text-red font-bold">52.38%</span>
-              </li>
-              <li>
-                Sum = 52.38% + 52.38% = <span className="text-red font-bold">104.76%</span>
-                (exceeds 100%)
-              </li>
-              <li>
-                Vig = 104.76% - 100% = <span className="font-bold highlight">4.76%</span>
-              </li>
-            </ul>
-          </div>
-
-          <p>
-            &quot;No-vig&quot; normalizes these implied probabilities so they sum to 100%,
-            resulting in a fair probability estimate closer to reality.
-          </p>
-
-          <div className="rounded-[24px] p-5 border border-white/8 bg-white/4">
-            <p className="text-sm text-gray font-medium mb-3">No-vig calculation:</p>
-            <ul className="space-y-2 text-sm">
-              <li>
-                Over fair probability = 52.38% / 104.76% = <span className="text-green-800 font-bold">50%</span>
-              </li>
-              <li>
-                Under fair probability = 52.38% / 104.76% = <span className="text-green-800 font-bold">50%</span>
-              </li>
-            </ul>
+        <p className="text-[15px] leading-relaxed">
+          Books price both sides so their implied probabilities add up to more than 100%.
+          The extra is their margin. Dividing each side by the total gives the fair price.
+          The consensus is the mean of those fair prices across the books that posted the line.
+        </p>
+        <div className="flex flex-col gap-2.5">
+          <VigRow label="Over −110" fill="bg-brand" percent="52.38%" />
+          <VigRow label="Under −110" fill="bg-brand-soft" percent="52.38%" />
+          <div className="flex items-center gap-2 text-[13px] text-muted">
+            <span className="h-3 w-3 rounded-[3px] bg-accent" />
+            Vig: 104.76% − 100% = 4.76%. Fair price: 50% / 50%.
           </div>
         </div>
-      </section>
-
-      <section className="card mb-6">
-        <div className="flex items-center gap-3 mb-6">
-          <div className="w-10 h-10 rounded-full bg-dark flex items-center justify-center border border-white/10">
-            <BookOpen className="w-5 h-5 text-cream" />
-          </div>
-          <h2 className="text-xl font-semibold text-dark">
-            Calculation Method
-          </h2>
-        </div>
-        
-        <div className="space-y-6 text-dark">
+        <div className="overflow-x-auto rounded-2xl bg-dark px-[18px] py-4 font-mono text-[13px] leading-[1.9] text-[#EDE7F8]">
           <div>
-            <h3 className="font-semibold text-dark mb-3">1. American Odds Conversion</h3>
-            <div className="bg-dark rounded-[24px] p-5 font-mono text-sm text-cream border border-white/8">
-              <p className="text-gray-light">If odds &lt; 0 (e.g., -110):</p>
-              <p className="text-accent ml-4">p = |odds| / (|odds| + 100)</p>
-              <p className="text-gray-light mt-3">If odds &gt; 0 (e.g., +150):</p>
-              <p className="text-accent ml-4">p = 100 / (odds + 100)</p>
-            </div>
+            p = |odds| / (|odds| + 100) <span className="text-[#8F86A3]">{"// odds < 0"}</span>
           </div>
-
           <div>
-            <h3 className="font-semibold text-dark mb-3">2. No-Vig Formula</h3>
-            <div className="bg-dark rounded-[24px] p-5 font-mono text-sm border border-white/8">
-              <p className="text-accent">p_fair = p_implied / (p_over + p_under)</p>
-            </div>
+            p = 100 / (odds + 100) <span className="text-[#8F86A3]">{"// odds > 0"}</span>
           </div>
-
-          <div>
-            <h3 className="font-semibold text-dark mb-3">3. Market Consensus (Mean Method)</h3>
-            <div className="bg-dark rounded-[24px] p-5 font-mono text-sm border border-white/8">
-              <p className="text-accent">consensus = mean(p_fair across bookmakers)</p>
-            </div>
-          </div>
+          <div className="text-accent">p_fair = p / (p_over + p_under)</div>
+          <div className="text-accent">consensus = mean(p_fair across books)</div>
         </div>
       </section>
 
-      <section className="card border-red">
-        <div className="flex items-center gap-3 mb-6">
-          <div className="w-10 h-10 rounded-full bg-red flex items-center justify-center">
-            <AlertTriangle className="w-5 h-5 text-white" />
-          </div>
-          <h2 className="text-xl font-semibold text-red">
-            Disclaimer
-          </h2>
+      <section className="flex flex-col gap-4 rounded-3xl border border-line bg-white p-5 md:p-7">
+        <div className="flex items-baseline gap-3">
+          <div className="font-mono text-[13px] font-bold text-brand">02</div>
+          <h2 className="text-xl font-bold">What the board actually shows</h2>
         </div>
-        
-        <div className="space-y-4">
-          <p className="font-bold text-red text-lg">
-            ⚠️ This site is for informational and data analysis purposes only and does not constitute betting advice.
-          </p>
-          <ul className="list-disc list-inside space-y-2 text-gray">
-            <li>The information provided on this website is for reference and educational purposes only</li>
-            <li>Odds and data may be delayed or incomplete, please refer to official sources</li>
-            <li>Past data does not represent future results</li>
-            <li>Please use betting services legally according to local laws</li>
-            <li>If you have gambling problems, please seek professional help</li>
-          </ul>
-        </div>
+        <p className="text-[15px] leading-relaxed text-ink">
+          Each row below is its own field. Nothing on this list is weighted into the percent
+          on Daily Picks.
+        </p>
+        <ul className="flex flex-col">
+          <Signal
+            label="Historical hit rate"
+            detail="DailyPick.probability. How often the player landed on the stored side of the mode line. The sample size is n_games. The daily board keeps rows at or above 65% with at least 10 games."
+          />
+          <Signal
+            label="No-vig consensus"
+            detail="On a game page, the mean fair price from the no-vig route. It is not copied onto DailyPick.probability."
+          />
+          <Signal
+            label="Projection"
+            detail="NBA only, when the projection route returns projected_value, edge, and minutes. WNBA has no projection route, so those tags stay hidden."
+          />
+          <Signal
+            label="Opponent rank"
+            detail="opponent_rank or opponent_position_rank, shown as Def # only when the number is present. A null rank stays blank."
+          />
+        </ul>
+        <p className="rounded-2xl bg-[#F6F2D2] px-4 py-3 text-sm leading-6 text-yellow">
+          Planned: one blended probability, and Supports / Neutral / Against verdicts.
+          The API does not return them, so this app does not show them.
+        </p>
       </section>
 
-      <section className="card mt-6">
-        <h2 className="text-lg font-semibold text-dark mb-3">
-          Data Source
-        </h2>
-        <p className="text-gray">
-          Odds data provided by{" "}
+      <section className="flex flex-col gap-3.5 rounded-3xl border border-line bg-white p-5 md:p-7">
+        <div className="flex items-baseline gap-3">
+          <div className="font-mono text-[13px] font-bold text-brand">03</div>
+          <h2 className="text-xl font-bold">Read the tier</h2>
+        </div>
+        <p className="text-[15px] leading-relaxed">
+          The tier is a display bucket on the historical hit rate. It is not a field the
+          API sends, and it is not a verdict.
+        </p>
+        <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2 lg:grid-cols-4">
+          <Tier name="Strong play" range="≥ 70%" className="bg-accent text-brand-ink" />
+          <Tier name="Playable" range="65 – 70%" className="bg-brand text-white" />
+          <Tier name="Lean only" range="56 – 65%" className="bg-[#E3DAF3] text-brand" />
+          <Tier name="Pass" range="< 56%" className="bg-[#E2E2E2] text-[#4A4458]" />
+        </div>
+        <p className="text-sm leading-6 text-muted">
+          Lean only and Pass do not appear on Daily Picks with the current service, because
+          rows below 65% or under 10 games are dropped before the page loads them.
+        </p>
+      </section>
+
+      <section className="rounded-3xl border border-line bg-white p-5 md:p-7">
+        <h2 className="text-lg font-bold">NBA and WNBA</h2>
+        <p className="mt-3 text-sm leading-6 text-muted">
+          Both leagues use the same no-vig formula and the same historical-rate board.
+          Picks and slips stay on separate routes.
+        </p>
+        <ul className="mt-4 space-y-2 text-sm">
+          <li>
+            <span className="font-bold">NBA:</span>{" "}
+            <Link href="/picks" className="font-semibold text-brand hover:underline">
+              Daily Picks
+            </Link>
+            {" · "}
+            <Link href="/betslip" className="font-semibold text-brand hover:underline">
+              Bet Slip
+            </Link>
+          </li>
+          <li>
+            <span className="font-bold">WNBA:</span>{" "}
+            <Link href="/wnba/picks" className="font-semibold text-brand hover:underline">
+              Daily Picks
+            </Link>
+            {" · "}
+            <Link href="/wnba/betslip" className="font-semibold text-brand hover:underline">
+              Bet Slip
+            </Link>
+          </li>
+        </ul>
+        <p className="mt-4 text-sm text-muted">
+          Odds come from{" "}
           <a
             href="https://the-odds-api.com"
             target="_blank"
             rel="noopener noreferrer"
-            className="text-red font-bold hover:underline inline-flex items-center gap-1"
+            className="font-semibold text-brand hover:underline"
           >
             The Odds API
-            <ExternalLink className="w-3 h-3" />
           </a>
+          .
         </p>
       </section>
 
-      <div className="mt-16 text-center">
-        <div className="divider-light mb-8" />
-        <p className="text-sm text-gray">
-          © 2024 No-Vig NBA. All rights reserved.
-        </p>
+      <p className="text-[13px] leading-6 text-muted">
+        For informational and research purposes only. This is not betting advice. Odds and
+        lineup data may be delayed or missing; check official sources. Past results do not
+        predict future results.
+      </p>
+    </div>
+  );
+}
+
+function VigRow({ label, fill, percent }: { label: string; fill: string; percent: string }) {
+  return (
+    <div className="flex flex-wrap items-center gap-3">
+      <div className="w-[110px] font-mono text-[13px] font-semibold">{label}</div>
+      <div className="relative h-[22px] min-w-[200px] flex-1 overflow-hidden rounded-md bg-[#EEEBF2]">
+        <div className={`absolute inset-y-0 left-0 w-1/2 ${fill}`} />
+        <div className="absolute inset-y-0 left-1/2 w-[2.4%] bg-accent" />
       </div>
+      <div className="w-[70px] text-right font-mono text-[13px] font-bold">{percent}</div>
+    </div>
+  );
+}
+
+function Signal({ label, detail }: { label: string; detail: string }) {
+  return (
+    <li className="border-t border-[#EEEBF2] py-3">
+      <div className="text-[15px] font-bold">{label}</div>
+      <div className="mt-0.5 text-[13px] leading-6 text-muted">{detail}</div>
+    </li>
+  );
+}
+
+function Tier({ name, range, className }: { name: string; range: string; className: string }) {
+  return (
+    <div className={`rounded-2xl px-3.5 py-3.5 ${className}`}>
+      <div className="font-bold">{name}</div>
+      <div className="mt-1 font-mono text-[13px] font-semibold">{range}</div>
     </div>
   );
 }

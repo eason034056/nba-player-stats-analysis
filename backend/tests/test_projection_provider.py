@@ -163,6 +163,8 @@ class TestNormalizeProjection:
         assert result["steals"] == 1.3
         assert result["blocked_shots"] == 0.4
         assert result["turnovers"] == 3.0
+        assert result["opponent_rank"] == 12
+        assert result["opponent_position_rank"] == 8
 
     def test_computes_pra_correctly(self):
         raw = _make_raw_projection(Points=10.0, Rebounds=5.0, Assists=3.0)

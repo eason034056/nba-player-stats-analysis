@@ -165,7 +165,8 @@ export function roundHalfAwayFromZero(value: number, digits: number): number {
 
 export function formatPercent(probability: number | null | undefined): string {
   // `null * 100` is 0, so a missing probability used to print "0.0%".
-  if (probability == null) return "—";
+  // `NaN` and infinities used to print "NaN%" / "Infinity%".
+  if (probability == null || !Number.isFinite(probability)) return "—";
   return `${roundHalfAwayFromZero(probability * 100, 1).toFixed(1)}%`;
 }
 
