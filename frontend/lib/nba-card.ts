@@ -26,10 +26,7 @@ export function finiteRate(value: number | null | undefined): value is number {
   return typeof value === "number" && Number.isFinite(value);
 }
 
-/**
- * Rate used by the NBA 65% floor and the strong / playable chips.
- * A missing blend keeps the historical rate.
- */
+/** Rate for the NBA 65% filter and the strong / playable chips. */
 export function boardRate(
   pick: { probability: number; combined_probability?: number | null },
   league: LeagueSegment,

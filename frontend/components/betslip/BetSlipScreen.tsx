@@ -15,7 +15,7 @@ import {
   slipCardFace,
   slipMatchup,
   slipPropText,
-  slipSummary,
+  slipTotals,
   slipTeamCode,
 } from "@/lib/bet-slip-board";
 import { getCanonicalTeamCode } from "@/lib/team-logos";
@@ -98,10 +98,8 @@ export function BetSlipScreen() {
   const [copySuccess, setCopySuccess] = useState(false);
   const shareImageRef = useRef<HTMLDivElement>(null);
   const picksHref = "/picks";
-  const summary = useMemo(
-    () => slipSummary(picks.map((pick) => pick.probability)),
-    [picks],
-  );
+  const totals = useMemo(() => slipTotals(picks), [picks]);
+  const summary = totals.summary;
 
   const lineupDates = useMemo(() => {
     return Array.from(
@@ -352,17 +350,19 @@ export function BetSlipScreen() {
               </div>
               <div>
                 <div className="font-mono text-[22px] font-bold">{summary.averageText}</div>
-                <div className="text-xs text-muted">avg. probability</div>
+                <div className="text-xs text-muted">{totals.averageLabel}</div>
               </div>
               <div>
                 <div className="font-mono text-[22px] font-bold text-brand">{summary.allHitText}</div>
-                <div className="text-xs text-muted">all hit</div>
+                <div className="text-xs text-muted">{totals.allHitLabel}</div>
               </div>
             </div>
             <p className="text-xs leading-5 text-muted">
-              Avg and all hit use the stored hit rates. A reverse add stores the complement of the
-              other side&apos;s hit rate, not a de-vigged price. All hit is the product of those stored
-              rates. It is not a joint probability from the API.
+              {totals.basis === "blend"
+                ? "Avg and all hit use the combined probability on each same-side leg. All hit is the product of those blends. It is not a joint probability from the API."
+                : totals.basis === "history"
+                  ? "History: a leg has no blend, so avg and all hit use the historical rate on every leg. A reverse add stores the complement of the other side's hit rate, not a de-vigged price."
+                  : "Avg and all hit use the stored hit rates. A reverse add stores the complement of the other side's hit rate, not a de-vigged price. All hit is the product of those stored rates. It is not a joint probability from the API."}
             </p>
             <ShareCard picks={picks} forwardedRef={shareImageRef} />
             <div className="flex flex-wrap gap-2">

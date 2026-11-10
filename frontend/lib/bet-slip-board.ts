@@ -21,6 +21,53 @@ export interface SlipSummary {
   allHitText: string;
 }
 
+function legHasBlend(pick: BetSlipPick): boolean {
+  return typeof pick.combined_probability === "number" && Number.isFinite(pick.combined_probability);
+}
+
+export interface SlipTotals {
+  summary: SlipSummary;
+  averageLabel: string;
+  allHitLabel: string;
+  basis: "blend" | "history" | "stored";
+}
+
+/**
+ * Same-side legs with a blend contribute that blend.
+ * A slip that also has a leg with no blend is labelled History and uses
+ * the historical rate on every leg, so the totals are not a mixed number.
+ */
+export function slipTotals(picks: BetSlipPick[]): SlipTotals {
+  const summaryOf = (values: number[], basis: SlipTotals["basis"], averageLabel: string, allHitLabel: string): SlipTotals => ({
+    summary: slipSummary(values),
+    averageLabel,
+    allHitLabel,
+    basis,
+  });
+  if (picks.length > 0 && picks.every(legHasBlend)) {
+    return summaryOf(
+      picks.map((pick) => pick.combined_probability as number),
+      "blend",
+      "avg. blend",
+      "all hit",
+    );
+  }
+  if (picks.some(legHasBlend)) {
+    return summaryOf(
+      picks.map((pick) => pick.probability),
+      "history",
+      "History",
+      "History",
+    );
+  }
+  return summaryOf(
+    picks.map((pick) => pick.probability),
+    "stored",
+    "avg. probability",
+    "all hit",
+  );
+}
+
 export function slipSummary(probabilities: number[]): SlipSummary {
   const count = probabilities.length;
   if (count === 0 || probabilities.some((value) => !Number.isFinite(value))) {

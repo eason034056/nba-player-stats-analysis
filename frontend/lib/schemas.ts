@@ -324,7 +324,7 @@ export const playerHistoryResponseSchema = z.object({
   equal_count: z.number().optional().default(0),   // 等於閾值的場次數
   mean: z.number().nullable().optional(),          // 平均值
   std: z.number().nullable().optional(),           // 標準差
-  season_mean: z.number().nullable().optional(),
+  season_mean: z.number().nullable().optional().catch(null),
   histogram: z.array(histogramBinSchema),          // 直方圖資料（保留兼容性）
   game_logs: z.array(gameLogSchema).optional().default([]),  // 每場比賽詳細資料
   opponents: z.array(z.string()).optional().default([]),      // 對手列表
@@ -467,7 +467,7 @@ export const pickSignalSchema = z.object({
   key: z.string(),
   label: z.string(),
   value: z.string().nullable().optional(),
-  verdict: z.enum(["supports", "neutral", "against"]).nullable().optional(),
+  verdict: z.enum(["supports", "neutral", "against"]).nullable().optional().catch(null),
 });
 
 export type PickSignal = z.infer<typeof pickSignalSchema>;
@@ -497,13 +497,13 @@ export const dailyPickSchema = z.object({
   opponent_position_rank: z.number().nullable().optional(),// 對手對該位置防守排名。同一契約：1 = 最弱
   injury_status: z.string().nullable().optional(),         // 傷病狀態（Free Trial 為 null）
   lineup_confirmed: z.boolean().nullable().optional(),     // 先發是否已確認
-  position: z.string().nullable().optional(),
-  tier: z.enum(["Strong play", "Playable", "Lean"]).nullable().optional(),
-  p_over: z.number().min(0).max(1).nullable().optional(),
-  p_under: z.number().min(0).max(1).nullable().optional(),
-  season_mean: z.number().nullable().optional(),
-  signals: z.array(pickSignalSchema).nullable().optional(),
-  combined_probability: z.number().min(0).max(1).nullable().optional(),
+  position: z.string().nullable().optional().catch(null),
+  tier: z.enum(["Strong play", "Playable", "Lean"]).nullable().optional().catch(null),
+  p_over: z.number().min(0).max(1).nullable().optional().catch(null),
+  p_under: z.number().min(0).max(1).nullable().optional().catch(null),
+  season_mean: z.number().nullable().optional().catch(null),
+  signals: z.array(pickSignalSchema).nullable().optional().catch(null),
+  combined_probability: z.number().min(0).max(1).nullable().optional().catch(null),
 });
 
 export type DailyPick = z.infer<typeof dailyPickSchema>;
@@ -719,10 +719,10 @@ export const propReadSchema = z.object({
   player: z.string(),
   market: z.string(),
   line: z.number(),
-  side: z.enum(["over", "under"]).nullable().optional(),
-  combined_probability: unitProbability.nullable().optional(),
-  tier: z.enum(["Strong play", "Playable", "Lean"]).nullable().optional(),
-  signals: z.array(pickSignalSchema).nullable().optional(),
+  side: z.enum(["over", "under"]).nullable().optional().catch(null),
+  combined_probability: unitProbability.nullable().optional().catch(null),
+  tier: z.enum(["Strong play", "Playable", "Lean"]).nullable().optional().catch(null),
+  signals: z.array(pickSignalSchema).nullable().optional().catch(null),
 });
 
 export type PropRead = z.infer<typeof propReadSchema>;
@@ -748,8 +748,8 @@ export const bulkPropBookSchema = z.object({
 
 export const bulkPropPlayerSchema = z.object({
   player: z.string(),
-  position: z.string().nullable().optional(),
-  team_code: z.string().nullable().optional(),
+  position: z.string().nullable().optional().catch(null),
+  team_code: z.string().nullable().optional().catch(null),
   line: z.number(),
   bookmakers_count: z.number(),
   books: z.array(bulkPropBookSchema).optional().default([]),

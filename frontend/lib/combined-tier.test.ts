@@ -214,13 +214,19 @@ describe("NBA combined tier", () => {
     expect(withoutMean?.detail).not.toContain("Season mean");
   });
 
-  it("rejects a combined probability outside 0 to 1", () => {
-    expect(
-      propReadSchema.safeParse({ ...combinedFixture.postedRead, combined_probability: 1.01 }).success,
-    ).toBe(false);
-    expect(
-      dailyPickSchema.safeParse({ ...combinedFixture.sameCard, combined_probability: -0.01 }).success,
-    ).toBe(false);
+  it("turns a combined probability outside 0 to 1 into null and keeps the row", () => {
+    const read = propReadSchema.safeParse({ ...combinedFixture.postedRead, combined_probability: 1.01 });
+    const pick = dailyPickSchema.safeParse({ ...combinedFixture.sameCard, combined_probability: -0.01 });
+    expect(read.success).toBe(true);
+    expect(pick.success).toBe(true);
+    if (read.success) {
+      expect(read.data.combined_probability).toBeNull();
+      expect(read.data.line).toBe(combinedFixture.postedRead.line);
+    }
+    if (pick.success) {
+      expect(pick.data.combined_probability).toBeNull();
+      expect(pick.data.player_name).toBe(combinedFixture.sameCard.player_name);
+    }
   });
 
   it("does not call readTier from the NBA card or the bet slip", () => {

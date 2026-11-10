@@ -419,25 +419,49 @@ function bulkForPlayer(players: BulkPropPlayer[] | undefined, name: string): Bul
   return players?.find((player) => samePlayer(player.player, name)) ?? null;
 }
 
-function nbaLean(pick: DailyPick | null, read: PropRead | null): { text: string; rate: number | null } {
-  const side = read?.side ?? pick?.direction ?? null;
-  const combined = read?.combined_probability ?? pick?.combined_probability ?? null;
-  const tier = read?.tier ?? pick?.tier ?? null;
-  const face = nbaTierFace({
-    probability: pick?.probability,
-    combined_probability: combined,
-    tier,
-  });
-  const letter = side === "under" ? "U" : side === "over" ? "O" : null;
+export type ReadsStatus = "loading" | "error" | "ready";
+
+export function nbaReadsStatus(isLoading: boolean, isError: boolean): ReadsStatus {
+  if (isLoading) return "loading";
+  if (isError) return "error";
+  return "ready";
+}
+
+export function nbaRequestNote(kind: "reads" | "props", status: ReadsStatus): string | null {
+  if (status === "loading") return kind === "reads" ? "Loading reads." : "Loading props.";
+  if (status === "error") return kind === "reads" ? "Reads failed." : "Props failed.";
+  return null;
+}
+
+function leanLetter(side: string | null | undefined): "U" | "O" | null {
+  if (side === "under") return "U";
+  if (side === "over") return "O";
+  return null;
+}
+
+function leanLine(letter: "U" | "O" | null, face: { probabilityText: string; tier: { label: string } | null }, rate: number | null) {
   const label = face.tier ? ` ${face.tier.label}` : "";
-  const rate =
-    typeof combined === "number" && Number.isFinite(combined)
-      ? combined
-      : pick && Number.isFinite(pick.probability)
-        ? pick.probability
-        : null;
   if (!letter) return { text: "—", rate };
   return { text: `${letter} ${face.probabilityText}${label}`, rate };
+}
+
+/** Line, side, probability, and tier from the daily pick alone. */
+function nbaLeanFromPick(pick: DailyPick): { text: string; rate: number | null } {
+  const face = nbaTierFace(pick);
+  return leanLine(leanLetter(pick.direction), face, tierProbability(pick));
+}
+
+/** Line, side, probability, and tier from the reads entry alone. */
+function nbaLeanFromRead(read: PropRead): { text: string; rate: number | null } {
+  const face = nbaTierFace({
+    combined_probability: read.combined_probability,
+    tier: read.tier,
+  });
+  const rate =
+    typeof read.combined_probability === "number" && Number.isFinite(read.combined_probability)
+      ? read.combined_probability
+      : null;
+  return leanLine(leanLetter(read.side), face, rate);
 }
 
 export function eventPlayerRows(args: {
@@ -453,6 +477,7 @@ export function eventPlayerRows(args: {
   homeAbbr: string;
   league: LeagueSegment;
   reads?: PropRead[];
+  readsStatus?: ReadsStatus;
   bulkPlayers?: BulkPropPlayer[];
 }): EventPlayerRow[] {
   const metric = marketToMetric(args.metric);
@@ -493,15 +518,29 @@ export function eventPlayerRows(args: {
       (onRoster(name, args.awayLineup) ? args.awayAbbr : null) ||
       (onRoster(name, args.homeLineup) ? args.homeAbbr : null);
     const selected = namesMatch(name, args.selectedName);
+    const readsStatus = args.league === "nba" ? args.readsStatus ?? "ready" : "ready";
+    const sourcePick = args.league === "nba" ? pick : null;
+    const sourceRead = args.league === "nba" && sourcePick == null ? read : null;
     const line =
-      pick != null
-        ? pick.threshold
-        : read != null
-          ? read.line
-          : selected && args.postedLine != null
-            ? args.postedLine
-            : null;
-    const nba = args.league === "nba" && (pick != null || read != null) ? nbaLean(pick, read) : null;
+      sourcePick != null
+        ? sourcePick.threshold
+        : sourceRead != null
+          ? sourceRead.line
+          : pick != null
+            ? pick.threshold
+            : selected && args.postedLine != null
+              ? args.postedLine
+              : null;
+    const nba =
+      sourcePick != null
+        ? nbaLeanFromPick(sourcePick)
+        : sourceRead != null
+          ? nbaLeanFromRead(sourceRead)
+          : args.league === "nba" && readsStatus === "loading"
+            ? { text: "Loading", rate: null }
+            : args.league === "nba" && readsStatus === "error"
+              ? { text: "Unavailable", rate: null }
+              : null;
     return {
       name,
       team: team || null,

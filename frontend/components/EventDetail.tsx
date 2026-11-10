@@ -41,6 +41,8 @@ import { createAgentPickContextFromDailyPick } from "@/lib/agent-chat";
 import {
   actionBarPercent,
   buildOurRead,
+  nbaReadsStatus,
+  nbaRequestNote,
   chartLine,
   errorText,
   eventPlayerRows,
@@ -349,6 +351,7 @@ export function EventDetail({ league }: { league: League }) {
     homeAbbr,
     league,
     reads: readsQuery.data?.reads,
+    readsStatus: league === "nba" ? nbaReadsStatus(readsQuery.isLoading, readsQuery.isError) : "ready",
     bulkPlayers: propsQuery.data?.markets.find((market) => market.market === selectedMarket)?.players,
   });
   const selectedRow = rows.find((row) => row.name === playerName) ?? null;
@@ -382,6 +385,11 @@ export function EventDetail({ league }: { league: League }) {
     league,
     read: selectedRead,
   });
+  const readsNote =
+    league === "nba" ? nbaRequestNote("reads", nbaReadsStatus(readsQuery.isLoading, readsQuery.isError)) : null;
+  const propsNote =
+    league === "nba" ? nbaRequestNote("props", nbaReadsStatus(propsQuery.isLoading, propsQuery.isError)) : null;
+  const shownModel = readsNote && !pick ? { ...model, caption: readsNote, tier: null } : model;
   const chart = chartQuery.data ? gameLogChart(chartQuery.data.game_logs ?? [], activeLine) : null;
   const projectionMetric = marketToProjectionCard(selectedMarket);
   const firstResult = result?.results?.[0];
@@ -474,6 +482,34 @@ export function EventDetail({ league }: { league: League }) {
           )}
         >
           <StatChips value={selectedMarket} onChange={setSelectedMarket} disabled={mutation.isPending} />
+          {readsNote ? (
+            <div className="flex flex-wrap items-center gap-3">
+              <p className="text-sm text-ink">{readsNote}</p>
+              {readsQuery.isError ? (
+                <button
+                  type="button"
+                  onClick={() => readsQuery.refetch()}
+                  className="text-sm font-semibold text-brand underline"
+                >
+                  Retry reads
+                </button>
+              ) : null}
+            </div>
+          ) : null}
+          {propsNote ? (
+            <div className="flex flex-wrap items-center gap-3">
+              <p className="text-sm text-ink">{propsNote}</p>
+              {propsQuery.isError ? (
+                <button
+                  type="button"
+                  onClick={() => propsQuery.refetch()}
+                  className="text-sm font-semibold text-brand underline"
+                >
+                  Retry props
+                </button>
+              ) : null}
+            </div>
+          ) : null}
           <PlayerRail
             rows={rows}
             selected={playerName}
@@ -487,7 +523,7 @@ export function EventDetail({ league }: { league: League }) {
 
         <div className={cn("order-2 min-w-0 md:col-start-2", show("read"))}>
             <OurRead
-              model={model}
+              model={shownModel}
               isLoading={Boolean(playerName) && mutation.isPending && !pick && !result}
               isError={mutation.isError}
               errorText={errorText(mutation.error)}

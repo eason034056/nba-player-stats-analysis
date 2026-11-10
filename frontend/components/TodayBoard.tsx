@@ -474,7 +474,7 @@ export function TodayBoard({ league }: { league: LeagueSegment }) {
     picksLabel,
     blurb:
       league === "nba"
-        ? "Each card is the combined probability and the tier from tonight's board. A missing blend shows —."
+        ? "Each card is the combined probability and the tier from tonight's board."
         : "Each card is a historical hit rate from tonight's board. Start with the strongest calls, or open any game.",
   };
 

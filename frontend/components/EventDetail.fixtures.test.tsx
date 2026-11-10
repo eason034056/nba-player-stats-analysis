@@ -185,6 +185,48 @@ describe("EventDetail fixtures", () => {
     });
   });
 
+  it("keeps a loading NBA read distinct from a player who has no read", async () => {
+    apiMocks.useEventReads.mockReturnValue({
+      data: undefined,
+      isLoading: true,
+      isError: false,
+      error: null,
+      refetch: vi.fn(),
+    });
+    renderWithProviders(<EventDetail league="nba" />);
+    const herro = await screen.findByTestId("player-row-Tyler Herro");
+    expect(herro).toHaveTextContent("Loading");
+    expect(herro).not.toHaveTextContent("No read");
+    expect(screen.getByText("Loading reads.")).toBeInTheDocument();
+    expect(screen.queryByText("No read")).not.toBeInTheDocument();
+  });
+
+  it("keeps a failed NBA read distinct from a player who has no read", async () => {
+    const refetch = vi.fn();
+    apiMocks.useEventReads.mockReturnValue({
+      data: undefined,
+      isLoading: false,
+      isError: true,
+      error: new Error("reads down"),
+      refetch,
+    });
+    apiMocks.useEventBulkProps.mockReturnValue({
+      data: undefined,
+      isLoading: false,
+      isError: true,
+      error: new Error("props down"),
+      refetch: vi.fn(),
+    });
+    const user = userEvent.setup();
+    renderWithProviders(<EventDetail league="nba" />);
+    expect(await screen.findByText("Reads failed.")).toBeInTheDocument();
+    expect(screen.getByText("Props failed.")).toBeInTheDocument();
+    expect(screen.getAllByText("Unavailable").length).toBeGreaterThan(0);
+    expect(screen.queryByText("No read")).not.toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Retry reads" }));
+    expect(refetch).toHaveBeenCalled();
+  });
+
   it("reads the WNBA game from the WNBA fixtures", async () => {
     nav.eventId = "evt-lva-nyl";
     nav.player = "A'ja Wilson";

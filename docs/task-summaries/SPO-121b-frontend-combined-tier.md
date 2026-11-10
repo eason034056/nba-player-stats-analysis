@@ -67,6 +67,10 @@ Today, Picks, and the game page at 390×844 and 1440×900. The blend is the numb
 
 ![Game page, 390×844](assets/SPO-121b/game-390x844.png)
 
+## Review
+
+The game-page rail takes line, side, probability, and tier from the daily pick when that player has one, and from the reads entry otherwise. Those fields are not mixed across the two payloads, so the rail matches the Our read headline. Slip totals use the blend when every leg has one. A slip that mixes a blend with a historical leg is labelled History and uses the historical rate on every leg. NBA reads and props show loading and error copy instead of "No read" while the request is in flight or has failed. New schema fields use `.catch(null)` so one bad value does not drop the response.
+
 ## Follow-ups
 
 - [ ] The about page still says the blend is planned. Its test locks that sentence.

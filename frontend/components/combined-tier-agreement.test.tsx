@@ -110,7 +110,8 @@ describe("Picks and the Bet Slip agree", () => {
     expect(screen.getAllByText("Playable").length).toBeGreaterThanOrEqual(2);
     expect(screen.queryByText("70%")).not.toBeInTheDocument();
     expect(screen.queryByText("59% Lean")).not.toBeInTheDocument();
-    expect(screen.queryByText("69.7%")).not.toBeInTheDocument();
+    expect(screen.getByText("avg. blend")).toBeInTheDocument();
+    expect(screen.getAllByText("69.7%")).toHaveLength(2);
   });
 
   it("keeps a 0.73 blend on the Strong chip when the historical rate is 0.40", async () => {
