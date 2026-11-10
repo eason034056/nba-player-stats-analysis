@@ -170,6 +170,16 @@ export function formatPercent(probability: number | null | undefined): string {
   return `${roundHalfAwayFromZero(probability * 100, 0)}%`;
 }
 
+/**
+ * Whole percent rounded down, for a card that also shows a backend tier.
+ * Half-away rounding can print 70% next to Playable (the Strong cutoff is 0.70).
+ * The 1e-9 nudge keeps 0.29 * 100 (28.999999999999996) at 29, not 28.
+ */
+export function formatTierPercent(probability: number | null | undefined): string {
+  if (typeof probability !== "number" || !Number.isFinite(probability)) return "—";
+  return `${Math.floor(probability * 100 + 1e-9)}%`;
+}
+
 export function staleLineWarning(meta: DDSnapshotMeta): string | null {
   const tooOld =
     meta.dataAgeSeconds !== null && meta.dataAgeSeconds > LIVE_ODDS_FRESH_SECONDS;

@@ -65,7 +65,7 @@ describe("sportsbook table matches the backend de-vig", () => {
       expect(formatVig(row.vig).startsWith("-")).toBe(false);
       expect(within(rendered).getByText(formatVig(row.vig))).toBeInTheDocument();
     }
-    expect(within(screen.getByTestId("result-row-caesars")).getByText("0%")).toBeInTheDocument();
+    expect(within(screen.getByTestId("result-row-caesars")).getByText("0.0%")).toBeInTheDocument();
     expect(within(screen.getByTestId("result-row-pointsbet")).getByText("1%")).toBeInTheDocument();
     expect(within(screen.getByTestId("result-row-pointsbet")).getByText("99%")).toBeInTheDocument();
     expect(math.results.some((row) => row.over_odds === 0 || row.under_odds === 0)).toBe(false);
@@ -78,14 +78,13 @@ describe("sportsbook table matches the backend de-vig", () => {
     expect(formatVig(Number.NaN)).not.toBe("NaN%");
   });
 
-  it("rounds each vig the same way formatPercent rounds a probability", () => {
+  it("prints vig to one decimal, separate from the whole fair percent", () => {
+    expect(formatVig(0.0476)).toBe("4.8%");
+    expect(formatVig(0.055)).toBe("5.5%");
+    expect(formatVig(0.0601)).toBe("6.0%");
+    expect(formatVig(0.0476)).not.toBe(formatPercent(0.0476));
     renderWithProviders(<ResultsTable data={math} />);
-    const mismatched = math.results.filter(
-      (row) => formatVig(row.vig) !== formatPercent(row.vig),
-    );
-    expect(mismatched.map((row) => `${row.bookmaker} ${formatVig(row.vig)} vs ${formatPercent(row.vig)}`)).toEqual(
-      [],
-    );
+    expect(within(screen.getByTestId("result-row-draftkings")).getByText("4.8%")).toBeInTheDocument();
   });
 
   it("dashes a yes-only double-double and uses the 4.5% single-leg prior", () => {
@@ -106,7 +105,7 @@ describe("sportsbook table matches the backend de-vig", () => {
     expect(within(fanduel).getByTestId("result-yes-fair")).toHaveTextContent(formatPercent(round4(fair)));
     expect(within(fanduel).getByTestId("result-yes-fair")).toHaveTextContent("68%");
     expect(within(fanduel).getByTestId("result-yes-fair")).not.toHaveTextContent("67%");
-    expect(within(fanduel).getByText("5%")).toBeInTheDocument();
+    expect(within(fanduel).getByText("4.5%")).toBeInTheDocument();
     expect(screen.getByTestId("result-line")).toHaveTextContent("Yes/No");
     expect(screen.queryByText("0.5")).not.toBeInTheDocument();
     expect(fanduel.textContent).not.toMatch(/NaN|Infinity|undefined/);

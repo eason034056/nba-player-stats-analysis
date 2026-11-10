@@ -10,7 +10,7 @@
 import { clsx, type ClassValue } from "clsx";
 import { twMerge } from "tailwind-merge";
 import { format, parseISO } from "date-fns";
-import { formatPercent } from "@/lib/player-dd";
+import { formatPercent, roundHalfAwayFromZero } from "@/lib/player-dd";
 import { zhTW } from "date-fns/locale";
 
 /**
@@ -196,12 +196,17 @@ export function formatAmericanOdds(odds: number): string {
  * @param vig - 水錢（小數）
  * @returns 百分比字串
  * 
+ * One decimal, matching the design and the ResultsTable color bands
+ * (below 4% green, above 6% red). A whole percent would show 0.055 as 6%
+ * while the band still treats it as the middle.
+ *
  * @example
  * formatVig(0.0476)
- * // 結果: "5%"
+ * // 結果: "4.8%"
  */
-export function formatVig(vig: number): string {
-  return formatPercent(vig);
+export function formatVig(vig: number | null | undefined): string {
+  if (typeof vig !== "number" || !Number.isFinite(vig)) return "—";
+  return `${roundHalfAwayFromZero(vig * 100, 1).toFixed(1)}%`;
 }
 
 

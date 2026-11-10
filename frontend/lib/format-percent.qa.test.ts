@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import { formatPct, formatSignedPct } from "@/components/agent-widget/presentation";
-import { formatPercent } from "@/lib/player-dd";
+import { formatPercent, formatTierPercent } from "@/lib/player-dd";
 import { dailyPicksResponseSchema, eventsResponseSchema } from "@/lib/schemas";
 import { tierFromApi, todayGames, todayReads } from "@/lib/today-board";
 import { formatProbability, formatVig } from "@/lib/utils";
@@ -59,10 +59,46 @@ describe("formatPercent edge cases", () => {
   });
 });
 
+describe("formatTierPercent", () => {
+  it.each([
+    [0.56, "56%"],
+    [0.65, "65%"],
+    [0.70, "70%"],
+    [0.5599, "55%"],
+    [0.6497, "64%"],
+    [0.697, "69%"],
+    [0.6999, "69%"],
+    [0.29, "29%"],
+  ])("floors %s to %s", (value, expected) => {
+    expect(formatTierPercent(value)).toBe(expected);
+  });
+
+  it("renders an em dash for null and non-finite values", () => {
+    expect(formatTierPercent(null)).toBe("—");
+    expect(formatTierPercent(undefined)).toBe("—");
+    expect(formatTierPercent(Number.NaN)).toBe("—");
+    expect(formatTierPercent(Number.POSITIVE_INFINITY)).toBe("—");
+    expect(formatTierPercent(null)).not.toBe("0%");
+  });
+});
+
 describe("formatVig and formatProbability", () => {
   it("prints a dash for missing or non-finite vig", () => {
+    expect(formatVig(null)).toBe("—");
+    expect(formatVig(undefined)).toBe("—");
     expect(formatVig(Number.NaN)).toBe("—");
     expect(formatVig(Number.POSITIVE_INFINITY)).toBe("—");
+    expect(formatVig(Number.NEGATIVE_INFINITY)).toBe("—");
+    expect(formatVig(null)).not.toBe("0%");
+    expect(formatVig(null)).not.toBe("0.0%");
+  });
+
+  it("keeps one decimal so a vig near 6% does not look like the high band", () => {
+    expect(formatVig(0.0476)).toBe("4.8%");
+    expect(formatVig(0.055)).toBe("5.5%");
+    expect(formatVig(0.0601)).toBe("6.0%");
+    expect(formatVig(0)).toBe("0.0%");
+    expect(formatVig(0.045)).toBe("4.5%");
   });
 
   it("matches formatPercent for missing and real values", () => {
@@ -81,6 +117,15 @@ describe("agent widget percent helpers", () => {
       expect(formatSignedPct(value as number | null | undefined)).toBe("N/A");
     }
   });
+
+  it("prints probabilities as whole numbers and edges as signed one-decimal percents", () => {
+    expect(formatPct(0.63)).toBe("63%");
+    expect(formatPct(0.6755)).toBe("68%");
+    expect(formatSignedPct(-0.004)).toBe("-0.4%");
+    expect(formatSignedPct(0.003)).toBe("+0.3%");
+    expect(formatSignedPct(0)).toBe("0.0%");
+    expect(formatSignedPct(-0.004)).not.toBe(formatPct(-0.004));
+  });
 });
 
 describe("Today keeps the backend tier next to the whole percent", () => {
@@ -97,7 +142,9 @@ describe("Today keeps the backend tier next to the whole percent", () => {
         const source = picks.picks.find((pick) => read.key.startsWith(`${pick.event_id}-${pick.player_name}-`));
         expect(source).toBeDefined();
         expect(read.tier).toEqual(tierFromApi(source?.tier));
-        expect(read.probabilityText).toBe(formatPercent(source?.probability));
+        expect(read.probabilityText).toBe(
+          read.tier ? formatTierPercent(source?.probability) : formatPercent(source?.probability),
+        );
         expect(read.href.startsWith(league === "wnba" ? "/wnba/" : "/")).toBe(true);
       }
     }

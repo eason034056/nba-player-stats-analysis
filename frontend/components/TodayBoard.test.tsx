@@ -23,6 +23,7 @@ import nbaPicksMissingDirectionFixture from "@/test/fixtures/today/nba-daily-pic
 import wnbaEventsFixture from "@/test/fixtures/today/wnba-events.json";
 import wnbaPicksFixture from "@/test/fixtures/today/wnba-daily-picks.json";
 import recordedNoVig from "@/test/fixtures/props-no-vig/player-double-double.json";
+import { giannisTopRead } from "@/test/fixtures/today/top-read";
 
 const nbaEvents = eventsResponseSchema.parse(nbaEventsFixture);
 const nbaPicks = dailyPicksResponseSchema.parse(nbaPicksFixture);
@@ -297,7 +298,9 @@ describe("TodayBoard", () => {
     expect(wilson.getAttribute("href")).toContain("/wnba/event/aces-liberty");
 
     const stewart = within(web).getByRole("link", { name: /breanna stewart/i });
-    expect(stewart).toHaveTextContent("68%");
+    expect(stewart).toHaveTextContent("Playable");
+    expect(stewart).toHaveTextContent("67%");
+    expect(stewart).not.toHaveTextContent("68%");
     expect(stewart).not.toHaveTextContent("67.6%");
     expect(stewart).toHaveTextContent("SEA @ MIN");
     expect(stewart).not.toHaveTextContent("GSW");
@@ -327,13 +330,7 @@ describe("TodayBoard", () => {
               commence_time_et: "2026-11-10T20:00:00-05:00",
               display_tz: "ET",
               lineup_status: { home: "confirmed", away: "projected" },
-              top_read: {
-                player: "Giannis Antetokounmpo",
-                market: "player_points",
-                side: "under",
-                line: 31.5,
-                probability: 0.81,
-              },
+              top_read: giannisTopRead,
             }
           : event,
       ),
@@ -363,13 +360,7 @@ describe("TodayBoard", () => {
         index === 0
           ? {
               ...event,
-              top_read: {
-                player: "Giannis Antetokounmpo",
-                market: "player_points",
-                side: "under",
-                line: 31.5,
-                probability: 0.81,
-              },
+              top_read: giannisTopRead,
             }
           : event,
       ),

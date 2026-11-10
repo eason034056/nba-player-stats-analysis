@@ -62,7 +62,7 @@ export const topReadSchema = z.object({
   market: z.string().min(1),
   side: z.enum(["over", "under"]),
   line: z.number().finite(),
-  probability: z.number().finite(),
+  probability: z.number().finite().min(0).max(1),
 });
 
 export type TopRead = z.infer<typeof topReadSchema>;

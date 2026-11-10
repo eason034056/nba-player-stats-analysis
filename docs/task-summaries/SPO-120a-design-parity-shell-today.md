@@ -18,9 +18,9 @@ Picks, the game page, Bet Slip, Method copy, and the agent keep their layouts. T
 | `frontend/lib/schemas.ts` | `NBAEvent` keeps `commence_time_et`, `display_tz`, `lineup_status`, and `top_read`. A `top_read` or `lineup_status` that fails the contract becomes null instead of failing the slate. `DailyPick.tier` is `"Strong play"`, `"Playable"`, `"Lean"`, or null. |
 | `frontend/lib/today-board.ts` | `etWallClock` reads the offset timestamp as written. `eventTipClock` uses it when the label is ET or absent. `todayGames` prefers `top_read` and falls back to the highest daily pick. The tier is `tierFromApi` on that pick. A `top_read` borrows the tier of the matching daily pick and stays unlabeled when nothing matches. |
 | `frontend/components/TodayBoard.tsx` | Design hero sentence, games hint, flat mobile top-pick cards, web card overlay `0.08` / `0.16` / hover `0.14`. An event `top_read` stays on the card when daily picks are still loading or have failed. A missing tier still shows the percent on a neutral pill. |
-| `frontend/lib/player-dd.ts` | `formatPercent` rounds half away from zero to a whole percent. Missing and non-finite inputs are `—`. |
-| `frontend/lib/utils.ts` | `formatProbability` and `formatVig` call `formatPercent`, so WNBA picks, the WNBA slip, implied percents, and vig use the same whole number. |
-| `frontend/components/agent-widget/presentation.ts` | `formatPct` and `formatSignedPct` use the same whole number. Null and non-finite stay `N/A`. |
+| `frontend/lib/player-dd.ts` | `formatPercent` rounds half away from zero to a whole percent. `formatTierPercent` floors a probability that sits next to a backend tier. Missing and non-finite inputs are `—`. |
+| `frontend/lib/utils.ts` | `formatProbability` calls `formatPercent`. `formatVig` stays one decimal (`0.0476` → `4.8%`) so the ResultsTable color bands match the label. Missing vig is `—`. |
+| `frontend/components/agent-widget/presentation.ts` | `formatPct` is a whole probability. `formatSignedPct` is a signed one-decimal edge (`-0.004` → `-0.4%`, `0.003` → `+0.3%`). Null and non-finite stay `N/A`. EV and market delta use the edge formatter. |
 | `frontend/app/wnba/player/[name]/page.tsx`, `frontend/components/PlayerHistoryStats.tsx` | Over/under history rates go through `formatPercent` instead of `toFixed(1)`. |
 | `frontend/app/wnba/layout.tsx` | Comment only. The shell no longer owns a footer. |
 | `frontend/components/AppShell.test.tsx` | Header is full width. The shell has no disclaimer. |
@@ -40,7 +40,9 @@ The hero sentence is the design sentence. The percent under it is still `DailyPi
 
 Whole percents use `roundHalfAwayFromZero(probability * 100, 0)`. `0.6755` prints `68%`. `1.005 * 100` is the float `100.49999999999999`; the half-away nudge prints `101%`, which is the half-away result for a true `100.5`. `formatPercent(0)` is `0%`. `formatPercent(null)`, `undefined`, `NaN`, and both infinities are `—`.
 
-`formatVig` calls `formatPercent`, so a `0.0476` vig prints `5%` and a real zero vig prints `0%`. The named `"4.5% single-leg prior"` label is unchanged. Usage rate, minutes, edges, and projected stat lines stay one decimal because they are not probabilities. The Method page's static `52.38%` / `4.76%` illustration is unchanged.
+On Today, a card or pill that shows a backend tier label uses `formatTierPercent` instead: `Math.floor(probability * 100 + 1e-9)`. The epsilon keeps `0.29 * 100` (the float `28.999999999999996`) at `29%`. The cutoffs `0.56`, `0.65`, and `0.70` print `56%`, `65%`, and `70%`. Just below them, `0.5599`, `0.6497`, `0.697`, and `0.6999` print `55%`, `64%`, `69%`, and `69%`. A row with no tier keeps half-away rounding, so the same `0.697` with a null tier prints `70%`. The tier string still comes from the API. Today does not compute it.
+
+`formatVig` keeps one decimal (`roundHalfAwayFromZero(vig * 100, 1)`), so `0.0476` prints `4.8%`, `0.055` prints `5.5%`, and a real zero prints `0.0%`. A whole percent would show `0.055` as `6%` while the table still colors anything at or below `0.06` as the middle band. Missing and non-finite vig is `—`. The named `"4.5% single-leg prior"` label is unchanged. Usage rate, minutes, projected stat lines, EV, and market delta stay one decimal because they are not probabilities. EV and market delta stay signed. The Method page's static `52.38%` / `4.76%` illustration is unchanged.
 
 The mobile chevron stays `text-muted`. The design swatch `#B9B3C4` is on the token list as `tone-neutral`, and an existing Today test refuses that hex on the chevron. `#625B70` is the readable ink already on the row.
 
@@ -48,7 +50,7 @@ The shell disclaimer was a second line under every route. Method already ends wi
 
 ## Tests / Verification
 
-- Frontend `npm test` (`TZ=America/Chicago vitest run`): 46 files, 294 tests, passed.
+- Frontend `npm test` (`TZ=America/Chicago vitest run`): 47 files, 331 tests, passed.
 - `npx tsc --noEmit`: passed.
 - `npm run lint`: passed, 0 warnings.
 - `npm run build`: passed.

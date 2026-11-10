@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { formatPercent } from "@/lib/player-dd";
+import { formatPercent, formatTierPercent } from "@/lib/player-dd";
 import {
   dailyPicksResponseSchema,
   eventsResponseSchema,
@@ -25,6 +25,7 @@ import nbaPicksPartialFixture from "@/test/fixtures/today/nba-daily-picks-partia
 import nbaPicksMissingDirectionFixture from "@/test/fixtures/today/nba-daily-picks-missing-direction.json";
 import wnbaEventsFixture from "@/test/fixtures/today/wnba-events.json";
 import wnbaPicksFixture from "@/test/fixtures/today/wnba-daily-picks.json";
+import { brokenTopRead, giannisTopRead } from "@/test/fixtures/today/top-read";
 
 const nbaEvents = eventsResponseSchema.parse(nbaEventsFixture);
 const nbaPicks = dailyPicksResponseSchema.parse(nbaPicksFixture);
@@ -73,6 +74,26 @@ describe("today board numbers", () => {
       nbaPicks.date,
     );
     expect(highWithoutTier[0].tier).toBeNull();
+    expect(highWithoutTier[0].probabilityText).toBe(formatPercent(0.91));
+
+    const justUnderStrong = todayReads(
+      [{ ...stored, probability: 0.697, tier: "Playable" }],
+      "nba",
+      nbaPicks.date,
+    );
+    expect(justUnderStrong[0].tier?.label).toBe("Playable");
+    expect(justUnderStrong[0].probabilityText).toBe("69%");
+    expect(justUnderStrong[0].probabilityText).toBe(formatTierPercent(0.697));
+    expect(justUnderStrong[0].probabilityText).not.toBe(formatPercent(0.697));
+
+    const sameRateWithoutTier = todayReads(
+      [{ ...stored, probability: 0.697, tier: null }],
+      "nba",
+      nbaPicks.date,
+    );
+    expect(sameRateWithoutTier[0].tier).toBeNull();
+    expect(sameRateWithoutTier[0].probabilityText).toBe("70%");
+
     expect(tierFromApi(null)).toBeNull();
     expect(tierFromApi(undefined)).toBeNull();
     expect(tierFromApi("Pass")).toBeNull();
@@ -93,9 +114,10 @@ describe("today board numbers", () => {
     const stewart = todayReads(wnbaPicks.picks, "wnba", wnbaPicks.date).find(
       (read) => read.player === "Breanna Stewart",
     );
-    expect(stewart?.probabilityText).toBe("68%");
-    expect(stewart?.probabilityText).toBe(formatPercent(0.6755));
-    expect(stewart?.probabilityText).not.toBe("67%");
+    expect(stewart?.tier?.label).toBe("Playable");
+    expect(stewart?.probabilityText).toBe("67%");
+    expect(stewart?.probabilityText).toBe(formatTierPercent(0.6755));
+    expect(stewart?.probabilityText).not.toBe(formatPercent(0.6755));
     expect(stewart?.probabilityText).not.toBe("67.6%");
   });
 
@@ -219,13 +241,7 @@ describe("today board event fields", () => {
               ...event,
               commence_time_et: "2026-11-10T20:00:00-05:00",
               display_tz: "ET",
-              top_read: {
-                player: "Giannis Antetokounmpo",
-                market: "player_points",
-                side: "under",
-                line: 31.5,
-                probability: 0.81,
-              },
+              top_read: giannisTopRead,
             }
           : event,
       ),
@@ -250,13 +266,7 @@ describe("today board event fields", () => {
       date: "2026-11-10",
       events: [{
         ...heat,
-        top_read: {
-          player: "",
-          market: "player_points",
-          side: "sideways",
-          line: Number.NaN,
-          probability: 2,
-        },
+        top_read: brokenTopRead,
       }],
     });
     expect(events.events[0].top_read).toBeNull();

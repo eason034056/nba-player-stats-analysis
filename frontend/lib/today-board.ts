@@ -11,7 +11,7 @@ import { enUS } from "date-fns/locale";
 
 import { buildEventDetailHref, type LeagueSegment } from "./event-detail-link";
 import { METRIC_TO_MARKET, type MetricKey } from "./metric-to-market";
-import { formatPercent } from "./player-dd";
+import { formatPercent, formatTierPercent } from "./player-dd";
 import {
   DIRECTION_DISPLAY_NAMES,
   type DailyPick,
@@ -221,6 +221,7 @@ export function todayReads(
     .slice(0, limit)
     .map((pick, index) => {
       const time = tipByEvent.get(pick.event_id) ?? boardClock(pick.commence_time);
+      const tier = tierFromApi(pick.tier);
       return {
         key: `${pick.event_id}-${pick.player_name}-${pick.metric}-${pick.direction}`,
         rank: index + 1,
@@ -231,8 +232,8 @@ export function todayReads(
           time,
         ),
         propText: propText(pick),
-        probabilityText: formatPercent(pick.probability),
-        tier: tierFromApi(pick.tier),
+        probabilityText: tier ? formatTierPercent(pick.probability) : formatPercent(pick.probability),
+        tier,
         href: readHref(pick, league, date),
       };
     });
@@ -295,6 +296,12 @@ export function todayGames(
     const best = apiRead
       ? null
       : ranked.find((pick) => pick.event_id === event.event_id) ?? null;
+    const tier = apiRead
+      ? tierForTopRead(apiRead, event.event_id, picks)
+      : best
+        ? tierFromApi(best.tier)
+        : null;
+    const probability = apiRead ? apiRead.probability : best ? best.probability : null;
     const href = apiRead
       ? buildEventDetailHref({
           eventId: event.event_id,
@@ -325,12 +332,12 @@ export function todayGames(
         : best
           ? `${playerLastName(best.player_name)} ${propText(best)}`
           : null,
-      topProbabilityText: apiRead
-        ? formatPercent(apiRead.probability)
-        : best
-          ? formatPercent(best.probability)
-          : null,
-      tier: apiRead ? tierForTopRead(apiRead, event.event_id, picks) : best ? tierFromApi(best.tier) : null,
+      topProbabilityText: apiRead || best
+        ? tier
+          ? formatTierPercent(probability)
+          : formatPercent(probability)
+        : null,
+      tier,
       topSource: apiRead ? "event" : best ? "picks" : "none",
       href,
     };
