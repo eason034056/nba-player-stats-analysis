@@ -177,6 +177,7 @@ def _analyze(stats_for, *, league="nba", only=None, drop_under=False, null_under
 
     service._get_props_for_market = props
     service.csv_service = type("Csv", (), {})()
+    service.csv_service.latest_position = lambda player_name: None
     service.csv_service.get_player_stats = (
         lambda player_name, metric, threshold, n=0, exclude_dnp=True: stats_for(
             player_name, threshold

@@ -767,6 +767,55 @@ def test_non_finite_over_price_does_not_raise():
     assert infinite["line"] == pytest.approx(37.5)
 
 
+def test_spliced_rung_takes_the_rung_prices_not_the_first_rows_vig(points_payload):
+    """Over and Under from two rows must not keep the first row's vig.
+
+    The snapshot key stores one row per book today, so this splice does
+    not run on a live capture. The copy still has to describe the kept
+    prices, not the first row's fair-probability fields.
+    """
+    bovada = next(book for book in points_payload["bookmakers"] if book["key"] == "bovada")
+    by_point = defaultdict(dict)
+    for outcome in _outcomes_by_player(bovada)["Luka Doncic"]:
+        by_point[float(outcome["point"])][outcome["name"].lower()] = outcome
+    over = by_point[36.5]["over"]["price"]
+    under = by_point[36.5]["under"]["price"]
+    rows = [
+        {
+            "bookmaker": "bovada",
+            "player_name": "Luka Doncic",
+            "market": "player_points",
+            "line": 36.5,
+            "over_odds": over,
+            "under_odds": None,
+            "vig": 0.09,
+            "over_fair_prob": 0.4,
+            "under_fair_prob": 0.6,
+        },
+        {
+            "bookmaker": "bovada",
+            "player_name": "Luka Doncic",
+            "market": "player_points",
+            "line": 36.5,
+            "over_odds": None,
+            "under_odds": under,
+            "vig": 0.11,
+            "over_fair_prob": 0.2,
+            "under_fair_prob": 0.8,
+        },
+    ]
+    chosen = _main_book_line(rows)
+    assert chosen["bookmaker"] == "bovada"
+    assert chosen["player_name"] == "Luka Doncic"
+    assert chosen["market"] == "player_points"
+    assert float(chosen["line"]) == pytest.approx(36.5)
+    assert chosen["over_odds"] == over
+    assert chosen["under_odds"] == under
+    assert "vig" not in chosen
+    assert "over_fair_prob" not in chosen
+    assert "under_fair_prob" not in chosen
+
+
 def test_writer_stores_the_last_rung_so_the_read_collapse_never_sees_it(service, points_payload):
     rows = _parse(service, points_payload, _SNAPSHOT_AT)
     payload = assemble_bulk_props(points_payload["id"], rows, now=_SNAPSHOT_AT)
@@ -1018,3 +1067,35 @@ async def test_well_formed_unknown_event_is_empty_200_and_wnba_route_is_absent(
     missing = await client.get(f"/api/wnba/events/{event_id}/props")
     assert missing.status_code == 404
     _assert_no_live_calls(odds_spies)
+
+
+@pytest.mark.asyncio
+async def test_props_route_answers_when_limiter_storage_is_unavailable(
+    client, monkeypatch, service, points_payload
+):
+    """Redis-backed slowapi storage down: the route still reads the snapshot."""
+    from app.middleware.rate_limit import limiter
+
+    rows = _parse(service, points_payload, _SNAPSHOT_AT)
+    _install(monkeypatch, _FakeDB(rows), _FakeCache())
+    previous_enabled = limiter.enabled
+    previous_dead = limiter._storage_dead
+    limiter.enabled = True
+    limiter._storage_dead = False
+
+    def _down(*_args, **_kwargs):
+        raise ConnectionError("redis unavailable")
+
+    monkeypatch.setattr(limiter._limiter, "hit", _down)
+    monkeypatch.setattr(limiter._storage, "check", lambda: False)
+    try:
+        response = await client.get(f"/api/nba/events/{points_payload['id']}/props")
+    finally:
+        limiter.enabled = previous_enabled
+        limiter._storage_dead = previous_dead
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["source"] == "snapshot"
+    assert body["event_id"] == points_payload["id"]
+    assert body["markets"]

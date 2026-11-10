@@ -1129,11 +1129,9 @@ class DailyAnalysisService:
                     player_team_code = canonical_team_code(player_team, league=league)
                     position = None
                     if league.lower() == "nba":
-                        latest_position = getattr(csv_service, "latest_position", None)
-                        if callable(latest_position):
-                            raw_position = latest_position(player_name)
-                            if isinstance(raw_position, str) and raw_position.strip():
-                                position = raw_position.strip()
+                        raw_position = csv_service.latest_position(player_name)
+                        if isinstance(raw_position, str) and raw_position.strip():
+                            position = raw_position.strip()
 
                     # Get projection value for this metric.
                     # 💡 Translate via PROJECTION_FIELD_ALIASES because the

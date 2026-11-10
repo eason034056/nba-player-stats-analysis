@@ -19,6 +19,11 @@ limiter = Limiter(
     key_func=get_remote_address,
     default_limits=[settings.rate_limit_default],
     storage_uri=settings.redis_url,
+    # Redis down must not 500 the request. The in-memory fallback keeps
+    # the same limits for this process. swallow_errors covers a failure
+    # of that fallback too: the route still answers, and slowapi logs it.
+    swallow_errors=True,
+    in_memory_fallback_enabled=True,
 )
 
 

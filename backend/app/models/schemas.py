@@ -556,9 +556,9 @@ class PlayerProjection(BaseModel):
         description=(
             "Source of opponent_rank only. csv when that null was filled "
             "from the game log. sportsdata when the row already carried "
-            "an integer in 1..30. sportsdata_invalid when the vendor value "
-            "was not an integer in 1..30; the rank is then null and is not "
-            "filled from the CSV."
+            "an integer in 1..30. sportsdata_invalid means the whole row "
+            "is invalidated: the vendor value was not an integer in 1..30, "
+            "so both ranks are null and neither is filled from the CSV."
         ),
     )
     opponent_rank_season: Optional[str] = Field(
@@ -578,8 +578,10 @@ class PlayerProjection(BaseModel):
     opponent_position_rank_source: Optional[Literal["csv", "sportsdata", "sportsdata_invalid"]] = Field(
         default=None,
         description=(
-            "Source of opponent_position_rank only. Same three words as "
-            "opponent_rank_source. Independent of the overall rank."
+            "Source of opponent_position_rank only. csv and sportsdata are "
+            "labeled independently of the overall rank. sportsdata_invalid "
+            "means the whole row is invalidated: both ranks are null and "
+            "neither is filled from the CSV."
         ),
     )
     opponent_position_rank_season: Optional[str] = Field(
@@ -786,7 +788,12 @@ class DailyPick(BaseModel):
     )
     opponent_rank_source: Optional[Literal["csv", "sportsdata", "sportsdata_invalid"]] = Field(
         default=None,
-        description="Source of opponent_rank only: csv, sportsdata, or sportsdata_invalid.",
+        description=(
+            "Source of opponent_rank only: csv, sportsdata, or "
+            "sportsdata_invalid. sportsdata_invalid means the whole row "
+            "is invalidated: both ranks are null and neither is filled "
+            "from the CSV."
+        ),
     )
     opponent_rank_season: Optional[str] = Field(
         default=None,
@@ -798,7 +805,12 @@ class DailyPick(BaseModel):
     )
     opponent_position_rank_source: Optional[Literal["csv", "sportsdata", "sportsdata_invalid"]] = Field(
         default=None,
-        description="Source of opponent_position_rank only: csv, sportsdata, or sportsdata_invalid.",
+        description=(
+            "Source of opponent_position_rank only: csv, sportsdata, or "
+            "sportsdata_invalid. sportsdata_invalid means the whole row "
+            "is invalidated: both ranks are null and neither is filled "
+            "from the CSV."
+        ),
     )
     opponent_position_rank_season: Optional[str] = Field(
         default=None,

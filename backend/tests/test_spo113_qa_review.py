@@ -271,7 +271,7 @@ class TestDefenseRankScale:
             assert filled["opponent_position_rank"] is not None
             assert 1 <= filled["opponent_position_rank"] <= 30
 
-    def test_a_number_already_on_the_row_is_kept_even_outside_1_to_30(self):
+    def test_existing_rank_outside_1_to_30_clears_the_row_as_sportsdata_invalid(self):
         table = build_defense_rank_table([_game("Lakers", "Celtics", 20)])
         kept = fill_null_defense_ranks(
             {
