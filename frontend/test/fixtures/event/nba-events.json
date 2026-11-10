@@ -1,0 +1,12 @@
+{
+  "date": "2026-11-10",
+  "events": [
+    {
+      "event_id": "evt-mia-bos",
+      "sport_key": "basketball_nba",
+      "home_team": "Miami Heat",
+      "away_team": "Boston Celtics",
+      "commence_time": "2026-11-11T00:30:00Z"
+    }
+  ]
+}

@@ -1,0 +1,23 @@
+{
+  "date": "2026-11-10",
+  "team": "NYL",
+  "opponent": "LVA",
+  "home_or_away": "",
+  "status": "projected",
+  "starters": ["Breanna Stewart", "Sabrina Ionescu", "Jonquel Jones"],
+  "bench_candidates": ["Leonie Fiebich"],
+  "sources": ["rotowire"],
+  "source_disagreement": false,
+  "confidence": "medium",
+  "updated_at": "2026-11-10T17:00:00Z",
+  "source_snapshots": {
+    "rotowire": {
+      "team": "NYL",
+      "opponent": "LVA",
+      "home_or_away": "",
+      "status": "expected",
+      "starters": ["Breanna Stewart", "Sabrina Ionescu", "Jonquel Jones"],
+      "bench_candidates": ["Leonie Fiebich"]
+    }
+  }
+}

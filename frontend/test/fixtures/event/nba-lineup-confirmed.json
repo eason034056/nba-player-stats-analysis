@@ -1,0 +1,31 @@
+{
+  "date": "2026-11-10",
+  "team": "MIA",
+  "opponent": "BOS",
+  "home_or_away": "HOME",
+  "status": "projected",
+  "starters": ["Bam Adebayo"],
+  "bench_candidates": ["Kevin Love"],
+  "sources": ["rotowire", "rotogrinders"],
+  "source_disagreement": false,
+  "confidence": "high",
+  "updated_at": "2026-11-10T18:00:00Z",
+  "source_snapshots": {
+    "rotowire": {
+      "team": "MIA",
+      "opponent": "BOS",
+      "home_or_away": "HOME",
+      "status": "confirmed",
+      "starters": ["Bam Adebayo"],
+      "bench_candidates": []
+    },
+    "rotogrinders": {
+      "team": "MIA",
+      "opponent": "BOS",
+      "home_or_away": "HOME",
+      "status": "confirmed",
+      "starters": ["Bam Adebayo"],
+      "bench_candidates": []
+    }
+  }
+}
