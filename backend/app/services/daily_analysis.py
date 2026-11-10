@@ -49,6 +49,7 @@ from app.models.schemas import (
     EventsResponse,
     TopRead,
 )
+from app.services.pick_signals import build_nba_signals
 
 
 # ==================== League routing (SPO-35) ====================
@@ -1194,6 +1195,12 @@ class DailyAnalysisService:
                         p_under=round(p_under, 4) if p_under is not None else None,
                     )
                     picks.append(pick)
+                    pick = _with_nba_signal_verdicts(
+                        pick,
+                        league=league,
+                        bookmakers_data=props_data,
+                        game_logs=history_stats.get("game_logs") or [],
+                    )
 
                     edge_str = f" (edge: {edge:+.1f})" if edge is not None else ""
                     min_str = f" [{projected_minutes:.0f}min]" if projected_minutes is not None else ""
@@ -1320,6 +1327,60 @@ class DailyAnalysisService:
             if line is not None:
                 player_lines[player_name].append(line)
         return dict(player_lines)
+
+
+def _recent_stat_values(game_logs: List[Dict[str, Any]]) -> List[float]:
+    """Stat values from ``get_player_stats`` logs, oldest first.
+
+    Logs without a numeric ``value`` are skipped. The last ten of what
+    remains are the non-DNP games the last-10 signal reads.
+    """
+    values: List[float] = []
+    for game in game_logs:
+        raw = game.get("value") if isinstance(game, dict) else None
+        if isinstance(raw, bool) or not isinstance(raw, (int, float)):
+            continue
+        number = float(raw)
+        if not math.isfinite(number):
+            continue
+        values.append(number)
+    return values
+
+
+def _with_nba_signal_verdicts(
+    pick: DailyPick,
+    *,
+    league: str,
+    bookmakers_data: List[Dict[str, Any]],
+    game_logs: List[Dict[str, Any]],
+) -> DailyPick:
+    """Attach the five signals on an NBA pick. WNBA is returned unchanged.
+
+    Both new fields stay None for WNBA. The bookmaker list is the snapshot
+    already fetched for this market; this does not request odds again and
+    does not change how lines are grouped.
+    """
+    if league.lower() != "nba":
+        return pick
+    values = _recent_stat_values(game_logs)
+    last10 = values[-10:] if len(values) >= 10 else None
+    signals, combined, _adjustment = build_nba_signals(
+        side=pick.direction,
+        line=pick.threshold,
+        player_name=pick.player_name,
+        bookmakers=bookmakers_data,
+        last10_values=last10,
+        history_rate=pick.probability,
+        projected_value=pick.projected_value,
+        opponent_rank=pick.opponent_rank,
+        opponent_position_rank=pick.opponent_position_rank,
+        injury_status=pick.injury_status,
+    )
+    # Mutate the instance already appended to the pick list. model_copy
+    # would leave the list holding the pre-signal object.
+    pick.signals = signals
+    pick.combined_probability = combined
+    return pick
 
 
 def best_top_reads(cached: Any) -> Dict[str, TopRead]:
