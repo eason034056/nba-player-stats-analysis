@@ -195,13 +195,6 @@ class TestCombinedProbabilityShape:
             assert not isinstance(market, bool)
             assert not math.isfinite(market)
 
-    @pytest.mark.xfail(
-        reason=(
-            "A NaN adjustment is clipped to the positive rail and published "
-            "as 0.9999. Missing information must not become a probability."
-        ),
-        strict=False,
-    )
     def test_nan_adjustment_is_not_published_as_a_probability(self):
         got = combined_probability(
             side="over",
@@ -286,7 +279,7 @@ class TestRecordedMarketConsensus:
         fairs = [devig(american_to_prob(over), american_to_prob(under)) for over, under in pairs]
         assert consensus[0] == pytest.approx(sum(item[0] for item in fairs) / len(fairs))
 
-    def test_tied_modal_lines_average_to_a_price_nobody_posted(self):
+    def test_tied_modal_lines_stay_on_the_lower_central_posted_point(self):
         payload = load_odds_fixture(RECORDED)
         # Two recorded books at 36.5 and two at 37.5. Each book contributes
         # Over and Under, so the two points tie at four outcomes each.
@@ -308,9 +301,10 @@ class TestRecordedMarketConsensus:
                     lines.append(float(outcome["point"]))
         assert lines.count(36.5) == lines.count(37.5) == 4
         mode = calculate_mode_threshold(lines)
-        assert mode == pytest.approx(37.0)
-        assert american_pairs_at_line(books, LUKA, mode) == []
-        at_low = american_pairs_at_line(books, LUKA, 36.5)
+        assert mode == 36.5
+        assert mode in lines
+        assert american_pairs_at_line(books, LUKA, 37.0) == []
+        at_low = american_pairs_at_line(books, LUKA, mode)
         at_high = american_pairs_at_line(books, LUKA, 37.5)
         assert len(at_low) == 2
         assert len(at_high) == 2
@@ -322,9 +316,9 @@ class TestRecordedMarketConsensus:
             history_rate=0.7,
         )
         assert signals[0].key == "market"
-        assert signals[0].value is None
-        assert signals[0].verdict is None
-        assert combined is None
+        assert signals[0].value is not None
+        assert signals[0].verdict is not None
+        assert combined is not None
 
 
 class TestCachedDailyPickAndWnba:

@@ -172,7 +172,7 @@ The proxy-line holdout met the pass bar against `probability`. `odds_line_snapsh
 
 - About 5,039 of the 18,817 holdout rows are playoff or play-in games, because this branch predates PR #38. Rebaseline after #38 merges into `dev`. That rebaseline is pending. The stored coefficients were not refit to drop those rows.
 - Early-season fits are unstable. In a rolling monthly check, January 2026 (trained on November–December only, n = 8,902) had combined Brier 0.2171 versus `probability` 0.2149, and the 0.4–0.5 bucket gap was −0.102.
-- Under the 0.5 market prior the market term is constant, so offline `combined_probability` is a recalibrated adjustment total. It shares `history_rate` with `probability` (correlation 0.39). The stored intercept `A = 0.2801` encodes that the pick side beats a coin flip. On top of a real no-vig market that can double-count recent form. Only a real-line test can settle this. Refit A and B once real lines exist.
+- Under the 0.5 market prior the market term is constant, so offline `combined_probability` is a recalibrated adjustment total. It shares `history_rate` with `probability` (correlation 0.38 overall, 0.40 on the fit rows, 0.35 on the holdout). The stored intercept `A = 0.2801` encodes that the pick side beats a coin flip. On top of a real no-vig market that can double-count recent form. Only a real-line test can settle this. Refit A and B once real lines exist.
 
 ## Alternatives
 

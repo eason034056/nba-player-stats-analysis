@@ -37,7 +37,7 @@ The blend starts from the market no-vig log-odds, adds four capped adjustments, 
 
 ## Why
 
-The five labels match PR #40. Verdicts are side-relative, so market, last 10, and history display the side's number rather than the over's number. A published pick is at least 0.65, so the history signal is Supports on every pick that ships. The ±0.5 projection cut is flat across metrics and should later scale with each metric's spread.
+The five labels match PR #40. Verdicts are side-relative, so market, last 10, and history display the side's number rather than the over's number. The history cuts are 0.55 and 0.45, so a rate of 0.65 supports and a rate near 0.56 supports too. The ±0.5 projection cut is flat across metrics and should later scale with each metric's spread.
 
 Platt multiplies only the clipped adjustment. Training rows use a 0.5 market, so a slope on `logit(market) + adjustment` would scale live prices that were never observed. The prototype's 25/25/25/15/10 average is uncalibrated and was not used. `compute_scorecard` stays the agent's gate and is not reused as these signals.
 
@@ -49,21 +49,21 @@ Rank 1 is weakest. The loader copies SportsDataIO's integer with no inversion. T
 
 ```
 cd backend && python3 -m pytest
-# 835 passed, 23 skipped, 6 xfailed, 2 failed
+# 856 passed, 23 skipped, 6 xfailed, 2 failed
 cd scripts/agents && python3 -m pytest
-# 94 passed
+# 96 passed
 ```
 
-Rerun after the cutoff coefficients were written. Same results. The two backend failures are `test_agent_chat_endpoint_validates_action_and_uses_service` and `test_lineups_api_returns_team_count`. Both die in the rate limiter because Redis is not running in this environment (`ConnectionError` has no `detail`). They do not import the signal module.
+Rerun after the NaN and modal-line fixes. The two backend failures are `test_agent_chat_endpoint_validates_action_and_uses_service` and `test_lineups_api_returns_team_count`. Both die in the rate limiter because Redis is not running in this environment (`ConnectionError` has no `detail`). They do not import the signal module. The same two fail on `dev` at `a14370d`.
 
 - Verdict boundaries for over and under, including the exact cuts.
 - Each missing input stays null and adds 0 to the blend.
 - WNBA helper and the existing WNBA daily-analysis test leave both fields null.
-- Recorded `backend/tests/fixtures/odds_api_event_odds__player_points.json`: Luka Doncic's modal line is 36.5 (5 books). The 37.5 pair is excluded. Adding BetMGM's `(−105, −125)` changes the mean.
+- Recorded `backend/tests/fixtures/odds_api_event_odds__player_points.json`, loaded with `load_odds_fixture`: Luka Doncic's modal line is 36.5 (5 books). The 37.5 outcomes are filtered out of that consensus. Putting the recorded 37.5 pair back in changes the mean.
 - DailyPick JSON shape, and a cached payload without the new fields still parses.
 - Calibration guard fails a miscalibrated combined column and skips an empty one.
 - Integration test: SKIPPED (not part of this change).
-- Fabrication scan: PASS. The market test reads the recorded Odds API fixture. No invented book payload.
+- Fabrication scan: PASS. Market tests load `odds_api_event_odds__player_points.json` through `load_odds_fixture` and keep recorded outcomes. No book, price, or line is typed in those tests.
 
 ## Calibration
 
@@ -88,7 +88,7 @@ INSUFFICIENT REAL-LINE DATA (2026-11-10). The proxy-line holdout met the pass ba
 
 - About 5,039 holdout rows are playoff or play-in games, because this branch predates PR #38. Rebaseline after #38 merges into `dev`. Pending. Coefficients were not refit to drop them.
 - Early-season fits are unstable. January 2026, trained on November–December only (n = 8,902), had combined Brier 0.2171 versus `probability` 0.2149, and the 0.4–0.5 bucket gap was −0.102.
-- With a constant 0.5 market, offline `combined_probability` is a recalibrated adjustment total. It shares `history_rate` with `probability` (correlation 0.39). `A = 0.2801` encodes that the pick side beats a coin flip, and on a real no-vig market that can double-count recent form. Refit A and B once real lines exist.
+- With a constant 0.5 market, offline `combined_probability` is a recalibrated adjustment total. It shares `history_rate` with `probability` (correlation 0.38 overall, 0.40 on the fit rows, 0.35 on the holdout). `A = 0.2801` encodes that the pick side beats a coin flip, and on a real no-vig market that can double-count recent form. Refit A and B once real lines exist.
 
 Regenerate:
 

@@ -267,7 +267,10 @@ def calculate_mode_threshold(lines: List[float]) -> Optional[float]:
     
     Calculation rules:
     1. If there is a clear mode (one value appears most), use it.
-    2. If there are multiple modes (multiple values appear the same number of times), average them.
+    2. If there are multiple modes (multiple values appear the same number of times),
+       keep a posted value: the middle tied value, or the lower of the two
+       central tied values when the count is even. Do not average them into
+       a line nobody posted.
     3. If every value appears only once (no mode), use the median value.
     
     Args:
@@ -282,7 +285,7 @@ def calculate_mode_threshold(lines: List[float]) -> Optional[float]:
         24.5  # 24.5 appears 3 times, so it's the mode.
         
         >>> calculate_mode_threshold([24.5, 24.5, 25.5, 25.5])
-        25.0  # 24.5 and 25.5 each appear twice, so take their average.
+        24.5  # 24.5 and 25.5 each appear twice. The lower central value is kept.
         
         >>> calculate_mode_threshold([24.5, 25.0, 25.5, 26.0])
         25.25  # Each value occurs once, so median is used.
@@ -320,6 +323,11 @@ def calculate_mode_threshold(lines: List[float]) -> Optional[float]:
         # Only one mode
         return modes[0]
     
-    # Multiple modes: take the average
-    return sum(modes) / len(modes)
+    # Multiple modes: stay on a posted point. Same tie-break as the
+    # main-line picker: sort the tied values, take the middle when the
+    # count is odd, and the lower of the two central values when it is even.
+    ordered = sorted(modes)
+    if len(ordered) % 2 == 1:
+        return float(ordered[len(ordered) // 2])
+    return float(ordered[(len(ordered) // 2) - 1])
 

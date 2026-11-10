@@ -103,7 +103,14 @@ def format_rank(rank: float) -> str:
 
 
 def _clip(value: float, limit: float) -> float:
-    return max(-limit, min(limit, value))
+    """Clip a finite adjustment. A non-finite value is missing and contributes 0.
+
+    ``min(limit, nan)`` returns ``limit``, so a NaN must not reach that call.
+    """
+    number = _finite(value)
+    if number is None:
+        return 0.0
+    return max(-limit, min(limit, number))
 
 
 def _logit(probability: float) -> float:
@@ -219,13 +226,15 @@ def side_probability(consensus: tuple[float, float] | None, side: str) -> float 
 def strict_hits(values: Sequence[float], line: float, side: str) -> int | None:
     """Count strict hits. Over is ``value > line``. Under is ``value < line``.
 
-    A push (``value == line``) is not a hit for either side. Returns None
-    unless ``side`` is over or under.
+    A push (``value == line``) is not a hit for either side. A non-finite
+    value is dropped before the comparison, so it is not a miss. Returns
+    None unless ``side`` is over or under.
     """
+    finite = [number for value in values if (number := _finite(value)) is not None]
     if side == "over":
-        return sum(1 for value in values if value > line)
+        return sum(1 for value in finite if value > line)
     if side == "under":
-        return sum(1 for value in values if value < line)
+        return sum(1 for value in finite if value < line)
     return None
 
 
@@ -317,7 +326,12 @@ def last10_signal(hits: int | None) -> PickSignal:
 
 
 def history_signal(history_rate: float | None) -> PickSignal:
-    """The published side rate. A published pick is at least 0.65, so Supports."""
+    """The side's all-game rate. Supports at 0.55 and against at 0.45.
+
+    The cuts apply to the rate that was passed in. A rate of 0.65 supports,
+    and so does a rate near 0.56. This function does not assume every stored
+    pick clears 0.65.
+    """
     key, label = SIGNAL_SPECS[2]
     rate = _finite(history_rate)
     if rate is None:
@@ -366,10 +380,11 @@ def defense_signal(rank: float | None, side: str) -> PickSignal:
 
 
 def last10_adjustment(hits: int | None) -> float:
-    """Log-odds from ``hits/10``. Missing or short samples contribute 0."""
-    if hits is None:
+    """Log-odds from ``hits/10``. Missing or non-finite counts contribute 0."""
+    count = _finite(hits)
+    if count is None:
         return 0.0
-    rate = hits / LAST10_GAMES
+    rate = count / LAST10_GAMES
     return _clip(LAST10_LOGIT_WEIGHT * _logit(rate), ADJUSTMENT_CAP)
 
 
@@ -383,9 +398,10 @@ def history_adjustment(history_rate: float | None) -> float:
 
 def defense_adjustment(rank: float | None, side: str) -> float:
     """Log-odds from rank. 1 favors the over. Missing contributes 0."""
-    if rank is None or side not in ("over", "under"):
+    rank_value = _finite(rank)
+    if rank_value is None or side not in ("over", "under"):
         return 0.0
-    favor_over = (DEFENSE_RANK_MIDPOINT - float(rank)) / DEFENSE_RANK_SCALE
+    favor_over = (DEFENSE_RANK_MIDPOINT - rank_value) / DEFENSE_RANK_SCALE
     favor = favor_over if side == "over" else -favor_over
     return _clip(DEFENSE_WEIGHT * favor, ADJUSTMENT_CAP)
 
@@ -446,9 +462,10 @@ def combined_probability(
     if side not in ("over", "under"):
         return None
     market = _finite(market_probability)
-    if market is None:
+    total = _finite(adjustment)
+    if market is None or total is None:
         return None
-    probability = _sigmoid(_logit(market) + calibrated_adjustment(adjustment))
+    probability = _sigmoid(_logit(market) + calibrated_adjustment(total))
     probability = min(max(probability, 1e-4), 1.0 - 1e-4)
     return round(probability, 4)
 
@@ -525,12 +542,19 @@ def build_nba_signals(
         market_probability=market_probability,
     )
     hits: int | None = None
+    finite_window: list[float] | None = None
+    if last10_values is not None:
+        finite_window = [
+            number
+            for value in last10_values
+            if (number := _finite(value)) is not None
+        ]
     if (
-        last10_values is not None
-        and len(last10_values) == LAST10_GAMES
+        finite_window is not None
+        and len(finite_window) == LAST10_GAMES
         and threshold is not None
     ):
-        hits = strict_hits(last10_values, threshold, side)
+        hits = strict_hits(finite_window, threshold, side)
     edge = directional_edge(projected_value, threshold, side)
     rank = defense_rank(opponent_position_rank, opponent_rank)
     signals = [

@@ -20,6 +20,7 @@ Dependencies:
 """
 
 import asyncio
+import math
 import re
 import time
 from datetime import datetime, timezone, timedelta
@@ -956,7 +957,10 @@ def _recent_stat_values(game_logs: List[Dict[str, Any]]) -> List[float]:
         raw = game.get("value") if isinstance(game, dict) else None
         if isinstance(raw, bool) or not isinstance(raw, (int, float)):
             continue
-        values.append(float(raw))
+        number = float(raw)
+        if not math.isfinite(number):
+            continue
+        values.append(number)
     return values
 
 

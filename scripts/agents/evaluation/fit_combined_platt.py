@@ -81,7 +81,9 @@ def _score(adjustments: np.ndarray, outcomes: np.ndarray, intercept: float, slop
 
     linear = _logit(0.5) + intercept + slope * adjustments
     probabilities = np.array([_sigmoid(float(value)) for value in linear])
-    return np.clip(np.round(probabilities, 4), 1e-4, 1.0 - 1e-4)
+    # Clip, then round, matching combined_probability.
+    clipped = np.clip(probabilities, 1e-4, 1.0 - 1e-4)
+    return np.round(clipped, 4)
 
 
 def _report(label: str, probabilities: np.ndarray, outcomes: np.ndarray, baseline: np.ndarray) -> dict:

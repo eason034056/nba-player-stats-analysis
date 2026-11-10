@@ -3,8 +3,6 @@
 from __future__ import annotations
 
 import asyncio
-import json
-from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
@@ -12,6 +10,7 @@ import pytest
 from app.models.schemas import DailyPick, PickSignal
 from app.services.daily_analysis import (
     DailyAnalysisService,
+    _recent_stat_values,
     _with_nba_signal_verdicts,
 )
 from app.services.pick_signal_constants import (
@@ -25,12 +24,51 @@ from app.services.pick_signals import (
     american_pairs_at_line,
     build_nba_signals,
     combined_probability,
+    defense_adjustment,
+    history_adjustment,
+    last10_adjustment,
     no_vig_consensus,
+    projection_adjustment,
 )
 from app.services.prob import american_to_prob, calculate_mode_threshold, devig
+from tests.fixtures.odds_api import load_odds_fixture
 
-FIXTURE = Path(__file__).parent / "fixtures" / "odds_api_event_odds__player_points.json"
+RECORDED = "odds_api_event_odds__player_points.json"
+LUKA = "Luka Doncic"
 KEYS = [key for key, _label in SIGNAL_SPECS]
+
+
+def _filtered_books(payload: dict, keep) -> list[dict]:
+    """Books whose recorded outcomes pass ``keep``. Prices are not retyped."""
+    selected: list[dict] = []
+    for book in payload["bookmakers"]:
+        markets = []
+        for market in book.get("markets") or []:
+            outcomes = [
+                outcome
+                for outcome in market.get("outcomes") or []
+                if keep(book, outcome)
+            ]
+            if not outcomes:
+                continue
+            copied = dict(market)
+            copied["outcomes"] = outcomes
+            markets.append(copied)
+        if not markets:
+            continue
+        copied_book = dict(book)
+        copied_book["markets"] = markets
+        selected.append(copied_book)
+    return selected
+
+
+def _outcome_lines(bookmakers: list[dict]) -> list[float]:
+    return [
+        float(outcome["point"])
+        for book in bookmakers
+        for market in book["markets"]
+        for outcome in market["outcomes"]
+    ]
 
 
 def signal_map(**overrides):
@@ -225,6 +263,27 @@ class TestMissingInputs:
         assert combined is not None
         assert 0.0 < combined < 1.0
 
+    def test_a_non_finite_last10_value_is_dropped_not_scored_as_a_miss(self):
+        window = [float("nan"), 30, 31, 32, 33, 34, 35, 10, 11, 12, 13]
+        found, _combined, _rows = signal_map(line=20.5, last10_values=window)
+        assert found["last10"].value == "6/10"
+        short = [float("nan"), 30, 31, 32, 33, 34, 35, 10, 11, 12]
+        found, _combined, _rows = signal_map(line=20.5, last10_values=short)
+        assert found["last10"].value is None
+        assert found["last10"].verdict is None
+        logs = [{"value": float("nan")}, {"value": 8}, {"value": float("inf")}]
+        assert _recent_stat_values(logs) == [8.0]
+
+    def test_non_finite_adjustment_inputs_add_nothing(self):
+        assert defense_adjustment(float("nan"), "over") == 0.0
+        assert defense_adjustment(float("inf"), "under") == 0.0
+        assert last10_adjustment(float("nan")) == 0.0
+        assert history_adjustment(float("nan")) == 0.0
+        assert projection_adjustment(float("nan")) == 0.0
+        assert combined_probability(
+            side="over", market_probability=0.5, adjustment=float("nan")
+        ) is None
+
     def test_no_market_price_is_none_even_with_the_other_signals(self):
         _found, combined, _signals = signal_map(market_probability=None, bookmakers=[])
         assert combined is None
@@ -263,52 +322,60 @@ class TestMissingInputs:
 
 class TestModalLineConsensus:
     def test_books_off_the_modal_line_are_excluded(self):
-        bookmakers = [
-            {
-                "key": "a",
-                "markets": [
-                    {
-                        "outcomes": [
-                            {"name": "Over", "description": "Ayo Dosunmu", "price": -110, "point": 10.5},
-                            {"name": "Under", "description": "Ayo Dosunmu", "price": -110, "point": 10.5},
-                        ]
-                    }
-                ],
-            },
-            {
-                "key": "b",
-                "markets": [
-                    {
-                        "outcomes": [
-                            {"name": "Over", "description": "Ayo Dosunmu", "price": -120, "point": 10.5},
-                            {"name": "Under", "description": "Ayo Dosunmu", "price": 100, "point": 10.5},
-                        ]
-                    }
-                ],
-            },
-            {
-                "key": "c",
-                "markets": [
-                    {
-                        "outcomes": [
-                            {"name": "Over", "description": "Ayo Dosunmu", "price": -130, "point": 12.5},
-                            {"name": "Under", "description": "Ayo Dosunmu", "price": 110, "point": 12.5},
-                        ]
-                    }
-                ],
-            },
-        ]
-        lines = [10.5, 10.5, 10.5, 10.5, 12.5, 12.5]
-        assert calculate_mode_threshold(lines) == 10.5
-        pairs = american_pairs_at_line(bookmakers, "Ayo Dosunmu", 10.5)
-        assert pairs == [(-110.0, -110.0), (-120.0, 100.0)]
+        payload = load_odds_fixture(RECORDED)
+        keep_at = {36.5: {"draftkings", "fanduel"}, 37.5: {"betmgm"}}
+
+        def keep(book, outcome):
+            point = outcome.get("point")
+            return (
+                outcome.get("description") == LUKA
+                and point in keep_at
+                and book.get("key") in keep_at[point]
+            )
+
+        bookmakers = _filtered_books(payload, keep)
+        mode = calculate_mode_threshold(_outcome_lines(bookmakers))
+        assert mode == 36.5
+        pairs = american_pairs_at_line(bookmakers, LUKA, mode)
+        assert len(pairs) == 2
+        assert {book["key"] for book in bookmakers if book["key"] != "betmgm"} == {
+            "draftkings",
+            "fanduel",
+        }
         consensus = no_vig_consensus(pairs)
-        fair_a = devig(american_to_prob(-110), american_to_prob(-110))
-        fair_b = devig(american_to_prob(-120), american_to_prob(100))
-        assert consensus[0] == pytest.approx((fair_a[0] + fair_b[0]) / 2)
+        fairs = [
+            devig(american_to_prob(over), american_to_prob(under))
+            for over, under in pairs
+        ]
+        assert consensus[0] == pytest.approx(sum(item[0] for item in fairs) / len(fairs))
+        off_mode = american_pairs_at_line(bookmakers, LUKA, 37.5)
+        assert len(off_mode) == 1
+        widened = no_vig_consensus(pairs + off_mode)
+        assert widened[0] != pytest.approx(consensus[0])
+
+    def test_a_tied_modal_line_stays_on_a_posted_point(self):
+        payload = load_odds_fixture(RECORDED)
+        keep_at = {36.5: {"fanduel", "draftkings"}, 37.5: {"betmgm", "bovada"}}
+
+        def keep(book, outcome):
+            point = outcome.get("point")
+            return (
+                outcome.get("description") == LUKA
+                and point in keep_at
+                and book.get("key") in keep_at[point]
+            )
+
+        books = _filtered_books(payload, keep)
+        lines = _outcome_lines(books)
+        assert lines.count(36.5) == lines.count(37.5) == 4
+        mode = calculate_mode_threshold(lines)
+        assert mode == 36.5
+        assert mode in lines
+        assert american_pairs_at_line(books, LUKA, mode)
+        assert american_pairs_at_line(books, LUKA, 37.0) == []
 
     def test_recorded_odds_api_fixture_uses_only_the_modal_line(self):
-        payload = json.loads(FIXTURE.read_text(encoding="utf-8"))
+        payload = load_odds_fixture(RECORDED)
         bookmakers = payload["bookmakers"]
         grouped = DailyAnalysisService()._group_props_by_player(bookmakers)
         mode = calculate_mode_threshold(grouped["Luka Doncic"])
@@ -339,8 +406,9 @@ class TestModalLineConsensus:
         assert consensus is not None
         assert consensus[0] == pytest.approx(sum(item[0] for item in at_mode) / len(at_mode))
         assert consensus[1] == pytest.approx(sum(item[1] for item in at_mode) / len(at_mode))
-        # BetMGM's 37.5 price is not part of that mean.
-        widened = no_vig_consensus(pairs + [(-105.0, -125.0)])
+        off_mode = american_pairs_at_line(bookmakers, LUKA, 37.5)
+        assert off_mode
+        widened = no_vig_consensus(pairs + off_mode)
         assert widened[0] != pytest.approx(consensus[0])
 
 
@@ -409,23 +477,10 @@ class TestLeagueWiring:
             n_games=18,
             bookmakers_count=3,
         )
-        bookmakers = [
-            {
-                "key": "draftkings",
-                "markets": [
-                    {
-                        "outcomes": [
-                            {"name": "Over", "description": "A'ja Wilson", "price": -130, "point": 14.5},
-                            {"name": "Under", "description": "A'ja Wilson", "price": 110, "point": 14.5},
-                        ]
-                    }
-                ],
-            }
-        ]
         returned = _with_nba_signal_verdicts(
             pick,
             league="wnba",
-            bookmakers_data=bookmakers,
+            bookmakers_data=load_odds_fixture(RECORDED)["bookmakers"],
             game_logs=[{"value": 20}] * 12,
         )
         assert returned is pick
@@ -433,24 +488,19 @@ class TestLeagueWiring:
         assert pick.combined_probability is None
 
     def test_nba_analyze_attaches_five_signals_from_the_fetched_books(self):
-        service = DailyAnalysisService()
-        service._get_props_for_market = AsyncMock(
-            return_value=[
-                {
-                    "key": "draftkings",
-                    "markets": [
-                        {
-                            "outcomes": [
-                                {"name": "Over", "description": "Stephen Curry", "price": -110, "point": 28.5},
-                                {"name": "Under", "description": "Stephen Curry", "price": -110, "point": 28.5},
-                            ]
-                        }
-                    ],
-                }
-            ]
+        payload = load_odds_fixture(RECORDED)
+        books = _filtered_books(
+            payload,
+            lambda book, outcome: (
+                book.get("key") == "draftkings"
+                and outcome.get("description") == LUKA
+                and outcome.get("point") == 36.5
+            ),
         )
-        # Oldest first, matching get_player_stats. The last 10 are six overs.
-        logs = [{"team": "Warriors", "value": value} for value in [10, 30, 31, 32, 33, 34, 35, 20, 21, 22, 23]]
+        service = DailyAnalysisService()
+        service._get_props_for_market = AsyncMock(return_value=books)
+        # Oldest first, matching get_player_stats. The last 10 are six overs of 36.5.
+        logs = [{"team": "Lakers", "value": value} for value in [10, 40, 41, 42, 43, 44, 45, 20, 21, 22, 23]]
         service.csv_service = MagicMock()
         service.csv_service.get_player_stats = MagicMock(
             return_value={
@@ -467,7 +517,7 @@ class TestLeagueWiring:
                 away_team="Team B",
                 commence_time="2026-03-30T02:00:00Z",
                 projections={
-                    "Stephen Curry": {
+                    "Luka Doncic": {
                         "team": "GSW",
                         "points": 30.0,
                         "rebounds": 6.0,
@@ -486,7 +536,7 @@ class TestLeagueWiring:
         assert len(points) == 1
         pick = points[0]
         assert [signal.key for signal in pick.signals] == KEYS
-        assert pick.signals[0].verdict == "neutral"  # -110/-110 is 0.50
+        assert pick.signals[0].verdict == "neutral"  # recorded -113/-113 de-vigs to 0.50
         assert pick.signals[1].value == "6/10"
         assert pick.signals[2].value == "72.0%"
         assert pick.signals[2].verdict == "supports"
