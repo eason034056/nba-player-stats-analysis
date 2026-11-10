@@ -122,8 +122,11 @@ The Odds API gateway, provider (`get_events`, `get_event_odds`, `get_event_odds_
 Covered: both markets in one payload, one vote per book against Bovada's alternate ladder (the vote is the closest-to-even total, not the last alternate, and `bookmakers_count` is 6 rather than the alternate-row count), one-sided double-double (`no_odds` null, Over/Under fields null), markets filter, player filter, empty filter, no snapshot, malformed id, unknown market, Postgres disconnected, query failure, Redis hit (no second read, age recomputed, TTL 60), and an older capture ignored when a newer one exists.
 
 ```
-cd backend && pytest
+cd backend && pytest --tb=line -q
+2 failed, 820 passed, 23 skipped, 6 xfailed
 ```
+
+The two failures are the known Redis ones: `test_agent_chat_endpoint_validates_action_and_uses_service` and `test_lineups_api_returns_team_count`. Both die in slowapi with `ConnectionError` because Redis is not running. No other failure.
 
 Integration tests that need `RUN_INTEGRATION=1` were not run. `ODDS_API_KEY` was not set and was not requested.
 
