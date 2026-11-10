@@ -62,12 +62,10 @@ interface PlayerProjectionPanelProps {
 /**
  * getMatchupInfo - 根據對手排名回傳對位難度的樣式和文字
  *
- * 叫 "getMatchupInfo" 因為它把數字排名轉換為「對位資訊」（Easy/Avg/Hard）
- * 排名 1-10 = Hard（對手防守排前 10 名）
- * 排名 11-20 = Average
- * 排名 21-30 = Easy（對手防守排最後 10 名，容易得分）
+ * SportsDataIO OpponentRank：1 是最弱防守（被得分最多），數字愈大防守愈強。
+ * 排名 1-10 = Easy，11-20 = Average，21-30 = Hard。
  *
- * @param rank - 對手防守排名（1 = 最強防守，30 = 最弱防守）
+ * @param rank - 對手防守排名（1 = 最弱防守，30 = 最強防守）
  * @returns 包含 label（文字）、color（文字色）、bg（背景色）的物件
  */
 function getMatchupInfo(rank: number | null | undefined): {
@@ -75,17 +73,15 @@ function getMatchupInfo(rank: number | null | undefined): {
   color: string;
   bg: string;
 } {
-  if (rank == null) {
-    return { label: "N/A", color: "text-gray", bg: "bg-gray/10" };
+  if (rank == null || !Number.isFinite(rank)) {
+    return { label: "—", color: "text-gray", bg: "bg-gray/10" };
   }
-  if (rank >= 21) {
-    // 排名 21-30 = 防守最弱 = 容易得分
+  if (rank <= 10) {
     return { label: `Easy #${rank}`, color: "text-green-700", bg: "bg-green-50" };
   }
-  if (rank >= 11) {
+  if (rank <= 20) {
     return { label: `Avg #${rank}`, color: "text-yellow-700", bg: "bg-yellow-50" };
   }
-  // 排名 1-10 = 防守最強 = 難以得分
   return { label: `Hard #${rank}`, color: "text-red", bg: "bg-red/5" };
 }
 

@@ -483,8 +483,8 @@ export const dailyPickSchema = z.object({
   projected_value: z.number().nullable().optional(),       // 投影值（如 projected points = 29.3）
   projected_minutes: z.number().nullable().optional(),     // 預計上場分鐘數
   edge: z.number().nullable().optional(),                  // 投影值與盤口差距（正數 = 有利方向）
-  opponent_rank: z.number().nullable().optional(),         // 對手整體防守排名（1-30）
-  opponent_position_rank: z.number().nullable().optional(),// 對手對該位置防守排名
+  opponent_rank: z.number().nullable().optional(),         // 對手整體防守排名（1 = 最弱，數字愈大愈強）
+  opponent_position_rank: z.number().nullable().optional(),// 對手對該位置防守排名（1 = 最弱）
   injury_status: z.string().nullable().optional(),         // 傷病狀態（Free Trial 為 null）
   lineup_confirmed: z.boolean().nullable().optional(),     // 先發是否已確認
 });
@@ -654,7 +654,7 @@ export const playerProjectionSchema = z.object({
   injury_status: z.string().nullable().optional(),
   injury_body_part: z.string().nullable().optional(),
   
-  // 對位難度
+  // 對位難度。SportsDataIO：1 = 最弱防守（被得分最多），數字愈大愈強。
   opponent_rank: z.number().nullable().optional(),
   opponent_position_rank: z.number().nullable().optional(),
   

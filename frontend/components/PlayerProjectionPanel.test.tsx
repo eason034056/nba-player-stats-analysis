@@ -2,8 +2,9 @@ import { screen } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 
 import { PlayerProjectionPanel } from "@/components/PlayerProjectionPanel";
-import type { PlayerProjection } from "@/lib/schemas";
+import { playerProjectionSchema, type PlayerProjection } from "@/lib/schemas";
 import { renderWithProviders } from "@/test/test-utils";
+import rankFixture from "@/test/fixtures/projections/opponent-defense-rank.json";
 
 const projection = {
   player_name: "Nikola Jokic",
@@ -70,5 +71,31 @@ describe("PlayerProjectionPanel highlights", () => {
     }
     expect(screen.queryByText(/Edge vs Line/)).not.toBeInTheDocument();
     expect(screen.queryByText("0.5")).not.toBeInTheDocument();
+  });
+
+  it("treats rank 1 as the weakest defense and the highest rank as the strongest", () => {
+    const weakest = playerProjectionSchema.parse(rankFixture.weakest);
+    const strongest = playerProjectionSchema.parse(rankFixture.strongest);
+    const missing = playerProjectionSchema.parse(rankFixture.missing);
+
+    const { rerender } = renderWithProviders(
+      <PlayerProjectionPanel projection={weakest} metric="points" threshold={18.5} />,
+    );
+    const easy = screen.getByText("Easy #1");
+    expect(easy).toHaveClass("text-green-700");
+    expect(screen.queryByText("Hard #1")).not.toBeInTheDocument();
+
+    rerender(
+      <PlayerProjectionPanel projection={strongest} metric="points" threshold={29.5} />,
+    );
+    const hard = screen.getByText("Hard #30");
+    expect(hard).toHaveClass("text-red");
+    expect(screen.queryByText("Easy #30")).not.toBeInTheDocument();
+
+    rerender(
+      <PlayerProjectionPanel projection={missing} metric="points" threshold={9.5} />,
+    );
+    expect(screen.getByText("—")).toBeInTheDocument();
+    expect(screen.queryByText(/Easy #|Avg #|Hard #/)).not.toBeInTheDocument();
   });
 });
