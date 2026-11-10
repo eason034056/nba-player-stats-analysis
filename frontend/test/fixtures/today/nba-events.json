@@ -1,0 +1,26 @@
+{
+  "date": "2026-11-10",
+  "events": [
+    {
+      "event_id": "heat-bucks",
+      "sport_key": "basketball_nba",
+      "home_team": "Milwaukee Bucks",
+      "away_team": "Miami Heat",
+      "commence_time": "2026-11-11T01:00:00Z"
+    },
+    {
+      "event_id": "sixers-nets",
+      "sport_key": "basketball_nba",
+      "home_team": "Brooklyn Nets",
+      "away_team": "Philadelphia 76ers",
+      "commence_time": "2026-11-11T00:00:00Z"
+    },
+    {
+      "event_id": "magic-hornets",
+      "sport_key": "basketball_nba",
+      "home_team": "Charlotte Hornets",
+      "away_team": "Orlando Magic",
+      "commence_time": "2026-11-11T00:30:00Z"
+    }
+  ]
+}

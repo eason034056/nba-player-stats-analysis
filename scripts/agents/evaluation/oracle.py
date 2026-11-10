@@ -1,20 +1,15 @@
 """Recorded headline counts for this CSV.
 
-Daily MED20, L10, L5, and ALL counts are the walk-forward prototype on
-origin/dev @ 5407401. They did not move when pushes became refunds or when
-an identical same-day row stopped being counted twice. Proxy lines are
-x.5, the box score is an integer, and the only duplicate date is the last
-WNBA game.
+The numbers are the regular-season walk-forward on the post-SPO-97 files.
+Headline targets and the history behind them are regular-season games, the
+same set ``CSVPlayerHistoryService._allowed_game_types`` uses in production.
+Playoffs and the play-in are not in these headlines.
 
-Agent MED20 pick counts are lower than that prototype. The pre-gate side
-is the unrounded model probability. A value in [0.54995, 0.55) used to
-round to 0.5500 and become an over; it is now avoid. The same thing
-happens just above 0.45, where rounding used to create an under. NBA
-picks went from 60,829 to 60,781. WNBA picks went from 8,590 to 8,579,
-and the WNBA average predicted probability rounds to 61.4% instead of 61.3%.
+Proxy lines are x.5. ROI assumes -110. The pre-gate agent side is the
+unrounded model probability.
 
-``compare_oracle`` is a same-data check. SPO-97 and SPO-98 change the CSV;
-the report says which tables move when they do.
+``compare_oracle`` is a same-data check. A CSV change or a different game-type
+filter moves the counts, and the report says so.
 """
 
 from __future__ import annotations
@@ -22,49 +17,60 @@ from __future__ import annotations
 from typing import Mapping
 
 # props, picks, hit%, ROI%, pick Brier, Wilson low, Wilson high, avg pred%, naive%, lift pp
+# Regular-season targets only. Rounded the same way the report prints them.
 _DAILY = {
-    ("nba", "MED20"): (277398, 55708, 64.9, 24.0, 0.227, 64.5, 65.3, 72.7, 50.8, 14.2),
-    ("wnba", "MED20"): (43560, 7199, 68.4, 30.6, 0.210, 67.3, 69.5, 74.3, 50.9, 17.5),
-    ("nba", "L10"): (277398, 101614, 64.9, 23.9, 0.232, 64.6, 65.2, 73.6, 54.5, 10.4),
-    ("wnba", "L10"): (43560, 15413, 64.5, 23.2, 0.231, 63.8, 65.3, 73.7, 55.0, 9.6),
-    ("nba", "L5"): (277398, 135012, 67.4, 28.8, 0.223, 67.2, 67.7, None, None, None),
-    ("wnba", "L5"): (43560, 20575, 68.1, 30.0, 0.219, 67.4, 68.7, None, None, None),
-    ("nba", "ALL"): (277398, 48160, 68.9, 31.6, 0.209, 68.5, 69.3, None, None, None),
-    ("wnba", "ALL"): (43560, 8174, 67.1, 28.1, 0.216, 66.1, 68.1, None, None, None),
+    ("nba", "MED20"): (233596, 48258, 64.5, 23.2, 0.230, 64.1, 65.0, 73.5, 50.4, 14.2),
+    ("wnba", "MED20"): (35178, 5433, 68.1, 29.9, 0.212, 66.8, 69.3, 74.7, 50.8, 17.2),
+    ("nba", "L10"): (233596, 91663, 64.3, 22.8, 0.236, 64.0, 64.6, 74.3, 54.2, 10.2),
+    ("wnba", "L10"): (35178, 12232, 63.9, 22.1, 0.233, 63.1, 64.8, 73.7, 54.8, 9.2),
+    ("nba", "L5"): (233596, 118169, 67.7, 29.3, 0.223, 67.5, 68.0, None, None, None),
+    ("wnba", "L5"): (35178, 16592, 67.5, 28.9, 0.221, 66.8, 68.3, None, None, None),
+    ("nba", "ALL"): (233596, 42240, 65.0, 24.2, 0.227, 64.6, 65.5, None, None, None),
+    ("wnba", "ALL"): (35178, 6637, 65.7, 25.4, 0.222, 64.5, 66.8, None, None, None),
 }
 
 # Daily MED20 pick counts by market. A mismatch here means one extractor drifted.
 _MARKET_PICKS = {
-    ("nba", "threes_made"): 9407,
-    ("nba", "ftm"): 7872,
-    ("nba", "steals"): 8333,
-    ("nba", "assists"): 5305,
-    ("nba", "fgm"): 4303,
-    ("nba", "rebounds"): 3916,
-    ("nba", "ra"): 3561,
-    ("nba", "points"): 3241,
-    ("nba", "pr"): 3179,
-    ("nba", "pa"): 3349,
-    ("nba", "pra"): 3242,
-    ("wnba", "threes_made"): 1698,
-    ("wnba", "pra"): 258,
-    ("wnba", "points"): 234,
+    ("nba", "threes_made"): 8252,
+    ("nba", "steals"): 7839,
+    ("nba", "ftm"): 7433,
+    ("nba", "assists"): 4742,
+    ("nba", "fgm"): 3698,
+    ("nba", "rebounds"): 3056,
+    ("nba", "points"): 2780,
+    ("nba", "pa"): 2659,
+    ("nba", "ra"): 2656,
+    ("nba", "pra"): 2572,
+    ("nba", "pr"): 2571,
+    ("wnba", "threes_made"): 1341,
+    ("wnba", "steals"): 1236,
+    ("wnba", "ftm"): 942,
+    ("wnba", "assists"): 496,
+    ("wnba", "fgm"): 318,
+    ("wnba", "rebounds"): 303,
+    ("wnba", "ra"): 268,
+    ("wnba", "points"): 156,
+    ("wnba", "pra"): 136,
+    ("wnba", "pr"): 121,
+    ("wnba", "pa"): 116,
 }
 
 # props, picks, hit%, Wilson low, Wilson high, avg pred%, lift pp, Brier of model p_over
 _AGENT = {
-    ("nba", "MED20"): (100872, 60781, 57.9, 57.5, 58.3, 62.0, 7.9, 0.2467),
-    ("wnba", "MED20"): (15840, 8579, 57.6, 56.5, 58.6, 61.4, 7.7, 0.2463),
+    ("nba", "MED20"): (84944, 50832, 57.4, 57.0, 57.9, 62.1, 7.6, 0.2477),
+    ("wnba", "MED20"): (12792, 6623, 57.0, 55.8, 58.2, 61.2, 7.1, 0.2472),
+    ("nba", "L10"): (84944, 61715, 58.1, 57.7, 58.5, 64.5, 6.0, 0.2477),
+    ("wnba", "L10"): (12792, 8950, 56.3, 55.3, 57.3, 63.8, 3.9, 0.2497),
 }
 
 _TARGETS = {
-    "nba": (25218, "2025-10-21", "2026-05-11"),
-    "wnba": (3960, "2025-06-05", "2026-05-08"),
+    "nba": (21236, "2025-11-09", "2026-04-12"),
+    "wnba": (3198, "2025-06-11", "2026-05-08"),
 }
 
 _COMPOSITION = {
-    "nba": (65.5, 44.0),
-    "wnba": (73.6, 60.5),
+    "nba": (70.8, 47.1),
+    "wnba": (73.1, 65.5),
 }
 
 ORACLE_SOURCE = "recorded headlines for this CSV"
@@ -165,12 +171,11 @@ def compare_oracle(
             )
 
     if agent_rows:
-        agent_med = [row for row in agent_rows if row.proxy == "MED20"]
-        by_league = grouped(agent_med, lambda row: (row.league, row.proxy))
+        by_league = grouped(agent_rows, lambda row: (row.league, row.proxy))
         agent_found = {key: summary for key, summary in by_league}
-        avoid = sum(1 for row in agent_med if row.prod_decision == "avoid")
-        if avoid != len(agent_med):
-            mismatches.append(f"agent production avoid {avoid} of {len(agent_med)}")
+        avoid = sum(1 for row in agent_rows if row.prod_decision == "avoid")
+        if avoid != len(agent_rows):
+            mismatches.append(f"agent production avoid {avoid} of {len(agent_rows)}")
         for key, expected in _AGENT.items():
             summary = agent_found.get(key)
             if summary is None:

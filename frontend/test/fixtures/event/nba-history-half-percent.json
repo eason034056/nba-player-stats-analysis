@@ -1,0 +1,31 @@
+{
+  "player": "Bam Adebayo",
+  "metric": "points",
+  "threshold": 18.5,
+  "n_games": 8,
+  "p_over": 0.6755,
+  "p_under": 0.3,
+  "equal_count": 0,
+  "mean": 20.0,
+  "std": 2.0,
+  "histogram": [],
+  "game_logs": [
+    {
+      "date": "11/10",
+      "date_full": "2026-11-10",
+      "opponent": "BOS",
+      "value": 24,
+      "is_over": true,
+      "team": "MIA",
+      "minutes": 30,
+      "is_starter": true
+    }
+  ],
+  "opponents": [
+    "BOS"
+  ],
+  "teammates": [
+    "Tyler Herro"
+  ],
+  "message": null
+}

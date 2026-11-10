@@ -1,0 +1,57 @@
+{
+  "player": "Bam Adebayo",
+  "metric": "points",
+  "threshold": 18.5,
+  "n_games": 3,
+  "p_over": 0.3333,
+  "p_under": 0.3333,
+  "equal_count": 1,
+  "mean": 18.5,
+  "std": 1.0,
+  "histogram": [],
+  "game_logs": [
+    {
+      "date": "11/01",
+      "date_full": "2026-11-01",
+      "opponent": "PHI",
+      "value": 18.49,
+      "is_over": false,
+      "team": "MIA",
+      "minutes": 30,
+      "is_starter": true,
+      "game_type": "regular_season",
+      "season": "2026-2027"
+    },
+    {
+      "date": "11/03",
+      "date_full": "2026-11-03",
+      "opponent": "BOS",
+      "value": 18.5,
+      "is_over": false,
+      "team": "MIA",
+      "minutes": 0,
+      "is_starter": false,
+      "game_type": "regular_season",
+      "season": "2026-2027"
+    },
+    {
+      "date": "11/10",
+      "date_full": "2026-11-10",
+      "opponent": "NYK",
+      "value": 18.51,
+      "is_over": true,
+      "team": "MIA",
+      "minutes": 28,
+      "is_starter": true,
+      "game_type": "regular_season",
+      "season": "2026-2027"
+    }
+  ],
+  "opponents": [
+    "BOS",
+    "NYK",
+    "PHI"
+  ],
+  "teammates": [],
+  "message": null
+}

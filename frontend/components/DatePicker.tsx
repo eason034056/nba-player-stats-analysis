@@ -64,7 +64,7 @@ export function DatePicker({ value, onChange }: DatePickerProps) {
         <div className="relative">
           <div className="control-date-pill cursor-pointer">
             <div className="flex items-center gap-3">
-              <div className="flex h-11 w-11 items-center justify-center rounded-full border border-white/10 bg-white/6">
+              <div className="flex h-11 w-11 items-center justify-center rounded-full border border-white/10 bg-white/5">
                 <Calendar className="h-5 w-5 text-red" />
               </div>
               <div className="text-left">

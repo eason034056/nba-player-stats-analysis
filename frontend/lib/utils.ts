@@ -10,6 +10,7 @@
 import { clsx, type ClassValue } from "clsx";
 import { twMerge } from "tailwind-merge";
 import { format, parseISO } from "date-fns";
+import { formatPercent } from "@/lib/player-dd";
 import { zhTW } from "date-fns/locale";
 
 /**
@@ -202,7 +203,7 @@ export function formatAmericanOdds(odds: number): string {
  * // 結果: "4.8%"
  */
 export function formatVig(vig: number): string {
-  return `${(vig * 100).toFixed(1)}%`;
+  return formatPercent(vig);
 }
 
 
