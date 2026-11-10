@@ -65,9 +65,9 @@ describe("sportsbook table matches the backend de-vig", () => {
       expect(formatVig(row.vig).startsWith("-")).toBe(false);
       expect(within(rendered).getByText(formatVig(row.vig))).toBeInTheDocument();
     }
-    expect(within(screen.getByTestId("result-row-caesars")).getByText("0.0%")).toBeInTheDocument();
-    expect(within(screen.getByTestId("result-row-pointsbet")).getByText("1.0%")).toBeInTheDocument();
-    expect(within(screen.getByTestId("result-row-pointsbet")).getByText("99.0%")).toBeInTheDocument();
+    expect(within(screen.getByTestId("result-row-caesars")).getByText("0%")).toBeInTheDocument();
+    expect(within(screen.getByTestId("result-row-pointsbet")).getByText("1%")).toBeInTheDocument();
+    expect(within(screen.getByTestId("result-row-pointsbet")).getByText("99%")).toBeInTheDocument();
     expect(math.results.some((row) => row.over_odds === 0 || row.under_odds === 0)).toBe(false);
   });
 
@@ -104,9 +104,9 @@ describe("sportsbook table matches the backend de-vig", () => {
     expect(within(fanduel).getByTestId("result-no-price")).toHaveTextContent("—");
     expect(within(fanduel).getByTestId("result-no-implied")).toHaveTextContent("—");
     expect(within(fanduel).getByTestId("result-yes-fair")).toHaveTextContent(formatPercent(round4(fair)));
-    expect(within(fanduel).getByTestId("result-yes-fair")).toHaveTextContent("67.6%");
-    expect(within(fanduel).getByTestId("result-yes-fair")).not.toHaveTextContent("67.5%");
-    expect(within(fanduel).getByText("4.5%")).toBeInTheDocument();
+    expect(within(fanduel).getByTestId("result-yes-fair")).toHaveTextContent("68%");
+    expect(within(fanduel).getByTestId("result-yes-fair")).not.toHaveTextContent("67%");
+    expect(within(fanduel).getByText("5%")).toBeInTheDocument();
     expect(screen.getByTestId("result-line")).toHaveTextContent("Yes/No");
     expect(screen.queryByText("0.5")).not.toBeInTheDocument();
     expect(fanduel.textContent).not.toMatch(/NaN|Infinity|undefined/);

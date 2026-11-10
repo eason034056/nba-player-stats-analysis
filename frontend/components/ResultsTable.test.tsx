@@ -31,7 +31,7 @@ describe("ResultsTable double-double rows", () => {
     expect(within(fanduel).getByTestId("result-yes-price")).toHaveTextContent("-240");
     expect(within(fanduel).getByTestId("result-no-price")).toHaveTextContent("—");
     expect(within(fanduel).getByTestId("result-no-implied")).toHaveTextContent("—");
-    expect(within(fanduel).getByTestId("result-no-fair")).toHaveTextContent("32.5%");
+    expect(within(fanduel).getByTestId("result-no-fair")).toHaveTextContent("32%");
     expect(within(fanduel).getAllByText(SINGLE_LEG_PRIOR_LABEL).length).toBeGreaterThan(0);
 
     const draftkings = screen.getByTestId("result-row-draftkings");
@@ -60,7 +60,7 @@ describe("ResultsTable double-double rows", () => {
     expect(within(nextFanduel).getByTestId("result-line")).toHaveTextContent("Yes/No");
     expect(within(nextFanduel).getByTestId("result-no-price")).toHaveTextContent("—");
     expect(within(nextFanduel).getByTestId("result-no-implied")).toHaveTextContent("—");
-    expect(within(nextFanduel).getByTestId("result-no-fair")).toHaveTextContent("32.5%");
+    expect(within(nextFanduel).getByTestId("result-no-fair")).toHaveTextContent("32%");
     expect(within(nextFanduel).getAllByText(SINGLE_LEG_PRIOR_LABEL).length).toBeGreaterThan(0);
     expect(screen.queryByText("0.5")).not.toBeInTheDocument();
   });
@@ -115,7 +115,7 @@ describe("ResultsTable double-double rows", () => {
     );
   });
 
-  it("renders 0.6755 as 67.6% in ResultsTable and PlayerDDTile", async () => {
+  it("renders 0.6755 as 68% in ResultsTable and PlayerDDTile", async () => {
     const parsed = noVigResponseSchema.parse({
       event_id: "evt-round",
       player_name: "Nikola Jokic",
@@ -146,7 +146,7 @@ describe("ResultsTable double-double rows", () => {
     });
 
     const { unmount } = renderTable(parsed);
-    expect(screen.getByTestId("result-yes-fair")).toHaveTextContent("67.6%");
+    expect(screen.getByTestId("result-yes-fair")).toHaveTextContent("68%");
     unmount();
 
     renderWithProviders(
@@ -159,7 +159,7 @@ describe("ResultsTable double-double rows", () => {
       />,
     );
     const fanduel = await screen.findByRole("article", { name: /fanduel/i });
-    expect(within(fanduel).getByText("67.6%")).toBeInTheDocument();
+    expect(within(fanduel).getByText("68%")).toBeInTheDocument();
   });
 
   it("agrees with the tile on 0.6745 and 0.1005 and dashes a null No price", async () => {
@@ -208,10 +208,10 @@ describe("ResultsTable double-double rows", () => {
 
     const { unmount } = renderTable(parsed);
     const draftkings = screen.getByTestId("result-row-draftkings");
-    expect(within(draftkings).getByTestId("result-yes-fair")).toHaveTextContent("67.5%");
+    expect(within(draftkings).getByTestId("result-yes-fair")).toHaveTextContent("67%");
     expect(within(draftkings).getByTestId("result-no-price")).toHaveTextContent("-110");
     const fanduel = screen.getByTestId("result-row-fanduel");
-    expect(within(fanduel).getByTestId("result-yes-fair")).toHaveTextContent("10.1%");
+    expect(within(fanduel).getByTestId("result-yes-fair")).toHaveTextContent("10%");
     expect(within(fanduel).getByTestId("result-yes-price")).toHaveTextContent("-240");
     expect(within(fanduel).getByTestId("result-no-price")).toHaveTextContent("—");
     expect(within(fanduel).getByTestId("result-no-price").textContent).not.toContain("-240");
@@ -231,10 +231,10 @@ describe("ResultsTable double-double rows", () => {
       />,
     );
     const tileDraftKings = await screen.findByRole("article", { name: /draftkings/i });
-    expect(within(tileDraftKings).getByText("67.5%")).toBeInTheDocument();
+    expect(within(tileDraftKings).getByText("67%")).toBeInTheDocument();
     const tileFanDuel = screen.getByRole("article", { name: /fanduel/i });
-    expect(within(tileFanDuel).getByText("10.1%")).toBeInTheDocument();
-    expect(within(tileFanDuel).getByText("90.0%")).toBeInTheDocument();
+    expect(within(tileFanDuel).getByText("10%")).toBeInTheDocument();
+    expect(within(tileFanDuel).getByText("90%")).toBeInTheDocument();
     expect(within(tileFanDuel).getByText("-240")).toBeInTheDocument();
     expect(within(tileFanDuel).getAllByText("Unavailable")).toHaveLength(2);
     expect(within(tileFanDuel).queryByText("+200")).not.toBeInTheDocument();

@@ -78,9 +78,9 @@ describe("read signals", () => {
   it("shows raw rates and the stored rank without a verdict", () => {
     const signals = buildReadSignals(base);
     const text = signals.map((signal) => `${signal.label} ${signal.detail} ${signal.value}`).join(" ");
-    expect(signals.find((signal) => signal.key === "market")?.value).toBe("54.0%");
+    expect(signals.find((signal) => signal.key === "market")?.value).toBe("54%");
     expect(signals.find((signal) => signal.key === "last10")?.value).toBe("1/2");
-    expect(signals.find((signal) => signal.key === "history")?.value).toBe("62.0%");
+    expect(signals.find((signal) => signal.key === "history")?.value).toBe("62%");
     expect(signals.find((signal) => signal.key === "projection")?.value).toBe("20.4");
     expect(signals.find((signal) => signal.key === "defense")?.value).toBe("#9");
     expect(text).not.toMatch(/supports|neutral|against/i);
@@ -131,7 +131,7 @@ describe("player rows and lines", () => {
     });
     const bam = rows.find((row) => row.name === "Bam Adebayo");
     const herro = rows.find((row) => row.name === "Tyler Herro");
-    expect(bam?.leanText).toBe("O 72.0%");
+    expect(bam?.leanText).toBe("O 72%");
     expect(bam?.lineText).toBe("18.5");
     expect(herro?.leanText).toBe("No read");
     expect(herro?.lineText).toBe("16.5");
@@ -187,7 +187,7 @@ describe("our read", () => {
     });
     expect(model.tier?.label).toBe("Strong play");
     expect(model.headlineLead).toBe("Over 18.5");
-    expect(model.caption).toMatch(/Historical hit rate 72.0%/);
+    expect(model.caption).toMatch(/Historical hit rate 72%/);
     expect(model.primary?.probability).toBe(0.72);
     expect(model.other).toBeNull();
     expect(model.bar?.sourceLabel).toBe("No-vig consensus");

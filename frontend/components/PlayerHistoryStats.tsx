@@ -53,6 +53,7 @@ import {
   type NoVigResponse,
 } from "@/lib/schemas";
 import { cn } from "@/lib/utils";
+import { formatPercent } from "@/lib/player-dd";
 import { PlayerDDTile } from "@/components/PlayerDDTile";
 
 /**
@@ -801,9 +802,7 @@ export function PlayerHistoryStats({
                 <span className="text-sm font-bold">Over Probability</span>
               </div>
               <p className="text-2xl font-bold text-green-800">
-                {historyData.p_over !== null && historyData.p_over !== undefined
-                  ? `${(historyData.p_over * 100).toFixed(1)}%`
-                  : "N/A"}
+                {formatPercent(historyData.p_over)}
               </p>
               <p className="text-xs text-gray mt-1">
                 &gt; {threshold}
@@ -817,9 +816,7 @@ export function PlayerHistoryStats({
                 <span className="text-sm font-bold">Under Probability</span>
               </div>
               <p className="text-2xl font-bold text-red">
-                {historyData.p_under !== null && historyData.p_under !== undefined
-                  ? `${(historyData.p_under * 100).toFixed(1)}%`
-                  : "N/A"}
+                {formatPercent(historyData.p_under)}
               </p>
               <p className="text-xs text-gray mt-1">
                 &lt; {threshold}

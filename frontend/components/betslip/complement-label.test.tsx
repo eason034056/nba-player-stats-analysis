@@ -13,7 +13,7 @@ import nbaPicksFixture from "@/test/fixtures/picks/nba-daily-picks.json";
 const picks = dailyPicksResponseSchema.parse(nbaPicksFixture);
 const lineups = lineupsResponseSchema.parse(nbaLineupsFixture);
 const bam = picks.picks[0];
-const caption = "Under hit rate 28.0% (1 − Over 72.0%)";
+const caption = "Under hit rate 28% (1 − Over 72%)";
 
 vi.mock("next/link", () => ({
   default: ({

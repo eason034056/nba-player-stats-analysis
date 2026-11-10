@@ -27,8 +27,10 @@ function BrandMark({ compact = false }: { compact?: boolean }) {
   return (
     <span
       className={cn(
-        "inline-flex items-center justify-center rounded-[10px] bg-brand font-mono font-bold text-accent",
-        compact ? "h-[30px] w-[30px] text-xs" : "h-[34px] w-[34px] text-[13px]",
+        "inline-flex items-center justify-center bg-brand font-mono font-bold text-accent",
+        compact
+          ? "h-[30px] w-[30px] rounded-mark-sm text-xs"
+          : "h-[34px] w-[34px] rounded-mark text-[13px]",
       )}
     >
       NV
@@ -45,7 +47,7 @@ function LeagueSwitch({ pathname }: { pathname: string }) {
         href={leagueSwitchHref(pathname, league)}
         aria-current={active ? "true" : undefined}
         className={cn(
-          "rounded-md px-1.5 py-[3px] font-mono text-[11px] font-bold leading-none",
+          "rounded-badge px-[7px] py-[3px] font-mono text-[11px] font-bold leading-none",
           active ? "bg-brand-tint text-brand" : "text-muted hover:text-brand",
         )}
       >
@@ -123,7 +125,7 @@ function SectionLinks({
             aria-current={isActive ? "page" : undefined}
             className={cn(
               "inline-flex items-center gap-2 rounded-full px-4 py-2 text-sm font-semibold",
-              isActive ? "bg-brand-tint text-brand" : "text-[#4A4458] hover:bg-brand-tint/60",
+              isActive ? "bg-brand-tint text-brand" : "text-ink-2 hover:bg-brand-tint/60",
             )}
           >
             <span>{section.label}</span>
@@ -161,20 +163,25 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   return (
     <div className="flex min-h-screen flex-col bg-canvas text-ink">
       <header className="sticky top-0 z-40 border-b border-line bg-white">
-        <div className="mx-auto hidden h-[68px] max-w-[1200px] items-center justify-between gap-6 px-8 md:flex">
-          <div className="flex items-center gap-2.5">
+        <div
+          data-testid="web-header"
+          className="hidden h-header w-full grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center px-8 md:grid"
+        >
+          <div className="flex min-w-0 items-center gap-2.5 justify-self-start">
             <Link href={onWnba ? "/wnba" : "/"} className="flex items-center gap-2.5">
               <BrandMark />
               <span className="text-lg font-bold tracking-[-0.02em]">No-Vig</span>
             </Link>
             <LeagueSwitch pathname={pathname} />
           </div>
-          <nav aria-label="Primary" className="flex items-center gap-1">
+          <nav aria-label="Primary" className="flex items-center gap-1 justify-self-center">
             <SectionLinks pathname={pathname} count={count} variant="bar" />
           </nav>
-          <AskAgentButton />
+          <div className="justify-self-end">
+            <AskAgentButton />
+          </div>
         </div>
-        <div className="flex items-center justify-between px-4 py-3.5 md:hidden">
+        <div className="flex items-center justify-between px-4 pb-3 pt-3.5 md:hidden">
           <div className="flex items-center gap-2">
             <Link href={onWnba ? "/wnba" : "/"} className="flex items-center gap-2">
               <BrandMark compact />
@@ -186,13 +193,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         </div>
       </header>
 
-      <div className="flex flex-1 flex-col pb-24 md:pb-8">
-        <main className="flex-1">{children}</main>
-        <footer className="mx-auto w-full max-w-[1200px] px-4 py-8 text-center text-xs leading-5 text-muted md:px-8">
-          No-Vig is for research. It is not betting advice. Live odds and
-          historical rates can be delayed or missing.
-        </footer>
-      </div>
+      <main className="flex-1 pb-24 md:pb-0">{children}</main>
 
       <nav
         aria-label="Mobile"

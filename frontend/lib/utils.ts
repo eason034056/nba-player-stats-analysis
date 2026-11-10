@@ -154,19 +154,17 @@ export function formatGameTime(dateString: string): string {
 /**
  * 格式化機率為百分比
  * 
- * @param probability - 機率（0-1 之間的小數）
- * @param decimals - 小數位數，預設 1
- * @returns 百分比字串
+ * @param probability - 機率（0-1 之間的小數）。缺值或非有限數回 em dash。
+ * @returns 整數百分比字串，與 formatPercent 相同
  * 
  * @example
  * formatProbability(0.5238)
- * // 結果: "52.4%"
+ * // 結果: "52%"
  */
 export function formatProbability(
-  probability: number,
-  decimals: number = 1
+  probability: number | null | undefined,
 ): string {
-  return `${(probability * 100).toFixed(decimals)}%`;
+  return formatPercent(probability);
 }
 
 
@@ -200,7 +198,7 @@ export function formatAmericanOdds(odds: number): string {
  * 
  * @example
  * formatVig(0.0476)
- * // 結果: "4.8%"
+ * // 結果: "5%"
  */
 export function formatVig(vig: number): string {
   return formatPercent(vig);

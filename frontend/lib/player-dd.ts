@@ -164,10 +164,10 @@ export function roundHalfAwayFromZero(value: number, digits: number): number {
 }
 
 export function formatPercent(probability: number | null | undefined): string {
-  // `null * 100` is 0, so a missing probability used to print "0.0%".
-  // `NaN` and infinities used to print "NaN%" / "Infinity%".
-  if (probability == null || !Number.isFinite(probability)) return "—";
-  return `${roundHalfAwayFromZero(probability * 100, 1).toFixed(1)}%`;
+  // `null * 100` is 0, so a missing probability must not print "0%".
+  // NaN and infinities must not print "NaN%" or "Infinity%".
+  if (typeof probability !== "number" || !Number.isFinite(probability)) return "—";
+  return `${roundHalfAwayFromZero(probability * 100, 0)}%`;
 }
 
 export function staleLineWarning(meta: DDSnapshotMeta): string | null {

@@ -49,12 +49,46 @@
   --shadow-soft: 0 8px 24px rgba(29, 21, 48, 0.06);
   --shadow-card: 0 1px 2px rgba(29, 21, 48, 0.04);
   --shadow-button: none;
+  --shadow-drawer: -20px 0 60px rgba(29, 21, 48, 0.18);
+
+  --color-ink-2: #4a4458;
+  --color-faint: #8a8496;
+  --color-eyebrow: #7b4fc4;
+  --color-against: #b4436c;
+  --color-under-text: #5b3a99;
+  --color-divider: #eeebf2;
+  --color-seg: #f3f1f6;
+  --color-panel: #f7f6f9;
+  --color-grid: #f1eef4;
+  --color-list-gap: #e6e2ec;
+  --color-under-bar: #c9b4ee;
+  --color-chart-line: #b3a63a;
+  --color-lean: #e3daf3;
+  --color-pass: #e2e2e2;
+  --color-tone-neutral: #b9b3c4;
+  --color-agent-border: #e3dfe9;
+  --color-tag-against: #f6e3ea;
+  --color-tag-against-ink: #8e2c50;
+  --color-tag-neutral: #f1f0f3;
+  --color-card-footer: #bfaee3;
+  --color-on-brand-soft: #e6ddf6;
+  --color-on-brand-meta: #d9cef0;
 
   --radius-sm: 10px;
   --radius-md: 14px;
   --radius-lg: 20px;
   --radius-xl: 28px;
-  --radius-full: 9999px;
+  --radius-full: 999px;
+  --radius-badge: 6px;
+  --radius-mark: 10px;
+  --radius-mark-mobile: 9px;
+  --radius-control: 12px;
+  --radius-tile: 16px;
+  --radius-row: 18px;
+  --radius-card: 20px;
+  --radius-game: 22px;
+  --radius-sheet: 24px;
+  --radius-hero: 28px;
 }
 
 @layer base {
@@ -355,6 +389,40 @@
     @apply badge;
     background: #f3f1f6;
     color: var(--color-gray);
+  }
+
+  /* Page column. cqi is the scrollport (page-frame), so 1440px pads 40px and 390px pads 16px. */
+  .page-frame {
+    container-type: inline-size;
+    width: 100%;
+  }
+
+  .page-wrap {
+    width: 100%;
+    max-width: 1200px;
+    margin-inline: auto;
+    padding: clamp(16px, 3.4cqi, 40px);
+    padding-bottom: 0;
+  }
+
+  @media (min-width: 768px) {
+    .page-wrap {
+      padding-bottom: 56px;
+    }
+  }
+
+  .today-snap {
+    display: flex;
+    gap: 10px;
+    overflow-x: auto;
+    scroll-snap-type: x mandatory;
+    margin-inline: calc(clamp(16px, 3.4cqi, 40px) * -1);
+    padding: 0 clamp(16px, 3.4cqi, 40px) 4px;
+  }
+
+  .today-snap > * {
+    flex: 0 0 82%;
+    scroll-snap-align: start;
   }
 }
 
