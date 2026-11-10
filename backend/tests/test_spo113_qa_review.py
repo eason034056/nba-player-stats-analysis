@@ -455,6 +455,7 @@ class TestHistorySample:
         assert stats["season_n_games"] == 0
         assert stats["season_p_over"] is None
         assert stats["season_p_under"] is None
+        assert stats["season_mean"] is None
 
         older = service.get_player_stats(
             "Sample Player", "points", 15.0, n=1, season="2025-26"
@@ -466,6 +467,7 @@ class TestHistorySample:
         assert older["season_n_games"] == 4
         assert older["season_p_over"] == 0.75
         assert older["season_p_under"] == 0.25
+        assert older["season_mean"] == 19.5
         assert all(log["value"] != 99 for log in older["game_logs"])
 
     def test_teammate_context_uses_the_sample_after_n(self, tmp_path):

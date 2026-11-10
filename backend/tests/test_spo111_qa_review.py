@@ -1,8 +1,9 @@
 """QA coverage for SPO-111 read tiers, historical rates, and top_read.
 
-The published board is probability >= 0.65 and n_games >= 10. That
-predicate is copied below as ``_prechange_board`` so the default query
-is compared with the filter this PR replaced, not with the new helper.
+Storage still uses the historical rate. The published NBA board is
+combined_probability >= 0.65 and n_games >= 10. ``_prechange_board``
+is the historical filter, kept so a test can show the two sets are
+not the same helper.
 
 ``p_over`` and ``p_under`` are shares of prior games (strictly above and
 strictly below the line). They are not bookmaker no-vig probabilities.
@@ -31,6 +32,7 @@ from app.services.daily_analysis import (
     best_top_reads,
     daily_picks_cache_key,
     present_daily_picks,
+    select_daily_picks,
     read_tier,
 )
 from app.services.prob import american_to_prob, devig, posted_american_odds
@@ -275,20 +277,26 @@ class TestTierBoundariesMatchReadTier:
         assert read_tier(0.56) == "Lean"
         assert read_tier(0.5599) is None
 
-    def test_stored_rows_use_those_same_cuts(self):
+    def test_stored_rows_keep_the_historical_rate_and_tier_follows_combined(self):
         picks = _analyze(_case_stats(_ASSIGNMENTS))
         by_name = {pick.player_name: pick for pick in picks}
 
-        assert by_name[_ROLES["exact_strong"]].tier == "Strong play"
-        assert by_name[_ROLES["exact_strong"]].probability == pytest.approx(0.70)
-        assert by_name[_ROLES["just_below_strong"]].tier == "Playable"
-        assert by_name[_ROLES["just_below_strong"]].probability == pytest.approx(0.6999)
-        assert by_name[_ROLES["exact_playable"]].tier == "Playable"
-        assert by_name[_ROLES["exact_playable"]].probability == pytest.approx(0.65)
-        assert by_name[_ROLES["exact_playable"]].n_games == 10
-        assert by_name[_ROLES["just_below_playable"]].tier == "Lean"
-        assert by_name[_ROLES["exact_lean"]].tier == "Lean"
-        assert by_name[_ROLES["exact_lean"]].probability == pytest.approx(0.56)
+        strong = by_name[_ROLES["exact_strong"]]
+        assert strong.probability == pytest.approx(0.70)
+        assert strong.tier == read_tier(strong.combined_probability)
+        below_strong = by_name[_ROLES["just_below_strong"]]
+        assert below_strong.probability == pytest.approx(0.6999)
+        assert below_strong.tier == read_tier(below_strong.combined_probability)
+        playable = by_name[_ROLES["exact_playable"]]
+        assert playable.probability == pytest.approx(0.65)
+        assert playable.n_games == 10
+        assert playable.tier == read_tier(playable.combined_probability)
+        lean = by_name[_ROLES["exact_lean"]]
+        assert lean.probability == pytest.approx(0.56)
+        assert lean.tier == read_tier(lean.combined_probability)
+        assert by_name[_ROLES["just_below_playable"]].tier == read_tier(
+            by_name[_ROLES["just_below_playable"]].combined_probability
+        )
         assert _ROLES["just_below_lean"] not in by_name
         assert _ROLES["too_few"] not in by_name
         assert _ROLES["missing_both"] not in by_name
@@ -442,7 +450,7 @@ class TestDefaultBoardBackCompat:
             ),
         )
 
-    def test_default_params_equal_the_prechange_filter_and_overrides_widen_it(self):
+    def test_default_params_filter_combined_probability(self):
         from app.api.daily_picks import get_daily_picks, trigger_daily_analysis
 
         stored = self._stored()
@@ -453,8 +461,11 @@ class TestDefaultBoardBackCompat:
         assert default_games == MIN_SAMPLE_GAMES == 10
 
         old = [_identity(pick) for pick in _prechange_board(stored.picks)]
-        presented = [_identity(pick) for pick in present_daily_picks(stored).picks]
-        assert presented == old
+        presented_picks = present_daily_picks(stored).picks
+        presented = [_identity(pick) for pick in presented_picks]
+        assert presented == [
+            _identity(pick) for pick in select_daily_picks(stored.picks)
+        ]
         assert any(row[3] == pytest.approx(0.65) and row[4] == 10 for row in old)
         assert all(row[3] >= 0.65 and row[4] >= 10 for row in old)
 
@@ -500,29 +511,35 @@ class TestDefaultBoardBackCompat:
         finally:
             monkeypatch.undo()
 
-        assert [_identity(pick) for pick in default.picks] == old
-        assert [_identity(pick) for pick in trigger.picks] == old
+        assert [_identity(pick) for pick in default.picks] == [
+            _identity(pick) for pick in select_daily_picks(stored.picks)
+        ]
+        assert [_identity(pick) for pick in trigger.picks] == [
+            _identity(pick) for pick in select_daily_picks(stored.picks)
+        ]
         assert [_identity(pick) for pick in lean.picks] == [
             _identity(pick)
-            for pick in _prechange_board(stored.picks, min_probability=0.56, min_games=10)
+            for pick in select_daily_picks(
+                stored.picks, min_probability=0.56, min_games=10
+            )
         ]
         assert [_identity(pick) for pick in with_short.picks] == [
             _identity(pick)
-            for pick in _prechange_board(stored.picks, min_probability=0.56, min_games=5)
+            for pick in select_daily_picks(
+                stored.picks, min_probability=0.56, min_games=5
+            )
         ]
-        lean_names = {pick.player_name for pick in lean.picks}
-        assert _ROLES["exact_lean"] in lean_names
-        assert _ROLES["just_below_playable"] in lean_names
-        assert _ROLES["exact_lean"] not in {pick.player_name for pick in default.picks}
-        assert _ROLES["nine_games"] in {pick.player_name for pick in with_short.picks}
-        assert _ROLES["short_sample"] in {pick.player_name for pick in with_short.picks}
-        assert _ROLES["nine_games"] not in {pick.player_name for pick in default.picks}
-
-        over_wins = next(pick for pick in default.picks if pick.player_name == _ROLES["over_wins_tie_bar"])
+        # Side choice is still the historical rate. A 0.65 over is stored
+        # ahead of a 0.90 under, and a 0.57 over does not replace a 0.90 under.
+        over_wins = next(
+            pick for pick in stored.picks if pick.player_name == _ROLES["over_wins_tie_bar"]
+        )
         assert over_wins.direction == "over"
         assert over_wins.probability == pytest.approx(0.65)
         assert over_wins.p_under == pytest.approx(0.90)
-        stolen = next(pick for pick in default.picks if pick.player_name == _ROLES["lean_must_not_steal"])
+        stolen = next(
+            pick for pick in stored.picks if pick.player_name == _ROLES["lean_must_not_steal"]
+        )
         assert stolen.direction == "under"
         assert stolen.probability == pytest.approx(0.90)
 

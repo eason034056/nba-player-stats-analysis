@@ -771,6 +771,23 @@ class CSVPlayerHistoryService:
                 return position
         return None
 
+    def latest_team(self, player_name: str) -> Optional[str]:
+        """Team name on the most recent loaded game, or None.
+
+        The game log is newest-first, the same order ``latest_position``
+        walks. A blank team is skipped. This is the CSV ``Team`` cell.
+        It does not call a lineup or odds API.
+        """
+        self.load_csv()
+        resolved = self.resolve_player_name(player_name)
+        if not resolved:
+            return None
+        for game in self._cache.get(resolved, []):
+            team = str(game.get("team") or "").strip()
+            if team:
+                return team
+        return None
+
     def _history_season_label(self, season: Optional[str]) -> Optional[str]:
         """Season label for the season-scoped rate. NBA only.
 
@@ -883,6 +900,7 @@ class CSVPlayerHistoryService:
                 "season_n_games": 0,
                 "season_p_over": None,
                 "season_p_under": None,
+                "season_mean": None,
             }
         count = len(values)
         over_count = sum(1 for value in values if value > threshold)
@@ -892,6 +910,7 @@ class CSVPlayerHistoryService:
             "season_n_games": count,
             "season_p_over": round(over_count / count, 4),
             "season_p_under": round(under_count / count, 4),
+            "season_mean": round(statistics.mean(values), 2),
         }
 
     def get_player_stats(

@@ -38,7 +38,13 @@ router = APIRouter(
     "/daily-picks",
     response_model=DailyPicksResponse,
     summary="Get daily high-probability player picks",
-    description="Retrieve player picks for a given date with probabilities higher than 65%"
+    description=(
+        "Retrieve NBA picks whose combined_probability is at least "
+        "min_probability (default 0.65) and whose sample is at least "
+        "min_games (default 10). The stored candidates still include "
+        "historical Lean rows. probability on each row stays the "
+        "historical hit rate."
+    )
 )
 async def get_daily_picks(
     date: Optional[str] = Query(
@@ -59,9 +65,11 @@ async def get_daily_picks(
         ge=0.5,
         le=0.95,
         description=(
-            "Minimum probability threshold (0.5-0.95). "
+            "Minimum combined_probability (0.5-0.95). "
             "Default 0.65 is the published board. "
-            "0.56 returns stored Lean rows."
+            "0.56 returns stored rows whose combined probability is Lean. "
+            "This is not the historical hit rate. That rate is still "
+            "probability on each row."
         ),
     ),
     min_games: int = Query(

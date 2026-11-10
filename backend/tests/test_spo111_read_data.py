@@ -1,8 +1,8 @@
 """SPO-111: NBA top_read, read tiers, both-side rates, and the Lean floor.
 
-The published board stays probability >= 0.65 and n_games >= 10.
-Default NBA storage also keeps Lean rows and samples down to 5 games.
-WNBA storage stays on the old floors.
+Default NBA storage still keeps a historical side at or above 0.56 and
+samples down to 5 games. The published board is now combined_probability
+>= 0.65 and n_games >= 10 (SPO-121). WNBA storage stays on the old floors.
 """
 
 import asyncio
@@ -29,6 +29,7 @@ from app.services.daily_analysis import (
     DailyAnalysisService,
     attach_top_reads,
     best_top_reads,
+    board_score,
     market_key_for_metric,
     present_daily_picks,
     read_tier,
@@ -225,39 +226,62 @@ class TestStoredCandidates:
         assert under.probability == pytest.approx(0.90)
         assert under.p_over == pytest.approx(0.57)
         assert under.p_under == pytest.approx(0.90)
-        assert under.tier == "Strong play"
+        assert under.tier == read_tier(under.combined_probability)
 
         lean = by_name[_LEAN_ONLY]
         assert lean.direction == "over"
-        assert lean.tier == "Lean"
+        assert lean.probability == pytest.approx(0.60)
+        assert lean.tier == read_tier(lean.combined_probability)
         assert lean.p_over == pytest.approx(0.60)
         assert lean.p_under == pytest.approx(0.30)
 
         short = by_name[_SHORT_SAMPLE]
         assert short.n_games == 6
-        assert short.tier == "Strong play"
+        assert short.probability == pytest.approx(0.80)
+        assert short.tier == read_tier(short.combined_probability)
         assert short.p_over == pytest.approx(0.80)
         assert short.p_under == pytest.approx(0.10)
 
-        default_rows = [_identity(pick) for pick in select_daily_picks(picks)]
-        # _analyze_single_event keeps insertion order. run_daily_analysis sorts.
-        assert default_rows == [
-            _identity(by_name[_BOARD_OVER]),
-            _identity(under),
+        # _analyze_single_event keeps insertion order. The board is the
+        # combined score, not the historical rate those names were given.
+        default_picks = select_daily_picks(picks)
+        assert [pick.player_name for pick in default_picks] == [
+            pick.player_name
+            for pick in picks
+            if (score := board_score(pick)) is not None
+            and score >= 0.65
+            and pick.n_games >= 10
         ]
-        assert all(row[3] >= 0.65 and row[4] >= 10 for row in default_rows)
+        assert all(
+            pick.combined_probability is not None
+            and pick.combined_probability >= 0.65
+            and pick.n_games >= 10
+            for pick in default_picks
+        )
 
         lean_rows = [
             pick.player_name
             for pick in select_daily_picks(picks, min_probability=0.56, min_games=10)
         ]
-        assert lean_rows == [_BOARD_OVER, _BOARD_UNDER, _LEAN_ONLY]
+        assert lean_rows == [
+            pick.player_name
+            for pick in picks
+            if (score := board_score(pick)) is not None
+            and score >= 0.56
+            and pick.n_games >= 10
+        ]
 
         with_short = [
             pick.player_name
             for pick in select_daily_picks(picks, min_probability=0.56, min_games=5)
         ]
-        assert with_short == [_BOARD_OVER, _BOARD_UNDER, _LEAN_ONLY, _SHORT_SAMPLE]
+        assert with_short == [
+            pick.player_name
+            for pick in picks
+            if (score := board_score(pick)) is not None
+            and score >= 0.56
+            and pick.n_games >= 5
+        ]
 
     def test_explicit_threshold_keeps_the_old_storage_floors(self):
         picks, _, _ = _analyze(explicit_threshold=0.65)
@@ -305,11 +329,14 @@ class TestStoredCandidates:
         result = asyncio.run(service.run_daily_analysis(date="2026-03-30", use_cache=False))
         assert result.total_picks == 4
         assert result.stats is not None
-        assert result.stats.high_prob_count == 2
+        expected = select_daily_picks(result.picks)
+        assert result.stats.high_prob_count == len(expected)
         presented = present_daily_picks(result)
-        assert presented.total_picks == 2
-        assert [pick.player_name for pick in presented.picks] == [_BOARD_UNDER, _BOARD_OVER]
-        assert presented.stats.high_prob_count == 2
+        assert presented.total_picks == len(expected)
+        assert [pick.player_name for pick in presented.picks] == [
+            pick.player_name for pick in expected
+        ]
+        assert presented.stats.high_prob_count == len(expected)
 
 
 class TestDailyPicksRoute:
@@ -324,7 +351,7 @@ class TestDailyPicksRoute:
                 total_events=1,
                 total_players=6,
                 total_props=4,
-                high_prob_count=2,
+                high_prob_count=len(select_daily_picks(picks)),
                 analysis_duration_seconds=0.1,
             ),
         )
@@ -384,35 +411,34 @@ class TestDailyPicksRoute:
             trigger_daily_analysis(date="2026-03-30", tz_offset=480)
         )
 
-        assert [pick.player_name for pick in default.picks] == [_BOARD_OVER, _BOARD_UNDER]
-        assert default.total_picks == 2
+        expected_default = select_daily_picks(stored.picks)
+        assert [pick.player_name for pick in default.picks] == [
+            pick.player_name for pick in expected_default
+        ]
+        assert default.total_picks == len(expected_default)
         assert default.stats is not None
-        assert default.stats.high_prob_count == 2
-        under = next(pick for pick in default.picks if pick.player_name == _BOARD_UNDER)
+        assert default.stats.high_prob_count == len(expected_default)
+        under = next(pick for pick in stored.picks if pick.player_name == _BOARD_UNDER)
         assert under.direction == "under"
-        assert under.tier == "Strong play"
+        assert under.tier == read_tier(under.combined_probability)
+        assert under.probability == pytest.approx(0.90)
         assert under.p_over == pytest.approx(0.57)
         assert under.p_under == pytest.approx(0.90)
-        assert _LEAN_ONLY not in {pick.player_name for pick in default.picks}
 
         assert [pick.player_name for pick in lean.picks] == [
-            _BOARD_OVER,
-            _BOARD_UNDER,
-            _LEAN_ONLY,
+            pick.player_name
+            for pick in select_daily_picks(stored.picks, min_probability=0.56, min_games=10)
         ]
-        lean_row = lean.picks[-1]
-        assert lean_row.tier == "Lean"
+        lean_row = next(pick for pick in stored.picks if pick.player_name == _LEAN_ONLY)
+        assert lean_row.tier == read_tier(lean_row.combined_probability)
         assert lean_row.probability == pytest.approx(0.60)
 
         assert [pick.player_name for pick in with_short.picks] == [
-            _BOARD_OVER,
-            _BOARD_UNDER,
-            _LEAN_ONLY,
-            _SHORT_SAMPLE,
+            pick.player_name
+            for pick in select_daily_picks(stored.picks, min_probability=0.56, min_games=5)
         ]
         assert [pick.player_name for pick in trigger.picks] == [
-            _BOARD_OVER,
-            _BOARD_UNDER,
+            pick.player_name for pick in expected_default
         ]
 
 

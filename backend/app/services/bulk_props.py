@@ -516,6 +516,78 @@ def assemble_bulk_props(
     )
 
 
+def roster_fields(
+    player_name: str,
+    csv_service: Any | None = None,
+) -> tuple[str | None, str | None]:
+    """Position and canonical team code from the latest NBA game log.
+
+    Both are null when the name is not in the log. A blank ``Pos`` is
+    null. A blank team is null. This reads the CSV already used by
+    player history. It does not call the Odds API.
+
+    Args:
+        player_name: Name stored on the snapshot.
+        csv_service: History service. Defaults to the NBA singleton.
+
+    Returns:
+        ``(position, team_code)``. Either element may be None.
+    """
+    if csv_service is None:
+        from app.services.csv_player_history import csv_player_service
+
+        csv_service = csv_player_service
+    position = csv_service.latest_position(player_name)
+    if not isinstance(position, str) or not position.strip():
+        position = None
+    else:
+        position = position.strip()
+    team = csv_service.latest_team(player_name)
+    team_code: str | None = None
+    if isinstance(team, str) and team.strip():
+        from app.services.daily_analysis import canonical_team_code
+
+        code = canonical_team_code(team.strip(), league="nba")
+        team_code = code or None
+    return position, team_code
+
+
+def attach_roster_fields(
+    payload: BulkPropsResponse,
+    csv_service: Any | None = None,
+) -> BulkPropsResponse:
+    """Copy ``payload`` with position and team code filled from the game log.
+
+    A lookup failure leaves both fields null and still returns the lines.
+    The props cache stores the lines without these fields so a roster
+    correction is visible on the next read. The caller attaches them on
+    the way out, including a cache hit.
+
+    Args:
+        payload: Assembled bulk props.
+        csv_service: History service. Defaults to the NBA singleton.
+
+    Returns:
+        The same lines, with ``position`` and ``team_code`` set per player.
+    """
+    markets: list[BulkPropMarket] = []
+    for market in payload.markets:
+        players: list[BulkPropPlayer] = []
+        for player in market.players:
+            try:
+                position, team_code = roster_fields(player.player, csv_service)
+            except Exception:
+                logger.exception("Roster lookup failed for %s", player.player)
+                position, team_code = None, None
+            players.append(
+                player.model_copy(
+                    update={"position": position, "team_code": team_code}
+                )
+            )
+        markets.append(market.model_copy(update={"players": players}))
+    return payload.model_copy(update={"markets": markets})
+
+
 def _with_fresh_age(payload: BulkPropsResponse, now: datetime) -> BulkPropsResponse:
     """Recompute ``data_age_seconds`` from the cached ``snapshot_at``."""
     if payload.snapshot_at is None:
@@ -574,7 +646,7 @@ async def get_event_bulk_props(
         except ValidationError:
             logger.warning("Ignoring unreadable bulk-props cache entry %s", key)
         else:
-            return _with_fresh_age(payload, clock)
+            return attach_roster_fields(_with_fresh_age(payload, clock))
 
     if not db_service.is_connected:
         raise BulkPropsStoreUnavailable(
@@ -606,4 +678,4 @@ async def get_event_bulk_props(
         payload.model_dump(mode="json"),
         BULK_PROPS_CACHE_TTL_SECONDS,
     )
-    return payload
+    return attach_roster_fields(payload)

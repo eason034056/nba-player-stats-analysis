@@ -548,8 +548,8 @@ class TestAnalyzeSingleEvent:
         assert all(p.direction == "over" for p in picks)
 
     def test_threshold_boundary_just_below_065(self):
-        """0.6499 is stored as Lean and is off the default 0.65 board."""
-        from app.services.daily_analysis import select_daily_picks
+        """0.6499 is still stored. The board and the tier follow combined_probability."""
+        from app.services.daily_analysis import board_score, read_tier, select_daily_picks
 
         service = self._build_service(
             csv_stats=_default_csv_stats(p_over=0.6499, p_under=0.3001, n_games=15),
@@ -566,9 +566,14 @@ class TestAnalyzeSingleEvent:
         )
 
         assert len(picks) > 0
-        assert all(p.tier == "Lean" for p in picks)
         assert all(p.direction == "over" for p in picks)
-        assert select_daily_picks(picks) == []
+        assert all(p.probability == pytest.approx(0.6499) for p in picks)
+        board = select_daily_picks(picks)
+        for pick in picks:
+            assert pick.tier == read_tier(pick.combined_probability)
+            score = board_score(pick)
+            on_board = score is not None and score >= 0.65 and pick.n_games >= 10
+            assert (pick in board) is on_board
 
 
 # ===========================================================================
@@ -720,7 +725,9 @@ class TestRunDailyAnalysis:
         assert result.message is None
         assert result.stats is not None
         assert result.stats.total_events == 1
-        assert result.stats.high_prob_count == result.total_picks
+        from app.services.daily_analysis import select_daily_picks
+
+        assert result.stats.high_prob_count == len(select_daily_picks(result.picks))
 
         # Picks should be sorted by probability descending
         probs = [p.probability for p in result.picks]
@@ -1094,4 +1101,6 @@ class TestPickFields:
         assert pick.player_team_code == "MIA"
         assert pick.p_over == 0.80
         assert pick.p_under == 0.15
-        assert pick.tier == "Strong play"
+        from app.services.daily_analysis import read_tier
+
+        assert pick.tier == read_tier(pick.combined_probability)
