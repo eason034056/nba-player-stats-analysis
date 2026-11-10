@@ -6,9 +6,9 @@ A Retrieval-Augmented Generation (RAG) system for NBA player injury and lineup i
 
 ## 📊 RAG Evaluation Report
 
-See the complete comparison and evaluation results of RAG approaches:
+The comparison lives in the evaluation notebook. HTML and PDF exports (`RAG_evaluation.html`, `RAG_evaluation.pdf`) are local build artifacts and are not stored in git.
 
-[![View RAG Evaluation Report](https://img.shields.io/badge/查看-RAG_評估報告-blue?style=for-the-badge)](./RAG_evaluation.pdf)
+[![View RAG Evaluation Notebook](https://img.shields.io/badge/查看-RAG_評估筆記本-blue?style=for-the-badge)](./notebooks/RAG_evaluation.ipynb)
 
 ---
 

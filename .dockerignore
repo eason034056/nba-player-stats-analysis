@@ -6,3 +6,7 @@
 !scripts/agents/**
 !data/
 !data/**
+# SPO-100: finetune JSONL is not read at runtime. Keep the CSVs and
+# star_players.json (matched by the whitelist above); drop only *.jsonl.
+# This line must stay after !data/** so the later pattern wins.
+data/*.jsonl
