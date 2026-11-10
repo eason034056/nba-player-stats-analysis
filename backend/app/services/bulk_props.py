@@ -5,13 +5,15 @@
 paid for those rows. This module does not import the Odds API gateway or
 provider, and a missing snapshot is an empty payload, not a live refresh.
 
-SPO-115's ``_main_book_line`` is not on ``dev``. ``_main_book_line`` below
-is the local stand-in: one bookmaker, one vote.
+``_main_book_line`` below mirrors ``daily_analysis._main_book_line``
+(SPO-115). That helper is not on ``dev``, so this copy stays local.
+One of the two copies should be removed after PR #43 merges.
 """
 
 from __future__ import annotations
 
 import logging
+import math
 import re
 from datetime import datetime, timezone
 from typing import Any
@@ -185,47 +187,124 @@ def _as_float(value: Any) -> float | None:
 
 
 def _as_int(value: Any) -> int | None:
-    """Coerce a numeric American price to int. None stays None."""
-    if value is None:
+    """Coerce a numeric American price to int. None stays None.
+
+    Infinity and NaN are not posted prices. Both return None. They do
+    not raise. ``int(float("inf"))`` would raise ``OverflowError``, and
+    ``int(float("nan"))`` would raise ``ValueError``.
+    """
+    if value is None or isinstance(value, bool):
         return None
     try:
-        return int(value)
+        number = float(value)
     except (TypeError, ValueError):
         return None
-
-
-def _distance_from_even(price: int | None) -> float:
-    """How far an American price is from a 50 percent implied probability.
-
-    A missing price sorts last, so a row that actually posted a number
-    wins over an empty one. ``american_to_prob`` rejects 0; that row also
-    sorts last.
-    """
-    if price is None:
-        return float("inf")
+    if not math.isfinite(number):
+        return None
     try:
-        return abs(american_to_prob(float(price)) - 0.5)
-    except (TypeError, ValueError, ZeroDivisionError):
-        return float("inf")
+        return int(number)
+    except (TypeError, ValueError, OverflowError):
+        return None
+
+
+def _posted_price(value: Any) -> float | None:
+    """American price used by the vote, or None when that side is absent.
+
+    Same cases as ``posted_american_odds``: missing, non-numeric, 0,
+    Infinity, and NaN are not a posted leg.
+    """
+    if isinstance(value, bool) or value is None:
+        return None
+    try:
+        number = float(value)
+    except (TypeError, ValueError):
+        return None
+    if not math.isfinite(number) or number == 0:
+        return None
+    return number
+
+
+def _even_money_distance(over: float | None, under: float | None) -> float:
+    """Distance from a fair 50/50 after the vig is removed.
+
+    Two posted sides: divide the Over implied probability by the sum of
+    both implied probabilities, then measure how far that is from 0.5.
+    One posted side: how far that side's implied probability is from 0.5.
+    No price: 1.0, so the rung sorts last among priced rungs.
+    """
+    if over is not None and under is not None:
+        p_over = american_to_prob(over)
+        p_under = american_to_prob(under)
+        total = p_over + p_under
+        if total <= 0:
+            return 1.0
+        return abs((p_over / total) - 0.5)
+    posted = over if over is not None else under
+    if posted is None:
+        return 1.0
+    return abs(american_to_prob(posted) - 0.5)
+
+
+def _posted_point(points: list[float]) -> float:
+    """Mode of the posted points when no side has a usable price.
+
+    Ties: sort the modes and take the middle one when the count is odd,
+    or the lower of the two central values when the count is even.
+    """
+    rounded = [round(point, 1) for point in points]
+    counts: dict[float, int] = {}
+    for point in rounded:
+        counts[point] = counts.get(point, 0) + 1
+    most = max(counts.values())
+    modes = sorted(point for point, count in counts.items() if count == most)
+    if len(modes) % 2 == 1:
+        return float(modes[len(modes) // 2])
+    return float(modes[(len(modes) // 2) - 1])
+
+
+def _row_for_rung(rung: dict[str, Any]) -> dict[str, Any]:
+    """Return a stored row that carries the rung's kept prices.
+
+    When one stored row already has both kept prices, that row is
+    returned unchanged. When the kept Over and the kept Under come from
+    different rows at the same point, the result is a copy of the first
+    row with those two prices written on it.
+    """
+    over = rung["over"]
+    under = rung["under"]
+    for row in rung["rows"]:
+        if _posted_price(row.get("over_odds")) == over and _posted_price(row.get("under_odds")) == under:
+            return row
+    merged = dict(rung["rows"][0])
+    merged["line"] = rung["point"]
+    merged["over_odds"] = over
+    merged["under_odds"] = under
+    return merged
 
 
 def _main_book_line(rows: list[dict[str, Any]]) -> dict[str, Any]:
     """Pick the one stored row that this bookmaker is allowed to vote.
 
-    The name is the local stand-in for SPO-115 ``_main_book_line``, which
-    is not on ``dev``. "Main" means the single total that counts. "Book"
-    means one bookmaker. "Line" means that total.
+    Mirrors ``daily_analysis._main_book_line`` (SPO-115). One of the two
+    copies should be removed after PR #43 merges. This copy stays in
+    this module so the branch does not import that helper.
 
-    Call it with every stored row for one ``(market, player, bookmaker)``
-    inside one snapshot. A book that posted several alternate totals must
-    not receive several votes in ``calculate_mode_threshold``. The winning
-    row is the one whose Over price (Yes price for a binary market, stored
-    in the same ``over_odds`` column) is closest to a 50 percent implied
-    probability. Ties break toward the American price closer to -110, then
-    the lower line, then the numeric prices, so the choice does not depend
-    on row order.
+    "Main" means the single total that counts. "Book" means one
+    bookmaker. "Line" means that total. Call it with every stored row
+    for one ``(market, player, bookmaker)`` inside one snapshot.
 
-    One row is returned unchanged.
+    The rules, applied to stored rows (``line``, ``over_odds``,
+    ``under_odds``) rather than to raw outcomes:
+
+    1. Group rows by the line rounded to one decimal. On a repeated
+       side at that line, keep the price closer to even money.
+    2. Remove the vig, then keep the pair closest to even money.
+       A two-sided rung beats a one-sided Over. Equal distances keep
+       the lower line.
+    3. When no side has a usable price, the fallback is the mode of
+       the posted lines, not the lower line.
+
+    A single stored row is returned unchanged.
 
     Args:
         rows: Stored rows for a single bookmaker. Must be non-empty.
@@ -236,19 +315,63 @@ def _main_book_line(rows: list[dict[str, Any]]) -> dict[str, Any]:
     if len(rows) == 1:
         return rows[0]
 
-    def vote_key(row: dict[str, Any]) -> tuple[float, float, float, int, int]:
-        price = _as_int(row.get("over_odds"))
+    rungs: dict[float, dict[str, Any]] = {}
+    bare_points: list[float] = []
+    for row in rows:
         line = _as_float(row.get("line"))
-        under = _as_int(row.get("under_odds"))
-        return (
-            _distance_from_even(price),
-            abs(price - (-110)) if price is not None else float("inf"),
-            line if line is not None else float("inf"),
-            price if price is not None else 0,
-            under if under is not None else 0,
-        )
+        if line is None:
+            continue
+        point = round(line, 1)
+        over = _posted_price(row.get("over_odds"))
+        under = _posted_price(row.get("under_odds"))
+        bare_points.append(point)
+        rung = rungs.get(point)
+        if rung is None:
+            rungs[point] = {
+                "point": point,
+                "over": over,
+                "under": under,
+                "rows": [row],
+            }
+            continue
+        rung["rows"].append(row)
+        if over is not None and (
+            rung["over"] is None
+            or _even_money_distance(over, None) < _even_money_distance(rung["over"], None)
+        ):
+            rung["over"] = over
+        if under is not None and (
+            rung["under"] is None
+            or _even_money_distance(under, None) < _even_money_distance(rung["under"], None)
+        ):
+            rung["under"] = under
 
-    return min(rows, key=vote_key)
+    if not bare_points:
+        return rows[0]
+
+    two_sided = [
+        rung
+        for rung in rungs.values()
+        if rung["over"] is not None and rung["under"] is not None
+    ]
+    priced = [
+        rung
+        for rung in rungs.values()
+        if rung["over"] is not None or rung["under"] is not None
+    ]
+    candidates = two_sided or priced
+    if not candidates:
+        chosen = _posted_point(bare_points)
+        for row in rows:
+            line = _as_float(row.get("line"))
+            if line is not None and round(line, 1) == chosen:
+                return row
+        return rows[0]
+
+    def _sort_key(rung: dict[str, Any]) -> tuple[float, float]:
+        return (_even_money_distance(rung["over"], rung["under"]), rung["point"])
+
+    return _row_for_rung(min(candidates, key=_sort_key))
 
 
 def _age_seconds(snapshot_at: datetime, now: datetime) -> int:

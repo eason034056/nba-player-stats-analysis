@@ -469,7 +469,9 @@ async def get_events(
     player's `line` is the modal consensus of those votes.
     """,
 )
+@limiter.limit(settings.rate_limit_props)
 async def get_event_props(
+    request: Request,
     event_id: str,
     markets: Optional[str] = Query(
         default=None,
@@ -496,6 +498,9 @@ async def get_event_props(
     Redis copy of the assembled JSON). It does not call the Odds API.
 
     Args:
+        request: Incoming request. The slowapi limiter reads it. Same
+            limit as ``POST /api/nba/props/no-vig``
+            (``settings.rate_limit_props``).
         event_id: Path id. Malformed ids are 404.
         markets: Comma-separated market filter, or omitted.
         player: Exact player name, or omitted.

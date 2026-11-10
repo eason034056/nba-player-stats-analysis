@@ -103,7 +103,7 @@ Stale pull requests the owner is closing. Not merged.
 
 | Ticket | Note |
 |---|---|
-| SPO-114 | Snapshot-only bulk props, `GET /api/nba/events/{event_id}/props`. NBA only. Reads `odds_line_snapshots`. Does not call the Odds API. Open as #46 on `feature/SPO-114-bulk-props` into `dev`. Summary: `docs/task-summaries/SPO-114-bulk-props.md`. |
+| SPO-114 | Snapshot-only bulk props, `GET /api/nba/events/{event_id}/props`. NBA only. Reads `odds_line_snapshots`. Does not call the Odds API. The one-vote line mirrors SPO-115 (de-vig, two-sided beats one-sided, posted-mode fallback) and stays local until #43 merges. League column and the writer's last-pair / no-line unique key are deferred. Open as #46 on `feature/SPO-114-bulk-props` into `dev`. Summary: `docs/task-summaries/SPO-114-bulk-props.md`. |
 | SPO-96 | This docs rewrite (`feature/SPO-96-claude-md-workflow-rewrite`). |
 | SPO-104 | One-sided DD quotes (`under_odds` / `p_under_imp` null, including a JSON null No price; `line_is_synthetic`, `market_kind`, `uses_prior`), league-scoped team codes, and the SPO-97 schedule-index follow-ups. Lands with #36. PR #37 into `dev`. Summary: `docs/task-summaries/SPO-104-dd-one-sided-and-followups.md`. |
 | SPO-102 | Wire `PlayerDDTile` to double-double history and yes/no odds. Open on `feature/SPO-102-player-dd-tile-wiring`. Summary: `docs/task-summaries/SPO-102-player-dd-tile-wiring.md`. |

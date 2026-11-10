@@ -71,22 +71,6 @@ _ROW_KEYS = (
     "under_fair_prob",
 )
 
-# Recorded Bovada ladders where the local vote (raw Over implied distance)
-# and SPO-115 (vig-free Over) pick totals one point apart. The first number
-# is bulk_props._main_book_line. The second is daily_analysis._main_book_line
-# on origin/feature/SPO-115-bookmakers-count. Every other (book, player) in
-# the recorded player_points body agrees.
-_RECORDED_LINE_DISAGREEMENTS = {
-    ("bovada", "Austin Reaves"): (22.5, 21.5),
-    ("bovada", "Dyson Daniels"): (11.5, 10.5),
-    ("bovada", "Kingston Flemings"): (9.5, 8.5),
-    ("bovada", "Luka Doncic"): (37.5, 36.5),
-    ("bovada", "Onyeka Okongwu"): (13.5, 12.5),
-    ("bovada", "Sandro Mamukelashvili"): (9.5, 8.5),
-    ("bovada", "Ziaire Williams"): (9.5, 8.5),
-}
-
-
 def _load(path: Path) -> dict:
     return json_loads(path)
 
@@ -598,21 +582,32 @@ async def test_process_event_delegates_and_stays_on_nba(monkeypatch, service, po
 
 
 def test_recorded_fixture_line_parity_with_spo115(points_payload):
+    """Every recorded (book, player) vote matches the SPO-115 oracle.
+
+    Luka's Bovada vote is the two-sided 36.5 at -115/-115. The previous
+    pin recorded seven Bovada ladders where a raw Over-implied distance
+    picked the next total up. That difference is the bug this fixes.
+    """
     seen = {}
+    luka = None
     for book in points_payload["bookmakers"]:
         for player, outcomes in _outcomes_by_player(book).items():
-            local = float(_main_book_line(_rung_rows(book, player, outcomes))["line"])
+            chosen = _main_book_line(_rung_rows(book, player, outcomes))
+            local = float(chosen["line"])
             other = _spo115_main_book_line(outcomes)
             seen[(book["key"], player)] = (local, other)
+            if book["key"] == "bovada" and player == "Luka Doncic":
+                luka = chosen
 
     disagreements = {
         key: lines for key, lines in seen.items() if lines[0] != pytest.approx(lines[1])
     }
-    assert disagreements.keys() == _RECORDED_LINE_DISAGREEMENTS.keys()
-    for key, (local, other) in _RECORDED_LINE_DISAGREEMENTS.items():
-        assert seen[key][0] == pytest.approx(local)
-        assert seen[key][1] == pytest.approx(other)
-    assert len(seen) - len(disagreements) == 80
+    assert disagreements == {}
+    assert len(seen) == 87
+    assert luka is not None
+    assert float(luka["line"]) == pytest.approx(36.5)
+    assert luka["over_odds"] == -115
+    assert luka["under_odds"] == -115
 
 
 def test_tie_break_lower_point_agrees_when_both_sides_match(points_payload):
@@ -645,12 +640,12 @@ def test_tie_break_lower_point_agrees_when_both_sides_match(points_payload):
     assert _spo115_main_book_line(outcomes) == pytest.approx(36.5)
 
 
-def test_minus_110_tie_break_beats_the_lower_point():
-    """Same raw distance. The local helper then prefers the price nearer -110.
+def test_equal_devig_distance_keeps_the_lower_point():
+    """+100/-100 and -100/+100 are the same price after the vig is removed.
 
-    +100 and -100 are both a 0.5 implied probability. SPO-115 removes the
-    vig and then keeps the lower point. The distances tie, so the two
-    helpers disagree.
+    The distances tie, so both helpers keep the lower posted point.
+    The previous pin expected the local helper to prefer the price
+    nearer -110 (11.5). That tie-break is not the SPO-115 rule.
     """
     rows = [
         {"line": 10.5, "over_odds": 100, "under_odds": -100},
@@ -662,11 +657,11 @@ def test_minus_110_tie_break_beats_the_lower_point():
         {"name": "Over", "point": 11.5, "price": -100},
         {"name": "Under", "point": 11.5, "price": 100},
     ]
-    assert float(_main_book_line(rows)["line"]) == pytest.approx(11.5)
+    assert float(_main_book_line(rows)["line"]) == pytest.approx(10.5)
     assert _spo115_main_book_line(outcomes) == pytest.approx(10.5)
 
 
-def test_one_sided_over_can_beat_a_two_sided_rung(points_payload):
+def test_two_sided_rung_beats_a_one_sided_over(points_payload):
     bovada = next(book for book in points_payload["bookmakers"] if book["key"] == "bovada")
     by_point = defaultdict(dict)
     for outcome in _outcomes_by_player(bovada)["Luka Doncic"]:
@@ -702,7 +697,7 @@ def test_one_sided_over_can_beat_a_two_sided_rung(points_payload):
             "price": by_point[two_sided_point]["under"]["price"],
         },
     ]
-    assert float(_main_book_line(rows)["line"]) == pytest.approx(one_sided_point)
+    assert float(_main_book_line(rows)["line"]) == pytest.approx(two_sided_point)
     assert _spo115_main_book_line(outcomes) == pytest.approx(two_sided_point)
 
 
@@ -728,7 +723,7 @@ def test_duplicate_same_side_keeps_the_price_closer_to_even(points_payload):
     assert _spo115_even_money_distance(closer, None) < _spo115_even_money_distance(farther, None)
 
 
-def test_posted_point_fallback_is_the_lower_line_not_the_mode(points_payload):
+def test_posted_point_fallback_is_the_mode(points_payload):
     bovada = next(book for book in points_payload["bookmakers"] if book["key"] == "bovada")
     points = []
     for outcome in _outcomes_by_player(bovada)["Luka Doncic"]:
@@ -745,11 +740,17 @@ def test_posted_point_fallback_is_the_lower_line_not_the_mode(points_payload):
         {"name": "Under", "point": 37.5, "price": None},
         {"name": "Over", "point": 37.5, "price": None},
     ]
-    assert float(_main_book_line(rows)["line"]) == pytest.approx(36.5)
+    assert float(_main_book_line(rows)["line"]) == pytest.approx(37.5)
     assert _spo115_main_book_line(outcomes) == pytest.approx(37.5)
 
 
-def test_nan_over_price_sorts_last_and_infinity_is_not_caught():
+def test_non_finite_over_price_does_not_raise():
+    """NaN and Infinity are missing prices. Neither raises.
+
+    The previous pin expected ``OverflowError`` from ``int(float("inf"))``.
+    ``_as_int`` now returns None for both, so the two-sided finite rung
+    is the vote.
+    """
     chosen = _main_book_line(
         [
             {"line": 41.5, "over_odds": float("nan"), "under_odds": -110},
@@ -757,13 +758,13 @@ def test_nan_over_price_sorts_last_and_infinity_is_not_caught():
         ]
     )
     assert chosen["line"] == pytest.approx(36.5)
-    with pytest.raises(OverflowError):
-        _main_book_line(
-            [
-                {"line": 36.5, "over_odds": float("inf"), "under_odds": -115},
-                {"line": 37.5, "over_odds": -115, "under_odds": -115},
-            ]
-        )
+    infinite = _main_book_line(
+        [
+            {"line": 36.5, "over_odds": float("inf"), "under_odds": -115},
+            {"line": 37.5, "over_odds": -115, "under_odds": -115},
+        ]
+    )
+    assert infinite["line"] == pytest.approx(37.5)
 
 
 def test_writer_stores_the_last_rung_so_the_read_collapse_never_sees_it(service, points_payload):

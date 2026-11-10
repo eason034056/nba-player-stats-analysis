@@ -15,10 +15,10 @@ WNBA is unchanged.
 | Area | File | Change |
 |---|---|---|
 | Read path | `backend/app/services/bulk_props.py` | Assembles the payload from the latest snapshot. One bookmaker, one vote (`_main_book_line`). Player `line` is `calculate_mode_threshold` of those votes. 60s Redis cache of the assembled JSON. Postgres only on a miss. |
-| HTTP | `backend/app/api/nba.py` | `GET /api/nba/events/{event_id}/props`. Optional `markets` and `player`. 404 / 400 / 503 / 500. No Odds API import on this handler. |
+| HTTP | `backend/app/api/nba.py` | `GET /api/nba/events/{event_id}/props`. Optional `markets` and `player`. 404 / 400 / 503 / 500. Same slowapi limit as `POST /props/no-vig` (`settings.rate_limit_props`). No Odds API import on this handler. |
 | Schema | `backend/app/models/schemas.py` | `BulkPropsResponse` and the nested book, player, and market models. |
 | Parser | `backend/app/services/odds_snapshot_service.py` | `rows_from_bookmakers` is the existing parser, moved out of `_process_event` so tests can build rows without a fetch. Parse rules are unchanged. `_process_event` still fetches, then calls it. The new route does not call `_process_event`. |
-| Tests | `backend/tests/test_spo114_bulk_props.py` | Recorded fixtures through the real parser. Provider and gateway patched and asserted unused. |
+| Tests | `backend/tests/test_spo114_bulk_props.py` | Point rows come from the recorded player_points body through the real parser. Binary rows are stored snapshot rows (`over_odds` = Yes, `under_odds` = No) fed to `assemble_bulk_props`. Provider and gateway patched and asserted unused. |
 | Docs | `docs/decisions/spo-114-bulk-props/decision_20261110_snapshot-only.md`, `docs/progress.md` | Snapshot-only decision, credit math, options B and C not implemented. |
 
 The path did not conflict. `GET /api/nba/events` remains the game list. Nothing else was mounted at `/events/{event_id}/props`.
@@ -27,9 +27,7 @@ The path did not conflict. `GET /api/nba/events` remains the game list. Nothing 
 
 The board needs every player in the game. Calling The Odds API once per player, or once per page view, spends credits the snapshot job has already spent. Option A serves that board from the table the scheduler writes. A miss stays empty so a cold event cannot turn into a live quote.
 
-`_main_book_line` is local because SPO-115's helper is not on `dev`. A book that stored several totals (alternates) votes once: the row whose Over price, or Yes price on a binary market, is closest to a 50 percent implied probability. Ties break toward -110, then the lower line. The player's `line` is the mode of those votes (`calculate_mode_threshold`: unique mode, else the average of tied modes, else the median when every line appears once). `bookmakers_count` is the number of books after that collapse.
-
-The snapshot writer still stores one pair per book, and that pair is the last Over and the last Under in the payload. This ticket does not change that write. The read path collapses extra rows when they are present. Making the writer store the same main line is a follow-up, not this change.
+`_main_book_line` is a local copy of `daily_analysis._main_book_line` (SPO-115, PR #43). It is not imported from that branch. One of the two copies should be removed after #43 merges. A book that stored several totals votes once: remove the vig, then keep the pair closest to even money. A two-sided rung beats a one-sided Over. Equal distances keep the lower line. When no side has a usable price, the fallback is the mode of the posted lines, not the lower line. On the recorded player_points fixture, Luka's Bovada vote is 36.5 (-115/-115). The player's `line` is the mode of those votes (`calculate_mode_threshold`: unique mode, else the average of tied modes, else the median when every line appears once). `bookmakers_count` is the number of books after that collapse.
 
 Binary markets keep the stored 0.5 sentinel on `line`. Yes and No are `yes_odds` and `no_odds`. A missing No is null. It is not copied onto `over_odds` or `under_odds`.
 
@@ -119,14 +117,14 @@ Rows come from `backend/tests/fixtures/odds_api_event_odds__player_points.json` 
 
 The Odds API gateway, provider (`get_events`, `get_event_odds`, `get_event_odds_with_usage`), and the provider's `httpx.AsyncClient` are patched. Every test asserts those mocks were not called. `bulk_props.py` does not import them. The route function source does not name them.
 
-Covered: both markets in one payload, one vote per book against Bovada's alternate ladder (the vote is the closest-to-even total, not the last alternate, and `bookmakers_count` is 6 rather than the alternate-row count), one-sided double-double (`no_odds` null, Over/Under fields null), markets filter, player filter, empty filter, no snapshot, malformed id, unknown market, Postgres disconnected, query failure, Redis hit (no second read, age recomputed, TTL 60), and an older capture ignored when a newer one exists.
+Covered: both markets in one payload, one vote per book against Bovada's alternate ladder (de-vig, two-sided beats one-sided, Luka's Bovada vote is 36.5 at -115/-115, and `bookmakers_count` is 6 rather than the alternate-row count), one-sided double-double from stored snapshot rows (`no_odds` null, Over/Under fields null), markets filter, player filter, empty filter, no snapshot, malformed id, unknown market, Postgres disconnected, query failure, Redis hit (no second read, age recomputed, TTL 60), and an older capture ignored when a newer one exists. QA review pins that previously recorded a difference from SPO-115 now pin parity. The pins that contradicted this fix, and were updated for that reason, are listed under Follow-ups.
 
 ```
 cd backend && pytest --tb=line -q
-2 failed, 820 passed, 23 skipped, 6 xfailed
+2 failed, 846 passed, 23 skipped, 6 xfailed
 ```
 
-The two failures are the known Redis ones: `test_agent_chat_endpoint_validates_action_and_uses_service` and `test_lineups_api_returns_team_count`. Both die in slowapi with `ConnectionError` because Redis is not running. No other failure.
+The two failures are the known Redis ones: `test_agent_chat_endpoint_validates_action_and_uses_service` and `test_lineups_api_returns_team_count`. Both die in slowapi with `ConnectionError` because Redis is not running. No other failure. Re-run after the QA review fixes (de-vig vote, stored binary rows, non-finite prices return None, `rate_limit_props` on the new route).
 
 Integration tests that need `RUN_INTEGRATION=1` were not run. `ODDS_API_KEY` was not set and was not requested.
 
@@ -134,6 +132,15 @@ Integration tests that need `RUN_INTEGRATION=1` were not run. `ODDS_API_KEY` was
 
 - Option B (on-demand refresh, at most one Odds API call per game per 30 minutes) is not implemented. Waiting on the owner.
 - Option C (one extra pre-tip snapshot) is not implemented. Waiting on the owner.
-- The snapshot writer still keeps the last Over/Under pair when a book posts alternates. The read path already collapses extra rows to the main line. Teaching the writer to store that same line is separate.
+- Deferred: the snapshot writer still keeps only the last Over and the last Under per book (`odds_snapshot_service.py` assigns `player_outcomes[player][direction] = outcome`, so a later rung replaces the earlier one). The unique key has no line (`db.py`, `UNIQUE(snapshot_at, event_id, player_name, market, bookmaker)`). Alternate totals cannot all be stored. The read path collapses extra rows when they are present. This change does not alter the writer or the key.
+- Deferred: no `league` column on `odds_line_snapshots`. WNBA is paused, so the column is not added.
 - Frontend wiring of this contract is the other half of the board. This change is backend only.
 - WNBA bulk props stay out while WNBA is paused.
+
+QA file `backend/tests/test_spo114_qa_review.py` was left alone except where a pin contradicted one of the fixes above. Those edits:
+
+- `test_recorded_fixture_line_parity_with_spo115` now asserts every recorded (book, player) agrees with the SPO-115 oracle, including Luka Bovada at 36.5 (-115/-115). The old `_RECORDED_LINE_DISAGREEMENTS` map was the list of differences.
+- `test_minus_110_tie_break_beats_the_lower_point` is now `test_equal_devig_distance_keeps_the_lower_point`. Both helpers return 10.5, not 11.5.
+- `test_one_sided_over_can_beat_a_two_sided_rung` is now `test_two_sided_rung_beats_a_one_sided_over`. Both helpers return the two-sided 36.5.
+- `test_posted_point_fallback_is_the_lower_line_not_the_mode` is now `test_posted_point_fallback_is_the_mode`. Both helpers return 37.5, the posted mode, not the lower line 36.5.
+- `test_nan_over_price_sorts_last_and_infinity_is_not_caught` is now `test_non_finite_over_price_does_not_raise`. It expected `OverflowError` on infinity. `_as_int` returns None instead, and the two-sided finite rung is the vote.

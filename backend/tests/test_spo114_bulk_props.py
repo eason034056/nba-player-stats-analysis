@@ -1,9 +1,10 @@
 """SPO-114: bulk NBA props are read from stored snapshots only.
 
-Rows are built by ``OddsSnapshotService.rows_from_bookmakers`` from the
-recorded Odds API ``player_points`` body and the recorded one-sided
-double-double fixture. Prices are copied out of those files. Nothing in
-this module types an Odds API payload by hand, and nothing calls the
+Point rows are built by ``OddsSnapshotService.rows_from_bookmakers`` from
+the recorded Odds API ``player_points`` body. Binary rows are stored
+snapshot rows: Yes in ``over_odds`` and No in ``under_odds``, with the
+prices taken from the recorded one-sided double-double fixture. Nothing
+in this module types an Odds API payload by hand, and nothing calls the
 live Odds API.
 """
 
@@ -26,6 +27,7 @@ from app.services.bulk_props import (
     BULK_PROPS_CACHE_TTL_SECONDS,
     LATEST_EVENT_SNAPSHOT_SQL,
     _main_book_line,
+    assemble_bulk_props,
     get_event_bulk_props,
 )
 from app.services.odds_snapshot_service import OddsSnapshotService
@@ -66,30 +68,29 @@ def _as_dicts(rows: list[tuple]) -> list[dict]:
     return [dict(zip(_ROW_KEYS, row)) for row in rows]
 
 
-def _bookmakers_from_recorded_novig(payload: dict) -> list[dict]:
-    """Odds API outcomes from a recorded no-vig fixture's posted prices.
+def _binary_snapshot_rows(payload: dict, snapshot_at: datetime, event_id: str) -> list[dict]:
+    """Stored ``odds_line_snapshots`` rows for one binary market.
 
-    ``yes_price`` and ``no_price`` are the posted legs in that file. A
-    null ``no_price`` is left off the outcome list. The old copied
-    ``under_odds`` value is not used as an input.
+    The snapshot writer puts Yes in ``over_odds`` and No in ``under_odds``.
+    A missing No stays null. Prices are ``yes_price`` and ``no_price``
+    from the recorded fixture. These dicts are our rows, not an Odds API
+    bookmaker body, and they are passed to ``assemble_bulk_props``.
     """
-    player = payload["player_name"]
-    market = payload["market"]
-    books = []
-    for row in payload["results"]:
-        outcomes = []
-        if row.get("yes_price") is not None:
-            outcomes.append(
-                {"name": "Yes", "description": player, "price": row["yes_price"]}
-            )
-        if row.get("no_price") is not None:
-            outcomes.append(
-                {"name": "No", "description": player, "price": row["no_price"]}
-            )
-        books.append(
-            {"key": row["bookmaker"], "markets": [{"key": market, "outcomes": outcomes}]}
+    rows = []
+    for result in payload["results"]:
+        rows.append(
+            {
+                "snapshot_at": snapshot_at,
+                "event_id": event_id,
+                "player_name": payload["player_name"],
+                "market": payload["market"],
+                "bookmaker": result["bookmaker"],
+                "line": result["line"],
+                "over_odds": result["yes_price"],
+                "under_odds": result["no_price"],
+            }
         )
-    return books
+    return rows
 
 
 def _parse(service: OddsSnapshotService, bookmakers: list[dict], event_id: str, payload: dict, snapshot_at: datetime) -> list[dict]:
@@ -132,24 +133,36 @@ def _alternate_point_rows(service: OddsSnapshotService, payload: dict, snapshot_
     return rows
 
 
+def _even_money_distance(over, under) -> float:
+    """Independent copy of the de-vig distance used as the expected vote."""
+    if over is not None and under is not None:
+        p_over = american_to_prob(float(over))
+        p_under = american_to_prob(float(under))
+        total = p_over + p_under
+        if total <= 0:
+            return 1.0
+        return abs((p_over / total) - 0.5)
+    posted = over if over is not None else under
+    if posted is None:
+        return 1.0
+    return abs(american_to_prob(float(posted)) - 0.5)
+
+
 def _vote_key(row: dict) -> tuple:
-    """Independent copy of the one-vote rule, used as the expected value."""
-    price = row["over_odds"]
+    """Independent copy of the one-vote rule, used as the expected value.
+
+    De-vig first. A two-sided row beats a one-sided row. Equal distances
+    keep the lower line. Each alternate in this file is already one stored
+    row per point, so the key does not have to merge a repeated side.
+    """
+    over = row["over_odds"]
     under = row["under_odds"]
     line = float(row["line"])
-    if price is None:
-        distance = float("inf")
-        gap = float("inf")
-    else:
-        distance = abs(american_to_prob(price) - 0.5)
-        gap = abs(price - (-110))
-    return (
-        distance,
-        gap,
-        line,
-        0 if price is None else price,
-        0 if under is None else under,
-    )
+    both = over is not None and under is not None
+    priced = over is not None or under is not None
+    rank = 0 if both else (1 if priced else 2)
+    distance = _even_money_distance(over, under) if priced else 1.0
+    return (rank, distance, line)
 
 
 def _expected_players(rows: list[dict]) -> dict[tuple[str, str], dict]:
@@ -338,13 +351,18 @@ async def test_multiple_markets_one_stored_vote_per_book(
 ):
     event_id = points_payload["id"]
     point_rows = _parse(service, points_payload["bookmakers"], event_id, points_payload, _SNAPSHOT_AT)
-    dd_rows = _parse(
-        service,
-        _bookmakers_from_recorded_novig(one_sided_payload),
-        event_id,
-        points_payload,
-        _SNAPSHOT_AT,
-    )
+    dd_rows = _binary_snapshot_rows(one_sided_payload, _SNAPSHOT_AT, event_id)
+    binary = assemble_bulk_props(event_id, dd_rows, now=_SNAPSHOT_AT)
+    binary_body = binary.model_dump(mode="json")
+    assert [market["market"] for market in binary_body["markets"]] == ["player_double_double"]
+    jokic_direct = binary_body["markets"][0]["players"][0]
+    direct_books = {book["bookmaker"]: book for book in jokic_direct["books"]}
+    assert direct_books["fanduel"]["yes_odds"] == -240
+    assert direct_books["fanduel"]["no_odds"] is None
+    assert direct_books["fanduel"]["over_odds"] is None
+    assert direct_books["draftkings"]["yes_odds"] == -250
+    assert direct_books["draftkings"]["no_odds"] == 200
+    assert jokic_direct["line"] == pytest.approx(0.5)
     rows = point_rows + dd_rows
     db = _FakeDB(rows)
     _install(monkeypatch, db, _FakeCache())
@@ -413,6 +431,14 @@ async def test_alternate_rows_count_one_vote_and_pick_the_main_line(
     direct = _main_book_line(wiggins_rows)
     assert direct["line"] == voted["line"]
     assert direct["bookmaker"] == "bovada"
+    luka_rows = [
+        row for row in rows
+        if row["player_name"] == "Luka Doncic" and row["bookmaker"] == "bovada"
+    ]
+    luka = _main_book_line(luka_rows)
+    assert float(luka["line"]) == pytest.approx(36.5)
+    assert luka["over_odds"] == -115
+    assert luka["under_odds"] == -115
     _assert_no_live_calls(odds_spies)
 
 
@@ -422,13 +448,7 @@ async def test_markets_and_player_filters(
 ):
     event_id = points_payload["id"]
     rows = _parse(service, points_payload["bookmakers"], event_id, points_payload, _SNAPSHOT_AT)
-    rows += _parse(
-        service,
-        _bookmakers_from_recorded_novig(one_sided_payload),
-        event_id,
-        points_payload,
-        _SNAPSHOT_AT,
-    )
+    rows += _binary_snapshot_rows(one_sided_payload, _SNAPSHOT_AT, event_id)
     db = _FakeDB(rows)
     _install(monkeypatch, db, _FakeCache())
 
@@ -639,7 +659,9 @@ def test_bulk_props_module_does_not_reference_the_odds_api():
         assert token not in source
 
     handler = inspect.getsource(
-        __import__("app.api.nba", fromlist=["get_event_props"]).get_event_props
+        inspect.unwrap(
+            __import__("app.api.nba", fromlist=["get_event_props"]).get_event_props
+        )
     )
     for token in ("odds_gateway", "odds_provider", "get_market_snapshot", "get_event_odds", "httpx"):
         assert token not in handler

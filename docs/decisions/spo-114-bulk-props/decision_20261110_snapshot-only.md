@@ -41,5 +41,10 @@ These stay pending the owner's decision. This change does not add either path, a
 ## Consequences
 
 - The board can be as stale as the last scheduled capture, plus up to 60 seconds of response cache. `snapshot_at` and `data_age_seconds` are on the payload so the client can show that age. `data_age_seconds` is recomputed on a cache hit.
-- Bovada-style alternate ladders: the read path counts each bookmaker once. If several rows for the same book exist in the latest capture, the vote is the row closest to a 50 percent implied Over (or Yes) price. The writer's current rule (last Over and last Under in the payload) is unchanged.
-- WNBA is out of scope while that league is paused. No WNBA route was added.
+- Bovada-style alternate ladders: the read path counts each bookmaker once. `_main_book_line` mirrors `daily_analysis._main_book_line` (SPO-115) and stays local until PR #43 merges, when one of the two copies should be removed. Remove the vig, then keep the pair closest to even money. A two-sided rung beats a one-sided Over. Equal distances keep the lower line. With no usable price, the fallback is the mode of the posted lines, not the lower line. On the recorded player_points fixture, Luka's Bovada vote is 36.5 (-115/-115).
+- WNBA is out of scope while that league is paused. No WNBA route was added. A `league` column on `odds_line_snapshots` is deferred for the same reason. It was not added.
+
+## Deferred, not this change
+
+- The snapshot writer keeps only the last Over and the last Under per book (`odds_snapshot_service.py`, the assignment into `player_outcomes[player][direction]`). The unique key has no line (`db.py`: `UNIQUE(snapshot_at, event_id, player_name, market, bookmaker)`). Alternate rungs cannot all be stored. The read path collapses extra rows when a capture already contains them. The writer and the key are unchanged.
+- No `league` column. WNBA is paused.
