@@ -131,7 +131,7 @@ Query `season`: optional string. Omit it and the season is the current recorded 
 
 ## Tests / Verification
 
-`python3 -m pytest --tb=line -q` from `backend/`: 833 passed, 23 skipped, 6 xfailed. Two failures, both the known Redis misses (`ConnectionError` from the rate limiter): `test_agent_chat_endpoint_validates_action_and_uses_service` and `test_lineups_api_returns_team_count`.
+`python3 -m pytest --tb=line -q` from `backend/` at `655ec6a`: 855 passed, 23 skipped, 6 xfailed. Two failures, both the known Redis misses (`ConnectionError` from the rate limiter): `test_agent_chat_endpoint_validates_action_and_uses_service` and `test_lineups_api_returns_team_count`. QA's five pin tests in `backend/tests/test_spo113_qa_review.py` pass. That file was not edited.
 
 No live Odds API call. No live SportsData call. The home/away assertion reads `tests/fixtures/espn/nba_team_18_schedule_2026_type_2.json` (event `401809234`, Knicks home against the Cavaliers on 2025-10-22). Rank tests use in-memory projection dicts and the shipped game log, not a hand-typed SportsData body.
 
