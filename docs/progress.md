@@ -1,6 +1,6 @@
 # Sports Lab Progress
 
-> Engineers update the row for their ticket in the pull request that changes that ticket. This file is a snapshot of ticket state, not a heartbeat log. Last updated: **2026-11-10** (SPO-96, after merging `origin/dev` through `fad723a`). Facts below were checked against `docs/task-summaries/`, `git log` on `dev`, and `gh pr list --base dev`. Titles that were not in those sources are left blank.
+> Engineers update the row for their ticket in the pull request that changes that ticket. This file is a snapshot of ticket state, not a heartbeat log. Last updated: **2026-11-10** (SPO-107 added under In flight; earlier rows were not re-audited). Facts below were checked against `docs/task-summaries/`, `git log` on `dev`, and `gh pr list --base dev`. Titles that were not in those sources are left blank.
 
 ## Shipped
 
@@ -80,6 +80,7 @@ Stale pull requests the owner is closing. Not merged.
 | SPO-96 | This docs rewrite (`feature/SPO-96-claude-md-workflow-rewrite`). |
 | SPO-97 | Game-log season labels and game-type hygiene, in review on `feature/SPO-97-csv-season-hygiene`. CSVs relabeled from the ESPN schedule; Summer League and preseason dropped; playoffs and play-in are opt-in, so default hit rates are regular season only. Cup finals are `cup_championship` and stay out of that sample, as do unclassified rows. Task summary: `docs/task-summaries/SPO-97-csv-season-hygiene.md` (not on `dev` until this merges). |
 | SPO-99 | Walk-forward backtest, open as #32. Entry below. |
+| SPO-107 | Harness game types match production regular season. Playoffs and play-in are a separate report section. Open on `feature/SPO-107-harness-gametype-parity`. Entry below. |
 | SPO-101 | SPO-10 Phase 4: live integration tests for the 12-tile `/event` surface and the DD round-trip (`feature/SPO-101-spo10-phase4-integration-tests`). Skipped unless `RUN_INTEGRATION=1`. One batched odds call (expected 10 paid units when FTM/FGM are empty, ceiling 12). Not run live (`ODDS_API_KEY` unset). Production code unchanged. In review, awaiting squash-merge. |
 | SPO-102 | Wire `PlayerDDTile` to double-double history and yes/no odds. Open on `feature/SPO-102-player-dd-tile-wiring`. Summary: `docs/task-summaries/SPO-102-player-dd-tile-wiring.md`. |
 | SPO-103 | SPO-10 Phase 5 final review. Open. |
@@ -93,6 +94,14 @@ Replaces the in-sample five-player `scripts/agents/evaluation/backtest.py` with 
 Proxy lines are MED20 by default; L10 is also supported. ROI assumes -110. Closing-line value is not measured. The CLV hook stays inactive unless an odds-history file is passed.
 
 CI job `walk-forward-guard` sits between `frontend-test` and `docker-build` on the workflow from #29. It runs the harness tests, including a 40-player sample (seed 7) that fails if MED20 Brier exceeds 0.30 or the calibration gap exceeds 0.15.
+
+### SPO-107 — harness game-type parity
+
+Open on `feature/SPO-107-harness-gametype-parity`, base `dev`. Not merged.
+
+`_active_games` uses `CSVPlayerHistoryService._allowed_game_types()` (regular season; a missing game type counts as regular). Headline metrics are regular-season targets scored with that history. Playoffs and the play-in are scored with the same history and reported in their own section, not in the headlines. The CI guard compares 25 daily L10 rates per league (seed 7) with `get_player_stats` and fails on any mismatch. `oracle.py` and `backtest_report.md` are the full run on the post-SPO-97 CSVs.
+
+Decision: `docs/decisions/SPO-107/decision_20261110_regular-season-harness.md`.
 
 ## Not classified
 
