@@ -113,7 +113,7 @@ Example, no capture:
 
 ## Tests
 
-Rows come from `backend/tests/fixtures/odds_api_event_odds__player_points.json` and `backend/tests/fixtures/player-double-double-one-sided.json`, passed through `rows_from_bookmakers` (the snapshot parser). The one-sided file is a recorded no-vig body; the test copies `yes_price` / `no_price` into outcomes and parses those. It does not invent prices.
+Point rows come from `backend/tests/fixtures/odds_api_event_odds__player_points.json`, passed through `rows_from_bookmakers` (the snapshot parser). Binary rows come from `backend/tests/fixtures/player-double-double-one-sided.json`: `yes_price` is stored in `over_odds` and `no_price` in `under_odds`, and those rows are passed to `assemble_bulk_props`. The test does not build an Odds API bookmaker body and does not invent prices.
 
 The Odds API gateway, provider (`get_events`, `get_event_odds`, `get_event_odds_with_usage`), and the provider's `httpx.AsyncClient` are patched. Every test asserts those mocks were not called. `bulk_props.py` does not import them. The route function source does not name them.
 
