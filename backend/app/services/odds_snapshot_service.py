@@ -38,6 +38,7 @@ from app.services.odds_theoddsapi import odds_provider
 from app.services.odds_provider import OddsAPIError
 from app.services.prob import (
     american_to_prob,
+    posted_american_odds,
     calculate_vig,
     devig,
     single_leg_devig,
@@ -542,17 +543,17 @@ class OddsSnapshotService:
                 # the de-vig on; skip rather than fabricate.
                 continue
 
-            yes_price = yes_out.get("price", 0)
-            if yes_price == 0:
+            yes_price = posted_american_odds(yes_out.get("price"))
+            if yes_price is None:
                 continue
 
             no_out = directions.get("no")
-            no_price = no_out.get("price", 0) if no_out else 0
+            no_price = posted_american_odds(no_out.get("price")) if no_out else None
 
             try:
                 p_yes_imp = american_to_prob(yes_price)
 
-                if no_price != 0:
+                if no_price is not None:
                     # Both legs posted — derive vig from the pair, same as
                     # Over/Under. This is the higher-fidelity path and
                     # what we want to use whenever it's available.
@@ -601,7 +602,7 @@ class OddsSnapshotService:
                     bookmaker_key,
                     0.5,                                # line sentinel — see docstring
                     int(yes_price),                     # over_odds = Yes price
-                    int(no_price) if no_price != 0 else None,  # under_odds = No price (nullable)
+                    int(no_price) if no_price is not None else None,  # under_odds = No price (nullable)
                     round(vig, 6),
                     round(p_yes_fair, 6),
                     round(p_no_fair, 6),

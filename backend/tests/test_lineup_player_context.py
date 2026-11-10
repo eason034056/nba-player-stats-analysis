@@ -40,7 +40,7 @@ async def test_get_player_lineup_context_canonicalizes_player_name_before_matchi
     monkeypatch.setattr(
         source_support,
         "_get_team_roster_candidates",
-        lambda team_code: ["OG Anunoby"] if team_code == "NYK" else [],
+        lambda team_code, league="nba": ["OG Anunoby"] if team_code == "NYK" else [],
     )
 
     result = await historical.get_player_lineup_context(

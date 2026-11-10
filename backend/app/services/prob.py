@@ -5,7 +5,21 @@ Contains all math functions related to odds conversion and vig (overround) remov
 This is the core calculation logic, used to convert bookmaker odds into fair probabilities.
 """
 
-from typing import Tuple, List, Optional
+from typing import Any, Tuple, List, Optional
+
+
+def posted_american_odds(value: Any) -> Optional[float]:
+    """Posted American price, or None when that side was not posted.
+
+    A missing key, JSON null, a non-number, and 0 are the same case:
+    the book did not post that leg. A null No price is a one-sided
+    quote. A null Yes price has nothing to de-vig, so the row is dropped.
+    """
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        return None
+    if value == 0:
+        return None
+    return float(value)
 
 
 def american_to_prob(odds: float) -> float:

@@ -30,6 +30,7 @@ from app.services.game_log_hygiene import (
     GAME_TYPE_PLAY_IN,
     GAME_TYPE_PLAYOFFS,
     GAME_TYPE_REGULAR,
+    coalesce_game_type,
 )
 from app.services.normalize import match_player_name
 
@@ -175,12 +176,15 @@ def _get_csv_path(league: str = "nba") -> str:
 
 # CSV ``Date`` values are the US game date, not the UTC calendar day of
 # tip. Jayson Kent is Remix on 2026-03-15 (vs Lakers) and Trail Blazers on
-# 2026-03-16. A US evening tip on the 15th is ``2026-03-16T00:30:00Z``,
-# which is 20:30 in America/New_York on the 15th. Eastern is the zone that
-# lines that timestamp up with the CSV row. Naive datetimes and date-only
-# strings are already that game date (the loader stores them that way) and
-# are not shifted.
-_US_GAME_DATE_TZ = ZoneInfo("America/New_York")
+# 2026-03-16. A US evening tip on the 15th is ``2026-03-16T00:30:00Z``.
+# A late Pacific tip such as 7:30pm PT is already the next UTC date, and
+# a 10:30pm PT tip (``2026-03-16T05:30:00Z`` in March, PDT) is also the
+# next morning in America/New_York. The CSV still uses the 15th.
+# America/Los_Angeles is the clock that keeps both of those tips on the
+# 15th. An East-coast evening is earlier that same calendar day on the
+# Pacific clock, so it does not move. Naive datetimes and date-only
+# strings are already the CSV game date and are not shifted.
+_US_GAME_DATE_TZ = ZoneInfo("America/Los_Angeles")
 
 
 def _as_us_game_date(moment: datetime) -> date:
@@ -188,7 +192,9 @@ def _as_us_game_date(moment: datetime) -> date:
 
     A naive ``datetime`` is already a CSV game date (midnight, no zone).
     An aware timestamp, including Odds API ``commence_time``, is converted
-    to America/New_York before the day is taken.
+    to America/Los_Angeles before the day is taken. Pacific is the zone
+    that still matches the CSV when a west-coast tip is after midnight
+    UTC and after midnight in New York.
     """
     if moment.tzinfo is None:
         return moment.date()
@@ -200,7 +206,7 @@ def _coerce_date(value: Any) -> Optional[date]:
 
     Accepts ``datetime`` / ``date``, ``YYYY-MM-DD``, ``M/D/YYYY``, and ISO
     timestamps (``2026-03-16T00:30:00Z``). Aware timestamps use the US game
-    date (America/New_York). Year-less chart labels such as ``"02/09"`` are
+    date (America/Los_Angeles). Year-less chart labels such as ``"02/09"`` are
     rejected so they cannot be mistaken for a real day.
     """
     if value is None or value == "":
@@ -504,7 +510,7 @@ class CSVPlayerHistoryService:
                 # regular season. Summer League, preseason, and G League
                 # are never loaded: they are not the distribution props use.
                 season = row.get("Season", "").strip()
-                game_type = row.get("GameType", "").strip() or GAME_TYPE_REGULAR
+                game_type = coalesce_game_type(row.get("GameType"))
                 if game_type not in CANONICAL_GAME_TYPES:
                     continue
                 wl = row.get("W/L", "").strip()
@@ -600,7 +606,7 @@ class CSVPlayerHistoryService:
     @staticmethod
     def _game_type_of(game: Dict[str, Any]) -> str:
         """Game type on a loaded row. Missing means regular season."""
-        return game.get("game_type") or GAME_TYPE_REGULAR
+        return coalesce_game_type(game.get("game_type"))
 
     def resolve_player_name(self, player_name: str) -> Optional[str]:
         """Map a query to the stored CSV spelling, or None.

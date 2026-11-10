@@ -317,6 +317,12 @@ export function getMarketDisplayName(key: string): string {
     player_steals: "抄截",
     player_blocks: "阻攻",
     player_turnovers: "失誤",
+    player_frees_made: "罰球命中",
+    player_field_goals: "投籃命中",
+    player_rebounds_assists: "籃板+助攻",
+    player_points_rebounds: "得分+籃板",
+    player_points_assists: "得分+助攻",
+    player_double_double: "雙十",
   };
   
   return nameMap[key] || key;

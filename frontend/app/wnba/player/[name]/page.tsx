@@ -2,9 +2,9 @@
  * /wnba/player/[name]/page.tsx - WNBA player history detail
  *
  * Read-only view of a single WNBA player's empirical Over/Under
- * distribution + game log. Powered entirely by
- * `GET /api/wnba/player-history`. No odds, no event linkage, no agent
- * integration — Phase 1 scope (SPO-32).
+ * distribution + game log, plus the double-double history tile.
+ * Continuous stats come from `GET /api/wnba/player-history`. This page
+ * has no event id, so the tile does not request live odds.
  *
  * 💡 Why a thin page that delegates to react-query:
  * - The CSV is small, the response is small, the chart library is heavy.
@@ -15,10 +15,9 @@
  *   have. A standalone read-only view is cleaner than ripping odds out
  *   of PlayerHistoryStats and threading a `league` flag through.
  *
- * ⚠ Metrics here are the **continuous** subset of SPO-16
- * `CONTINUOUS_METRIC_EXTRACTORS`. Binary metrics (DD) require a separate
- * endpoint and a separate UI path — out of scope for the first read-only
- * page. We'll layer them in once the Phase 5 agent work consumes them.
+ * Continuous metrics stay on this page. Double-double history is the
+ * separate Yes/No tile. This route has no event id, so the tile loads
+ * history and leaves the odds block on its empty state.
  */
 
 "use client";
@@ -47,6 +46,7 @@ import {
   ReferenceLine,
   Cell,
 } from "recharts";
+import { PlayerDDTile } from "@/components/PlayerDDTile";
 import { getWNBAPlayerHistory } from "@/lib/api";
 
 // Continuous metrics (Phase 1) — must stay in lockstep with the backend's
@@ -209,6 +209,10 @@ export default function WNBAPlayerPage() {
               />
             </label>
           </div>
+        </section>
+
+        <section className="mb-8" data-testid="wnba-player-dd">
+          <PlayerDDTile playerName={playerName} league="wnba" />
         </section>
 
         {isError && (
