@@ -2,7 +2,14 @@
 
 from __future__ import annotations
 
-from evaluation.calibration_guard import Thresholds, evaluate_guard, run_sample_guard
+from evaluation.calibration_guard import (
+    PRODUCTION_CHECK_ROWS,
+    GuardResult,
+    Thresholds,
+    evaluate_guard,
+    record_production_check,
+    run_sample_guard,
+)
 from evaluation.metrics import summarize
 
 
@@ -73,8 +80,25 @@ def test_guard_skips_combined_probability_when_the_column_is_empty():
     assert "skip wnba combined_probability: n=0" in result.message
 
 
+def test_production_mismatch_fails_the_guard():
+    # Brier can be fine and the guard still fails when get_player_stats disagrees.
+    result = GuardResult(ok=True, lines=["Calibration guard: ok"])
+    record_production_check(result, "nba", {"checked": PRODUCTION_CHECK_ROWS, "mismatches": 1})
+    assert result.ok is False
+    assert result.failures == [f"nba production rate mismatches 1 of {PRODUCTION_CHECK_ROWS}"]
+
+
+def test_production_check_with_zero_rows_fails():
+    result = GuardResult(ok=True)
+    record_production_check(result, "wnba", {"checked": 0, "mismatches": 0})
+    assert result.ok is False
+    assert "sampled 0 rows" in result.failures[0]
+
+
 def test_sample_walk_forward_stays_within_the_default_thresholds():
     # The default sample is 40 players per league, seed 7. That is the CI check.
+    # The production comparison is 25 L10 rows per league on that same seed.
     result = run_sample_guard(seed=7)
     assert result.ok, result.message
     assert "nba" in result.message and "wnba" in result.message
+    assert result.message.count(f"matched on {PRODUCTION_CHECK_ROWS}") == 2

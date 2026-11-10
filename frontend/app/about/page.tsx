@@ -93,8 +93,8 @@ export default function AboutPage() {
           </div>
 
           <p className="text-sm text-gray">
-            The Navbar title and the bet-slip badge auto-switch to match the
-            league section you are browsing.
+            The league switch and the bet-slip badge follow the section you
+            are browsing.
           </p>
         </div>
       </section>
@@ -146,10 +146,10 @@ export default function AboutPage() {
             <p className="text-sm text-gray font-medium mb-3">No-vig calculation:</p>
             <ul className="space-y-2 text-sm">
               <li>
-                Over fair probability = 52.38% / 104.76% = <span className="text-green-600 font-bold">50%</span>
+                Over fair probability = 52.38% / 104.76% = <span className="text-green-800 font-bold">50%</span>
               </li>
               <li>
-                Under fair probability = 52.38% / 104.76% = <span className="text-green-600 font-bold">50%</span>
+                Under fair probability = 52.38% / 104.76% = <span className="text-green-800 font-bold">50%</span>
               </li>
             </ul>
           </div>
@@ -171,23 +171,23 @@ export default function AboutPage() {
             <h3 className="font-semibold text-dark mb-3">1. American Odds Conversion</h3>
             <div className="bg-dark rounded-[24px] p-5 font-mono text-sm text-cream border border-white/8">
               <p className="text-gray-light">If odds &lt; 0 (e.g., -110):</p>
-              <p className="text-yellow ml-4">p = |odds| / (|odds| + 100)</p>
+              <p className="text-accent ml-4">p = |odds| / (|odds| + 100)</p>
               <p className="text-gray-light mt-3">If odds &gt; 0 (e.g., +150):</p>
-              <p className="text-yellow ml-4">p = 100 / (odds + 100)</p>
+              <p className="text-accent ml-4">p = 100 / (odds + 100)</p>
             </div>
           </div>
 
           <div>
             <h3 className="font-semibold text-dark mb-3">2. No-Vig Formula</h3>
             <div className="bg-dark rounded-[24px] p-5 font-mono text-sm border border-white/8">
-              <p className="text-yellow">p_fair = p_implied / (p_over + p_under)</p>
+              <p className="text-accent">p_fair = p_implied / (p_over + p_under)</p>
             </div>
           </div>
 
           <div>
             <h3 className="font-semibold text-dark mb-3">3. Market Consensus (Mean Method)</h3>
             <div className="bg-dark rounded-[24px] p-5 font-mono text-sm border border-white/8">
-              <p className="text-yellow">consensus = mean(p_fair across bookmakers)</p>
+              <p className="text-accent">consensus = mean(p_fair across bookmakers)</p>
             </div>
           </div>
         </div>

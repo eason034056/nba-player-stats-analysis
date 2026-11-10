@@ -64,7 +64,7 @@ export function renderWithProviders(
   function Wrapper({ children }: { children: ReactNode }) {
     return (
       <QueryClientProvider client={queryClient}>
-        {/* Same pair as app/providers.tsx. Navbar and PickContextMenu call both hooks. */}
+        {/* Same pair as app/providers.tsx. AppShell and PickContextMenu call both hooks. */}
         <BetSlipProvider>
           <WnbaBetSlipProvider>
             <AgentWidgetProvider>

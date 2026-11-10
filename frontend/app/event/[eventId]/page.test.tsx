@@ -2,7 +2,11 @@ import { screen } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import EventPage from "@/app/event/[eventId]/page";
+import { eventsResponseSchema } from "@/lib/schemas";
+import routeEventsFixture from "@/test/fixtures/event/nba-events-route-date.json";
 import { renderWithProviders } from "@/test/test-utils";
+
+const routeEvents = eventsResponseSchema.parse(routeEventsFixture);
 
 const navigationMocks = vi.hoisted(() => ({
   useParams: vi.fn(),
@@ -42,9 +46,15 @@ vi.mock("@/components/BookmakerSelect", () => ({
   BookmakerSelect: () => <div>bookmaker select</div>,
 }));
 
-vi.mock("@/components/MarketSelect", () => ({
-  MarketSelect: () => <div>market select</div>,
-}));
+vi.mock("@/components/MarketSelect", async () => {
+  const actual = await vi.importActual<typeof import("@/components/MarketSelect")>(
+    "@/components/MarketSelect",
+  );
+  return {
+    ...actual,
+    MarketSelect: () => <div>market select</div>,
+  };
+});
 
 vi.mock("@/components/ResultsTable", () => ({
   ResultsTable: () => <div>results table</div>,
@@ -77,18 +87,7 @@ describe("EventPage", () => {
       },
     });
 
-    apiMocks.getEvents.mockResolvedValue({
-      date: "2026-03-16",
-      events: [
-        {
-          event_id: "evt-1",
-          sport_key: "basketball_nba",
-          home_team: "Los Angeles Lakers",
-          away_team: "Golden State Warriors",
-          commence_time: "2026-03-17T01:00:00Z",
-        },
-      ],
-    });
+    apiMocks.getEvents.mockResolvedValue(routeEvents);
     apiMocks.getTeamLineup.mockResolvedValue(null);
     apiMocks.getPlayerProjection.mockResolvedValue(null);
     apiMocks.calculateNoVig.mockResolvedValue(null);

@@ -1,8 +1,7 @@
 """Markdown report for one walk-forward run.
 
-The numbers come from the rows the harness just scored. The narrative
-around SPO-97 and SPO-98 is fixed: those tickets are not fixed here, and
-the section says which of these tables can move when they land.
+The numbers come from the rows the harness just scored. Headline rows are
+regular-season games. Playoffs and the play-in are a separate section.
 """
 
 from __future__ import annotations
@@ -170,10 +169,13 @@ def render_report(
         "The previous `scripts/agents/evaluation/backtest.py` scored five hard-coded players"
     )
     add('in-sample: the "actual rate" was the same history the model had just fit.')
-    add("This report walks forward. Each player-game is scored with that player's")
-    add("non-DNP games dated strictly before it, which is the information Daily Picks")
-    add("and the scorecard would have had on the morning of the game if the CSV had")
-    add("been frozen there.")
+    add("This report walks forward. Each headline player-game is a regular-season")
+    add("game scored with that player's regular-season, non-DNP games dated strictly")
+    add("before it. That is the set `CSVPlayerHistoryService._allowed_game_types`")
+    add("uses in production, and it is the information Daily Picks and the scorecard")
+    add("would have had on the morning of the game if the CSV had been frozen there.")
+    add("Playoff and play-in games are scored with that same history and reported")
+    add("in their own section. They are not in the headline tables.")
     add("")
     add("## Assumptions")
     add("")
@@ -192,9 +194,9 @@ def render_report(
     add(_inventory_table(inventories))
     add("")
     add(
-        "Target windows (a game is scored only if it has at least 10 prior non-DNP games,"
+        "Headline target windows (a regular-season game is scored only if it has at"
     )
-    add("the same floor as `MIN_SAMPLE_GAMES`):")
+    add("least 10 prior regular-season non-DNP games, the same floor as `MIN_SAMPLE_GAMES`):")
     add("")
     for league, replay in replays.items():
         configured = EVAL_START[league].strftime("%Y-%m-%d")
@@ -215,7 +217,8 @@ def render_report(
     add(
         "rate is the share strictly below it, rounded to 4 decimals. That is the return"
     )
-    add("value of `CSVPlayerHistoryService.get_player_stats(n=0, exclude_dnp=True)`.")
+    add("value of `CSVPlayerHistoryService.get_player_stats(n=0, exclude_dnp=True)`,")
+    add("which reads regular-season games only unless the caller opts in.")
     add("The side comes from `choose_daily_pick_side`: over when `p_over` clears")
     add("`HIGH_PROBABILITY_THRESHOLD` (0.65), otherwise under when `p_under` does.")
     add("The tier is the frontend `getProbabilityLevel`: high at or above 0.70,")
@@ -448,12 +451,16 @@ def render_report(
             )
         )
         add("")
+    add("## Playoffs and play-in")
+    add("")
+    add(_postseason_section(replays))
+    add("")
     if odds.active:
         add("## Odds-backed ROI and CLV")
         add("")
         add(_odds_section(daily, agent))
         add("")
-    add("## What moves when SPO-97 and SPO-98 land")
+    add("## Game-type scope")
     add("")
     add(_shift_section(inventories, replays))
     add("")
@@ -465,11 +472,13 @@ def render_report(
     add("")
     add(guard_note)
     add("")
-    add("The CI job runs `pytest` on `scripts/agents/tests/test_calibration_guard.py`,")
-    add("which replays a 40-player sample (seed 7) per league and fails if the")
+    add("The CI job runs `pytest` on the walk-forward and calibration-guard tests.")
+    add("The guard replays a 40-player sample (seed 7) per league and fails if the")
     add("MED20 Brier score exceeds `BACKTEST_GUARD_MAX_BRIER` (default 0.30) or")
     add("the calibration gap exceeds `BACKTEST_GUARD_MAX_GAP` (default 0.15).")
-    add("The full-run figures above are the same check on every player.")
+    add("It also compares 25 daily L10 rates per league, same seed, with")
+    add("`get_player_stats`. Any mismatch fails the job. The full-run figures")
+    add("above are the Brier and gap check on every player.")
     add("")
     add("## How to read the hit rate")
     add("")
@@ -663,17 +672,92 @@ def _odds_section(daily: list, agent: list) -> str:
     return "\n\n".join(parts)
 
 
+def _postseason_section(replays: dict[str, LeagueReplay]) -> str:
+    """Playoff and play-in targets, kept out of the headline tables.
+
+    History for every row is the regular-season list. An earlier playoff
+    game is not in the prior of a later playoff game, which is the
+    production default (``include_playoffs`` and ``include_play_in`` off).
+    """
+    lines = [
+        "These rows are not in the headline hit rate, ROI, Brier, calibration, or oracle.",
+        "Each target is a playoff or play-in game. The prior window is regular season only,",
+        "so a series game does not see earlier games from that series. The Cup final is in",
+        "neither list: production's allowed set does not include `cup_championship`.",
+        "",
+    ]
+    spans: list[str] = []
+    for league, replay in replays.items():
+        if not replay.postseason_by_type:
+            spans.append(f"- **{league.upper()}**: no playoff or play-in targets.")
+            continue
+        for kind, info in sorted(replay.postseason_by_type.items()):
+            spans.append(
+                f"- **{league.upper()} {kind}**: {info['targets']:,} player-games, "
+                f"{info['start']} → {info['end']}."
+            )
+    lines.extend(spans)
+    lines.append("")
+    daily = [row for replay in replays.values() for row in replay.postseason_daily]
+    agent = [row for replay in replays.values() for row in replay.postseason_agent]
+    lines.append(_breakdown_table("Daily", daily))
+    lines.append("")
+    lines.append(_breakdown_table("Agent pre-gate", agent))
+    return "\n".join(lines)
+
+
+def _breakdown_table(path: str, rows: list) -> str:
+    """One path (daily or agent) split by league, game type, and proxy."""
+    if not rows:
+        return f"**{path}.** _No rows._"
+    grouped_rows = grouped(
+        rows, lambda row: (row.league, row.game_type, row.proxy)
+    )
+    table_rows = []
+    for key, summary in grouped_rows:
+        league, game_type, proxy = key
+        subset = [
+            row
+            for row in rows
+            if row.league == league and row.game_type == game_type and row.proxy == proxy
+        ]
+        comp = composition(subset)
+        table_rows.append(
+            [
+                f"{league.upper()} {game_type} {proxy}",
+                str(summary.picks),
+                _hit_cell(summary),
+                _pct(summary.avg_pred),
+                _pct(summary.roi, signed=True),
+                _num(summary.brier),
+                _num(summary.calibration_gap),
+                _pct(comp.under_share),
+                _pct(comp.line_half_share),
+            ]
+        )
+    table = _table(
+        [
+            "Group",
+            "Picks",
+            "Hit% (95% CI)",
+            "Pred%",
+            "ROI%",
+            "Brier",
+            "Cal gap",
+            "Under%",
+            "0.5-line%",
+        ],
+        table_rows,
+    )
+    return f"**{path}.**\n\n{table}"
+
+
 def _shift_section(
     inventories: dict[str, dict], replays: dict[str, LeagueReplay]
 ) -> str:
-    nba = inventories.get("nba", {})
     wnba = inventories.get("wnba", {})
     nba_exposure = replays["nba"].exposure if "nba" in replays else {}
     wnba_exposure = replays["wnba"].exposure if "wnba" in replays else {}
-    months = nba.get("before_cutoff_by_month", {})
-    month_text = (
-        ", ".join(f"{month}={count}" for month, count in months.items()) or "none"
-    )
     dup_text = (
         ", ".join(
             f"{item['player']} {item['date']} ×{item['copies']}"
@@ -681,53 +765,25 @@ def _shift_section(
         )
         or "none"
     )
-    nba_targets = nba_exposure.get("targets") or 0
-    last20 = nba_exposure.get("last_20_includes_pre_cutoff") or 0
-    any_prior = nba_exposure.get("any_prior_before_cutoff") or 0
     dup_in_prior = (nba_exposure.get("prior_includes_duplicate_date") or 0) + (
         wnba_exposure.get("prior_includes_duplicate_date") or 0
     )
-    seasons = nba.get("seasons", {})
     return "\n".join(
         [
-            "These four data bugs are left for SPO-97 and SPO-98. This run does not correct them.",
+            "SPO-97 labeled each row with a game type and dropped Summer League and preseason "
+            "from the CSVs this run reads. Headline history and headline targets are regular "
+            "season only, the same set as `CSVPlayerHistoryService._allowed_game_types` with "
+            "both opt-in flags off. A row that has no game type still counts as regular season, "
+            "which is what `_game_type_of` does. Playoffs and the play-in stay in the file and "
+            "are the section above, not the headline metrics.",
             "",
-            f"**Season label.** The NBA cache has {nba.get('rows', 0):,} rows and season counts {seasons}. "
-            f"{nba.get('rows_before_nba_cutoff', 0):,} of those rows are dated before 2025-10-21 "
-            f"({month_text}). `get_player_stats(n=0)` does not read the Season column, and neither "
-            "does this replay, so correcting the label by itself does not move a hit rate, an ROI, "
-            "a Brier score, or a calibration bucket. What does move them is the natural companion "
-            "of that fix: dropping Summer League, preseason, and the stray older rows out of the "
-            "history the model consumes. "
-            f"{any_prior:,} of {nba_targets:,} scored NBA player-games have at least one such row "
-            f"in their prior window, and {last20:,} have one inside the last 20 games that MED20 "
-            "and the rotation split look at. Those are the NBA tables that shift: the MED20 and "
-            "L10 hit rates, ROI, Brier, calibration, monthly rates (October and November most of "
-            "all, because the short window is still full of pre-cutoff games), and the proxy-"
-            "sensitivity table. WNBA is a separate file and does not move because of the NBA label.",
+            "SPO-98 matches names by exact key. This replay iterates the CSV's own player keys, "
+            "so the tables do not move when a live request stops accepting a partial name. "
+            "The replay does not read the team column. A traded player's badge on the picks "
+            "page is outside these numbers.",
             "",
-            f"**Duplicate WNBA row.** Duplicate player-dates in the WNBA cache: {dup_text}. "
-            "A second copy of the same date is not scored as its own target. When that copy "
-            "is the same box score (these two rows differ only in Season), the replay keeps "
-            "one copy, so a later game does not count it twice. A same-day row with a different "
-            "box score, such as a doubleheader, stays in the later prior. "
-            f"Scored player-games whose prior still contains a date that had a duplicate row: {dup_in_prior}. "
-            "Deleting the extra row therefore does not move the WNBA headline hit rate, ROI, "
-            "Brier, or calibration on this file. The replay has already stopped the double count.",
-            "",
-            "**Team taken from the oldest game.** Daily Picks falls back to `game_logs[0]` when "
-            "there is no projection, and `get_player_stats` returns logs oldest-first, so a traded "
-            f"player is labelled with their oldest team. {nba.get('multi_team_players', 0)} NBA "
-            f"and {wnba.get('multi_team_players', 0)} WNBA players in this cache have more than "
-            "one team. This replay never reads the team. Hit rate, ROI, Brier, calibration, "
-            "monthly rates, under share, and the 0.5-line share do not move. The team badge on "
-            "the picks page does.",
-            "",
-            "**Substring name match.** `get_player_stats` and `_games_for` accept a name when "
-            "either string contains the other. This replay iterates the CSV's own player keys "
-            "and looks them up exactly, so the fuzzy branch does not fire. None of the tables "
-            "in this report move when matching gets stricter. A live request that passes a "
-            "partial or overlapping name can change, because that request is the one that "
-            "uses the fuzzy branch.",
+            f"Duplicate player-dates in the WNBA cache: {dup_text}. A second copy of the same "
+            "date is not its own target. When the box score matches, the later prior keeps one "
+            f"copy. Scored headline player-games whose prior still contains such a date: {dup_in_prior}.",
         ]
     )

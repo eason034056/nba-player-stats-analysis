@@ -37,11 +37,11 @@ const VerdictSummaryCard = ({ message }: { message: AgentThreadMessage }) => {
     <div className="rounded-[22px] border border-white/10 bg-[rgba(255,255,255,0.04)] p-4 shadow-[0_18px_48px_rgba(2,8,20,0.28)]">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="min-w-0 flex-1">
-          <p className="text-[10px] uppercase tracking-[0.24em] text-light">Verdict</p>
-          <h3 className="mt-2 text-base font-semibold text-dark">
+          <p className="text-[10px] uppercase tracking-[0.24em] text-on-dark-muted">Verdict</p>
+          <h3 className="mt-2 text-base font-semibold text-on-dark">
             {message.verdict.subject}
           </h3>
-          <p className="mt-2 text-sm text-gray">
+          <p className="mt-2 text-sm text-on-dark-muted">
             {message.verdict.summary || message.verdict.reasons[0]}
           </p>
         </div>
@@ -57,22 +57,22 @@ const VerdictSummaryCard = ({ message }: { message: AgentThreadMessage }) => {
 
       <div className="mt-4 grid grid-cols-3 gap-2 text-sm">
         <div className="rounded-[16px] border border-white/8 bg-white/5 px-3 py-2">
-          <p className="text-[10px] uppercase tracking-[0.2em] text-light">Confidence</p>
-          <p className="mt-1 font-semibold text-dark">{formatPct(message.verdict.confidence)}</p>
+          <p className="text-[10px] uppercase tracking-[0.2em] text-on-dark-muted">Confidence</p>
+          <p className="mt-1 font-semibold text-on-dark">{formatPct(message.verdict.confidence)}</p>
         </div>
         <div className="rounded-[16px] border border-white/8 bg-white/5 px-3 py-2">
-          <p className="text-[10px] uppercase tracking-[0.2em] text-light">EV</p>
-          <p className="mt-1 font-semibold text-dark">{formatPct(message.verdict.expected_value_pct)}</p>
+          <p className="text-[10px] uppercase tracking-[0.2em] text-on-dark-muted">EV</p>
+          <p className="mt-1 font-semibold text-on-dark">{formatPct(message.verdict.expected_value_pct)}</p>
         </div>
         <div className="rounded-[16px] border border-white/8 bg-white/5 px-3 py-2">
-          <p className="text-[10px] uppercase tracking-[0.2em] text-light">Market delta</p>
-          <p className="mt-1 font-semibold text-dark">{formatSignedPct(marketDelta)}</p>
+          <p className="text-[10px] uppercase tracking-[0.2em] text-on-dark-muted">Market delta</p>
+          <p className="mt-1 font-semibold text-on-dark">{formatSignedPct(marketDelta)}</p>
         </div>
       </div>
 
       {isLineMoved ? (
-        <div className="mt-4 rounded-[18px] border border-yellow-400/25 bg-yellow-400/10 p-3 text-sm text-dark">
-          <div className="flex items-center gap-2 text-[10px] uppercase tracking-[0.2em] text-yellow-700">
+        <div className="mt-4 rounded-[18px] border border-yellow-400/25 bg-yellow-400/10 p-3 text-sm text-on-dark">
+          <div className="flex items-center gap-2 text-[10px] uppercase tracking-[0.2em] text-accent">
             <ShieldAlert className="h-4 w-4" />
             <span>Line moved</span>
           </div>
@@ -80,7 +80,7 @@ const VerdictSummaryCard = ({ message }: { message: AgentThreadMessage }) => {
             Original {message.verdict.queried_line ?? "N/A"} {"->"} Live {message.verdict.best_line ?? "N/A"}
           </p>
           {message.verdict.available_lines.length > 0 ? (
-            <p className="mt-1 text-xs text-gray">
+            <p className="mt-1 text-xs text-on-dark-muted">
               Available lines: {message.verdict.available_lines.join(", ")}
             </p>
           ) : null}
@@ -92,7 +92,7 @@ const VerdictSummaryCard = ({ message }: { message: AgentThreadMessage }) => {
           <button
             type="button"
             onClick={() => setIsExpanded((current) => !current)}
-            className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-3 py-1.5 text-xs font-medium text-dark transition-colors hover:bg-white/10"
+            className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-3 py-1.5 text-xs font-medium text-on-dark transition-colors hover:bg-white/10"
           >
             {isExpanded ? "Hide breakdown" : "Show breakdown"}
             {isExpanded ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
@@ -111,7 +111,7 @@ const VerdictSummaryCard = ({ message }: { message: AgentThreadMessage }) => {
                   {message.verdict.reasons.map((reason) => (
                     <div
                       key={reason}
-                      className="rounded-[16px] border border-white/8 bg-white/4 px-3 py-2 text-sm text-dark"
+                      className="rounded-[16px] border border-white/8 bg-white/4 px-3 py-2 text-sm text-on-dark"
                     >
                       {reason}
                     </div>
@@ -120,7 +120,7 @@ const VerdictSummaryCard = ({ message }: { message: AgentThreadMessage }) => {
               ) : null}
 
               {message.verdict.risk_factors.length > 0 ? (
-                <div className="rounded-[18px] border border-red/25 bg-red/10 p-3 text-sm text-dark">
+                <div className="rounded-[18px] border border-red/25 bg-red/10 p-3 text-sm text-on-dark">
                   <div className="mb-2 flex items-center gap-2 text-red">
                     <ShieldAlert className="h-4 w-4" />
                     <span className="text-[10px] uppercase tracking-[0.2em]">
@@ -149,35 +149,35 @@ const SlipReviewCard = ({ message }: { message: AgentThreadMessage }) => {
     <div className="rounded-[22px] border border-white/10 bg-[rgba(255,255,255,0.04)] p-4 shadow-[0_18px_48px_rgba(2,8,20,0.28)]">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="min-w-0 flex-1">
-          <p className="text-[10px] uppercase tracking-[0.24em] text-light">Slip review</p>
-          <h3 className="mt-2 text-base font-semibold text-dark">
+          <p className="text-[10px] uppercase tracking-[0.24em] text-on-dark-muted">Slip review</p>
+          <h3 className="mt-2 text-base font-semibold text-on-dark">
             {message.slip_review.summary}
           </h3>
         </div>
-        <span className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-[10px] uppercase tracking-[0.22em] text-light">
+        <span className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-[10px] uppercase tracking-[0.22em] text-on-dark-muted">
           {message.slip_review.items.length} legs
         </span>
       </div>
 
       <div className="mt-4 grid grid-cols-3 gap-2 text-sm">
         <div className="rounded-[16px] border border-white/8 bg-white/5 px-3 py-2">
-          <p className="text-[10px] uppercase tracking-[0.2em] text-light">Keep</p>
-          <p className="mt-1 font-semibold text-dark">{message.slip_review.keep_count}</p>
+          <p className="text-[10px] uppercase tracking-[0.2em] text-on-dark-muted">Keep</p>
+          <p className="mt-1 font-semibold text-on-dark">{message.slip_review.keep_count}</p>
         </div>
         <div className="rounded-[16px] border border-white/8 bg-white/5 px-3 py-2">
-          <p className="text-[10px] uppercase tracking-[0.2em] text-light">Recheck</p>
-          <p className="mt-1 font-semibold text-dark">{message.slip_review.recheck_count}</p>
+          <p className="text-[10px] uppercase tracking-[0.2em] text-on-dark-muted">Recheck</p>
+          <p className="mt-1 font-semibold text-on-dark">{message.slip_review.recheck_count}</p>
         </div>
         <div className="rounded-[16px] border border-white/8 bg-white/5 px-3 py-2">
-          <p className="text-[10px] uppercase tracking-[0.2em] text-light">Remove</p>
-          <p className="mt-1 font-semibold text-dark">{message.slip_review.remove_count}</p>
+          <p className="text-[10px] uppercase tracking-[0.2em] text-on-dark-muted">Remove</p>
+          <p className="mt-1 font-semibold text-on-dark">{message.slip_review.remove_count}</p>
         </div>
       </div>
 
       <button
         type="button"
         onClick={() => setIsExpanded((current) => !current)}
-        className="mt-4 inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-3 py-1.5 text-xs font-medium text-dark transition-colors hover:bg-white/10"
+        className="mt-4 inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-3 py-1.5 text-xs font-medium text-on-dark transition-colors hover:bg-white/10"
       >
         {isExpanded ? "Hide legs" : "Show legs"}
         {isExpanded ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
@@ -191,12 +191,12 @@ const SlipReviewCard = ({ message }: { message: AgentThreadMessage }) => {
               className="rounded-[16px] border border-white/8 bg-white/4 px-3 py-2"
             >
               <div className="flex items-center justify-between gap-3">
-                <p className="text-sm font-semibold text-dark">{item.subject}</p>
-                <span className="rounded-full border border-white/10 bg-white/5 px-2.5 py-1 text-[10px] uppercase tracking-[0.2em] text-light">
+                <p className="text-sm font-semibold text-on-dark">{item.subject}</p>
+                <span className="rounded-full border border-white/10 bg-white/5 px-2.5 py-1 text-[10px] uppercase tracking-[0.2em] text-on-dark-muted">
                   {item.recommendation ?? "review"}
                 </span>
               </div>
-              <p className="mt-1 text-sm text-gray">{item.summary}</p>
+              <p className="mt-1 text-sm text-on-dark-muted">{item.summary}</p>
             </div>
           ))}
         </div>
@@ -232,7 +232,7 @@ export const AgentWidgetTranscript = ({
   >
     {messages.length === 0 ? (
       <div className="rounded-[22px] border border-white/8 bg-[rgba(255,255,255,0.03)] p-4">
-        <p className="text-sm text-gray">
+        <p className="text-sm text-on-dark-muted">
           Start with a direct question about the current pick, then branch into risk,
           pricing, or a plain-English explanation as needed.
         </p>
@@ -242,7 +242,7 @@ export const AgentWidgetTranscript = ({
               key={action.action}
               type="button"
               onClick={() => void onAction(action)}
-              className="rounded-full border border-white/10 bg-white/5 px-3 py-2 text-sm font-medium text-dark transition-colors hover:border-white/20 hover:bg-white/10"
+              className="rounded-full border border-white/10 bg-white/5 px-3 py-2 text-sm font-medium text-on-dark transition-colors hover:border-white/20 hover:bg-white/10"
             >
               {action.label}
             </button>
@@ -257,8 +257,8 @@ export const AgentWidgetTranscript = ({
           className={cn(
             "rounded-[20px] px-4 py-3 text-sm leading-6 shadow-[0_12px_36px_rgba(2,8,20,0.18)]",
             message.role === "user"
-              ? "ml-auto w-fit max-w-[85%] whitespace-pre-wrap break-words border border-red/25 bg-[linear-gradient(180deg,rgba(255,136,108,0.16)_0%,rgba(255,136,108,0.09)_100%)] text-dark"
-              : "mr-6 max-w-[calc(100%-1.5rem)] whitespace-pre-wrap break-words border border-white/8 bg-white/4 text-dark",
+              ? "ml-auto w-fit max-w-[85%] whitespace-pre-wrap break-words border border-red/25 bg-[linear-gradient(180deg,rgba(255,136,108,0.16)_0%,rgba(255,136,108,0.09)_100%)] text-on-dark"
+              : "mr-6 max-w-[calc(100%-1.5rem)] whitespace-pre-wrap break-words border border-white/8 bg-white/4 text-on-dark",
           )}
         >
           {message.text}
@@ -273,14 +273,14 @@ export const AgentWidgetTranscript = ({
     ))}
 
     {isPending ? (
-      <div className="flex items-center gap-2 rounded-full border border-white/8 bg-white/4 px-3 py-2 text-sm text-gray">
+      <div className="flex items-center gap-2 rounded-full border border-white/8 bg-white/4 px-3 py-2 text-sm text-on-dark-muted">
         <Loader2 className="h-4 w-4 animate-spin text-red" />
         <span>Checking historical edge, pricing, and context...</span>
       </div>
     ) : null}
 
     {error ? (
-      <div className="rounded-[20px] border border-red/25 bg-red/10 p-4 text-sm text-dark">
+      <div className="rounded-[20px] border border-red/25 bg-red/10 p-4 text-sm text-on-dark">
         <div className="flex items-start gap-2">
           <AlertTriangle className="mt-0.5 h-4 w-4 text-red" />
           <div className="flex-1">
@@ -288,7 +288,7 @@ export const AgentWidgetTranscript = ({
             <button
               type="button"
               onClick={() => void onRetryLastRequest()}
-              className="mt-3 inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/8 px-3 py-2 font-medium text-dark transition-colors hover:bg-white/12"
+              className="mt-3 inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/8 px-3 py-2 font-medium text-on-dark transition-colors hover:bg-white/12"
               aria-label="Retry last request"
             >
               Retry last request

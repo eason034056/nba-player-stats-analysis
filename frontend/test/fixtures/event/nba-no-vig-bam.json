@@ -1,0 +1,56 @@
+{
+  "event_id": "evt-mia-bos",
+  "player_name": "Bam Adebayo",
+  "market": "player_points",
+  "fetched_at": "2026-11-10T18:05:00Z",
+  "data_age_seconds": 90,
+  "cache_state": "fresh",
+  "source": "fixture",
+  "results": [
+    {
+      "bookmaker": "draftkings",
+      "line": 18.5,
+      "over_odds": -118,
+      "under_odds": -102,
+      "vig": 0.042,
+      "p_over_fair": 0.54,
+      "p_under_fair": 0.46,
+      "line_is_synthetic": false,
+      "market_kind": "over_under",
+      "uses_prior": false
+    },
+    {
+      "bookmaker": "fanduel",
+      "line": 18.5,
+      "over_odds": -110,
+      "under_odds": -110,
+      "vig": 0.045,
+      "p_over_fair": 0.52,
+      "p_under_fair": 0.48,
+      "line_is_synthetic": false,
+      "market_kind": "over_under",
+      "uses_prior": false
+    },
+    {
+      "bookmaker": "betmgm",
+      "line": 19.5,
+      "over_odds": -105,
+      "under_odds": -115,
+      "vig": 0.048,
+      "p_over_fair": 0.55,
+      "p_under_fair": 0.45,
+      "line_is_synthetic": false,
+      "market_kind": "over_under",
+      "uses_prior": false
+    }
+  ],
+  "consensus": {
+    "method": "mean",
+    "p_over_fair": 0.54,
+    "p_under_fair": 0.46,
+    "p_yes_fair": null,
+    "p_no_fair": null,
+    "consensus_uses_prior": false,
+    "consensus_prior_book_count": 0
+  }
+}

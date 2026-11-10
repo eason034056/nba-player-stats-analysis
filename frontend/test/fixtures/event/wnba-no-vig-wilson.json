@@ -1,0 +1,25 @@
+{
+  "event_id": "evt-lva-nyl",
+  "player_name": "A'ja Wilson",
+  "market": "player_points",
+  "fetched_at": "2026-11-10T18:05:00Z",
+  "data_age_seconds": 90,
+  "results": [
+    {
+      "bookmaker": "draftkings",
+      "line": 22.5,
+      "over_odds": -110,
+      "under_odds": -110,
+      "vig": 0.045,
+      "p_over_fair": 0.51,
+      "p_under_fair": 0.49,
+      "line_is_synthetic": false,
+      "market_kind": "over_under"
+    }
+  ],
+  "consensus": {
+    "method": "mean",
+    "p_over_fair": 0.51,
+    "p_under_fair": 0.49
+  }
+}

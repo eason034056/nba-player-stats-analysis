@@ -1,0 +1,23 @@
+{
+  "date": "2026-11-10",
+  "team": "LVA",
+  "opponent": "NYL",
+  "home_or_away": "",
+  "status": "projected",
+  "starters": ["A'ja Wilson", "Jackie Young", "Chelsea Gray", "Kelsey Plum", "Alysha Clark"],
+  "bench_candidates": ["Kiah Stokes"],
+  "sources": ["rotowire"],
+  "source_disagreement": false,
+  "confidence": "high",
+  "updated_at": "2026-11-10T17:00:00Z",
+  "source_snapshots": {
+    "rotowire": {
+      "team": "LVA",
+      "opponent": "NYL",
+      "home_or_away": "",
+      "status": "confirmed",
+      "starters": ["A'ja Wilson", "Jackie Young", "Chelsea Gray", "Kelsey Plum", "Alysha Clark"],
+      "bench_candidates": ["Kiah Stokes"]
+    }
+  }
+}

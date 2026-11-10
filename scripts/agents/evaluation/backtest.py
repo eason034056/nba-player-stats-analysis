@@ -161,6 +161,7 @@ _DAILY_FIELDS = (
     "price",
     "clv_prob",
     "clv_line",
+    "game_type",
     "combined_probability",
     "combined_adjustment",
 )
@@ -186,6 +187,7 @@ _AGENT_FIELDS = (
     "price",
     "clv_prob",
     "clv_line",
+    "game_type",
 )
 
 
@@ -270,11 +272,20 @@ def main(argv: list[str] | None = None) -> int:
             if proxy in proxies:
                 print(_headline(league, daily, proxy))
         if agent:
-            print(
-                _headline(league, agent, "MED20").replace(
-                    f"{league} MED20", f"{league} agent MED20", 1
-                )
-            )
+            for proxy in ("MED20", "L10"):
+                if proxy in proxies:
+                    print(
+                        _headline(league, agent, proxy).replace(
+                            f"{league} {proxy}", f"{league} agent {proxy}", 1
+                        )
+                    )
+        postseason = replay.postseason_by_type
+        if postseason:
+            parts = [
+                f"{kind} {info['targets']:,} {info['start']} → {info['end']}"
+                for kind, info in sorted(postseason.items())
+            ]
+            print(f"{league} playoffs/play-in (not in headlines): " + "; ".join(parts))
     print()
 
     mismatches = []
@@ -300,15 +311,20 @@ def main(argv: list[str] | None = None) -> int:
         for item in oracle_mismatches:
             print(f"  {item}")
     else:
+        ranges = ", ".join(
+            f"{league.upper()} {replays[league].target_start} → {replays[league].target_end} "
+            f"({replays[league].targets:,} player-games)"
+            for league in leagues
+            if league in replays
+        )
         oracle_note = (
-            "Daily headlines match the walk-forward prototype on origin/dev @ 5407401. "
-            "Agent MED20 picks are 60,781 NBA and 8,579 WNBA (prototype 60,829 and 8,590). "
-            "The side is now the unrounded probability, so a value that only crosses "
-            "0.55 or 0.45 after rounding to 4 decimals is an abstention. "
-            "WNBA average predicted probability rounds to 61.4% (prototype 61.3%). "
-            "Push refunds and the duplicate-row filter did not move a headline: "
-            "proxy lines are x.5, stats are integers, and the only duplicate date "
-            "is the last WNBA game."
+            "Headlines match the recorded regular-season walk-forward for this CSV. "
+            f"Headline targets: {ranges}. "
+            "History and those targets are regular-season games, the same set "
+            "`CSVPlayerHistoryService._allowed_game_types` uses in production. "
+            "Playoffs and the play-in are scored with that history and reported "
+            "in their own section; they are not part of these headlines. "
+            "Proxy lines are x.5. ROI assumes -110. CLV is not measured."
         )
         print(oracle_note)
     print()

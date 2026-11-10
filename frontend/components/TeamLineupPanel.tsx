@@ -70,7 +70,7 @@ export function TeamLineupPanel({
         <span
           className={`rounded-full px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.16em] ${
             lineup.confidence === "high"
-              ? "bg-green-500/10 text-green-700"
+              ? "bg-green-800/10 text-green-700"
               : lineup.confidence === "medium"
                 ? "bg-yellow-500/15 text-yellow-700"
                 : "bg-red-500/10 text-red-700"
@@ -122,7 +122,7 @@ export function TeamLineupPanel({
           </p>
         </div>
       ) : (
-        <div className="mt-4 rounded-[18px] border border-green-500/20 bg-green-500/10 px-4 py-3 text-sm text-dark">
+        <div className="mt-4 rounded-[18px] border border-green-500/20 bg-green-800/10 px-4 py-3 text-sm text-dark">
           <div className="flex items-center gap-2 font-semibold text-green-700">
             <CheckCircle2 className="h-4 w-4" />
             <span>Lineup aligned</span>
