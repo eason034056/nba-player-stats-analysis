@@ -34,7 +34,12 @@ import pytest
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from tests.fixtures.odds_api import NBA_EXPANDED_MARKETS, first_posted_market
+from tests.fixtures.odds_api import (
+    NBA_EXPANDED_MARKETS,
+    RECORDED_PLAYER_POINTS,
+    derive_line_board,
+    first_posted_market,
+)
 
 from app.services.csv_player_history import CSVPlayerHistoryService
 from app.services.prob import single_leg_devig, DEFAULT_BINARY_VIG
@@ -684,6 +689,57 @@ class TestProjectionFieldAliases:
             )
 
 
+def _recorded_points_ou(player: str, line: float) -> list[dict]:
+    """FanDuel ``player_points`` sliced to one Over and its Under.
+
+    ``derive_line_board`` copies FanDuel from
+    ``odds_api_event_odds__player_points.json`` and the first outcome on
+    that book (Dyson Daniels Over, price -113, point 10.5), then rewrites
+    ``description`` and ``point``. That helper keeps a single side. The
+    Over/Under parser drops a player who has no Under, so the matching
+    Under from the same recorded pair is appended here. ``first_posted_market``
+    finds that market. The Under price stays the recorded -113. Player
+    name and line are this test's controls. This does not type -110:
+    that price is not the price on this pair.
+    """
+    books = derive_line_board(
+        [{player: [line]}],
+        fixture_name=RECORDED_PLAYER_POINTS,
+    )
+    posted = first_posted_market(RECORDED_PLAYER_POINTS, "player_points")
+    if posted is None:
+        raise AssertionError("player_points is not in the recorded NBA capture")
+    book_key, market = posted
+    if books[0].get("key") != book_key:
+        raise AssertionError(
+            f"derive_line_board used {books[0].get('key')!r}, "
+            f"not the first posted book {book_key!r}"
+        )
+    outcomes = market.get("outcomes") or []
+    over = next((item for item in outcomes if item.get("name") == "Over"), None)
+    if over is None:
+        raise AssertionError("recorded player_points has no Over")
+    under = next(
+        (
+            item
+            for item in outcomes
+            if item.get("name") == "Under"
+            and item.get("description") == over.get("description")
+            and item.get("point") == over.get("point")
+        ),
+        None,
+    )
+    if under is None:
+        raise AssertionError(
+            "recorded player_points has no Under beside the first Over"
+        )
+    under = copy.deepcopy(under)
+    under["description"] = player
+    under["point"] = line
+    books[0]["markets"][0]["outcomes"].append(under)
+    return books
+
+
 # ===========================================================================
 # 8. SPO-18 dispatcher hardening — unknown market key path
 # ===========================================================================
@@ -781,33 +837,10 @@ class TestDispatcherUnknownMarketKey:
         """
         svc = OddsSnapshotService()
 
+        # Slice of the recorded FanDuel player_points pair (Dyson Daniels
+        # Over -113 / Under -113). Name and line are this test's controls.
         fake_snapshot = SimpleNamespace(
-            data={
-                "bookmakers": [
-                    {
-                        "key": "fanduel",
-                        "markets": [
-                            {
-                                "key": "player_points",
-                                "outcomes": [
-                                    {
-                                        "name": "Over",
-                                        "description": "Stephen Curry",
-                                        "point": 24.5,
-                                        "price": -110,
-                                    },
-                                    {
-                                        "name": "Under",
-                                        "description": "Stephen Curry",
-                                        "point": 24.5,
-                                        "price": -110,
-                                    },
-                                ],
-                            },
-                        ],
-                    },
-                ],
-            },
+            data={"bookmakers": _recorded_points_ou("Stephen Curry", 24.5)},
         )
 
         mock_get = AsyncMock(return_value=fake_snapshot)
