@@ -10,7 +10,13 @@ import type { AgentQuickAction, AgentThreadMessage } from "@/lib/agent-chat";
 import { AgentVerdictBreakdown } from "./AgentVerdictBreakdown";
 import { formatPct, formatSignedPct } from "./presentation";
 
-const VerdictSummaryCard = ({ message }: { message: AgentThreadMessage }) => {
+const VerdictSummaryCard = ({
+  message,
+  surface,
+}: {
+  message: AgentThreadMessage;
+  surface: "light" | "dark";
+}) => {
   const [isExpanded, setIsExpanded] = useState(false);
 
   if (!message.verdict) {
@@ -34,7 +40,14 @@ const VerdictSummaryCard = ({ message }: { message: AgentThreadMessage }) => {
         : "border-yellow-300/30 bg-yellow-300/10 text-yellow-100";
 
   return (
-    <div className="rounded-[22px] border border-white/10 bg-[rgba(255,255,255,0.04)] p-4 shadow-[0_18px_48px_rgba(2,8,20,0.28)]">
+    <div
+      className={cn(
+        "rounded-[22px] border p-4",
+        surface === "light"
+          ? "border-[#E3DFE9] bg-white"
+          : "border-white/10 bg-[rgba(255,255,255,0.04)] shadow-[0_18px_48px_rgba(2,8,20,0.28)]",
+      )}
+    >
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="min-w-0 flex-1">
           <p className="text-[10px] uppercase tracking-[0.24em] text-on-dark-muted">Verdict</p>
@@ -138,7 +151,13 @@ const VerdictSummaryCard = ({ message }: { message: AgentThreadMessage }) => {
   );
 };
 
-const SlipReviewCard = ({ message }: { message: AgentThreadMessage }) => {
+const SlipReviewCard = ({
+  message,
+  surface,
+}: {
+  message: AgentThreadMessage;
+  surface: "light" | "dark";
+}) => {
   const [isExpanded, setIsExpanded] = useState(false);
 
   if (!message.slip_review) {
@@ -146,7 +165,14 @@ const SlipReviewCard = ({ message }: { message: AgentThreadMessage }) => {
   }
 
   return (
-    <div className="rounded-[22px] border border-white/10 bg-[rgba(255,255,255,0.04)] p-4 shadow-[0_18px_48px_rgba(2,8,20,0.28)]">
+    <div
+      className={cn(
+        "rounded-[22px] border p-4",
+        surface === "light"
+          ? "border-[#E3DFE9] bg-white"
+          : "border-white/10 bg-[rgba(255,255,255,0.04)] shadow-[0_18px_48px_rgba(2,8,20,0.28)]",
+      )}
+    >
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="min-w-0 flex-1">
           <p className="text-[10px] uppercase tracking-[0.24em] text-on-dark-muted">Slip review</p>
@@ -213,6 +239,7 @@ interface AgentWidgetTranscriptProps {
   error: string | null;
   onAction: (action: AgentQuickAction) => Promise<void>;
   onRetryLastRequest: () => Promise<void>;
+  surface?: "light" | "dark";
 }
 
 export const AgentWidgetTranscript = ({
@@ -223,18 +250,30 @@ export const AgentWidgetTranscript = ({
   error,
   onAction,
   onRetryLastRequest,
+  surface = "dark",
 }: AgentWidgetTranscriptProps) => (
   <div
     ref={transcriptRef}
     role="log"
     aria-label="Betting agent transcript"
-    className="app-scrollbar flex-1 space-y-4 overflow-y-auto overscroll-contain px-4 py-4 sm:px-5"
+    className={cn(
+      "app-scrollbar flex-1 space-y-4 overflow-y-auto overscroll-contain px-4 py-4 sm:px-5",
+      surface === "light" && "agent-surface-light",
+    )}
   >
     {messages.length === 0 ? (
-      <div className="rounded-[22px] border border-white/8 bg-[rgba(255,255,255,0.03)] p-4">
-        <p className="text-sm text-on-dark-muted">
-          Start with a direct question about the current pick, then branch into risk,
-          pricing, or a plain-English explanation as needed.
+      <div
+        className={cn(
+          "rounded-[18px] border p-3.5",
+          surface === "light"
+            ? "rounded-bl-[4px] border-[#E3DFE9] bg-white"
+            : "rounded-[22px] border-white/8 bg-[rgba(255,255,255,0.03)]",
+        )}
+      >
+        <p className={cn("text-sm leading-relaxed", surface === "light" ? "text-ink" : "text-on-dark-muted")}>
+          {surface === "light"
+            ? "I check any prop against market price, recent form, projection and matchup. What do you want to look at?"
+            : "Start with a direct question about the current pick, then branch into risk, pricing, or a plain-English explanation as needed."}
         </p>
         <div className="mt-4 flex flex-wrap gap-2">
           {starterActions.map((action) => (
@@ -242,7 +281,12 @@ export const AgentWidgetTranscript = ({
               key={action.action}
               type="button"
               onClick={() => void onAction(action)}
-              className="rounded-full border border-white/10 bg-white/5 px-3 py-2 text-sm font-medium text-on-dark transition-colors hover:border-white/20 hover:bg-white/10"
+              className={cn(
+                "rounded-full border px-3 py-2 text-sm font-medium transition-colors",
+                surface === "light"
+                  ? "border-[#D3CCDF] bg-white text-brand hover:bg-brand-tint"
+                  : "border-white/10 bg-white/5 text-on-dark hover:border-white/20 hover:bg-white/10",
+              )}
             >
               {action.label}
             </button>
@@ -255,32 +299,46 @@ export const AgentWidgetTranscript = ({
       <div key={message.id} className="space-y-3">
         <div
           className={cn(
-            "rounded-[20px] px-4 py-3 text-sm leading-6 shadow-[0_12px_36px_rgba(2,8,20,0.18)]",
+            "rounded-[18px] px-3.5 py-2.5 text-sm leading-6",
             message.role === "user"
-              ? "ml-auto w-fit max-w-[85%] whitespace-pre-wrap break-words border border-red/25 bg-[linear-gradient(180deg,rgba(255,136,108,0.16)_0%,rgba(255,136,108,0.09)_100%)] text-on-dark"
-              : "mr-6 max-w-[calc(100%-1.5rem)] whitespace-pre-wrap break-words border border-white/8 bg-white/4 text-on-dark",
+              ? "ml-auto w-fit max-w-[85%] whitespace-pre-wrap break-words rounded-[18px_18px_4px_18px] bg-brand text-white"
+              : surface === "light"
+                ? "mr-6 max-w-[94%] whitespace-pre-wrap break-words rounded-[18px_18px_18px_4px] border border-[#E3DFE9] bg-white text-ink"
+                : "mr-6 max-w-[calc(100%-1.5rem)] whitespace-pre-wrap break-words border border-white/8 bg-white/4 text-on-dark",
           )}
         >
           {message.text}
         </div>
         {message.role === "assistant" ? (
           <div className="space-y-3">
-            <VerdictSummaryCard message={message} />
-            <SlipReviewCard message={message} />
+            <VerdictSummaryCard message={message} surface={surface} />
+            <SlipReviewCard message={message} surface={surface} />
           </div>
         ) : null}
       </div>
     ))}
 
     {isPending ? (
-      <div className="flex items-center gap-2 rounded-full border border-white/8 bg-white/4 px-3 py-2 text-sm text-on-dark-muted">
-        <Loader2 className="h-4 w-4 animate-spin text-red" />
-        <span>Checking historical edge, pricing, and context...</span>
+      <div
+        className={cn(
+          "flex items-center gap-2 rounded-[18px] px-4 py-3 text-sm",
+          surface === "light"
+            ? "border border-[#E3DFE9] bg-white text-muted"
+            : "rounded-full border border-white/8 bg-white/4 text-on-dark-muted",
+        )}
+      >
+        <Loader2 className={cn("h-4 w-4 animate-spin", surface === "light" ? "text-brand" : "text-red")} />
+        <span>Checking market, form and matchup…</span>
       </div>
     ) : null}
 
     {error ? (
-      <div className="rounded-[20px] border border-red/25 bg-red/10 p-4 text-sm text-on-dark">
+      <div
+        className={cn(
+          "rounded-[20px] border p-4 text-sm",
+          surface === "light" ? "border-red/30 bg-red-light text-ink" : "border-red/25 bg-red/10 text-on-dark",
+        )}
+      >
         <div className="flex items-start gap-2">
           <AlertTriangle className="mt-0.5 h-4 w-4 text-red" />
           <div className="flex-1">
@@ -288,7 +346,12 @@ export const AgentWidgetTranscript = ({
             <button
               type="button"
               onClick={() => void onRetryLastRequest()}
-              className="mt-3 inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/8 px-3 py-2 font-medium text-on-dark transition-colors hover:bg-white/12"
+              className={cn(
+                "mt-3 inline-flex items-center gap-2 rounded-full border px-3 py-2 font-medium transition-colors",
+                surface === "light"
+                  ? "border-[#D3CCDF] bg-white text-ink hover:bg-[#F7F6F9]"
+                  : "border-white/10 bg-white/8 text-on-dark hover:bg-white/12",
+              )}
               aria-label="Retry last request"
             >
               Retry last request
