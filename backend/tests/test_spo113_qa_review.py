@@ -282,8 +282,9 @@ class TestDefenseRankScale:
             },
             table,
         )
-        assert kept["opponent_rank"] == 0
-        assert kept["opponent_position_rank"] == 31
+        assert kept["opponent_rank"] is None
+        assert kept["opponent_position_rank"] is None
+        assert kept["opponent_rank_source"] == "sportsdata_invalid"
 
     def test_preseason_and_zero_point_rows_do_not_invent_a_defense(self):
         table = build_defense_rank_table(

@@ -498,26 +498,44 @@ class PlayerProjection(BaseModel):
         le=30,
         description="Opponent defense vs this position. Ranked inside that position only, 1-30.",
     )
-    opponent_rank_source: Optional[Literal["csv", "sportsdata"]] = Field(
+    opponent_rank_source: Optional[Literal["csv", "sportsdata", "sportsdata_invalid"]] = Field(
         default=None,
         description=(
-            "csv when a null rank was filled from the game log. "
-            "sportsdata when the projection row already carried the number."
+            "Source of opponent_rank only. csv when that null was filled "
+            "from the game log. sportsdata when the row already carried "
+            "an integer in 1..30. sportsdata_invalid when the vendor value "
+            "was not an integer in 1..30; the rank is then null and is not "
+            "filled from the CSV."
         ),
     )
     opponent_rank_season: Optional[str] = Field(
         default=None,
         description=(
-            "Game-log season the csv rank used, e.g. 2025-2026 (the 2025-26 "
-            "season). Null when the rank came from SportsData or is still null."
+            "Game-log season for opponent_rank when its source is csv, "
+            "e.g. 2025-2026 (the 2025-26 season). Null otherwise."
         ),
     )
     opponent_rank_note: Optional[str] = Field(
         default=None,
         description=(
-            "Present on a csv rank: computed from real points allowed, "
-            "not fantasy points."
+            "Present when opponent_rank_source is csv: computed from real "
+            "points allowed, not fantasy points."
         ),
+    )
+    opponent_position_rank_source: Optional[Literal["csv", "sportsdata", "sportsdata_invalid"]] = Field(
+        default=None,
+        description=(
+            "Source of opponent_position_rank only. Same three words as "
+            "opponent_rank_source. Independent of the overall rank."
+        ),
+    )
+    opponent_position_rank_season: Optional[str] = Field(
+        default=None,
+        description="Game-log season for the position rank when its source is csv. Null otherwise.",
+    )
+    opponent_position_rank_note: Optional[str] = Field(
+        default=None,
+        description="Present when the position rank source is csv: real points allowed, not fantasy points.",
     )
 
     # DFS related
@@ -684,17 +702,29 @@ class DailyPick(BaseModel):
         le=30,
         description="Opponent defense vs position rank, ranked inside that position (1-30)"
     )
-    opponent_rank_source: Optional[Literal["csv", "sportsdata"]] = Field(
+    opponent_rank_source: Optional[Literal["csv", "sportsdata", "sportsdata_invalid"]] = Field(
         default=None,
-        description="csv when this pick's null rank was filled from the game log; sportsdata when the projection already had it.",
+        description="Source of opponent_rank only: csv, sportsdata, or sportsdata_invalid.",
     )
     opponent_rank_season: Optional[str] = Field(
         default=None,
-        description="Game-log season for a csv rank, e.g. 2025-2026 (the 2025-26 season). Null for a SportsData rank.",
+        description="Game-log season for opponent_rank when its source is csv, e.g. 2025-2026. Null otherwise.",
     )
     opponent_rank_note: Optional[str] = Field(
         default=None,
-        description="On a csv rank: computed from real points allowed, not fantasy points.",
+        description="On a csv overall rank: computed from real points allowed, not fantasy points.",
+    )
+    opponent_position_rank_source: Optional[Literal["csv", "sportsdata", "sportsdata_invalid"]] = Field(
+        default=None,
+        description="Source of opponent_position_rank only: csv, sportsdata, or sportsdata_invalid.",
+    )
+    opponent_position_rank_season: Optional[str] = Field(
+        default=None,
+        description="Game-log season for the position rank when its source is csv. Null otherwise.",
+    )
+    opponent_position_rank_note: Optional[str] = Field(
+        default=None,
+        description="On a csv position rank: computed from real points allowed, not fantasy points.",
     )
     injury_status: Optional[str] = Field(
         default=None,

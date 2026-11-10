@@ -48,11 +48,11 @@ The nulls exist because the value is missing at the source. `projection_provider
 
 A fill that looked the abbreviation up as-is would still miss six clubs. SportsData writes `GS`, `NO`, `NY`, `SA`, `PHO`, and `UTAH`. `canonical_team_code` and the lineup table use `GSW`, `NOP`, `NYK`, `SAS`, `PHX`, and `UTA`. The lookup goes through `canonical_team_code`, which already has those aliases. The league query param is not the NBA bug: the projection URL is hardcoded to `/v3/nba/`. WNBA is not in the projection leagues, and its ranks stay null on purpose.
 
-Rank 1 is the most real points allowed per game (the weakest defense), which is the scale the picks page already uses: 1–10 easy, 11–20 average, 21–30 hard. Position rank is points allowed to `PG`, `SG`, `SF`, `PF`, or `C`, and each position is ranked on its own 1–30 list. A single list of every team-position pair is not used, because that list runs to 150. `_rank_descending` keeps only places 1 through 30. A number already on the projection is kept, including a vendor 0 or 31; the response models reject those with `ge=1, le=30` when they are serialized. An unknown opponent stays null. Zero-minute rows are left out of the sum, the same way history leaves them out.
+Rank 1 is the most real points allowed per game (the weakest defense), which is the scale the picks page already uses: 1–10 easy, 11–20 average, 21–30 hard. Position rank is points allowed to `PG`, `SG`, `SF`, `PF`, or `C`, and each position is ranked on its own 1–30 list. A single list of every team-position pair is not used, because that list runs to 150. `_rank_descending` keeps only places 1 through 30. An integer already on the projection in 1–30 is kept. A vendor value that is not an int in 1–30 becomes null with source `sportsdata_invalid` and is not filled from the CSV. If either rank on the row is invalid, both are cleared, so `GET /api/nba/projections` does not drop the player and `GET /api/nba/projections/{player}` does not 500. The response models still use `ge=1, le=30`. An unknown opponent stays null. Zero-minute rows are left out of the sum, the same way history leaves them out.
 
 The CSV spells Philadelphia as `Sixers`. That token was missing from `TEAM_CODE_ALIASES`, so the table stored `SIXERS` and a lookup for `PHI` stayed null. `SIXERS` now maps to `PHI`, beside the existing `76ERS` alias.
 
-The rank season is the recorded current season when the log has regular-season games for it, otherwise the latest season that does. In November 2026 that is `2025-2026` (the 2025-26 season). A filled rank is labeled `opponent_rank_source: "csv"`, `opponent_rank_season: "2025-2026"`, and `opponent_rank_note` saying it is real points allowed, not fantasy points. A number that was already on the row is `opponent_rank_source: "sportsdata"`. Redis stores the unfilled dict on both the fetch path and the Postgres fallback, and the fill runs after the read. The season label used to choose that window stays the UTC date. QA pins that choice (`test_chicago_evening_uses_the_utc_date` and the inclusive window edges). An Eastern evening can already be the next UTC date.
+The rank season is the recorded current season when the log has regular-season games for it, otherwise the latest season that does. In November 2026 that is `2025-2026` (the 2025-26 season). Each rank has its own source, season, and note. A null overall rank filled from the log is `opponent_rank_source: "csv"` with `opponent_rank_season: "2025-2026"` and `opponent_rank_note` saying it is real points allowed, not fantasy points. The position rank uses `opponent_position_rank_source`, `opponent_position_rank_season`, and `opponent_position_rank_note`. An in-range vendor number is `sportsdata` on that rank only. A valid overall rank next to a null position rank stays `sportsdata` while the position rank can be `csv`. Redis stores the unfilled dict on both the fetch path and the Postgres fallback, and the fill runs after the read. The season label used to choose that window stays the UTC date. QA pins that choice (`test_chicago_evening_uses_the_utc_date` and the inclusive window edges). An Eastern evening can already be the next UTC date.
 
 ## API contract
 
@@ -92,9 +92,12 @@ Shared models also serialize these keys on WNBA. WNBA routes do not compute them
 | `picks[].position` | string | yes | Same `Pos` source as suggest. Null on WNBA and when the log has no position. |
 | `picks[].opponent_rank` | integer | yes | 1–30 (`ge=1`, `le=30`). 1 = most real points allowed. Filled when the projection left it null. |
 | `picks[].opponent_position_rank` | integer | yes | 1–30, ranked inside that position only. |
-| `picks[].opponent_rank_source` | string | yes | `"csv"` or `"sportsdata"`. |
-| `picks[].opponent_rank_season` | string | yes | Game-log season for a csv rank, e.g. `"2025-2026"` (the 2025-26 season). Null for a SportsData rank. |
-| `picks[].opponent_rank_note` | string | yes | On a csv rank: computed from real points allowed, not fantasy points. |
+| `picks[].opponent_rank_source` | string | yes | Source of `opponent_rank` only. `"csv"`, `"sportsdata"`, or `"sportsdata_invalid"`. |
+| `picks[].opponent_rank_season` | string | yes | Game-log season when that source is `"csv"`, e.g. `"2025-2026"` (the 2025-26 season). Null otherwise. |
+| `picks[].opponent_rank_note` | string | yes | On a csv overall rank: computed from real points allowed, not fantasy points. |
+| `picks[].opponent_position_rank_source` | string | yes | Source of `opponent_position_rank` only. Same three words. |
+| `picks[].opponent_position_rank_season` | string | yes | Game-log season when the position source is `"csv"`. Null otherwise. |
+| `picks[].opponent_position_rank_note` | string | yes | On a csv position rank: computed from real points allowed, not fantasy points. |
 
 ### `GET /api/nba/player-history`
 
@@ -125,13 +128,16 @@ Query `season`: optional string. Omit it and the season is the current recorded 
 |---|---|---|---|
 | `opponent_rank` | integer | yes | 1–30. 1 is the most real points allowed per game. Kept when the projection already has a number. Null when the opponent code is unknown or the log has no regular-season games. |
 | `opponent_position_rank` | integer | yes | 1–30 inside `PG` / `SG` / `SF` / `PF` / `C`. A center rank is not compared with a point-guard rank. |
-| `opponent_rank_source` | string | yes | `"csv"` when a null rank was filled from the game log. `"sportsdata"` when the row already carried the number. |
-| `opponent_rank_season` | string | yes | Season of the csv table, e.g. `"2025-2026"`. Null for `"sportsdata"` and when the rank stays null. |
+| `opponent_rank_source` | string | yes | Source of `opponent_rank` only. `"csv"`, `"sportsdata"`, or `"sportsdata_invalid"`. |
+| `opponent_rank_season` | string | yes | Season of the csv table for that rank, e.g. `"2025-2026"`. Null unless the source is `"csv"`. |
 | `opponent_rank_note` | string | yes | `"Computed from real points allowed, not fantasy points."` when `opponent_rank_source` is `"csv"`. |
+| `opponent_position_rank_source` | string | yes | Source of `opponent_position_rank` only. Same three words. |
+| `opponent_position_rank_season` | string | yes | Season for the position rank when its source is `"csv"`. Null otherwise. |
+| `opponent_position_rank_note` | string | yes | Same note when the position source is `"csv"`. |
 
 ## Tests / Verification
 
-`python3 -m pytest --tb=line -q` from `backend/` at `655ec6a`: 855 passed, 23 skipped, 6 xfailed. Two failures, both the known Redis misses (`ConnectionError` from the rate limiter): `test_agent_chat_endpoint_validates_action_and_uses_service` and `test_lineups_api_returns_team_count`. QA's five pin tests in `backend/tests/test_spo113_qa_review.py` pass. That file was not edited.
+`python3 -m pytest --tb=line -q` from `backend/`: 867 passed, 23 skipped, 6 xfailed. Two failures, both the known Redis misses (`ConnectionError` from the rate limiter): `test_agent_chat_endpoint_validates_action_and_uses_service` and `test_lineups_api_returns_team_count`. The two `TestSportsDataRankBounds` pins pass. `test_a_number_already_on_the_row_is_kept_even_outside_1_to_30` still asserted that 0 and 31 stay on the row. That assertion now expects null and `sportsdata_invalid`, because keeping them is what made the projections list drop the player. The two new pins were not rewritten.
 
 No live Odds API call. No live SportsData call. The home/away assertion reads `tests/fixtures/espn/nba_team_18_schedule_2026_type_2.json` (event `401809234`, Knicks home against the Cavaliers on 2025-10-22). Rank tests use in-memory projection dicts and the shipped game log, not a hand-typed SportsData body.
 

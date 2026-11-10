@@ -766,6 +766,9 @@ class DailyAnalysisService:
                     opponent_rank_source = proj.get("opponent_rank_source") if proj else None
                     opponent_rank_season = proj.get("opponent_rank_season") if proj else None
                     opponent_rank_note = proj.get("opponent_rank_note") if proj else None
+                    opponent_position_rank_source = proj.get("opponent_position_rank_source") if proj else None
+                    opponent_position_rank_season = proj.get("opponent_position_rank_season") if proj else None
+                    opponent_position_rank_note = proj.get("opponent_position_rank_note") if proj else None
                     injury_status = proj.get("injury_status") if proj else None
                     lineup_confirmed = proj.get("lineup_confirmed") if proj else None
 
@@ -810,6 +813,9 @@ class DailyAnalysisService:
                             opponent_rank_source=opponent_rank_source,
                             opponent_rank_season=opponent_rank_season,
                             opponent_rank_note=opponent_rank_note,
+                            opponent_position_rank_source=opponent_position_rank_source,
+                            opponent_position_rank_season=opponent_position_rank_season,
+                            opponent_position_rank_note=opponent_position_rank_note,
                             injury_status=injury_status,
                             lineup_confirmed=lineup_confirmed,
                         )
@@ -847,6 +853,9 @@ class DailyAnalysisService:
                             opponent_rank_source=opponent_rank_source,
                             opponent_rank_season=opponent_rank_season,
                             opponent_rank_note=opponent_rank_note,
+                            opponent_position_rank_source=opponent_position_rank_source,
+                            opponent_position_rank_season=opponent_position_rank_season,
+                            opponent_position_rank_note=opponent_position_rank_note,
                             injury_status=injury_status,
                             lineup_confirmed=lineup_confirmed,
                         )

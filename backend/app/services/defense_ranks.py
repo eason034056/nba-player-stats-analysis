@@ -219,42 +219,105 @@ def nba_defense_table() -> DefenseRankTable:
     return table
 
 
+def _vendor_rank_kind(value: Any) -> str:
+    """``missing``, ``sportsdata``, or ``invalid``.
+
+    ``None`` is missing and may be filled from the game log. An int in
+    1..30 is a SportsData rank and is kept. Anything else, including 0,
+    31, a float, or a bool, is invalid. An invalid rank is not a cue to
+    fill that slot from the CSV.
+    """
+    if value is None:
+        return "missing"
+    if isinstance(value, bool) or not isinstance(value, int):
+        return "invalid"
+    if 1 <= value <= _RANK_LIMIT:
+        return "sportsdata"
+    return "invalid"
+
+
 def fill_null_defense_ranks(
     projection: dict[str, Any],
     table: DefenseRankTable | None = None,
 ) -> dict[str, Any]:
     """Copy ``projection`` and fill whichever rank is null.
 
-    A rank the projection already carries is left alone. An opponent
-    that is not in the table stays null. ``opponent`` is canonicalized
-    before the lookup, so ``GS`` and ``GSW`` hit the same row.
+    Each rank is labeled on its own. A null overall rank can come from
+    the game log while a position rank that SportsData already sent
+    stays ``sportsdata``. An opponent that is not in the table stays
+    null. ``opponent`` is canonicalized before the lookup, so ``GS``
+    and ``GSW`` hit the same row.
+
+    A SportsData rank that is not an int in 1..30 becomes null with
+    source ``sportsdata_invalid``. That slot is not filled from the
+    CSV. If either rank on the row is invalid, both ranks are cleared
+    so a 0 sitting next to an in-range 8 is not published as a half
+    vendor rank.
     """
     if table is None:
         table = nba_defense_table()
-    overall = projection.get("opponent_rank")
-    positional = projection.get("opponent_position_rank")
-    if overall is not None and positional is not None:
-        labeled = dict(projection)
-        labeled["opponent_rank_source"] = SPORTSDATA_RANK_SOURCE
-        return labeled
+    overall_raw = projection.get("opponent_rank")
+    positional_raw = projection.get("opponent_position_rank")
+    overall_kind = _vendor_rank_kind(overall_raw)
+    positional_kind = _vendor_rank_kind(positional_raw)
     updated = dict(projection)
+    if overall_kind == "invalid" or positional_kind == "invalid":
+        updated["opponent_rank"] = None
+        updated["opponent_position_rank"] = None
+        updated["opponent_rank_source"] = "sportsdata_invalid"
+        updated["opponent_position_rank_source"] = "sportsdata_invalid"
+        updated["opponent_rank_season"] = None
+        updated["opponent_position_rank_season"] = None
+        updated["opponent_rank_note"] = None
+        updated["opponent_position_rank_note"] = None
+        return updated
+
     code = _team_code(projection.get("opponent"))
-    filled_from_csv = False
-    if overall is None:
-        updated["opponent_rank"] = table.overall.get(code) if code else None
-        filled_from_csv = updated["opponent_rank"] is not None
-    if positional is None:
-        position = _primary_position(projection.get("position"))
-        updated["opponent_position_rank"] = (
-            table.by_position.get((code, position)) if code and position else None
-        )
-        filled_from_csv = filled_from_csv or updated["opponent_position_rank"] is not None
-    if filled_from_csv:
-        updated["opponent_rank_source"] = CSV_RANK_SOURCE
-        updated["opponent_rank_season"] = table.season
-        updated["opponent_rank_note"] = CSV_RANK_NOTE
-    elif overall is not None or positional is not None:
-        updated["opponent_rank_source"] = SPORTSDATA_RANK_SOURCE
+    position = _primary_position(projection.get("position"))
+
+    def _one(
+        kind: str,
+        raw: Any,
+        filled: int | None,
+        rank_key: str,
+        source_key: str,
+        season_key: str,
+        note_key: str,
+    ) -> None:
+        if kind == "sportsdata":
+            updated[rank_key] = raw
+            updated[source_key] = SPORTSDATA_RANK_SOURCE
+            updated[season_key] = None
+            updated[note_key] = None
+            return
+        updated[rank_key] = filled
+        if filled is None:
+            updated[source_key] = None
+            updated[season_key] = None
+            updated[note_key] = None
+            return
+        updated[source_key] = CSV_RANK_SOURCE
+        updated[season_key] = table.season
+        updated[note_key] = CSV_RANK_NOTE
+
+    _one(
+        overall_kind,
+        overall_raw,
+        table.overall.get(code) if code else None,
+        "opponent_rank",
+        "opponent_rank_source",
+        "opponent_rank_season",
+        "opponent_rank_note",
+    )
+    _one(
+        positional_kind,
+        positional_raw,
+        table.by_position.get((code, position)) if code and position else None,
+        "opponent_position_rank",
+        "opponent_position_rank_source",
+        "opponent_position_rank_season",
+        "opponent_position_rank_note",
+    )
     return updated
 
 

@@ -587,6 +587,48 @@ class TestDefenseRanks:
         )
         assert kept["opponent_rank"] == 9
         assert kept["opponent_position_rank"] == 8
+        assert kept["opponent_rank_source"] == "sportsdata"
+        assert kept["opponent_position_rank_source"] == "sportsdata"
+        assert kept["opponent_rank_season"] is None
+        assert kept["opponent_position_rank_season"] is None
+
+    def test_a_null_position_rank_is_labeled_apart_from_the_vendor_overall(self):
+        table = build_defense_rank_table(self._games())
+        filled = fill_null_defense_ranks(
+            {
+                "opponent": "GS",
+                "position": "PG",
+                "opponent_rank": 9,
+                "opponent_position_rank": None,
+            },
+            table,
+        )
+        assert filled["opponent_rank"] == 9
+        assert filled["opponent_rank_source"] == "sportsdata"
+        assert filled["opponent_rank_season"] is None
+        assert filled["opponent_position_rank"] == table.by_position[("GSW", "PG")]
+        assert filled["opponent_position_rank_source"] == "csv"
+        assert filled["opponent_position_rank_season"] == table.season
+        assert filled["opponent_position_rank_note"] == (
+            "Computed from real points allowed, not fantasy points."
+        )
+
+    def test_an_out_of_range_vendor_rank_is_not_replaced_from_the_csv(self):
+        table = build_defense_rank_table(self._games())
+        cleared = fill_null_defense_ranks(
+            {
+                "opponent": "GS",
+                "position": "PG",
+                "opponent_rank": 0,
+                "opponent_position_rank": 8,
+            },
+            table,
+        )
+        assert cleared["opponent_rank"] is None
+        assert cleared["opponent_position_rank"] is None
+        assert cleared["opponent_rank_source"] == "sportsdata_invalid"
+        assert cleared["opponent_position_rank_source"] == "sportsdata_invalid"
+        assert table.overall["GSW"] != 0
 
     def test_unknown_opponent_stays_null(self):
         table = build_defense_rank_table(self._games())
