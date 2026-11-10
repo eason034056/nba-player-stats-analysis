@@ -78,7 +78,7 @@ When `league` is omitted, the overlay logs a warning and reads the slug from `{l
 cd backend && pytest
 ```
 
-Local run with Redis down: 726 passed, 2 failed, 9 skipped, 0 xfailed. The failures are the two known Redis cases named below. `pytest scripts/agents/tests`: 46 passed.
+Local run with Redis down: 730 passed, 2 failed, 9 skipped, 0 xfailed. The failures are the two known Redis cases named below. `pytest scripts/agents/tests`: 87 passed.
 
 New coverage:
 
