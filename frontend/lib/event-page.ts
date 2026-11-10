@@ -436,10 +436,17 @@ export function eventPlayerRows(args: {
     const teamFromPick = pick
       ? pick.player_team_code || teamAbbr(pick.player_team, args.league) || null
       : null;
-    const team =
-      teamFromPick ||
-      (onRoster(name, args.awayLineup) ? args.awayAbbr : null) ||
-      (onRoster(name, args.homeLineup) ? args.homeAbbr : null);
+    const onAway = onRoster(name, args.awayLineup);
+    const onHome = onRoster(name, args.homeLineup);
+    const lineupTeam =
+      onAway && !onHome ? args.awayAbbr : onHome && !onAway ? args.homeAbbr : null;
+    const pickInGame =
+      teamFromPick && (teamFromPick === args.awayAbbr || teamFromPick === args.homeAbbr)
+        ? teamFromPick
+        : null;
+    // Tonight's lineup beats a CSV or projection club. A code that is
+    // neither home nor away (CHI on BOS@PHI) is not shown.
+    const team = lineupTeam || pickInGame;
     const selected = namesMatch(name, args.selectedName);
     const line =
       pick != null
@@ -464,6 +471,32 @@ export function eventPlayerRows(args: {
     }
     return a.name.localeCompare(b.name);
   });
+}
+
+function rosterNames(lineup: TeamLineup | null | undefined): string[] {
+  if (!lineup) return [];
+  return [...(lineup.starters ?? []), ...(lineup.bench_candidates ?? [])];
+}
+
+/**
+ * Teammates for the event filter.
+ *
+ * When the player is on one lineup, the other names on that lineup are
+ * the teammates for this game. The history list is the fallback, and the
+ * history request is scoped to a club in the game so a finished stint
+ * (Bulls, for a Celtics at 76ers tip) is not offered.
+ */
+export function eventTeammates(args: {
+  player: string;
+  awayLineup: TeamLineup | null;
+  homeLineup: TeamLineup | null;
+  historyTeammates: string[];
+}): string[] {
+  const onAway = onRoster(args.player, args.awayLineup);
+  const onHome = onRoster(args.player, args.homeLineup);
+  const side = onAway && !onHome ? args.awayLineup : onHome && !onAway ? args.homeLineup : null;
+  if (!side) return args.historyTeammates;
+  return rosterNames(side).filter((name) => !namesMatch(name, args.player));
 }
 
 export interface PostedLineRow {

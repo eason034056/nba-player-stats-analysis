@@ -381,6 +381,9 @@ export interface PlayerHistoryRequest {
   is_starter?: boolean;        // 先發狀態篩選（True=僅先發、False=僅替補、undefined=全部）
   teammate_filter?: string[];  // 星級隊友名稱列表（可多選）
   teammate_played?: boolean;   // true=隊友皆有上場, false=隊友皆未上場
+  home_team?: string;          // 本場主隊。和 away_team 一起用時，隊友只留本場球隊
+  away_team?: string;          // 本場客隊
+  as_of?: string;              // 開賽時間，用來選這天的紀錄球隊
 }
 
 /**

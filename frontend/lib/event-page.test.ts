@@ -5,6 +5,7 @@ import {
   buildReadSignals,
   consensusSplit,
   eventPlayerRows,
+  eventTeammates,
   eventWhen,
   gameLogChart,
   lineupChip,
@@ -136,6 +137,97 @@ describe("player rows and lines", () => {
     expect(herro?.leanText).toBe("No read");
     expect(herro?.lineText).toBe("16.5");
     expect(rows.map((row) => row.leanText).join(" ")).not.toMatch(/80%|51%/);
+  });
+
+  it("labels a player from the lineup and drops a club that is not in the game", () => {
+    const phi = teamLineupSchema.parse({
+      date: "2026-11-10",
+      team: "PHI",
+      status: "projected",
+      confidence: "medium",
+      starters: ["Tyrese Maxey", "Jaylen Brown"],
+      bench_candidates: ["Anfernee Simons"],
+    });
+    const rows = eventPlayerRows({
+      suggested: ["Anfernee Simons", "Jaylen Brown"],
+      picks: [
+        pick({
+          player_name: "Anfernee Simons",
+          player_team: "Bulls",
+          player_team_code: "CHI",
+          event_id: "bos-phi",
+          home_team: "Philadelphia 76ers",
+          away_team: "Boston Celtics",
+        }),
+        pick({
+          player_name: "Jaylen Brown",
+          player_team: "Celtics",
+          player_team_code: "BOS",
+          event_id: "bos-phi",
+          home_team: "Philadelphia 76ers",
+          away_team: "Boston Celtics",
+        }),
+      ],
+      metric: "player_points",
+      eventId: "bos-phi",
+      selectedName: "Anfernee Simons",
+      postedLine: 9.5,
+      awayLineup: null,
+      homeLineup: phi,
+      awayAbbr: "BOS",
+      homeAbbr: "PHI",
+      league: "nba",
+    });
+    expect(rows.find((row) => row.name === "Anfernee Simons")?.team).toBe("PHI");
+    expect(rows.find((row) => row.name === "Jaylen Brown")?.team).toBe("PHI");
+    const unlabeled = eventPlayerRows({
+      suggested: ["Anfernee Simons"],
+      picks: [
+        pick({
+          player_name: "Anfernee Simons",
+          player_team: "Bulls",
+          player_team_code: "CHI",
+          event_id: "bos-phi",
+        }),
+      ],
+      metric: "player_points",
+      eventId: "bos-phi",
+      selectedName: "",
+      postedLine: null,
+      awayLineup: null,
+      homeLineup: null,
+      awayAbbr: "BOS",
+      homeAbbr: "PHI",
+      league: "nba",
+    });
+    expect(unlabeled.find((row) => row.name === "Anfernee Simons")?.team).toBeNull();
+  });
+
+  it("uses the lineup for teammates when the player is on it", () => {
+    const phi = teamLineupSchema.parse({
+      date: "2026-11-10",
+      team: "PHI",
+      status: "projected",
+      confidence: "medium",
+      starters: ["Tyrese Maxey"],
+      bench_candidates: ["Anfernee Simons"],
+    });
+    expect(
+      eventTeammates({
+        player: "Anfernee Simons",
+        awayLineup: null,
+        homeLineup: phi,
+        historyTeammates: ["Josh Giddey", "Derrick White"],
+      }),
+    ).toEqual(["Tyrese Maxey"]);
+    expect(
+      eventTeammates({
+        player: "Anfernee Simons",
+        awayLineup: null,
+        homeLineup: null,
+        historyTeammates: ["Derrick White"],
+      }),
+    ).toEqual(["Derrick White"]);
   });
 
   it("ignores a synthetic double-double line", () => {

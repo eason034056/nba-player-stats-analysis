@@ -220,6 +220,10 @@ interface PlayerHistoryStatsProps {
     request: PlayerDDHistoryRequest,
   ) => Promise<PlayerDDHistoryResponse>;
   cacheNamespace?: string;
+  /** Event clubs. When both are set, the teammate list drops a club that is not playing. */
+  eventHome?: string;
+  eventAway?: string;
+  eventAsOf?: string;
 }
 
 /**
@@ -237,6 +241,9 @@ export function PlayerHistoryStats({
   calculateNoVigFn,
   getPlayerDDHistoryFn,
   cacheNamespace = "nba",
+  eventHome = "",
+  eventAway = "",
+  eventAsOf = "",
 }: PlayerHistoryStatsProps) {
   // A missing client follows the league. Passing the NBA function into a
   // WNBA panel would post the binary market to /api/nba/props/no-vig.
@@ -297,7 +304,7 @@ export function PlayerHistoryStats({
     isError: isHistoryError,
     error: historyError,
   } = useQuery({
-    queryKey: ["playerHistory", cacheNamespace, selectedPlayer, metric, threshold, recentN, selectedOpponent, starterFilter, teammateFilter, teammatePlayedFilter],
+    queryKey: ["playerHistory", cacheNamespace, selectedPlayer, metric, threshold, recentN, selectedOpponent, starterFilter, teammateFilter, teammatePlayedFilter, eventHome, eventAway, eventAsOf],
     queryFn: () =>
       getPlayerHistoryFn({
         player: selectedPlayer,
@@ -310,6 +317,9 @@ export function PlayerHistoryStats({
         is_starter: starterFilter === "all" ? undefined : starterFilter === "starter",
         teammate_filter: teammateFilter.length > 0 ? teammateFilter : undefined,
         teammate_played: teammatePlayedFilter === "all" ? undefined : teammatePlayedFilter === "with",
+        home_team: eventHome || undefined,
+        away_team: eventAway || undefined,
+        as_of: eventAsOf || undefined,
       }),
     // DD is binary. /player-history answers Over/Under only and returns 400
     // for metric=dd, with a pointer to /player-dd-history. PlayerDDTile

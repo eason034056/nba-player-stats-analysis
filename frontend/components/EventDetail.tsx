@@ -41,6 +41,7 @@ import {
   chartLine,
   errorText,
   eventPlayerRows,
+  eventTeammates,
   eventWhen,
   gameLogChart,
   lineupChip,
@@ -133,6 +134,9 @@ function historyRequest(
   opponent: string,
   mates: string[],
   mateMode: MateMode,
+  homeTeam: string,
+  awayTeam: string,
+  asOf: string,
 ): PlayerHistoryRequest {
   return {
     player,
@@ -146,6 +150,9 @@ function historyRequest(
     teammate_filter: mates.length > 0 && mateMode !== "all" ? mates : undefined,
     teammate_played:
       mates.length === 0 || mateMode === "all" ? undefined : mateMode === "with",
+    home_team: homeTeam || undefined,
+    away_team: awayTeam || undefined,
+    as_of: asOf || undefined,
   };
 }
 
@@ -230,6 +237,9 @@ export function EventDetail({ league }: { league: League }) {
   const picksDate = routeDate || gameDate || getTodayString();
   const awayAbbr = currentEvent ? teamAbbr(currentEvent.away_team, league) : "";
   const homeAbbr = currentEvent ? teamAbbr(currentEvent.home_team, league) : "";
+  const eventHome = currentEvent?.home_team ?? "";
+  const eventAway = currentEvent?.away_team ?? "";
+  const eventAsOf = currentEvent?.commence_time ?? "";
 
   const picksQuery = useQuery({
     queryKey: [cfg.picksQueryKey, picksDate],
@@ -293,30 +303,45 @@ export function EventDetail({ league }: { league: League }) {
       opponent,
       mates,
       mateMode,
+      eventHome,
+      eventAway,
+      eventAsOf,
     ],
     queryFn: () =>
       cfg.getPlayerHistoryFn(
-        historyRequest(playerName, metric, activeLine as number, range, role, opponent, mates, mateMode),
+        historyRequest(
+          playerName,
+          metric,
+          activeLine as number,
+          range,
+          role,
+          opponent,
+          mates,
+          mateMode,
+          eventHome,
+          eventAway,
+          eventAsOf,
+        ),
       ),
     enabled: historyEnabled,
     staleTime: 30 * 1000,
     retry: false,
   });
   const sampleQuery = useQuery({
-    queryKey: ["event-sample", cfg.cacheNamespace, playerName, metric, line],
+    queryKey: ["event-sample", cfg.cacheNamespace, playerName, metric, line, eventHome, eventAway, eventAsOf],
     queryFn: () =>
       cfg.getPlayerHistoryFn(
-        historyRequest(playerName, metric, line as number, 0, "all", "", [], "all"),
+        historyRequest(playerName, metric, line as number, 0, "all", "", [], "all", eventHome, eventAway, eventAsOf),
       ),
     enabled: baseHistoryEnabled,
     staleTime: 30 * 1000,
     retry: false,
   });
   const last10Query = useQuery({
-    queryKey: ["event-last10", cfg.cacheNamespace, playerName, metric, line],
+    queryKey: ["event-last10", cfg.cacheNamespace, playerName, metric, line, eventHome, eventAway, eventAsOf],
     queryFn: () =>
       cfg.getPlayerHistoryFn(
-        historyRequest(playerName, metric, line as number, 10, "all", "", [], "all"),
+        historyRequest(playerName, metric, line as number, 10, "all", "", [], "all", eventHome, eventAway, eventAsOf),
       ),
     enabled: baseHistoryEnabled,
     staleTime: 30 * 1000,
@@ -541,7 +566,12 @@ export function EventDetail({ league }: { league: League }) {
                 opponent={opponent}
                 opponents={sampleQuery.data?.opponents ?? []}
                 onOpponent={setOpponent}
-                teammates={sampleQuery.data?.teammates ?? []}
+                teammates={eventTeammates({
+                  player: playerName,
+                  awayLineup: awayLineupQuery.data ?? null,
+                  homeLineup: homeLineupQuery.data ?? null,
+                  historyTeammates: sampleQuery.data?.teammates ?? [],
+                })}
                 selectedMates={mates}
                 onToggleMate={(name) =>
                   setMates((current) =>
@@ -590,6 +620,9 @@ export function EventDetail({ league }: { league: League }) {
               getPlayerHistoryFn={cfg.getPlayerHistoryFn}
               getPlayerDDHistoryFn={cfg.getPlayerDDHistoryFn}
               calculateNoVigFn={cfg.calculateNoVig}
+              eventHome={eventHome}
+              eventAway={eventAway}
+              eventAsOf={eventAsOf}
               cacheNamespace={cfg.cacheNamespace}
             />
           </div>

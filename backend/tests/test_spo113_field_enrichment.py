@@ -492,6 +492,9 @@ class TestHistoryFields:
             include_playoffs=False,
             include_play_in=False,
             season="2025-26",
+            home_team=None,
+            away_team=None,
+            as_of=None,
         )
         assert response.season == "2025-2026"
         assert response.season_n_games == 2
