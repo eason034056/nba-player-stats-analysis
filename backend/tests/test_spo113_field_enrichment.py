@@ -10,6 +10,7 @@ from __future__ import annotations
 import copy
 import csv
 import json
+import logging
 from datetime import datetime, timezone
 from pathlib import Path
 from unittest.mock import AsyncMock
@@ -18,8 +19,10 @@ import pytest
 
 from app.api.nba import get_events, get_player_history, suggest_players
 from app.models.schemas import NBAEvent
+from app.services.cache import CacheService
 from app.services.csv_player_history import CSVPlayerHistoryService
 from app.services.defense_ranks import (
+    CSV_RANK_NOTE,
     build_defense_rank_table,
     fill_null_defense_ranks,
 )
@@ -706,44 +709,129 @@ def test_season_label_accepts_the_short_espn_form():
     assert recorded_nba_season_label(datetime(2026, 11, 10, tzinfo=timezone.utc)) == "2026-2027"
 
 
+def _recorded_nba_event() -> tuple[dict, str]:
+    """First recorded NBA events row, and its id."""
+    recorded = load_odds_fixture("odds_api_events__basketball_nba.json")
+    event = copy.deepcopy(recorded[0])
+    return event, event["id"]
+
+
+def _stored_points_read(event_id: str) -> dict:
+    return {
+        "picks": [
+            {
+                "event_id": event_id,
+                "player_name": "Stephen Curry",
+                "metric": "points",
+                "direction": "over",
+                "threshold": 24.5,
+                "probability": 0.72,
+            }
+        ]
+    }
+
+
+def _confirmed_slate() -> dict:
+    return {
+        "ATL": {
+            "starters": ["Trae Young"],
+            "source_snapshots": {"rotowire": {"status": "confirmed"}},
+        },
+        "LAL": {
+            "starters": ["LeBron James"],
+            "source_snapshots": {"rotogrinders": {"status": "projected"}},
+        },
+    }
+
+
+def _events_cache_key() -> str:
+    return f"{CacheService.build_events_key('2026-11-10', 'us')}:tz0"
+
+
+def _cached_events_body(event: dict, event_id: str) -> dict:
+    """Odds API shape stored before top_read and lineup enrichment."""
+    return {
+        "date": "2026-11-10",
+        "events": [
+            {
+                "event_id": event_id,
+                "sport_key": event["sport_key"],
+                "home_team": event["home_team"],
+                "away_team": event["away_team"],
+                "commence_time": event["commence_time"],
+            }
+        ],
+    }
+
+
+def _assert_lineup_and_clock(item) -> None:
+    assert item.commence_time_et == "2026-11-09T19:10:00-05:00"
+    assert item.display_tz == "ET"
+    assert item.lineup_status is not None
+    assert item.lineup_status.home == "confirmed"
+    assert item.lineup_status.away == "projected"
+
+
+def _assert_top_read(item) -> None:
+    assert item.top_read is not None
+    assert item.top_read.player == "Stephen Curry"
+    assert item.top_read.market == "player_points"
+    assert item.top_read.side == "over"
+    assert item.top_read.line == 24.5
+    assert item.top_read.probability == pytest.approx(0.72)
+
+
 @pytest.mark.asyncio
 async def test_events_item_keeps_top_read_and_lineup_fields(monkeypatch):
     """One events row keeps SPO-111 top_read and the SPO-113 clock and lineup."""
-    recorded = load_odds_fixture("odds_api_events__basketball_nba.json")
-    event = copy.deepcopy(recorded[0])
-    event_id = event["id"]
+    event, event_id = _recorded_nba_event()
+    provider_calls = {"n": 0}
 
     async def fake_events(**kwargs):
+        provider_calls["n"] += 1
         return [event]
 
     async def fake_get(key):
         if key == daily_picks_cache_key("nba", "2026-11-10", 0):
-            return {
-                "picks": [
-                    {
-                        "event_id": event_id,
-                        "player_name": "Stephen Curry",
-                        "metric": "points",
-                        "direction": "over",
-                        "threshold": 24.5,
-                        "probability": 0.72,
-                    }
-                ]
-            }
+            return _stored_points_read(event_id)
         return None
 
     async def fake_peek(date):
         assert date == "2026-11-10"
-        return {
-            "ATL": {
-                "starters": ["Trae Young"],
-                "source_snapshots": {"rotowire": {"status": "confirmed"}},
-            },
-            "LAL": {
-                "starters": ["LeBron James"],
-                "source_snapshots": {"rotogrinders": {"status": "projected"}},
-            },
-        }
+        return _confirmed_slate()
+
+    monkeypatch.setattr("app.api.nba.odds_provider.get_events", fake_events)
+    monkeypatch.setattr("app.api.nba.cache_service.get", fake_get)
+    monkeypatch.setattr("app.api.nba.cache_service.set", AsyncMock(return_value=True))
+    monkeypatch.setattr("app.api.nba.lineup_service.peek_lineups", fake_peek)
+
+    response = await get_events(date="2026-11-10", regions="us", tz_offset=0)
+    item = response.events[0]
+    assert provider_calls["n"] == 1
+    assert item.event_id == event_id
+    _assert_top_read(item)
+    _assert_lineup_and_clock(item)
+
+
+@pytest.mark.asyncio
+async def test_events_cache_hit_keeps_top_read_and_lineup_fields(monkeypatch):
+    """A stored events body is enriched on the way out. The provider is not called."""
+    event, event_id = _recorded_nba_event()
+    events_key = _events_cache_key()
+
+    async def fake_events(**kwargs):
+        raise AssertionError("cache hit must not call the odds provider")
+
+    async def fake_get(key):
+        if key == events_key:
+            return _cached_events_body(event, event_id)
+        if key == daily_picks_cache_key("nba", "2026-11-10", 0):
+            return _stored_points_read(event_id)
+        return None
+
+    async def fake_peek(date):
+        assert date == "2026-11-10"
+        return _confirmed_slate()
 
     monkeypatch.setattr("app.api.nba.odds_provider.get_events", fake_events)
     monkeypatch.setattr("app.api.nba.cache_service.get", fake_get)
@@ -753,17 +841,69 @@ async def test_events_item_keeps_top_read_and_lineup_fields(monkeypatch):
     response = await get_events(date="2026-11-10", regions="us", tz_offset=0)
     item = response.events[0]
     assert item.event_id == event_id
-    assert item.top_read is not None
-    assert item.top_read.player == "Stephen Curry"
-    assert item.top_read.market == "player_points"
-    assert item.top_read.side == "over"
-    assert item.top_read.line == 24.5
-    assert item.top_read.probability == pytest.approx(0.72)
+    _assert_top_read(item)
+    _assert_lineup_and_clock(item)
+
+
+@pytest.mark.asyncio
+async def test_events_item_keeps_lineup_fields_when_top_read_load_raises(monkeypatch):
+    """A failed top_read join still returns the event with its lineup fields."""
+    event, event_id = _recorded_nba_event()
+
+    async def fake_events(**kwargs):
+        return [event]
+
+    async def fake_peek(date):
+        assert date == "2026-11-10"
+        return _confirmed_slate()
+
+    async def boom(date, offset_minutes):
+        raise RuntimeError("daily picks cache down")
+
+    monkeypatch.setattr("app.api.nba.odds_provider.get_events", fake_events)
+    monkeypatch.setattr("app.api.nba.cache_service.get", AsyncMock(return_value=None))
+    monkeypatch.setattr("app.api.nba.cache_service.set", AsyncMock(return_value=True))
+    monkeypatch.setattr("app.api.nba.lineup_service.peek_lineups", fake_peek)
+    monkeypatch.setattr("app.api.nba.load_stored_top_reads", boom)
+
+    response = await get_events(date="2026-11-10", regions="us", tz_offset=0)
+    item = response.events[0]
+    assert item.event_id == event_id
+    assert item.top_read is None
+    _assert_lineup_and_clock(item)
+
+
+@pytest.mark.asyncio
+async def test_events_item_keeps_clock_when_lineup_peek_fails(monkeypatch, caplog):
+    """A failed lineup peek is logged and the event list still returns."""
+    event, event_id = _recorded_nba_event()
+
+    async def fake_events(**kwargs):
+        return [event]
+
+    async def boom(date):
+        raise RuntimeError("lineup cache down")
+
+    monkeypatch.setattr("app.api.nba.odds_provider.get_events", fake_events)
+    monkeypatch.setattr("app.api.nba.cache_service.get", AsyncMock(return_value=None))
+    monkeypatch.setattr("app.api.nba.cache_service.set", AsyncMock(return_value=True))
+    monkeypatch.setattr("app.api.nba.lineup_service.peek_lineups", boom)
+
+    with caplog.at_level(logging.WARNING, logger="app.api.nba"):
+        response = await get_events(date="2026-11-10", regions="us", tz_offset=0)
+
+    item = response.events[0]
+    assert item.event_id == event_id
     assert item.commence_time_et == "2026-11-09T19:10:00-05:00"
     assert item.display_tz == "ET"
     assert item.lineup_status is not None
-    assert item.lineup_status.home == "confirmed"
-    assert item.lineup_status.away == "projected"
+    assert item.lineup_status.home is None
+    assert item.lineup_status.away is None
+    assert any(
+        record.levelno == logging.WARNING and "lineup peek failed" in record.message
+        for record in caplog.records
+    )
+    assert any(record.exc_info and record.exc_info[1] for record in caplog.records)
 
 
 @pytest.mark.asyncio
@@ -797,7 +937,13 @@ async def test_daily_pick_keeps_position_rank_and_read_tier(monkeypatch, tmp_pat
                 "team": "GSW",
                 "points": 28.0,
                 "opponent_rank": 12,
+                "opponent_rank_source": "csv",
+                "opponent_rank_season": "2025-2026",
+                "opponent_rank_note": CSV_RANK_NOTE,
                 "opponent_position_rank": 7,
+                "opponent_position_rank_source": "sportsdata",
+                "opponent_position_rank_season": None,
+                "opponent_position_rank_note": None,
             }
         },
         league="nba",
@@ -806,6 +952,66 @@ async def test_daily_pick_keeps_position_rank_and_read_tier(monkeypatch, tmp_pat
     assert points.position == "PG"
     assert points.opponent_rank == 12
     assert points.opponent_position_rank == 7
+    assert points.opponent_rank_source == "csv"
+    assert points.opponent_rank_season == "2025-2026"
+    assert points.opponent_rank_note == CSV_RANK_NOTE
+    assert points.opponent_position_rank_source == "sportsdata"
+    assert points.opponent_position_rank_season is None
+    assert points.opponent_position_rank_note is None
     assert points.tier == "Strong play"
     assert points.p_over == pytest.approx(1.0)
     assert points.direction == "over"
+
+
+@pytest.mark.asyncio
+async def test_daily_pick_keeps_a_fully_invalidated_rank_row(monkeypatch, tmp_path):
+    """sportsdata_invalid clears both ranks. The pick still carries that source."""
+    path = tmp_path / "invalid.csv"
+    _write_csv(
+        path,
+        [
+            _row("Stephen Curry", "2025-2026", f"1/{day}/2026", "Warriors", "Lakers", "30", pos="PG")
+            for day in range(1, 6)
+        ],
+    )
+    service = DailyAnalysisService()
+    service.csv_service = _service(path)
+    service._get_props_for_market = AsyncMock(
+        return_value=_player_points_bookmakers(
+            [
+                ("Stephen Curry", "Over", 10.5),
+                ("Stephen Curry", "Under", 10.5),
+            ]
+        )
+    )
+    picks, _, _ = await service._analyze_single_event(
+        event_id="evt-1",
+        home_team="Los Angeles Lakers",
+        away_team="Golden State Warriors",
+        commence_time="2026-01-15T01:00:00Z",
+        projections={
+            "Stephen Curry": {
+                "team": "GSW",
+                "points": 28.0,
+                "opponent_rank": None,
+                "opponent_position_rank": None,
+                "opponent_rank_source": "sportsdata_invalid",
+                "opponent_rank_season": None,
+                "opponent_rank_note": None,
+                "opponent_position_rank_source": "sportsdata_invalid",
+                "opponent_position_rank_season": None,
+                "opponent_position_rank_note": None,
+            }
+        },
+        league="nba",
+    )
+    points = next(pick for pick in picks if pick.metric == "points")
+    assert points.position == "PG"
+    assert points.opponent_rank is None
+    assert points.opponent_position_rank is None
+    assert points.opponent_rank_source == "sportsdata_invalid"
+    assert points.opponent_position_rank_source == "sportsdata_invalid"
+    assert points.opponent_rank_season is None
+    assert points.opponent_position_rank_season is None
+    assert points.opponent_rank_note is None
+    assert points.opponent_position_rank_note is None

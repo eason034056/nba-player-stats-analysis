@@ -5,9 +5,8 @@
 paid for those rows. This module does not import the Odds API gateway or
 provider, and a missing snapshot is an empty payload, not a live refresh.
 
-``_main_book_line`` below mirrors ``daily_analysis._main_book_line``
-(SPO-115). That helper is not on ``dev``, so this copy stays local.
-One of the two copies should be removed after PR #43 merges.
+The line a book votes with is ``daily_analysis._main_book_line``
+(SPO-115, PR #43). This module maps that point back onto a stored row.
 """
 
 from __future__ import annotations
@@ -27,13 +26,17 @@ from app.models.schemas import (
     BulkPropsResponse,
 )
 from app.services.cache import cache_service
+from app.services.daily_analysis import (
+    _even_money_distance,
+    _main_book_line as _vote_main_line,
+)
 from app.services.db import db_service
 from app.services.odds_snapshot_service import (
     BINARY_MARKET_KEYS,
     OVER_UNDER_MARKET_KEYS,
     SNAPSHOT_MARKETS,
 )
-from app.services.prob import american_to_prob, calculate_mode_threshold
+from app.services.prob import calculate_mode_threshold
 
 logger = logging.getLogger(__name__)
 
@@ -224,87 +227,116 @@ def _posted_price(value: Any) -> float | None:
     return number
 
 
-def _even_money_distance(over: float | None, under: float | None) -> float:
-    """Distance from a fair 50/50 after the vig is removed.
+# Fields that belong to one row's own prices. A spliced rung must not
+# keep them from the first row, because that row's vig and fair
+# probabilities describe a different pair of prices.
+_ROW_PRICE_FIELDS = frozenset(
+    {
+        "line",
+        "over_odds",
+        "under_odds",
+        "vig",
+        "over_fair_prob",
+        "under_fair_prob",
+    }
+)
 
-    Two posted sides: divide the Over implied probability by the sum of
-    both implied probabilities, then measure how far that is from 0.5.
-    One posted side: how far that side's implied probability is from 0.5.
-    No price: 1.0, so the rung sorts last among priced rungs.
+
+def _closer_price(current: float | None, candidate: float | None) -> float | None:
+    """Keep the posted price closer to even money. A tie keeps ``current``."""
+    if candidate is None:
+        return current
+    if current is None:
+        return candidate
+    if _even_money_distance(candidate, None) < _even_money_distance(current, None):
+        return candidate
+    return current
+
+
+def _outcomes_for_vote(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Stored rows in the outcome shape ``daily_analysis._main_book_line`` reads.
+
+    One Over outcome per row carries the point, so a ladder with no
+    usable price still counts once per stored row. Under is added only
+    when that side has a posted price. Non-finite prices are left off
+    here. The shared helper treats a missing price as no leg.
     """
-    if over is not None and under is not None:
-        p_over = american_to_prob(over)
-        p_under = american_to_prob(under)
-        total = p_over + p_under
-        if total <= 0:
-            return 1.0
-        return abs((p_over / total) - 0.5)
-    posted = over if over is not None else under
-    if posted is None:
-        return 1.0
-    return abs(american_to_prob(posted) - 0.5)
+    outcomes: list[dict[str, Any]] = []
+    for row in rows:
+        line = _as_float(row.get("line"))
+        if line is None:
+            continue
+        over = _posted_price(row.get("over_odds"))
+        under = _posted_price(row.get("under_odds"))
+        outcomes.append({"name": "Over", "point": line, "price": over})
+        if under is not None:
+            outcomes.append({"name": "Under", "point": line, "price": under})
+    return outcomes
 
 
-def _posted_point(points: list[float]) -> float:
-    """Mode of the posted points when no side has a usable price.
-
-    Ties: sort the modes and take the middle one when the count is odd,
-    or the lower of the two central values when the count is even.
-    """
-    rounded = [round(point, 1) for point in points]
-    counts: dict[float, int] = {}
-    for point in rounded:
-        counts[point] = counts.get(point, 0) + 1
-    most = max(counts.values())
-    modes = sorted(point for point, count in counts.items() if count == most)
-    if len(modes) % 2 == 1:
-        return float(modes[len(modes) // 2])
-    return float(modes[(len(modes) // 2) - 1])
+def _rung_for_point(rows: list[dict[str, Any]], point: float) -> dict[str, Any] | None:
+    """Rows at ``point``, with the closer posted price kept on each side."""
+    matched: list[dict[str, Any]] = []
+    over: float | None = None
+    under: float | None = None
+    target = round(float(point), 1)
+    for row in rows:
+        line = _as_float(row.get("line"))
+        if line is None or round(line, 1) != target:
+            continue
+        matched.append(row)
+        over = _closer_price(over, _posted_price(row.get("over_odds")))
+        under = _closer_price(under, _posted_price(row.get("under_odds")))
+    if not matched:
+        return None
+    return {"point": target, "over": over, "under": under, "rows": matched}
 
 
 def _row_for_rung(rung: dict[str, Any]) -> dict[str, Any]:
     """Return a stored row that carries the rung's kept prices.
 
     When one stored row already has both kept prices, that row is
-    returned unchanged. When the kept Over and the kept Under come from
-    different rows at the same point, the result is a copy of the first
-    row with those two prices written on it.
+    returned unchanged, including its vig and fair probabilities.
+
+    When the kept Over and the kept Under come from different rows at
+    the same point, the result is a new dict. It copies only the fields
+    every row in the rung shares, then sets ``line``, ``over_odds``, and
+    ``under_odds`` from the rung. Price-derived fields are not taken
+    from the first row.
     """
     over = rung["over"]
     under = rung["under"]
     for row in rung["rows"]:
-        if _posted_price(row.get("over_odds")) == over and _posted_price(row.get("under_odds")) == under:
+        if (
+            _posted_price(row.get("over_odds")) == over
+            and _posted_price(row.get("under_odds")) == under
+        ):
             return row
-    merged = dict(rung["rows"][0])
-    merged["line"] = rung["point"]
-    merged["over_odds"] = over
-    merged["under_odds"] = under
-    return merged
+    shared: dict[str, Any] = {}
+    first = rung["rows"][0]
+    for key, value in first.items():
+        if key in _ROW_PRICE_FIELDS:
+            continue
+        if all(key in other and other[key] == value for other in rung["rows"][1:]):
+            shared[key] = value
+    shared["line"] = rung["point"]
+    shared["over_odds"] = over
+    shared["under_odds"] = under
+    return shared
 
 
 def _main_book_line(rows: list[dict[str, Any]]) -> dict[str, Any]:
-    """Pick the one stored row that this bookmaker is allowed to vote.
-
-    Mirrors ``daily_analysis._main_book_line`` (SPO-115). One of the two
-    copies should be removed after PR #43 merges. This copy stays in
-    this module so the branch does not import that helper.
+    """The stored row for the line ``daily_analysis._main_book_line`` votes.
 
     "Main" means the single total that counts. "Book" means one
     bookmaker. "Line" means that total. Call it with every stored row
     for one ``(market, player, bookmaker)`` inside one snapshot.
 
-    The rules, applied to stored rows (``line``, ``over_odds``,
-    ``under_odds``) rather than to raw outcomes:
-
-    1. Group rows by the line rounded to one decimal. On a repeated
-       side at that line, keep the price closer to even money.
-    2. Remove the vig, then keep the pair closest to even money.
-       A two-sided rung beats a one-sided Over. Equal distances keep
-       the lower line.
-    3. When no side has a usable price, the fallback is the mode of
-       the posted lines, not the lower line.
-
-    A single stored row is returned unchanged.
+    The point is chosen by ``daily_analysis._main_book_line`` (SPO-115).
+    This function only maps that point back onto a stored row. A single
+    stored row is returned unchanged. When the kept Over and Under were
+    not posted on the same row, ``_row_for_rung`` builds the copy from
+    the rung.
 
     Args:
         rows: Stored rows for a single bookmaker. Must be non-empty.
@@ -314,64 +346,13 @@ def _main_book_line(rows: list[dict[str, Any]]) -> dict[str, Any]:
     """
     if len(rows) == 1:
         return rows[0]
-
-    rungs: dict[float, dict[str, Any]] = {}
-    bare_points: list[float] = []
-    for row in rows:
-        line = _as_float(row.get("line"))
-        if line is None:
-            continue
-        point = round(line, 1)
-        over = _posted_price(row.get("over_odds"))
-        under = _posted_price(row.get("under_odds"))
-        bare_points.append(point)
-        rung = rungs.get(point)
-        if rung is None:
-            rungs[point] = {
-                "point": point,
-                "over": over,
-                "under": under,
-                "rows": [row],
-            }
-            continue
-        rung["rows"].append(row)
-        if over is not None and (
-            rung["over"] is None
-            or _even_money_distance(over, None) < _even_money_distance(rung["over"], None)
-        ):
-            rung["over"] = over
-        if under is not None and (
-            rung["under"] is None
-            or _even_money_distance(under, None) < _even_money_distance(rung["under"], None)
-        ):
-            rung["under"] = under
-
-    if not bare_points:
+    point = _vote_main_line(_outcomes_for_vote(rows))
+    if point is None:
         return rows[0]
-
-    two_sided = [
-        rung
-        for rung in rungs.values()
-        if rung["over"] is not None and rung["under"] is not None
-    ]
-    priced = [
-        rung
-        for rung in rungs.values()
-        if rung["over"] is not None or rung["under"] is not None
-    ]
-    candidates = two_sided or priced
-    if not candidates:
-        chosen = _posted_point(bare_points)
-        for row in rows:
-            line = _as_float(row.get("line"))
-            if line is not None and round(line, 1) == chosen:
-                return row
+    rung = _rung_for_point(rows, float(point))
+    if rung is None:
         return rows[0]
-
-    def _sort_key(rung: dict[str, Any]) -> tuple[float, float]:
-        return (_even_money_distance(rung["over"], rung["under"]), rung["point"])
-
-    return _row_for_rung(min(candidates, key=_sort_key))
+    return _row_for_rung(rung)
 
 
 def _age_seconds(snapshot_at: datetime, now: datetime) -> int:

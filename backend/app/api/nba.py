@@ -111,7 +111,12 @@ async def _with_event_fields(response: EventsResponse) -> EventsResponse:
     """
     try:
         lineups = await lineup_service.peek_lineups(response.date)
-    except Exception:
+    except Exception as exc:
+        logger.warning(
+            "NBA lineup peek failed for %s",
+            response.date,
+            exc_info=exc,
+        )
         lineups = {}
     return response.model_copy(
         update={
