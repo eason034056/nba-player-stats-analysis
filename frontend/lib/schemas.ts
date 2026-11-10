@@ -455,12 +455,12 @@ export const RECENT_GAMES_OPTIONS = recentGamesOptions("nba");
  * - home_team / away_team: 主客場球隊
  * - commence_time: 比賽開始時間
  * - metric: 統計指標（points/assists/rebounds/pra）
- * - threshold: 眾數門檻（所有博彩公司 line 的眾數）
+ * - threshold: 眾數門檻（每家博彩公司一條主盤的眾數）
  * - direction: "over" 或 "under"
  * - probability: 歷史機率（>= 0.65）
  * - n_games: 樣本場次數
- * - bookmakers_count: 提供此 line 的博彩公司數量
- * - all_lines: 所有博彩公司的 line 列表
+ * - bookmakers_count: 有開出這名球員這個盤口的博彩公司家數（同一家的 Over/Under 與替代盤只算一次）
+ * - all_lines: 每家博彩公司的主盤，一家一條
  */
 export const dailyPickSchema = z.object({
   player_name: z.string(),
