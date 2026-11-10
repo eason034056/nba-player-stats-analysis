@@ -275,19 +275,33 @@ def normalize_rotogrinders_player_candidate(raw_name: str) -> str | None:
 
 
 def _build_team_roster_cache() -> dict[str, list[str]]:
-    from app.services.csv_player_history import CSVPlayerHistoryService
+    """Latest-club roster for NBA and WNBA.
 
-    service = CSVPlayerHistoryService()
-    service.load_csv()
+    Team codes overlap across leagues (MIN is the Timberwolves and the
+    Lynx). Each league is resolved with its own alias table, then the
+    names are stored under that code. ``resolve_canonical_player_name``
+    looks players up by code, so both leagues have to be loaded here or
+    a WNBA player never appears on her club.
+    """
+    from app.services.csv_player_history import CSVPlayerHistoryService, team_from_game_logs
 
     roster_map: dict[str, list[str]] = {code: [] for code in TEAM_ALIASES}
-    for player_name, logs in service._cache.items():
-        if not logs:
-            continue
-        latest_team = detect_team_code(logs[0].get("team", "") or "")
-        if not latest_team:
-            continue
-        roster_map.setdefault(latest_team, []).append(player_name)
+    for code in WNBA_TEAM_ALIASES:
+        roster_map.setdefault(code, [])
+
+    for league in ("nba", "wnba"):
+        service = CSVPlayerHistoryService(league=league)
+        service.load_csv()
+        for player_name, logs in service._cache.items():
+            if not logs:
+                continue
+            latest_team = detect_team_code(
+                team_from_game_logs(logs) or "",
+                league=league,
+            )
+            if not latest_team:
+                continue
+            roster_map.setdefault(latest_team, []).append(player_name)
 
     for team_code, players in roster_map.items():
         roster_map[team_code] = sorted(dict.fromkeys(players))

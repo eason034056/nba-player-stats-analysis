@@ -31,9 +31,12 @@ for _p in (_BACKEND_DIR, _RAG_DIR):
 
 from app.services.csv_player_history import (
     CSVPlayerHistoryService,
+    _coerce_date,
     nba_csv_player_service,
+    team_from_game_logs,
     wnba_csv_player_service,
 )
+from app.services.normalize import player_name_key
 
 _STAR_PLAYERS_PATH = os.path.join(_PROJECT_ROOT, "data", "star_players.json")
 
@@ -130,17 +133,33 @@ def _games_for(player: str, n: int = 0, league: str = "nba") -> List[Dict[str, A
     """
     csv = _csv_for(league)
     csv.load_csv()
-    logs = csv._cache.get(player, [])
-    if not logs:
-        low = player.lower()
-        for p in csv._all_players:
-            if low in p.lower() or p.lower() in low:
-                logs = csv._cache.get(p, [])
-                break
+    resolved = csv.resolve_player_name(player)
+    logs = csv._cache.get(resolved, []) if resolved else []
     active = [g for g in logs if g.get("minutes", 0) > 0]
     if n > 0:
         active = active[:n]
     return active
+
+
+def _is_same_player(left: str, right: str) -> bool:
+    """True when both names fold to the same non-empty ``player_name_key``."""
+    key = player_name_key(left)
+    return bool(key) and key == player_name_key(right)
+
+
+def _team_for(player: str, date: str = "", league: str = "nba") -> str:
+    """Team on ``date``, or the most recent team when ``date`` is empty.
+
+    Uses the full CSV log, not ``games[0]``. ``_games_for`` is newest-first,
+    but a last-N window can sit entirely after a trade, and chart-style
+    callers elsewhere are oldest-first. Dating the logs keeps both shapes
+    on the event-day team.
+    """
+    csv = _csv_for(league)
+    csv.load_csv()
+    resolved = csv.resolve_player_name(player)
+    logs = csv._cache.get(resolved, []) if resolved else []
+    return team_from_game_logs(logs, date or None)
 
 
 def _values(games: List[Dict], metric: str) -> List[float]:
@@ -411,7 +430,9 @@ async def _infer_opponent_from_schedule(player: str, date: str, league: str = "n
     games = _games_for(player, league=league)
     if not games:
         return "unknown"
-    player_team = games[0].get("team", "")  # CSV 格式如 "Warriors", "Bucks"
+    # CSV short names ("Warriors", "Bucks"). Date selects the club on that
+    # day so a mid-season trade is not stuck on the first row.
+    player_team = _team_for(player, date, league=league)
     if not player_team:
         return "unknown"
 
@@ -432,7 +453,6 @@ async def _infer_opponent_from_schedule(player: str, date: str, league: str = "n
         return "unknown"
 
     player_code = _team_code_from_name(player_team)
-    player_low = player.lower()
 
     for ev in events:
         try:
@@ -453,7 +473,7 @@ async def _infer_opponent_from_schedule(player: str, date: str, league: str = "n
         for bm in odds.get("bookmakers", []):
             for mkt in bm.get("markets", []):
                 for o in mkt.get("outcomes", []):
-                    if o.get("description", "").lower() == player_low:
+                    if _is_same_player(o.get("description") or "", player):
                         home = ev.get("home_team", "")
                         away = ev.get("away_team", "")
                         home_code = _team_code_from_name(home)
@@ -546,9 +566,7 @@ async def get_projected_lineup_consensus(team: str, date: str = "", league: str 
 async def get_player_lineup_context(player: str, date: str = "", team: str = "", opponent: str = "", league: str = "nba") -> Dict[str, Any]:
     target_team = team
     if not target_team:
-        games = _games_for(player, 1, league=league)
-        if games:
-            target_team = games[0].get("team", "")
+        target_team = _team_for(player, date, league=league)
 
     own_lineup = await get_projected_lineup_consensus(target_team, date, league=league)
     opponent_lineup = await get_projected_lineup_consensus(opponent, date, league=league) if opponent else _signal_payload(
@@ -618,11 +636,13 @@ def get_availability_context(player: str, date: str = "", league: str = "nba") -
     games = _games_for(player, 10, league=league)
     if not games:
         return _signal_payload("unavailable", 0, 0, 0, "last_10", "csv", {"error": "no games"})
-    team = games[0].get("team", "")
+    team = _team_for(player, date, league=league)
     code = _team_code_from_name(team)
     injuries = _fetch_injury_report_for_team(code)
-    player_low = player.lower()
-    player_entry = next((e for e in injuries if player_low in e["player"].lower()), None)
+    player_entry = next(
+        (e for e in injuries if _is_same_player(e.get("player") or "", player)),
+        None,
+    )
     status = player_entry["status"] if player_entry else "Healthy"
     return _signal_payload(
         "caution" if status in ("Out", "Questionable", "Day-To-Day") else "neutral",
@@ -643,10 +663,10 @@ def auto_teammate_impact(player: str, metric: str, threshold: float, league: str
     if not games:
         return _signal_payload("unavailable", 0, 0, 0, "season", "csv", {"error": "no data"})
 
-    team = games[0].get("team", "")
+    team = _team_for(player, league=league)
     player_pos = games[0].get("pos", "")
     stars = _STAR_PLAYERS.get(team, [])
-    stars = [s for s in stars if s.lower() != player.lower()]
+    stars = [s for s in stars if not _is_same_player(s, player)]
 
     if not stars:
         return _signal_payload("neutral", 0, 0, 0.3, "season", "csv", {"note": "no star teammates registered"})
@@ -655,7 +675,9 @@ def auto_teammate_impact(player: str, metric: str, threshold: float, league: str
     injuries = _fetch_injury_report_for_team(code)
     injury_map = {}
     for e in injuries:
-        injury_map[e["player"].lower()] = e
+        key = player_name_key(e.get("player") or "")
+        if key:
+            injury_map[key] = e
 
     chemistry = []
     for star in stars:
@@ -666,7 +688,7 @@ def auto_teammate_impact(player: str, metric: str, threshold: float, league: str
         wo_mean = without_data["details"].get("mean", 0) or 0
         delta = round(w_mean - wo_mean, 2)
 
-        star_injury = injury_map.get(star.lower())
+        star_injury = injury_map.get(player_name_key(star))
         inj_status = star_injury["status"] if star_injury else "Healthy"
         inj_detail = star_injury.get("injury", "") if star_injury else ""
 
@@ -993,17 +1015,40 @@ def get_game_script_splits(player: str, metric: str, threshold: float, league: s
 
 
 def get_lineup_context(player: str, date: str = "", league: str = "nba") -> Dict[str, Any]:
-    games = _games_for(player, 10, league=league)
+    # Sample the 10 games on or before the event day. An undated call keeps
+    # the newest 10. Taking the newest 10 first and only labeling the team
+    # with ``date`` mixes a pre-trade club with the post-trade rotation.
+    games = _games_for(player, league=league)
+    event = _coerce_date(date) if date else None
+    if event is not None:
+        window = []
+        for game in games:
+            played = game.get("game_date")
+            # Cache rows store a naive datetime. The parameter ``date`` is
+            # the query string, so this check stays on ``datetime``.
+            if not isinstance(played, datetime):
+                continue
+            if played.date() <= event:
+                window.append(game)
+        games = window
+    games = games[:10]
     if not games:
         return _signal_payload("unavailable", 0, 0, 0, "last_10", "csv", {"error": "no data"})
 
-    team = games[0].get("team", "")
+    team = _team_for(player, date, league=league)
     csv = _csv_for(league)
+    # Lineup sets store the CSV spelling. Drop both the query and that
+    # spelling so "Aja Wilson" is not listed as her own teammate.
+    resolved_name = csv.resolve_player_name(player) or player
     lineups = []
     for g in games:
         gd = g.get("game_date")
-        if gd and team:
-            lineup = csv._lineup_cache.get((team, gd.strftime("%Y-%m-%d")), set())
+        # Each game's own club, so a trade inside the last-10 window still
+        # finds that night's lineup. ``team`` is the event-day / latest club
+        # reported on the signal.
+        g_team = g.get("team", "") or team
+        if gd and g_team:
+            lineup = csv._lineup_cache.get((g_team, gd.strftime("%Y-%m-%d")), set())
             lineups.append(lineup)
 
     if not lineups:
@@ -1012,7 +1057,7 @@ def get_lineup_context(player: str, date: str = "", league: str = "nba") -> Dict
     from collections import Counter
     all_mates = Counter()
     for lu in lineups:
-        lu_copy = lu - {player}
+        lu_copy = lu - {player, resolved_name}
         all_mates.update(lu_copy)
 
     frequent = [(name, cnt) for name, cnt in all_mates.most_common(8)]
@@ -1025,9 +1070,9 @@ def get_rotation_absorption_map(player: str, metric: str, date: str = "", league
     if not games:
         return _signal_payload("unavailable", 0, 0, 0, "season", "csv", {"error": "no data"})
 
-    team = games[0].get("team", "")
+    team = _team_for(player, date, league=league)
     stars = _STAR_PLAYERS.get(team, [])
-    stars = [s for s in stars if s.lower() != player.lower()]
+    stars = [s for s in stars if not _is_same_player(s, player)]
 
     if not stars:
         return _signal_payload("neutral", 0, 0, 0.3, "season", "csv", {"note": "no tracked stars"})

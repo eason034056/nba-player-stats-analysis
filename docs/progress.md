@@ -1,8 +1,20 @@
 # Sports Lab Progress
 
-> Engineers update the row for their ticket in the pull request that changes that ticket. This file is a snapshot of ticket state, not a heartbeat log. Last updated: **2026-11-10** (SPO-96, after merging SPO-95 from `dev`). Facts below were checked against `docs/task-summaries/`, `git log` on `dev`, and `gh pr list --base dev`. Titles that were not in those sources are left blank.
+> Engineers update the row for their ticket in the pull request that changes that ticket. This file is a snapshot of ticket state, not a heartbeat log. Last updated: **2026-11-10** (SPO-96, after merging `origin/dev` through `fad723a`). Facts below were checked against `docs/task-summaries/`, `git log` on `dev`, and `gh pr list --base dev`. Titles that were not in those sources are left blank.
 
 ## Shipped
+
+### SPO-98 — Player team attribution and exact name matching
+
+Shipped on `dev` in #28 (`fad723a`). Task summary: `docs/task-summaries/SPO-98-team-attribution-exact-names.md`.
+
+US game date, exact `player_name_key`, league-aware roster. Daily-picks wiring loads recorded Odds API `player_points` (`backend/tests/fixtures/`). The progress row that came in with the merge still said `in_review` on `feature/SPO-98-team-attribution-exact-names`; the squash-merge is on `dev`.
+
+### SPO-100 — junk-file pass (2026-11-09)
+
+Shipped on `dev` in #31 (`f267e06`).
+
+Untrack `nba_lineup_rag/RAG_evaluation.html`, `RAG_evaluation.pdf`, and `outputs/notebook_results_*.json`. `frontend/tsconfig.tsbuildinfo` was already gitignored and untracked. `data/*.jsonl` stays in git; `.dockerignore` keeps it out of the backend image. The progress note that landed with that merge listed the branch as `feature/SPO-100-junk-pass` and the status as PR open against `dev`.
 
 ### SPO-95 — CI branch triggers (2026-11-09)
 
@@ -67,9 +79,7 @@ Stale pull requests the owner is closing. Not merged.
 |---|---|
 | SPO-96 | This docs rewrite (`feature/SPO-96-claude-md-workflow-rewrite`). |
 | SPO-97 | CSV season hygiene. No task summary on `dev` yet. |
-| SPO-98 | Team attribution and exact name matching. No task summary on `dev` yet. |
 | SPO-99 | In flight. Title not in `docs/task-summaries/` or `git log` on `dev`. |
-| SPO-100 | Junk pass (repo junk / gitignore). In flight. |
 | SPO-101 | SPO-10 Phase 4 integration tests. Open. |
 | SPO-102 | In flight. Title not in `docs/task-summaries/` or `git log` on `dev`. |
 | SPO-103 | SPO-10 Phase 5 final review. Open. |
