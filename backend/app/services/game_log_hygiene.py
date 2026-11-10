@@ -17,8 +17,10 @@ schedule event on local date plus both team names, then:
 
 The schedule file is produced by ``scripts/explore_espn_schedule_api.py``.
 Raw team-schedule responses recorded with curl are folded in at load
-time (``tests/fixtures/espn/*_team_*_schedule_*_type_*.json``). Nothing
-here invents a season boundary from a calendar constant.
+time from ``tests/fixtures/espn/`` and ``tests/fixtures/espn/recorded/``.
+Nothing here invents a season boundary from a calendar constant.
+A blank ``GameType`` is regular season; that rule lives in
+:func:`coalesce_game_type`.
 """
 
 from __future__ import annotations
@@ -83,6 +85,44 @@ _SEASON_TYPE_ABBREV = {
     "post": GAME_TYPE_PLAYOFFS,
     "playin": GAME_TYPE_PLAY_IN,
 }
+
+# Files named ``{league}_team_{id}_schedule_{season}_type_{n}.json``.
+_TEAM_SCHEDULE_GLOB = "*_team_*_schedule_*_type_*.json"
+
+
+def coalesce_game_type(value: Any) -> str:
+    """Game type for a cell that may be blank.
+
+    None, a missing cell, ``""``, and whitespace are regular season.
+    That is the one rule for a row that never named a type: older CSV
+    files have no ``GameType`` column, and a scraped cell can be empty.
+    Any other token is returned stripped, including ``playoffs`` and
+    ``unclassified``. Call this instead of ``value or "regular_season"``.
+    """
+    if value is None:
+        return GAME_TYPE_REGULAR
+    text = str(value).strip()
+    if not text:
+        return GAME_TYPE_REGULAR
+    return text
+
+
+def _league_slug_from_schedule_filename(path: Path) -> str:
+    """League slug from ``{league}_team_...``, or ``ValueError``.
+
+    Used only when the caller did not pass ``league``. A name with no
+    ``_team_`` marker, or an empty prefix, cannot be guessed.
+    """
+    name = path.name
+    if "_team_" not in name:
+        raise ValueError(
+            f"Recorded schedule {name} has no league prefix "
+            "(expected '{league}_team_...')"
+        )
+    league = name.split("_team_", 1)[0].strip()
+    if not league:
+        raise ValueError(f"Recorded schedule {name} has no league prefix")
+    return league
 
 # RealGM writes "Sixers". ESPN's recorded shortDisplayName for that
 # franchise is "76ers" (tests/fixtures/espn/team_directory.json).
@@ -260,10 +300,15 @@ def _parse_event_instant(value: str) -> datetime | None:
 def _local_dates(instant: datetime) -> set[str]:
     """Calendar dates to try when joining to a RealGM date cell.
 
-    RealGM prints the arena-local date. East-coast and west-coast
-    conversions of the same UTC kickoff cover that without treating the
-    UTC date itself as a third candidate (that extra day collides with
-    the next day's back-to-back).
+    RealGM prints the arena-local date. A west-coast tip after midnight
+    UTC is still the previous evening in Los Angeles and already the next
+    morning in New York, so one kickoff is indexed under both the Pacific
+    date and the Eastern date. A CSV cell written in either convention
+    still matches this event. ``match`` returns the event once for the
+    date on the row, so the two keys are not two games.
+
+    The UTC date itself is not a third candidate. That extra day collides
+    with the next day's back-to-back.
     """
     return {
         instant.astimezone(_EASTERN).date().isoformat(),
@@ -357,7 +402,10 @@ _SCHEDULE_CACHE: dict[str, list[dict[str, Any]]] = {}
 
 
 def _overlay_recorded_team_schedules(
-    schedule_path: Path, events: list[dict[str, Any]]
+    schedule_path: Path,
+    events: list[dict[str, Any]],
+    *,
+    league: str | None = None,
 ) -> list[dict[str, Any]]:
     """Fold curl-recorded team schedules onto the compact index.
 
@@ -366,35 +414,75 @@ def _overlay_recorded_team_schedules(
     same id (so a championship gains its competition notes) and new
     ids are added (the 2026-27 Celtics schedule is not in the older
     compact file).
+
+    ``league`` is the fixture slug (``nba`` or ``wnba``) passed by the
+    caller. A file whose name starts with a different league is skipped,
+    so ``league="wnba"`` does not relabel an NBA recording. A file with
+    no ``{league}_`` prefix uses the explicit league. When ``league`` is
+    omitted or blank, each file's slug is that prefix and a warning is
+    logged. A filename with no prefix raises ``ValueError``.
+
+    ``Path.glob`` is not recursive, so both the schedule directory and
+    its ``recorded/`` child are scanned. The Commissioner's Cup final
+    (ESPN event 401736430) lives under ``recorded/``.
     """
     from app.services.espn_schedule import compact_event
 
+    explicit = (league or "").strip()
     by_id = {str(event.get("id")): event for event in events}
-    pattern = "*_team_*_schedule_*_type_*.json"
-    for raw_path in sorted(schedule_path.parent.glob(pattern)):
-        league = raw_path.name.split("_team_", 1)[0]
+    parent = schedule_path.parent
+    paths = sorted(parent.glob(_TEAM_SCHEDULE_GLOB))
+    recorded_dir = parent / "recorded"
+    if recorded_dir.is_dir():
+        paths.extend(sorted(recorded_dir.glob(_TEAM_SCHEDULE_GLOB)))
+    for raw_path in paths:
+        if explicit:
+            try:
+                prefix = _league_slug_from_schedule_filename(raw_path)
+            except ValueError:
+                prefix = ""
+            if prefix and prefix != explicit:
+                continue
+            file_league = prefix or explicit
+        else:
+            file_league = _league_slug_from_schedule_filename(raw_path)
+            logger.warning(
+                "No league was passed to the schedule overlay; using %s from %s",
+                file_league,
+                raw_path.name,
+            )
         payload = json.loads(raw_path.read_text(encoding="utf-8"))
         if not isinstance(payload, dict):
             continue
         for event in payload.get("events") or []:
             if not isinstance(event, dict) or not event.get("id"):
                 continue
-            compact = compact_event(league, event)
+            compact = compact_event(file_league, event)
             by_id[compact["id"]] = compact
     return list(by_id.values())
 
 
-def load_schedule_events(path: Path | None = None) -> list[dict[str, Any]]:
-    """Load the recorded event list. ``path`` overrides the default fixture."""
+def load_schedule_events(
+    path: Path | None = None, *, league: str | None = None
+) -> list[dict[str, Any]]:
+    """Load the recorded event list. ``path`` overrides the default fixture.
+
+    ``league`` is forwarded to the recorded-schedule overlay. An explicit
+    league reads only files for that league (a filename with no prefix
+    still uses it). Omitting it logs a warning and falls back to the
+    filename prefix. The cache key includes the league so an explicit
+    call does not reuse a guessed one.
+    """
     schedule_path = (path or default_schedule_path()).resolve()
-    cached = _SCHEDULE_CACHE.get(str(schedule_path))
+    cache_key = f"{schedule_path}|{(league or '').strip()}"
+    cached = _SCHEDULE_CACHE.get(cache_key)
     if cached is not None:
         return cached
     payload = json.loads(schedule_path.read_text(encoding="utf-8"))
     if not isinstance(payload, list):
         raise ValueError(f"Schedule fixture must be a list of events: {schedule_path}")
-    merged = _overlay_recorded_team_schedules(schedule_path, payload)
-    _SCHEDULE_CACHE[str(schedule_path)] = merged
+    merged = _overlay_recorded_team_schedules(schedule_path, payload, league=league)
+    _SCHEDULE_CACHE[cache_key] = merged
     return merged
 
 
@@ -538,7 +626,7 @@ def _stamp_and_classify(
         updated["_scraped_season"] = scraped_season
         updated["_game_date"] = game_date or ""
         updated["Season"] = season
-        updated["GameType"] = game_type
+        updated["GameType"] = coalesce_game_type(game_type)
         prepared.append(updated)
     return prepared, classified_counts, ambiguous, unclassified
 

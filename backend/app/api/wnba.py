@@ -84,9 +84,11 @@ from app.services.odds_gateway import MarketSnapshotResult, odds_gateway
 from app.services.odds_provider import OddsAPIError
 from app.services.odds_snapshot_service import BINARY_MARKET_KEYS
 from app.services.odds_theoddsapi import odds_provider
+from app.services.game_log_hygiene import coalesce_game_type
 from app.services.prob import (
     DEFAULT_BINARY_VIG,
     american_to_prob,
+    posted_american_odds,
     calculate_consensus_mean,
     calculate_vig,
     devig,
@@ -214,7 +216,7 @@ async def get_player_history(
                 team=log.get("team", ""),
                 minutes=log.get("minutes", 0.0),
                 is_starter=log.get("is_starter", False),
-                game_type=log.get("game_type", "regular_season"),
+                game_type=coalesce_game_type(log.get("game_type")),
                 season=log.get("season", ""),
             )
             for log in stats.get("game_logs", [])
@@ -341,9 +343,12 @@ def _build_binary_no_vig_response(
       be safely applied (extreme prices), the row is dropped and counted in
       `rows_dropped_due_to_prior` — surfaced in the aggregate message so the
       omission is visible rather than fabricated.
-    - Legacy `over_*/under_*` fields encode "over=Yes, under=No" so existing
-      frontend Zod parsers keep working; explicit `yes_*/no_*` mirrors are
-      populated alongside for SPO-26-aware consumers.
+    - Legacy `over_*/under_*` fields encode "over=Yes, under=posted No".
+      A missing No price stays None on `under_odds` and `p_under_imp`.
+      It is not copied from Yes, and `p_under_imp` is not `1 - p_yes_imp`.
+      `p_under_fair` / `no_fair_prob` remain the complement of the
+      de-vigged Yes fair. `line_is_synthetic` is True and `market_kind`
+      is "binary".
     - `Consensus.p_yes_fair/p_no_fair` mirrors are populated for binary.
 
     Deliberate divergence from `nba.py` — null-safe `name` parsing
@@ -355,6 +360,7 @@ def _build_binary_no_vig_response(
     """
     results: List[BookmakerResult] = []
     fair_probs_for_consensus: List[tuple] = []
+    prior_book_count = 0
     rows_dropped_due_to_prior = 0
 
     for bookmaker in bookmakers_data:
@@ -380,21 +386,26 @@ def _build_binary_no_vig_response(
             if yes_outcome is None:
                 continue
 
-            yes_price = yes_outcome.get("price", 0)
-            if yes_price == 0:
+            yes_price = posted_american_odds(yes_outcome.get("price"))
+            if yes_price is None:
                 continue
-            no_price_raw = no_outcome.get("price", 0) if no_outcome is not None else 0
+            no_price_raw = (
+                posted_american_odds(no_outcome.get("price"))
+                if no_outcome is not None
+                else None
+            )
 
             try:
                 p_yes_imp = american_to_prob(yes_price)
                 no_price: Optional[float]
                 p_no_imp: Optional[float]
 
-                if no_price_raw != 0:
+                if no_price_raw is not None:
                     no_price = float(no_price_raw)
                     p_no_imp = american_to_prob(no_price_raw)
                     vig = calculate_vig(p_yes_imp, p_no_imp)
                     p_yes_fair, p_no_fair = devig(p_yes_imp, p_no_imp)
+                    uses_prior = False
                 else:
                     no_price = None
                     p_no_imp = None
@@ -404,26 +415,23 @@ def _build_binary_no_vig_response(
                         continue
                     p_no_fair = 1.0 - p_yes_fair
                     vig = DEFAULT_BINARY_VIG
-
-                under_odds_for_legacy = (
-                    float(no_price) if no_price is not None else float(yes_price)
-                )
-                p_under_imp_for_legacy = (
-                    p_no_imp if p_no_imp is not None else (1.0 - p_yes_imp)
-                )
+                    uses_prior = True
 
                 results.append(
                     BookmakerResult(
                         bookmaker=bookmaker_key,
                         line=_BINARY_LINE_SENTINEL,
                         over_odds=float(yes_price),
-                        under_odds=under_odds_for_legacy,
+                        under_odds=float(no_price) if no_price is not None else None,
                         p_over_imp=round(p_yes_imp, 4),
-                        p_under_imp=round(p_under_imp_for_legacy, 4),
+                        p_under_imp=round(p_no_imp, 4) if p_no_imp is not None else None,
                         vig=round(vig, 4),
                         p_over_fair=round(p_yes_fair, 4),
                         p_under_fair=round(p_no_fair, 4),
                         fetched_at=snapshot.fetched_at,
+                        line_is_synthetic=True,
+                        market_kind="binary",
+                        uses_prior=uses_prior,
                         yes_price=float(yes_price),
                         no_price=no_price,
                         p_yes_imp=round(p_yes_imp, 4),
@@ -433,6 +441,8 @@ def _build_binary_no_vig_response(
                     )
                 )
                 fair_probs_for_consensus.append((p_yes_fair, p_no_fair))
+                if uses_prior:
+                    prior_book_count += 1
 
             except (ValueError, ZeroDivisionError):
                 continue
@@ -449,6 +459,8 @@ def _build_binary_no_vig_response(
                 p_under_fair=no_fair_consensus,
                 p_yes_fair=yes_fair_consensus,
                 p_no_fair=no_fair_consensus,
+                consensus_uses_prior=prior_book_count > 0,
+                consensus_prior_book_count=prior_book_count,
             )
 
     if results:
@@ -699,6 +711,9 @@ async def calculate_no_vig(request: Request, body: NoVigRequest) -> NoVigRespons
                             p_over_fair=round(p_over_fair, 4),
                             p_under_fair=round(p_under_fair, 4),
                             fetched_at=snapshot.fetched_at,
+                            line_is_synthetic=False,
+                            market_kind="over_under",
+                            uses_prior=False,
                         )
                     )
                     fair_probs_for_consensus.append((p_over_fair, p_under_fair))
@@ -713,6 +728,8 @@ async def calculate_no_vig(request: Request, body: NoVigRequest) -> NoVigRespons
                     method="mean",
                     p_over_fair=round(consensus_probs[0], 4),
                     p_under_fair=round(consensus_probs[1], 4),
+                    consensus_uses_prior=False,
+                    consensus_prior_book_count=0,
                 )
 
         return NoVigResponse(

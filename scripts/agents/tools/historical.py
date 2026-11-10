@@ -29,6 +29,7 @@ for _p in (_BACKEND_DIR, _RAG_DIR):
     if _p not in sys.path:
         sys.path.insert(0, _p)
 
+from app.services.game_log_hygiene import coalesce_game_type
 from app.services.csv_player_history import (
     CSVPlayerHistoryService,
     _coerce_date,
@@ -145,7 +146,7 @@ def _games_for(player: str, n: int = 0, league: str = "nba") -> List[Dict[str, A
     # have no game_type and count as regular.
     active = [
         g for g in logs
-        if g.get("minutes", 0) > 0 and (g.get("game_type") or "regular_season") == "regular_season"
+        if g.get("minutes", 0) > 0 and coalesce_game_type(g.get("game_type")) == "regular_season"
     ]
     if n > 0:
         active = active[:n]
@@ -406,8 +407,22 @@ def _fetch_injury_report_for_team(team_code: str) -> List[Dict[str, Any]]:
     return result
 
 
-def _team_code_from_name(team_name: str) -> str:
-    """Best-effort CSV team name -> 3-letter code via nba_lineup_rag."""
+def _team_code_from_name(team_name: str, league: str = "nba") -> str:
+    """CSV team name to a 3-letter code for one league.
+
+    ``league`` defaults to ``"nba"`` and keeps the nba_lineup_rag alias
+    table. WNBA callers pass ``league="wnba"``, which uses the WNBA
+    alias table (Lynx → MIN, Wings → DAL) and does not consult the NBA
+    table. An unknown league raises.
+    """
+    league_key = (league or "nba").strip().lower()
+    if league_key == "wnba":
+        from app.services.lineup_source_support import detect_team_code
+
+        code = detect_team_code(team_name, league="wnba")
+        return code or team_name
+    if league_key != "nba":
+        raise ValueError(f"Unknown league for team code: {league!r}")
     try:
         from src.config import normalize_team_name
         code = normalize_team_name(team_name)
@@ -463,7 +478,7 @@ async def _infer_opponent_from_schedule(player: str, date: str, league: str = "n
     if not events:
         return "unknown"
 
-    player_code = _team_code_from_name(player_team)
+    player_code = _team_code_from_name(player_team, league=league)
 
     for ev in events:
         try:
@@ -487,8 +502,8 @@ async def _infer_opponent_from_schedule(player: str, date: str, league: str = "n
                     if _is_same_player(o.get("description") or "", player):
                         home = ev.get("home_team", "")
                         away = ev.get("away_team", "")
-                        home_code = _team_code_from_name(home)
-                        away_code = _team_code_from_name(away)
+                        home_code = _team_code_from_name(home, league=league)
+                        away_code = _team_code_from_name(away, league=league)
                         if home_code == player_code:
                             return away
                         if away_code == player_code:
@@ -505,7 +520,7 @@ async def get_official_injury_report(team: str, date: str = "", player: str = ""
         if effective_team == "unknown":
             effective_team = team or "unknown"  # 保持原值以便 details 顯示
 
-    code = _team_code_from_name(effective_team)
+    code = _team_code_from_name(effective_team, league=league)
     entries = await asyncio.to_thread(_fetch_injury_report_for_team, code)
     return _signal_payload(
         "caution" if entries else "neutral",
@@ -528,7 +543,7 @@ async def get_projected_lineup_consensus(team: str, date: str = "", league: str 
 
     svc = wnba_lineup_service if (league or "nba").lower() == "wnba" else lineup_service
     effective_date = date or _today_date_string()
-    code = _team_code_from_name(team)
+    code = _team_code_from_name(team, league=league)
     lineup, cache_state, _fetched_at = await svc.get_team_lineup(effective_date, code)
     if not lineup:
         return _signal_payload(
@@ -586,12 +601,14 @@ async def get_player_lineup_context(player: str, date: str = "", team: str = "",
 
     own_details = own_lineup.get("details", {}) if isinstance(own_lineup, dict) else {}
     starters = list(own_details.get("starters") or [])
-    team_code = own_details.get("team") or _team_code_from_name(target_team)
+    team_code = own_details.get("team") or _team_code_from_name(target_team, league=league)
     canonical_player_name = None
     try:
         from app.services.lineup_source_support import resolve_canonical_player_name
 
-        canonical_player_name = resolve_canonical_player_name(player, team_code).get("canonical_name")
+        canonical_player_name = resolve_canonical_player_name(
+            player, team_code, league=league
+        ).get("canonical_name")
     except ImportError:
         canonical_player_name = None
 
@@ -648,7 +665,7 @@ def get_availability_context(player: str, date: str = "", league: str = "nba") -
     if not games:
         return _signal_payload("unavailable", 0, 0, 0, "last_10", "csv", {"error": "no games"})
     team = _team_for(player, date, league=league)
-    code = _team_code_from_name(team)
+    code = _team_code_from_name(team, league=league)
     injuries = _fetch_injury_report_for_team(code)
     player_entry = next(
         (e for e in injuries if _is_same_player(e.get("player") or "", player)),
@@ -682,7 +699,7 @@ def auto_teammate_impact(player: str, metric: str, threshold: float, league: str
     if not stars:
         return _signal_payload("neutral", 0, 0, 0.3, "season", "csv", {"note": "no star teammates registered"})
 
-    code = _team_code_from_name(team)
+    code = _team_code_from_name(team, league=league)
     injuries = _fetch_injury_report_for_team(code)
     injury_map = {}
     for e in injuries:

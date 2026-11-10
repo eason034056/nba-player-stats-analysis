@@ -120,7 +120,9 @@ NON_PLAYER_LINE_KEYS = {
     "–",
 }
 
-_TEAM_ROSTER_CACHE: dict[str, list[str]] | None = None
+# League → team code → canonical names. TOR is the Raptors in the NBA
+# cache and the Tempo in the WNBA cache. The two lists are not merged.
+_TEAM_ROSTER_CACHE: dict[str, dict[str, list[str]]] = {}
 
 
 def now_iso() -> str:
@@ -274,48 +276,64 @@ def normalize_rotogrinders_player_candidate(raw_name: str) -> str | None:
     return _normalize_spaces(" ".join(name_tokens))
 
 
-def _build_team_roster_cache() -> dict[str, list[str]]:
-    """Latest-club roster for NBA and WNBA.
+def _roster_league(league: str | None) -> str:
+    """Normalize a roster league. Missing means NBA.
 
-    Team codes overlap across leagues (MIN is the Timberwolves and the
-    Lynx). Each league is resolved with its own alias table, then the
-    names are stored under that code. ``resolve_canonical_player_name``
-    looks players up by code, so both leagues have to be loaded here or
-    a WNBA player never appears on her club.
+    An unknown league is an error. Guessing would put a Tempo player on
+    the Raptors list, which is the bug this cache exists to prevent.
+    """
+    key = (league or "nba").strip().lower()
+    if key not in LEAGUE_TEAM_LOOKUPS:
+        raise ValueError(f"Unknown league for roster lookup: {league!r}")
+    return key
+
+
+def _build_team_roster_cache(league: str = "nba") -> dict[str, list[str]]:
+    """Latest-club roster for one league.
+
+    Team codes overlap (MIN is the Timberwolves and the Lynx, TOR is the
+    Raptors and the Tempo). The default ``league="nba"`` keeps existing
+    callers on the NBA list. Pass ``league="wnba"`` for the WNBA list.
+    The two lists are stored separately and are not merged.
     """
     from app.services.csv_player_history import CSVPlayerHistoryService, team_from_game_logs
 
-    roster_map: dict[str, list[str]] = {code: [] for code in TEAM_ALIASES}
-    for code in WNBA_TEAM_ALIASES:
-        roster_map.setdefault(code, [])
+    league_key = _roster_league(league)
+    aliases = WNBA_TEAM_ALIASES if league_key == "wnba" else TEAM_ALIASES
+    roster_map: dict[str, list[str]] = {code: [] for code in aliases}
 
-    for league in ("nba", "wnba"):
-        service = CSVPlayerHistoryService(league=league)
-        service.load_csv()
-        for player_name, logs in service._cache.items():
-            if not logs:
-                continue
-            latest_team = detect_team_code(
-                team_from_game_logs(logs) or "",
-                league=league,
-            )
-            if not latest_team:
-                continue
-            roster_map.setdefault(latest_team, []).append(player_name)
+    service = CSVPlayerHistoryService(league=league_key)
+    service.load_csv()
+    for player_name, logs in service._cache.items():
+        if not logs:
+            continue
+        latest_team = detect_team_code(
+            team_from_game_logs(logs) or "",
+            league=league_key,
+        )
+        if not latest_team:
+            continue
+        roster_map.setdefault(latest_team, []).append(player_name)
 
     for team_code, players in roster_map.items():
         roster_map[team_code] = sorted(dict.fromkeys(players))
     return roster_map
 
 
-def _get_team_roster_candidates(team_code: str) -> list[str]:
-    global _TEAM_ROSTER_CACHE
-    if _TEAM_ROSTER_CACHE is None:
-        _TEAM_ROSTER_CACHE = _build_team_roster_cache()
-    return list(_TEAM_ROSTER_CACHE.get(team_code, []))
+def _get_team_roster_candidates(team_code: str, league: str = "nba") -> list[str]:
+    league_key = _roster_league(league)
+    cached = _TEAM_ROSTER_CACHE.get(league_key)
+    if cached is None:
+        cached = _build_team_roster_cache(league_key)
+        _TEAM_ROSTER_CACHE[league_key] = cached
+    return list(cached.get(team_code, []))
 
 
-def resolve_canonical_player_name(raw_name: str, team_code: str) -> dict[str, str | None]:
+def resolve_canonical_player_name(
+    raw_name: str,
+    team_code: str,
+    league: str = "nba",
+) -> dict[str, str | None]:
     candidate = _normalize_spaces(raw_name)
     if not candidate:
         return {
@@ -324,7 +342,7 @@ def resolve_canonical_player_name(raw_name: str, team_code: str) -> dict[str, st
             "resolution_reason": "empty_candidate",
         }
 
-    roster = _get_team_roster_candidates(team_code)
+    roster = _get_team_roster_candidates(team_code, league=league)
     normalized_candidate = _normalize_name_key(candidate)
     for roster_name in roster:
         if _normalize_name_key(roster_name) == normalized_candidate:
@@ -373,7 +391,12 @@ def resolve_canonical_player_name(raw_name: str, team_code: str) -> dict[str, st
     }
 
 
-def normalize_source_players(raw_names: list[str], team_code: str, source: str) -> dict[str, list[str]]:
+def normalize_source_players(
+    raw_names: list[str],
+    team_code: str,
+    source: str,
+    league: str = "nba",
+) -> dict[str, list[str]]:
     display_names: list[str] = []
     canonical_names: list[str] = []
     unresolved_names: list[str] = []
@@ -388,7 +411,7 @@ def normalize_source_players(raw_names: list[str], team_code: str, source: str) 
         if not candidate:
             continue
 
-        resolution = resolve_canonical_player_name(candidate, team_code)
+        resolution = resolve_canonical_player_name(candidate, team_code, league=league)
         canonical_name = resolution.get("canonical_name")
         if canonical_name:
             display_names.append(str(canonical_name))

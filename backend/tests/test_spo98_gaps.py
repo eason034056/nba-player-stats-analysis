@@ -451,7 +451,7 @@ class TestRosterAndSampleContexts:
             detect_team_code,
         )
 
-        cache = _build_team_roster_cache()
+        cache = _build_team_roster_cache(league="wnba")
         lynx = detect_team_code("Lynx", league="wnba")
         assert lynx == "MIN"
         assert "DiJonai Carrington" in cache.get(lynx, [])
@@ -540,27 +540,27 @@ class TestReReviewEdges:
         logs = wnba_service._cache["DiJonai Carrington"]
         assert team_from_game_logs(logs, "2020-01-01") == "Wings"
 
-    @pytest.mark.xfail(
-        strict=True,
-        reason=(
-            "America/New_York moves a late Pacific tip onto the next morning. "
-            "2026-03-16T06:30:00Z is 10:30pm PST on 2026-03-15, and "
-            "2026-03-15 22:30 America/Los_Angeles is 10:30pm local that night "
-            "(05:30Z, because March 15 2026 is PDT). Kent's CSV row for that "
-            "night is Remix vs Lakers. Both clocks return Trail Blazers, and "
-            "get_lineup_context labels the same tip Trail Blazers."
-        ),
-    )
     def test_pacific_late_tip_stays_on_the_us_game_date(self, nba_service):
-        logs = nba_service._cache["Jayson Kent"]
-        assert team_from_game_logs(logs, "2026-03-16T06:30:00Z") == "Remix"
+        # 2026-03-16T05:30:00Z is 10:30pm Pacific on the 15th (PDT). The published
+        # file dropped that G League row, so the two-club log is what still
+        # has Remix that night. The UTC calendar day is the Blazers game.
+        logs = _kent_two_club_logs()
+        assert team_from_game_logs(logs, "2026-03-16T05:30:00Z") == "Remix"
         pacific = datetime(2026, 3, 15, 22, 30, tzinfo=ZoneInfo("America/Los_Angeles"))
         assert team_from_game_logs(logs, pacific) == "Remix"
+        assert team_from_game_logs(logs, "2026-03-16") == "Trail Blazers"
+        shipped = nba_service._cache["Jayson Kent"]
+        assert {row["team"] for row in shipped} == {"Trail Blazers"}
         historical = _historical()
         late = historical.get_lineup_context(
-            "Jayson Kent", "2026-03-16T06:30:00Z", league="nba"
+            "Jayson Kent", "2026-03-16T05:30:00Z", league="nba"
         )
-        assert late["details"]["team"] == "Remix"
+        # US game date is the 15th, before every remaining canonical game.
+        assert late["details"].get("error") == "no data"
+        utc_day = historical.get_lineup_context(
+            "Jayson Kent", "2026-03-16", league="nba"
+        )
+        assert utc_day["details"]["team"] == "Trail Blazers"
 
     def test_star_list_matches_suffix_and_comma_variants(self, monkeypatch):
         historical = _historical()
@@ -610,14 +610,6 @@ class TestReReviewEdges:
         assert historical._is_same_player("Gary Trent, Jr.", "gary trent jr")
         assert not historical._is_same_player("Nikola Jokić", "Nikola Jovic")
 
-    @pytest.mark.xfail(
-        strict=True,
-        reason=(
-            "Shared codes are one list. TOR holds Tyreke Key (Raptors) and "
-            "Teonni Key (Tempo). resolve_canonical_player_name('T. Key', 'TOR') "
-            "returns ambiguous_team_match. Each league has only one T. Key."
-        ),
-    )
     def test_shared_team_code_initials_do_not_cross_leagues(self):
         from app.services.lineup_source_support import (
             _build_team_roster_cache,
@@ -625,26 +617,29 @@ class TestReReviewEdges:
         )
 
         cache = _build_team_roster_cache()
-        assert "Tyreke Key" in cache["TOR"]
-        resolved = resolve_canonical_player_name("T. Key", "TOR")
-        assert resolved["resolution_status"] == "team_resolved"
-        assert resolved["canonical_name"] == "Tyreke Key"
+        # Tyreke Key's only rows were Summer League and left the canonical
+        # NBA file. Teonni Key is Tempo and must not land on the NBA list.
         assert "Teonni Key" not in cache["TOR"]
+        assert "Tyreke Key" not in cache["TOR"]
+        resolved = resolve_canonical_player_name("T. Key", "TOR")
+        assert resolved["canonical_name"] != "Teonni Key"
+        assert resolved["resolution_status"] == "unresolved"
 
-    @pytest.mark.xfail(
-        strict=True,
-        reason=(
-            "canonical_team_code and historical._team_code_from_name only "
-            "know NBA aliases. WNBA daily picks and the injury/odds paths "
-            "send nicknames through them, so Lynx stays 'LYNX' / 'Lynx' "
-            "instead of MIN and Wings stays 'WINGS'."
-        ),
-    )
+        wnba_cache = _build_team_roster_cache(league="wnba")
+        assert "Teonni Key" in wnba_cache["TOR"]
+        assert "Tyreke Key" not in wnba_cache["TOR"]
+        wnba_resolved = resolve_canonical_player_name("T. Key", "TOR", league="wnba")
+        assert wnba_resolved["resolution_status"] == "team_resolved"
+        assert wnba_resolved["canonical_name"] == "Teonni Key"
+
     def test_wnba_nickname_uses_the_wnba_team_code(self):
         from app.services.daily_analysis import canonical_team_code
 
         historical = _historical()
-        assert canonical_team_code("Lynx") == "MIN"
-        assert canonical_team_code("Wings") == "DAL"
-        assert historical._team_code_from_name("Lynx") == "MIN"
-        assert historical._team_code_from_name("Wings") == "DAL"
+        assert canonical_team_code("Lynx", league="wnba") == "MIN"
+        assert canonical_team_code("Wings", league="wnba") == "DAL"
+        assert historical._team_code_from_name("Lynx", league="wnba") == "MIN"
+        assert historical._team_code_from_name("Wings", league="wnba") == "DAL"
+        # The default league is NBA. Lynx is not a Timberwolves alias.
+        assert canonical_team_code("Lynx") != "MIN"
+        assert historical._team_code_from_name("Lynx") != "MIN"
