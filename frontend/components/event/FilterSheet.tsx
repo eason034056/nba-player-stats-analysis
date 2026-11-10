@@ -4,6 +4,12 @@ import { useEffect, useRef } from "react";
 
 const FOCUSABLE = 'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])';
 
+function focusableIn(dialog: HTMLElement): HTMLElement[] {
+  return Array.from(dialog.querySelectorAll<HTMLElement>(FOCUSABLE)).filter(
+    (node) => !node.hasAttribute("disabled"),
+  );
+}
+
 /**
  * Mobile filter sheet. The controls inside are the current game-log filters.
  * SPO-120c restyles those controls; this only moves them off the fourth tab.
@@ -18,17 +24,45 @@ export function FilterSheet({
   children: React.ReactNode;
 }) {
   const dialogRef = useRef<HTMLDivElement>(null);
+  const onCloseRef = useRef(onClose);
+
+  useEffect(() => {
+    onCloseRef.current = onClose;
+  }, [onClose]);
 
   useEffect(() => {
     if (!open) return;
     const trigger = document.activeElement instanceof HTMLElement ? document.activeElement : null;
     const dialog = dialogRef.current;
-    const target = dialog?.querySelector<HTMLElement>(FOCUSABLE) ?? dialog;
+    const target = dialog ? focusableIn(dialog)[0] ?? dialog : null;
     target?.focus();
     const onKey = (event: KeyboardEvent) => {
       if (event.key === "Escape") {
         event.preventDefault();
-        onClose();
+        onCloseRef.current();
+        return;
+      }
+      if (event.key !== "Tab" || !dialog) return;
+      const items = focusableIn(dialog);
+      if (items.length === 0) {
+        event.preventDefault();
+        dialog.focus();
+        return;
+      }
+      const first = items[0];
+      const last = items[items.length - 1];
+      const active = document.activeElement;
+      const inside = active instanceof Node && dialog.contains(active);
+      if (event.shiftKey) {
+        if (!inside || active === first) {
+          event.preventDefault();
+          last.focus();
+        }
+        return;
+      }
+      if (!inside || active === last) {
+        event.preventDefault();
+        first.focus();
       }
     };
     window.addEventListener("keydown", onKey);
@@ -36,7 +70,8 @@ export function FilterSheet({
       window.removeEventListener("keydown", onKey);
       trigger?.focus();
     };
-  }, [open, onClose]);
+    // onClose stays in a ref. A new parent callback must not move focus again.
+  }, [open]);
 
   if (!open) return null;
   return (
