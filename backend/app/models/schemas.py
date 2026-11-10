@@ -6,7 +6,9 @@ Defines all API request and response data structures
 - Field: Used to define extra info for fields (description, default values, etc)
 """
 
-from pydantic import BaseModel, Field
+import math
+
+from pydantic import BaseModel, Field, field_validator
 from typing import Any, Dict, List, Literal, Optional
 from datetime import datetime
 
@@ -25,6 +27,48 @@ class HealthResponse(BaseModel):
 
 # ==================== NBA Events ====================
 
+class TopRead(BaseModel):
+    """
+    Best stored daily pick for one event.
+
+    Joined from the daily-picks cache for that event_id. This is not an
+    Odds API field and does not trigger a props request.
+
+    - player: Player name on the stored pick
+    - market: Odds API market key (player_points), not the CSV metric (points)
+    - side: Stored direction, over or under
+    - line: Modal bookmaker line
+    - probability: Chosen-side historical rate, from 0 to 1
+    """
+    player: str = Field(..., description="Player name")
+    market: str = Field(
+        ...,
+        min_length=1,
+        description="Odds API market key, for example player_points",
+    )
+    side: Literal["over", "under"] = Field(..., description="Stored pick side")
+    line: float = Field(..., description="Modal bookmaker line")
+    probability: float = Field(..., description="Chosen-side historical probability (0-1)")
+
+    @field_validator("line", "probability")
+    @classmethod
+    def _must_be_finite(cls, value: float) -> float:
+        """Reject NaN and Infinity before a TopRead can be built.
+
+        Args:
+            value: Parsed line or probability.
+
+        Returns:
+            The same number when it is finite.
+
+        Raises:
+            ValueError: ``value`` is NaN or Infinity.
+        """
+        if not math.isfinite(value):
+            raise ValueError("must be a finite number")
+        return value
+
+
 class NBAEvent(BaseModel):
     """
     Single NBA game information
@@ -34,12 +78,21 @@ class NBAEvent(BaseModel):
     - home_team: Name of the home team
     - away_team: Name of the away team
     - commence_time: Game start time (UTC ISO 8601 format)
+    - top_read: Highest-probability stored daily pick for this event, or null
     """
     event_id: str = Field(..., description="Event ID")
     sport_key: str = Field(..., description="Sport key")
     home_team: str = Field(..., description="Home team")
     away_team: str = Field(..., description="Away team")
     commence_time: datetime = Field(..., description="Game start time (UTC)")
+    top_read: Optional[TopRead] = Field(
+        default=None,
+        description=(
+            "Highest-probability stored daily pick for this event, or null "
+            "when that event has no stored pick. Filled on GET /api/nba/events "
+            "from the daily-picks cache."
+        ),
+    )
 
 
 class EventsResponse(BaseModel):
@@ -477,7 +530,9 @@ class DailyPick(BaseModel):
     - metric: Stat metric (points/assists/rebounds/pra)
     - threshold: Modal line (mode of one main line per bookmaker)
     - direction: "over" or "under," higher probability direction
-    - probability: Historical probability (>= 0.65)
+    - probability: Historical probability of the chosen side. The default
+      query keeps rows at or above 0.65. Stored NBA candidates go down to
+      the Lean floor (0.56).
     - n_games: Number of historical games used
     - bookmakers_count: Distinct bookmakers that posted this player on this market
     - all_lines: One main line per bookmaker, sorted. Alternate rungs are not repeated.
@@ -532,6 +587,24 @@ class DailyPick(BaseModel):
     lineup_confirmed: Optional[bool] = Field(
         default=None,
         description="Is lineup confirmed"
+    )
+    # Additive read fields. Older cached payloads omit them and validate
+    # as null. Later tickets can add verdict fields beside these.
+    tier: Optional[Literal["Strong play", "Playable", "Lean"]] = Field(
+        default=None,
+        description=(
+            "Read tier of probability. Strong play >= 0.70, "
+            "Playable >= 0.65 and below 0.70, Lean >= 0.56 and below 0.65. "
+            "Null when probability is below Lean or missing."
+        ),
+    )
+    p_over: Optional[float] = Field(
+        default=None,
+        description="Share of prior games strictly above the line. Null when unknown.",
+    )
+    p_under: Optional[float] = Field(
+        default=None,
+        description="Share of prior games strictly below the line. Null when unknown.",
     )
 
 
