@@ -10,6 +10,8 @@
  * 3. TypeScript 類型安全
  */
 
+import { useQuery } from "@tanstack/react-query";
+
 import {
   eventsResponseSchema,
   noVigResponseSchema,
@@ -24,6 +26,10 @@ import {
   projectionsResponseSchema,
   projectionRefreshResponseSchema,
   teamLineupSchema,
+  bulkPropsResponseSchema,
+  eventReadsResponseSchema,
+  type BulkPropsResponse,
+  type EventReadsResponse,
   type PlayerProjection,
   type EventsResponse,
   type NoVigRequest,
@@ -972,4 +978,56 @@ export async function refreshProjections(
   });
   
   return projectionRefreshResponseSchema.parse(data);
+}
+
+export async function getEventReads(
+  eventId: string,
+  market?: string,
+): Promise<EventReadsResponse> {
+  const params = new URLSearchParams();
+  if (market) params.set("market", market);
+  const query = params.toString();
+  const path = `/api/nba/events/${encodeURIComponent(eventId)}/reads`;
+  const data = await fetchApi<EventReadsResponse>(query ? `${path}?${query}` : path);
+  return eventReadsResponseSchema.parse(data);
+}
+
+export async function getEventBulkProps(
+  eventId: string,
+  market?: string,
+): Promise<BulkPropsResponse> {
+  const params = new URLSearchParams();
+  if (market) params.set("markets", market);
+  const query = params.toString();
+  const path = `/api/nba/events/${encodeURIComponent(eventId)}/props`;
+  const data = await fetchApi<BulkPropsResponse>(query ? `${path}?${query}` : path);
+  return bulkPropsResponseSchema.parse(data);
+}
+
+export function useEventReads(args: {
+  eventId: string | null | undefined;
+  market?: string | null;
+  enabled: boolean;
+}) {
+  return useQuery({
+    queryKey: ["nba-event-reads", args.eventId ?? null, args.market ?? null],
+    queryFn: () => getEventReads(args.eventId as string, args.market ?? undefined),
+    enabled: args.enabled && Boolean(args.eventId),
+    staleTime: 60 * 1000,
+    retry: false,
+  });
+}
+
+export function useEventBulkProps(args: {
+  eventId: string | null | undefined;
+  market?: string | null;
+  enabled: boolean;
+}) {
+  return useQuery({
+    queryKey: ["nba-event-props", args.eventId ?? null, args.market ?? null],
+    queryFn: () => getEventBulkProps(args.eventId as string, args.market ?? undefined),
+    enabled: args.enabled && Boolean(args.eventId),
+    staleTime: 60 * 1000,
+    retry: false,
+  });
 }

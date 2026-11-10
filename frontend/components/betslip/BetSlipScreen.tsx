@@ -12,13 +12,12 @@ import { getLineups } from "@/lib/api";
 import {
   complementHitRateLabel,
   slipDetailHref,
+  slipCardFace,
   slipMatchup,
   slipPropText,
   slipSummary,
   slipTeamCode,
-  slipTierLabel,
 } from "@/lib/bet-slip-board";
-import { formatPercent } from "@/lib/player-dd";
 import { getCanonicalTeamCode } from "@/lib/team-logos";
 import { getLocalDateString } from "@/lib/utils";
 
@@ -81,7 +80,7 @@ function ShareCard({
             ) : null}
           </div>
           <div style={{ fontFamily: SHARE_FONT_MONO, fontWeight: 700, fontSize: 16, color: "#E4DA72" }}>
-            {formatPercent(pick.probability)}
+            {slipCardFace(pick).probabilityText}
           </div>
         </div>
       ))}
@@ -275,7 +274,7 @@ export function BetSlipScreen() {
           <div className="flex min-w-0 flex-[3_1_420px] flex-col gap-2.5">
             <h2 className="sr-only">Your picks</h2>
             {picks.map((pick) => {
-              const tier = slipTierLabel(pick.probability);
+              const face = slipCardFace(pick);
               const lineup =
                 lineupsByDateAndTeam.get(
                   `${getLocalDateString(pick.commence_time)}:${getCanonicalTeamCode(pick.player_team)}`,
@@ -312,9 +311,9 @@ export function BetSlipScreen() {
                   </div>
                   <div className="text-right">
                     <div className="font-mono text-xl font-bold text-brand">
-                      {formatPercent(pick.probability)}
+                      {face.probabilityText}
                     </div>
-                    {tier ? <div className="text-[11px] font-semibold text-muted">{tier}</div> : null}
+                    {face.tier ? <div className="text-[11px] font-semibold text-muted">{face.tier.label}</div> : null}
                   </div>
                   <button
                     type="button"

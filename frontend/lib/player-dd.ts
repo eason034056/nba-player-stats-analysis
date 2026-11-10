@@ -170,6 +170,16 @@ export function formatPercent(probability: number | null | undefined): string {
   return `${roundHalfAwayFromZero(probability * 100, 1).toFixed(1)}%`;
 }
 
+/**
+ * Whole percent for a probability that sits next to a tier label.
+ * Floors. The epsilon keeps a binary value such as 0.29 * 100 from
+ * landing just under the integer.
+ */
+export function formatTierPercent(probability: number | null | undefined): string {
+  if (probability == null || !Number.isFinite(probability)) return "—";
+  return `${Math.floor(probability * 100 + 1e-9)}%`;
+}
+
 export function staleLineWarning(meta: DDSnapshotMeta): string | null {
   const tooOld =
     meta.dataAgeSeconds !== null && meta.dataAgeSeconds > LIVE_ODDS_FRESH_SECONDS;

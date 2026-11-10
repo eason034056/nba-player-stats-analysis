@@ -78,11 +78,11 @@ function GameTopRead({ game }: { game: TodayGameCard }) {
           {game.topText ?? "No read on this game"}
         </div>
       </div>
-      {game.topProbabilityText && game.tier ? (
+      {game.showProbability && game.topProbabilityText ? (
         <div
           className={cn(
             "shrink-0 rounded-[10px] px-2.5 py-1.5 font-mono text-sm font-bold",
-            TIER_CLASS[game.tier.name],
+            game.tier ? TIER_CLASS[game.tier.name] : "bg-[#E2E2E2] text-[#4A4458]",
           )}
         >
           {game.topProbabilityText}
@@ -99,6 +99,7 @@ function WebBoard({
   picksHref,
   picksCount,
   picksLabel,
+  blurb,
   onAsk,
 }: {
   eyebrow: string;
@@ -107,6 +108,7 @@ function WebBoard({
   picksHref: string;
   picksCount: number | null | undefined;
   picksLabel: string | null;
+  blurb: string;
   onAsk: () => void;
 }) {
   const countText =
@@ -123,8 +125,7 @@ function WebBoard({
               Tonight&apos;s best reads
             </h1>
             <p className="text-[17px] leading-[1.55] text-[#E6DDF6]">
-              Each card is a historical hit rate from tonight&apos;s board.
-              Start with the strongest calls, or open any game.
+              {blurb}
             </p>
           </div>
           <div className="flex flex-wrap gap-2.5">
@@ -269,11 +270,11 @@ function GamesBlock({
                 {game.time && (
                   <div className="font-mono text-xs font-semibold text-muted">{game.time}</div>
                 )}
-                {game.topProbabilityText && game.tier ? (
+                {game.showProbability && game.topProbabilityText ? (
                   <div
                     className={cn(
                       "rounded-[9px] px-2 py-1 font-mono text-[13px] font-bold",
-                      TIER_CLASS[game.tier.name],
+                      game.tier ? TIER_CLASS[game.tier.name] : "bg-[#E2E2E2] text-[#4A4458]",
                     )}
                   >
                     {game.topProbabilityText}
@@ -463,20 +464,31 @@ export function TodayBoard({ league }: { league: LeagueSegment }) {
     reads,
     games: games.map((game) =>
       picksQuery.isLoading
-        ? { ...game, topText: "Loading the top read", topProbabilityText: null, tier: null }
+        ? { ...game, topText: "Loading the top read", topProbabilityText: null, showProbability: false, tier: null }
         : picksQuery.isError
-          ? { ...game, topText: "Top read unavailable", topProbabilityText: null, tier: null }
+          ? { ...game, topText: "Top read unavailable", topProbabilityText: null, showProbability: false, tier: null }
           : game,
     ),
     picksHref,
     picksCount,
     picksLabel,
+    blurb:
+      league === "nba"
+        ? "Each card is the combined probability and the tier from tonight's board. A missing blend shows —."
+        : "Each card is a historical hit rate from tonight's board. Start with the strongest calls, or open any game.",
   };
 
   return (
     <div className="mx-auto flex w-full max-w-[1200px] flex-col px-4 py-6 md:px-8 md:py-10">
       <WebBoard {...boardProps} onAsk={openWidget} />
-      <MobileBoard {...boardProps} />
+      <MobileBoard
+        eyebrow={boardProps.eyebrow}
+        reads={boardProps.reads}
+        games={boardProps.games}
+        picksHref={boardProps.picksHref}
+        picksCount={boardProps.picksCount}
+        picksLabel={boardProps.picksLabel}
+      />
     </div>
   );
 }

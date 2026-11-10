@@ -9,9 +9,10 @@
 import type { BetSlipPick } from "@/contexts/BetSlipContext";
 import { buildEventDetailHref, type LeagueSegment } from "./event-detail-link";
 import { metricToMarket } from "./metric-to-market";
+import { slipFace } from "./nba-card";
 import { formatPercent } from "./player-dd";
 import { teamAbbr } from "./team-abbr";
-import { boardClock, readTier } from "./today-board";
+import { boardClock } from "./today-board";
 import { propPhrase } from "./picks-board";
 
 export interface SlipSummary {
@@ -63,8 +64,19 @@ export function slipTeamCode(pick: BetSlipPick, league: LeagueSegment): string {
   return teamAbbr(pick.player_team, league) || pick.player_team.slice(0, 3).toUpperCase();
 }
 
-export function slipTierLabel(probability: number): string | null {
-  return readTier(probability)?.label ?? null;
+export function slipCardFace(pick: BetSlipPick) {
+  return slipFace(pick);
+}
+
+export function sameSideSlipRead(
+  pick: { direction: string; tier?: string | null; combined_probability?: number | null },
+  direction: string,
+): { tier?: string | null; combined_probability?: number | null } {
+  if (direction !== pick.direction) return {};
+  return {
+    tier: pick.tier ?? null,
+    combined_probability: pick.combined_probability ?? null,
+  };
 }
 
 export function slipDetailHref(pick: BetSlipPick, league: LeagueSegment): string {

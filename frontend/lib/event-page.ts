@@ -9,7 +9,8 @@
 import { format, parseISO } from "date-fns";
 import { enUS } from "date-fns/locale";
 
-import { formatPercent } from "./player-dd";
+import { nbaTierFace, tierFromBackend, tierProbability } from "./nba-card";
+import { formatPercent, formatTierPercent } from "./player-dd";
 import {
   formatThreshold,
   playerLastName,
@@ -21,10 +22,12 @@ import { METRIC_TO_MARKET, type MetricKey } from "./metric-to-market";
 import type { LeagueSegment } from "./event-detail-link";
 import { teamAbbr } from "./team-abbr";
 import type {
+  BulkPropPlayer,
   DailyPick,
   GameLog,
   PlayerHistoryResponse,
   PlayerProjection,
+  PropRead,
   TeamLineup,
 } from "./schemas";
 
@@ -175,7 +178,7 @@ export interface SignalInput {
     p_no_fair?: number | null;
   } | null;
   last10: GameLog[];
-  history: Pick<PlayerHistoryResponse, "p_over" | "p_under" | "n_games"> | null;
+  history: Pick<PlayerHistoryResponse, "p_over" | "p_under" | "n_games" | "season_mean"> | null;
   projection: PlayerProjection | null;
   pick: DailyPick | null;
   market: string;
@@ -266,10 +269,15 @@ function historySignal(input: SignalInput): ReadSignal {
   }
   const games = input.history?.n_games;
   const sample = finite(games) ? `${games} games` : "the returned games";
+  const seasonMean = input.history?.season_mean;
+  const seasonSentence =
+    typeof seasonMean === "number" && Number.isFinite(seasonMean)
+      ? ` Season mean ${seasonMean.toFixed(1)}.`
+      : "";
   return {
     key: "history",
     label: "All-game hit rate",
-    detail: `Over ${formatPercent(over)} · under ${formatPercent(under)} across ${sample}. Not a season filter.`,
+    detail: `Over ${formatPercent(over)} · under ${formatPercent(under)} across ${sample}. Not a season filter.${seasonSentence}`,
     value: formatPercent(over),
     meter: over,
   };
@@ -375,11 +383,14 @@ export interface SlipSeed {
   direction: string;
   probability: number;
   n_games: number;
+  tier?: string | null;
+  combined_probability?: number | null;
 }
 
 export interface EventPlayerRow {
   name: string;
   team: string | null;
+  position: string | null;
   lineText: string;
   leanText: string;
   hasLean: boolean;
@@ -396,6 +407,39 @@ function onRoster(name: string, lineup: TeamLineup | null | undefined): boolean 
   return players.some((player) => namesMatch(player, name));
 }
 
+function samePlayer(left: string, right: string): boolean {
+  return left.trim().toLowerCase() === right.trim().toLowerCase();
+}
+
+function readForPlayer(reads: PropRead[] | undefined, name: string): PropRead | null {
+  return reads?.find((read) => samePlayer(read.player, name)) ?? null;
+}
+
+function bulkForPlayer(players: BulkPropPlayer[] | undefined, name: string): BulkPropPlayer | null {
+  return players?.find((player) => samePlayer(player.player, name)) ?? null;
+}
+
+function nbaLean(pick: DailyPick | null, read: PropRead | null): { text: string; rate: number | null } {
+  const side = read?.side ?? pick?.direction ?? null;
+  const combined = read?.combined_probability ?? pick?.combined_probability ?? null;
+  const tier = read?.tier ?? pick?.tier ?? null;
+  const face = nbaTierFace({
+    probability: pick?.probability,
+    combined_probability: combined,
+    tier,
+  });
+  const letter = side === "under" ? "U" : side === "over" ? "O" : null;
+  const label = face.tier ? ` ${face.tier.label}` : "";
+  const rate =
+    typeof combined === "number" && Number.isFinite(combined)
+      ? combined
+      : pick && Number.isFinite(pick.probability)
+        ? pick.probability
+        : null;
+  if (!letter) return { text: "—", rate };
+  return { text: `${letter} ${face.probabilityText}${label}`, rate };
+}
+
 export function eventPlayerRows(args: {
   suggested: string[];
   picks: DailyPick[];
@@ -408,6 +452,8 @@ export function eventPlayerRows(args: {
   awayAbbr: string;
   homeAbbr: string;
   league: LeagueSegment;
+  reads?: PropRead[];
+  bulkPlayers?: BulkPropPlayer[];
 }): EventPlayerRow[] {
   const metric = marketToMetric(args.metric);
   const picks = args.picks.filter(
@@ -428,32 +474,46 @@ export function eventPlayerRows(args: {
     names.push(name.trim());
   };
   for (const pick of picks) push(pick.player_name);
+  for (const read of args.reads ?? []) push(read.player);
   for (const name of args.suggested) push(name);
   if (args.selectedName) push(args.selectedName);
 
   const rows = names.map((name) => {
     const pick = byName.get(name.toLowerCase()) ?? null;
-    const teamFromPick = pick
-      ? pick.player_team_code || teamAbbr(pick.player_team, args.league) || null
-      : null;
+    const read = args.league === "nba" ? readForPlayer(args.reads, name) : null;
+    const bulk = args.league === "nba" ? bulkForPlayer(args.bulkPlayers, name) : null;
+    const teamFromPick = pick?.player_team_code?.trim()
+      ? pick.player_team_code
+      : pick
+        ? teamAbbr(pick.player_team, args.league) || null
+        : null;
     const team =
       teamFromPick ||
+      bulk?.team_code?.trim() ||
       (onRoster(name, args.awayLineup) ? args.awayAbbr : null) ||
       (onRoster(name, args.homeLineup) ? args.homeAbbr : null);
     const selected = namesMatch(name, args.selectedName);
     const line =
       pick != null
         ? pick.threshold
-        : selected && args.postedLine != null
-          ? args.postedLine
-          : null;
+        : read != null
+          ? read.line
+          : selected && args.postedLine != null
+            ? args.postedLine
+            : null;
+    const nba = args.league === "nba" && (pick != null || read != null) ? nbaLean(pick, read) : null;
     return {
       name,
       team: team || null,
+      position: pick?.position?.trim() || bulk?.position?.trim() || null,
       lineText: line == null ? "—" : formatThreshold(line),
-      leanText: pick ? `${pick.direction === "under" ? "U" : "O"} ${formatPercent(pick.probability)}` : "No read",
-      hasLean: pick != null,
-      probability: pick?.probability ?? null,
+      leanText: nba
+        ? nba.text
+        : pick
+          ? `${pick.direction === "under" ? "U" : "O"} ${formatPercent(pick.probability)}`
+          : "No read",
+      hasLean: nba != null || pick != null,
+      probability: nba?.rate ?? pick?.probability ?? null,
     };
   });
 
@@ -621,6 +681,8 @@ export function buildOurRead(args: {
   last10: GameLog[];
   history: PlayerHistoryResponse | null;
   projection: PlayerProjection | null;
+  league: LeagueSegment;
+  read?: PropRead | null;
 }): OurReadModel {
   const signals = buildReadSignals({
     binary: args.binary,
@@ -691,8 +753,25 @@ export function buildOurRead(args: {
       };
     }
     headlineLead = `${direction === "under" ? "Under" : "Over"} ${formatThreshold(pick.threshold)}`;
-    caption = `Historical hit rate ${formatPercent(pick.probability)} over ${pick.n_games} games. The tier is a display bucket on that rate.`;
-    tier = readTier(pick.probability);
+    if (args.league === "nba") {
+      const face = nbaTierFace(pick);
+      const combinedText = finite(pick.combined_probability)
+        ? face.tier
+          ? formatTierPercent(pick.combined_probability)
+          : formatPercent(pick.combined_probability)
+        : "—";
+      caption = `Combined probability ${combinedText}. Historical hit rate ${formatPercent(pick.probability)} over ${pick.n_games} games.`;
+      tier = face.tier;
+      primary = { ...primary, tier: pick.tier ?? null, combined_probability: pick.combined_probability ?? null };
+    } else {
+      caption = `Historical hit rate ${formatPercent(pick.probability)} over ${pick.n_games} games. The tier is a display bucket on that rate.`;
+      tier = readTier(pick.probability);
+    }
+  } else if (args.league === "nba" && args.read && (args.read.side === "over" || args.read.side === "under")) {
+    const face = nbaTierFace(args.read);
+    headlineLead = `${args.read.side === "under" ? "Under" : "Over"} ${formatThreshold(args.read.line)}`;
+    caption = `Combined probability ${face.probabilityText}.`;
+    tier = face.tier;
   } else if (args.line != null && !args.binary) {
     const overSide = historySide(args.history, args.line, "over");
     const underSide = historySide(args.history, args.line, "under");
@@ -732,10 +811,26 @@ export function buildOurRead(args: {
   };
 }
 
+/** Percent on the NBA action bar, beside the tier. WNBA keeps its short label. */
+export function actionBarPercent(
+  seed: {
+    probability?: number | null;
+    combined_probability?: number | null;
+    tier?: string | null;
+  } | null,
+  league: LeagueSegment,
+): string | null {
+  if (league !== "nba" || !seed || !tierFromBackend(seed.tier)) return null;
+  return formatTierPercent(tierProbability(seed));
+}
+
 export function slipButtonLabel(seed: SlipSeed, inSlip: boolean): string {
   const side = seed.direction === "under" ? "U" : "O";
   if (inSlip) return `In slip · ${playerLastName(seed.player_name)} ${side} ${formatThreshold(seed.threshold)}`;
-  return `Add ${playerLastName(seed.player_name)} ${side} ${formatThreshold(seed.threshold)} ${formatPercent(seed.probability)}`;
+  const percent = seed.tier
+    ? formatTierPercent(tierProbability(seed))
+    : formatPercent(seed.probability);
+  return `Add ${playerLastName(seed.player_name)} ${side} ${formatThreshold(seed.threshold)} ${percent}`;
 }
 
 export function errorText(error: unknown): string {

@@ -34,9 +34,12 @@ import {
   getWNBAPlayerSuggestions,
   getWNBATeamLineup,
   getWnbaDailyPicks,
+  useEventBulkProps,
+  useEventReads,
 } from "@/lib/api";
 import { createAgentPickContextFromDailyPick } from "@/lib/agent-chat";
 import {
+  actionBarPercent,
   buildOurRead,
   chartLine,
   errorText,
@@ -231,6 +234,16 @@ export function EventDetail({ league }: { league: League }) {
   const awayAbbr = currentEvent ? teamAbbr(currentEvent.away_team, league) : "";
   const homeAbbr = currentEvent ? teamAbbr(currentEvent.home_team, league) : "";
 
+  const readsQuery = useEventReads({
+    eventId,
+    market: selectedMarket,
+    enabled: league === "nba",
+  });
+  const propsQuery = useEventBulkProps({
+    eventId,
+    market: selectedMarket,
+    enabled: league === "nba",
+  });
   const picksQuery = useQuery({
     queryKey: [cfg.picksQueryKey, picksDate],
     queryFn: () => cfg.getPicks(picksDate),
@@ -335,9 +348,19 @@ export function EventDetail({ league }: { league: League }) {
     awayAbbr,
     homeAbbr,
     league,
+    reads: readsQuery.data?.reads,
+    bulkPlayers: propsQuery.data?.markets.find((market) => market.market === selectedMarket)?.players,
   });
   const selectedRow = rows.find((row) => row.name === playerName) ?? null;
-  const position = projectionQuery.data?.position?.trim() || null;
+  const selectedRead =
+    league === "nba"
+      ? readsQuery.data?.reads.find(
+          (read) => read.player.trim().toLowerCase() === playerName.trim().toLowerCase(),
+        ) ?? null
+      : null;
+  const position =
+    projectionQuery.data?.position?.trim() ||
+    (league === "nba" ? selectedRow?.position || null : null);
   const model = buildOurRead({
     player: playerName.trim(),
     marketName: getMarketDisplayName(selectedMarket),
@@ -356,6 +379,8 @@ export function EventDetail({ league }: { league: League }) {
     last10: last10Query.data?.game_logs ?? [],
     history: sampleQuery.data ?? null,
     projection: projectionQuery.data ?? null,
+    league,
+    read: selectedRead,
   });
   const chart = chartQuery.data ? gameLogChart(chartQuery.data.game_logs ?? [], activeLine) : null;
   const projectionMetric = marketToProjectionCard(selectedMarket);
@@ -391,6 +416,7 @@ export function EventDetail({ league }: { league: League }) {
     const ids = Array.isArray(id) ? id : [id];
     return cn(!ids.includes(tab) && "max-md:hidden");
   };
+  const barPercent = actionBarPercent(model.primary, league);
 
   return (
     <div className="mx-auto flex max-w-[1200px] flex-col gap-5 px-4 py-6 md:px-8">
@@ -622,7 +648,12 @@ export function EventDetail({ league }: { league: League }) {
               onClick={() => addSeed(model.primary!)}
               className="min-h-12 flex-1 rounded-[14px] bg-brand px-3 text-sm font-bold text-white"
             >
-              {existing?.direction === model.primary.direction ? "In slip" : model.primary.direction === "under" ? "Add under" : "Add over"}
+              {existing?.direction === model.primary.direction
+                ? "In slip"
+                : model.primary.direction === "under"
+                  ? "Add under"
+                  : "Add over"}
+              {barPercent ? ` ${barPercent}` : ""}
             </button>
           ) : null}
           {model.other ? (

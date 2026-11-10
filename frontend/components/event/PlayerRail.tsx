@@ -52,7 +52,7 @@ export function PlayerRail({
                 onClick={() => onSelect(row.name)}
                 data-testid={`player-row-${row.name}`}
                 className={cn(
-                  "flex min-w-[118px] shrink-0 flex-col gap-1.5 rounded-2xl border px-3 py-2.5 text-left md:grid md:min-w-0 md:grid-cols-[minmax(0,1fr)_44px_76px] md:items-center md:gap-2.5 md:px-3.5 md:py-3",
+                  "flex min-w-[118px] shrink-0 flex-col gap-1.5 rounded-2xl border px-3 py-2.5 text-left md:grid md:min-w-0 md:grid-cols-[minmax(0,1fr)_40px_148px] md:items-center md:gap-2.5 md:px-3.5 md:py-3",
                   active ? "border-brand bg-brand-tint" : "border-line bg-white",
                 )}
               >
@@ -70,7 +70,7 @@ export function PlayerRail({
                 </span>
                 <span
                   className={cn(
-                    "w-fit rounded-md px-1.5 py-0.5 font-mono text-[11px] font-bold md:w-full md:px-0 md:py-1.5 md:text-center md:text-xs",
+                    "w-fit whitespace-nowrap rounded-md px-1.5 py-0.5 font-mono text-[11px] font-bold md:w-full md:px-1 md:py-1.5 md:text-center md:text-xs",
                     row.hasLean ? "bg-[#E2E2E2] text-ink" : "bg-[#F3F1F6] text-muted",
                   )}
                 >

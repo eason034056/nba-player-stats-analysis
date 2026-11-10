@@ -11,6 +11,7 @@ import { enUS } from "date-fns/locale";
 
 import { buildEventDetailHref, type LeagueSegment } from "./event-detail-link";
 import { METRIC_TO_MARKET, type MetricKey } from "./metric-to-market";
+import { boardRate, nbaTierFace, tierFromBackend } from "./nba-card";
 import { formatPercent } from "./player-dd";
 import {
   DIRECTION_DISPLAY_NAMES,
@@ -27,10 +28,7 @@ export interface ReadTier {
 }
 
 /**
- * Display bucket for a probability the API already computed.
- * 70% and 65% match the picks page (high versus medium) and the
- * prototype's Strong / Playable labels. Below that, the daily-picks
- * service does not return a row.
+ * WNBA display bucket. NBA cards do not call this. They use DailyPick.tier.
  */
 export function readTier(probability: number | null | undefined): ReadTier | null {
   if (probability == null || !Number.isFinite(probability)) return null;
@@ -131,13 +129,25 @@ function readHref(pick: DailyPick, league: LeagueSegment, date: string): string 
   });
 }
 
-export function rankReads(picks: DailyPick[]): DailyPick[] {
+export function rankReads(picks: DailyPick[], league: LeagueSegment): DailyPick[] {
   return [...picks].sort((a, b) => {
-    if (b.probability !== a.probability) return b.probability - a.probability;
+    const left = boardRate(a, league);
+    const right = boardRate(b, league);
+    if (right !== left) return right - left;
     const byName = a.player_name.localeCompare(b.player_name);
     if (byName !== 0) return byName;
     return a.metric.localeCompare(b.metric);
   });
+}
+
+function cardTier(pick: DailyPick, league: LeagueSegment): ReadTier | null {
+  if (league === "nba") return tierFromBackend(pick.tier);
+  return readTier(pick.probability);
+}
+
+function cardProbability(pick: DailyPick, league: LeagueSegment): string {
+  if (league === "nba") return nbaTierFace(pick).probabilityText;
+  return formatPercent(pick.probability);
 }
 
 export interface TodayReadCard {
@@ -157,7 +167,7 @@ export function todayReads(
   date: string,
   limit = 3,
 ): TodayReadCard[] {
-  return rankReads(picks)
+  return rankReads(picks, league)
     .slice(0, limit)
     .map((pick, index) => {
       const time = boardClock(pick.commence_time);
@@ -171,8 +181,8 @@ export function todayReads(
           time,
         ),
         propText: propText(pick),
-        probabilityText: formatPercent(pick.probability),
-        tier: readTier(pick.probability),
+        probabilityText: cardProbability(pick, league),
+        tier: cardTier(pick, league),
         href: readHref(pick, league, date),
       };
     });
@@ -187,6 +197,7 @@ export interface TodayGameCard {
   time: string | null;
   topText: string | null;
   topProbabilityText: string | null;
+  showProbability: boolean;
   tier: ReadTier | null;
   href: string;
 }
@@ -197,9 +208,10 @@ export function todayGames(
   league: LeagueSegment,
   date: string,
 ): TodayGameCard[] {
-  const ranked = rankReads(picks);
+  const ranked = rankReads(picks, league);
   return events.map((event) => {
     const best = ranked.find((pick) => pick.event_id === event.event_id) ?? null;
+    const tier = best ? cardTier(best, league) : null;
     return {
       eventId: event.event_id,
       awayAbbr: teamAbbr(event.away_team, league),
@@ -210,8 +222,9 @@ export function todayGames(
       topText: best
         ? `${playerLastName(best.player_name)} ${propText(best)}`
         : null,
-      topProbabilityText: best ? formatPercent(best.probability) : null,
-      tier: best ? readTier(best.probability) : null,
+      topProbabilityText: best ? cardProbability(best, league) : null,
+      showProbability: league === "nba" ? best != null : tier != null,
+      tier,
       href: best
         ? readHref(best, league, date)
         : buildEventDetailHref({

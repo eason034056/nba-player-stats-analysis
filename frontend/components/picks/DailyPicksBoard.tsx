@@ -7,6 +7,7 @@ import { DatePicker } from "@/components/DatePicker";
 import { LineupStatusBadge } from "@/components/LineupStatusBadge";
 import { PickContextMenu } from "@/components/PickContextMenu";
 import type { LeagueSegment } from "@/lib/event-detail-link";
+import { boardRate } from "@/lib/nba-card";
 import {
   CONFIDENCE_FILTERS,
   buildPickRows,
@@ -145,17 +146,18 @@ export function DailyPicksBoard({
       sortPicks(
         picks.filter(
           (pick) =>
-            matchesConfidence(pick.probability, confidence) &&
+            matchesConfidence(boardRate(pick, league), confidence) &&
             (market === "ALL" || metricShort(pick.metric) === market),
         ),
+        league,
       ),
-    [confidence, market, picks],
+    [confidence, league, market, picks],
   );
   const rows = useMemo(
     () => buildPickRows(visiblePicks, league, selectedDate),
     [league, selectedDate, visiblePicks],
   );
-  const strongCount = countStrong(visiblePicks);
+  const strongCount = countStrong(visiblePicks, league);
   const floor = Math.round(minProbability * 100);
   const eyebrow = picksEyebrow(selectedDate, analyzedAt);
 
@@ -170,7 +172,9 @@ export function DailyPicksBoard({
             Daily Picks
           </h1>
           <p className="text-[15px] leading-relaxed text-muted">
-            Props whose historical hit rate is {floor}% or more, ranked by that rate.
+            {league === "nba"
+              ? `Props whose combined probability is ${floor}% or more. A missing blend keeps the historical hit rate.`
+              : `Props whose historical hit rate is ${floor}% or more, ranked by that rate.`}
           </p>
         </div>
         <div className="flex gap-2.5">
@@ -478,9 +482,10 @@ export function DailyPicksBoard({
       ) : null}
 
       <p className="text-[13px] leading-6 text-muted">
-        The line is the most common line across books. The percent is the historical hit rate
-        over the stored sample. Projection, edge, minutes, and opponent rank appear only when
-        the response includes them. A blended probability is not on this board.
+        The line is the most common line across books.{" "}
+        {league === "nba"
+          ? "The percent is the combined probability. A missing blend shows —. Projection, edge, minutes, and opponent rank appear only when the response includes them."
+          : "The percent is the historical hit rate over the stored sample. Projection, edge, minutes, and opponent rank appear only when the response includes them. A blended probability is not on this board."}
       </p>
     </div>
   );
