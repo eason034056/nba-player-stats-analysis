@@ -649,3 +649,73 @@ class OddsSnapshotTriggerResponse(BaseModel):
     total_lines: int = Field(default=0, description="Total odds line records written")
     duration_ms: int = Field(default=0, description="Duration (ms)")
     message: str = Field(default="", description="Operation message")
+
+
+# ==================== Bulk event props (stored snapshot only) ====================
+
+class BulkPropBook(BaseModel):
+    """
+    One bookmaker's stored line for one player and market.
+
+    Over/Under markets fill ``over_odds`` and ``under_odds``. ``yes_odds``
+    and ``no_odds`` are null. Binary markets (``player_double_double``)
+    fill ``yes_odds`` and ``no_odds``. A side the book did not post is
+    null, not a copy of the other side. ``over_odds`` and ``under_odds``
+    are null on a binary row so a Yes price is not read as an Over.
+    ``line`` on a binary row is the stored 0.5 sentinel, not a posted total.
+    """
+    bookmaker: str = Field(..., description="Bookmaker key, one row per book")
+    line: float = Field(..., description="This book's stored line. 0.5 sentinel for binary markets")
+    over_odds: Optional[int] = Field(default=None, description="Posted Over American odds. Null for binary markets and when Over was not stored")
+    under_odds: Optional[int] = Field(default=None, description="Posted Under American odds. Null for binary markets and when Under was not stored")
+    yes_odds: Optional[int] = Field(default=None, description="Posted Yes American odds for a binary market. Null for Over/Under markets")
+    no_odds: Optional[int] = Field(default=None, description="Posted No American odds for a binary market. Null when that side was not posted, and null for Over/Under markets")
+
+
+class BulkPropPlayer(BaseModel):
+    """
+    One player inside one market.
+
+    ``line`` is the modal consensus of one line per bookmaker
+    (``calculate_mode_threshold``). ``bookmakers_count`` counts distinct
+    books after that collapse and equals ``len(books)``.
+    """
+    player: str = Field(..., description="Player name as stored on the snapshot")
+    line: float = Field(..., description="Modal consensus of one line per bookmaker")
+    bookmakers_count: int = Field(..., description="Distinct bookmakers. Equals the length of books")
+    books: List[BulkPropBook] = Field(default_factory=list, description="One entry per bookmaker")
+
+
+class BulkPropMarket(BaseModel):
+    """Every player with a stored line in one market."""
+    market: str = Field(..., description="Market key, for example player_points")
+    players: List[BulkPropPlayer] = Field(default_factory=list, description="Players in this market, sorted by name")
+
+
+class BulkPropsResponse(BaseModel):
+    """
+    ``GET /api/nba/events/{event_id}/props``.
+
+    Read from the latest ``odds_line_snapshots`` capture. ``source`` is
+    always ``"snapshot"``. When that capture does not exist, ``markets``
+    is empty and both ``snapshot_at`` and ``data_age_seconds`` are null.
+    That response is HTTP 200. A malformed ``event_id`` is HTTP 404 and
+    does not use this body.
+    """
+    event_id: str = Field(..., description="Event id from the path")
+    snapshot_at: Optional[datetime] = Field(
+        default=None,
+        description="When the newest stored capture was written (ISO 8601). Null when no snapshot exists",
+    )
+    data_age_seconds: Optional[int] = Field(
+        default=None,
+        description="Whole seconds since snapshot_at. Null when no snapshot exists. Recomputed on a cache hit",
+    )
+    source: Literal["snapshot"] = Field(
+        default="snapshot",
+        description="Always snapshot. This route does not call the Odds API",
+    )
+    markets: List[BulkPropMarket] = Field(
+        default_factory=list,
+        description="Markets in the newest snapshot, in SNAPSHOT_MARKETS order. Empty when nothing is stored or nothing matches the filter",
+    )

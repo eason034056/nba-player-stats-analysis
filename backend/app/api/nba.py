@@ -27,7 +27,16 @@ from app.models.schemas import (
     PlayerHistoryResponse,
     PlayerDDHistoryResponse,
     HistogramBin,
-    GameLog
+    GameLog,
+    BulkPropsResponse,
+)
+from app.services.bulk_props import (
+    BulkPropsQueryFailed,
+    BulkPropsStoreUnavailable,
+    UnknownMarkets,
+    event_id_is_well_formed,
+    get_event_bulk_props,
+    parse_market_filter,
 )
 from app.services.odds_theoddsapi import odds_provider
 from app.services.odds_provider import OddsAPIError
@@ -432,6 +441,91 @@ async def get_events(
             status_code=500,
             detail=f"Internal error: {str(e)}"
         )
+
+
+@router.get(
+    "/events/{event_id}/props",
+    response_model=BulkPropsResponse,
+    summary="Stored lines for every player in one NBA game",
+    description="""
+    Read the latest `odds_line_snapshots` capture for this event.
+
+    The capture is written by the odds snapshot scheduler. This route does
+    not call The Odds API, including when no capture is stored.
+
+    A well-formed `event_id` with no snapshot is HTTP 200: `markets` is
+    empty, and `snapshot_at` and `data_age_seconds` are null. A malformed
+    `event_id` (empty, or anything other than 1–128 characters from
+    `[A-Za-z0-9_-]` starting with a letter or digit) is HTTP 404 and is
+    not looked up.
+
+    `markets` is an optional comma-separated list of snapshot market keys.
+    An unknown key is HTTP 400. Omit it to return every market in the
+    capture. `player` is an optional exact name, case-insensitive. A
+    filter that matches nobody still returns the snapshot timestamp when
+    a capture exists.
+
+    `source` is always `"snapshot"`. Each bookmaker votes once. The
+    player's `line` is the modal consensus of those votes.
+    """,
+)
+async def get_event_props(
+    event_id: str,
+    markets: Optional[str] = Query(
+        default=None,
+        description=(
+            "Comma-separated snapshot market keys. "
+            "Omit to return every market in the latest capture"
+        ),
+    ),
+    player: Optional[str] = Query(
+        default=None,
+        description="Exact player name, case-insensitive. Omit to return every player",
+    ),
+) -> BulkPropsResponse:
+    """
+    Stored props for one NBA event.
+
+    ``get_event_props`` is the HTTP handler. "Event" is the Odds API game
+    id. "Props" is every player line in that game. Call it as
+    ``GET /api/nba/events/{event_id}/props``. Optional query ``markets``
+    (comma-separated keys) and ``player`` (exact name).
+
+    The handler checks the id and the market list, then calls
+    ``get_event_bulk_props``. That function reads Postgres (and a 60s
+    Redis copy of the assembled JSON). It does not call the Odds API.
+
+    Args:
+        event_id: Path id. Malformed ids are 404.
+        markets: Comma-separated market filter, or omitted.
+        player: Exact player name, or omitted.
+
+    Returns:
+        BulkPropsResponse. Empty markets and a null snapshot time when
+        nothing is stored.
+
+    Raises:
+        HTTPException: 404 malformed id, 400 unknown market, 503 database
+            disconnected, 500 snapshot query failed.
+    """
+    if not event_id_is_well_formed(event_id):
+        raise HTTPException(status_code=404, detail="Malformed event_id")
+
+    try:
+        market_filter = parse_market_filter(markets)
+    except UnknownMarkets as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    try:
+        return await get_event_bulk_props(
+            event_id,
+            markets=market_filter,
+            player=player,
+        )
+    except BulkPropsStoreUnavailable as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+    except BulkPropsQueryFailed as exc:
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
 
 
 @router.post(
