@@ -1,0 +1,39 @@
+{
+  "date": "2026-11-10",
+  "analyzed_at": "2026-11-10T18:00:00Z",
+  "total_picks": 9,
+  "picks": [
+    {
+      "player_name": "Bam Adebayo",
+      "player_team": "Heat",
+      "player_team_code": "MIA",
+      "event_id": "heat-bucks",
+      "home_team": "Milwaukee Bucks",
+      "away_team": "Miami Heat",
+      "commence_time": "2026-11-11T01:00:00Z",
+      "metric": "rebounds",
+      "threshold": 10.5,
+      "direction": "over",
+      "probability": 0.724,
+      "n_games": 22,
+      "bookmakers_count": 4,
+      "all_lines": [10.5],
+      "has_projection": false,
+      "projected_value": null,
+      "projected_minutes": null,
+      "edge": null,
+      "opponent_rank": null,
+      "opponent_position_rank": null,
+      "injury_status": null,
+      "lineup_confirmed": null
+    }
+  ],
+  "stats": {
+    "total_events": 3,
+    "total_players": 40,
+    "total_props": 120,
+    "high_prob_count": 9,
+    "analysis_duration_seconds": 12.5
+  },
+  "message": null
+}

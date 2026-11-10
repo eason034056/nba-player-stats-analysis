@@ -4,8 +4,32 @@ import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { TodayBoard } from "@/components/TodayBoard";
-import type { DailyPick, NBAEvent } from "@/lib/schemas";
+import { formatPercent } from "@/lib/player-dd";
+import {
+  dailyPicksResponseSchema,
+  eventsResponseSchema,
+  type DailyPicksResponse,
+} from "@/lib/schemas";
 import { renderWithProviders } from "@/test/test-utils";
+import nbaEventsFixture from "@/test/fixtures/today/nba-events.json";
+import nbaPicksFixture from "@/test/fixtures/today/nba-daily-picks.json";
+import nbaEventsEmptyFixture from "@/test/fixtures/today/nba-events-empty.json";
+import nbaPicksEmptyFixture from "@/test/fixtures/today/nba-daily-picks-empty.json";
+import nbaEventsPartialFixture from "@/test/fixtures/today/nba-events-partial.json";
+import nbaPicksPartialFixture from "@/test/fixtures/today/nba-daily-picks-partial.json";
+import nbaPicksCountFixture from "@/test/fixtures/today/nba-daily-picks-total-mismatch.json";
+import wnbaEventsFixture from "@/test/fixtures/today/wnba-events.json";
+import wnbaPicksFixture from "@/test/fixtures/today/wnba-daily-picks.json";
+import recordedNoVig from "@/test/fixtures/props-no-vig/player-double-double.json";
+
+const nbaEvents = eventsResponseSchema.parse(nbaEventsFixture);
+const nbaPicks = dailyPicksResponseSchema.parse(nbaPicksFixture);
+const nbaEventsEmpty = eventsResponseSchema.parse(nbaEventsEmptyFixture);
+const nbaPicksEmpty = dailyPicksResponseSchema.parse(nbaPicksEmptyFixture);
+const nbaEventsPartial = eventsResponseSchema.parse(nbaEventsPartialFixture);
+const nbaPicksCount = dailyPicksResponseSchema.parse(nbaPicksCountFixture);
+const wnbaEvents = eventsResponseSchema.parse(wnbaEventsFixture);
+const wnbaPicks = dailyPicksResponseSchema.parse(wnbaPicksFixture);
 
 const apiMocks = vi.hoisted(() => ({
   getEvents: vi.fn(),
@@ -39,97 +63,13 @@ vi.mock("@/lib/api", async () => {
   return { ...actual, ...apiMocks };
 });
 
-function event(overrides: Partial<NBAEvent> = {}): NBAEvent {
-  return {
-    event_id: "heat-bucks",
-    sport_key: "basketball_nba",
-    home_team: "Milwaukee Bucks",
-    away_team: "Miami Heat",
-    commence_time: "2026-11-11T01:00:00Z",
-    ...overrides,
-  };
-}
-
-function pick(overrides: Partial<DailyPick> = {}): DailyPick {
-  return {
-    player_name: "Bam Adebayo",
-    player_team: "Heat",
-    player_team_code: "MIA",
-    event_id: "heat-bucks",
-    home_team: "Milwaukee Bucks",
-    away_team: "Miami Heat",
-    commence_time: "2026-11-11T01:00:00Z",
-    metric: "rebounds",
-    threshold: 10.5,
-    direction: "over",
-    probability: 0.724,
-    n_games: 22,
-    bookmakers_count: 4,
-    all_lines: [10.5],
-    has_projection: false,
-    ...overrides,
-  };
-}
-
-const nbaEvents = [
-  event(),
-  event({
-    event_id: "sixers-nets",
-    home_team: "Brooklyn Nets",
-    away_team: "Philadelphia 76ers",
-    commence_time: "2026-11-11T00:00:00Z",
-  }),
-  event({
-    event_id: "magic-hornets",
-    home_team: "Charlotte Hornets",
-    away_team: "Orlando Magic",
-    commence_time: "2026-11-11T00:30:00Z",
-  }),
-];
-
-const nbaPicks = [
-  pick(),
-  pick({
-    player_name: "Joel Embiid",
-    player_team: "76ers",
-    player_team_code: "PHI",
-    event_id: "sixers-nets",
-    home_team: "Brooklyn Nets",
-    away_team: "Philadelphia 76ers",
-    commence_time: "2026-11-11T00:00:00Z",
-    metric: "points",
-    threshold: 29.5,
-    probability: 0.702,
-    all_lines: [29.5],
-  }),
-  pick({
-    player_name: "Tyrese Haliburton",
-    player_team: "Pacers",
-    player_team_code: "IND",
-    event_id: "sixers-nets",
-    home_team: "Brooklyn Nets",
-    away_team: "Philadelphia 76ers",
-    commence_time: "2026-11-11T00:00:00Z",
-    metric: "assists",
-    threshold: 9.5,
-    probability: 0.681,
-    all_lines: [9.5],
-  }),
-];
-
-function boardPayload(events: NBAEvent[], picks: DailyPick[]) {
-  return {
-    events: {
-      date: "2026-11-10",
-      events,
-    },
-    picks: {
-      date: "2026-11-10",
-      analyzed_at: "2026-11-10T18:00:00Z",
-      total_picks: picks.length,
-      picks,
-    },
-  };
+function impliedPercents(payload: typeof recordedNoVig): string[] {
+  return payload.results.flatMap((row) => [
+    formatPercent(row.p_over_imp),
+    formatPercent(row.p_under_imp),
+    formatPercent(row.p_over_fair),
+    formatPercent(row.p_under_fair),
+  ]);
 }
 
 describe("TodayBoard", () => {
@@ -147,21 +87,23 @@ describe("TodayBoard", () => {
   });
 
   it("renders tonight's reads and each game's top read from the API", async () => {
-    const payload = boardPayload(nbaEvents, nbaPicks);
-    apiMocks.getEvents.mockResolvedValue(payload.events);
-    apiMocks.getDailyPicks.mockResolvedValue(payload.picks);
+    apiMocks.getEvents.mockResolvedValue(nbaEvents);
+    apiMocks.getDailyPicks.mockResolvedValue(nbaPicks);
 
     renderWithProviders(<TodayBoard league="nba" />);
 
     const web = await screen.findByTestId("today-web");
     expect(within(web).getByText("TUE · NOV 10 · 3 GAMES")).toBeInTheDocument();
+    expect(within(web).queryByText(/NOV 11/)).not.toBeInTheDocument();
     expect(within(web).getByRole("link", { name: /all 3 picks/i })).toHaveAttribute("href", "/picks");
 
     const bam = within(web).getByRole("link", { name: /bam adebayo/i });
+    expect(bam).toHaveTextContent(formatPercent(nbaPicks.picks[0].probability));
     expect(bam).toHaveTextContent("72.4%");
     expect(bam).toHaveTextContent("Strong play");
     expect(bam).toHaveTextContent("Over 10.5 REB");
     expect(bam).toHaveTextContent("MIA @ MIL · 7:00 PM");
+    expect(bam).not.toHaveTextContent("1:00 AM");
     expect(bam.getAttribute("href")).toContain("/event/heat-bucks");
     expect(bam.getAttribute("href")).toContain("player=Bam");
     expect(bam.getAttribute("href")).toContain("market=player_rebounds");
@@ -174,16 +116,26 @@ describe("TodayBoard", () => {
     expect(within(web).getByText("No read on this game")).toBeInTheDocument();
     expect(within(web).queryByText("81%")).not.toBeInTheDocument();
     expect(within(web).queryByText(/chet holmgren/i)).not.toBeInTheDocument();
+    for (const oddsPercent of impliedPercents(recordedNoVig)) {
+      expect(within(web).queryByText(oddsPercent)).not.toBeInTheDocument();
+    }
+    expect(web).not.toHaveTextContent("NaN");
+    expect(web).not.toHaveTextContent("undefined");
+    expect(web).not.toHaveTextContent("null");
 
     const mobile = screen.getByTestId("today-mobile");
     expect(within(mobile).getByRole("link", { name: /see all 3 picks/i })).toHaveAttribute("href", "/picks");
     expect(within(mobile).getByRole("link", { name: /bam adebayo/i })).toHaveTextContent("72.4%");
+
+    expect(apiMocks.getEvents).toHaveBeenCalledWith("2026-11-10");
+    expect(apiMocks.getDailyPicks).toHaveBeenCalledWith({ date: "2026-11-10" });
+    expect(apiMocks.getWNBAEvents).not.toHaveBeenCalled();
+    expect(apiMocks.getWnbaDailyPicks).not.toHaveBeenCalled();
   });
 
   it("shows empty states when the slate and the board have no rows", async () => {
-    const payload = boardPayload([], []);
-    apiMocks.getEvents.mockResolvedValue(payload.events);
-    apiMocks.getDailyPicks.mockResolvedValue(payload.picks);
+    apiMocks.getEvents.mockResolvedValue(nbaEventsEmpty);
+    apiMocks.getDailyPicks.mockResolvedValue(nbaPicksEmpty);
 
     renderWithProviders(<TodayBoard league="nba" />);
 
@@ -207,9 +159,8 @@ describe("TodayBoard", () => {
 
   it("shows an error and retries the games request", async () => {
     const user = userEvent.setup();
-    const payload = boardPayload(nbaEvents, nbaPicks);
     apiMocks.getEvents.mockRejectedValueOnce(new Error("board down"));
-    apiMocks.getDailyPicks.mockResolvedValue(payload.picks);
+    apiMocks.getDailyPicks.mockResolvedValue(nbaPicks);
 
     renderWithProviders(<TodayBoard league="nba" />);
 
@@ -218,13 +169,26 @@ describe("TodayBoard", () => {
     expect(alert).toHaveTextContent("board down");
     expect(screen.queryByText("Bam Adebayo")).not.toBeInTheDocument();
 
-    apiMocks.getEvents.mockResolvedValue(payload.events);
+    apiMocks.getEvents.mockResolvedValue(nbaEvents);
     await user.click(screen.getByRole("button", { name: "Retry" }));
     expect(await screen.findByTestId("today-web")).toHaveTextContent("Bam Adebayo");
   });
 
+  it("does not print an object error when the games request rejects with a non-Error", async () => {
+    apiMocks.getEvents.mockRejectedValueOnce("board down");
+    apiMocks.getDailyPicks.mockResolvedValue(nbaPicksEmpty);
+
+    renderWithProviders(<TodayBoard league="nba" />);
+
+    const alert = await screen.findByRole("alert");
+    expect(alert).toHaveTextContent("Could not load games.");
+    expect(alert).toHaveTextContent("The request failed.");
+    expect(alert).not.toHaveTextContent("undefined");
+    expect(alert).not.toHaveTextContent("[object Object]");
+  });
+
   it("keeps the games and withholds percents when reads fail", async () => {
-    apiMocks.getEvents.mockResolvedValue(boardPayload(nbaEvents, []).events);
+    apiMocks.getEvents.mockResolvedValue(nbaEvents);
     apiMocks.getDailyPicks.mockRejectedValue(new Error("picks down"));
 
     renderWithProviders(<TodayBoard league="nba" />);
@@ -235,38 +199,43 @@ describe("TodayBoard", () => {
     expect(within(web).getByText("Heat")).toBeInTheDocument();
     expect(within(web).queryByText("72.4%")).not.toBeInTheDocument();
     expect(within(web).queryByText("0.0%")).not.toBeInTheDocument();
+    expect(within(web).getByRole("link", { name: /all picks/i })).toBeInTheDocument();
+  });
+
+  it("renders a blank clock and an em dash when probability and commence time are missing", async () => {
+    apiMocks.getEvents.mockResolvedValue(nbaEventsPartial);
+    apiMocks.getDailyPicks.mockResolvedValue(
+      nbaPicksPartialFixture as unknown as DailyPicksResponse,
+    );
+
+    renderWithProviders(<TodayBoard league="nba" />);
+
+    const web = await screen.findByTestId("today-web");
+    const bam = within(web).getByRole("link", { name: /bam adebayo/i });
+    expect(bam).toHaveTextContent("—");
+    expect(bam).toHaveTextContent("MIA @ MIL");
+    expect(bam).not.toHaveTextContent("AM");
+    expect(bam).not.toHaveTextContent("PM");
+    expect(web).not.toHaveTextContent("NaN");
+    expect(web).not.toHaveTextContent("undefined");
+    expect(web).not.toHaveTextContent("0.0%");
+    expect(dailyPicksResponseSchema.safeParse(nbaPicksPartialFixture).success).toBe(false);
+  });
+
+  it("uses the API total_picks count instead of the number of rows on the card", async () => {
+    apiMocks.getEvents.mockResolvedValue(nbaEvents);
+    apiMocks.getDailyPicks.mockResolvedValue(nbaPicksCount);
+
+    renderWithProviders(<TodayBoard league="nba" />);
+
+    const web = await screen.findByTestId("today-web");
+    expect(within(web).getByRole("link", { name: /all 9 picks/i })).toHaveAttribute("href", "/picks");
+    expect(within(web).getAllByRole("link", { name: /bam adebayo/i })).toHaveLength(1);
   });
 
   it("renders the WNBA board from the WNBA endpoints", async () => {
-    apiMocks.getWNBAEvents.mockResolvedValue({
-      date: "2026-11-10",
-      events: [
-        event({
-          event_id: "aces-liberty",
-          sport_key: "basketball_wnba",
-          away_team: "Las Vegas Aces",
-          home_team: "New York Liberty",
-        }),
-      ],
-    });
-    apiMocks.getWnbaDailyPicks.mockResolvedValue({
-      date: "2026-11-10",
-      analyzed_at: "2026-11-10T18:00:00Z",
-      total_picks: 1,
-      picks: [
-        pick({
-          player_name: "A'ja Wilson",
-          player_team: "Aces",
-          player_team_code: "LVA",
-          event_id: "aces-liberty",
-          away_team: "Las Vegas Aces",
-          home_team: "New York Liberty",
-          metric: "points",
-          threshold: 22.5,
-          probability: 0.71,
-        }),
-      ],
-    });
+    apiMocks.getWNBAEvents.mockResolvedValue(wnbaEvents);
+    apiMocks.getWnbaDailyPicks.mockResolvedValue(wnbaPicks);
 
     renderWithProviders(<TodayBoard league="wnba" />);
 
@@ -274,9 +243,28 @@ describe("TodayBoard", () => {
     const wilson = within(web).getByRole("link", { name: /a'ja wilson/i });
     expect(wilson).toHaveTextContent("71.0%");
     expect(wilson).toHaveTextContent("LVA @ NYL");
+    expect(wilson).not.toHaveTextContent("LAL");
+    expect(wilson).not.toHaveTextContent("NYK");
     expect(wilson.getAttribute("href")).toContain("/wnba/event/aces-liberty");
-    expect(within(web).getByRole("link", { name: /all 1 picks/i })).toHaveAttribute("href", "/wnba/picks");
+
+    const stewart = within(web).getByRole("link", { name: /breanna stewart/i });
+    expect(stewart).toHaveTextContent("67.6%");
+    expect(stewart).not.toHaveTextContent("67.5%");
+    expect(stewart).toHaveTextContent("SEA @ MIN");
+    expect(stewart).not.toHaveTextContent("GSW");
+    expect(within(web).getByText("Lynx")).toBeInTheDocument();
+    expect(within(web).queryByText("Timberwolves")).not.toBeInTheDocument();
+    expect(within(web).getByRole("link", { name: /all 2 picks/i })).toHaveAttribute("href", "/wnba/picks");
+    const fanduelImplied = recordedNoVig.results.find(
+      (row) => row.bookmaker === "fanduel",
+    )?.p_over_imp;
+    expect(formatPercent(fanduelImplied)).toBe("70.6%");
+    expect(within(web).queryByText("70.6%")).not.toBeInTheDocument();
+    expect(within(web).queryByText("71.4%")).not.toBeInTheDocument();
+
     expect(apiMocks.getEvents).not.toHaveBeenCalled();
-    expect(apiMocks.getWNBAEvents).toHaveBeenCalled();
+    expect(apiMocks.getDailyPicks).not.toHaveBeenCalled();
+    expect(apiMocks.getWNBAEvents).toHaveBeenCalledWith("2026-11-10");
+    expect(apiMocks.getWnbaDailyPicks).toHaveBeenCalledWith({ date: "2026-11-10" });
   });
 });

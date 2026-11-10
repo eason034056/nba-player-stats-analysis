@@ -28,6 +28,14 @@ describe("formatPercent", () => {
     expect(formatPercent(null)).toBe("—");
     expect(formatPercent(undefined)).toBe("—");
     expect(formatPercent(null)).not.toBe("0.0%");
+    expect(formatPercent(0)).toBe("0.0%");
+  });
+
+  it("formats a stored fraction once and rounds a half up at the third decimal", () => {
+    expect(formatPercent(0.724)).toBe("72.4%");
+    expect(formatPercent(0.724)).not.toBe("7240.0%");
+    expect(formatPercent(0.0005)).toBe("0.1%");
+    expect(formatPercent(0.0004)).toBe("0.0%");
   });
 
   it("does not throw or invent 0% when the input is not finite", () => {
