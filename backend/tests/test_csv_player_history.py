@@ -11,7 +11,7 @@ Covers:
 - Histogram calculation
 - Opponent and starter filters
 - Teammate filter logic
-- Fuzzy player name matching
+- Normalized exact player-name matching (no substring)
 - _parse_minutes and _parse_float helpers
 """
 
@@ -362,10 +362,16 @@ class TestPlayerNotFound:
         assert result["n_games"] == 0
         assert result["p_over"] is None
 
-    def test_fuzzy_match_partial_name(self, service):
-        """Partial name triggers fuzzy matching."""
+    def test_partial_name_does_not_substring_match(self, service):
+        """A shorter name is not a match just because it sits inside a longer one."""
         result = service.get_player_stats("Curry", "points", 24.5)
-        # Should match "Stephen Curry" via fuzzy logic
+        assert result["n_games"] == 0
+        assert result["player"] == "Curry"
+        assert result["message"] is not None
+
+    def test_normalized_exact_name_matches(self, service):
+        """Case and whitespace fold; the stored spelling is what comes back."""
+        result = service.get_player_stats("  STEPHEN   curry ", "points", 24.5)
         assert result["n_games"] > 0
         assert result["player"] == "Stephen Curry"
 

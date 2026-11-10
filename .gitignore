@@ -94,3 +94,29 @@ coverage/
 # ==================== 其他 ====================
 *.local
 Thumbs.db
+
+# ==================== SPO-100 generated / local junk ====================
+# RAG evaluation exports. Source of truth stays tracked:
+# nba_lineup_rag/notebooks/RAG_evaluation.ipynb
+nba_lineup_rag/RAG_evaluation.html
+nba_lineup_rag/RAG_evaluation.pdf
+
+# Written by RAG_evaluation.ipynb. Nothing in the runtime reads these back.
+outputs/notebook_results_*.json
+nba_lineup_rag/outputs/notebook_results_*.json
+
+# tsc incremental cache. frontend/.gitignore already lists the frontend file
+# by basename; this covers every package from the repo root.
+*.tsbuildinfo
+
+# Local env files beyond .env / .env.local above. Keep committed templates.
+.env.*
+!.env.example
+!.env.*.example
+
+# Notebook and tool caches.
+.ipynb_checkpoints/
+.venv/
+.ruff_cache/
+.coverage.*
+coverage.xml
