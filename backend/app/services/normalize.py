@@ -120,6 +120,63 @@ def canonical_name(name: str) -> str:
     return " ".join(_canonical_tokens(name))
 
 
+def player_name_key(name: str | None) -> str:
+    """Identity key for exact player-name equality.
+
+    The same function is applied to both the query and the stored name.
+    Two names match only when these keys are equal. The key folds:
+
+    * case (``LeBron`` and ``lebron``)
+    * surrounding and repeated whitespace
+    * accents / diacritics (``Jokić`` and ``Jokic``)
+    * punctuation (apostrophes, periods, commas, hyphens)
+    * spacing of initials (``P. J.``, ``P.J.``, and ``PJ``)
+    * a trailing generational suffix (``Jr``, ``Sr``, ``II``, ``III``, ``IV``, ``V``, ``VI``)
+
+    Nickname aliases are not folded here. ``Steph`` stays ``steph`` and
+    ``Stephen`` stays ``stephen``. Callers that want those aliases must
+    apply ``canonical_name`` (or ``_FIRST_NAME_GROUPS``) explicitly.
+    """
+    if not name:
+        return ""
+    tokens = _strip_suffix_tokens(_collapse_initial_tokens(_tokenize_name(name)))
+    return " ".join(tokens)
+
+
+def match_player_name(query: str | None, candidates: Iterable[str]) -> Optional[str]:
+    """Return the stored candidate that exactly equals ``query`` after ``player_name_key``.
+
+    An exact stored string wins first, so ``"Gary Trent"`` still resolves
+    when a separate ``"Gary Trent, Jr."`` row shares the same key. If the
+    query is not itself a stored string and more than one candidate shares
+    the key, return None instead of guessing.
+
+    Substring containment is never a match: ``"Smith"`` does not resolve
+    to ``"Aaron Nesmith"`` or ``"Jalen Smith"``.
+    """
+    if query is None:
+        return None
+    query_text = str(query)
+    if not query_text.strip():
+        return None
+
+    stored = [candidate for candidate in candidates if candidate == query_text]
+    if len(stored) == 1:
+        return stored[0]
+
+    key = player_name_key(query_text)
+    if not key:
+        return None
+
+    matched: List[str] = []
+    for candidate in candidates:
+        if player_name_key(candidate) == key and candidate not in matched:
+            matched.append(candidate)
+    if len(matched) == 1:
+        return matched[0]
+    return None
+
+
 def _expand_first_name_aliases(tokens: Sequence[str]) -> Iterable[List[str]]:
     if not tokens:
         return []

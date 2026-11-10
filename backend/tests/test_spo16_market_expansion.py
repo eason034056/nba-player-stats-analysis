@@ -5,7 +5,7 @@ Covers:
 - New continuous metrics in csv_player_history (threes_made, steals, ftm, fgm,
   ra, pr, pa)
 - player_dd_history binary historical estimator (rejects threshold, computes
-  dd_games correctly, handles fuzzy match)
+  dd_games correctly, normalized exact name match)
 - single_leg_devig in prob.py (returns None on bad inputs, computes fair prob
   with the league-average prior on good inputs)
 - DD binary parser path in odds_snapshot_service (Yes-only and Yes+No cases,
@@ -266,9 +266,15 @@ class TestPlayerDdHistory:
         assert result["prob_dd"] is None
         assert result["message"] is not None
 
-    def test_fuzzy_match(self, varied_service):
-        # Substring match should resolve "Ali" -> "Alice".
+    def test_partial_name_does_not_substring_match(self, varied_service):
+        # "Ali" is a substring of "Alice" and must not attach to her.
         result = varied_service.player_dd_history("Ali")
+        assert result["player"] == "Ali"
+        assert result["games"] == 0
+        assert result["prob_dd"] is None
+
+    def test_casefolded_name_matches(self, varied_service):
+        result = varied_service.player_dd_history("alice")
         assert result["player"] == "Alice"
         assert result["games"] == 4
 
