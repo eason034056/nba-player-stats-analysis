@@ -8,7 +8,7 @@
 
 The No-Vig redesign needs a tier on each stored NBA pick: Strong play, Playable, Lean, or null below Lean. The same number has to be the storage floor for candidates that the daily-picks query can ask for.
 
-`frontend/` was searched for `readTier` on 2026-11-10. There is no such helper and no Lean cutoff. The picks page already paints two buckets inside the current board: `getProbabilityLevel` returns high at probability >= 0.70 and medium for the rest of the rows it renders. Those rows are themselves at or above 0.65, because that is what the API used to return.
+`readTier` exists on Frontend PR #39 in `frontend/lib/today-board.ts`. That branch is not on `dev` yet. The helper buckets a probability the API already computed: `strong` at >= 0.70, `playable` at >= 0.65, `lean` at >= 0.56, and `pass` below 0.56. The display labels are "Strong play", "Playable", "Lean only", and "Pass". The picks page on `dev` still paints two buckets inside the current board: `getProbabilityLevel` returns high at probability >= 0.70 and medium for the rest of the rows it renders. Those rows are themselves at or above 0.65, because that is what the API used to return.
 
 ## Decision
 
@@ -31,7 +31,7 @@ READ_TIER_CUTOFFS = (
 
 `LEAN_PROBABILITY_FLOOR` is the last cutoff in that tuple, so the storage floor and the Lean label cannot drift apart.
 
-The 0.70 and 0.65 cuts match the picks-page buckets. 0.56 is the fallback from the ticket, used because the frontend has no Lean threshold of its own.
+The 0.70, 0.65, and 0.56 cuts are the same numbers `readTier` uses (`strong` / `playable` / `lean`; below that is `pass`). The API `tier` strings are `"Strong play"`, `"Playable"`, and `"Lean"`. Below 0.56 the API sends null, which is the `pass` bucket on the frontend. The picks page on `dev` uses the same 0.70 and 0.65 splits.
 
 A pick whose chosen side is at least 0.65 stays on the published board. The default NBA analysis stores a row that misses 0.65 when a side still clears 0.56. The query default remains 0.65, so that row appears only when the client asks for it.
 

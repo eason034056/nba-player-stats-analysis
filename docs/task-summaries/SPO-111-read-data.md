@@ -10,7 +10,7 @@ NBA events now carry `top_read`, the highest-probability stored daily pick for t
 
 WNBA routes were not extended. Shared models serialize the new optional fields. WNBA storage still drops anything below 0.65 or below 10 games, and WNBA events leave `top_read` null.
 
-`frontend/` has no `readTier`. The cutoffs live in one tuple, `READ_TIER_CUTOFFS`, and are recorded in `docs/decisions/spo-111-read-data/decision_20261110_read-tier-cutoffs.md`.
+`readTier` exists on Frontend PR #39 (`frontend/lib/today-board.ts`), which is not on `dev` yet. Its cutoffs are 0.70 / 0.65 / 0.56 (`strong` / `playable` / `lean` / `pass`). Backend `READ_TIER_CUTOFFS` uses those same numbers. The tuple is recorded in `docs/decisions/spo-111-read-data/decision_20261110_read-tier-cutoffs.md`.
 
 ## API contract
 
@@ -117,5 +117,5 @@ No new external fixture. The events join does not call a provider.
 ## Follow-ups
 
 - SPO-112 can add signal verdicts and `combined_probability` on `DailyPick` next to `tier`.
-- Frontend `readTier` should use the same tuple: Strong play 0.70, Playable 0.65, Lean 0.56.
+- Frontend `readTier` on PR #39 already uses 0.70 / 0.65 / 0.56 (`strong` / `playable` / `lean` / `pass`). Its lean display label is "Lean only", and below 0.56 it returns `pass` where this API sends null.
 - WNBA `top_read` stays null until a later ticket fills it from the WNBA daily-picks cache.
