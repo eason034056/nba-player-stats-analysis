@@ -21,6 +21,7 @@ WNBA odds wrapper is exercised by `tests/test_wnba_odds_integration.py`
 from __future__ import annotations
 
 import asyncio
+import copy
 import os
 import sys
 from typing import Any
@@ -35,6 +36,11 @@ from app.services.daily_analysis import (  # noqa: E402
     _resolve_csv_service,
     _resolve_sport_key,
 )
+from tests.fixtures.odds_api import (  # noqa: E402
+    RECORDED_NBA_EVENTS,
+    derive_line_board,
+    load_odds_fixture,
+)
 
 
 # ---------------------------------------------------------------------------
@@ -42,20 +48,50 @@ from app.services.daily_analysis import (  # noqa: E402
 # ---------------------------------------------------------------------------
 
 def _bookmakers_for(player: str, lines: list[float]) -> list[dict[str, Any]]:
-    """Build a minimal Odds-API-shaped bookmakers payload for one player."""
-    return [
-        {
-            "key": "testbook",
-            "markets": [
-                {
-                    "outcomes": [
-                        {"description": player, "point": line}
-                        for line in lines
-                    ]
-                }
-            ],
-        }
-    ]
+    """One recorded bookmaker, with this test's player and lines.
+
+    ``derive_line_board`` copies FanDuel from the recorded ``player_points``
+    event and the first outcome on that book (Dyson Daniels Over, price
+    -113, point 10.5). ``description`` and ``point`` are replaced with
+    ``player`` and ``lines``. The bookmaker key, market key, outcome
+    name, and price stay the values that capture posted. Callers pass
+    the player and the lines this case controls. They do not pass a price.
+    """
+    return derive_line_board([{player: lines}])
+
+
+def _listed_event(
+    event_id: str,
+    home_team: str,
+    away_team: str,
+    commence_time: str,
+    *,
+    league: str = "nba",
+) -> dict[str, Any]:
+    """Copy the first recorded NBA event and override identity and tip time.
+
+    Source: ``odds_api_events__basketball_nba.json[0]`` (Los Angeles
+    Lakers at Atlanta Hawks, ``2026-11-10T00:10:00Z``). ``id``,
+    ``home_team``, ``away_team``, and ``commence_time`` are this test's
+    controls. Every other field stays on the recording.
+
+    No WNBA events file is on disk. WNBA is paused, so this helper does
+    not add a WNBA recording. A WNBA case is that same NBA object with
+    only the league fields rewritten: ``sport_key`` from
+    ``basketball_nba`` to ``basketball_wnba``, and ``sport_title`` from
+    ``NBA`` to ``WNBA``.
+    """
+    recorded = load_odds_fixture(RECORDED_NBA_EVENTS)
+    event = copy.deepcopy(recorded[0])
+    event["id"] = event_id
+    event["home_team"] = home_team
+    event["away_team"] = away_team
+    event["commence_time"] = commence_time
+    if league == "wnba":
+        # Derived from the NBA events capture. No WNBA recording exists.
+        event["sport_key"] = "basketball_wnba"
+        event["sport_title"] = "WNBA"
+    return event
 
 
 # ---------------------------------------------------------------------------
@@ -286,14 +322,16 @@ class TestRunDailyAnalysisLeagueRouting:
         )
 
         # Single event so the pipeline gets past the "no events" early return.
+        # WNBA body: the first recorded NBA event, league fields only rewritten.
         service._get_events_for_date = AsyncMock(
             return_value=[
-                {
-                    "id": "wnba-evt-1",
-                    "home_team": "Toronto Tempo",
-                    "away_team": "Seattle Storm",
-                    "commence_time": "2026-05-14T23:00:00Z",
-                }
+                _listed_event(
+                    "wnba-evt-1",
+                    "Toronto Tempo",
+                    "Seattle Storm",
+                    "2026-05-14T23:00:00Z",
+                    league="wnba",
+                )
             ]
         )
         # No props → no analyse work; we only care about the projection call.
@@ -326,12 +364,12 @@ class TestRunDailyAnalysisLeagueRouting:
 
         service._get_events_for_date = AsyncMock(
             return_value=[
-                {
-                    "id": "nba-evt-1",
-                    "home_team": "Lakers",
-                    "away_team": "Warriors",
-                    "commence_time": "2026-05-14T03:00:00Z",
-                }
+                _listed_event(
+                    "nba-evt-1",
+                    "Lakers",
+                    "Warriors",
+                    "2026-05-14T03:00:00Z",
+                )
             ]
         )
         service._get_props_for_market = AsyncMock(return_value=[])
@@ -359,12 +397,13 @@ class TestRunDailyAnalysisLeagueRouting:
 
         service._get_events_for_date = AsyncMock(
             return_value=[
-                {
-                    "id": "wnba-evt-1",
-                    "home_team": "Toronto Tempo",
-                    "away_team": "Seattle Storm",
-                    "commence_time": "2026-05-14T23:00:00Z",
-                }
+                _listed_event(
+                    "wnba-evt-1",
+                    "Toronto Tempo",
+                    "Seattle Storm",
+                    "2026-05-14T23:00:00Z",
+                    league="wnba",
+                )
             ]
         )
 
