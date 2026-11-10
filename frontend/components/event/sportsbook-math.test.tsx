@@ -71,6 +71,13 @@ describe("sportsbook table matches the backend de-vig", () => {
     expect(math.results.some((row) => row.over_odds === 0 || row.under_odds === 0)).toBe(false);
   });
 
+  it("renders a dash when the vig is not finite", () => {
+    expect(formatVig(Number.NaN)).toBe("—");
+    expect(formatVig(Number.POSITIVE_INFINITY)).toBe("—");
+    expect(formatVig(Number.NEGATIVE_INFINITY)).toBe("—");
+    expect(formatVig(Number.NaN)).not.toBe("NaN%");
+  });
+
   it("rounds each vig the same way formatPercent rounds a probability", () => {
     renderWithProviders(<ResultsTable data={math} />);
     const mismatched = math.results.filter(
