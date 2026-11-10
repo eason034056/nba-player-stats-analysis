@@ -42,14 +42,16 @@ function ReadFace({ read }: { read: TodayReadCard }) {
     >
       <div className="flex items-center justify-between gap-2.5">
         <span className="font-mono text-[11px] font-bold text-accent">#{read.rank}</span>
-        <span
-          className={cn(
-            "rounded-full px-2 py-1 text-[11px] font-bold",
-            TIER_CLASS[read.tier.name],
-          )}
-        >
-          {read.tier.label}
-        </span>
+        {read.tier ? (
+          <span
+            className={cn(
+              "rounded-full px-2 py-1 text-[11px] font-bold",
+              TIER_CLASS[read.tier.name],
+            )}
+          >
+            {read.tier.label}
+          </span>
+        ) : null}
       </div>
       <div>
         <div className="text-[17px] font-bold tracking-[-0.01em]">{read.player}</div>
@@ -103,12 +105,12 @@ function WebBoard({
   reads: TodayReadCard[];
   games: TodayGameCard[];
   picksHref: string;
-  picksCount: number | null;
+  picksCount: number | null | undefined;
   picksLabel: string | null;
   onAsk: () => void;
 }) {
   const countText =
-    picksCount === null ? "All picks →" : `All ${picksCount} picks →`;
+    picksCount == null ? "All picks →" : `All ${picksCount} picks →`;
   return (
     <div data-testid="today-web" className="hidden flex-col gap-8 md:flex">
       <section className="flex flex-col gap-7 rounded-[28px] bg-brand px-8 py-10 text-white lg:px-11">
@@ -175,11 +177,11 @@ function MobileBoard({
   reads: TodayReadCard[];
   games: TodayGameCard[];
   picksHref: string;
-  picksCount: number | null;
+  picksCount: number | null | undefined;
   picksLabel: string | null;
 }) {
   const countText =
-    picksCount === null ? "See all picks →" : `See all ${picksCount} picks →`;
+    picksCount == null ? "See all picks →" : `See all ${picksCount} picks →`;
   return (
     <div data-testid="today-mobile" className="flex flex-col gap-6 md:hidden">
       <section className="flex flex-col gap-3.5">
@@ -278,7 +280,7 @@ function GamesBlock({
                   </div>
                 ) : null}
               </div>
-              <span className="text-xl text-[#B9B3C4]" aria-hidden>
+              <span className="text-xl text-muted" aria-hidden>
                 ›
               </span>
             </Link>

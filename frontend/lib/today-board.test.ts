@@ -8,6 +8,7 @@ import {
 } from "@/lib/schemas";
 import {
   boardClock,
+  directionLabel,
   propText,
   readTier,
   slateEyebrow,
@@ -17,6 +18,7 @@ import {
 import nbaEventsFixture from "@/test/fixtures/today/nba-events.json";
 import nbaPicksFixture from "@/test/fixtures/today/nba-daily-picks.json";
 import nbaPicksPartialFixture from "@/test/fixtures/today/nba-daily-picks-partial.json";
+import nbaPicksMissingDirectionFixture from "@/test/fixtures/today/nba-daily-picks-missing-direction.json";
 import wnbaEventsFixture from "@/test/fixtures/today/wnba-events.json";
 import wnbaPicksFixture from "@/test/fixtures/today/wnba-daily-picks.json";
 
@@ -50,12 +52,14 @@ describe("today board numbers", () => {
   });
 
   it("buckets the display tiers on the stored probability", () => {
-    expect(readTier(0.7).name).toBe("strong");
-    expect(readTier(0.699).name).toBe("playable");
-    expect(readTier(0.65).name).toBe("playable");
-    expect(readTier(0.649).name).toBe("lean");
-    expect(readTier(0.56).name).toBe("lean");
-    expect(readTier(0.559).name).toBe("pass");
+    expect(readTier(0.7)?.name).toBe("strong");
+    expect(readTier(0.699)?.name).toBe("playable");
+    expect(readTier(0.65)?.name).toBe("playable");
+    expect(readTier(0.649)?.name).toBe("lean");
+    expect(readTier(0.56)?.name).toBe("lean");
+    expect(readTier(0.559)?.name).toBe("pass");
+    expect(readTier(null)).toBeNull();
+    expect(readTier(undefined)).toBeNull();
   });
 
   it("formats a half-away probability the same way formatPercent does", () => {
@@ -71,9 +75,22 @@ describe("today board numbers", () => {
     const picks = nbaPicksPartialFixture.picks as unknown as DailyPick[];
     const [card] = todayReads(picks, "nba", "2026-11-10");
     expect(card.probabilityText).toBe("—");
+    expect(card.tier).toBeNull();
     expect(card.probabilityText).not.toMatch(/NaN|undefined/);
     expect(card.matchup).toBe("MIA @ MIL");
     expect(propText(picks[0])).toBe("Over 10.5 REB");
+  });
+
+  it("dashes a missing direction instead of printing null or undefined", () => {
+    expect(directionLabel(null)).toBe("—");
+    expect(directionLabel(undefined)).toBe("—");
+    expect(directionLabel("null")).toBe("—");
+    expect(directionLabel("undefined")).toBe("—");
+    const picks = nbaPicksMissingDirectionFixture.picks as unknown as DailyPick[];
+    expect(propText(picks[0])).toBe("— 10.5 REB");
+    expect(propText(picks[0])).not.toMatch(/undefined|\bnull\b/);
+    const [card] = todayReads(picks, "nba", "2026-11-10");
+    expect(card.propText).toBe("— 10.5 REB");
   });
 });
 

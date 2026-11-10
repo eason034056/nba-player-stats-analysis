@@ -18,6 +18,8 @@ import nbaPicksEmptyFixture from "@/test/fixtures/today/nba-daily-picks-empty.js
 import nbaEventsPartialFixture from "@/test/fixtures/today/nba-events-partial.json";
 import nbaPicksPartialFixture from "@/test/fixtures/today/nba-daily-picks-partial.json";
 import nbaPicksCountFixture from "@/test/fixtures/today/nba-daily-picks-total-mismatch.json";
+import nbaPicksCountMissingFixture from "@/test/fixtures/today/nba-daily-picks-count-missing.json";
+import nbaPicksMissingDirectionFixture from "@/test/fixtures/today/nba-daily-picks-missing-direction.json";
 import wnbaEventsFixture from "@/test/fixtures/today/wnba-events.json";
 import wnbaPicksFixture from "@/test/fixtures/today/wnba-daily-picks.json";
 import recordedNoVig from "@/test/fixtures/props-no-vig/player-double-double.json";
@@ -114,6 +116,10 @@ describe("TodayBoard", () => {
     expect(within(web).getByText("Adebayo Over 10.5 REB")).toBeInTheDocument();
     expect(within(web).getByText("Embiid Over 29.5 PTS")).toBeInTheDocument();
     expect(within(web).getByText("No read on this game")).toBeInTheDocument();
+    const mobile = screen.getByTestId("today-mobile");
+    const chevron = within(mobile).getAllByText("›")[0];
+    expect(chevron.className).toContain("text-muted");
+    expect(chevron.className).not.toContain("B9B3C4");
     expect(within(web).queryByText("81%")).not.toBeInTheDocument();
     expect(within(web).queryByText(/chet holmgren/i)).not.toBeInTheDocument();
     for (const oddsPercent of impliedPercents(recordedNoVig)) {
@@ -123,7 +129,6 @@ describe("TodayBoard", () => {
     expect(web).not.toHaveTextContent("undefined");
     expect(web).not.toHaveTextContent("null");
 
-    const mobile = screen.getByTestId("today-mobile");
     expect(within(mobile).getByRole("link", { name: /see all 3 picks/i })).toHaveAttribute("href", "/picks");
     expect(within(mobile).getByRole("link", { name: /bam adebayo/i })).toHaveTextContent("72.4%");
 
@@ -218,8 +223,37 @@ describe("TodayBoard", () => {
     expect(bam).not.toHaveTextContent("PM");
     expect(web).not.toHaveTextContent("NaN");
     expect(web).not.toHaveTextContent("undefined");
+    expect(web).not.toHaveTextContent("Pass");
     expect(web).not.toHaveTextContent("0.0%");
     expect(dailyPicksResponseSchema.safeParse(nbaPicksPartialFixture).success).toBe(false);
+  });
+
+  it("omits the count when total_picks is missing and still prints zero", async () => {
+    apiMocks.getEvents.mockResolvedValue(nbaEventsEmpty);
+    apiMocks.getDailyPicks.mockResolvedValue(
+      nbaPicksCountMissingFixture as unknown as DailyPicksResponse,
+    );
+
+    renderWithProviders(<TodayBoard league="nba" />);
+
+    const web = await screen.findByTestId("today-web");
+    expect(within(web).getByRole("link", { name: "All picks →" })).toBeInTheDocument();
+    expect(web).not.toHaveTextContent("undefined");
+    expect(within(web).queryByRole("link", { name: /all 0 picks/i })).not.toBeInTheDocument();
+  });
+
+  it("dashes a missing direction on the card", async () => {
+    apiMocks.getEvents.mockResolvedValue(nbaEventsPartial);
+    apiMocks.getDailyPicks.mockResolvedValue(
+      nbaPicksMissingDirectionFixture as unknown as DailyPicksResponse,
+    );
+
+    renderWithProviders(<TodayBoard league="nba" />);
+
+    const web = await screen.findByTestId("today-web");
+    expect(within(web).getByRole("link", { name: /bam adebayo/i })).toHaveTextContent("— 10.5 REB");
+    expect(web).not.toHaveTextContent("undefined");
+    expect(web).not.toHaveTextContent("null 10.5");
   });
 
   it("uses the API total_picks count instead of the number of rows on the card", async () => {

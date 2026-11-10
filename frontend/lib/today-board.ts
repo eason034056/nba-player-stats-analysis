@@ -32,7 +32,8 @@ export interface ReadTier {
  * prototype's Strong / Playable labels. Below that, the daily-picks
  * service does not return a row.
  */
-export function readTier(probability: number): ReadTier {
+export function readTier(probability: number | null | undefined): ReadTier | null {
+  if (probability == null || !Number.isFinite(probability)) return null;
   if (probability >= 0.7) return { name: "strong", label: "Strong play" };
   if (probability >= 0.65) return { name: "playable", label: "Playable" };
   if (probability >= 0.56) return { name: "lean", label: "Lean only" };
@@ -63,8 +64,13 @@ export function formatThreshold(threshold: number): string {
   return String(threshold);
 }
 
-export function directionLabel(direction: string): string {
-  return DIRECTION_DISPLAY_NAMES[direction] ?? direction;
+export function directionLabel(direction: string | null | undefined): string {
+  if (typeof direction !== "string") return "—";
+  const known = DIRECTION_DISPLAY_NAMES[direction];
+  if (known) return known;
+  const trimmed = direction.trim().toLowerCase();
+  if (!trimmed || trimmed === "null" || trimmed === "undefined") return "—";
+  return direction;
 }
 
 export function propText(
@@ -141,7 +147,7 @@ export interface TodayReadCard {
   matchup: string;
   propText: string;
   probabilityText: string;
-  tier: ReadTier;
+  tier: ReadTier | null;
   href: string;
 }
 
