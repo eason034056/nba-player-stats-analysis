@@ -1,5 +1,7 @@
 name: Deploy to Production
 
+# Production is a version tag (`v*`), not a branch push. This file never filtered
+# on `main`, so the master/main mismatch does not apply. Pull requests do not deploy.
 on:
   push:
     tags:

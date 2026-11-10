@@ -1,8 +1,11 @@
 name: Deploy to Staging
 
+# The workflow targeted `main`, the name CLAUDE.md uses for the production branch.
+# That ref does not exist; the default branch is `master`. Staging follows pushes
+# there. `dev` stays on CI only. Pull requests do not deploy.
 on:
   push:
-    branches: [main]
+    branches: [master]
 
 concurrency:
   group: deploy-staging
