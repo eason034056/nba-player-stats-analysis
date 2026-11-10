@@ -1,12 +1,12 @@
 # Sports Lab Progress
 
-> Engineers update the row for their ticket in the pull request that changes that ticket. This file is a snapshot of ticket state, not a heartbeat log. Last updated: **2026-11-10** (Nov 10 merge batch on `dev` at `6688384`: #35, #39–#48; SPO-10 and SPO-11 Done). Facts below were checked against `docs/task-summaries/`, `git log` on `dev`, and `gh pr list --base dev`. Titles that were not in those sources are left blank.
+> Engineers update the row for their ticket in the pull request that changes that ticket. This file is a snapshot of ticket state, not a heartbeat log. Last updated: **2026-11-10** (Nov 10 merge batch on `dev` at `6688384`: #35, #39–#48; SPO-96, SPO-102, SPO-103, SPO-104, and SPO-107 moved to Shipped; SPO-10 and SPO-11 Done). Facts below were checked against `docs/task-summaries/`, `git log` on `dev`, and `gh pr list --base dev`. Titles that were not in those sources are left blank.
 
 ## Shipped
 
 ### Nov 10 merge batch
 
-Shipped on `dev` at `6688384`. Each note is the progress note from that pull request. Open-branch status is replaced with the merge.
+Shipped on `dev` at `6688384`. Notes for #35 and #39–#48 are those pull requests' progress notes, with open-branch status replaced by the merge. SPO-107, SPO-104, SPO-102, SPO-96, and SPO-103 moved here from In flight after `git log origin/dev`.
 
 | Ticket | Note |
 |---|---|
@@ -21,6 +21,11 @@ Shipped on `dev` at `6688384`. Each note is the progress note from that pull req
 | SPO-110c | Merged into `dev` in #41. NBA only; WNBA paused, routes unchanged. Daily Picks, Bet Slip, Method, and the Ask agent panel. Summary: `docs/task-summaries/SPO-110c-picks-slip-method.md`. |
 | SPO-110b | Merged into `dev` in #40. NBA and WNBA game page restyle. Summary: `docs/task-summaries/SPO-110b-game-page.md`. |
 | SPO-110a | Merged into `dev` in #39. Design tokens, app shell, and the Today page (NBA and WNBA). Summary: `docs/task-summaries/SPO-110a-design-system-shell-today.md`. Picks, Bet Slip, and Method were not restyled in this pull request. |
+| SPO-107 | Merged into `dev` in #38 (`23b4443`). Harness game types match production regular season. `_active_games` uses `CSVPlayerHistoryService._allowed_game_types()` (regular season; a missing game type counts as regular). Headline metrics are regular-season targets scored with that history. Playoffs and the play-in are scored with the same history and reported in their own section, not in the headlines. The CI guard compares 25 daily L10 rates per league (seed 7) with `get_player_stats` and fails on any mismatch. `oracle.py` and `backtest_report.md` are the full run on the post-SPO-97 CSVs. Decision: `docs/decisions/SPO-107/decision_20261110_regular-season-harness.md`. Summary: `docs/task-summaries/SPO-107-harness-gametype-parity.md`. |
+| SPO-104 | Merged into `dev` in #37 (`a14370d`). One-sided DD quotes (`under_odds` / `p_under_imp` null, including a JSON null No price; `line_is_synthetic`, `market_kind`, `uses_prior`), league-scoped team codes, and the SPO-97 schedule-index follow-ups. Summary: `docs/task-summaries/SPO-104-dd-one-sided-and-followups.md`. |
+| SPO-102 | Merged into `dev` in #33 (`e64621b`). `PlayerDDTile` loads double-double history and yes/no odds. Summary: `docs/task-summaries/SPO-102-player-dd-tile-wiring.md`. |
+| SPO-96 | Merged into `dev` in #27 (`adbbc69`). Process docs rewritten for the current team workflow. Summary: `docs/task-summaries/SPO-96-claude-md-workflow-rewrite.md`. |
+| SPO-103 | SPO-10 phase 5 final review. Done with SPO-10 and SPO-11. Verified on `dev` at `6688384` (backend 1041 passed, 23 skipped, 6 xfailed, 0 failed, CI 6/6). WNBA live coverage is deferred because WNBA work is paused. Frontend fixes from this review shipped as SPO-105 in #36 (`4267d88`). |
 
 ### SPO-105 — frontend review fixes
 
@@ -84,7 +89,7 @@ Later WNBA follow-ups also on `dev`: SPO-60 metadata title (#19), SPO-64 README 
 
 ### SPO-10 — event-page stat expansion
 
-SPO-10 and SPO-11 are Done. Verified on `dev` at `6688384` (backend 1041 passed, 0 failed, CI 6/6). WNBA live coverage is deferred because WNBA work is paused.
+SPO-10 and SPO-11 are Done. Verified on `dev` at `6688384` (backend 1041 passed, 23 skipped, 6 xfailed, 0 failed, CI 6/6). WNBA live coverage is deferred because WNBA work is paused.
 
 | Phase | Evidence on `dev` |
 |---|---|
@@ -93,7 +98,7 @@ SPO-10 and SPO-11 are Done. Verified on `dev` at `6688384` (backend 1041 passed,
 | 3 frontend | SPO-20, PR #3 (`e36cb57`) |
 | 3.5 API route gap | SPO-26, PR #4 (`490b9be`) |
 | 4 integration tests | SPO-101, shipped on `dev` in #34. Gated with `RUN_INTEGRATION=1`. |
-| 5 final review | Done with SPO-10 and SPO-11. Verified on `dev` at `6688384` (backend 1041 passed, 0 failed, CI 6/6). WNBA live coverage is deferred because WNBA work is paused. |
+| 5 final review | Done with SPO-10 and SPO-11. Verified on `dev` at `6688384` (backend 1041 passed, 23 skipped, 6 xfailed, 0 failed, CI 6/6). WNBA live coverage is deferred because WNBA work is paused. |
 
 ## Abandoned
 
@@ -119,27 +124,13 @@ Stale pull requests the owner is closing. Not merged.
 
 ## In flight (cleanup)
 
-| Ticket | Note |
-|---|---|
-| SPO-96 | This docs rewrite (`feature/SPO-96-claude-md-workflow-rewrite`). |
-| SPO-104 | One-sided DD quotes (`under_odds` / `p_under_imp` null, including a JSON null No price; `line_is_synthetic`, `market_kind`, `uses_prior`), league-scoped team codes, and the SPO-97 schedule-index follow-ups. Lands with #36. PR #37 into `dev`. Summary: `docs/task-summaries/SPO-104-dd-one-sided-and-followups.md`. |
-| SPO-107 | Harness game types match production regular season. Playoffs and play-in are a separate report section. Open on `feature/SPO-107-harness-gametype-parity`. Entry below. |
-| SPO-102 | Wire `PlayerDDTile` to double-double history and yes/no odds. Open on `feature/SPO-102-player-dd-tile-wiring`. Summary: `docs/task-summaries/SPO-102-player-dd-tile-wiring.md`. |
-| SPO-103 | SPO-10 Phase 5 final review. Open. |
-
-### SPO-107 — harness game-type parity
-
-Open on `feature/SPO-107-harness-gametype-parity`, base `dev`. Not merged.
-
-`_active_games` uses `CSVPlayerHistoryService._allowed_game_types()` (regular season; a missing game type counts as regular). Headline metrics are regular-season targets scored with that history. Playoffs and the play-in are scored with the same history and reported in their own section, not in the headlines. The CI guard compares 25 daily L10 rates per league (seed 7) with `get_player_stats` and fails on any mismatch. `oracle.py` and `backtest_report.md` are the full run on the post-SPO-97 CSVs.
-
-Decision: `docs/decisions/SPO-107/decision_20261110_regular-season-harness.md`.
+None in this snapshot.
 
 ## Backlog
 
 | Ticket | Note |
 |---|---|
-| SPO-117 | Snapshot writer stores 0 rows, alt lines overwrite the main line, and mode ties should take the average. Waiting for Eason's approval. |
+| SPO-117 | Snapshot writer stores 0 rows, and alt lines overwrite the main line. Waiting for Eason's approval. `calculate_mode_threshold` already applies the tie rule. `assemble_bulk_props` takes the player `line` from that function. The per-book main line does not: `bulk_props._main_book_line` calls `daily_analysis._main_book_line` (equal distance keeps the lower posted point; with no usable price, `_posted_point`). That path should follow the same tie rule. `OddsSnapshotService.rows_from_bookmakers` stores the last Over and the last Under and does not pick a mode. |
 | #47 QA | Follow-ups from the #47 QA review. Move `_main_book_line`, `_even_money_distance` and `_posted_point` out of `daily_analysis` into a shared public module. Comment in `rate_limit.py` that the in-memory fallback counts per process and `swallow_errors` lets any limiter error through. Assert `opponent_position_rank_source` in `test_spo113_qa_review.py`. Fix the "Odds API shape" docstring in `test_spo113_field_enrichment.py` (it's our cache). Stop patching slowapi private attributes in the Redis-down test. Reject NaN/inf in `bulk_props._as_float`. Add QA's SPO-118 tests. |
 | Limiter | Before running more than one worker process, re-evaluate the limiter's in-memory fallback (limits become per process). |
 
