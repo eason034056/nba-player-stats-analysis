@@ -4,6 +4,16 @@
 
 ## Shipped
 
+### SPO-99 — walk-forward backtest
+
+Shipped on `dev` in #32. The progress section that came in with the merge still said the pull request was open and not merged.
+
+Replaces the in-sample five-player `scripts/agents/evaluation/backtest.py` with a walk-forward harness. Each player-game uses only games dated strictly before it. Daily Picks goes through `choose_daily_pick_side`. The agent path calls `compute_scorecard` on a prior-only cache.
+
+Proxy lines are MED20 by default; L10 is also supported. ROI assumes -110. Closing-line value is not measured. The CLV hook stays inactive unless an odds-history file is passed.
+
+CI job `walk-forward-guard` sits between `frontend-test` and `docker-build` on the workflow from #29. It runs the harness tests, including a 40-player sample (seed 7) that fails if MED20 Brier exceeds 0.30 or the calibration gap exceeds 0.15.
+
 ### SPO-97 — Game-log season labels and game types
 
 Shipped on `dev` in #30. Task summary: `docs/task-summaries/SPO-97-csv-season-hygiene.md`.
@@ -84,8 +94,7 @@ Stale pull requests the owner is closing. Not merged.
 | Ticket | Note |
 |---|---|
 | SPO-96 | This docs rewrite (`feature/SPO-96-claude-md-workflow-rewrite`). |
-| SPO-104 | One-sided DD quotes (`under_odds` / `p_under_imp` null, `line_is_synthetic`, `market_kind`), league-scoped team codes, and the SPO-97 schedule-index follow-ups. PR into `dev` from `feature/SPO-104-dd-one-sided-and-followups`. Summary: `docs/task-summaries/SPO-104-dd-one-sided-and-followups.md`. |
-| SPO-99 | In flight. Title not in `docs/task-summaries/` or `git log` on `dev`. |
+| SPO-104 | One-sided DD quotes (`under_odds` / `p_under_imp` null, `line_is_synthetic`, `market_kind`, `uses_prior`), league-scoped team codes, and the SPO-97 schedule-index follow-ups. PR into `dev` from `feature/SPO-104-dd-one-sided-and-followups`. Summary: `docs/task-summaries/SPO-104-dd-one-sided-and-followups.md`. |
 | SPO-101 | SPO-10 Phase 4 integration tests. Open. |
 | SPO-102 | Wire `PlayerDDTile` to double-double history and yes/no odds. Open on `feature/SPO-102-player-dd-tile-wiring`. Summary: `docs/task-summaries/SPO-102-player-dd-tile-wiring.md`. |
 | SPO-103 | SPO-10 Phase 5 final review. Open. |
