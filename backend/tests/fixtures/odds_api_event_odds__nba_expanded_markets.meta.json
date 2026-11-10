@@ -1,0 +1,64 @@
+{
+  "endpoint_path": "/v4/sports/basketball_nba/events/cfa503c66cd505776a910921875ef7dd/odds",
+  "query_parameters": {
+    "regions": "us",
+    "bookmakers": "draftkings,fanduel",
+    "oddsFormat": "american",
+    "dateFormat": "iso",
+    "markets": "player_rebounds,player_assists,player_threes,player_steals,player_frees_made,player_field_goals,player_points_rebounds_assists,player_rebounds_assists,player_points_rebounds,player_points_assists,player_double_double"
+  },
+  "recorded_at": "2026-11-10T19:02:40Z",
+  "http_status": 200,
+  "headers": {
+    "x-requests-used": "59",
+    "x-requests-remaining": "441",
+    "x-requests-last": "9",
+    "content-type": "application/json; charset=utf-8",
+    "date": "Tue, 10 Nov 2026 19:02:40 GMT",
+    "content-length": "25915"
+  },
+  "markets_returned_per_book": {
+    "fanduel": [
+      "player_assists",
+      "player_double_double",
+      "player_points_assists",
+      "player_points_rebounds",
+      "player_points_rebounds_assists",
+      "player_rebounds",
+      "player_rebounds_assists",
+      "player_steals",
+      "player_threes"
+    ],
+    "draftkings": [
+      "player_assists",
+      "player_double_double",
+      "player_points_assists",
+      "player_points_rebounds",
+      "player_points_rebounds_assists",
+      "player_rebounds",
+      "player_rebounds_assists",
+      "player_steals",
+      "player_threes"
+    ]
+  },
+  "event": {
+    "id": "cfa503c66cd505776a910921875ef7dd",
+    "sport_key": "basketball_nba",
+    "home_team": "Philadelphia 76ers",
+    "away_team": "Boston Celtics",
+    "commence_time": "2026-11-11T01:10:00Z"
+  },
+  "requested_markets": [
+    "player_rebounds",
+    "player_assists",
+    "player_threes",
+    "player_steals",
+    "player_frees_made",
+    "player_field_goals",
+    "player_points_rebounds_assists",
+    "player_rebounds_assists",
+    "player_points_rebounds",
+    "player_points_assists",
+    "player_double_double"
+  ]
+}

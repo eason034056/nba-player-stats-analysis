@@ -416,9 +416,12 @@ class TestDdBinaryParser:
         yes_outcomes: list[tuple[str, int]],
         no_outcomes: list[tuple[str, int]] | None = None,
     ) -> dict:
-        """Inline DD market used until a recording posts player_double_double.
+        """Inline DD market for a side the recording did not post.
 
-        # TODO(SPO-106): replace with recorded fixture
+        The 2026-11-10 Celtics at 76ers capture posts double-double Yes
+        only. Yes+No and No-only still use this builder.
+
+        # TODO(SPO-106): replace with recorded fixture when a book posts No
         """
         outcomes = [
             {"name": "Yes", "description": player, "price": price}
@@ -442,17 +445,20 @@ class TestDdBinaryParser:
 
         ``kind`` is ``yes_only``, ``yes_and_no``, or ``no_only``.
 
-        When the expanded NBA file posts ``player_double_double``, the
-        market is copied and then cut down to the one player and the
-        sides this case needs. A recording that does not contain the
-        required side (no book posted No, for example) returns None from
-        the derivation and this method keeps the inline builder.
+        ``yes_only`` copies the first recorded Yes (FanDuel, Joel Embiid
+        on the Celtics at 76ers capture) and must not fall back. The
+        recording has no No, so ``yes_and_no`` and ``no_only`` keep the
+        inline builder instead of inventing a No price.
         """
         posted = first_posted_market(NBA_EXPANDED_MARKETS, "player_double_double")
         derived = _derive_dd_case(posted, kind) if posted is not None else None
         if derived is not None:
             return derived
-        # TODO(SPO-106): replace with recorded fixture
+        if kind == "yes_only":
+            raise AssertionError(
+                "player_double_double Yes is not in the expanded NBA recording"
+            )
+        # TODO(SPO-106): replace with recorded fixture when a book posts No
         return inline_book, self._dd_market_payload(inline_yes, inline_no)
 
     def test_yes_only_uses_single_leg_devig(self):

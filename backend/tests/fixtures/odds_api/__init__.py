@@ -9,18 +9,17 @@ the fields the case controls (drop a bookmaker, drop one side, relabel
 a player). Those copies are named at the call site. This module does
 not invent a response.
 
-Recorded today (SPO-98, 2026-11-09):
+Recorded (NBA only):
 
 - ``odds_api_events__basketball_nba.json`` — ``GET /v4/sports/basketball_nba/events``.
-  League ``basketball_nba`` only. No markets.
+  League ``basketball_nba`` only. No markets. SPO-98, 2026-11-09.
 - ``odds_api_event_odds__player_points.json`` — one NBA event, market
-  ``player_points`` only. Lakers at Hawks.
-
-Not recorded (``record_fixtures.py`` writes this when ``ODDS_API_KEY``
-is set; the file is absent until that run):
-
-- ``odds_api_event_odds__nba_expanded_markets.json`` — one NBA event,
-  the markets that were not in the SPO-98 capture.
+  ``player_points`` only. Lakers at Hawks. SPO-98, 2026-11-09.
+- ``odds_api_event_odds__nba_expanded_markets.json`` — Celtics at 76ers,
+  2026-11-10. Both books posted rebounds, assists, threes, steals, the
+  four combo markets, and double-double Yes. Neither book posted
+  ``player_frees_made`` or ``player_field_goals``. Double-double has
+  no No.
 """
 
 from __future__ import annotations
@@ -37,7 +36,8 @@ FIXTURES_DIR = Path(__file__).resolve().parent.parent
 RECORDED_NBA_EVENTS = "odds_api_events__basketball_nba.json"
 RECORDED_PLAYER_POINTS = "odds_api_event_odds__player_points.json"
 
-# Written by record_fixtures.py. Absent until that script runs with a key.
+# Celtics at 76ers, recorded 2026-11-10. The .meta.json beside it is the
+# request and quota headers. The body itself is not rewritten.
 NBA_EXPANDED_MARKETS = "odds_api_event_odds__nba_expanded_markets.json"
 
 # Markets the recorder requests in one ``markets=`` parameter.

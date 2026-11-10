@@ -121,41 +121,25 @@ def _drop_all_bookmakers(snapshot: dict[str, Any]) -> dict[str, Any]:
 
 
 def _rebounds_under_only() -> dict[str, Any]:
-    """A player_rebounds board that has Under and no Over.
+    """Recorded ``player_rebounds`` with every Over removed.
 
-    When ``odds_api_event_odds__nba_expanded_markets.json`` posts
-    ``player_rebounds``, this copies that market and drops Over. Until
-    that file exists, the inline builder below is the stand-in.
+    Source: ``odds_api_event_odds__nba_expanded_markets.json``, the first
+    bookmaker that posts ``player_rebounds`` (FanDuel on the Celtics at
+    76ers capture). Under prices, lines, and player names stay recorded.
+    Dropping Over is the case ``test_process_event_missing_over`` skips.
     """
     posted = first_posted_market(NBA_EXPANDED_MARKETS, "player_rebounds")
-    if posted is not None:
-        book_key, market = posted
-        # Derivation: remove Over so the player has only Under.
-        market["outcomes"] = [
-            outcome for outcome in market["outcomes"] if outcome.get("name") != "Over"
-        ]
-        return {"bookmakers": [{"key": book_key, "markets": [market]}]}
-    # TODO(SPO-106): replace with recorded fixture
-    return {
-        "bookmakers": [
-            {
-                "key": "draftkings",
-                "markets": [
-                    {
-                        "key": "player_rebounds",
-                        "outcomes": [
-                            {
-                                "description": "Stephen Curry",
-                                "name": "Under",
-                                "point": 5.5,
-                                "price": -110,
-                            }
-                        ],
-                    }
-                ],
-            }
-        ]
-    }
+    if posted is None:
+        raise AssertionError("player_rebounds is not in the expanded NBA recording")
+    book_key, market = posted
+    market["outcomes"] = [
+        outcome for outcome in market["outcomes"] if outcome.get("name") != "Over"
+    ]
+    if not market["outcomes"] or any(
+        outcome.get("name") != "Under" for outcome in market["outcomes"]
+    ):
+        raise AssertionError("recorded player_rebounds did not leave an Under")
+    return {"bookmakers": [{"key": book_key, "markets": [market]}]}
 
 
 def _snapshot_result(data):
@@ -510,9 +494,7 @@ async def test_process_event_missing_over(monkeypatch):
     """Player with only Under but no Over should be skipped."""
     service = OddsSnapshotService()
 
-    # player_rebounds is not in the SPO-98 capture. _rebounds_under_only
-    # loads it once the expanded file posts that market, and otherwise
-    # keeps the inline Under-only builder.
+    # Derivation: recorded FanDuel player_rebounds, Over removed.
     snapshot_data = _rebounds_under_only()
     mock_gateway = MagicMock()
     mock_gateway.get_market_snapshot = AsyncMock(

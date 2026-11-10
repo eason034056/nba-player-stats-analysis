@@ -221,10 +221,13 @@ class TestGroupPropsByPlayer:
         assert result == {}
 
     def test_multiple_markets_per_bookmaker(self):
-        # The capture has one market per book. The second market is a
-        # copy of that recorded player_points market, with point 6.5.
+        # One book, two market keys. The second market is a copy of the
+        # recorded player_points market with key player_rebounds and
+        # point 6.5. The same key twice is one vote (SPO-115); two keys
+        # stay two votes.
         bookmakers_data = derive_line_board([{"Player A": [5.5]}])
         second = copy.deepcopy(bookmakers_data[0]["markets"][0])
+        second["key"] = "player_rebounds"
         second["outcomes"][0]["point"] = 6.5
         bookmakers_data[0]["markets"].append(second)
         result = self.service._group_props_by_player(bookmakers_data)
