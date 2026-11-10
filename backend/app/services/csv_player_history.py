@@ -21,7 +21,8 @@ CSV column mapping:
 import csv
 import os
 from typing import List, Optional, Dict, Any, Set, Tuple, Callable
-from datetime import datetime
+from datetime import datetime, date
+from zoneinfo import ZoneInfo
 import statistics
 
 from app.services.game_log_hygiene import (
@@ -30,6 +31,7 @@ from app.services.game_log_hygiene import (
     GAME_TYPE_PLAYOFFS,
     GAME_TYPE_REGULAR,
 )
+from app.services.normalize import match_player_name
 
 
 # ===========================================================================
@@ -169,6 +171,135 @@ def _get_csv_path(league: str = "nba") -> str:
         file_name,
     )
     return local_path
+
+
+# CSV ``Date`` values are the US game date, not the UTC calendar day of
+# tip. Jayson Kent is Remix on 2026-03-15 (vs Lakers) and Trail Blazers on
+# 2026-03-16. A US evening tip on the 15th is ``2026-03-16T00:30:00Z``,
+# which is 20:30 in America/New_York on the 15th. Eastern is the zone that
+# lines that timestamp up with the CSV row. Naive datetimes and date-only
+# strings are already that game date (the loader stores them that way) and
+# are not shifted.
+_US_GAME_DATE_TZ = ZoneInfo("America/New_York")
+
+
+def _as_us_game_date(moment: datetime) -> date:
+    """Calendar day of a timestamp on the US game-date clock.
+
+    A naive ``datetime`` is already a CSV game date (midnight, no zone).
+    An aware timestamp, including Odds API ``commence_time``, is converted
+    to America/New_York before the day is taken.
+    """
+    if moment.tzinfo is None:
+        return moment.date()
+    return moment.astimezone(_US_GAME_DATE_TZ).date()
+
+
+def _coerce_date(value: Any) -> Optional[date]:
+    """Parse a calendar day from a log field or an event timestamp.
+
+    Accepts ``datetime`` / ``date``, ``YYYY-MM-DD``, ``M/D/YYYY``, and ISO
+    timestamps (``2026-03-16T00:30:00Z``). Aware timestamps use the US game
+    date (America/New_York). Year-less chart labels such as ``"02/09"`` are
+    rejected so they cannot be mistaken for a real day.
+    """
+    if value is None or value == "":
+        return None
+    if isinstance(value, datetime):
+        return _as_us_game_date(value)
+    if isinstance(value, date):
+        return value
+    if not isinstance(value, str):
+        return None
+    text = value.strip()
+    if not text:
+        return None
+    if "T" in text:
+        try:
+            parsed = datetime.fromisoformat(text.replace("Z", "+00:00"))
+        except ValueError:
+            return None
+        return _as_us_game_date(parsed)
+    for fmt in ("%Y-%m-%d", "%m/%d/%Y"):
+        try:
+            return datetime.strptime(text, fmt).date()
+        except ValueError:
+            continue
+    return None
+
+
+def _log_day(log: Dict[str, Any]) -> Optional[date]:
+    """Calendar day of one game log, regardless of which date field it uses.
+
+    Raw cache rows store ``game_date`` (a ``datetime``). ``get_player_stats``
+    chart rows store ``date_full`` (``YYYY-MM-DD``) plus a year-less ``date``
+    label for the x-axis. Only the full day is used.
+    """
+    for key in ("game_date", "date_full"):
+        day = _coerce_date(log.get(key))
+        if day is not None:
+            return day
+    return None
+
+
+def team_from_game_logs(
+    game_logs: Optional[List[Dict[str, Any]]],
+    event_day: Any = None,
+) -> str:
+    """Team the player belonged to on ``event_day``.
+
+    ``get_player_stats`` returns ``game_logs`` oldest-first for charts, so
+    ``game_logs[0]["team"]`` is the first club in the file, not the club
+    on the slate being priced. This helper ignores list order.
+
+    Rules:
+    1. A log whose calendar day equals ``event_day`` supplies the team.
+    2. Otherwise the latest log on or before ``event_day`` (the club they
+       were on heading into that day, including a future slate and a
+       gap day between games).
+    3. When ``event_day`` is missing, use the most recent log's team.
+    4. When every dated log is after ``event_day``, use the earliest
+       known team. That is the first club in the file, which is the one
+       they were already on when the log starts.
+
+    Rows with no parseable day (the one-team fixtures in the daily-picks
+    tests) fall back to that row's team.
+    """
+    if not game_logs:
+        return ""
+
+    dated: List[Tuple[date, int, str]] = []
+    undated: List[str] = []
+    for index, log in enumerate(game_logs):
+        if not isinstance(log, dict):
+            continue
+        team = str(log.get("team") or "").strip()
+        if not team:
+            continue
+        day = _log_day(log)
+        if day is None:
+            undated.append(team)
+        else:
+            dated.append((day, index, team))
+
+    if not dated:
+        return undated[0] if undated else ""
+
+    event = _coerce_date(event_day)
+    if event is not None:
+        on_day = [item for item in dated if item[0] == event]
+        if on_day:
+            on_day.sort(key=lambda item: item[1])
+            return on_day[-1][2]
+        prior = [item for item in dated if item[0] <= event]
+        if prior:
+            prior.sort()
+            return prior[-1][2]
+        dated.sort()
+        return dated[0][2]
+
+    dated.sort()
+    return dated[-1][2]
 
 
 # ⚠ Legacy module-level constant. Kept ONLY for backward compatibility
@@ -455,7 +586,9 @@ class CSVPlayerHistoryService:
         Regular season is always included. Playoffs and the play-in stay
         in the file so a caller can opt in; they are off by default because
         a prop priced off the regular-season distribution should not mix
-        in a seven-game series.
+        in a seven-game series. ``cup_championship`` and anything
+        ``load_csv`` already dropped (summer, preseason, unclassified)
+        stay out of this set.
         """
         allowed = {GAME_TYPE_REGULAR}
         if include_playoffs:
@@ -468,6 +601,17 @@ class CSVPlayerHistoryService:
     def _game_type_of(game: Dict[str, Any]) -> str:
         """Game type on a loaded row. Missing means regular season."""
         return game.get("game_type") or GAME_TYPE_REGULAR
+
+    def resolve_player_name(self, player_name: str) -> Optional[str]:
+        """Map a query to the stored CSV spelling, or None.
+
+        Uses ``match_player_name``: normalized exact equality (case,
+        whitespace, diacritics, punctuation, initials, trailing suffixes).
+        A name that only contains another name is not a match. Works for
+        every league this service is constructed with.
+        """
+        self.load_csv()
+        return match_player_name(player_name, self._all_players)
 
     def get_all_players(self, search: Optional[str] = None) -> List[str]:
         """
@@ -509,14 +653,8 @@ class CSVPlayerHistoryService:
         """
         self.load_csv()
 
-        player_games = self._cache.get(player_name, [])
-        if not player_games:
-            # Try fuzzy match
-            player_lower = player_name.lower()
-            for p in self._all_players:
-                if player_lower in p.lower() or p.lower() in player_lower:
-                    player_games = self._cache.get(p, [])
-                    break
+        resolved = self.resolve_player_name(player_name)
+        player_games = self._cache.get(resolved, []) if resolved else []
 
         allowed = self._allowed_game_types(include_playoffs, include_play_in)
         opponents = set()
@@ -563,14 +701,10 @@ class CSVPlayerHistoryService:
         """
         self.load_csv()
 
-        player_games = self._cache.get(player_name, [])
-        if not player_games:
-            player_lower = player_name.lower()
-            for p in self._all_players:
-                if player_lower in p.lower() or p.lower() in player_lower:
-                    player_games = self._cache.get(p, [])
-                    player_name = p
-                    break
+        resolved = self.resolve_player_name(player_name)
+        if resolved:
+            player_name = resolved
+        player_games = self._cache.get(player_name, []) if resolved else []
 
         allowed = self._allowed_game_types(include_playoffs, include_play_in)
         teammates: Set[str] = set()
@@ -644,21 +778,12 @@ class CSVPlayerHistoryService:
         """
         self.load_csv()
 
-        # Get player's game logs
-        player_games = self._cache.get(player_name, [])
-
-        if not player_games:
-            # Try fuzzy match
-            player_lower = player_name.lower()
-            matched_player = None
-            for p in self._all_players:
-                if player_lower in p.lower() or p.lower() in player_lower:
-                    matched_player = p
-                    break
-
-            if matched_player:
-                player_games = self._cache.get(matched_player, [])
-                player_name = matched_player
+        # Resolve to the stored spelling. Normalized exact key only —
+        # "Smith" must not attach to "Aaron Nesmith" or "Jalen Smith".
+        resolved = self.resolve_player_name(player_name)
+        if resolved:
+            player_name = resolved
+        player_games = self._cache.get(player_name, []) if resolved else []
 
         if not player_games:
             return {
@@ -861,7 +986,9 @@ class CSVPlayerHistoryService:
         Over/Under flow by mistake).
 
         Args:
-            player_name: player name (fuzzy-matched if exact match fails)
+            player_name: player name. Stored spelling wins; otherwise a
+                normalized exact key (case, whitespace, diacritics,
+                punctuation, trailing Jr/Sr/II/III). Not a substring match.
             season: optional CSV "Season" filter (e.g. "2024-25"); None
                     means use all seasons available in the CSV
             threshold: must be None — provided so the call signature matches
@@ -869,7 +996,7 @@ class CSVPlayerHistoryService:
 
         Returns:
             dict with:
-              - player: resolved (post-fuzzy) player name
+              - player: stored CSV spelling after normalized exact match
               - season: the season filter actually applied (None = all)
               - games: count of games considered (post DNP exclusion)
               - dd_games: count of those games that were DDs
@@ -894,16 +1021,11 @@ class CSVPlayerHistoryService:
 
         self.load_csv()
 
-        # Reuse the same fuzzy-match logic as get_player_stats so callers
-        # behave consistently across metrics.
-        player_games = self._cache.get(player_name, [])
-        if not player_games:
-            player_lower = player_name.lower()
-            for p in self._all_players:
-                if player_lower in p.lower() or p.lower() in player_lower:
-                    player_games = self._cache.get(p, [])
-                    player_name = p
-                    break
+        # Same normalized exact match as get_player_stats.
+        resolved = self.resolve_player_name(player_name)
+        if resolved:
+            player_name = resolved
+        player_games = self._cache.get(player_name, []) if resolved else []
 
         if not player_games:
             return {

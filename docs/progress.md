@@ -1,7 +1,17 @@
 # Sports Lab Progress
 
+## SPO-95 — CI branch triggers (2026-11-09)
+
+`ci.yml` and `deploy-staging.yml` filtered on `main`. This repo has no `main` ref; `origin/HEAD` is `master`, and integrated work lands on `dev`. CI now runs on push to `master` and `dev`, and on pull requests that target either branch. Staging deploy runs on push to `master` (the branch the workflow called `main`). Production deploy stays on `v*` tags (that file never named `main`). Neither deploy workflow runs on pull requests.
+
 > Maintained by CTO. Last refresh: **2026-05-08T08:24Z** (heartbeat: SPO-24 `issue_assigned` — Lens APPROVED test-prob English-regex fix → CTO reassigning to owner (CEO triage → Eason) for squash-merge to `dev`; CTO does NOT push/merge per role). Prior refreshes: 2026-05-08T08:14Z (SPO-27 productivity review closed as productive); 06:11Z (Phase 3 done, Phase 3.5 SPO-26 opened); 01:56Z (Phase 3 dispatch — file later reverted to 01:18Z snapshot); 01:18Z (SPO-15 closed); 2026-05-03T02:59Z–02:38Z (SPO-16 Lens APPROVED chain); 2026-05-02T23:27Z (SPO-11 v3 accept → SPO-16 dispatch); 23:20Z (plan v3 + Addendum 1).
 > Source of truth: Paperclip API. This file is a snapshot — when in doubt, query paperclip directly.
+
+## SPO-100 junk-file pass (2026-11-09)
+
+| Ticket | Branch | Status | Note |
+|---|---|---|---|
+| SPO-100 | `feature/SPO-100-junk-pass` | PR open against `dev` | Untrack `nba_lineup_rag/RAG_evaluation.html`, `RAG_evaluation.pdf`, and `outputs/notebook_results_*.json`. `frontend/tsconfig.tsbuildinfo` was already gitignored and untracked. `data/*.jsonl` stays in git; `.dockerignore` keeps it out of the backend image. |
 
 ---
 
@@ -21,6 +31,7 @@
 | [SPO-26](/SPO/issues/SPO-26) | [Forge] SPO-10 Phase 3 backend gap: API route 12-metric expansion + /player-dd-history + /props/no-vig DD branch | Phase 3.5 implementation. Forge complete; Lens review pending. | in_review | Forge (held; Lens picks up review) | `feature/SPO-26-backend-route-12metric-expansion` |
 | [SPO-21](/SPO/issues/SPO-21) | [Sentinel] Triage 7 pre-existing backend test failures + 3 collection errors | Out-of-epic hygiene. Blocked on its own SPO-24/SPO-25 (SPO-22/23 already closed). SPO-25 closed 08:18Z; SPO-24 awaiting owner squash-merge. Will fully unblock when SPO-24 closes. | blocked | Sentinel | _(triage only — no branch)_ |
 | [SPO-24](/SPO/issues/SPO-24) | [Forge] Update test_prob.py regexes to match English error messages | Sub-ticket of SPO-21. Forge complete on `feature/SPO-24-test-prob-english-regex` (commit `d8f211f`, 25/25 tests pass, prod `prob.py` untouched). **Lens APPROVED 08:22Z** — branch base `35a25dd` is two commits behind `origin/dev` (`e36cb57`) but `git log 35a25dd..origin/dev -- backend/tests/test_prob.py backend/app/services/prob.py` is empty → squash-merge will be conflict-free. **THIS HEARTBEAT (08:24Z):** CTO reassigning to CEO (`in_review`) for owner Eason's squash-merge to `dev` (conventional prefix `fix(test):`). | in_review | CEO (held; awaiting Eason squash-merge) | `feature/SPO-24-test-prob-english-regex` (local, commit `d8f211f`) |
+| [SPO-98](/SPO/issues/SPO-98) | Fix player team attribution and exact name matching | US game date, exact `player_name_key`, league-aware roster. Daily-picks wiring loads recorded Odds API `player_points` (`backend/tests/fixtures/`). | in_review | Forge | `feature/SPO-98-team-attribution-exact-names` |
 | [SPO-97](/SPO/issues/SPO-97) | Game-log season labels and game-type hygiene | CSVs relabeled from the ESPN schedule; Summer League and preseason dropped; playoffs opt-in (default hit rates are regular season only). NBA and WNBA Cup finals are `cup_championship`, outside that sample. | in_review | owner | `feature/SPO-97-csv-season-hygiene` |
 
 ---

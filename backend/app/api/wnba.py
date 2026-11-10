@@ -253,7 +253,10 @@ async def get_player_history(
     description="Compute historical P(DD = 1) for a WNBA player. DD is binary (Yes/No), no threshold.",
 )
 async def get_player_dd_history(
-    player: str = Query(..., description="Player name (fuzzy-matched if exact match fails)"),
+    player: str = Query(
+        ...,
+        description="Player name (normalized exact match: case, accents, punctuation, suffixes)",
+    ),
     season: Optional[str] = Query(default=None, description="Season filter; None means all seasons"),
     include_playoffs: bool = Query(
         default=False,

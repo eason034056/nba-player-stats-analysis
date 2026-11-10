@@ -980,7 +980,10 @@ async def get_player_history(
     ),
 )
 async def get_player_dd_history(
-    player: str = Query(..., description="Player name (fuzzy-matched if exact match fails)"),
+    player: str = Query(
+        ...,
+        description="Player name (normalized exact match: case, accents, punctuation, suffixes)",
+    ),
     season: Optional[str] = Query(
         default=None,
         description="Season filter (e.g. '2024-25'); None means use all seasons",
