@@ -18,7 +18,7 @@ export type ConfidenceFilter = "all" | "strong" | "playable";
 export const CONFIDENCE_FILTERS: { id: ConfidenceFilter; label: string }[] = [
   { id: "all", label: "All" },
   { id: "strong", label: "Strong ≥70%" },
-  { id: "playable", label: "Playable 65–70%" },
+  { id: "playable", label: "Playable 65–<70%" },
 ];
 
 /** Market chips the prototype draws, in that order. */
@@ -173,7 +173,7 @@ export function buildPickRows(
       ? Math.max(0, Math.min(100, pick.probability * 100))
       : 0;
     return {
-      key: `${pick.player_name}-${pick.metric}-${pick.direction}`,
+      key: `${pick.event_id}-${pick.player_name}-${pick.metric}-${pick.direction}`,
       rank: String(index + 1).padStart(2, "0"),
       team: pickTeamCode(pick, league),
       player: pick.player_name,

@@ -17,6 +17,7 @@ import { useBetSlip } from "@/contexts/BetSlipContext";
 import { getDailyPicks, getLineups, triggerDailyAnalysis } from "@/lib/api";
 import { createAgentPickContextFromDailyPick } from "@/lib/agent-chat";
 import type { DailyPick } from "@/lib/schemas";
+import { complementHitRateLabel } from "@/lib/bet-slip-board";
 import { getCanonicalTeamCode } from "@/lib/team-logos";
 import { getTodayString } from "@/lib/utils";
 
@@ -168,7 +169,12 @@ export default function PicksPage() {
     });
   }, [selectedDate, selectedTeams, setPageContext]);
 
-  const buildSlipPick = (pick: DailyPick, direction: string, probability: number) => ({
+  const buildSlipPick = (
+    pick: DailyPick,
+    direction: string,
+    probability: number,
+    rateBasis?: "complement",
+  ) => ({
     player_name: pick.player_name,
     player_team: pick.player_team || "",
     event_id: pick.event_id,
@@ -180,6 +186,7 @@ export default function PicksPage() {
     direction,
     probability,
     n_games: pick.n_games,
+    rate_basis: rateBasis,
   });
 
   const handleToggleSlip = useCallback(
@@ -203,7 +210,7 @@ export default function PicksPage() {
     (pick: DailyPick) => {
       const reverse = pick.direction === "over" ? "under" : "over";
       removePick(`${pick.player_name}-${pick.metric}`);
-      addPick(buildSlipPick(pick, reverse, 1 - pick.probability));
+      addPick(buildSlipPick(pick, reverse, 1 - pick.probability, "complement"));
     },
     [addPick, removePick],
   );
@@ -267,6 +274,12 @@ export default function PicksPage() {
       }
       onToggleSlip={handleToggleSlip}
       onAddReverse={handleAddReverse}
+      slipCaption={(pick) => {
+        const leg = slipPicks.find(
+          (item) => item.player_name === pick.player_name && item.metric === pick.metric,
+        );
+        return leg ? complementHitRateLabel(leg) : null;
+      }}
       onAsk={(pick) => void handleAsk(pick)}
       onReviewBoard={() => void handleReviewBoard()}
     />

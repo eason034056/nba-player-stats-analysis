@@ -220,7 +220,7 @@ export const AgentWidget = () => {
         className="mx-auto flex h-full w-full max-w-6xl overflow-hidden bg-[linear-gradient(180deg,rgba(255,255,255,0.05)_0%,rgba(255,255,255,0.02)_100%),rgba(6,11,20,0.96)] lg:my-3 lg:h-[calc(100%-1.5rem)] lg:rounded-[32px] lg:border lg:border-white/10 lg:shadow-[0_42px_120px_rgba(2,8,20,0.54)]"
       >
         <div className="flex min-w-0 flex-1 flex-col">
-          <div className="flex items-center justify-between gap-3 border-b border-white/8 px-4 py-3 sm:px-5">
+          <div className="flex items-center justify-between gap-3 border-b border-white/10 px-4 py-3 sm:px-5">
             <div className="flex items-center gap-3">
               <div className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-3 py-1.5 text-[11px] uppercase tracking-[0.22em] text-on-dark-muted">
                 <Sparkles className="h-3.5 w-3.5" />
@@ -256,7 +256,7 @@ export const AgentWidget = () => {
             </div>
           </div>
 
-          <div className="border-b border-white/8 px-4 py-3 sm:px-5">
+          <div className="border-b border-white/10 px-4 py-3 sm:px-5">
             <SummaryRail
               eyebrow={summary.eyebrow}
               title={summary.title}

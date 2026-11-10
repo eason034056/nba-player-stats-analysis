@@ -43,7 +43,7 @@ export const AgentWidgetComposer = ({
     <div
       className={cn(
         "border-t px-3.5 py-3",
-        light ? "border-[#E3DFE9] bg-white" : "border-white/8 bg-[rgba(5,10,18,0.78)] px-4 backdrop-blur-xl sm:px-5",
+        light ? "border-[#E3DFE9] bg-white" : "border-white/10 bg-[rgba(5,10,18,0.78)] px-4 backdrop-blur-xl sm:px-5",
       )}
     >
       {isSuggestionsOpen ? (
@@ -78,7 +78,7 @@ export const AgentWidgetComposer = ({
           </div>
 
           {templateActions.length > 0 ? (
-            <div className={cn("mt-4 border-t pt-4", light ? "border-[#E3DFE9]" : "border-white/8")}>
+            <div className={cn("mt-4 border-t pt-4", light ? "border-[#E3DFE9]" : "border-white/10")}>
               <p className={cn("text-[10px] uppercase tracking-[0.22em]", light ? "text-muted" : "text-on-dark-muted")}>
                 More prompts
               </p>

@@ -13,15 +13,15 @@ export default function Loading() {
         <div className="card">
           <div className="skeleton h-3 w-24 mb-3" />
           <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-            <div className="rounded-[22px] border border-white/8 bg-white/4 p-4">
+            <div className="rounded-[22px] border border-white/10 bg-white/5 p-4">
               <div className="skeleton h-3 w-12 mb-2" />
               <div className="skeleton h-8 w-10" />
             </div>
-            <div className="rounded-[22px] border border-white/8 bg-white/4 p-4">
+            <div className="rounded-[22px] border border-white/10 bg-white/5 p-4">
               <div className="skeleton h-3 w-12 mb-2" />
               <div className="skeleton h-4 w-16 mt-2" />
             </div>
-            <div className="hidden sm:block rounded-[22px] border border-white/8 bg-white/4 p-4">
+            <div className="hidden sm:block rounded-[22px] border border-white/10 bg-white/5 p-4">
               <div className="skeleton h-3 w-12 mb-2" />
               <div className="skeleton h-4 w-14 mt-2" />
             </div>

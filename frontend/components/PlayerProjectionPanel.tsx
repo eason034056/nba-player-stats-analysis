@@ -62,7 +62,8 @@ interface PlayerProjectionPanelProps {
 /**
  * getMatchupInfo - 根據對手排名回傳對位難度的樣式和文字
  *
- * SportsDataIO OpponentRank：1 是最弱防守（被得分最多），數字愈大防守愈強。
+ * 方向以我們自己的契約為準：backend/app/models/schemas.py 第 514–516 行，
+ * opponent_rank 1 是最弱防守，數字愈大防守愈強。
  * 排名 1-10 = Easy，11-20 = Average，21-30 = Hard。
  *
  * @param rank - 對手防守排名（1 = 最弱防守，30 = 最強防守）

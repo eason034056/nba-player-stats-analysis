@@ -69,23 +69,35 @@ const VerdictSummaryCard = ({
       </div>
 
       <div className="mt-4 grid grid-cols-3 gap-2 text-sm">
-        <div className="rounded-[16px] border border-white/8 bg-white/5 px-3 py-2">
+        <div className="rounded-[16px] border border-white/10 bg-white/5 px-3 py-2">
           <p className="text-[10px] uppercase tracking-[0.2em] text-on-dark-muted">Confidence</p>
           <p className="mt-1 font-semibold text-on-dark">{formatPct(message.verdict.confidence)}</p>
         </div>
-        <div className="rounded-[16px] border border-white/8 bg-white/5 px-3 py-2">
+        <div className="rounded-[16px] border border-white/10 bg-white/5 px-3 py-2">
           <p className="text-[10px] uppercase tracking-[0.2em] text-on-dark-muted">EV</p>
           <p className="mt-1 font-semibold text-on-dark">{formatPct(message.verdict.expected_value_pct)}</p>
         </div>
-        <div className="rounded-[16px] border border-white/8 bg-white/5 px-3 py-2">
+        <div className="rounded-[16px] border border-white/10 bg-white/5 px-3 py-2">
           <p className="text-[10px] uppercase tracking-[0.2em] text-on-dark-muted">Market delta</p>
           <p className="mt-1 font-semibold text-on-dark">{formatSignedPct(marketDelta)}</p>
         </div>
       </div>
 
       {isLineMoved ? (
-        <div className="mt-4 rounded-[18px] border border-yellow-400/25 bg-yellow-400/10 p-3 text-sm text-on-dark">
-          <div className="flex items-center gap-2 text-[10px] uppercase tracking-[0.2em] text-accent">
+        <div
+          className={cn(
+            "mt-4 rounded-[18px] border p-3 text-sm text-on-dark",
+            surface === "light"
+              ? "border-accent bg-accent"
+              : "border-yellow-400/25 bg-yellow-400/10",
+          )}
+        >
+          <div
+            className={cn(
+              "flex items-center gap-2 text-[10px] uppercase tracking-[0.2em]",
+              surface === "light" ? "text-yellow" : "text-accent",
+            )}
+          >
             <ShieldAlert className="h-4 w-4" />
             <span>Line moved</span>
           </div>
@@ -124,7 +136,7 @@ const VerdictSummaryCard = ({
                   {message.verdict.reasons.map((reason) => (
                     <div
                       key={reason}
-                      className="rounded-[16px] border border-white/8 bg-white/4 px-3 py-2 text-sm text-on-dark"
+                      className="rounded-[16px] border border-white/10 bg-white/5 px-3 py-2 text-sm text-on-dark"
                     >
                       {reason}
                     </div>
@@ -186,15 +198,15 @@ const SlipReviewCard = ({
       </div>
 
       <div className="mt-4 grid grid-cols-3 gap-2 text-sm">
-        <div className="rounded-[16px] border border-white/8 bg-white/5 px-3 py-2">
+        <div className="rounded-[16px] border border-white/10 bg-white/5 px-3 py-2">
           <p className="text-[10px] uppercase tracking-[0.2em] text-on-dark-muted">Keep</p>
           <p className="mt-1 font-semibold text-on-dark">{message.slip_review.keep_count}</p>
         </div>
-        <div className="rounded-[16px] border border-white/8 bg-white/5 px-3 py-2">
+        <div className="rounded-[16px] border border-white/10 bg-white/5 px-3 py-2">
           <p className="text-[10px] uppercase tracking-[0.2em] text-on-dark-muted">Recheck</p>
           <p className="mt-1 font-semibold text-on-dark">{message.slip_review.recheck_count}</p>
         </div>
-        <div className="rounded-[16px] border border-white/8 bg-white/5 px-3 py-2">
+        <div className="rounded-[16px] border border-white/10 bg-white/5 px-3 py-2">
           <p className="text-[10px] uppercase tracking-[0.2em] text-on-dark-muted">Remove</p>
           <p className="mt-1 font-semibold text-on-dark">{message.slip_review.remove_count}</p>
         </div>
@@ -214,7 +226,7 @@ const SlipReviewCard = ({
           {message.slip_review.items.map((item) => (
             <div
               key={`${item.subject}-${item.recommendation ?? "review"}`}
-              className="rounded-[16px] border border-white/8 bg-white/4 px-3 py-2"
+              className="rounded-[16px] border border-white/10 bg-white/5 px-3 py-2"
             >
               <div className="flex items-center justify-between gap-3">
                 <p className="text-sm font-semibold text-on-dark">{item.subject}</p>
@@ -267,7 +279,7 @@ export const AgentWidgetTranscript = ({
           "rounded-[18px] border p-3.5",
           surface === "light"
             ? "rounded-bl-[4px] border-[#E3DFE9] bg-white"
-            : "rounded-[22px] border-white/8 bg-[rgba(255,255,255,0.03)]",
+            : "rounded-[22px] border-white/10 bg-[rgba(255,255,255,0.03)]",
         )}
       >
         <p className={cn("text-sm leading-relaxed", surface === "light" ? "text-ink" : "text-on-dark-muted")}>
@@ -304,7 +316,7 @@ export const AgentWidgetTranscript = ({
               ? "ml-auto w-fit max-w-[85%] whitespace-pre-wrap break-words rounded-[18px_18px_4px_18px] bg-brand text-white"
               : surface === "light"
                 ? "mr-6 max-w-[94%] whitespace-pre-wrap break-words rounded-[18px_18px_18px_4px] border border-[#E3DFE9] bg-white text-ink"
-                : "mr-6 max-w-[calc(100%-1.5rem)] whitespace-pre-wrap break-words border border-white/8 bg-white/4 text-on-dark",
+                : "mr-6 max-w-[calc(100%-1.5rem)] whitespace-pre-wrap break-words border border-white/10 bg-white/5 text-on-dark",
           )}
         >
           {message.text}
@@ -324,7 +336,7 @@ export const AgentWidgetTranscript = ({
           "flex items-center gap-2 rounded-[18px] px-4 py-3 text-sm",
           surface === "light"
             ? "border border-[#E3DFE9] bg-white text-muted"
-            : "rounded-full border border-white/8 bg-white/4 text-on-dark-muted",
+            : "rounded-full border border-white/10 bg-white/5 text-on-dark-muted",
         )}
       >
         <Loader2 className={cn("h-4 w-4 animate-spin", surface === "light" ? "text-brand" : "text-red")} />
@@ -350,7 +362,7 @@ export const AgentWidgetTranscript = ({
                 "mt-3 inline-flex items-center gap-2 rounded-full border px-3 py-2 font-medium transition-colors",
                 surface === "light"
                   ? "border-[#D3CCDF] bg-white text-ink hover:bg-[#F7F6F9]"
-                  : "border-white/10 bg-white/8 text-on-dark hover:bg-white/12",
+                  : "border-white/10 bg-white/10 text-on-dark hover:bg-white/10",
               )}
               aria-label="Retry last request"
             >

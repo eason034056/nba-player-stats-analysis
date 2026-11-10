@@ -55,6 +55,7 @@ export interface DailyPicksBoardProps {
   slipDirection: (pick: DailyPick) => string | null;
   onToggleSlip: (pick: DailyPick) => void;
   onAddReverse?: (pick: DailyPick) => void;
+  slipCaption?: (pick: DailyPick) => string | null;
   onAsk?: (pick: DailyPick) => void;
   onReviewBoard?: () => void;
 }
@@ -78,7 +79,7 @@ function Chip({
       className={cn(
         "min-h-[38px] shrink-0 rounded-full border px-3.5 py-2",
         mono ? "font-mono text-xs font-bold" : "text-[13px] font-semibold",
-        active ? "border-brand bg-brand text-white" : "border-[#D3CCDF] bg-white text-ink",
+        active ? "border-brand bg-brand text-white" : "border-muted bg-white text-ink",
       )}
     >
       {children}
@@ -126,6 +127,7 @@ export function DailyPicksBoard({
   slipDirection,
   onToggleSlip,
   onAddReverse,
+  slipCaption,
   onAsk,
   onReviewBoard,
 }: DailyPicksBoardProps) {
@@ -153,7 +155,7 @@ export function DailyPicksBoard({
     () => buildPickRows(visiblePicks, league, selectedDate),
     [league, selectedDate, visiblePicks],
   );
-  const strongCount = countStrong(picks);
+  const strongCount = countStrong(visiblePicks);
   const floor = Math.round(minProbability * 100);
   const eyebrow = picksEyebrow(selectedDate, analyzedAt);
 
@@ -173,7 +175,7 @@ export function DailyPicksBoard({
         </div>
         <div className="flex gap-2.5">
           <div className="rounded-2xl border border-line bg-white px-4 py-2.5">
-            <div className="font-mono text-[22px] font-bold leading-none">{picks.length}</div>
+            <div className="font-mono text-[22px] font-bold leading-none">{visiblePicks.length}</div>
             <div className="mt-1 text-xs text-muted">picks</div>
           </div>
           <div className="rounded-2xl bg-accent px-4 py-2.5 text-brand-ink">
@@ -200,7 +202,7 @@ export function DailyPicksBoard({
             type="button"
             onClick={onReanalyze}
             disabled={isReanalyzing}
-            className="min-h-10 rounded-full border border-[#D3CCDF] bg-white px-4 text-sm font-semibold text-ink disabled:opacity-50"
+            className="min-h-10 rounded-full border border-muted bg-white px-4 text-sm font-semibold text-ink disabled:opacity-50"
           >
             {isReanalyzing ? "Analyzing..." : "Re-analyze"}
           </button>
@@ -279,7 +281,7 @@ export function DailyPicksBoard({
                     "min-h-10 rounded-full border px-3 py-2 font-mono text-xs font-bold",
                     selected
                       ? "border-brand bg-brand text-white"
-                      : "border-[#D3CCDF] bg-white text-ink",
+                      : "border-muted bg-white text-ink",
                   )}
                 >
                   {team}
@@ -389,6 +391,9 @@ export function DailyPicksBoard({
 
                   <div className="flex min-w-0 flex-1 basis-[220px] flex-col gap-2">
                     <div className="text-[15px] font-bold">{row.propText}</div>
+                    {slipCaption?.(pick) ? (
+                      <p className="text-xs leading-5 text-muted">{slipCaption(pick)}</p>
+                    ) : null}
                     <TagList
                       tags={row.tags}
                       pick={pick}
@@ -430,7 +435,7 @@ export function DailyPicksBoard({
                           "min-h-11 rounded-full border px-4 text-[13px] font-bold",
                           sameSide
                             ? "border-accent bg-accent text-brand-ink"
-                            : "border-[#D3CCDF] bg-white text-brand",
+                            : "border-muted bg-white text-brand",
                         )}
                       >
                         {sameSide ? "✓ In slip" : "+ Slip"}
@@ -448,7 +453,7 @@ export function DailyPicksBoard({
                             "min-h-11 rounded-full border px-3 text-[13px] font-semibold",
                             reversed
                               ? "border-brand bg-brand text-white"
-                              : "border-[#D3CCDF] bg-white text-ink",
+                              : "border-muted bg-white text-ink",
                           )}
                         >
                           {reversed ? "Reverse added" : `Add ${reverse === "over" ? "Over" : "Under"}`}

@@ -38,6 +38,19 @@ export function slipPropText(pick: Pick<BetSlipPick, "direction" | "threshold" |
   return propPhrase(pick);
 }
 
+/**
+ * Caption for a reverse add. The stored number is 1 − the other side's
+ * historical hit rate. It is not a market price and not a de-vigged Under.
+ */
+export function complementHitRateLabel(
+  pick: Pick<BetSlipPick, "direction" | "probability" | "rate_basis">,
+): string | null {
+  if (pick.rate_basis !== "complement" || !Number.isFinite(pick.probability)) return null;
+  const side = pick.direction === "under" ? "Under" : pick.direction === "over" ? "Over" : pick.direction;
+  const other = pick.direction === "under" ? "Over" : pick.direction === "over" ? "Under" : "other side";
+  return `${side} hit rate ${formatPercent(pick.probability)} (1 − ${other} ${formatPercent(1 - pick.probability)})`;
+}
+
 export function slipMatchup(pick: BetSlipPick, league: LeagueSegment): string {
   const away = teamAbbr(pick.away_team, league) || pick.away_team;
   const home = teamAbbr(pick.home_team, league) || pick.home_team;

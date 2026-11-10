@@ -10,6 +10,7 @@ import { useBetSlip, type BetSlipPick } from "@/contexts/BetSlipContext";
 import { createAgentPickContextFromBetSlip } from "@/lib/agent-chat";
 import { getLineups } from "@/lib/api";
 import {
+  complementHitRateLabel,
   slipDetailHref,
   slipMatchup,
   slipPropText,
@@ -73,6 +74,11 @@ function ShareCard({
           <div style={{ minWidth: 0 }}>
             <div style={{ fontWeight: 700, fontSize: 14 }}>{pick.player_name}</div>
             <div style={{ fontSize: 12, color: "#D9CEF0" }}>{slipPropText(pick)}</div>
+            {complementHitRateLabel(pick) ? (
+              <div style={{ fontSize: 11, color: "#D9CEF0", marginTop: 2 }}>
+                {complementHitRateLabel(pick)}
+              </div>
+            ) : null}
           </div>
           <div style={{ fontFamily: SHARE_FONT_MONO, fontWeight: 700, fontSize: 16, color: "#E4DA72" }}>
             {formatPercent(pick.probability)}
@@ -285,6 +291,9 @@ export function BetSlipScreen() {
                   <div className="min-w-0 flex-1">
                     <div className="text-[15px] font-bold">{pick.player_name}</div>
                     <div className="mt-0.5 text-sm font-semibold text-brand">{slipPropText(pick)}</div>
+                    {complementHitRateLabel(pick) ? (
+                      <p className="mt-0.5 text-xs leading-5 text-muted">{complementHitRateLabel(pick)}</p>
+                    ) : null}
                     <div className="mt-0.5 text-xs text-muted">
                       {slipMatchup(pick, "nba")}
                       {" · "}
@@ -352,7 +361,9 @@ export function BetSlipScreen() {
               </div>
             </div>
             <p className="text-xs leading-5 text-muted">
-              All hit is the product of the stored rates. It is not a joint probability from the API.
+              Avg and all hit use the stored hit rates. A reverse add stores the complement of the
+              other side&apos;s hit rate, not a de-vigged price. All hit is the product of those stored
+              rates. It is not a joint probability from the API.
             </p>
             <ShareCard picks={picks} forwardedRef={shareImageRef} />
             <div className="flex flex-wrap gap-2">
