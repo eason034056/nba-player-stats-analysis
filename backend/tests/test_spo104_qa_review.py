@@ -13,7 +13,9 @@ Over/Under prices come from the recorded Odds API body
 
 from __future__ import annotations
 
+import csv
 import json
+import math
 import sys
 from datetime import date, datetime, timedelta, timezone
 from zoneinfo import ZoneInfo
@@ -39,13 +41,19 @@ from app.services.csv_player_history import (  # noqa: E402
     _coerce_date,
     team_from_game_logs,
 )
-from app.services.game_log_hygiene import _local_dates  # noqa: E402
+from app.services.game_log_hygiene import (  # noqa: E402
+    ScheduleIndex,
+    _local_dates,
+    hygiene_rows,
+    load_schedule_events,
+)
 from app.services.odds_gateway import MarketSnapshotResult  # noqa: E402
 from app.services.odds_snapshot_service import OddsSnapshotService  # noqa: E402
 from app.services.prob import (  # noqa: E402
     DEFAULT_BINARY_VIG,
     american_to_prob,
     devig,
+    posted_american_odds,
     single_leg_devig,
 )
 
@@ -581,6 +589,380 @@ def test_late_pacific_tip_is_indexed_on_both_arena_dates():
         "2026-03-15",
         "2026-03-16",
     }
+
+
+_MISSING_LEG = (None, 0, 0.0, "", "abc", "+150")
+_OMIT = object()
+
+
+def _binary_bookmakers(player: str, market: str, books: list[tuple]) -> dict:
+    """Odds API body. ``no_price`` of ``_OMIT`` leaves the No outcome off."""
+    built = []
+    for key, yes_price, no_price in books:
+        outcomes = []
+        if yes_price is not _OMIT:
+            outcomes.append({"name": "Yes", "description": player, "price": yes_price})
+        if no_price is not _OMIT:
+            outcomes.append({"name": "No", "description": player, "price": no_price})
+        built.append({"key": key, "markets": [{"key": market, "outcomes": outcomes}]})
+    return {"bookmakers": built}
+
+
+def _post_binary(client, module, path, one_sided, books):
+    return _post(
+        client,
+        module,
+        path,
+        _binary_bookmakers(one_sided["player_name"], one_sided["market"], books),
+        {
+            "event_id": one_sided["event_id"],
+            "player_name": one_sided["player_name"],
+            "market": one_sided["market"],
+        },
+    )
+
+
+@pytest.mark.parametrize("bad", _MISSING_LEG)
+def test_posted_american_odds_treats_a_bad_price_as_missing(bad):
+    assert posted_american_odds(bad) is None
+
+
+@pytest.mark.parametrize(("path", "module"), _ROUTES)
+@pytest.mark.parametrize("bad", _MISSING_LEG)
+def test_bad_no_price_uses_the_single_leg_prior(client, one_sided, path, module, bad):
+    yes = next(row for row in one_sided["results"] if row["no_price"] is None)
+    response = _post_binary(
+        client,
+        module,
+        path,
+        one_sided,
+        [(yes["bookmaker"], yes["yes_price"], bad)],
+    )
+    assert response.status_code == 200, response.text
+    body = response.json()
+    assert len(body["results"]) == 1
+    row = body["results"][0]
+    for key in _NULL_NO_FIELDS:
+        assert key in row and row[key] is None
+    assert row["uses_prior"] is True
+    assert body["consensus"]["consensus_uses_prior"] is True
+    assert body["consensus"]["consensus_prior_book_count"] == 1
+
+
+@pytest.mark.parametrize(("path", "module"), _ROUTES)
+@pytest.mark.parametrize("bad", _MISSING_LEG)
+def test_bad_yes_price_drops_the_row_and_consensus_is_null(
+    client, one_sided, path, module, bad
+):
+    yes = next(row for row in one_sided["results"] if row["no_price"] is None)
+    response = _post_binary(
+        client,
+        module,
+        path,
+        one_sided,
+        [(yes["bookmaker"], bad, _OMIT)],
+    )
+    assert response.status_code == 200, response.text
+    body = response.json()
+    assert body["results"] == []
+    assert "consensus" in body and body["consensus"] is None
+
+
+@pytest.mark.parametrize(("path", "module"), _ROUTES)
+def test_dropped_yes_leaves_the_remaining_book_in_consensus(client, one_sided, path, module):
+    """One null Yes is dropped. The other book still posts both legs."""
+    fanduel = next(row for row in one_sided["results"] if row["bookmaker"] == "fanduel")
+    draftkings = next(row for row in one_sided["results"] if row["bookmaker"] == "draftkings")
+    response = _post_binary(
+        client,
+        module,
+        path,
+        one_sided,
+        [
+            (fanduel["bookmaker"], None, _OMIT),
+            (draftkings["bookmaker"], draftkings["yes_price"], draftkings["no_price"]),
+        ],
+    )
+    assert response.status_code == 200, response.text
+    body = response.json()
+    assert [row["bookmaker"] for row in body["results"]] == ["draftkings"]
+    assert body["results"][0]["uses_prior"] is False
+    assert body["consensus"]["consensus_uses_prior"] is False
+    assert body["consensus"]["consensus_prior_book_count"] == 0
+
+
+@pytest.mark.parametrize(("path", "module"), _ROUTES)
+def test_every_yes_dropped_returns_200_with_null_consensus(client, one_sided, path, module):
+    response = _post_binary(
+        client,
+        module,
+        path,
+        one_sided,
+        [(row["bookmaker"], 0, row.get("no_price")) for row in one_sided["results"]],
+    )
+    assert response.status_code == 200, response.text
+    body = response.json()
+    assert body["results"] == []
+    assert body["consensus"] is None
+
+
+@pytest.mark.parametrize(("path", "module"), _ROUTES)
+@pytest.mark.parametrize("side", ("yes", "no"))
+@pytest.mark.xfail(
+    strict=True,
+    reason="SPO-104 QA: a NaN price is serialized and the response fails instead of a missing leg",
+)
+def test_nan_price_does_not_publish_a_row(client, one_sided, path, module, side):
+    """NaN is not a posted American price.
+
+    A NaN No falls back to the single-leg prior. A NaN Yes drops the row.
+    The response stays 200 and is valid JSON.
+    """
+    yes = next(row for row in one_sided["results"] if row["no_price"] is None)
+    if side == "yes":
+        books = [(yes["bookmaker"], float("nan"), _OMIT)]
+    else:
+        books = [(yes["bookmaker"], yes["yes_price"], float("nan"))]
+    response = _post_binary(client, module, path, one_sided, books)
+    assert response.status_code == 200, response.text
+    body = response.json()
+    if side == "yes":
+        assert body["results"] == []
+        assert body["consensus"] is None
+    else:
+        row = body["results"][0]
+        for key in _NULL_NO_FIELDS:
+            assert row[key] is None
+        assert row["uses_prior"] is True
+        assert body["consensus"]["consensus_prior_book_count"] == 1
+
+
+@pytest.mark.parametrize("bad", _MISSING_LEG)
+def test_snapshot_parser_treats_a_bad_no_price_as_missing(one_sided, bad):
+    yes = next(row for row in one_sided["results"] if row["no_price"] is None)
+    market = {
+        "key": "player_double_double",
+        "outcomes": [
+            {
+                "name": "Yes",
+                "description": one_sided["player_name"],
+                "price": yes["yes_price"],
+            },
+            {
+                "name": "No",
+                "description": one_sided["player_name"],
+                "price": bad,
+            },
+        ],
+    }
+    rows = OddsSnapshotService()._parse_binary_market(
+        market=market,
+        market_key="player_double_double",
+        bookmaker_key=yes["bookmaker"],
+        snapshot_at=datetime(2026, 5, 8, tzinfo=timezone.utc),
+        date_obj=date(2026, 5, 8),
+        event_id=one_sided["event_id"],
+        home_team="Nuggets",
+        away_team="Lakers",
+    )
+    assert len(rows) == 1
+    assert rows[0][10] is None
+
+
+@pytest.mark.xfail(
+    strict=True,
+    reason="SPO-104 QA: a NaN No price is dropped instead of the one-sided prior",
+)
+def test_snapshot_parser_treats_nan_no_as_one_sided(one_sided):
+    yes = next(row for row in one_sided["results"] if row["no_price"] is None)
+    market = {
+        "key": "player_double_double",
+        "outcomes": [
+            {
+                "name": "Yes",
+                "description": one_sided["player_name"],
+                "price": yes["yes_price"],
+            },
+            {
+                "name": "No",
+                "description": one_sided["player_name"],
+                "price": float("nan"),
+            },
+        ],
+    }
+    rows = OddsSnapshotService()._parse_binary_market(
+        market=market,
+        market_key="player_double_double",
+        bookmaker_key=yes["bookmaker"],
+        snapshot_at=datetime(2026, 5, 8, tzinfo=timezone.utc),
+        date_obj=date(2026, 5, 8),
+        event_id=one_sided["event_id"],
+        home_team="Nuggets",
+        away_team="Lakers",
+    )
+    assert len(rows) == 1
+    assert rows[0][10] is None
+
+
+def test_snapshot_parser_drops_a_bad_yes_price(one_sided):
+    yes = next(row for row in one_sided["results"] if row["no_price"] is None)
+    market = {
+        "key": "player_double_double",
+        "outcomes": [
+            {
+                "name": "Yes",
+                "description": one_sided["player_name"],
+                "price": 0,
+            },
+            {
+                "name": "No",
+                "description": one_sided["player_name"],
+                "price": yes["yes_price"],
+            },
+        ],
+    }
+    rows = OddsSnapshotService()._parse_binary_market(
+        market=market,
+        market_key="player_double_double",
+        bookmaker_key=yes["bookmaker"],
+        snapshot_at=datetime(2026, 5, 8, tzinfo=timezone.utc),
+        date_obj=date(2026, 5, 8),
+        event_id=one_sided["event_id"],
+        home_team="Nuggets",
+        away_team="Lakers",
+    )
+    assert rows == []
+
+
+def test_same_line_side_prob_skips_nulls_and_callers_keep_ev_empty(player_points):
+    from scripts.agents.scoring import compute_scorecard
+    from scripts.agents.tools.market import (
+        _build_market_quote_for_line,
+        _extract_player_lines,
+        _same_line_side_prob,
+    )
+
+    assert _same_line_side_prob([], "under") is None
+    assert _same_line_side_prob([{"fair_under": None}, {"fair_under": None}], "under") is None
+    assert _same_line_side_prob(
+        [{"fair_under": None}, {"fair_under": 0.4}, {"fair_under": 0.6}],
+        "under",
+    ) == pytest.approx(0.5)
+
+    lines, _matched, _candidates, _suggestions = _extract_player_lines(
+        player_points, "Jalen Johnson"
+    )
+    same = [dict(row) for row in lines if abs(row["line"] - 20.5) < 1e-9]
+    for row in same:
+        row["fair_under"] = None
+    quote = _build_market_quote_for_line(same, 20.5, "under")
+    assert quote["details"]["market_implied_for_query"] is None
+    assert quote["details"]["best_odds"] is not None
+    card = compute_scorecard(
+        {"get_base_stats": {"signal": "neutral", "effect_size": 0, "reliability": 0.5, "details": {}}},
+        {},
+        {
+            "get_current_market": {"signal": "neutral", "details": {"n_books": len(same)}},
+            "get_market_quote_for_line": quote,
+        },
+        direction="under",
+    )
+    assert card["market_implied_probability"] is None
+    assert card["expected_value_pct"] is None
+
+
+def _late_tip_event() -> dict:
+    """Recorded Bucks at 76ers event, retimed to a 10:30pm Pacific tip.
+
+    No kickoff in the recorded schedule splits the Eastern and Pacific
+    calendar dates. The clubs, season, and id stay on event 401704632.
+    """
+    recorded = next(
+        event
+        for event in load_schedule_events()
+        if str(event.get("id")) == "401704632"
+    )
+    event = json.loads(json.dumps(recorded))
+    event["date"] = "2026-03-16T05:30:00Z"
+    return event
+
+
+def _club_names(event: dict) -> tuple[str, str]:
+    home = away = ""
+    for competitor in event.get("competitors") or []:
+        name = str((competitor.get("team") or {}).get("shortDisplayName") or "")
+        if competitor.get("homeAway") == "home":
+            home = name
+        else:
+            away = name
+    return home, away
+
+
+def _log_row(player: str, when: str, team: str, opponent: str) -> dict[str, str]:
+    return {
+        "Player": player,
+        "Season": "2025-2026",
+        "Date": when,
+        "Team": team,
+        "Opponent": opponent,
+        "MIN": "20:00",
+        "PTS": "20",
+    }
+
+
+def _history_for(rows: list[dict[str, str]], tmp_path: Path):
+    from app.services import csv_player_history as history
+    from scripts.agents.tools.historical import _build_base_rate_signal
+
+    path = tmp_path / "late-tip.csv"
+    with path.open("w", encoding="utf-8", newline="") as handle:
+        writer = csv.DictWriter(f=handle, fieldnames=list(rows[0].keys()))
+        writer.writeheader()
+        writer.writerows(rows)
+    with patch.object(history, "CSV_PATH", str(path)):
+        service = history.CSVPlayerHistoryService(league="nba")
+        service.load_csv()
+    name = service.resolve_player_name("Late Tip Player")
+    logs = service._cache[name]
+    signal = _build_base_rate_signal(
+        logs, "points", 15.0, window="season", source="csv"
+    )
+    return logs, signal
+
+
+@pytest.mark.parametrize("arena_date", ("3/15/2026", "3/16/2026"))
+def test_late_pacific_tip_counts_once_on_either_arena_date(tmp_path, arena_date):
+    """One kickoff matched on the Pacific date and on the Eastern date.
+
+    ``2026-03-16T05:30:00Z`` is 10:30pm Pacific on the 15th and 12:30am
+    Eastern on the 16th. Each date resolves to that event once. A single
+    game-log row stays one row in hygiene, history, and the hit rate.
+    """
+    event = _late_tip_event()
+    home, away = _club_names(event)
+    index = ScheduleIndex()
+    index.add(event)
+    pacific = index.match("2026-03-15", home, away)
+    eastern = index.match("2026-03-16", home, away)
+    assert [item["id"] for item in pacific] == ["401704632"]
+    assert [item["id"] for item in eastern] == ["401704632"]
+    assert len({item["id"] for item in pacific + eastern}) == 1
+
+    report = hygiene_rows(
+        [_log_row("Late Tip Player", arena_date, home, away)],
+        [event],
+        league="nba",
+    )
+    assert report.output_rows == 1
+    assert report.rows[0]["GameType"] == "regular_season"
+    logs, signal = _history_for(report.rows, tmp_path)
+    assert len(logs) == 1
+    assert logs[0]["points"] == 20
+    assert signal["sample_size"] == 1
+    assert signal["details"]["total"] == 1
+    assert signal["details"]["over_count"] == 1
+    assert signal["details"]["hit_rate"] == 1.0
+    assert math.isfinite(signal["details"]["hit_rate"])
 
 
 @pytest.mark.xfail(
