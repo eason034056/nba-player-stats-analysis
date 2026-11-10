@@ -14,8 +14,8 @@
  *
  * Props:
  * @param projection - PlayerProjection 物件（來自 SportsDataIO API）
- * @param metric     - 目前選中的 metric key（points / rebounds / assists / pra）
- * @param threshold  - 盤口閾值（用於計算 edge）
+ * @param metric     - 目前選中的投影卡。null 表示這個市場沒有對應的卡（例如 DD）。
+ * @param threshold  - 盤口閾值（用於計算 edge）。DD 的 0.5 不傳進來。
  *
  * 使用位置：
  *   frontend/app/event/[eventId]/page.tsx
@@ -24,6 +24,12 @@
 
 "use client";
 
+import {
+  PROJECTION_CARDS,
+  projectionCardLabel,
+  projectionCardValue,
+  type ProjectionCardKey,
+} from "@/lib/projection-metric";
 import { type PlayerProjection } from "@/lib/schemas";
 import { cn } from "@/lib/utils";
 import {
@@ -40,22 +46,11 @@ import {
 
 // ==================== 型別定義 ====================
 
-/**
- * MetricKey - 支援的統計指標 key
- *
- * 對應到 PlayerProjection 物件的欄位名稱：
- * - "points"   → projection.points
- * - "rebounds"  → projection.rebounds
- * - "assists"   → projection.assists
- * - "pra"       → projection.pra（Points + Rebounds + Assists）
- */
-type MetricKey = "points" | "rebounds" | "assists" | "pra";
-
 interface PlayerProjectionPanelProps {
   /** 球員投影資料，null 表示正在載入或無資料 */
   projection: PlayerProjection | null;
-  /** 目前選中的統計指標（決定哪張 stat card 被 highlight） */
-  metric: MetricKey;
+  /** 目前選中的投影卡。null 時不 highlight、不算 edge。 */
+  metric: ProjectionCardKey | null;
   /** 盤口閾值（用於計算 edge = projected - threshold） */
   threshold: number | null;
   /** 是否正在載入投影資料 */
@@ -63,48 +58,6 @@ interface PlayerProjectionPanelProps {
 }
 
 // ==================== Helper Functions ====================
-
-/**
- * getMetricLabel - 取得 metric 的中文顯示名稱
- *
- * 這個 function 叫 "getMetricLabel" 因為它把 metric key 轉成 label（標籤文字）
- *
- * @param key - 統計指標 key
- * @returns 該 metric 的英文顯示名稱
- *
- * @example
- * getMetricLabel("points") // "Points"
- * getMetricLabel("pra")    // "PRA"
- */
-function getMetricLabel(key: MetricKey): string {
-  const labels: Record<MetricKey, string> = {
-    points: "Points",
-    rebounds: "Rebounds",
-    assists: "Assists",
-    pra: "PRA",
-  };
-  return labels[key];
-}
-
-/**
- * getProjectedValue - 從 projection 物件中取出指定 metric 的投影值
- *
- * 叫 "getProjectedValue" 因為它根據 metric key 從投影資料中「取出」對應的預測數值
- *
- * @param projection - 球員投影資料
- * @param key - 要取出的統計指標
- * @returns 該 metric 的投影數值，或 null
- *
- * @example
- * getProjectedValue(projection, "points")  // 29.3
- * getProjectedValue(projection, "assists") // null（API 未回傳）
- */
-function getProjectedValue(
-  projection: PlayerProjection,
-  key: MetricKey
-): number | null | undefined {
-  return projection[key];
-}
 
 /**
  * getMatchupInfo - 根據對手排名回傳對位難度的樣式和文字
@@ -167,6 +120,7 @@ function StatCard({
   subtitle,
   isHighlighted = false,
   warning = false,
+  testId,
 }: {
   icon: React.ReactNode;
   label: string;
@@ -174,9 +128,12 @@ function StatCard({
   subtitle?: string;
   isHighlighted?: boolean;
   warning?: boolean;
+  testId?: string;
 }) {
   return (
     <div
+      data-testid={testId}
+      data-highlighted={isHighlighted ? "true" : "false"}
       className={cn(
         "rounded-lg border-2 p-3 transition-all duration-200",
         isHighlighted
@@ -395,17 +352,9 @@ export function PlayerProjectionPanel({
     return null;
   }
 
-  // 取出目前選中 metric 的投影值
-  const projectedValue = getProjectedValue(projection, metric);
+  const projectedValue =
+    metric === null ? null : projectionCardValue(projection, metric);
   const matchup = getMatchupInfo(projection.opponent_rank);
-
-  // 核心投影 metrics — 對應的 4 張 stat cards
-  const coreMetrics: { key: MetricKey; icon: React.ReactNode }[] = [
-    { key: "points", icon: <Target className="w-3.5 h-3.5 text-gray" /> },
-    { key: "rebounds", icon: <Activity className="w-3.5 h-3.5 text-gray" /> },
-    { key: "assists", icon: <Activity className="w-3.5 h-3.5 text-gray" /> },
-    { key: "pra", icon: <TrendingUp className="w-3.5 h-3.5 text-gray" /> },
-  ];
 
   return (
     <div className="card">
@@ -436,13 +385,22 @@ export function PlayerProjectionPanel({
 
       {/* Row 1: 核心投影數據 */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-        {coreMetrics.map(({ key, icon }) => (
+        {PROJECTION_CARDS.map(({ key }) => (
           <StatCard
             key={key}
-            icon={icon}
-            label={`Proj ${getMetricLabel(key)}`}
-            value={formatStat(getProjectedValue(projection, key))}
-            isHighlighted={key === metric}
+            testId={`proj-card-${key}`}
+            icon={
+              key === "points" || key === "fgm" ? (
+                <Target className="w-3.5 h-3.5 text-gray" />
+              ) : key === "pra" || key === "ra" || key === "pr" || key === "pa" ? (
+                <TrendingUp className="w-3.5 h-3.5 text-gray" />
+              ) : (
+                <Activity className="w-3.5 h-3.5 text-gray" />
+              )
+            }
+            label={`Proj ${projectionCardLabel(key)}`}
+            value={formatStat(projectionCardValue(projection, key))}
+            isHighlighted={metric === key}
           />
         ))}
       </div>
@@ -504,13 +462,14 @@ export function PlayerProjectionPanel({
       </div>
 
       {/* Edge Bar */}
-      {threshold != null &&
+      {metric !== null &&
+        threshold != null &&
         projectedValue != null &&
         projectedValue !== undefined && (
           <EdgeBar
             threshold={threshold}
             projected={projectedValue}
-            metricLabel={getMetricLabel(metric)}
+            metricLabel={projectionCardLabel(metric)}
           />
         )}
     </div>

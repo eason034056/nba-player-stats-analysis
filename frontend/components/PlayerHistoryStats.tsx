@@ -39,7 +39,8 @@ import {
 import { getCSVPlayers, getPlayerHistory, calculateNoVig, calculateWNBANoVig } from "@/lib/api";
 import {
   HISTORY_METRICS,
-  RECENT_GAMES_OPTIONS,
+  recentGamesOptions,
+  type SeasonLeague,
   type HistoryMetricKey,
   type GameLog,
   type PlayerProjection,
@@ -247,7 +248,10 @@ export function PlayerHistoryStats({
   const [metric, setMetric] = useState<HistoryMetricKey>(
     marketToHistoryMetric(initialMarket)
   );
-  const [threshold, setThreshold] = useState<string>(initialThreshold || "24.5");
+  const [threshold, setThreshold] = useState<string>(initialThreshold ?? "");
+  const [lineState, setLineState] = useState<"unknown" | "empty" | "posted">(
+    "unknown",
+  );
   const [selectedOpponent, setSelectedOpponent] = useState<string>("");
   const [starterFilter, setStarterFilter] = useState<string>("all");
   const [teammateFilter, setTeammateFilter] = useState<string[]>([]);
@@ -273,6 +277,10 @@ export function PlayerHistoryStats({
     }
   }, [initialMarket, metric]);
   
+  const seasonLeague: SeasonLeague = cacheNamespace === "wnba" ? "wnba" : "nba";
+  const gameRangeOptions = recentGamesOptions(seasonLeague);
+  const numericThreshold = parseFloat(threshold);
+  const hasLine = threshold.trim() !== "" && Number.isFinite(numericThreshold);
   const [recentN, setRecentN] = useState<number>(0);
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
 
@@ -309,9 +317,9 @@ export function PlayerHistoryStats({
     // not painted for a Yes/No market.
     enabled:
       !!selectedPlayer &&
-      !!threshold &&
-      !isNaN(parseFloat(threshold)) &&
-      !isBinaryHistoryMetric(metric),
+      hasLine &&
+      !isBinaryHistoryMetric(metric) &&
+      (!eventId || lineState === "posted"),
     staleTime: 30 * 1000,
   });
 
@@ -336,16 +344,25 @@ export function PlayerHistoryStats({
           odds_format: "american",
         });
 
-        if (result.results && result.results.length > 0) {
-          const lines = result.results.map((r) => r.line);
+        const postedLines = (result.results ?? []).filter(
+          (row) => row.line_is_synthetic !== true && row.market_kind !== "binary",
+        );
+        if (postedLines.length > 0) {
+          const lines = postedLines.map((r) => r.line);
           const modeValue = calculateMode(lines);
 
           if (modeValue !== null) {
             setThreshold(modeValue.toString());
+            setLineState("posted");
+            return;
           }
         }
+        setThreshold("");
+        setLineState("empty");
       } catch (error) {
-        console.log("Unable to fetch odds data, using default threshold");
+        console.log("Unable to fetch odds data; no placeholder line is used");
+        setThreshold("");
+        setLineState("empty");
       } finally {
         setIsFetchingOdds(false);
       }
@@ -362,6 +379,8 @@ export function PlayerHistoryStats({
   useEffect(() => {
     if (!selectedPlayer || !eventId) return;
     if (isBinaryHistoryMetric(metric)) return;
+    setThreshold("");
+    setLineState("unknown");
     fetchOddsAndSetThreshold(selectedPlayer, metric);
   }, [selectedPlayer, metric, eventId, fetchOddsAndSetThreshold]);
 
@@ -384,6 +403,9 @@ export function PlayerHistoryStats({
 
   const handleThresholdChange = (value: string) => {
     setThreshold(value);
+    if (value.trim() !== "" && Number.isFinite(parseFloat(value))) {
+      setLineState("posted");
+    }
   };
 
   const handleMetricChange = (newMetric: HistoryMetricKey) => {
@@ -516,7 +538,7 @@ export function PlayerHistoryStats({
                   step="0.5"
                   value={threshold}
                   onChange={(e) => handleThresholdChange(e.target.value)}
-                  placeholder="e.g., 24.5"
+                  placeholder="Enter a line"
                   className="input w-full"
                   disabled={isFetchingOdds}
                 />
@@ -533,11 +555,12 @@ export function PlayerHistoryStats({
               Game Range
             </label>
             <select
+              aria-label="Game Range"
               value={recentN}
               onChange={(e) => setRecentN(Number(e.target.value))}
               className="input w-full"
             >
-              {RECENT_GAMES_OPTIONS.map((opt) => (
+              {gameRangeOptions.map((opt) => (
                 <option key={opt.value} value={opt.value}>
                   {opt.label}
                 </option>
@@ -726,9 +749,40 @@ export function PlayerHistoryStats({
         />
       )}
 
+      {selectedPlayer &&
+        !isBinaryHistoryMetric(metric) &&
+        lineState === "empty" &&
+        !hasLine &&
+        !isFetchingOdds && (
+          <div className="card border-yellow" data-testid="no-posted-line">
+            <div className="flex items-start gap-4">
+              <div className="w-10 h-10 rounded-lg bg-yellow flex items-center justify-center shrink-0">
+                <AlertCircle className="w-5 h-5 text-dark" />
+              </div>
+              <div>
+                <h3 className="font-bold text-dark mb-1">No posted line</h3>
+                <p className="text-sm text-gray">
+                  No bookmaker has posted a line for this market. Over and
+                  Under rates are not calculated, and no placeholder line is used.
+                </p>
+              </div>
+            </div>
+          </div>
+        )}
+
       {/* Over/Under results — only the continuous metric path renders the
-          chart + threshold-driven probability cards. */}
-      {selectedPlayer && historyData && !isBinaryHistoryMetric(metric) && (
+          chart + threshold-driven probability cards. A zero-game sample
+          shows the backend message instead of a rate. */}
+      {selectedPlayer && historyData && hasLine && !isBinaryHistoryMetric(metric) && historyData.n_games === 0 && (
+        <div className="card" data-testid="history-zero-games">
+          <h3 className="font-bold text-dark mb-1">No games in this sample</h3>
+          <p className="text-sm text-gray">
+            {historyData.message?.trim() || "No qualifying games for this query."}
+          </p>
+        </div>
+      )}
+
+      {selectedPlayer && historyData && hasLine && !isBinaryHistoryMetric(metric) && historyData.n_games > 0 && (
         <div className="space-y-6 animate-fade-in">
           {/* Stats cards */}
           {/* 

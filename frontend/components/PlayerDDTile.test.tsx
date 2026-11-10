@@ -1,4 +1,4 @@
-import { screen } from "@testing-library/react";
+import { screen, within } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { PlayerDDTile, type PlayerDDTileProps } from "@/components/PlayerDDTile";
@@ -12,9 +12,12 @@ import type {
   NoVigResponse,
   PlayerDDHistoryResponse,
 } from "@/lib/schemas";
+import { SINGLE_LEG_PRIOR_LABEL } from "@/lib/no-vig-display";
+import { noVigResponseSchema } from "@/lib/schemas";
 import jokicHistory from "@/test/fixtures/player-dd-history/jokic.json";
 import jokicEmptySeason from "@/test/fixtures/player-dd-history/jokic-empty-season.json";
 import recordedNoVig from "@/test/fixtures/props-no-vig/player-double-double.json";
+import oneSidedNoVig from "@/test/fixtures/props-no-vig/player-double-double-one-sided.json";
 import { renderWithProviders } from "@/test/test-utils";
 
 vi.mock("@/lib/api", () => {
@@ -542,4 +545,43 @@ describe("PlayerDDTile", () => {
       expect(screen.getByText(/90/)).toBeInTheDocument();
     },
   );
+
+  it("labels fair probabilities that came from the 4.5% single-leg prior", async () => {
+    const legacy = noVigResponseSchema.parse(recordedNoVig);
+    const { unmount } = renderTile({
+      getPlayerDDHistoryFn: vi.fn().mockResolvedValue(jokicHistory),
+      calculateNoVigFn: vi.fn().mockResolvedValue(legacy),
+    });
+
+    expect(await screen.findByText("81.3%")).toBeInTheDocument();
+    const legacyFanduel = screen.getByRole("article", { name: /fanduel/i });
+    expect(within(legacyFanduel).getAllByText(SINGLE_LEG_PRIOR_LABEL).length).toBeGreaterThan(0);
+    expect(within(legacyFanduel).getByText("67.6%")).toBeInTheDocument();
+    expect(within(legacyFanduel).getByText("32.5%")).toBeInTheDocument();
+    const legacyDraftkings = screen.getByRole("article", { name: /draftkings/i });
+    expect(within(legacyDraftkings).queryByText(SINGLE_LEG_PRIOR_LABEL)).not.toBeInTheDocument();
+    unmount();
+
+    const next = noVigResponseSchema.parse(oneSidedNoVig);
+    expect(next.results[1]?.under_odds).toBeNull();
+    expect(next.results[1]?.no_price).toBeNull();
+    expect(next.results[1]?.p_no_imp).toBeNull();
+    expect(next.results[1]?.uses_prior).toBe(true);
+    renderTile({
+      getPlayerDDHistoryFn: vi.fn().mockResolvedValue(jokicHistory),
+      calculateNoVigFn: vi.fn().mockResolvedValue({
+        ...next,
+        results: [next.results[1]],
+      }),
+    });
+
+    const fanduel = await screen.findByRole("article", { name: /fanduel/i });
+    expect(within(fanduel).getAllByText(SINGLE_LEG_PRIOR_LABEL).length).toBeGreaterThan(0);
+    expect(within(fanduel).getByText("67.6%")).toBeInTheDocument();
+    expect(within(fanduel).getByText("32.5%")).toBeInTheDocument();
+    expect(screen.getAllByTestId("dd-consensus-prior").map((node) => node.textContent)).toEqual([
+      "includes 1 book on the 4.5% single-leg prior",
+      "includes 1 book on the 4.5% single-leg prior",
+    ]);
+  });
 });

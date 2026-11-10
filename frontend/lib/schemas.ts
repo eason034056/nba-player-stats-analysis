@@ -87,17 +87,22 @@ export type NoVigRequest = z.infer<typeof noVigRequestSchema>;
  * 
  * 每家博彩公司的賠率和計算結果
  */
+export const marketKindSchema = z.enum(["binary", "over_under"]);
+
 export const bookmakerResultSchema = z.object({
   bookmaker: z.string(),     // 博彩公司名稱（如 "draftkings"）
-  line: z.number(),          // 門檻值（如 28.5）
-  over_odds: z.number(),     // Over 原始賠率（美式）
-  under_odds: z.number(),    // Under 原始賠率（美式）
-  p_over_imp: z.number(),    // Over 隱含機率（含水）
-  p_under_imp: z.number(),   // Under 隱含機率（含水）
+  line: z.number(),          // 門檻值（如 28.5）。DD 的 0.5 是佔位，見 line_is_synthetic。
+  // 價格與隱含機率在單邊報價上可以是 null。SPO-104 之前單邊 DD 會把
+  // Yes 價抄進 under_odds；之後 under_odds / p_under_imp 改為 null。
+  // 兩邊都要能通過，畫面才不會在後端合併前後壞掉。
+  over_odds: z.number().nullable().optional(),
+  under_odds: z.number().nullable().optional(),
+  p_over_imp: z.number().nullable().optional(),
+  p_under_imp: z.number().nullable().optional(),
   vig: z.number(),           // 水錢（vig）
-  p_over_fair: z.number(),   // Over 去水機率
-  p_under_fair: z.number(),  // Under 去水機率
-  fetched_at: z.string(),    // 資料取得時間
+  p_over_fair: z.number(),   // Over 去水機率（單邊時仍是模型補數的另一側）
+  p_under_fair: z.number(),  // Under 去水機率。單邊 DD 仍有值，但是 4.5% prior 的補數。
+  fetched_at: z.string().nullable().optional(),
   // SPO-26 二元市場（player_double_double）的顯式 Yes/No 欄位。
   // Over/Under 市場維持缺席或 null。DD tile 只讀這些名字，
   // 不把 over_odds / p_over_fair 當成 Yes 的替身。
@@ -107,6 +112,12 @@ export const bookmakerResultSchema = z.object({
   p_no_imp: z.number().nullable().optional(),
   yes_fair_prob: z.number().nullable().optional(),
   no_fair_prob: z.number().nullable().optional(),
+  // SPO-104（PR #37）。這些欄位在每一列上，不在回應外層。
+  // 仍是 optional + nullable，合併前的 dev payload 才過得了。
+  // 缺席時前端改用 market === player_double_double，或 null 的 No 價。
+  line_is_synthetic: z.boolean().nullable().optional(),
+  market_kind: marketKindSchema.nullable().optional(),
+  uses_prior: z.boolean().nullable().optional(),
 });
 
 export type BookmakerResult = z.infer<typeof bookmakerResultSchema>;
@@ -123,6 +134,10 @@ export const consensusSchema = z.object({
   // 二元市場共識。Over/Under 回應裡這兩個欄位是 null 或缺席。
   p_yes_fair: z.number().nullable().optional(),
   p_no_fair: z.number().nullable().optional(),
+  // 跟 p_yes_fair 放在同一個共識物件。任一家書用了 prior 即為 true。
+  // 沒有共識時整個物件缺席或是 null，這兩個鍵不會出現在外層。
+  consensus_uses_prior: z.boolean().nullable().optional(),
+  consensus_prior_book_count: z.number().int().nullable().optional(),
 });
 
 export type Consensus = z.infer<typeof consensusSchema>;
@@ -139,8 +154,9 @@ export const noVigResponseSchema = z.object({
   results: z.array(bookmakerResultSchema),
   consensus: consensusSchema.nullable().optional(),
   message: z.string().nullable().optional(),
-  // NoVigResponse 快照年齡。後端是 Optional[datetime] / Optional[int] / Optional[str]。
-  // 缺席時維持 undefined，舊的 Over/Under 回應仍能通過。
+  // 快照年齡必須留在 parse 結果裡。Zod 預設會丟掉 schema 沒列出的鍵，
+  // 所以這四個鍵要寫在這裡，畫面才讀得到賠率有多舊。
+  // NBA 與 WNBA 的 /props/no-vig 共用這個 schema。
   fetched_at: z.string().nullable().optional(),
   data_age_seconds: z.number().int().nullable().optional(),
   cache_state: z.string().nullable().optional(),
@@ -403,13 +419,27 @@ export type HistoryMetricKey = (typeof HISTORY_METRICS)[number]["key"];
  * 
  * 用於前端選擇要分析的場次範圍
  */
-export const RECENT_GAMES_OPTIONS = [
-  { value: 0, label: "All Games" },
-  { value: 10, label: "Last 10 Games" },
-  { value: 20, label: "Last 20 Games" },
-  { value: 30, label: "Last 30 Games" },
-  { value: 82, label: "Full Season (82 games)" },
-] as const;
+export type SeasonLeague = "nba" | "wnba";
+
+/** Regular-season length. NBA plays 82, WNBA plays 44. */
+export const REGULAR_SEASON_GAMES: Record<SeasonLeague, number> = {
+  nba: 82,
+  wnba: 44,
+};
+
+export function recentGamesOptions(league: SeasonLeague) {
+  const games = REGULAR_SEASON_GAMES[league];
+  return [
+    { value: 0, label: "All Games" },
+    { value: 10, label: "Last 10 Games" },
+    { value: 20, label: "Last 20 Games" },
+    { value: 30, label: "Last 30 Games" },
+    { value: games, label: `Full Season (${games} games)` },
+  ] as const;
+}
+
+/** NBA list. Callers that know the league should use `recentGamesOptions`. */
+export const RECENT_GAMES_OPTIONS = recentGamesOptions("nba");
 
 
 // ==================== 每日高機率球員 ====================
