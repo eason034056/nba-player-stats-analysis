@@ -9,11 +9,9 @@ the old club.
 """
 
 import asyncio
-import json
 import os
 import sys
 from datetime import datetime
-from pathlib import Path
 from unittest.mock import MagicMock
 
 import pytest
@@ -37,6 +35,11 @@ from app.services.csv_player_history import (
 )
 from app.services.daily_analysis import DailyAnalysisService
 from app.services.normalize import match_player_name, player_name_key
+from tests.fixtures.odds_api import (
+    RECORDED_NBA_EVENTS,
+    RECORDED_PLAYER_POINTS,
+    load_odds_fixture,
+)
 
 
 @pytest.fixture(scope="module")
@@ -221,14 +224,11 @@ class TestTeamAttribution:
 
 # Recorded The Odds API bodies. See tests/fixtures/README.md.
 # Only player_points was captured. Other markets are left empty.
-_FIXTURES = Path(__file__).resolve().parent / "fixtures"
-_EVENT_ODDS_PATH = _FIXTURES / "odds_api_event_odds__player_points.json"
-_EVENTS_PATH = _FIXTURES / "odds_api_events__basketball_nba.json"
 
 
 def _load_recorded_event() -> dict:
     """The Lakers @ Hawks player_points response, unchanged."""
-    return json.loads(_EVENT_ODDS_PATH.read_text())
+    return load_odds_fixture(RECORDED_PLAYER_POINTS)
 
 
 def _outcome_names(event: dict) -> set[str]:
@@ -245,7 +245,7 @@ def _outcome_names(event: dict) -> set[str]:
 class TestDailyAnalysisWiring:
     def _picks(self, game_logs, commence_time, projections=None):
         event = _load_recorded_event()
-        events = json.loads(_EVENTS_PATH.read_text())
+        events = load_odds_fixture(RECORDED_NBA_EVENTS)
         assert any(row["id"] == event["id"] for row in events)
         assert len(event["bookmakers"]) == 6
         assert {m["key"] for b in event["bookmakers"] for m in b["markets"]} == {

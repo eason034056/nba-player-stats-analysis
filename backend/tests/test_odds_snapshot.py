@@ -2,10 +2,12 @@
 Tests for OddsSnapshotService (app/services/odds_snapshot_service.py)
 """
 
+import copy
 import os
 import sys
 from datetime import datetime, timezone, timedelta
 from types import SimpleNamespace
+from typing import Any
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -14,37 +16,145 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from app.services.odds_snapshot_service import OddsSnapshotService, UPSERT_LINE_SQL, INSERT_LOG_SQL
 from app.services.odds_provider import OddsAPIError
+from tests.fixtures.odds_api import (
+    NBA_EXPANDED_MARKETS,
+    RECORDED_NBA_EVENTS,
+    RECORDED_PLAYER_POINTS,
+    first_posted_market,
+    load_odds_fixture,
+)
 
 
 # ---------------------------------------------------------------------------
-# Helpers
+# Helpers — every body starts from a recorded Odds API file.
 # ---------------------------------------------------------------------------
 
-def _make_event(event_id, home, away, commence_time):
-    """Build a minimal event dict matching The Odds API shape."""
+def _derive_listed_event(event_id, home, away, commence_time):
+    """Copy the first recorded NBA event and override identity and tip time.
+
+    Source: ``odds_api_events__basketball_nba.json[0]`` (Lakers @ Hawks,
+    ``2026-11-10T00:10:00Z``). ``sport_key`` and ``sport_title`` stay
+    recorded. The four arguments are what ``_get_events`` and
+    ``take_snapshot`` read. ``not-a-date`` replaces the recorded
+    ``commence_time`` so the parse-skip test has an unparseable clock;
+    the rest of the object is still the recorded event.
+    """
+    recorded = load_odds_fixture(RECORDED_NBA_EVENTS)
+    event = copy.deepcopy(recorded[0])
+    event["id"] = event_id
+    event["home_team"] = home
+    event["away_team"] = away
+    event["commence_time"] = commence_time
+    return event
+
+
+def _points_snapshot(book_keys: list[str], players: list[str]) -> dict[str, Any]:
+    """Recorded ``player_points`` restricted to the named books and players.
+
+    Starts at ``odds_api_event_odds__player_points.json``. Drops every
+    other bookmaker and every outcome whose ``description`` is not in
+    ``players``. Prices, lines, and the market key stay recorded.
+    Book order follows ``book_keys``.
+    """
+    event = load_odds_fixture(RECORDED_PLAYER_POINTS)
+    wanted_players = set(players)
+    by_key: dict[str, dict[str, Any]] = {}
+    for book in event["bookmakers"]:
+        if book.get("key") not in book_keys:
+            continue
+        kept = copy.deepcopy(book)
+        markets = []
+        for market in kept.get("markets") or []:
+            if market.get("key") != "player_points":
+                continue
+            market["outcomes"] = [
+                outcome
+                for outcome in market.get("outcomes") or []
+                if outcome.get("description") in wanted_players
+            ]
+            markets.append(market)
+        kept["markets"] = markets
+        by_key[kept["key"]] = kept
+    missing = [key for key in book_keys if key not in by_key]
+    if missing:
+        raise AssertionError(f"recorded player_points is missing bookmakers {missing}")
+    return {"bookmakers": [by_key[key] for key in book_keys]}
+
+
+def _drop_outcome_name(snapshot: dict[str, Any], name: str) -> dict[str, Any]:
+    """Drop outcomes whose ``name`` equals ``name`` (Over or Under)."""
+    snapshot = copy.deepcopy(snapshot)
+    for book in snapshot["bookmakers"]:
+        for market in book["markets"]:
+            market["outcomes"] = [
+                outcome for outcome in market["outcomes"] if outcome.get("name") != name
+            ]
+    return snapshot
+
+
+def _set_outcome_price(snapshot: dict[str, Any], name: str, price: int) -> dict[str, Any]:
+    """Set ``price`` on every outcome whose ``name`` equals ``name``."""
+    snapshot = copy.deepcopy(snapshot)
+    for book in snapshot["bookmakers"]:
+        for market in book["markets"]:
+            for outcome in market["outcomes"]:
+                if outcome.get("name") == name:
+                    outcome["price"] = price
+    return snapshot
+
+
+def _clear_points(snapshot: dict[str, Any]) -> dict[str, Any]:
+    """Set every outcome ``point`` to None. The rest of the quote stays."""
+    snapshot = copy.deepcopy(snapshot)
+    for book in snapshot["bookmakers"]:
+        for market in book["markets"]:
+            for outcome in market["outcomes"]:
+                outcome["point"] = None
+    return snapshot
+
+
+def _drop_all_bookmakers(snapshot: dict[str, Any]) -> dict[str, Any]:
+    """Derivation: the recorded event with an empty bookmaker list."""
+    snapshot = copy.deepcopy(snapshot)
+    snapshot["bookmakers"] = []
+    return snapshot
+
+
+def _rebounds_under_only() -> dict[str, Any]:
+    """A player_rebounds board that has Under and no Over.
+
+    When ``odds_api_event_odds__nba_expanded_markets.json`` posts
+    ``player_rebounds``, this copies that market and drops Over. Until
+    that file exists, the inline builder below is the stand-in.
+    """
+    posted = first_posted_market(NBA_EXPANDED_MARKETS, "player_rebounds")
+    if posted is not None:
+        book_key, market = posted
+        # Derivation: remove Over so the player has only Under.
+        market["outcomes"] = [
+            outcome for outcome in market["outcomes"] if outcome.get("name") != "Over"
+        ]
+        return {"bookmakers": [{"key": book_key, "markets": [market]}]}
+    # TODO(SPO-106): replace with recorded fixture
     return {
-        "id": event_id,
-        "home_team": home,
-        "away_team": away,
-        "commence_time": commence_time,
-    }
-
-
-def _make_bookmaker(key, markets):
-    """Build a bookmaker dict with nested markets/outcomes."""
-    return {"key": key, "markets": markets}
-
-
-def _make_market(key, outcomes):
-    return {"key": key, "outcomes": outcomes}
-
-
-def _make_outcome(description, name, point, price):
-    return {
-        "description": description,
-        "name": name,
-        "point": point,
-        "price": price,
+        "bookmakers": [
+            {
+                "key": "draftkings",
+                "markets": [
+                    {
+                        "key": "player_rebounds",
+                        "outcomes": [
+                            {
+                                "description": "Stephen Curry",
+                                "name": "Under",
+                                "point": 5.5,
+                                "price": -110,
+                            }
+                        ],
+                    }
+                ],
+            }
+        ]
     }
 
 
@@ -89,8 +199,8 @@ async def test_take_snapshot_with_events(monkeypatch):
     service = OddsSnapshotService()
 
     events = [
-        _make_event("evt1", "Lakers", "Celtics", "2026-03-01T02:00:00Z"),
-        _make_event("evt2", "Warriors", "Nets", "2026-03-01T04:00:00Z"),
+        _derive_listed_event("evt1", "Lakers", "Celtics", "2026-03-01T02:00:00Z"),
+        _derive_listed_event("evt2", "Warriors", "Nets", "2026-03-01T04:00:00Z"),
     ]
 
     mock_get_events = AsyncMock(return_value=events)
@@ -129,7 +239,7 @@ async def test_take_snapshot_with_events(monkeypatch):
 async def test_take_snapshot_db_not_connected(monkeypatch):
     service = OddsSnapshotService()
 
-    events = [_make_event("evt1", "Lakers", "Celtics", "2026-03-01T02:00:00Z")]
+    events = [_derive_listed_event("evt1", "Lakers", "Celtics", "2026-03-01T02:00:00Z")]
     monkeypatch.setattr(service, "_get_events", AsyncMock(return_value=events))
 
     fake_row = ("snap", "date", "eid", "home", "away", "player", "mkt", "bk",
@@ -161,8 +271,8 @@ async def test_take_snapshot_event_processing_error(monkeypatch):
     service = OddsSnapshotService()
 
     events = [
-        _make_event("evt1", "Lakers", "Celtics", "2026-03-01T02:00:00Z"),
-        _make_event("evt2", "Warriors", "Nets", "2026-03-01T04:00:00Z"),
+        _derive_listed_event("evt1", "Lakers", "Celtics", "2026-03-01T02:00:00Z"),
+        _derive_listed_event("evt2", "Warriors", "Nets", "2026-03-01T04:00:00Z"),
     ]
     monkeypatch.setattr(service, "_get_events", AsyncMock(return_value=events))
 
@@ -200,7 +310,7 @@ async def test_take_snapshot_event_404_skipped(monkeypatch):
     """OddsAPIError with 404 is silently skipped (no props data)."""
     service = OddsSnapshotService()
 
-    events = [_make_event("evt1", "Lakers", "Celtics", "2026-03-01T02:00:00Z")]
+    events = [_derive_listed_event("evt1", "Lakers", "Celtics", "2026-03-01T02:00:00Z")]
     monkeypatch.setattr(service, "_get_events", AsyncMock(return_value=events))
 
     async def _process_404(**kwargs):
@@ -232,8 +342,8 @@ async def test_get_events_filters_by_local_date(monkeypatch):
     # event at 2026-02-28T17:00Z => local 03-01 01:00 => should be included
     # event at 2026-02-28T15:00Z => local 02-28 23:00 => should be excluded
     raw_events = [
-        _make_event("in_range", "A", "B", "2026-02-28T17:00:00Z"),
-        _make_event("out_range", "C", "D", "2026-02-28T15:00:00Z"),
+        _derive_listed_event("in_range", "A", "B", "2026-02-28T17:00:00Z"),
+        _derive_listed_event("out_range", "C", "D", "2026-02-28T15:00:00Z"),
     ]
 
     mock_provider = MagicMock()
@@ -265,8 +375,8 @@ async def test_get_events_skips_invalid_commence_time(monkeypatch):
     service = OddsSnapshotService()
 
     raw_events = [
-        _make_event("bad", "A", "B", "not-a-date"),
-        _make_event("good", "C", "D", "2026-02-28T18:00:00Z"),
+        _derive_listed_event("bad", "A", "B", "not-a-date"),
+        _derive_listed_event("good", "C", "D", "2026-02-28T18:00:00Z"),
     ]
 
     mock_provider = MagicMock()
@@ -287,16 +397,12 @@ async def test_get_events_skips_invalid_commence_time(monkeypatch):
 async def test_process_event_builds_correct_rows(monkeypatch):
     service = OddsSnapshotService()
 
-    bookmakers_data = [
-        _make_bookmaker("draftkings", [
-            _make_market("player_points", [
-                _make_outcome("Stephen Curry", "Over", 24.5, -110),
-                _make_outcome("Stephen Curry", "Under", 24.5, -110),
-            ]),
-        ]),
-    ]
-
-    snapshot_data = {"bookmakers": bookmakers_data}
+    # DraftKings Luka Doncic in the capture is -113/-113 at 36.5, a
+    # symmetric pair, so the fair probabilities are 0.5/0.5.
+    snapshot_data = _points_snapshot(["draftkings"], ["Luka Doncic"])
+    outcomes = snapshot_data["bookmakers"][0]["markets"][0]["outcomes"]
+    over = next(outcome for outcome in outcomes if outcome["name"] == "Over")
+    under = next(outcome for outcome in outcomes if outcome["name"] == "Under")
     mock_gateway = MagicMock()
     mock_gateway.get_market_snapshot = AsyncMock(
         return_value=_snapshot_result(snapshot_data)
@@ -319,17 +425,16 @@ async def test_process_event_builds_correct_rows(monkeypatch):
     assert row[2] == "evt1"                  # event_id
     assert row[3] == "Warriors"              # home_team
     assert row[4] == "Lakers"                # away_team
-    assert row[5] == "Stephen Curry"         # player_name
+    assert row[5] == "Luka Doncic"           # player_name
     assert row[6] == "player_points"         # market
     assert row[7] == "draftkings"            # bookmaker
-    assert row[8] == 24.5                    # line
-    assert row[9] == -110                    # over_odds
-    assert row[10] == -110                   # under_odds
-    # vig & fair probs should be valid floats
+    assert row[8] == over["point"]           # line, recorded
+    assert row[9] == over["price"]           # over_odds, recorded
+    assert row[10] == under["price"]         # under_odds, recorded
     assert isinstance(row[11], float)        # vig
     assert isinstance(row[12], float)        # over_fair_prob
     assert isinstance(row[13], float)        # under_fair_prob
-    # For -110/-110, fair probs should each be ~0.5
+    # Symmetric American prices de-vig to 0.5/0.5.
     assert abs(row[12] - 0.5) < 0.01
     assert abs(row[13] - 0.5) < 0.01
 
@@ -338,24 +443,12 @@ async def test_process_event_builds_correct_rows(monkeypatch):
 async def test_process_event_multiple_bookmakers_and_players(monkeypatch):
     service = OddsSnapshotService()
 
-    bookmakers_data = [
-        _make_bookmaker("draftkings", [
-            _make_market("player_points", [
-                _make_outcome("Stephen Curry", "Over", 24.5, -110),
-                _make_outcome("Stephen Curry", "Under", 24.5, -110),
-                _make_outcome("LeBron James", "Over", 27.5, -115),
-                _make_outcome("LeBron James", "Under", 27.5, -105),
-            ]),
-        ]),
-        _make_bookmaker("fanduel", [
-            _make_market("player_points", [
-                _make_outcome("Stephen Curry", "Over", 24.5, -108),
-                _make_outcome("Stephen Curry", "Under", 24.5, -112),
-            ]),
-        ]),
-    ]
-
-    snapshot_data = {"bookmakers": bookmakers_data}
+    # Both names are on DraftKings and FanDuel in the player_points capture.
+    # Other bookmakers in that file are dropped.
+    snapshot_data = _points_snapshot(
+        ["draftkings", "fanduel"],
+        ["Luka Doncic", "Jalen Johnson"],
+    )
     mock_gateway = MagicMock()
     mock_gateway.get_market_snapshot = AsyncMock(
         return_value=_snapshot_result(snapshot_data)
@@ -371,12 +464,13 @@ async def test_process_event_multiple_bookmakers_and_players(monkeypatch):
         snapshot_at=snapshot_at,
     )
 
-    # draftkings: Curry + LeBron = 2, fanduel: Curry = 1 => 3 total
-    assert len(rows) == 3
+    # Two books, two recorded players, one complete pair each.
+    assert len(rows) == 4
     bookmaker_player_pairs = [(r[7], r[5]) for r in rows]
-    assert ("draftkings", "Stephen Curry") in bookmaker_player_pairs
-    assert ("draftkings", "LeBron James") in bookmaker_player_pairs
-    assert ("fanduel", "Stephen Curry") in bookmaker_player_pairs
+    assert ("draftkings", "Luka Doncic") in bookmaker_player_pairs
+    assert ("draftkings", "Jalen Johnson") in bookmaker_player_pairs
+    assert ("fanduel", "Luka Doncic") in bookmaker_player_pairs
+    assert ("fanduel", "Jalen Johnson") in bookmaker_player_pairs
 
 
 # ---------------------------------------------------------------------------
@@ -388,16 +482,11 @@ async def test_process_event_missing_under(monkeypatch):
     """Player with only Over but no Under should be skipped."""
     service = OddsSnapshotService()
 
-    bookmakers_data = [
-        _make_bookmaker("draftkings", [
-            _make_market("player_points", [
-                _make_outcome("Stephen Curry", "Over", 24.5, -110),
-                # No Under for Curry
-            ]),
-        ]),
-    ]
-
-    snapshot_data = {"bookmakers": bookmakers_data}
+    # Derivation: recorded DraftKings Luka Doncic pair, Under removed.
+    snapshot_data = _drop_outcome_name(
+        _points_snapshot(["draftkings"], ["Luka Doncic"]),
+        "Under",
+    )
     mock_gateway = MagicMock()
     mock_gateway.get_market_snapshot = AsyncMock(
         return_value=_snapshot_result(snapshot_data)
@@ -421,16 +510,10 @@ async def test_process_event_missing_over(monkeypatch):
     """Player with only Under but no Over should be skipped."""
     service = OddsSnapshotService()
 
-    bookmakers_data = [
-        _make_bookmaker("draftkings", [
-            _make_market("player_rebounds", [
-                _make_outcome("Stephen Curry", "Under", 5.5, -110),
-                # No Over for Curry
-            ]),
-        ]),
-    ]
-
-    snapshot_data = {"bookmakers": bookmakers_data}
+    # player_rebounds is not in the SPO-98 capture. _rebounds_under_only
+    # loads it once the expanded file posts that market, and otherwise
+    # keeps the inline Under-only builder.
+    snapshot_data = _rebounds_under_only()
     mock_gateway = MagicMock()
     mock_gateway.get_market_snapshot = AsyncMock(
         return_value=_snapshot_result(snapshot_data)
@@ -457,16 +540,12 @@ async def test_process_event_missing_over(monkeypatch):
 async def test_process_event_zero_price_skipped(monkeypatch):
     service = OddsSnapshotService()
 
-    bookmakers_data = [
-        _make_bookmaker("draftkings", [
-            _make_market("player_points", [
-                _make_outcome("Stephen Curry", "Over", 24.5, 0),
-                _make_outcome("Stephen Curry", "Under", 24.5, -110),
-            ]),
-        ]),
-    ]
-
-    snapshot_data = {"bookmakers": bookmakers_data}
+    # Derivation: recorded DraftKings Luka pair, Over price set to 0.
+    snapshot_data = _set_outcome_price(
+        _points_snapshot(["draftkings"], ["Luka Doncic"]),
+        "Over",
+        0,
+    )
     mock_gateway = MagicMock()
     mock_gateway.get_market_snapshot = AsyncMock(
         return_value=_snapshot_result(snapshot_data)
@@ -490,16 +569,8 @@ async def test_process_event_none_line_skipped(monkeypatch):
     """If line (point) is None the row should be skipped."""
     service = OddsSnapshotService()
 
-    bookmakers_data = [
-        _make_bookmaker("draftkings", [
-            _make_market("player_points", [
-                _make_outcome("Stephen Curry", "Over", None, -110),
-                _make_outcome("Stephen Curry", "Under", None, -110),
-            ]),
-        ]),
-    ]
-
-    snapshot_data = {"bookmakers": bookmakers_data}
+    # Derivation: recorded DraftKings Luka pair, both points cleared.
+    snapshot_data = _clear_points(_points_snapshot(["draftkings"], ["Luka Doncic"]))
     mock_gateway = MagicMock()
     mock_gateway.get_market_snapshot = AsyncMock(
         return_value=_snapshot_result(snapshot_data)
@@ -523,7 +594,10 @@ async def test_process_event_empty_bookmakers(monkeypatch):
     """No bookmakers in snapshot should produce zero rows."""
     service = OddsSnapshotService()
 
-    snapshot_data = {"bookmakers": []}
+    # Derivation: recorded DraftKings Luka board with every bookmaker dropped.
+    snapshot_data = _drop_all_bookmakers(
+        _points_snapshot(["draftkings"], ["Luka Doncic"])
+    )
     mock_gateway = MagicMock()
     mock_gateway.get_market_snapshot = AsyncMock(
         return_value=_snapshot_result(snapshot_data)

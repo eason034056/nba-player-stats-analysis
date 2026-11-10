@@ -1,6 +1,6 @@
 # Sports Lab Progress
 
-> Engineers update the row for their ticket in the pull request that changes that ticket. This file is a snapshot of ticket state, not a heartbeat log. Last updated: **2026-11-10** (SPO-96, after merging `origin/dev` through `fad723a`). Facts below were checked against `docs/task-summaries/`, `git log` on `dev`, and `gh pr list --base dev`. Titles that were not in those sources are left blank.
+> Engineers update the row for their ticket in the pull request that changes that ticket. This file is a snapshot of ticket state, not a heartbeat log. Last updated: **2026-11-10** (SPO-106 row, on `origin/dev` at `53fe0c4`). Facts below were checked against `docs/task-summaries/`, `git log` on `dev`, and `gh pr list --base dev`. Titles that were not in those sources are left blank.
 
 ## Shipped
 
@@ -83,6 +83,7 @@ Stale pull requests the owner is closing. Not merged.
 | SPO-101 | SPO-10 Phase 4 integration tests. Open. |
 | SPO-102 | Wire `PlayerDDTile` to double-double history and yes/no odds. Open on `feature/SPO-102-player-dd-tile-wiring`. Summary: `docs/task-summaries/SPO-102-player-dd-tile-wiring.md`. |
 | SPO-103 | SPO-10 Phase 5 final review. Open. |
+| SPO-106 | Recorded Odds API fixtures for unit tests, plus gated WNBA live coverage for rebounds, assists, threes, and the combo markets. Draft on `feature/SPO-106-recorded-odds-fixtures`. `player_points` and the NBA events list load through `tests.fixtures.odds_api`. REB, AST, 3PM, STL, FTM, FGM, R+A, P+R, P+A, PRA, DD, and WNBA stay on inline builders until `record_fixtures.py` runs with `ODDS_API_KEY` (not run: no key). Summary: `docs/task-summaries/SPO-106-recorded-odds-fixtures.md`. |
 
 ## Not classified
 

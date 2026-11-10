@@ -35,14 +35,47 @@ from app.services.daily_analysis import (  # noqa: E402
     _resolve_csv_service,
     _resolve_sport_key,
 )
+from tests.fixtures.odds_api import (  # noqa: E402
+    WNBA_EXPANDED_MARKETS,
+    derive_line_board,
+    load_odds_fixture,
+    odds_fixture_exists,
+)
 
 
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
 
+def _wnba_recording_has_an_outcome() -> bool:
+    """True when the WNBA odds file exists and a bookmaker posted an outcome.
+
+    An empty file is not a switch. The inline builder stays until there
+    is a recorded outcome to copy.
+    """
+    if not odds_fixture_exists(WNBA_EXPANDED_MARKETS):
+        return False
+    event = load_odds_fixture(WNBA_EXPANDED_MARKETS)
+    if not isinstance(event, dict):
+        return False
+    for book in event.get("bookmakers") or []:
+        for market in book.get("markets") or []:
+            if market.get("outcomes"):
+                return True
+    return False
+
+
 def _bookmakers_for(player: str, lines: list[float]) -> list[dict[str, Any]]:
-    """Build a minimal Odds-API-shaped bookmakers payload for one player."""
+    """Bookmakers list for one WNBA player.
+
+    When ``odds_api_event_odds__wnba_expanded_markets.json`` contains an
+    outcome, the shell is that recording and ``description`` / ``point``
+    are this test's controls (A'ja Wilson and her lines). Until then the
+    inline builder stands in. No WNBA event was listed for SPO-106.
+    """
+    if _wnba_recording_has_an_outcome():
+        return derive_line_board([{player: lines}], fixture_name=WNBA_EXPANDED_MARKETS)
+    # TODO(SPO-106): replace with recorded fixture
     return [
         {
             "key": "testbook",

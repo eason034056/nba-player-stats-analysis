@@ -21,6 +21,7 @@ ticket §6. Anything broader (full daily-analysis end-to-end, Sentinel test
 suite) is out of scope per ticket §7.
 """
 
+import copy
 import csv
 import os
 import sys
@@ -32,6 +33,8 @@ from unittest.mock import AsyncMock, patch
 import pytest
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+from tests.fixtures.odds_api import NBA_EXPANDED_MARKETS, first_posted_market
 
 from app.services.csv_player_history import CSVPlayerHistoryService
 from app.services.prob import single_leg_devig, DEFAULT_BINARY_VIG
@@ -358,6 +361,53 @@ class TestSingleLegDevig:
 # 5. DD binary parser path (no Over/Under contamination)
 # ===========================================================================
 
+def _derive_dd_case(posted: tuple[str, dict], kind: str) -> tuple[str, dict] | None:
+    """Cut a recorded DD market down to one player and the sides ``kind`` needs.
+
+    ``posted`` is ``(bookmaker key, market)`` from ``first_posted_market``.
+    Returns None when the recording does not contain the required side,
+    so the caller keeps the inline builder instead of inventing a price.
+    """
+    book_key, market = posted
+    grouped: dict[str, dict[str, dict]] = {}
+    for outcome in market.get("outcomes") or []:
+        player = outcome.get("description") or ""
+        side = (outcome.get("name") or "").lower()
+        if player and side in ("yes", "no"):
+            grouped.setdefault(player, {})[side] = outcome
+
+    if kind == "yes_and_no":
+        player = next(
+            (
+                name
+                for name, sides in grouped.items()
+                if "yes" in sides and "no" in sides
+            ),
+            None,
+        )
+        if player is None:
+            return None
+        keep = [grouped[player]["yes"], grouped[player]["no"]]
+    elif kind == "yes_only":
+        player = next((name for name, sides in grouped.items() if "yes" in sides), None)
+        if player is None:
+            return None
+        # Derivation: drop No. The Yes price stays recorded.
+        keep = [grouped[player]["yes"]]
+    elif kind == "no_only":
+        player = next((name for name, sides in grouped.items() if "no" in sides), None)
+        if player is None:
+            return None
+        # Derivation: drop Yes. The No price stays recorded.
+        keep = [grouped[player]["no"]]
+    else:
+        raise AssertionError(f"unknown DD case {kind}")
+
+    derived = copy.deepcopy(market)
+    derived["outcomes"] = [copy.deepcopy(outcome) for outcome in keep]
+    return book_key, derived
+
+
 class TestDdBinaryParser:
     """Acceptance criterion 2: DD parser is a separate code path."""
 
@@ -366,7 +416,10 @@ class TestDdBinaryParser:
         yes_outcomes: list[tuple[str, int]],
         no_outcomes: list[tuple[str, int]] | None = None,
     ) -> dict:
-        """Build a DD market dict mimicking The Odds API response shape."""
+        """Inline DD market used until a recording posts player_double_double.
+
+        # TODO(SPO-106): replace with recorded fixture
+        """
         outcomes = [
             {"name": "Yes", "description": player, "price": price}
             for player, price in yes_outcomes
@@ -378,15 +431,47 @@ class TestDdBinaryParser:
             )
         return {"key": "player_double_double", "outcomes": outcomes}
 
+    def _dd_case(
+        self,
+        kind: str,
+        inline_yes: list[tuple[str, int]],
+        inline_no: list[tuple[str, int]] | None,
+        inline_book: str,
+    ) -> tuple[str, dict]:
+        """Recorded DD market for ``kind``, or the inline builder.
+
+        ``kind`` is ``yes_only``, ``yes_and_no``, or ``no_only``.
+
+        When the expanded NBA file posts ``player_double_double``, the
+        market is copied and then cut down to the one player and the
+        sides this case needs. A recording that does not contain the
+        required side (no book posted No, for example) returns None from
+        the derivation and this method keeps the inline builder.
+        """
+        posted = first_posted_market(NBA_EXPANDED_MARKETS, "player_double_double")
+        derived = _derive_dd_case(posted, kind) if posted is not None else None
+        if derived is not None:
+            return derived
+        # TODO(SPO-106): replace with recorded fixture
+        return inline_book, self._dd_market_payload(inline_yes, inline_no)
+
     def test_yes_only_uses_single_leg_devig(self):
         svc = OddsSnapshotService()
-        market = self._dd_market_payload(
-            yes_outcomes=[("Nikola Jokic", -150)],
+        bookmaker_key, market = self._dd_case(
+            "yes_only",
+            inline_yes=[("Nikola Jokic", -150)],
+            inline_no=None,
+            inline_book="draftkings",
+        )
+        yes_price = next(
+            outcome["price"]
+            for outcome in market["outcomes"]
+            if outcome["name"] == "Yes"
         )
         rows = svc._parse_binary_market(
             market=market,
             market_key="player_double_double",
-            bookmaker_key="draftkings",
+            bookmaker_key=bookmaker_key,
             snapshot_at=datetime(2026, 5, 2),
             date_obj=datetime(2026, 5, 2).date(),
             event_id="evt-1",
@@ -397,7 +482,7 @@ class TestDdBinaryParser:
         # line is the 0.5 sentinel — DD has no real point
         assert row[8] == 0.5
         # over_odds = Yes price, under_odds = None when only Yes posted
-        assert row[9] == -150
+        assert row[9] == yes_price
         assert row[10] is None
         # over_fair_prob populated via single-leg de-vig
         assert row[12] is not None
@@ -405,14 +490,26 @@ class TestDdBinaryParser:
 
     def test_yes_and_no_uses_two_leg_devig(self):
         svc = OddsSnapshotService()
-        market = self._dd_market_payload(
-            yes_outcomes=[("Nikola Jokic", -150)],
-            no_outcomes=[("Nikola Jokic", 130)],
+        bookmaker_key, market = self._dd_case(
+            "yes_and_no",
+            inline_yes=[("Nikola Jokic", -150)],
+            inline_no=[("Nikola Jokic", 130)],
+            inline_book="fanduel",
+        )
+        yes_price = next(
+            outcome["price"]
+            for outcome in market["outcomes"]
+            if outcome["name"] == "Yes"
+        )
+        no_price = next(
+            outcome["price"]
+            for outcome in market["outcomes"]
+            if outcome["name"] == "No"
         )
         rows = svc._parse_binary_market(
             market=market,
             market_key="player_double_double",
-            bookmaker_key="fanduel",
+            bookmaker_key=bookmaker_key,
             snapshot_at=datetime(2026, 5, 2),
             date_obj=datetime(2026, 5, 2).date(),
             event_id="evt-1",
@@ -420,9 +517,9 @@ class TestDdBinaryParser:
         )
         assert len(rows) == 1
         row = rows[0]
-        # both prices populated
-        assert row[9] == -150
-        assert row[10] == 130
+        # both prices populated, copied from the market the case built
+        assert row[9] == yes_price
+        assert row[10] == no_price
         # vig comes from leg pair, fair probs sum to 1
         assert row[12] is not None
         assert row[13] is not None
@@ -432,14 +529,16 @@ class TestDdBinaryParser:
         # Spec: "Do NOT publish a fair probability if vig cannot be estimated"
         # — without a Yes anchor, we have nothing.
         svc = OddsSnapshotService()
-        market = self._dd_market_payload(
-            yes_outcomes=[],
-            no_outcomes=[("Some Player", -120)],
+        bookmaker_key, market = self._dd_case(
+            "no_only",
+            inline_yes=[],
+            inline_no=[("Some Player", -120)],
+            inline_book="caesars",
         )
         rows = svc._parse_binary_market(
             market=market,
             market_key="player_double_double",
-            bookmaker_key="caesars",
+            bookmaker_key=bookmaker_key,
             snapshot_at=datetime(2026, 5, 2),
             date_obj=datetime(2026, 5, 2).date(),
             event_id="evt-1",
