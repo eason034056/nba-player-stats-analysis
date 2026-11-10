@@ -37,7 +37,7 @@ WNBA regular season is 44 games. The shared history panel is the caller on both 
 
 ## Tests / Verification
 
-- `npx vitest run` — 26 files, 98 tests, passed.
+- `npx vitest run` — 26 files, 105 tests, passed.
 - `npx tsc --noEmit` — passed.
 - `npm run lint` — passed, 0 warnings.
 - Integration test: SKIPPED. No new external API client. The UI reads the existing `/props/no-vig` and `/player-dd-history` routes.
@@ -53,6 +53,10 @@ WNBA regular season is 44 games. The shared history panel is the caller on both 
 | DD tile labels the 4.5% single-leg prior | `labels fair probabilities that came from the 4.5% single-leg prior` |
 | WNBA player page mounts the DD tile without an event id | `renders double-double history without an event and shows the odds empty state` |
 | Zod keeps `fetched_at` and `data_age_seconds`, and the table shows the age | `shows how old the odds are from fetched_at and data_age_seconds` |
+| Fair percents use the same half-away rounding as the DD tile | `renders 0.6755 as 67.6% in ResultsTable and PlayerDDTile` |
+| `uses_prior` wins when present and a null No price is the fallback | `prefers uses_prior when it is present and falls back when it is absent` |
+| A mixed consensus is labeled when any book used the prior | `labels a mixed consensus when any book used the prior` |
+| `consensus_uses_prior` is read from the consensus object or the envelope | `reads consensus_uses_prior from the consensus object and from the envelope` |
 
 Companion schema locks in `frontend/lib/player-dd-schema.test.ts`: `keeps fetched_at and data_age_seconds on the no-vig schema`, `accepts a one-sided row before the synthetic-line flags exist`, `accepts null under_odds with line_is_synthetic and market_kind`.
 
@@ -66,10 +70,9 @@ Companion schema locks in `frontend/lib/player-dd-schema.test.ts`: `keeps fetche
 
 ## Follow-ups
 
-- A mixed consensus (one book two-sided, another on the 4.5% prior) is not labeled as the prior. The label is on the one-sided book, and on the consensus only when every book used the prior. The contract has no separate consensus flag for that mix.
 - `line_is_synthetic` and `market_kind` are read from each result row. They are not read from the response envelope.
 - The hand-typed Odds API bodies called out in the SPO-103 review are backend fixtures. This ticket does not replace them.
-- Continuous history percents still use `toFixed`. DD tile percents still use half-away rounding.
+- Implied probabilities and continuous history percents still use `toFixed`. Fair probabilities in the results table and the DD tile share half-away rounding.
 
 ## SPO-104 contract used
 
@@ -78,6 +81,16 @@ One-sided DD quote: `under_odds: null`, `no_price: null`, `p_under_imp: null`. `
 Every result row may include `line_is_synthetic: boolean` (true for DD) and `market_kind: "binary" | "over_under"`.
 
 WNBA uses the same schema and the same components.
+
+### Provisional fields
+
+These names are not on the merged backend yet. They are optional and nullable on the shared NBA/WNBA no-vig schema so either shape parses. Final names wait on the backend PR.
+
+| Field | Where | Meaning |
+|---|---|---|
+| `uses_prior` | each result row and each DD book quote | True when that book only posted Yes and the fair value came from the 4.5% prior. A boolean wins. When the field is absent, a null `under_odds` or `no_price` is still the signal. |
+| `consensus_uses_prior` | consensus object, or the response envelope when the consensus object does not carry it | True if any book in the consensus used the prior. The consensus is labeled in that case. When the flag is absent, the consensus is labeled if any row used the prior. |
+| `consensus_prior_book_count` | same places as `consensus_uses_prior` | When present, the caption is `includes N book(s) on the 4.5% single-leg prior`. |
 
 **Ticket**: SPO-105
 **Branch**: `feature/SPO-105-frontend-review-fixes`

@@ -13,6 +13,7 @@ import { TrendingUp, TrendingDown, AlertCircle, Calculator } from "lucide-react"
 import {
   MISSING_QUOTE,
   SINGLE_LEG_PRIOR_LABEL,
+  consensusPriorCaption,
   fairNoValue,
   fairYesValue,
   lineText,
@@ -24,9 +25,9 @@ import {
   yesImpliedText,
   yesPriceText,
 } from "@/lib/no-vig-display";
+import { formatPercent } from "@/lib/player-dd";
 import { type NoVigResponse, type BookmakerResult } from "@/lib/schemas";
 import {
-  formatProbability,
   formatVig,
   getBookmakerDisplayName,
   getMarketDisplayName,
@@ -123,7 +124,7 @@ function ResultRow({
       <td data-testid="result-yes-fair">
         <div className="flex items-center gap-2">
           <span className="font-mono text-blue-600 font-bold w-16">
-            {yesFair === null ? MISSING_QUOTE : formatProbability(yesFair)}
+            {yesFair === null ? MISSING_QUOTE : formatPercent(yesFair)}
           </span>
           {yesFair !== null && (
             <ProbabilityBar probability={yesFair} color="blue" />
@@ -142,7 +143,7 @@ function ResultRow({
       <td data-testid="result-no-fair">
         <div className="flex items-center gap-2">
           <span className="font-mono text-yellow font-bold w-16">
-            {noFair === null ? MISSING_QUOTE : formatProbability(noFair)}
+            {noFair === null ? MISSING_QUOTE : formatPercent(noFair)}
           </span>
           {noFair !== null && (
             <ProbabilityBar probability={noFair} color="amber" />
@@ -167,11 +168,11 @@ function ResultRow({
 function ConsensusBlock({
   consensus,
   binary,
-  priorOnly,
+  priorCaption,
 }: {
   consensus: NoVigResponse["consensus"];
   binary: boolean;
-  priorOnly: boolean;
+  priorCaption: string | null;
 }) {
   if (!consensus) return null;
 
@@ -207,10 +208,12 @@ function ConsensusBlock({
             <span className="text-sm text-blue-600 font-semibold">{yesLabel}</span>
           </div>
           <p className="text-3xl font-mono font-bold text-blue-600">
-            {formatProbability(yesFair)}
+            {formatPercent(yesFair)}
           </p>
-          {priorOnly && (
-            <p className="text-[10px] text-gray mt-1">{SINGLE_LEG_PRIOR_LABEL}</p>
+          {priorCaption && (
+            <p className="text-[10px] text-gray mt-1" data-testid="consensus-prior">
+              {priorCaption}
+            </p>
           )}
           <div className="mt-2 w-full bg-blue-200 rounded-full h-2">
             <div
@@ -226,10 +229,12 @@ function ConsensusBlock({
             <span className="text-sm text-dark font-semibold">{noLabel}</span>
           </div>
           <p className="text-3xl font-mono font-bold text-dark">
-            {formatProbability(noFair)}
+            {formatPercent(noFair)}
           </p>
-          {priorOnly && (
-            <p className="text-[10px] text-gray mt-1">{SINGLE_LEG_PRIOR_LABEL}</p>
+          {priorCaption && (
+            <p className="text-[10px] text-gray mt-1" data-testid="consensus-prior">
+              {priorCaption}
+            </p>
           )}
           <div className="mt-2 w-full bg-yellow/50 rounded-full h-2">
             <div
@@ -327,10 +332,7 @@ export function ResultsTable({ data, isLoading }: ResultsTableProps) {
   }
 
   const binary = responseIsBinary(data);
-  const priorOnly =
-    binary &&
-    data.results.length > 0 &&
-    data.results.every((row) => usesSingleLegPrior(row));
+  const priorCaption = consensusPriorCaption(data);
   const ageLabel = oddsAgeLabel(data);
 
   return (
@@ -379,7 +381,7 @@ export function ResultsTable({ data, isLoading }: ResultsTableProps) {
       <ConsensusBlock
         consensus={data.consensus}
         binary={binary}
-        priorOnly={priorOnly}
+        priorCaption={priorCaption}
       />
 
       <p className="mt-4 text-xs text-gray">

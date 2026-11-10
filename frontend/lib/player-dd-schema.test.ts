@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest";
 
+import {
+  SINGLE_LEG_PRIOR_LABEL,
+  consensusPriorCaption,
+  usesSingleLegPrior,
+} from "@/lib/no-vig-display";
 import { selectDDHistory, selectDDOdds } from "@/lib/player-dd";
 import {
   noVigResponseSchema,
@@ -346,5 +351,71 @@ describe("recorded double-double payloads", () => {
     expect(parsed.results[0]?.no_fair_prob).toBe(0.3245);
     expect(parsed.results[0]?.line_is_synthetic).toBe(true);
     expect(parsed.results[0]?.market_kind).toBe("binary");
+  });
+
+  it("accepts uses_prior true, false, and absent", () => {
+    const absent = noVigResponseSchema.parse(recordedNoVig);
+    expect(absent.results[0]?.uses_prior).toBeUndefined();
+    expect(absent.results[1]?.uses_prior).toBeUndefined();
+
+    const parsed = noVigResponseSchema.parse({
+      ...recordedNoVig,
+      results: [
+        { ...recordedNoVig.results[0], uses_prior: true },
+        { ...recordedNoVig.results[1], uses_prior: false },
+        { ...recordedNoVig.results[1], bookmaker: "betmgm", uses_prior: null },
+      ],
+    });
+    expect(parsed.results[0]?.uses_prior).toBe(true);
+    expect(parsed.results[1]?.uses_prior).toBe(false);
+    expect(parsed.results[2]?.uses_prior).toBeNull();
+    expect(usesSingleLegPrior(parsed.results[0]!)).toBe(true);
+    expect(usesSingleLegPrior(parsed.results[1]!)).toBe(false);
+    expect(usesSingleLegPrior(parsed.results[2]!)).toBe(true);
+  });
+
+  it("accepts consensus_uses_prior on the consensus object and on the envelope", () => {
+    const onConsensus = noVigResponseSchema.parse({
+      ...recordedNoVig,
+      consensus: {
+        ...recordedNoVig.consensus,
+        consensus_uses_prior: true,
+        consensus_prior_book_count: 1,
+      },
+    });
+    expect(onConsensus.consensus?.consensus_uses_prior).toBe(true);
+    expect(onConsensus.consensus?.consensus_prior_book_count).toBe(1);
+    expect(consensusPriorCaption(onConsensus)).toBe(
+      "includes 1 book on the 4.5% single-leg prior",
+    );
+
+    const onEnvelope = noVigResponseSchema.parse({
+      ...recordedNoVig,
+      consensus_uses_prior: false,
+      consensus_prior_book_count: 2,
+    });
+    expect(onEnvelope.consensus?.consensus_uses_prior).toBeUndefined();
+    expect(onEnvelope.consensus_uses_prior).toBe(false);
+    expect(onEnvelope.consensus_prior_book_count).toBe(2);
+    expect(consensusPriorCaption(onEnvelope)).toBeNull();
+
+    const countedOnEnvelope = noVigResponseSchema.parse({
+      ...recordedNoVig,
+      results: recordedNoVig.results.map((row) => ({ ...row, uses_prior: false })),
+      consensus_uses_prior: true,
+      consensus_prior_book_count: null,
+    });
+    expect(countedOnEnvelope.consensus_prior_book_count).toBeNull();
+    expect(consensusPriorCaption(countedOnEnvelope)).toBe(SINGLE_LEG_PRIOR_LABEL);
+  });
+
+  it("still parses a payload from before uses_prior existed", () => {
+    const parsed = noVigResponseSchema.parse(recordedNoVig);
+    expect(parsed.results[1]?.no_price).toBeNull();
+    expect(parsed.results[1]?.uses_prior).toBeUndefined();
+    expect(parsed.consensus_uses_prior).toBeUndefined();
+    expect(parsed.consensus?.consensus_uses_prior).toBeUndefined();
+    expect(usesSingleLegPrior(parsed.results[1]!)).toBe(true);
+    expect(consensusPriorCaption(parsed)).toBe(SINGLE_LEG_PRIOR_LABEL);
   });
 });

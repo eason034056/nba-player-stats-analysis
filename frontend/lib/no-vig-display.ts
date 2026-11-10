@@ -6,6 +6,10 @@
  * `no_price: null`. Older responses still copy the Yes price into
  * `under_odds` and leave `no_price` null. Either null means the fair
  * No number came from the 4.5% single-leg prior.
+ *
+ * `uses_prior` and `consensus_uses_prior` are provisional names. When
+ * a boolean is present it wins. When it is absent, a null No price on
+ * any row is still the prior signal.
  */
 
 import type { BookmakerResult, NoVigResponse } from "@/lib/schemas";
@@ -21,14 +25,61 @@ export function isDoubleDoubleMarket(market: string | null | undefined): boolean
 }
 
 /**
- * A null No price is the prior signal. `undefined` (the field was not on
- * an Over/Under row) is not.
+ * `uses_prior` wins when the backend sent a boolean. Otherwise a null
+ * No price is the prior signal. `undefined` (the field was not on an
+ * Over/Under row) is not.
  */
 export function usesSingleLegPrior(row: {
+  uses_prior?: boolean | null;
   under_odds?: number | null;
   no_price?: number | null;
 }): boolean {
+  if (typeof row.uses_prior === "boolean") return row.uses_prior;
   return row.under_odds === null || row.no_price === null;
+}
+
+export interface ConsensusPriorSource {
+  consensus?: {
+    consensus_uses_prior?: boolean | null;
+    consensus_prior_book_count?: number | null;
+  } | null;
+  consensus_uses_prior?: boolean | null;
+  consensus_prior_book_count?: number | null;
+  results: Array<{
+    uses_prior?: boolean | null;
+    under_odds?: number | null;
+    no_price?: number | null;
+  }>;
+}
+
+function finiteCount(value: number | null | undefined): number | null {
+  return typeof value === "number" && Number.isFinite(value) ? value : null;
+}
+
+/** True when the consensus includes at least one 4.5% prior book. */
+export function consensusUsesPrior(data: ConsensusPriorSource): boolean {
+  const onConsensus = data.consensus?.consensus_uses_prior;
+  if (typeof onConsensus === "boolean") return onConsensus;
+  if (typeof data.consensus_uses_prior === "boolean") return data.consensus_uses_prior;
+  return data.results.some((row) => usesSingleLegPrior(row));
+}
+
+export function consensusPriorBookCount(data: ConsensusPriorSource): number | null {
+  const onConsensus = finiteCount(data.consensus?.consensus_prior_book_count);
+  if (onConsensus !== null) return onConsensus;
+  return finiteCount(data.consensus_prior_book_count);
+}
+
+/**
+ * Caption under consensus fair values. A count, when the payload has one,
+ * says how many books in that consensus used the prior.
+ */
+export function consensusPriorCaption(data: ConsensusPriorSource): string | null {
+  if (!consensusUsesPrior(data)) return null;
+  const count = consensusPriorBookCount(data);
+  if (count === null) return SINGLE_LEG_PRIOR_LABEL;
+  const noun = count === 1 ? "book" : "books";
+  return `includes ${count} ${noun} on the ${SINGLE_LEG_PRIOR_LABEL}`;
 }
 
 export function responseIsBinary(data: Pick<NoVigResponse, "market" | "results">): boolean {

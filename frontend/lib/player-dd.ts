@@ -7,10 +7,11 @@
  * Those legacy fields stay on the row so older Over/Under screens keep
  * parsing. A one-sided quote is `no_price: null`. SPO-104 also sends
  * `under_odds: null` instead of copying the Yes price. Either null means
- * the fair pair came from the 4.5% single-leg prior.
+ * the fair pair came from the 4.5% single-leg prior. A boolean
+ * `uses_prior` on the row wins over that null check.
  */
 
-import { usesSingleLegPrior } from "@/lib/no-vig-display";
+import { consensusPriorCaption, usesSingleLegPrior } from "@/lib/no-vig-display";
 import type {
   BookmakerResult,
   NoVigResponse,
@@ -64,6 +65,7 @@ export type DDOddsSelection =
       books: DDBookQuote[];
       consensusYesFair: number | null;
       consensusNoFair: number | null;
+      consensusPriorLabel: string | null;
       message: string | null;
     } & DDSnapshotMeta)
   | ({
@@ -143,6 +145,7 @@ export function selectDDOdds(response: NoVigResponse): DDOddsSelection {
     consensusNoFair: isProbability(consensus?.p_no_fair)
       ? consensus.p_no_fair
       : null,
+    consensusPriorLabel: consensusPriorCaption(response),
     message,
     ...meta,
   };

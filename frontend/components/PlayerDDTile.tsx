@@ -299,9 +299,7 @@ function OddsBlock({
     );
   }
 
-  const priorOnly =
-    selection.books.length > 0 &&
-    selection.books.every((book) => book.usesSingleLegPrior);
+  const priorCaption = selection.consensusPriorLabel;
 
   return (
     <div className="space-y-4" data-testid="dd-odds">
@@ -322,8 +320,10 @@ function OddsBlock({
                 missingLabel="Unavailable"
                 valueClassName="text-green-800"
               />
-              {priorOnly && selection.consensusYesFair !== null && (
-                <p className="text-[10px] text-gray mt-0.5">{SINGLE_LEG_PRIOR_LABEL}</p>
+              {priorCaption && selection.consensusYesFair !== null && (
+                <p className="text-[10px] text-gray mt-0.5" data-testid="dd-consensus-prior">
+                  {priorCaption}
+                </p>
               )}
             </div>
             <div>
@@ -334,8 +334,10 @@ function OddsBlock({
                 missingLabel="Unavailable"
                 valueClassName="text-green-800"
               />
-              {priorOnly && selection.consensusNoFair !== null && (
-                <p className="text-[10px] text-gray mt-0.5">{SINGLE_LEG_PRIOR_LABEL}</p>
+              {priorCaption && selection.consensusNoFair !== null && (
+                <p className="text-[10px] text-gray mt-0.5" data-testid="dd-consensus-prior">
+                  {priorCaption}
+                </p>
               )}
             </div>
           </div>

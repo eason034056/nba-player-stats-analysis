@@ -1,9 +1,11 @@
 import { screen, within } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 
+import { PlayerDDTile } from "@/components/PlayerDDTile";
 import { ResultsTable } from "@/components/ResultsTable";
 import { SINGLE_LEG_PRIOR_LABEL } from "@/lib/no-vig-display";
-import { noVigResponseSchema, type NoVigResponse } from "@/lib/schemas";
+import { noVigResponseSchema, type BookmakerResult, type NoVigResponse } from "@/lib/schemas";
+import jokicHistory from "@/test/fixtures/player-dd-history/jokic.json";
 import recordedNoVig from "@/test/fixtures/props-no-vig/player-double-double.json";
 import oneSidedNoVig from "@/test/fixtures/props-no-vig/player-double-double-one-sided.json";
 import { renderWithProviders } from "@/test/test-utils";
@@ -108,4 +110,206 @@ describe("ResultsTable double-double rows", () => {
       "Odds response is 47 seconds old. Fetched at 2026-11-10T03:00:00Z.",
     );
   });
+
+  it("renders 0.6755 as 67.6% in ResultsTable and PlayerDDTile", async () => {
+    const parsed = noVigResponseSchema.parse({
+      event_id: "evt-round",
+      player_name: "Nikola Jokic",
+      market: "player_double_double",
+      results: [
+        binaryRow("fanduel", {
+          over_odds: -240,
+          under_odds: 200,
+          no_price: 200,
+          p_under_imp: 0.3245,
+          p_over_fair: 0.6755,
+          p_under_fair: 0.3245,
+          yes_price: -240,
+          yes_fair_prob: 0.6755,
+          no_fair_prob: 0.3245,
+          uses_prior: false,
+        }),
+      ],
+      consensus: {
+        method: "mean",
+        p_over_fair: 0.6755,
+        p_under_fair: 0.3245,
+        p_yes_fair: 0.6755,
+        p_no_fair: 0.3245,
+        consensus_uses_prior: false,
+      },
+      message: null,
+    });
+
+    const { unmount } = renderTable(parsed);
+    expect(screen.getByTestId("result-yes-fair")).toHaveTextContent("67.6%");
+    unmount();
+
+    renderWithProviders(
+      <PlayerDDTile
+        playerName="Nikola Jokic"
+        league="nba"
+        eventId="evt-round"
+        getPlayerDDHistoryFn={() => Promise.resolve(jokicHistory)}
+        calculateNoVigFn={() => Promise.resolve(parsed)}
+      />,
+    );
+    const fanduel = await screen.findByRole("article", { name: /fanduel/i });
+    expect(within(fanduel).getByText("67.6%")).toBeInTheDocument();
+  });
+
+  it("prefers uses_prior when it is present and falls back when it is absent", () => {
+    const flagged = noVigResponseSchema.parse(
+      ddBody([
+        binaryRow("fanduel", {
+          under_odds: 200,
+          no_price: 200,
+          p_under_imp: 0.3333,
+          uses_prior: true,
+        }),
+      ]),
+    );
+    const { unmount } = renderTable(flagged);
+    const flaggedRow = screen.getByTestId("result-row-fanduel");
+    expect(within(flaggedRow).getAllByText(SINGLE_LEG_PRIOR_LABEL).length).toBeGreaterThan(0);
+    expect(within(flaggedRow).getByTestId("result-no-price")).toHaveTextContent("—");
+    unmount();
+
+    const suppressed = noVigResponseSchema.parse(
+      ddBody([
+        binaryRow("fanduel", {
+          under_odds: null,
+          no_price: null,
+          p_under_imp: null,
+          uses_prior: false,
+        }),
+      ], { consensus_uses_prior: false }),
+    );
+    const { unmount: unmountSuppressed } = renderTable(suppressed);
+    expect(within(screen.getByTestId("result-row-fanduel")).queryByText(SINGLE_LEG_PRIOR_LABEL)).not.toBeInTheDocument();
+    expect(screen.queryByTestId("consensus-prior")).not.toBeInTheDocument();
+    unmountSuppressed();
+
+    const absent = noVigResponseSchema.parse(
+      ddBody([
+        binaryRow("fanduel", {
+          under_odds: null,
+          no_price: null,
+          p_under_imp: null,
+        }),
+      ]),
+    );
+    expect(absent.results[0]?.uses_prior).toBeUndefined();
+    renderTable(absent);
+    expect(
+      within(screen.getByTestId("result-row-fanduel")).getAllByText(SINGLE_LEG_PRIOR_LABEL).length,
+    ).toBeGreaterThan(0);
+  });
+
+  it("labels a mixed consensus when any book used the prior", () => {
+    const mixed = noVigResponseSchema.parse(recordedNoVig);
+    expect(mixed.consensus?.consensus_uses_prior).toBeUndefined();
+    renderTable(mixed);
+
+    expect(within(screen.getByTestId("result-row-draftkings")).queryByText(SINGLE_LEG_PRIOR_LABEL)).not.toBeInTheDocument();
+    expect(
+      within(screen.getByTestId("result-row-fanduel")).getAllByText(SINGLE_LEG_PRIOR_LABEL).length,
+    ).toBeGreaterThan(0);
+    expect(screen.getAllByTestId("consensus-prior").map((node) => node.textContent)).toEqual([
+      SINGLE_LEG_PRIOR_LABEL,
+      SINGLE_LEG_PRIOR_LABEL,
+    ]);
+  });
+
+  it("reads consensus_uses_prior from the consensus object and from the envelope", () => {
+    const onObject = noVigResponseSchema.parse(
+      ddBody(
+        [
+          binaryRow("draftkings", { under_odds: 200, no_price: 200, uses_prior: false }),
+          binaryRow("fanduel", { under_odds: 180, no_price: 180, uses_prior: false }),
+        ],
+        {
+          consensus: {
+            method: "mean",
+            p_over_fair: 0.68,
+            p_under_fair: 0.32,
+            p_yes_fair: 0.68,
+            p_no_fair: 0.32,
+            consensus_uses_prior: true,
+            consensus_prior_book_count: 1,
+          },
+        },
+      ),
+    );
+    const { unmount } = renderTable(onObject);
+    expect(screen.getAllByTestId("consensus-prior")[0]).toHaveTextContent(
+      "includes 1 book on the 4.5% single-leg prior",
+    );
+    expect(within(screen.getByTestId("result-row-draftkings")).queryByText(SINGLE_LEG_PRIOR_LABEL)).not.toBeInTheDocument();
+    expect(within(screen.getByTestId("result-row-fanduel")).queryByText(SINGLE_LEG_PRIOR_LABEL)).not.toBeInTheDocument();
+    unmount();
+
+    const onEnvelope = noVigResponseSchema.parse(
+      ddBody(
+        [binaryRow("draftkings", { under_odds: 200, no_price: 200, uses_prior: false })],
+        {
+          consensus_uses_prior: true,
+          consensus_prior_book_count: 2,
+        },
+      ),
+    );
+    expect(onEnvelope.consensus?.consensus_uses_prior).toBeUndefined();
+    expect(onEnvelope.consensus_uses_prior).toBe(true);
+    renderTable(onEnvelope);
+    expect(screen.getAllByTestId("consensus-prior")[0]).toHaveTextContent(
+      "includes 2 books on the 4.5% single-leg prior",
+    );
+  });
 });
+
+function binaryRow(
+  bookmaker: string,
+  overrides: Partial<BookmakerResult> = {},
+): BookmakerResult {
+  return {
+    bookmaker,
+    line: 0.5,
+    over_odds: -240,
+    under_odds: null,
+    p_over_imp: 0.7059,
+    p_under_imp: null,
+    vig: 0.045,
+    p_over_fair: 0.6755,
+    p_under_fair: 0.3245,
+    yes_price: -240,
+    no_price: null,
+    p_yes_imp: 0.7059,
+    p_no_imp: null,
+    yes_fair_prob: 0.6755,
+    no_fair_prob: 0.3245,
+    line_is_synthetic: true,
+    market_kind: "binary",
+    ...overrides,
+  };
+}
+
+function ddBody(
+  results: BookmakerResult[],
+  extra: Record<string, unknown> = {},
+) {
+  return {
+    event_id: "evt-prior",
+    player_name: "Nikola Jokic",
+    market: "player_double_double",
+    results,
+    consensus: {
+      method: "mean",
+      p_over_fair: 0.6755,
+      p_under_fair: 0.3245,
+      p_yes_fair: 0.6755,
+      p_no_fair: 0.3245,
+    },
+    message: null,
+    ...extra,
+  };
+}
