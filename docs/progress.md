@@ -1,8 +1,14 @@
 # Sports Lab Progress
 
-> Engineers update the row for their ticket in the pull request that changes that ticket. This file is a snapshot of ticket state, not a heartbeat log. Last updated: **2026-11-09** (SPO-96). Facts below were checked against `docs/task-summaries/`, `git log` on `dev`, and `gh pr list --base dev`. Titles that were not in those sources are left blank.
+> Engineers update the row for their ticket in the pull request that changes that ticket. This file is a snapshot of ticket state, not a heartbeat log. Last updated: **2026-11-10** (SPO-96, after merging SPO-95 from `dev`). Facts below were checked against `docs/task-summaries/`, `git log` on `dev`, and `gh pr list --base dev`. Titles that were not in those sources are left blank.
 
 ## Shipped
+
+### SPO-95 — CI branch triggers (2026-11-09)
+
+Shipped on `dev` in #29 (`546dc5d`). QA owned the CI fix.
+
+`ci.yml` and `deploy-staging.yml` filtered on `main`. This repo has no `main` ref; `origin/HEAD` is `master`, and integrated work lands on `dev`. CI now runs on push to `master` and `dev`, and on pull requests that target either branch. Staging deploy runs on push to `master` (the branch the workflow called `main`). Production deploy stays on `v*` tags (that file never named `main`). Neither deploy workflow runs on pull requests.
 
 ### SPO-29 — WNBA rollout
 
@@ -59,7 +65,6 @@ Stale pull requests the owner is closing. Not merged.
 
 | Ticket | Note |
 |---|---|
-| SPO-95 | CI fix, owned by QA. |
 | SPO-96 | This docs rewrite (`feature/SPO-96-claude-md-workflow-rewrite`). |
 | SPO-97 | CSV season hygiene. No task summary on `dev` yet. |
 | SPO-98 | Team attribution and exact name matching. No task summary on `dev` yet. |
