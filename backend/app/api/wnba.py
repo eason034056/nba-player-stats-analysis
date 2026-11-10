@@ -163,6 +163,14 @@ async def get_player_history(
     is_starter: Optional[bool] = Query(default=None, description="Starter filter"),
     teammate_filter: Optional[str] = Query(default=None, description="Comma-separated teammate names"),
     teammate_played: Optional[bool] = Query(default=None, description="Teammate played filter"),
+    include_playoffs: bool = Query(
+        default=False,
+        description="Include playoff games. Default is regular season only.",
+    ),
+    include_play_in: bool = Query(
+        default=False,
+        description="Include play-in games. Default is regular season only.",
+    ),
 ) -> PlayerHistoryResponse:
     """Get WNBA player historical statistical summary."""
     valid_metrics = sorted(CONTINUOUS_METRIC_EXTRACTORS.keys())
@@ -188,6 +196,8 @@ async def get_player_history(
             is_starter=is_starter,
             teammate_filter=teammate_list,
             teammate_played=teammate_played,
+            include_playoffs=include_playoffs,
+            include_play_in=include_play_in,
         )
 
         histogram_bins = [
@@ -204,6 +214,8 @@ async def get_player_history(
                 team=log.get("team", ""),
                 minutes=log.get("minutes", 0.0),
                 is_starter=log.get("is_starter", False),
+                game_type=log.get("game_type", "regular_season"),
+                season=log.get("season", ""),
             )
             for log in stats.get("game_logs", [])
         ]
@@ -246,10 +258,23 @@ async def get_player_dd_history(
         description="Player name (normalized exact match: case, accents, punctuation, suffixes)",
     ),
     season: Optional[str] = Query(default=None, description="Season filter; None means all seasons"),
+    include_playoffs: bool = Query(
+        default=False,
+        description="Include playoff games. Default is regular season only.",
+    ),
+    include_play_in: bool = Query(
+        default=False,
+        description="Include play-in games. Default is regular season only.",
+    ),
 ) -> PlayerDDHistoryResponse:
     """Get WNBA player Double-Double historical rate."""
     try:
-        stats = wnba_csv_player_service.player_dd_history(player_name=player, season=season)
+        stats = wnba_csv_player_service.player_dd_history(
+            player_name=player,
+            season=season,
+            include_playoffs=include_playoffs,
+            include_play_in=include_play_in,
+        )
         return PlayerDDHistoryResponse(
             player=stats["player"],
             season=stats.get("season"),
@@ -333,6 +358,7 @@ def _build_binary_no_vig_response(
     """
     results: List[BookmakerResult] = []
     fair_probs_for_consensus: List[tuple] = []
+    prior_book_count = 0
     rows_dropped_due_to_prior = 0
 
     for bookmaker in bookmakers_data:
@@ -373,6 +399,7 @@ def _build_binary_no_vig_response(
                     p_no_imp = american_to_prob(no_price_raw)
                     vig = calculate_vig(p_yes_imp, p_no_imp)
                     p_yes_fair, p_no_fair = devig(p_yes_imp, p_no_imp)
+                    uses_prior = False
                 else:
                     no_price = None
                     p_no_imp = None
@@ -382,6 +409,7 @@ def _build_binary_no_vig_response(
                         continue
                     p_no_fair = 1.0 - p_yes_fair
                     vig = DEFAULT_BINARY_VIG
+                    uses_prior = True
 
                 results.append(
                     BookmakerResult(
@@ -397,6 +425,7 @@ def _build_binary_no_vig_response(
                         fetched_at=snapshot.fetched_at,
                         line_is_synthetic=True,
                         market_kind="binary",
+                        uses_prior=uses_prior,
                         yes_price=float(yes_price),
                         no_price=no_price,
                         p_yes_imp=round(p_yes_imp, 4),
@@ -406,6 +435,8 @@ def _build_binary_no_vig_response(
                     )
                 )
                 fair_probs_for_consensus.append((p_yes_fair, p_no_fair))
+                if uses_prior:
+                    prior_book_count += 1
 
             except (ValueError, ZeroDivisionError):
                 continue
@@ -422,6 +453,8 @@ def _build_binary_no_vig_response(
                 p_under_fair=no_fair_consensus,
                 p_yes_fair=yes_fair_consensus,
                 p_no_fair=no_fair_consensus,
+                consensus_uses_prior=prior_book_count > 0,
+                consensus_prior_book_count=prior_book_count,
             )
 
     if results:
@@ -674,6 +707,7 @@ async def calculate_no_vig(request: Request, body: NoVigRequest) -> NoVigRespons
                             fetched_at=snapshot.fetched_at,
                             line_is_synthetic=False,
                             market_kind="over_under",
+                            uses_prior=False,
                         )
                     )
                     fair_probs_for_consensus.append((p_over_fair, p_under_fair))
@@ -688,6 +722,8 @@ async def calculate_no_vig(request: Request, body: NoVigRequest) -> NoVigRespons
                     method="mean",
                     p_over_fair=round(consensus_probs[0], 4),
                     p_under_fair=round(consensus_probs[1], 4),
+                    consensus_uses_prior=False,
+                    consensus_prior_book_count=0,
                 )
 
         return NoVigResponse(

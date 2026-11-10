@@ -1,0 +1,1154 @@
+[
+  {
+    "league": "nba",
+    "id": "1",
+    "abbreviation": "ATL",
+    "shortDisplayName": "Hawks",
+    "displayName": "Atlanta Hawks",
+    "name": "Hawks",
+    "location": "Atlanta"
+  },
+  {
+    "league": "nba",
+    "id": "2",
+    "abbreviation": "BOS",
+    "shortDisplayName": "Celtics",
+    "displayName": "Boston Celtics",
+    "name": "Celtics",
+    "location": "Boston"
+  },
+  {
+    "league": "nba",
+    "id": "17",
+    "abbreviation": "BKN",
+    "shortDisplayName": "Nets",
+    "displayName": "Brooklyn Nets",
+    "name": "Nets",
+    "location": "Brooklyn"
+  },
+  {
+    "league": "nba",
+    "id": "30",
+    "abbreviation": "CHA",
+    "shortDisplayName": "Hornets",
+    "displayName": "Charlotte Hornets",
+    "name": "Hornets",
+    "location": "Charlotte"
+  },
+  {
+    "league": "nba",
+    "id": "4",
+    "abbreviation": "CHI",
+    "shortDisplayName": "Bulls",
+    "displayName": "Chicago Bulls",
+    "name": "Bulls",
+    "location": "Chicago"
+  },
+  {
+    "league": "nba",
+    "id": "5",
+    "abbreviation": "CLE",
+    "shortDisplayName": "Cavaliers",
+    "displayName": "Cleveland Cavaliers",
+    "name": "Cavaliers",
+    "location": "Cleveland"
+  },
+  {
+    "league": "nba",
+    "id": "6",
+    "abbreviation": "DAL",
+    "shortDisplayName": "Mavericks",
+    "displayName": "Dallas Mavericks",
+    "name": "Mavericks",
+    "location": "Dallas"
+  },
+  {
+    "league": "nba",
+    "id": "7",
+    "abbreviation": "DEN",
+    "shortDisplayName": "Nuggets",
+    "displayName": "Denver Nuggets",
+    "name": "Nuggets",
+    "location": "Denver"
+  },
+  {
+    "league": "nba",
+    "id": "8",
+    "abbreviation": "DET",
+    "shortDisplayName": "Pistons",
+    "displayName": "Detroit Pistons",
+    "name": "Pistons",
+    "location": "Detroit"
+  },
+  {
+    "league": "nba",
+    "id": "9",
+    "abbreviation": "GS",
+    "shortDisplayName": "Warriors",
+    "displayName": "Golden State Warriors",
+    "name": "Warriors",
+    "location": "Golden State"
+  },
+  {
+    "league": "nba",
+    "id": "10",
+    "abbreviation": "HOU",
+    "shortDisplayName": "Rockets",
+    "displayName": "Houston Rockets",
+    "name": "Rockets",
+    "location": "Houston"
+  },
+  {
+    "league": "nba",
+    "id": "11",
+    "abbreviation": "IND",
+    "shortDisplayName": "Pacers",
+    "displayName": "Indiana Pacers",
+    "name": "Pacers",
+    "location": "Indiana"
+  },
+  {
+    "league": "nba",
+    "id": "12",
+    "abbreviation": "LAC",
+    "shortDisplayName": "Clippers",
+    "displayName": "LA Clippers",
+    "name": "Clippers",
+    "location": "LA"
+  },
+  {
+    "league": "nba",
+    "id": "13",
+    "abbreviation": "LAL",
+    "shortDisplayName": "Lakers",
+    "displayName": "Los Angeles Lakers",
+    "name": "Lakers",
+    "location": "Los Angeles"
+  },
+  {
+    "league": "nba",
+    "id": "29",
+    "abbreviation": "MEM",
+    "shortDisplayName": "Grizzlies",
+    "displayName": "Memphis Grizzlies",
+    "name": "Grizzlies",
+    "location": "Memphis"
+  },
+  {
+    "league": "nba",
+    "id": "14",
+    "abbreviation": "MIA",
+    "shortDisplayName": "Heat",
+    "displayName": "Miami Heat",
+    "name": "Heat",
+    "location": "Miami"
+  },
+  {
+    "league": "nba",
+    "id": "15",
+    "abbreviation": "MIL",
+    "shortDisplayName": "Bucks",
+    "displayName": "Milwaukee Bucks",
+    "name": "Bucks",
+    "location": "Milwaukee"
+  },
+  {
+    "league": "nba",
+    "id": "16",
+    "abbreviation": "MIN",
+    "shortDisplayName": "Timberwolves",
+    "displayName": "Minnesota Timberwolves",
+    "name": "Timberwolves",
+    "location": "Minnesota"
+  },
+  {
+    "league": "nba",
+    "id": "3",
+    "abbreviation": "NO",
+    "shortDisplayName": "Pelicans",
+    "displayName": "New Orleans Pelicans",
+    "name": "Pelicans",
+    "location": "New Orleans"
+  },
+  {
+    "league": "nba",
+    "id": "18",
+    "abbreviation": "NY",
+    "shortDisplayName": "Knicks",
+    "displayName": "New York Knicks",
+    "name": "Knicks",
+    "location": "New York"
+  },
+  {
+    "league": "nba",
+    "id": "25",
+    "abbreviation": "OKC",
+    "shortDisplayName": "Thunder",
+    "displayName": "Oklahoma City Thunder",
+    "name": "Thunder",
+    "location": "Oklahoma City"
+  },
+  {
+    "league": "nba",
+    "id": "19",
+    "abbreviation": "ORL",
+    "shortDisplayName": "Magic",
+    "displayName": "Orlando Magic",
+    "name": "Magic",
+    "location": "Orlando"
+  },
+  {
+    "league": "nba",
+    "id": "20",
+    "abbreviation": "PHI",
+    "shortDisplayName": "76ers",
+    "displayName": "Philadelphia 76ers",
+    "name": "76ers",
+    "location": "Philadelphia"
+  },
+  {
+    "league": "nba",
+    "id": "21",
+    "abbreviation": "PHX",
+    "shortDisplayName": "Suns",
+    "displayName": "Phoenix Suns",
+    "name": "Suns",
+    "location": "Phoenix"
+  },
+  {
+    "league": "nba",
+    "id": "22",
+    "abbreviation": "POR",
+    "shortDisplayName": "Trail Blazers",
+    "displayName": "Portland Trail Blazers",
+    "name": "Trail Blazers",
+    "location": "Portland"
+  },
+  {
+    "league": "nba",
+    "id": "23",
+    "abbreviation": "SAC",
+    "shortDisplayName": "Kings",
+    "displayName": "Sacramento Kings",
+    "name": "Kings",
+    "location": "Sacramento"
+  },
+  {
+    "league": "nba",
+    "id": "24",
+    "abbreviation": "SA",
+    "shortDisplayName": "Spurs",
+    "displayName": "San Antonio Spurs",
+    "name": "Spurs",
+    "location": "San Antonio"
+  },
+  {
+    "league": "nba",
+    "id": "28",
+    "abbreviation": "TOR",
+    "shortDisplayName": "Raptors",
+    "displayName": "Toronto Raptors",
+    "name": "Raptors",
+    "location": "Toronto"
+  },
+  {
+    "league": "nba",
+    "id": "26",
+    "abbreviation": "UTAH",
+    "shortDisplayName": "Jazz",
+    "displayName": "Utah Jazz",
+    "name": "Jazz",
+    "location": "Utah"
+  },
+  {
+    "league": "nba",
+    "id": "27",
+    "abbreviation": "WSH",
+    "shortDisplayName": "Wizards",
+    "displayName": "Washington Wizards",
+    "name": "Wizards",
+    "location": "Washington"
+  },
+  {
+    "league": "wnba",
+    "id": "20",
+    "abbreviation": "ATL",
+    "shortDisplayName": "Dream",
+    "displayName": "Atlanta Dream",
+    "name": "Dream",
+    "location": "Atlanta"
+  },
+  {
+    "league": "wnba",
+    "id": "19",
+    "abbreviation": "CHI",
+    "shortDisplayName": "Sky",
+    "displayName": "Chicago Sky",
+    "name": "Sky",
+    "location": "Chicago"
+  },
+  {
+    "league": "wnba",
+    "id": "18",
+    "abbreviation": "CON",
+    "shortDisplayName": "Sun",
+    "displayName": "Connecticut Sun",
+    "name": "Sun",
+    "location": "Connecticut"
+  },
+  {
+    "league": "wnba",
+    "id": "3",
+    "abbreviation": "DAL",
+    "shortDisplayName": "Wings",
+    "displayName": "Dallas Wings",
+    "name": "Wings",
+    "location": "Dallas"
+  },
+  {
+    "league": "wnba",
+    "id": "129689",
+    "abbreviation": "GS",
+    "shortDisplayName": "Valkyries",
+    "displayName": "Golden State Valkyries",
+    "name": "Valkyries",
+    "location": "Golden State"
+  },
+  {
+    "league": "wnba",
+    "id": "5",
+    "abbreviation": "IND",
+    "shortDisplayName": "Fever",
+    "displayName": "Indiana Fever",
+    "name": "Fever",
+    "location": "Indiana"
+  },
+  {
+    "league": "wnba",
+    "id": "17",
+    "abbreviation": "LV",
+    "shortDisplayName": "Aces",
+    "displayName": "Las Vegas Aces",
+    "name": "Aces",
+    "location": "Las Vegas"
+  },
+  {
+    "league": "wnba",
+    "id": "6",
+    "abbreviation": "LA",
+    "shortDisplayName": "Sparks",
+    "displayName": "Los Angeles Sparks",
+    "name": "Sparks",
+    "location": "Los Angeles"
+  },
+  {
+    "league": "wnba",
+    "id": "8",
+    "abbreviation": "MIN",
+    "shortDisplayName": "Lynx",
+    "displayName": "Minnesota Lynx",
+    "name": "Lynx",
+    "location": "Minnesota"
+  },
+  {
+    "league": "wnba",
+    "id": "9",
+    "abbreviation": "NY",
+    "shortDisplayName": "Liberty",
+    "displayName": "New York Liberty",
+    "name": "Liberty",
+    "location": "New York"
+  },
+  {
+    "league": "wnba",
+    "id": "11",
+    "abbreviation": "PHX",
+    "shortDisplayName": "Mercury",
+    "displayName": "Phoenix Mercury",
+    "name": "Mercury",
+    "location": "Phoenix"
+  },
+  {
+    "league": "wnba",
+    "id": "132052",
+    "abbreviation": "POR",
+    "shortDisplayName": "Fire",
+    "displayName": "Portland Fire",
+    "name": "Fire",
+    "location": "Portland"
+  },
+  {
+    "league": "wnba",
+    "id": "14",
+    "abbreviation": "SEA",
+    "shortDisplayName": "Storm",
+    "displayName": "Seattle Storm",
+    "name": "Storm",
+    "location": "Seattle"
+  },
+  {
+    "league": "wnba",
+    "id": "131935",
+    "abbreviation": "TOR",
+    "shortDisplayName": "Tempo",
+    "displayName": "Toronto Tempo",
+    "name": "Tempo",
+    "location": "Toronto"
+  },
+  {
+    "league": "wnba",
+    "id": "16",
+    "abbreviation": "WSH",
+    "shortDisplayName": "Mystics",
+    "displayName": "Washington Mystics",
+    "name": "Mystics",
+    "location": "Washington"
+  },
+  {
+    "league": "nba-development",
+    "id": "2",
+    "abbreviation": "AUS",
+    "shortDisplayName": "Spurs",
+    "displayName": "Austin Spurs",
+    "name": "Spurs",
+    "location": "Austin"
+  },
+  {
+    "league": "nba-development",
+    "id": "4",
+    "abbreviation": "CAP",
+    "shortDisplayName": "Go-Go",
+    "displayName": "Capital City Go-Go",
+    "name": "Go-Go",
+    "location": "Capital City"
+  },
+  {
+    "league": "nba-development",
+    "id": "3",
+    "abbreviation": "CLC",
+    "shortDisplayName": "Charge",
+    "displayName": "Cleveland Charge",
+    "name": "Charge",
+    "location": "Cleveland"
+  },
+  {
+    "league": "nba-development",
+    "id": "22",
+    "abbreviation": "CVL",
+    "shortDisplayName": "Lakers",
+    "displayName": "Coachella Valley Lakers",
+    "name": "Lakers",
+    "location": "Coachella Valley"
+  },
+  {
+    "league": "nba-development",
+    "id": "28",
+    "abbreviation": "CPS",
+    "shortDisplayName": "Skyhawks",
+    "displayName": "College Park Skyhawks",
+    "name": "Skyhawks",
+    "location": "College Park"
+  },
+  {
+    "league": "nba-development",
+    "id": "5",
+    "abbreviation": "DEL",
+    "shortDisplayName": "Blue Coats",
+    "displayName": "Delaware Blue Coats",
+    "name": "Blue Coats",
+    "location": "Delaware"
+  },
+  {
+    "league": "nba-development",
+    "id": "123432",
+    "abbreviation": "GLI",
+    "shortDisplayName": "Ignite",
+    "displayName": "G League Ignite",
+    "name": "Ignite",
+    "location": "G League"
+  },
+  {
+    "league": "nba-development",
+    "id": "129829",
+    "abbreviation": "UTD",
+    "shortDisplayName": "United",
+    "displayName": "G League United",
+    "name": "United",
+    "location": "G League"
+  },
+  {
+    "league": "nba-development",
+    "id": "8",
+    "abbreviation": "GRD",
+    "shortDisplayName": "Gold",
+    "displayName": "Grand Rapids Gold",
+    "name": "Gold",
+    "location": "Grand Rapids"
+  },
+  {
+    "league": "nba-development",
+    "id": "9",
+    "abbreviation": "GBO",
+    "shortDisplayName": "Swarm",
+    "displayName": "Greensboro Swarm",
+    "name": "Swarm",
+    "location": "Greensboro"
+  },
+  {
+    "league": "nba-development",
+    "id": "10",
+    "abbreviation": "IWA",
+    "shortDisplayName": "Wolves",
+    "displayName": "Iowa Wolves",
+    "name": "Wolves",
+    "location": "Iowa"
+  },
+  {
+    "league": "nba-development",
+    "id": "6",
+    "abbreviation": "LAK",
+    "shortDisplayName": "Squadron",
+    "displayName": "Laketown Squadron",
+    "name": "Squadron",
+    "location": "Laketown"
+  },
+  {
+    "league": "nba-development",
+    "id": "12",
+    "abbreviation": "LIN",
+    "shortDisplayName": "Nets",
+    "displayName": "Long Island Nets",
+    "name": "Nets",
+    "location": "Long Island"
+  },
+  {
+    "league": "nba-development",
+    "id": "129830",
+    "abbreviation": "MEGA",
+    "shortDisplayName": "MIS",
+    "displayName": "MEGA MIS",
+    "name": "MIS",
+    "location": "MEGA"
+  },
+  {
+    "league": "nba-development",
+    "id": "13",
+    "abbreviation": "MNE",
+    "shortDisplayName": "Celtics",
+    "displayName": "Maine Celtics",
+    "name": "Celtics",
+    "location": "Maine"
+  },
+  {
+    "league": "nba-development",
+    "id": "14",
+    "abbreviation": "MHU",
+    "shortDisplayName": "Hustle",
+    "displayName": "Memphis Hustle",
+    "name": "Hustle",
+    "location": "Memphis"
+  },
+  {
+    "league": "nba-development",
+    "id": "124612",
+    "abbreviation": "MXC",
+    "shortDisplayName": "Capitanes",
+    "displayName": "Mexico City Capitanes",
+    "name": "Capitanes",
+    "location": "Mexico City"
+  },
+  {
+    "league": "nba-development",
+    "id": "15",
+    "abbreviation": "MCC",
+    "shortDisplayName": "Cruise",
+    "displayName": "Motor City Cruise",
+    "name": "Cruise",
+    "location": "Motor City"
+  },
+  {
+    "league": "nba-development",
+    "id": "7",
+    "abbreviation": "NOB",
+    "shortDisplayName": "Boom",
+    "displayName": "Noblesville Boom",
+    "name": "Boom",
+    "location": "Noblesville"
+  },
+  {
+    "league": "nba-development",
+    "id": "16",
+    "abbreviation": "OKL",
+    "shortDisplayName": "Blue",
+    "displayName": "Oklahoma City Blue",
+    "name": "Blue",
+    "location": "Oklahoma City"
+  },
+  {
+    "league": "nba-development",
+    "id": "11",
+    "abbreviation": "OSC",
+    "shortDisplayName": "Magic",
+    "displayName": "Osceola Magic",
+    "name": "Magic",
+    "location": "Osceola"
+  },
+  {
+    "league": "nba-development",
+    "id": "17",
+    "abbreviation": "RAP",
+    "shortDisplayName": "905",
+    "displayName": "Raptors 905",
+    "name": "905",
+    "location": "Raptors"
+  },
+  {
+    "league": "nba-development",
+    "id": "18",
+    "abbreviation": "RGV",
+    "shortDisplayName": "Vipers",
+    "displayName": "Rio Grande Valley Vipers",
+    "name": "Vipers",
+    "location": "Rio Grande Valley"
+  },
+  {
+    "league": "nba-development",
+    "id": "128019",
+    "abbreviation": "RCITY",
+    "shortDisplayName": "Remix",
+    "displayName": "Rip City Remix",
+    "name": "Remix",
+    "location": "Rip City"
+  },
+  {
+    "league": "nba-development",
+    "id": "19",
+    "abbreviation": "SLC",
+    "shortDisplayName": "Stars",
+    "displayName": "Salt Lake City Stars",
+    "name": "Stars",
+    "location": "Salt Lake City"
+  },
+  {
+    "league": "nba-development",
+    "id": "1",
+    "abbreviation": "SAN",
+    "shortDisplayName": "Clippers",
+    "displayName": "San Diego Clippers",
+    "name": "Clippers",
+    "location": "San Diego"
+  },
+  {
+    "league": "nba-development",
+    "id": "20",
+    "abbreviation": "SCW",
+    "shortDisplayName": "Warriors",
+    "displayName": "Santa Cruz Warriors",
+    "name": "Warriors",
+    "location": "Santa Cruz"
+  },
+  {
+    "league": "nba-development",
+    "id": "21",
+    "abbreviation": "SXF",
+    "shortDisplayName": "Skyforce",
+    "displayName": "Sioux Falls Skyforce",
+    "name": "Skyforce",
+    "location": "Sioux Falls"
+  },
+  {
+    "league": "nba-development",
+    "id": "23",
+    "abbreviation": "STO",
+    "shortDisplayName": "Kings",
+    "displayName": "Stockton Kings",
+    "name": "Kings",
+    "location": "Stockton"
+  },
+  {
+    "league": "nba-development",
+    "id": "24",
+    "abbreviation": "TEX",
+    "shortDisplayName": "Legends",
+    "displayName": "Texas Legends",
+    "name": "Legends",
+    "location": "Texas"
+  },
+  {
+    "league": "nba-development",
+    "id": "129713",
+    "abbreviation": "VALLEY",
+    "shortDisplayName": "Suns",
+    "displayName": "Valley Suns",
+    "name": "Suns",
+    "location": "Valley"
+  },
+  {
+    "league": "nba-development",
+    "id": "25",
+    "abbreviation": "WES",
+    "shortDisplayName": "Knicks",
+    "displayName": "Westchester Knicks",
+    "name": "Knicks",
+    "location": "Westchester"
+  },
+  {
+    "league": "nba-development",
+    "id": "26",
+    "abbreviation": "WCB",
+    "shortDisplayName": "Bulls",
+    "displayName": "Windy City Bulls",
+    "name": "Bulls",
+    "location": "Windy City"
+  },
+  {
+    "league": "nba-development",
+    "id": "27",
+    "abbreviation": "WIS",
+    "shortDisplayName": "Herd",
+    "displayName": "Wisconsin Herd",
+    "name": "Herd",
+    "location": "Wisconsin"
+  },
+  {
+    "league": "nba-summer-las-vegas",
+    "id": "1",
+    "abbreviation": "ATL",
+    "shortDisplayName": "Hawks",
+    "displayName": "Atlanta Hawks",
+    "name": "Hawks",
+    "location": "Atlanta"
+  },
+  {
+    "league": "nba-summer-las-vegas",
+    "id": "2",
+    "abbreviation": "BOS",
+    "shortDisplayName": "Celtics",
+    "displayName": "Boston Celtics",
+    "name": "Celtics",
+    "location": "Boston"
+  },
+  {
+    "league": "nba-summer-las-vegas",
+    "id": "17",
+    "abbreviation": "BKN",
+    "shortDisplayName": "Nets",
+    "displayName": "Brooklyn Nets",
+    "name": "Nets",
+    "location": "Brooklyn"
+  },
+  {
+    "league": "nba-summer-las-vegas",
+    "id": "30",
+    "abbreviation": "CHA",
+    "shortDisplayName": "Hornets",
+    "displayName": "Charlotte Hornets",
+    "name": "Hornets",
+    "location": "Charlotte"
+  },
+  {
+    "league": "nba-summer-las-vegas",
+    "id": "4",
+    "abbreviation": "CHI",
+    "shortDisplayName": "Bulls",
+    "displayName": "Chicago Bulls",
+    "name": "Bulls",
+    "location": "Chicago"
+  },
+  {
+    "league": "nba-summer-las-vegas",
+    "id": "5",
+    "abbreviation": "CLE",
+    "shortDisplayName": "Cavaliers",
+    "displayName": "Cleveland Cavaliers",
+    "name": "Cavaliers",
+    "location": "Cleveland"
+  },
+  {
+    "league": "nba-summer-las-vegas",
+    "id": "6",
+    "abbreviation": "DAL",
+    "shortDisplayName": "Mavericks",
+    "displayName": "Dallas Mavericks",
+    "name": "Mavericks",
+    "location": "Dallas"
+  },
+  {
+    "league": "nba-summer-las-vegas",
+    "id": "7",
+    "abbreviation": "DEN",
+    "shortDisplayName": "Nuggets",
+    "displayName": "Denver Nuggets",
+    "name": "Nuggets",
+    "location": "Denver"
+  },
+  {
+    "league": "nba-summer-las-vegas",
+    "id": "8",
+    "abbreviation": "DET",
+    "shortDisplayName": "Pistons",
+    "displayName": "Detroit Pistons",
+    "name": "Pistons",
+    "location": "Detroit"
+  },
+  {
+    "league": "nba-summer-las-vegas",
+    "id": "9",
+    "abbreviation": "GS",
+    "shortDisplayName": "Warriors",
+    "displayName": "Golden State Warriors",
+    "name": "Warriors",
+    "location": "Golden State"
+  },
+  {
+    "league": "nba-summer-las-vegas",
+    "id": "10",
+    "abbreviation": "HOU",
+    "shortDisplayName": "Rockets",
+    "displayName": "Houston Rockets",
+    "name": "Rockets",
+    "location": "Houston"
+  },
+  {
+    "league": "nba-summer-las-vegas",
+    "id": "11",
+    "abbreviation": "IND",
+    "shortDisplayName": "Pacers",
+    "displayName": "Indiana Pacers",
+    "name": "Pacers",
+    "location": "Indiana"
+  },
+  {
+    "league": "nba-summer-las-vegas",
+    "id": "12",
+    "abbreviation": "LAC",
+    "shortDisplayName": "Clippers",
+    "displayName": "LA Clippers",
+    "name": "Clippers",
+    "location": "LA"
+  },
+  {
+    "league": "nba-summer-las-vegas",
+    "id": "13",
+    "abbreviation": "LAL",
+    "shortDisplayName": "Lakers",
+    "displayName": "Los Angeles Lakers",
+    "name": "Lakers",
+    "location": "Los Angeles"
+  },
+  {
+    "league": "nba-summer-las-vegas",
+    "id": "29",
+    "abbreviation": "MEM",
+    "shortDisplayName": "Grizzlies",
+    "displayName": "Memphis Grizzlies",
+    "name": "Grizzlies",
+    "location": "Memphis"
+  },
+  {
+    "league": "nba-summer-las-vegas",
+    "id": "14",
+    "abbreviation": "MIA",
+    "shortDisplayName": "Heat",
+    "displayName": "Miami Heat",
+    "name": "Heat",
+    "location": "Miami"
+  },
+  {
+    "league": "nba-summer-las-vegas",
+    "id": "15",
+    "abbreviation": "MIL",
+    "shortDisplayName": "Bucks",
+    "displayName": "Milwaukee Bucks",
+    "name": "Bucks",
+    "location": "Milwaukee"
+  },
+  {
+    "league": "nba-summer-las-vegas",
+    "id": "16",
+    "abbreviation": "MIN",
+    "shortDisplayName": "Timberwolves",
+    "displayName": "Minnesota Timberwolves",
+    "name": "Timberwolves",
+    "location": "Minnesota"
+  },
+  {
+    "league": "nba-summer-las-vegas",
+    "id": "3",
+    "abbreviation": "NO",
+    "shortDisplayName": "Pelicans",
+    "displayName": "New Orleans Pelicans",
+    "name": "Pelicans",
+    "location": "New Orleans"
+  },
+  {
+    "league": "nba-summer-las-vegas",
+    "id": "18",
+    "abbreviation": "NY",
+    "shortDisplayName": "Knicks",
+    "displayName": "New York Knicks",
+    "name": "Knicks",
+    "location": "New York"
+  },
+  {
+    "league": "nba-summer-las-vegas",
+    "id": "25",
+    "abbreviation": "OKC",
+    "shortDisplayName": "Thunder",
+    "displayName": "Oklahoma City Thunder",
+    "name": "Thunder",
+    "location": "Oklahoma City"
+  },
+  {
+    "league": "nba-summer-las-vegas",
+    "id": "19",
+    "abbreviation": "ORL",
+    "shortDisplayName": "Magic",
+    "displayName": "Orlando Magic",
+    "name": "Magic",
+    "location": "Orlando"
+  },
+  {
+    "league": "nba-summer-las-vegas",
+    "id": "20",
+    "abbreviation": "PHI",
+    "shortDisplayName": "76ers",
+    "displayName": "Philadelphia 76ers",
+    "name": "76ers",
+    "location": "Philadelphia"
+  },
+  {
+    "league": "nba-summer-las-vegas",
+    "id": "21",
+    "abbreviation": "PHX",
+    "shortDisplayName": "Suns",
+    "displayName": "Phoenix Suns",
+    "name": "Suns",
+    "location": "Phoenix"
+  },
+  {
+    "league": "nba-summer-las-vegas",
+    "id": "22",
+    "abbreviation": "POR",
+    "shortDisplayName": "Trail Blazers",
+    "displayName": "Portland Trail Blazers",
+    "name": "Trail Blazers",
+    "location": "Portland"
+  },
+  {
+    "league": "nba-summer-las-vegas",
+    "id": "23",
+    "abbreviation": "SAC",
+    "shortDisplayName": "Kings",
+    "displayName": "Sacramento Kings",
+    "name": "Kings",
+    "location": "Sacramento"
+  },
+  {
+    "league": "nba-summer-las-vegas",
+    "id": "24",
+    "abbreviation": "SA",
+    "shortDisplayName": "Spurs",
+    "displayName": "San Antonio Spurs",
+    "name": "Spurs",
+    "location": "San Antonio"
+  },
+  {
+    "league": "nba-summer-las-vegas",
+    "id": "28",
+    "abbreviation": "TOR",
+    "shortDisplayName": "Raptors",
+    "displayName": "Toronto Raptors",
+    "name": "Raptors",
+    "location": "Toronto"
+  },
+  {
+    "league": "nba-summer-las-vegas",
+    "id": "26",
+    "abbreviation": "UTAH",
+    "shortDisplayName": "Jazz",
+    "displayName": "Utah Jazz",
+    "name": "Jazz",
+    "location": "Utah"
+  },
+  {
+    "league": "nba-summer-las-vegas",
+    "id": "27",
+    "abbreviation": "WSH",
+    "shortDisplayName": "Wizards",
+    "displayName": "Washington Wizards",
+    "name": "Wizards",
+    "location": "Washington"
+  },
+  {
+    "league": "nba-summer-california",
+    "id": "110732",
+    "abbreviation": "BKN",
+    "shortDisplayName": "Nets",
+    "displayName": "Brooklyn Nets",
+    "name": "Nets",
+    "location": "Brooklyn"
+  },
+  {
+    "league": "nba-summer-california",
+    "id": "132761",
+    "abbreviation": "GS",
+    "shortDisplayName": "Warriors Blue",
+    "displayName": "Golden State Warriors Blue",
+    "name": "Warriors Blue",
+    "location": "Golden State"
+  },
+  {
+    "league": "nba-summer-california",
+    "id": "132762",
+    "abbreviation": "GS",
+    "shortDisplayName": "Warriors Gold",
+    "displayName": "Golden State Warriors Gold",
+    "name": "Warriors Gold",
+    "location": "Golden State"
+  },
+  {
+    "league": "nba-summer-california",
+    "id": "13",
+    "abbreviation": "LAL",
+    "shortDisplayName": "Lakers",
+    "displayName": "Los Angeles Lakers",
+    "name": "Lakers",
+    "location": "Los Angeles"
+  },
+  {
+    "league": "nba-summer-california",
+    "id": "14",
+    "abbreviation": "MIA",
+    "shortDisplayName": "Heat",
+    "displayName": "Miami Heat",
+    "name": "Heat",
+    "location": "Miami"
+  },
+  {
+    "league": "nba-summer-california",
+    "id": "110746",
+    "abbreviation": "MIL",
+    "shortDisplayName": "Bucks",
+    "displayName": "Milwaukee Bucks",
+    "name": "Bucks",
+    "location": "Milwaukee"
+  },
+  {
+    "league": "nba-summer-california",
+    "id": "110755",
+    "abbreviation": "SAC",
+    "shortDisplayName": "Kings",
+    "displayName": "Sacramento Kings",
+    "name": "Kings",
+    "location": "Sacramento"
+  },
+  {
+    "league": "nba-summer-california",
+    "id": "24",
+    "abbreviation": "SA",
+    "shortDisplayName": "Spurs",
+    "displayName": "San Antonio Spurs",
+    "name": "Spurs",
+    "location": "San Antonio"
+  },
+  {
+    "league": "nba-summer-utah",
+    "id": "1",
+    "abbreviation": "ATL",
+    "shortDisplayName": "Hawks",
+    "displayName": "Atlanta Hawks",
+    "name": "Hawks",
+    "location": "Atlanta"
+  },
+  {
+    "league": "nba-summer-utah",
+    "id": "29",
+    "abbreviation": "MEM",
+    "shortDisplayName": "Grizzlies",
+    "displayName": "Memphis Grizzlies",
+    "name": "Grizzlies",
+    "location": "Memphis"
+  },
+  {
+    "league": "nba-summer-utah",
+    "id": "25",
+    "abbreviation": "OKC",
+    "shortDisplayName": "Thunder",
+    "displayName": "Oklahoma City Thunder",
+    "name": "Thunder",
+    "location": "Oklahoma City"
+  },
+  {
+    "league": "nba-summer-utah",
+    "id": "26",
+    "abbreviation": "UTAH",
+    "shortDisplayName": "Jazz",
+    "displayName": "Utah Jazz",
+    "name": "Jazz",
+    "location": "Utah"
+  },
+  {
+    "league": "nba-summer-sacramento",
+    "id": "30",
+    "abbreviation": "CHA",
+    "shortDisplayName": "Hornets",
+    "displayName": "Charlotte Hornets",
+    "name": "Hornets",
+    "location": "Charlotte"
+  },
+  {
+    "league": "nba-summer-sacramento",
+    "id": "9",
+    "abbreviation": "GS",
+    "shortDisplayName": "Warriors",
+    "displayName": "Golden State Warriors",
+    "name": "Warriors",
+    "location": "Golden State"
+  },
+  {
+    "league": "nba-summer-sacramento",
+    "id": "13",
+    "abbreviation": "LAL",
+    "shortDisplayName": "Lakers",
+    "displayName": "Los Angeles Lakers",
+    "name": "Lakers",
+    "location": "Los Angeles"
+  },
+  {
+    "league": "nba-summer-sacramento",
+    "id": "14",
+    "abbreviation": "MIA",
+    "shortDisplayName": "Heat",
+    "displayName": "Miami Heat",
+    "name": "Heat",
+    "location": "Miami"
+  },
+  {
+    "league": "nba-summer-sacramento",
+    "id": "129792",
+    "abbreviation": "SAC",
+    "shortDisplayName": "Kings 1",
+    "displayName": "Sacramento Kings 1",
+    "name": "Kings 1",
+    "location": "Sacramento"
+  },
+  {
+    "league": "nba-summer-sacramento",
+    "id": "129793",
+    "abbreviation": "SAC",
+    "shortDisplayName": "Kings 2",
+    "displayName": "Sacramento Kings 2",
+    "name": "Kings 2",
+    "location": "Sacramento"
+  },
+  {
+    "league": "nba-summer-sacramento",
+    "id": "24",
+    "abbreviation": "SA",
+    "shortDisplayName": "Spurs",
+    "displayName": "San Antonio Spurs",
+    "name": "Spurs",
+    "location": "San Antonio"
+  }
+]

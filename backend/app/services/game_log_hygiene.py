@@ -7,8 +7,8 @@ schedule event on local date plus both team names, then:
 
 - replaces ``Season`` with the label derived from that event
 - writes ``GameType`` (``regular_season``, ``playoffs``, ``play_in``,
-  ``preseason``, ``summer_league``, ``g_league``, ``nba_cup_championship``,
-  ``cup_championship``, ``unclassified``)
+  ``preseason``, ``summer_league``, ``g_league``, ``cup_championship``,
+  ``unclassified``)
 - drops Summer League, preseason, and G League
 - keeps rows that do not join any event, labeled ``unclassified``, so a
   schedule that does not list a date cannot delete that game
@@ -46,23 +46,24 @@ GAME_TYPE_PLAY_IN = "play_in"
 GAME_TYPE_PRESEASON = "preseason"
 GAME_TYPE_SUMMER = "summer_league"
 GAME_TYPE_GLEAGUE = "g_league"
-GAME_TYPE_NBA_CUP = "nba_cup_championship"
-# WNBA Commissioner's Cup final. Distinct from the NBA Cup token so a
-# reader can tell the leagues apart. It is not regular season.
+# One token for both leagues. ESPN marks the NBA Cup final and the WNBA
+# Commissioner's Cup final with the same competition type (``CC`` /
+# ``commissioners-cup``) while ``seasonType`` stays ``reg``. ``GAME_TYPE_NBA_CUP``
+# is the earlier name for that same token.
 GAME_TYPE_CUP = "cup_championship"
+GAME_TYPE_NBA_CUP = GAME_TYPE_CUP
 GAME_TYPE_UNCLASSIFIED = "unclassified"
 GAME_TYPE_AMBIGUOUS = "ambiguous"
 
 # Kept in the canonical file and loaded into the stats cache.
 # The default sample is ``regular_season`` only. Playoffs and the
-# play-in are opt-in. The NBA Cup championship is its own token, so it
-# stays out of that default sample.
+# play-in are opt-in. ``cup_championship`` is its own token, so an NBA
+# or WNBA Cup final stays out of that default sample.
 CANONICAL_GAME_TYPES = frozenset(
     {
         GAME_TYPE_REGULAR,
         GAME_TYPE_PLAYOFFS,
         GAME_TYPE_PLAY_IN,
-        GAME_TYPE_NBA_CUP,
         GAME_TYPE_CUP,
     }
 )
@@ -104,6 +105,24 @@ def coalesce_game_type(value: Any) -> str:
     if not text:
         return GAME_TYPE_REGULAR
     return text
+
+
+def _league_slug_from_schedule_filename(path: Path) -> str:
+    """League slug from ``{league}_team_...``, or ``ValueError``.
+
+    Used only when the caller did not pass ``league``. A name with no
+    ``_team_`` marker, or an empty prefix, cannot be guessed.
+    """
+    name = path.name
+    if "_team_" not in name:
+        raise ValueError(
+            f"Recorded schedule {name} has no league prefix "
+            "(expected '{league}_team_...')"
+        )
+    league = name.split("_team_", 1)[0].strip()
+    if not league:
+        raise ValueError(f"Recorded schedule {name} has no league prefix")
+    return league
 
 # RealGM writes "Sixers". ESPN's recorded shortDisplayName for that
 # franchise is "76ers" (tests/fixtures/espn/team_directory.json).
@@ -209,15 +228,27 @@ def season_label_for_event(event: dict[str, Any]) -> str:
     return f"{int(year) - 1}-{int(year)}"
 
 
-def _is_nba_cup_championship(event: dict[str, Any]) -> bool:
-    """True when the recorded competition is the NBA Cup final.
+# Exact notes headlines on the recorded championship events. Group-stage
+# headlines ("NBA Cup - Group Play", "WNBA Commissioner's Cup") are different
+# strings, and those competitions are type Standard.
+_CUP_CHAMPIONSHIP_HEADLINES = frozenset(
+    {
+        "NBA Cup Championship",
+        "WNBA Commissioner's Cup Championship",
+    }
+)
 
-    Group play, quarterfinals, and semifinals stay regular season: ESPN
-    gives them ``seasonType.abbreviation`` ``reg`` and a Standard
-    competition type. The championship uses the same season type, and
-    the recorded competition type is ``CC`` / ``commissioners-cup``,
-    with notes headline ``NBA Cup Championship``. Both signals are read
-    off the payload. Event ids are not a list in this module.
+
+def _is_cup_championship(event: dict[str, Any]) -> bool:
+    """True when the recorded competition is a Cup final.
+
+    NBA group play through the semifinals, and WNBA Commissioner's Cup
+    pool games, stay regular season: ESPN gives them
+    ``seasonType.abbreviation`` ``reg`` and a Standard competition type.
+    The championship uses the same season type. The recorded competition
+    type is ``CC`` / ``commissioners-cup`` on both the NBA Cup final and
+    the WNBA Commissioner's Cup final. The notes headline is the other
+    signal. Event ids are not a list in this module.
     """
     competition = event.get("competition") or {}
     comp_type = competition.get("type") or {}
@@ -227,7 +258,7 @@ def _is_nba_cup_championship(event: dict[str, Any]) -> bool:
         return True
     for note in competition.get("notes") or []:
         headline = str((note or {}).get("headline") or "").strip()
-        if headline == "NBA Cup Championship":
+        if headline in _CUP_CHAMPIONSHIP_HEADLINES:
             return True
     return False
 
@@ -238,25 +269,18 @@ def game_type_for_event(event: dict[str, Any]) -> str:
     Summer League and the G League reuse ESPN's own ``reg`` / ``pre``
     abbreviations for *their* seasons. The league slug on the fixture
     (the endpoint that returned the event) distinguishes them from the
-    NBA regular season. The NBA Cup championship also reuses ``reg``;
-    :func:`_is_nba_cup_championship` reads the recorded competition.
+    NBA regular season. A Cup championship in either league also reuses
+    ``reg``; :func:`_is_cup_championship` reads the recorded competition.
     """
     league = str(event.get("league") or "")
     if "summer" in league:
         return GAME_TYPE_SUMMER
     if league == "nba-development":
         return GAME_TYPE_GLEAGUE
-    if _is_nba_cup_championship(event):
-        # Both leagues reuse seasonType "reg" and competition type CC.
-        # The NBA final keeps its own token. The WNBA Commissioner's Cup
-        # final is cup_championship. Group play is Standard, not CC, so
-        # it stays on the season-type map below.
-        if league == "wnba":
-            return GAME_TYPE_CUP
-        if league == "nba":
-            return GAME_TYPE_NBA_CUP
+    if league in {"nba", "wnba"} and _is_cup_championship(event):
+        return GAME_TYPE_CUP
     abbrev = str((event.get("seasonType") or {}).get("abbreviation") or "").lower()
-    return coalesce_game_type(_SEASON_TYPE_ABBREV.get(abbrev, GAME_TYPE_UNCLASSIFIED))
+    return _SEASON_TYPE_ABBREV.get(abbrev, GAME_TYPE_UNCLASSIFIED)
 
 
 def _parse_event_instant(value: str) -> datetime | None:
@@ -372,45 +396,6 @@ class ScheduleIndex:
 _SCHEDULE_CACHE: dict[str, list[dict[str, Any]]] = {}
 
 
-def _recorded_team_schedule_paths(schedule_path: Path) -> list[Path]:
-    """Team-schedule recordings next to the compact index and under ``recorded/``.
-
-    ``Path.glob`` does not walk into directories. The Commissioner's Cup
-    final is only in ``tests/fixtures/espn/recorded/``, so a glob of the
-    parent directory never sees it.
-    """
-    parent = schedule_path.parent
-    found: dict[Path, Path] = {}
-    for root in (parent, parent / "recorded"):
-        if not root.is_dir():
-            continue
-        for path in root.glob(_TEAM_SCHEDULE_GLOB):
-            found[path.resolve()] = path
-    return [found[key] for key in sorted(found)]
-
-
-def _league_slug_from_schedule_filename(path: Path) -> str:
-    """League prefix of ``{league}_team_{id}_schedule_...json``.
-
-    This is the documented fallback when a caller did not pass ``league``.
-    A name with no ``_team_`` marker, or an empty prefix, raises. The
-    site-API body does not carry the league slug.
-    """
-    marker = "_team_"
-    if marker not in path.name:
-        raise ValueError(
-            f"Cannot read a league from {path.name}. "
-            "Expected {league}_team_{id}_schedule_{season}_type_{n}.json, "
-            "or pass league= explicitly."
-        )
-    league = path.name.split(marker, 1)[0].strip()
-    if not league:
-        raise ValueError(
-            f"Schedule file {path.name} has no league prefix. Pass league= explicitly."
-        )
-    return league
-
-
 def _overlay_recorded_team_schedules(
     schedule_path: Path,
     events: list[dict[str, Any]],
@@ -420,28 +405,39 @@ def _overlay_recorded_team_schedules(
     """Fold curl-recorded team schedules onto the compact index.
 
     Files named ``{league}_team_{id}_schedule_{season}_type_{n}.json``
-    are unmodified site-API responses, in the fixture directory or in
-    its ``recorded/`` subdirectory. Compacted events replace the same
-    id (so a championship gains its competition notes) and new ids are
-    added.
+    are unmodified site-API responses. Compacted events replace the
+    same id (so a championship gains its competition notes) and new
+    ids are added (the 2026-27 Celtics schedule is not in the older
+    compact file).
 
-    ``league`` is the ESPN slug the caller already knows. When it is
-    missing or blank, each file's slug is taken from its name and a
-    warning is logged. The filename is not read when ``league`` is set.
+    ``league`` is the fixture slug (``nba`` or ``wnba``) passed by the
+    caller. A non-blank value is applied to every recorded file, and
+    the filename is not consulted. When ``league`` is omitted or blank,
+    each file's slug is the prefix before ``_team_`` and a warning is
+    logged. A filename with no prefix raises ``ValueError``.
+
+    ``Path.glob`` is not recursive, so both the schedule directory and
+    its ``recorded/`` child are scanned. The Commissioner's Cup final
+    (ESPN event 401736430) lives under ``recorded/``.
     """
     from app.services.espn_schedule import compact_event
 
-    by_id = {str(event.get("id")): event for event in events}
     explicit = (league or "").strip()
-    for raw_path in _recorded_team_schedule_paths(schedule_path):
+    by_id = {str(event.get("id")): event for event in events}
+    parent = schedule_path.parent
+    paths = sorted(parent.glob(_TEAM_SCHEDULE_GLOB))
+    recorded_dir = parent / "recorded"
+    if recorded_dir.is_dir():
+        paths.extend(sorted(recorded_dir.glob(_TEAM_SCHEDULE_GLOB)))
+    for raw_path in paths:
         if explicit:
             file_league = explicit
         else:
             file_league = _league_slug_from_schedule_filename(raw_path)
             logger.warning(
-                "No league was passed for %s; using %r from the filename",
-                raw_path.name,
+                "No league was passed to the schedule overlay; using %s from %s",
                 file_league,
+                raw_path.name,
             )
         payload = json.loads(raw_path.read_text(encoding="utf-8"))
         if not isinstance(payload, dict):
@@ -455,15 +451,14 @@ def _overlay_recorded_team_schedules(
 
 
 def load_schedule_events(
-    path: Path | None = None,
-    *,
-    league: str | None = None,
+    path: Path | None = None, *, league: str | None = None
 ) -> list[dict[str, Any]]:
     """Load the recorded event list. ``path`` overrides the default fixture.
 
-    ``league`` is forwarded to the recorded-schedule overlay. Omit it
-    only when the files encode the slug in their names; that path logs
-    a warning. See :func:`_overlay_recorded_team_schedules`.
+    ``league`` is forwarded to the recorded-schedule overlay. Callers
+    that know the file is one league should pass it. Omitting it logs a
+    warning and falls back to the filename prefix. The cache key
+    includes the league so an explicit call does not reuse a guessed one.
     """
     schedule_path = (path or default_schedule_path()).resolve()
     cache_key = f"{schedule_path}|{(league or '').strip()}"

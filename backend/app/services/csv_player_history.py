@@ -25,6 +25,13 @@ from datetime import datetime, date
 from zoneinfo import ZoneInfo
 import statistics
 
+from app.services.game_log_hygiene import (
+    CANONICAL_GAME_TYPES,
+    GAME_TYPE_PLAY_IN,
+    GAME_TYPE_PLAYOFFS,
+    GAME_TYPE_REGULAR,
+    coalesce_game_type,
+)
 from app.services.normalize import match_player_name
 
 
@@ -497,8 +504,15 @@ class CSVPlayerHistoryService:
                 status = row.get("Status", "").strip()
                 is_starter = status.lower() == "starter"
 
-                # Parse all 28 CSV columns
+                # Parse all 28 CSV columns, plus GameType when the hygiene
+                # pass has written it. A blank GameType is a legacy row
+                # (unit-test fixtures, older files) and counts as the
+                # regular season. Summer League, preseason, and G League
+                # are never loaded: they are not the distribution props use.
                 season = row.get("Season", "").strip()
+                game_type = coalesce_game_type(row.get("GameType"))
+                if game_type not in CANONICAL_GAME_TYPES:
+                    continue
                 wl = row.get("W/L", "").strip()
                 pos = row.get("Pos", "").strip()
 
@@ -521,6 +535,7 @@ class CSVPlayerHistoryService:
                     "player_name": player_name,
                     "game_date": game_date,
                     "season": season,
+                    "game_type": game_type,
                     "points": pts,
                     "assists": ast,
                     "rebounds": reb,
@@ -567,6 +582,32 @@ class CSVPlayerHistoryService:
         self._loaded = True
         print(f"✅ CSV loaded [{self.league}], total {len(self._all_players)} players")
 
+    @staticmethod
+    def _allowed_game_types(
+        include_playoffs: bool = False,
+        include_play_in: bool = False,
+    ) -> Set[str]:
+        """Game types that feed a stats call.
+
+        Regular season is always included. Playoffs and the play-in stay
+        in the file so a caller can opt in; they are off by default because
+        a prop priced off the regular-season distribution should not mix
+        in a seven-game series. ``cup_championship`` and anything
+        ``load_csv`` already dropped (summer, preseason, unclassified)
+        stay out of this set.
+        """
+        allowed = {GAME_TYPE_REGULAR}
+        if include_playoffs:
+            allowed.add(GAME_TYPE_PLAYOFFS)
+        if include_play_in:
+            allowed.add(GAME_TYPE_PLAY_IN)
+        return allowed
+
+    @staticmethod
+    def _game_type_of(game: Dict[str, Any]) -> str:
+        """Game type on a loaded row. Missing means regular season."""
+        return coalesce_game_type(game.get("game_type"))
+
     def resolve_player_name(self, player_name: str) -> Optional[str]:
         """Map a query to the stored CSV spelling, or None.
 
@@ -601,7 +642,12 @@ class CSVPlayerHistoryService:
         search_lower = search.lower()
         return [p for p in self._all_players if search_lower in p.lower()]
 
-    def get_player_opponents(self, player_name: str) -> List[str]:
+    def get_player_opponents(
+        self,
+        player_name: str,
+        include_playoffs: bool = False,
+        include_play_in: bool = False,
+    ) -> List[str]:
         """
         Get all opponents the player has played against
 
@@ -616,8 +662,11 @@ class CSVPlayerHistoryService:
         resolved = self.resolve_player_name(player_name)
         player_games = self._cache.get(resolved, []) if resolved else []
 
+        allowed = self._allowed_game_types(include_playoffs, include_play_in)
         opponents = set()
         for game in player_games:
+            if self._game_type_of(game) not in allowed:
+                continue
             opponent = game.get("opponent", "")
             if opponent:
                 opponents.add(opponent)
@@ -639,7 +688,12 @@ class CSVPlayerHistoryService:
         date_key = date.strftime("%Y-%m-%d")
         return self._lineup_cache.get((team, date_key), set())
 
-    def get_teammates(self, player_name: str) -> List[str]:
+    def get_teammates(
+        self,
+        player_name: str,
+        include_playoffs: bool = False,
+        include_play_in: bool = False,
+    ) -> List[str]:
         """
         Get all teammates who have played for the same team as the player
 
@@ -658,8 +712,11 @@ class CSVPlayerHistoryService:
             player_name = resolved
         player_games = self._cache.get(player_name, []) if resolved else []
 
+        allowed = self._allowed_game_types(include_playoffs, include_play_in)
         teammates: Set[str] = set()
         for game in player_games:
+            if self._game_type_of(game) not in allowed:
+                continue
             team = game.get("team", "")
             game_date = game.get("game_date")
             if not team or game_date is None:
@@ -682,7 +739,9 @@ class CSVPlayerHistoryService:
         opponent: Optional[str] = None,
         is_starter: Optional[bool] = None,
         teammate_filter: Optional[List[str]] = None,
-        teammate_played: Optional[bool] = None
+        teammate_played: Optional[bool] = None,
+        include_playoffs: bool = False,
+        include_play_in: bool = False,
     ) -> Dict[str, Any]:
         """
         Calculate player historical statistics
@@ -750,9 +809,18 @@ class CSVPlayerHistoryService:
             }
 
         # Get all opponents (for filters)
-        all_opponents = self.get_player_opponents(player_name)
+        all_opponents = self.get_player_opponents(
+            player_name,
+            include_playoffs=include_playoffs,
+            include_play_in=include_play_in,
+        )
         # Get all teammates (for star teammate selector, only those on the same team)
-        all_teammates = self.get_teammates(player_name)
+        all_teammates = self.get_teammates(
+            player_name,
+            include_playoffs=include_playoffs,
+            include_play_in=include_play_in,
+        )
+        allowed_game_types = self._allowed_game_types(include_playoffs, include_play_in)
 
         # Validate teammate_filter: only accept teammates from the same team, remove non-teammates
         validated_teammate_filter = None
@@ -767,6 +835,12 @@ class CSVPlayerHistoryService:
         values: List[float] = []
 
         for game in player_games:
+            # Regular season only, unless the caller opted into playoffs
+            # or the play-in. Summer League and preseason never reach this
+            # loop: load_csv drops them.
+            if self._game_type_of(game) not in allowed_game_types:
+                continue
+
             # Exclude DNP
             if exclude_dnp and game.get("minutes", 0) == 0:
                 continue
@@ -826,6 +900,8 @@ class CSVPlayerHistoryService:
                     "team": game.get("team", ""),
                     "minutes": round(minutes, 1),  # minutes played
                     "is_starter": game_is_starter,  # whether started
+                    "game_type": self._game_type_of(game),
+                    "season": game.get("season", ""),
                 })
 
         # Take the most recent N games
@@ -896,6 +972,8 @@ class CSVPlayerHistoryService:
         player_name: str,
         season: Optional[str] = None,
         threshold: Any = None,
+        include_playoffs: bool = False,
+        include_play_in: bool = False,
     ) -> Dict[str, Any]:
         """
         Historical Double-Double rate for a player.
@@ -969,9 +1047,12 @@ class CSVPlayerHistoryService:
         games_count = 0
         dd_count = 0
 
+        allowed_game_types = self._allowed_game_types(include_playoffs, include_play_in)
         for game in player_games:
             # Exclude DNPs — a player who didn't play can't have a DD,
             # but counting those games would dilute the rate.
+            if self._game_type_of(game) not in allowed_game_types:
+                continue
             if game.get("minutes", 0) == 0:
                 continue
             if season and game.get("season") != season:

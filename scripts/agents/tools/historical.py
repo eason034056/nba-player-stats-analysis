@@ -29,6 +29,7 @@ for _p in (_BACKEND_DIR, _RAG_DIR):
     if _p not in sys.path:
         sys.path.insert(0, _p)
 
+from app.services.game_log_hygiene import coalesce_game_type
 from app.services.csv_player_history import (
     CSVPlayerHistoryService,
     _coerce_date,
@@ -133,9 +134,20 @@ def _games_for(player: str, n: int = 0, league: str = "nba") -> List[Dict[str, A
     """
     csv = _csv_for(league)
     csv.load_csv()
+    # Exact ``player_name_key`` only. "Curry" must not attach to Seth Curry
+    # or Stephen Curry. Team attribution stays on ``_team_for``, which reads
+    # the full log (including playoffs) for the US game date.
     resolved = csv.resolve_player_name(player)
     logs = csv._cache.get(resolved, []) if resolved else []
-    active = [g for g in logs if g.get("minutes", 0) > 0]
+    # Regular season only. Playoffs stay in the CSV (GameType=playoffs)
+    # so a caller of CSVPlayerHistoryService can opt in; this tool is the
+    # props path and must not mix a postseason series, a Cup final, or an
+    # unclassified row into a season rate. Rows loaded from older fixtures
+    # have no game_type and count as regular.
+    active = [
+        g for g in logs
+        if g.get("minutes", 0) > 0 and coalesce_game_type(g.get("game_type")) == "regular_season"
+    ]
     if n > 0:
         active = active[:n]
     return active

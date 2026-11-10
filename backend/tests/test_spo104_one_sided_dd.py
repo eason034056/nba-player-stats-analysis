@@ -152,6 +152,76 @@ def test_one_sided_dd_leaves_under_empty(dd_payload, module_path):
     assert response.consensus is not None
     assert response.consensus.p_yes_fair == 0.6787
     assert response.consensus.p_no_fair == 0.3213
+    assert fanduel.uses_prior is True
+    assert draftkings.uses_prior is False
+    assert response.consensus.consensus_uses_prior is True
+    assert response.consensus.consensus_prior_book_count == 1
+
+
+def _select_books(payload: dict, mode: str) -> list[dict]:
+    """Pick recorded Yes/No legs. ``prior`` drops every posted No price."""
+    books = _bookmakers_from_dd_fixture(payload)
+    if mode == "mixed":
+        return books
+    if mode == "two_sided":
+        return [
+            book
+            for book in books
+            if any(outcome["name"] == "No" for outcome in book["markets"][0]["outcomes"])
+        ]
+    kept = []
+    for book in books:
+        yes_only = [
+            outcome
+            for outcome in book["markets"][0]["outcomes"]
+            if outcome["name"] == "Yes"
+        ]
+        kept.append(
+            {
+                "key": book["key"],
+                "markets": [{"key": payload["market"], "outcomes": yes_only}],
+            }
+        )
+    return kept
+
+
+@pytest.mark.parametrize("module_path", ["app.api.nba", "app.api.wnba"])
+@pytest.mark.parametrize(
+    ("mode", "uses_prior", "prior_count"),
+    [
+        ("two_sided", False, 0),
+        ("mixed", True, 1),
+        ("prior", True, 2),
+    ],
+)
+def test_consensus_prior_flags(dd_payload, module_path, mode, uses_prior, prior_count):
+    import importlib
+
+    module = importlib.import_module(module_path)
+    body = NoVigRequest(
+        event_id=dd_payload["event_id"],
+        player_name=dd_payload["player_name"],
+        market=dd_payload["market"],
+    )
+    response = _post(
+        module,
+        body,
+        {"bookmakers": _select_books(dd_payload, mode)},
+    )
+    assert response.results
+    assert response.consensus is not None
+    assert all(row.line_is_synthetic is True for row in response.results)
+    assert all(row.market_kind == "binary" for row in response.results)
+    assert response.consensus.consensus_uses_prior is uses_prior
+    assert response.consensus.consensus_prior_book_count == prior_count
+    assert sum(1 for row in response.results if row.uses_prior) == prior_count
+    if mode == "two_sided":
+        assert all(row.uses_prior is False for row in response.results)
+        assert all(row.under_odds is not None for row in response.results)
+    if mode == "prior":
+        assert all(row.uses_prior is True for row in response.results)
+        assert all(row.under_odds is None for row in response.results)
+        assert len(response.results) == prior_count
 
 
 @pytest.mark.parametrize("module_path", ["app.api.nba", "app.api.wnba"])
@@ -173,3 +243,7 @@ def test_over_under_line_is_not_synthetic(ou_payload, module_path):
         assert row.p_under_imp is not None
         assert row.yes_price is None
         assert row.line != 0.5
+        assert row.uses_prior is False
+    assert response.consensus is not None
+    assert response.consensus.consensus_uses_prior is False
+    assert response.consensus.consensus_prior_book_count == 0

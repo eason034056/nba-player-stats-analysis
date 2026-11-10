@@ -101,6 +101,10 @@ class BookmakerResult(BaseModel):
           model output of the single-leg prior, not a posted price.
         - ``line_is_synthetic`` is True and ``market_kind`` is
           ``"binary"`` when ``line`` is the 0.5 sentinel.
+        - ``uses_prior`` is True when this row's fair probability came
+          from ``single_leg_devig`` because the book did not post No.
+          It is False when both legs were posted, and False for every
+          Over/Under row.
         - Anti-hallucination guard: rows where ``yes_fair_prob`` cannot be
           honestly derived (vig prior fails on a single-leg quote) are
           NOT emitted — the route surfaces that via ``message`` rather
@@ -130,6 +134,14 @@ class BookmakerResult(BaseModel):
         ...,
         description="binary for Yes/No markets such as player_double_double; over_under for a posted total.",
     )
+    uses_prior: bool = Field(
+        ...,
+        description=(
+            "True when this row's fair probability came from the single-leg "
+            "prior because the No leg was not posted. False for a two-sided "
+            "quote and for every Over/Under row."
+        ),
+    )
 
     # === Binary-market explicit mirrors (SPO-26) ===================
     # For binary markets the over_*/under_* fields above carry the Yes/No
@@ -154,12 +166,23 @@ class Consensus(BaseModel):
     - p_over_fair / p_under_fair: Consensus probabilities
     - p_yes_fair / p_no_fair: Binary-market mirrors of p_over_fair / p_under_fair,
       populated for binary markets (e.g. player_double_double); None for Over/Under
+    - consensus_uses_prior / consensus_prior_book_count: whether any book
+      in this average was de-vigged with the single-leg prior, and how many.
+      Both are False / 0 for an Over/Under consensus.
     """
     method: str = Field(..., description="Calculation method")
     p_over_fair: float = Field(..., description="Consensus over (or Yes for binary) probability")
     p_under_fair: float = Field(..., description="Consensus under (or No for binary) probability")
     p_yes_fair: Optional[float] = Field(default=None, description="Consensus Yes probability (binary markets only)")
     p_no_fair: Optional[float] = Field(default=None, description="Consensus No probability (binary markets only)")
+    consensus_uses_prior: bool = Field(
+        ...,
+        description="True when any book included in this consensus used the single-leg prior.",
+    )
+    consensus_prior_book_count: int = Field(
+        ...,
+        description="How many books included in this consensus used the single-leg prior.",
+    )
 
 
 class NoVigResponse(BaseModel):
@@ -244,6 +267,11 @@ class GameLog(BaseModel):
     team: str = Field(default="", description="Player's team")
     minutes: float = Field(default=0.0, description="Minutes played")
     is_starter: bool = Field(default=False, description="Is starter")
+    game_type: str = Field(
+        default="regular_season",
+        description="regular_season, playoffs, or play_in",
+    )
+    season: str = Field(default="", description="Season label for this game")
 
 
 class PlayerHistoryResponse(BaseModel):
