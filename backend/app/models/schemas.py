@@ -27,6 +27,24 @@ class HealthResponse(BaseModel):
 
 # ==================== NBA Events ====================
 
+class EventLineupStatus(BaseModel):
+    """Per-team lineup confirmation on one NBA event.
+
+    ``confirmed`` when any source snapshot for that club reports
+    ``status == "confirmed"``. ``projected`` when a lineup exists and
+    nobody reported confirmed. ``null`` when that club has no lineup
+    for the events date. See ``confirmation_status``.
+    """
+    home: Optional[Literal["confirmed", "projected"]] = Field(
+        default=None,
+        description="Home club confirmation: confirmed, projected, or null",
+    )
+    away: Optional[Literal["confirmed", "projected"]] = Field(
+        default=None,
+        description="Away club confirmation: confirmed, projected, or null",
+    )
+
+
 class TopRead(BaseModel):
     """
     Best stored daily pick for one event.
@@ -85,6 +103,18 @@ class NBAEvent(BaseModel):
     home_team: str = Field(..., description="Home team")
     away_team: str = Field(..., description="Away team")
     commence_time: datetime = Field(..., description="Game start time (UTC)")
+    commence_time_et: Optional[str] = Field(
+        default=None,
+        description="Same tip as commence_time, ISO 8601 with the America/New_York offset",
+    )
+    display_tz: Optional[str] = Field(
+        default=None,
+        description='Zone label for commence_time_et. "ET" on NBA events.',
+    )
+    lineup_status: Optional[EventLineupStatus] = Field(
+        default=None,
+        description="Per-team confirmation for this event. Null on WNBA.",
+    )
     top_read: Optional[TopRead] = Field(
         default=None,
         description=(
@@ -256,12 +286,25 @@ class NoVigResponse(BaseModel):
 
 # ==================== Player Suggest ====================
 
+class PlayerSuggestion(BaseModel):
+    """One suggested name plus the position from the game log, when known."""
+    name: str = Field(..., description="Player name, same spelling as players[]")
+    position: Optional[str] = Field(
+        default=None,
+        description="Pos on the player's most recent game log. Null when the name is not in the log.",
+    )
+
+
 class PlayerSuggestResponse(BaseModel):
     """
     Player name suggestion API response model
     For frontend autocomplete feature
     """
     players: List[str] = Field(default_factory=list, description="List of player names")
+    suggestions: List[PlayerSuggestion] = Field(
+        default_factory=list,
+        description="Same order as players, with position. Empty on WNBA.",
+    )
     fetched_at: Optional[datetime] = Field(default=None, description="Cache data fetch time")
     data_age_seconds: Optional[int] = Field(default=None, description="Data age in seconds")
     cache_state: Optional[str] = Field(default=None, description="fresh | stale | refreshed")
@@ -325,6 +368,39 @@ class GameLog(BaseModel):
         description="regular_season, playoffs, or play_in",
     )
     season: str = Field(default="", description="Season label for this game")
+    home_or_away: Optional[Literal["home", "away"]] = Field(
+        default=None,
+        description="home or away from the recorded schedule join. Null when the row does not join.",
+    )
+
+
+class TeammateMissedGame(BaseModel):
+    """One game in the history sample where a listed teammate did not play."""
+    date: str = Field(..., description="Game date YYYY-MM-DD")
+    game_id: Optional[str] = Field(
+        default=None,
+        description="Recorded ESPN event id when the schedule join is unique. Otherwise null.",
+    )
+
+
+class TeammateContext(BaseModel):
+    """Games a listed teammate missed, plus the player's stat with and without them."""
+    name: str = Field(..., description="Teammate name. Also present in teammates[].")
+    games_missed: int = Field(..., description="How many sample games this teammate did not play")
+    missed_games: List[TeammateMissedGame] = Field(
+        default_factory=list,
+        description="Those games, oldest first",
+    )
+    with_n: int = Field(default=0, description="Sample games this teammate played")
+    without_n: int = Field(default=0, description="Sample games this teammate missed")
+    with_mean: Optional[float] = Field(
+        default=None,
+        description="Mean of the requested stat in games this teammate played",
+    )
+    without_mean: Optional[float] = Field(
+        default=None,
+        description="Mean of the requested stat in games this teammate missed",
+    )
 
 
 class PlayerHistoryResponse(BaseModel):
@@ -360,9 +436,29 @@ class PlayerHistoryResponse(BaseModel):
     game_logs: List[GameLog] = Field(default_factory=list, description="Per-game details")
     opponents: List[str] = Field(default_factory=list, description="Opponent list")
     teammates: List[str] = Field(default_factory=list, description="Teammate list (for star teammate selector)")
+    teammate_context: List[TeammateContext] = Field(
+        default_factory=list,
+        description="Same names as teammates, with games missed and a with/without split. Empty on WNBA.",
+    )
     opponent_filter: Optional[str] = Field(default=None, description="Current opponent filter")
     teammate_filter: Optional[List[str]] = Field(default=None, description="Current star teammate filter")
     teammate_played: Optional[bool] = Field(default=None, description="Star teammate presence filter")
+    season: Optional[str] = Field(
+        default=None,
+        description="Season the season_* rates use. Echoed from the query or the current NBA season.",
+    )
+    season_n_games: Optional[int] = Field(
+        default=None,
+        description="Games in that season after the same filters as n_games, ignoring the n window",
+    )
+    season_p_over: Optional[float] = Field(
+        default=None,
+        description="Share of season games strictly above the threshold",
+    )
+    season_p_under: Optional[float] = Field(
+        default=None,
+        description="Share of season games strictly below the threshold",
+    )
     message: Optional[str] = Field(default=None, description="Additional message")
 
 
@@ -442,9 +538,58 @@ class PlayerProjection(BaseModel):
     injury_status: Optional[str] = Field(default=None, description="Injury status (Free Trial: None)")
     injury_body_part: Optional[str] = Field(default=None, description="Injured body part")
 
-    # Matchup difficulty
-    opponent_rank: Optional[int] = Field(default=None, description="Opponent overall defense rank (1-30)")
-    opponent_position_rank: Optional[int] = Field(default=None, description="Opponent defense vs position rank")
+    # Matchup difficulty. 1 is the most points allowed (weakest defense).
+    opponent_rank: Optional[int] = Field(
+        default=None,
+        ge=1,
+        le=30,
+        description="Opponent overall defense rank. 1-30, 1 = most points allowed (weakest).",
+    )
+    opponent_position_rank: Optional[int] = Field(
+        default=None,
+        ge=1,
+        le=30,
+        description="Opponent defense vs this position. Ranked inside that position only, 1-30.",
+    )
+    opponent_rank_source: Optional[Literal["csv", "sportsdata", "sportsdata_invalid"]] = Field(
+        default=None,
+        description=(
+            "Source of opponent_rank only. csv when that null was filled "
+            "from the game log. sportsdata when the row already carried "
+            "an integer in 1..30. sportsdata_invalid when the vendor value "
+            "was not an integer in 1..30; the rank is then null and is not "
+            "filled from the CSV."
+        ),
+    )
+    opponent_rank_season: Optional[str] = Field(
+        default=None,
+        description=(
+            "Game-log season for opponent_rank when its source is csv, "
+            "e.g. 2025-2026 (the 2025-26 season). Null otherwise."
+        ),
+    )
+    opponent_rank_note: Optional[str] = Field(
+        default=None,
+        description=(
+            "Present when opponent_rank_source is csv: computed from real "
+            "points allowed, not fantasy points."
+        ),
+    )
+    opponent_position_rank_source: Optional[Literal["csv", "sportsdata", "sportsdata_invalid"]] = Field(
+        default=None,
+        description=(
+            "Source of opponent_position_rank only. Same three words as "
+            "opponent_rank_source. Independent of the overall rank."
+        ),
+    )
+    opponent_position_rank_season: Optional[str] = Field(
+        default=None,
+        description="Game-log season for the position rank when its source is csv. Null otherwise.",
+    )
+    opponent_position_rank_note: Optional[str] = Field(
+        default=None,
+        description="Present when the position rank source is csv: real points allowed, not fantasy points.",
+    )
 
     # DFS related
     draftkings_salary: Optional[float] = Field(default=None, description="DraftKings DFS salary")
@@ -482,11 +627,30 @@ class ProjectionRefreshResponse(BaseModel):
 
 
 class TeamLineup(BaseModel):
+    """One team's lineup for a date.
+
+    ``status`` and ``confirmation_status`` are different words.
+    ``status`` is completeness from the starter count: ``projected``
+    (five names), ``partial`` (fewer than five), or ``unavailable``.
+    ``confirmation_status`` is whether any source snapshot reported
+    ``confirmed``. A four-name slate can be ``status="partial"`` and
+    ``confirmation_status="confirmed"`` at the same time. Both fields
+    can also read ``projected``: completeness means the names are a
+    projected five, and confirmation means nobody has reported the
+    lineup confirmed.
+    """
     date: str = Field(..., description="Query date YYYY-MM-DD")
     team: str = Field(..., description="Team code")
     opponent: str = Field(default="", description="Opponent team code")
     home_or_away: str = Field(default="", description="HOME or AWAY")
-    status: str = Field(..., description="projected | partial | unavailable")
+    status: str = Field(
+        ...,
+        description=(
+            "Completeness from the starter count: projected (five names), "
+            "partial (fewer than five), or unavailable. This is not "
+            "confirmation. See confirmation_status."
+        ),
+    )
     starters: List[str] = Field(default_factory=list, description="Projected starting five")
     bench_candidates: List[str] = Field(default_factory=list, description="Primary bench candidates")
     sources: List[str] = Field(default_factory=list, description="Consensus sources")
@@ -496,6 +660,17 @@ class TeamLineup(BaseModel):
     source_snapshots: Dict[str, Dict[str, Any]] = Field(
         default_factory=dict,
         description="Standardized snapshot of each source",
+    )
+    confirmation_status: Optional[Literal["confirmed", "projected"]] = Field(
+        default=None,
+        description=(
+            "Confirmation consensus, separate from status. confirmed when "
+            "any source_snapshots status is confirmed, including a stale "
+            "confirmation next to a fresh projected snapshot. projected "
+            "when a snapshot or a starter exists and nobody reported "
+            "confirmed (expected lands here). null when the record has "
+            "neither. Does not read updated_at."
+        ),
     )
 
 
@@ -540,6 +715,10 @@ class DailyPick(BaseModel):
     player_name: str = Field(..., description="Player name")
     player_team: str = Field(default="", description="Player's team (short name)")
     player_team_code: str = Field(default="", description="Player's team code")
+    position: Optional[str] = Field(
+        default=None,
+        description="Pos on the player's most recent NBA game log. Null when unknown. Null on WNBA.",
+    )
     event_id: str = Field(..., description="Event ID")
     home_team: str = Field(..., description="Home team")
     away_team: str = Field(..., description="Away team")
@@ -574,11 +753,39 @@ class DailyPick(BaseModel):
     )
     opponent_rank: Optional[int] = Field(
         default=None,
-        description="Opponent overall defense rank (1-30, 1=weakest defense)"
+        ge=1,
+        le=30,
+        description="Opponent overall defense rank (1-30, 1=weakest defense, most points allowed)"
     )
     opponent_position_rank: Optional[int] = Field(
         default=None,
-        description="Opponent defense vs position rank (1-30)"
+        ge=1,
+        le=30,
+        description="Opponent defense vs position rank, ranked inside that position (1-30)"
+    )
+    opponent_rank_source: Optional[Literal["csv", "sportsdata", "sportsdata_invalid"]] = Field(
+        default=None,
+        description="Source of opponent_rank only: csv, sportsdata, or sportsdata_invalid.",
+    )
+    opponent_rank_season: Optional[str] = Field(
+        default=None,
+        description="Game-log season for opponent_rank when its source is csv, e.g. 2025-2026. Null otherwise.",
+    )
+    opponent_rank_note: Optional[str] = Field(
+        default=None,
+        description="On a csv overall rank: computed from real points allowed, not fantasy points.",
+    )
+    opponent_position_rank_source: Optional[Literal["csv", "sportsdata", "sportsdata_invalid"]] = Field(
+        default=None,
+        description="Source of opponent_position_rank only: csv, sportsdata, or sportsdata_invalid.",
+    )
+    opponent_position_rank_season: Optional[str] = Field(
+        default=None,
+        description="Game-log season for the position rank when its source is csv. Null otherwise.",
+    )
+    opponent_position_rank_note: Optional[str] = Field(
+        default=None,
+        description="On a csv position rank: computed from real points allowed, not fantasy points.",
     )
     injury_status: Optional[str] = Field(
         default=None,

@@ -343,8 +343,11 @@ class ScheduleIndex:
         if not event_id or instant is None:
             return
         names_by_side: list[set[str]] = []
-        for competitor in event.get("competitors") or []:
+        home_index: int | None = None
+        for index, competitor in enumerate(event.get("competitors") or []):
             names_by_side.append(_competitor_names(competitor))
+            if str(competitor.get("homeAway") or "").lower() == "home":
+                home_index = index
         if len(names_by_side) < 2:
             return
         stored = {
@@ -353,6 +356,7 @@ class ScheduleIndex:
             "season_label": season_label_for_event(event),
             "game_type": game_type_for_event(event),
             "sides": names_by_side,
+            "home_index": home_index,
         }
         self.events_by_id[event_id] = stored
         for local_date in _local_dates(instant):
@@ -396,6 +400,40 @@ class ScheduleIndex:
             if opponent_keys & other:
                 matched.append(event)
         return matched
+
+    def _team_side(self, event: dict[str, Any], team: str) -> int | None:
+        """Index of ``team`` inside one stored event, or None."""
+        team_keys = csv_team_keys(team)
+        for index, side in enumerate(event.get("sides") or []):
+            if team_keys & side:
+                return index
+        return None
+
+    def venue(self, game_date: str, team: str, opponent: str) -> str | None:
+        """``home`` or ``away`` for ``team`` when exactly one event joins.
+
+        A miss, or two events on the same date, is None. The side comes
+        from the recorded ``homeAway`` flag, stored as ``home_index``.
+        """
+        matched = self.match(game_date, team, opponent)
+        if len(matched) != 1:
+            return None
+        event = matched[0]
+        home_index = event.get("home_index")
+        if not isinstance(home_index, int):
+            return None
+        team_side = self._team_side(event, team)
+        if team_side is None:
+            return None
+        return "home" if team_side == home_index else "away"
+
+    def event_id_for(self, game_date: str, team: str, opponent: str) -> str | None:
+        """Recorded event id when exactly one event joins. Otherwise None."""
+        matched = self.match(game_date, team, opponent)
+        if len(matched) != 1:
+            return None
+        event_id = str(matched[0].get("id") or "").strip()
+        return event_id or None
 
 
 _SCHEDULE_CACHE: dict[str, list[dict[str, Any]]] = {}

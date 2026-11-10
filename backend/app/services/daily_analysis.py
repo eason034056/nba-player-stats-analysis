@@ -419,6 +419,7 @@ TEAM_CODE_ALIASES: Dict[str, str] = {
     "PHI": "PHI",
     "PHILADELPHIA76ERS": "PHI",
     "76ERS": "PHI",
+    "SIXERS": "PHI",
     "PHO": "PHX",
     "PHX": "PHX",
     "PHOENIXSUNS": "PHX",
@@ -1125,6 +1126,13 @@ class DailyAnalysisService:
                         game_logs = history_stats.get("game_logs", [])
                         player_team = team_from_game_logs(game_logs, commence_time)
                     player_team_code = canonical_team_code(player_team, league=league)
+                    position = None
+                    if league.lower() == "nba":
+                        latest_position = getattr(csv_service, "latest_position", None)
+                        if callable(latest_position):
+                            raw_position = latest_position(player_name)
+                            if isinstance(raw_position, str) and raw_position.strip():
+                                position = raw_position.strip()
 
                     # Get projection value for this metric.
                     # 💡 Translate via PROJECTION_FIELD_ALIASES because the
@@ -1135,6 +1143,12 @@ class DailyAnalysisService:
                     projected_minutes = proj.get("minutes") if proj else None
                     opponent_rank = proj.get("opponent_rank") if proj else None
                     opponent_position_rank = proj.get("opponent_position_rank") if proj else None
+                    opponent_rank_source = proj.get("opponent_rank_source") if proj else None
+                    opponent_rank_season = proj.get("opponent_rank_season") if proj else None
+                    opponent_rank_note = proj.get("opponent_rank_note") if proj else None
+                    opponent_position_rank_source = proj.get("opponent_position_rank_source") if proj else None
+                    opponent_position_rank_season = proj.get("opponent_position_rank_season") if proj else None
+                    opponent_position_rank_note = proj.get("opponent_position_rank_note") if proj else None
                     injury_status = proj.get("injury_status") if proj else None
                     lineup_confirmed = proj.get("lineup_confirmed") if proj else None
 
@@ -1164,8 +1178,15 @@ class DailyAnalysisService:
                         projected_value=round(projected_value, 2) if projected_value is not None else None,
                         projected_minutes=round(projected_minutes, 1) if projected_minutes is not None else None,
                         edge=edge,
+                        position=position,
                         opponent_rank=opponent_rank,
                         opponent_position_rank=opponent_position_rank,
+                        opponent_rank_source=opponent_rank_source,
+                        opponent_rank_season=opponent_rank_season,
+                        opponent_rank_note=opponent_rank_note,
+                        opponent_position_rank_source=opponent_position_rank_source,
+                        opponent_position_rank_season=opponent_position_rank_season,
+                        opponent_position_rank_note=opponent_position_rank_note,
                         injury_status=injury_status,
                         lineup_confirmed=lineup_confirmed,
                         tier=read_tier(side_probability),
