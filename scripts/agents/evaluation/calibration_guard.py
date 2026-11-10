@@ -19,6 +19,10 @@ already in the current model. Override them with
 ``run_sample_guard`` replays a deterministic player sample so CI can run
 the check without the full history. The sample size is
 ``BACKTEST_GUARD_PLAYERS`` (default 40) drawn with seed 7.
+
+The same replay compares ``PRODUCTION_CHECK_ROWS`` daily L10 rates
+(default 25, seed 7) with ``get_player_stats``. Any mismatch fails the
+guard. Zero sampled rows fails too: a skipped comparison is not a pass.
 """
 
 from __future__ import annotations
@@ -27,6 +31,12 @@ import os
 from dataclasses import dataclass, field
 
 from evaluation.metrics import Summary
+
+# Fixed-seed production comparison inside the CI player sample.
+# About 20–30 rows per league: large enough to catch a history filter
+# that no longer matches get_player_stats, small enough that the extra
+# calls do not move the walk-forward-guard job.
+PRODUCTION_CHECK_ROWS = 25
 
 
 @dataclass
@@ -119,6 +129,32 @@ def evaluate_guard(
     return result
 
 
+def record_production_check(
+    result: GuardResult, league: str, validation: dict
+) -> None:
+    """Fail ``result`` when the production-rate sample did not match.
+
+    Args:
+        result: Guard result to update. A mismatch clears ``ok``.
+        league: ``nba`` or ``wnba``.
+        validation: The ``replay.validation`` dict. ``checked`` is how many
+            rows were compared. ``mismatches`` is how many disagreed with
+            ``get_player_stats``.
+    """
+    checked = int(validation.get("checked", 0))
+    mismatches = int(validation.get("mismatches", 0))
+    if checked <= 0 or mismatches:
+        result.ok = False
+        if checked <= 0:
+            detail = f"{league} production rate check sampled 0 rows"
+        else:
+            detail = f"{league} production rate mismatches {mismatches} of {checked}"
+        result.failures.append(detail)
+        result.lines.append(f"FAIL {detail}")
+        return
+    result.lines.append(f"ok {league}: production rates matched on {checked} sampled rows")
+
+
 def run_sample_guard(
     players: int | None = None,
     seed: int = 7,
@@ -135,7 +171,7 @@ def run_sample_guard(
 
     Returns:
         The guard result for the sample. ``ok`` is false when a league
-        exceeds a bound.
+        exceeds a bound or a production-rate comparison mismatches.
     """
     from evaluation.metrics import summarize
     from evaluation.walk_forward import load_historical, replay_league, select_players
@@ -144,22 +180,28 @@ def run_sample_guard(
         players = int(os.environ.get("BACKTEST_GUARD_PLAYERS", "40"))
     historical = load_historical()
     snapshots: list[tuple[str, Summary]] = []
+    checks: list[tuple[str, dict]] = []
     for league in ("nba", "wnba"):
         service = historical._csv_for(league)
         chosen = select_players(list(service._cache), players, seed)
         replay = replay_league(
             service,
             league,
-            ["MED20"],
+            ["MED20", "L10"],
             players=chosen,
             do_agent=False,
-            validate=0,
+            validate=PRODUCTION_CHECK_ROWS,
+            seed=seed,
         )
         rows = [row for row in replay.daily if row.proxy == "MED20"]
         snapshots.append((league, summarize(rows)))
+        checks.append((league, replay.validation))
     result = evaluate_guard(snapshots, thresholds)
+    for league, validation in checks:
+        record_production_check(result, league, validation)
     result.lines.insert(
         1,
-        f"Sample: {players} players per league, seed {seed}, proxy MED20, agent path off.",
+        f"Sample: {players} players per league, seed {seed}, proxy MED20, agent path off. "
+        f"Production comparison: {PRODUCTION_CHECK_ROWS} L10 rows per league, same seed.",
     )
     return result
