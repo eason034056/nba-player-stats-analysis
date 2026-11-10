@@ -15,7 +15,13 @@ from datetime import datetime, timezone
 from typing import Optional
 
 from app.models.schemas import DailyPicksResponse
-from app.services.daily_analysis import daily_analysis_service
+from app.services.daily_analysis import (
+    HIGH_PROBABILITY_THRESHOLD,
+    MIN_SAMPLE_GAMES,
+    STORED_MIN_SAMPLE_GAMES,
+    daily_analysis_service,
+    present_daily_picks,
+)
 from app.services.cache import cache_service
 
 
@@ -49,16 +55,24 @@ async def get_daily_picks(
         description="Whether to force re-analysis (ignore cache)"
     ),
     min_probability: float = Query(
-        default=0.65,
+        default=HIGH_PROBABILITY_THRESHOLD,
         ge=0.5,
         le=0.95,
-        description="Minimum probability threshold (0.5-0.95)"
+        description=(
+            "Minimum probability threshold (0.5-0.95). "
+            "Default 0.65 is the published board. "
+            "0.56 returns stored Lean rows."
+        ),
     ),
     min_games: int = Query(
-        default=10,
-        ge=5,
+        default=MIN_SAMPLE_GAMES,
+        ge=STORED_MIN_SAMPLE_GAMES,
         le=100,
-        description="Minimum number of sample games (5-100)"
+        description=(
+            "Minimum number of sample games. "
+            "Default 10 is the published board. "
+            "Stored NBA rows go down to 5."
+        ),
     )
 ) -> DailyPicksResponse:
     """
@@ -113,24 +127,19 @@ async def get_daily_picks(
     offset_minutes = tz_offset if tz_offset is not None else 480
     
     try:
-        # Run analysis (uses cache automatically, unless refresh=True)
+        # Run analysis (uses cache automatically, unless refresh=True).
+        # The stored set includes NBA candidates down to the Lean floor.
+        # This filter is what keeps the default response on the 0.65 / 10 board.
         result = await daily_analysis_service.run_daily_analysis(
             date=date,
             use_cache=not refresh,
             tz_offset_minutes=offset_minutes
         )
-        
-        # Filter results by parameters
-        if result.picks:
-            filtered_picks = [
-                pick for pick in result.picks
-                if pick.probability >= min_probability
-                and pick.n_games >= min_games
-            ]
-            result.picks = filtered_picks
-            result.total_picks = len(filtered_picks)
-        
-        return result
+        return present_daily_picks(
+            result,
+            min_probability=min_probability,
+            min_games=min_games,
+        )
         
     except Exception as e:
         raise HTTPException(
@@ -182,14 +191,15 @@ async def trigger_daily_analysis(
     offset_minutes = tz_offset if tz_offset is not None else 480
     
     try:
-        # Force re-analysis (ignore cache)
+        # Force re-analysis (ignore cache). The service caches the
+        # candidate set, including Lean rows. The body of this call stays
+        # the published board, matching the GET default.
         result = await daily_analysis_service.run_daily_analysis(
             date=date,
             use_cache=False,
             tz_offset_minutes=offset_minutes
         )
-        
-        return result
+        return present_daily_picks(result)
         
     except Exception as e:
         raise HTTPException(

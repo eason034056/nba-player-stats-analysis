@@ -6,7 +6,9 @@ Defines all API request and response data structures
 - Field: Used to define extra info for fields (description, default values, etc)
 """
 
-from pydantic import BaseModel, Field
+import math
+
+from pydantic import BaseModel, Field, field_validator
 from typing import Any, Dict, List, Literal, Optional
 from datetime import datetime
 
@@ -43,6 +45,48 @@ class EventLineupStatus(BaseModel):
     )
 
 
+class TopRead(BaseModel):
+    """
+    Best stored daily pick for one event.
+
+    Joined from the daily-picks cache for that event_id. This is not an
+    Odds API field and does not trigger a props request.
+
+    - player: Player name on the stored pick
+    - market: Odds API market key (player_points), not the CSV metric (points)
+    - side: Stored direction, over or under
+    - line: Modal bookmaker line
+    - probability: Chosen-side historical rate, from 0 to 1
+    """
+    player: str = Field(..., description="Player name")
+    market: str = Field(
+        ...,
+        min_length=1,
+        description="Odds API market key, for example player_points",
+    )
+    side: Literal["over", "under"] = Field(..., description="Stored pick side")
+    line: float = Field(..., description="Modal bookmaker line")
+    probability: float = Field(..., description="Chosen-side historical probability (0-1)")
+
+    @field_validator("line", "probability")
+    @classmethod
+    def _must_be_finite(cls, value: float) -> float:
+        """Reject NaN and Infinity before a TopRead can be built.
+
+        Args:
+            value: Parsed line or probability.
+
+        Returns:
+            The same number when it is finite.
+
+        Raises:
+            ValueError: ``value`` is NaN or Infinity.
+        """
+        if not math.isfinite(value):
+            raise ValueError("must be a finite number")
+        return value
+
+
 class NBAEvent(BaseModel):
     """
     Single NBA game information
@@ -52,6 +96,7 @@ class NBAEvent(BaseModel):
     - home_team: Name of the home team
     - away_team: Name of the away team
     - commence_time: Game start time (UTC ISO 8601 format)
+    - top_read: Highest-probability stored daily pick for this event, or null
     """
     event_id: str = Field(..., description="Event ID")
     sport_key: str = Field(..., description="Sport key")
@@ -69,6 +114,14 @@ class NBAEvent(BaseModel):
     lineup_status: Optional[EventLineupStatus] = Field(
         default=None,
         description="Per-team confirmation for this event. Null on WNBA.",
+    )
+    top_read: Optional[TopRead] = Field(
+        default=None,
+        description=(
+            "Highest-probability stored daily pick for this event, or null "
+            "when that event has no stored pick. Filled on GET /api/nba/events "
+            "from the daily-picks cache."
+        ),
     )
 
 
@@ -652,7 +705,9 @@ class DailyPick(BaseModel):
     - metric: Stat metric (points/assists/rebounds/pra)
     - threshold: Modal line (mode of one main line per bookmaker)
     - direction: "over" or "under," higher probability direction
-    - probability: Historical probability (>= 0.65)
+    - probability: Historical probability of the chosen side. The default
+      query keeps rows at or above 0.65. Stored NBA candidates go down to
+      the Lean floor (0.56).
     - n_games: Number of historical games used
     - bookmakers_count: Distinct bookmakers that posted this player on this market
     - all_lines: One main line per bookmaker, sorted. Alternate rungs are not repeated.
@@ -739,6 +794,24 @@ class DailyPick(BaseModel):
     lineup_confirmed: Optional[bool] = Field(
         default=None,
         description="Is lineup confirmed"
+    )
+    # Additive read fields. Older cached payloads omit them and validate
+    # as null. Later tickets can add verdict fields beside these.
+    tier: Optional[Literal["Strong play", "Playable", "Lean"]] = Field(
+        default=None,
+        description=(
+            "Read tier of probability. Strong play >= 0.70, "
+            "Playable >= 0.65 and below 0.70, Lean >= 0.56 and below 0.65. "
+            "Null when probability is below Lean or missing."
+        ),
+    )
+    p_over: Optional[float] = Field(
+        default=None,
+        description="Share of prior games strictly above the line. Null when unknown.",
+    )
+    p_under: Optional[float] = Field(
+        default=None,
+        description="Share of prior games strictly below the line. Null when unknown.",
     )
 
 
@@ -862,3 +935,73 @@ class OddsSnapshotTriggerResponse(BaseModel):
     total_lines: int = Field(default=0, description="Total odds line records written")
     duration_ms: int = Field(default=0, description="Duration (ms)")
     message: str = Field(default="", description="Operation message")
+
+
+# ==================== Bulk event props (stored snapshot only) ====================
+
+class BulkPropBook(BaseModel):
+    """
+    One bookmaker's stored line for one player and market.
+
+    Over/Under markets fill ``over_odds`` and ``under_odds``. ``yes_odds``
+    and ``no_odds`` are null. Binary markets (``player_double_double``)
+    fill ``yes_odds`` and ``no_odds``. A side the book did not post is
+    null, not a copy of the other side. ``over_odds`` and ``under_odds``
+    are null on a binary row so a Yes price is not read as an Over.
+    ``line`` on a binary row is the stored 0.5 sentinel, not a posted total.
+    """
+    bookmaker: str = Field(..., description="Bookmaker key, one row per book")
+    line: float = Field(..., description="This book's stored line. 0.5 sentinel for binary markets")
+    over_odds: Optional[int] = Field(default=None, description="Posted Over American odds. Null for binary markets and when Over was not stored")
+    under_odds: Optional[int] = Field(default=None, description="Posted Under American odds. Null for binary markets and when Under was not stored")
+    yes_odds: Optional[int] = Field(default=None, description="Posted Yes American odds for a binary market. Null for Over/Under markets")
+    no_odds: Optional[int] = Field(default=None, description="Posted No American odds for a binary market. Null when that side was not posted, and null for Over/Under markets")
+
+
+class BulkPropPlayer(BaseModel):
+    """
+    One player inside one market.
+
+    ``line`` is the modal consensus of one line per bookmaker
+    (``calculate_mode_threshold``). ``bookmakers_count`` counts distinct
+    books after that collapse and equals ``len(books)``.
+    """
+    player: str = Field(..., description="Player name as stored on the snapshot")
+    line: float = Field(..., description="Modal consensus of one line per bookmaker")
+    bookmakers_count: int = Field(..., description="Distinct bookmakers. Equals the length of books")
+    books: List[BulkPropBook] = Field(default_factory=list, description="One entry per bookmaker")
+
+
+class BulkPropMarket(BaseModel):
+    """Every player with a stored line in one market."""
+    market: str = Field(..., description="Market key, for example player_points")
+    players: List[BulkPropPlayer] = Field(default_factory=list, description="Players in this market, sorted by name")
+
+
+class BulkPropsResponse(BaseModel):
+    """
+    ``GET /api/nba/events/{event_id}/props``.
+
+    Read from the latest ``odds_line_snapshots`` capture. ``source`` is
+    always ``"snapshot"``. When that capture does not exist, ``markets``
+    is empty and both ``snapshot_at`` and ``data_age_seconds`` are null.
+    That response is HTTP 200. A malformed ``event_id`` is HTTP 404 and
+    does not use this body.
+    """
+    event_id: str = Field(..., description="Event id from the path")
+    snapshot_at: Optional[datetime] = Field(
+        default=None,
+        description="When the newest stored capture was written (ISO 8601). Null when no snapshot exists",
+    )
+    data_age_seconds: Optional[int] = Field(
+        default=None,
+        description="Whole seconds since snapshot_at. Null when no snapshot exists. Recomputed on a cache hit",
+    )
+    source: Literal["snapshot"] = Field(
+        default="snapshot",
+        description="Always snapshot. This route does not call the Odds API",
+    )
+    markets: List[BulkPropMarket] = Field(
+        default_factory=list,
+        description="Markets in the newest snapshot, in SNAPSHOT_MARKETS order. Empty when nothing is stored or nothing matches the filter",
+    )

@@ -25,7 +25,7 @@ from app.services.defense_ranks import (
 )
 from app.services.espn_schedule import compact_event
 from app.services.event_fields import commence_time_et, enrich_nba_event
-from app.services.daily_analysis import DailyAnalysisService
+from app.services.daily_analysis import DailyAnalysisService, daily_picks_cache_key
 from app.services.lineup_service import confirmation_status
 from app.services.nba_season import (
     normalize_nba_season_label,
@@ -345,6 +345,7 @@ class TestPosition:
             [_row("Stephen Curry", "2025-2026", "1/1/2026", "Warriors", "Lakers", "30", pos="PG")],
         )
         monkeypatch.setattr("app.services.daily_analysis.MIN_SAMPLE_GAMES", 1)
+        monkeypatch.setattr("app.services.daily_analysis.STORED_MIN_SAMPLE_GAMES", 1)
         service = DailyAnalysisService()
         service.csv_service = _service(path)
         service._get_props_for_market = AsyncMock(
@@ -703,3 +704,108 @@ def test_season_label_accepts_the_short_espn_form():
     assert normalize_nba_season_label("2025-26") == "2025-2026"
     assert normalize_nba_season_label("2025-2026") == "2025-2026"
     assert recorded_nba_season_label(datetime(2026, 11, 10, tzinfo=timezone.utc)) == "2026-2027"
+
+
+@pytest.mark.asyncio
+async def test_events_item_keeps_top_read_and_lineup_fields(monkeypatch):
+    """One events row keeps SPO-111 top_read and the SPO-113 clock and lineup."""
+    recorded = load_odds_fixture("odds_api_events__basketball_nba.json")
+    event = copy.deepcopy(recorded[0])
+    event_id = event["id"]
+
+    async def fake_events(**kwargs):
+        return [event]
+
+    async def fake_get(key):
+        if key == daily_picks_cache_key("nba", "2026-11-10", 0):
+            return {
+                "picks": [
+                    {
+                        "event_id": event_id,
+                        "player_name": "Stephen Curry",
+                        "metric": "points",
+                        "direction": "over",
+                        "threshold": 24.5,
+                        "probability": 0.72,
+                    }
+                ]
+            }
+        return None
+
+    async def fake_peek(date):
+        assert date == "2026-11-10"
+        return {
+            "ATL": {
+                "starters": ["Trae Young"],
+                "source_snapshots": {"rotowire": {"status": "confirmed"}},
+            },
+            "LAL": {
+                "starters": ["LeBron James"],
+                "source_snapshots": {"rotogrinders": {"status": "projected"}},
+            },
+        }
+
+    monkeypatch.setattr("app.api.nba.odds_provider.get_events", fake_events)
+    monkeypatch.setattr("app.api.nba.cache_service.get", fake_get)
+    monkeypatch.setattr("app.api.nba.cache_service.set", AsyncMock(return_value=True))
+    monkeypatch.setattr("app.api.nba.lineup_service.peek_lineups", fake_peek)
+
+    response = await get_events(date="2026-11-10", regions="us", tz_offset=0)
+    item = response.events[0]
+    assert item.event_id == event_id
+    assert item.top_read is not None
+    assert item.top_read.player == "Stephen Curry"
+    assert item.top_read.market == "player_points"
+    assert item.top_read.side == "over"
+    assert item.top_read.line == 24.5
+    assert item.top_read.probability == pytest.approx(0.72)
+    assert item.commence_time_et == "2026-11-09T19:10:00-05:00"
+    assert item.display_tz == "ET"
+    assert item.lineup_status is not None
+    assert item.lineup_status.home == "confirmed"
+    assert item.lineup_status.away == "projected"
+
+
+@pytest.mark.asyncio
+async def test_daily_pick_keeps_position_rank_and_read_tier(monkeypatch, tmp_path):
+    """One stored pick keeps SPO-113 position and ranks plus SPO-111 tier and p_over."""
+    path = tmp_path / "both.csv"
+    _write_csv(
+        path,
+        [
+            _row("Stephen Curry", "2025-2026", f"1/{day}/2026", "Warriors", "Lakers", "30", pos="PG")
+            for day in range(1, 6)
+        ],
+    )
+    service = DailyAnalysisService()
+    service.csv_service = _service(path)
+    service._get_props_for_market = AsyncMock(
+        return_value=_player_points_bookmakers(
+            [
+                ("Stephen Curry", "Over", 10.5),
+                ("Stephen Curry", "Under", 10.5),
+            ]
+        )
+    )
+    picks, _, _ = await service._analyze_single_event(
+        event_id="evt-1",
+        home_team="Los Angeles Lakers",
+        away_team="Golden State Warriors",
+        commence_time="2026-01-15T01:00:00Z",
+        projections={
+            "Stephen Curry": {
+                "team": "GSW",
+                "points": 28.0,
+                "opponent_rank": 12,
+                "opponent_position_rank": 7,
+            }
+        },
+        league="nba",
+    )
+    points = next(pick for pick in picks if pick.metric == "points")
+    assert points.position == "PG"
+    assert points.opponent_rank == 12
+    assert points.opponent_position_rank == 7
+    assert points.tier == "Strong play"
+    assert points.p_over == pytest.approx(1.0)
+    assert points.direction == "over"

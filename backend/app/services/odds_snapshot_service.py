@@ -373,6 +373,47 @@ class OddsSnapshotService:
         )
 
         bookmakers_data = snapshot.data.get("bookmakers", [])
+        return self.rows_from_bookmakers(
+            bookmakers_data,
+            event_id=event_id,
+            home_team=home_team,
+            away_team=away_team,
+            date=date,
+            snapshot_at=snapshot_at,
+        )
+
+    def rows_from_bookmakers(
+        self,
+        bookmakers_data: List[Dict[str, Any]],
+        *,
+        event_id: str,
+        home_team: str,
+        away_team: str,
+        date: str,
+        snapshot_at: datetime,
+    ) -> List[tuple]:
+        """Turn already-fetched bookmaker payloads into snapshot rows.
+
+        This is the pure parser ``_process_event`` uses after the gateway
+        returns. It does not call the Odds API, Redis, or Postgres. Tests
+        build ``odds_line_snapshots`` rows by calling it with recorded
+        fixtures. One bookmaker that posts several totals still becomes one
+        row: the last Over and the last Under in the payload are the pair
+        that is stored. Read-side ``_main_book_line`` is what collapses
+        extra stored rows for the same book.
+
+        Args:
+            bookmakers_data: Odds API ``bookmakers`` array, already fetched.
+            event_id: Event id written onto every row.
+            home_team: Home team name written onto every row.
+            away_team: Away team name written onto every row.
+            date: Game date, ``YYYY-MM-DD``.
+            snapshot_at: Timestamp shared by every row from this capture.
+
+        Returns:
+            Row tuples matching ``UPSERT_LINE_SQL`` parameters ``$1`` through
+            ``$14``.
+        """
         date_obj = datetime.strptime(date, "%Y-%m-%d").date()
         rows: List[tuple] = []
 
