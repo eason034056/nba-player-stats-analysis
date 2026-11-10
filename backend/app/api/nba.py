@@ -413,10 +413,11 @@ async def get_events(
             ]
         }
     """
-    # Handle date param: defaults to today
+    # Handle date param: defaults to today UTC. The detail route computes
+    # its own local date before calling here. This default stays UTC.
     if date is None:
         date = datetime.now(timezone.utc).strftime("%Y-%m-%d")
-    
+
     # Omitted tz_offset uses 480 (UTC+8), the same default as
     # GET /api/nba/daily-picks. top_read is loaded with
     # daily_picks:nba:{date}:tz{offset}, so a different default would miss
@@ -425,7 +426,16 @@ async def get_events(
     # JavaScript's getTimezoneOffset() returns "UTC - Local" minutes
     # (UTC+8 is -480). Callers should send the normal offset (UTC+8 is 480).
     offset_minutes = tz_offset if tz_offset is not None else 480
-    
+
+    # A string that matches YYYY-MM-DD can still be impossible (month 13).
+    # Reject it here, before the cache read and before the broad
+    # ``except Exception`` below, so the client gets a plain 422 and the
+    # parser message is not copied into the body.
+    try:
+        date_obj = datetime.strptime(date, "%Y-%m-%d")
+    except ValueError:
+        raise HTTPException(status_code=422, detail="Invalid date")
+
     # 1. Check cache (include timezone offset to distinguish different local time requests)
     cache_key = f"{CacheService.build_events_key(date, regions)}:tz{offset_minutes}"
     cached_data = await cache_service.get(cache_key)
@@ -447,8 +457,9 @@ async def get_events(
         # Example: If user is UTC-6 and selects "2026-01-17"
         # Local 2026-01-17 00:00:00 = UTC 2026-01-17 06:00:00
         # Local 2026-01-17 23:59:59 = UTC 2026-01-18 05:59:59
-        date_obj = datetime.strptime(date, "%Y-%m-%d")
-        
+        # date_obj was parsed above. One calendar day, then the existing
+        # ±1h window. No second day and no extra provider call.
+
         # Local 00:00:00 to UTC
         local_start = datetime.combine(date_obj.date(), datetime.min.time())
         utc_start = local_start - timedelta(minutes=offset_minutes)
@@ -539,9 +550,11 @@ async def get_events(
     request the list uses, then stores that list. This route does not
     call the per-event odds endpoint or the odds gateway.
 
-    Query date, regions, and tz_offset match GET /api/nba/events, so
-    the cache key matches. Omit them for the same defaults (today UTC,
-    us, timezone offset 480).
+    Pass the date and tz_offset you loaded this event with. Those two
+    values are what the list stored under, so the cache key matches.
+    If date is omitted, the default is the caller's local date: UTC now
+    plus tz_offset minutes. Omitted tz_offset is 480. regions defaults
+    to us. The list route still treats an omitted date as today UTC.
 
     A malformed event_id is HTTP 404 and the list is not read. The id
     rule is the same as GET /api/nba/events/{event_id}/props: 1–128
@@ -559,7 +572,11 @@ async def get_event(
     event_id: str,
     date: Optional[str] = Query(
         default=None,
-        description="Query date (YYYY-MM-DD), defaults to today. Same as GET /api/nba/events.",
+        description=(
+            "Local date (YYYY-MM-DD). Pass the date and tz_offset you "
+            "loaded this event with. Omitted date is the caller's local "
+            "date from tz_offset."
+        ),
         pattern=r"^\d{4}-\d{2}-\d{2}$",
     ),
     regions: str = Query(
@@ -579,12 +596,16 @@ async def get_event(
     ``get_event`` is the HTTP handler. The name is the singular of
     ``get_events``: one game, not the day's list. Call it as
     ``GET /api/nba/events/{event_id}``. Pass the same ``date``,
-    ``regions``, and ``tz_offset`` as the list so both share one cache
-    key.
+    ``regions``, and ``tz_offset`` the event was loaded with, so both
+    share one cache key. When ``date`` is omitted, the default is the
+    caller's local date from ``tz_offset`` (UTC now plus that many
+    minutes; omitted offset is 480). The list route's omitted date
+    stays today UTC.
 
     The handler checks the id with ``event_id_is_well_formed``, then
-    calls ``get_events``. That function reads Redis and, on a miss,
-    ``odds_provider.get_events``. It does not call ``odds_gateway``.
+    calls ``get_events`` once. That function reads Redis and, on a miss,
+    ``odds_provider.get_events`` for that one local day. It does not
+    call ``odds_gateway``, and it does not try the next day.
 
     Args:
         request: Incoming request. The slowapi limiter reads it. Same
@@ -592,19 +613,31 @@ async def get_event(
             (``settings.rate_limit_props``).
         event_id: Path id. Malformed ids and ids missing from that
             date's list are 404.
-        date: List date, or omitted for today UTC.
+        date: Local date YYYY-MM-DD. Pass the date you loaded this
+            event with. Omitted value is the caller's local date from
+            tz_offset.
         regions: Region code. Default ``us``.
-        tz_offset: Minutes east of UTC. Omitted uses 480.
+        tz_offset: Minutes east of UTC. Pass the offset you loaded this
+            event with. Omitted uses 480.
 
     Returns:
         The ``NBAEvent`` for this id on that date's list.
 
     Raises:
         HTTPException: 404 when the id is malformed or not on the list.
+            422 ``Invalid date`` when the calendar date is impossible.
             Odds API errors from the list path pass through.
     """
     if not event_id_is_well_formed(event_id):
         raise HTTPException(status_code=404, detail="Malformed event_id")
+
+    # Detail-only. get_events still treats an omitted date as today UTC.
+    # One local date, then one list read. No next-day fallback.
+    if date is None:
+        offset_minutes = tz_offset if tz_offset is not None else 480
+        date = (
+            datetime.now(timezone.utc) + timedelta(minutes=offset_minutes)
+        ).strftime("%Y-%m-%d")
 
     listing = await get_events(date=date, regions=regions, tz_offset=tz_offset)
     for event in listing.events:

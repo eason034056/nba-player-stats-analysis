@@ -156,12 +156,12 @@ async def test_previous_local_evening_game_is_not_on_next_local_date(client, mon
 
 
 @pytest.mark.asyncio
-async def test_omitted_date_is_utc_today_not_the_callers_local_day(client, monkeypatch):
-    """Pins current behavior: 19:30 CT on 11-10 is 01:30Z on 11-11.
+async def test_omitted_date_is_the_callers_local_day(client, monkeypatch):
+    """7:30 PM CT on 11-10 is 01:30Z on 11-11.
 
-    With date omitted the route searches 2026-11-11 in the caller's
-    offset, so that evening's BOS@PHI game (local 11-10) is 404. A caller
-    must send the local date it got the event from.
+    With date omitted and tz_offset=-360 the detail route searches the
+    caller's local date, 2026-11-10, once. BOS@PHI tips that evening.
+    It does not search 2026-11-11 and it does not call the provider again.
     """
     _freeze_utc_now(monkeypatch, real_datetime(2026, 11, 11, 1, 30, tzinfo=timezone.utc))
     calls = _Calls()
@@ -172,14 +172,21 @@ async def test_omitted_date_is_utc_today_not_the_callers_local_day(client, monke
         f"/api/nba/events/{_BOS_PHI['id']}", params={"tz_offset": -360}
     )
 
-    assert response.status_code == 404
-    assert f"{CacheService.build_events_key('2026-11-11', 'us')}:tz-360" in cache
+    local_key = f"{CacheService.build_events_key('2026-11-10', 'us')}:tz-360"
+    utc_key = f"{CacheService.build_events_key('2026-11-11', 'us')}:tz-360"
+    assert response.status_code == 200
+    assert response.json()["event_id"] == _BOS_PHI["id"]
+    assert local_key in cache
+    assert utc_key not in cache
+    assert len(calls.events) == 1
+    assert calls.gateway == 0 and calls.event_odds == 0
 
     with_date = await client.get(
         f"/api/nba/events/{_BOS_PHI['id']}",
         params={"date": "2026-11-10", "tz_offset": -360},
     )
     assert with_date.status_code == 200
+    assert len(calls.events) == 1
 
 
 # --- Cache key parity with the list route --------------------------------
@@ -308,6 +315,24 @@ async def test_unexpected_provider_error_is_500_and_nothing_is_cached(client, mo
 
 
 # --- Input validation -----------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_impossible_calendar_date_is_422(client, monkeypatch):
+    """2026-13-45 matches the digit pattern and is not a real day."""
+    calls = _Calls()
+    _install(monkeypatch, calls, {})
+    response = await client.get(
+        f"/api/nba/events/{_BOS_PHI['id']}", params={"date": "2026-13-45"}
+    )
+    assert response.status_code == 422
+    assert response.json()["detail"] == "Invalid date"
+    assert calls.events == [] and calls.cache_gets == []
+
+    listing = await client.get("/api/nba/events", params={"date": "2026-13-45"})
+    assert listing.status_code == 422
+    assert listing.json()["detail"] == "Invalid date"
+    assert calls.events == [] and calls.cache_gets == []
 
 
 @pytest.mark.asyncio
