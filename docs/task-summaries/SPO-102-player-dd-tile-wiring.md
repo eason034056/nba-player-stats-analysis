@@ -12,10 +12,10 @@
 | `frontend/lib/api.ts` | `getPlayerDDHistory` → `GET /api/nba/player-dd-history`. `getWNBAPlayerDDHistory` → `GET /api/wnba/player-dd-history`. Query params are `player` and optional `season`. No `threshold`. |
 | `frontend/lib/player-dd.ts` | Selects a book only when `yes_price` is a posted number. Ignores `over_*` / `under_*` and the `line` sentinel. History is shown only when `prob_dd` is present and `n_games` > 0. Percentages use half-up rounding. A snapshot older than 30 seconds, or one marked `cache_state: "stale"`, produces a stale-line warning. |
 | `frontend/lib/use-player-dd.ts` | TanStack Query hook. League `wnba` calls the WNBA clients; `nba` calls the NBA clients; any other league does not fetch. Odds stale time is 30s. |
-| `frontend/components/PlayerDDTile.tsx` | Fetches through the hook. Renders book Yes/No prices, implied and fair probabilities, consensus fair probability, historical `prob_dd`, the edge against fair Yes, and the stale-line warning. A blank player name, empty payload, null Yes fields, loading, and error each have an explicit state. `league` is required. |
+| `frontend/components/PlayerDDTile.tsx` | Fetches through the hook. Renders book Yes/No prices, implied and fair probabilities, consensus fair probability, historical `prob_dd`, the edge against fair Yes, and the stale-line warning. Consensus values use `text-green-800` because `text-dark` is `#ebf1fb` and disappears on the light green card. A blank player name, empty payload, null Yes fields, loading, and error each have an explicit state. `league` is required. |
 | `frontend/components/PlayerHistoryStats.tsx` | Passes `eventId`, league from `cacheNamespace`, and the DD history client into the tile. When no odds client is injected, `cacheNamespace: "wnba"` uses `calculateWNBANoVig`. The continuous `/player-history` query stays disabled for `dd`. The 0.5 line is not copied into the threshold box. |
 | `frontend/components/EventDetail.tsx` | NBA config uses `getPlayerDDHistory`; WNBA config uses `getWNBAPlayerDDHistory`. |
-| `frontend/components/PlayerDDTile.test.tsx` | Fixture-backed yes/no odds, null yes/no fields (the `-777` stand-in stays a control), empty history, history error, odds error, loading, missing event, blank player, stale snapshot, WNBA route selection, unsupported league. |
+| `frontend/components/PlayerDDTile.test.tsx` | Fixture-backed yes/no odds, null yes/no fields (the `-777` stand-in stays a control), empty history, history error, odds error, loading, missing event, blank player, stale snapshot, WNBA route selection, unsupported league. Consensus `67.9%` / `32.1%` must carry `text-green-800`. The 31-second warning is matched in full and must not say "game window". |
 | `frontend/components/PlayerHistoryStats.dd.test.tsx` | WNBA event page path uses the recorded Wilson history and the recorded no-vig fixture. With only `cacheNamespace="wnba"`, both fetches stay on `/api/wnba/`. |
 | `frontend/lib/player-dd-schema.test.ts` | Zod parse of the SPO-26 history body, a null `prob_dd`, binary yes/no rows, an Over/Under row that omits the new fields, and retention of `cache_state` / `data_age_seconds`. |
 | `frontend/test/test-utils.tsx` | Mounts `WnbaBetSlipProvider` beside the NBA slip, matching `app/providers.tsx`. Navbar and the pick menu call `useWnbaBetSlip`. |
@@ -51,7 +51,7 @@ The warning names the age of the odds response. It does not say a game is underw
 - `npx tsc --noEmit` — passed.
 - `npm run lint` — passed.
 - Integration test: SKIPPED (no new external API client; the tile calls the existing backend routes).
-- Manual: the populated screenshot is the recorded Jokic fixture (`jokic.json` and `player-double-double.json`): 81.3% (61 of 75 games), DraftKings -250 / +200, FanDuel No price unavailable, FanDuel fair Yes 67.6%, consensus 67.9% / 32.1%, edge +13.5 pts. The empty screenshot is the unavailable history and odds state and was already current, so it was left in place.
+- Manual: the populated screenshot is the recorded Jokic fixture (`jokic.json` and `player-double-double.json`): 81.3% (61 of 75 games), DraftKings -250 / +200, FanDuel No price unavailable, FanDuel fair Yes 67.6%, consensus 67.9% / 32.1% in dark green, edge +13.5 pts. The empty screenshot is the unavailable history and odds state and was already current, so it was left in place.
 
 Screenshots:
 
