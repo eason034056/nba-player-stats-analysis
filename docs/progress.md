@@ -1,6 +1,6 @@
 # Sports Lab Progress
 
-> Engineers update the row for their ticket in the pull request that changes that ticket. This file is a snapshot of ticket state, not a heartbeat log. Last updated: **2026-11-10** (SPO-106 row, after merging `origin/dev` at `63d309e`). Facts below were checked against `docs/task-summaries/`, `git log` on `dev`, and `gh pr list --base dev`. Titles that were not in those sources are left blank.
+> Engineers update the row for their ticket in the pull request that changes that ticket. This file is a snapshot of ticket state, not a heartbeat log. Last updated: **2026-11-10** (SPO-105 on `dev`; SPO-107 added under In flight; SPO-110a; SPO-110c). Facts below were checked against `docs/task-summaries/`, `git log` on `dev`, and `gh pr list --base dev`. Titles that were not in those sources are left blank.
 
 ## Shipped
 
@@ -111,7 +111,6 @@ Stale pull requests the owner is closing. Not merged.
 | SPO-107 | Harness game types match production regular season. Playoffs and play-in are a separate report section. Open on `feature/SPO-107-harness-gametype-parity`. Entry below. |
 | SPO-102 | Wire `PlayerDDTile` to double-double history and yes/no odds. Open on `feature/SPO-102-player-dd-tile-wiring`. Summary: `docs/task-summaries/SPO-102-player-dd-tile-wiring.md`. |
 | SPO-103 | SPO-10 Phase 5 final review. Open. |
-| SPO-106 | Recorded NBA Odds API fixtures for unit tests. Draft on `feature/SPO-106-recorded-odds-fixtures`. `player_points`, the NBA events list, and `odds_api_event_odds__nba_expanded_markets.json` (Celtics at 76ers, 2026-11-10) load through `tests.fixtures.odds_api`. Rebounds Under-only and double-double Yes use that file. FTM, FGM, and double-double No stay inline because the recording did not post those sides. WNBA fixture work is deferred while WNBA work is paused. Summary: `docs/task-summaries/SPO-106-recorded-odds-fixtures.md`. |
 
 ### SPO-107 — harness game-type parity
 
