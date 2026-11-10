@@ -42,6 +42,37 @@ def test_guard_passes_inside_the_threshold():
     assert summary.calibration_gap < 0.15
 
 
+def test_guard_fails_when_combined_probability_is_miscalibrated():
+    # The published probability is inside the bounds. combined_probability is not.
+    rows = []
+    for index in range(40):
+        hit = 1 if index % 2 == 0 else 0
+        row = _Row(0.60, hit)
+        row.combined_probability = 0.95
+        rows.append(row)
+    summary = summarize(rows)
+    assert summary.brier < 0.30
+    assert summary.calibration_gap < 0.15
+    assert summary.combined_n == 40
+    result = evaluate_guard(
+        [("nba", summary)], Thresholds(max_brier=0.30, max_calibration_gap=0.15)
+    )
+    assert result.ok is False
+    assert any("combined_probability" in item for item in result.failures)
+    assert "FAIL nba combined_probability" in result.message
+
+
+def test_guard_skips_combined_probability_when_the_column_is_empty():
+    rows = [_Row(0.60, 1 if index % 2 == 0 else 0) for index in range(40)]
+    summary = summarize(rows)
+    assert summary.combined_n == 0
+    result = evaluate_guard(
+        [("wnba", summary)], Thresholds(max_brier=0.30, max_calibration_gap=0.15)
+    )
+    assert result.ok is True
+    assert "skip wnba combined_probability: n=0" in result.message
+
+
 def test_sample_walk_forward_stays_within_the_default_thresholds():
     # The default sample is 40 players per league, seed 7. That is the CI check.
     result = run_sample_guard(seed=7)

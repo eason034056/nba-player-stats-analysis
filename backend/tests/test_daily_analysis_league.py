@@ -411,3 +411,5 @@ class TestRunDailyAnalysisLeagueRouting:
         # Pick was generated from WNBA history (74% > 65% threshold).
         assert result.picks[0].player_name == "A'ja Wilson"
         assert result.picks[0].probability == pytest.approx(0.74, abs=1e-6)
+        assert result.picks[0].signals is None
+        assert result.picks[0].combined_probability is None
