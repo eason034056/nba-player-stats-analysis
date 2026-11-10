@@ -1,6 +1,6 @@
 # Sports Lab Progress
 
-> Engineers update the row for their ticket in the pull request that changes that ticket. This file is a snapshot of ticket state, not a heartbeat log. Last updated: **2026-11-10** (SPO-105 on `dev`; SPO-107 added under In flight). Facts below were checked against `docs/task-summaries/`, `git log` on `dev`, and `gh pr list --base dev`. Titles that were not in those sources are left blank.
+> Engineers update the row for their ticket in the pull request that changes that ticket. This file is a snapshot of ticket state, not a heartbeat log. Last updated: **2026-11-10** (SPO-105 on `dev`; SPO-107 added under In flight; SPO-110a). Facts below were checked against `docs/task-summaries/`, `git log` on `dev`, and `gh pr list --base dev`. Titles that were not in those sources are left blank.
 
 ## Shipped
 
@@ -103,6 +103,7 @@ Stale pull requests the owner is closing. Not merged.
 
 | Ticket | Note |
 |---|---|
+| SPO-110a | Design tokens, app shell, and the Today page (NBA and WNBA). Open on `feature/SPO-110a-design-system-shell-today`. PR into `dev`. Summary: `docs/task-summaries/SPO-110a-design-system-shell-today.md`. Picks, Bet Slip, and Method stay on their current pages until PR C. |
 | SPO-96 | This docs rewrite (`feature/SPO-96-claude-md-workflow-rewrite`). |
 | SPO-104 | One-sided DD quotes (`under_odds` / `p_under_imp` null, including a JSON null No price; `line_is_synthetic`, `market_kind`, `uses_prior`), league-scoped team codes, and the SPO-97 schedule-index follow-ups. Lands with #36. PR #37 into `dev`. Summary: `docs/task-summaries/SPO-104-dd-one-sided-and-followups.md`. |
 | SPO-107 | Harness game types match production regular season. Playoffs and play-in are a separate report section. Open on `feature/SPO-107-harness-gametype-parity`. Entry below. |

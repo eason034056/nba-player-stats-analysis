@@ -409,7 +409,7 @@ export default function WNBAPlayerPage() {
                         </td>
                         <td
                           className={`py-2 text-right font-semibold ${
-                            g.is_over ? "text-green-600" : "text-slate-400"
+                            g.is_over ? "text-green-800" : "text-muted"
                           }`}
                         >
                           {g.is_over ? "Over" : "Under"}

@@ -43,41 +43,41 @@ const AnalysisContent = ({
   return (
     <div className="space-y-4">
       <div>
-        <p className="text-[10px] uppercase tracking-[0.22em] text-light">
+        <p className="text-[10px] uppercase tracking-[0.22em] text-on-dark-muted">
           Market snapshot
         </p>
         {verdict ? (
           <div className="mt-3 grid grid-cols-2 gap-2 text-sm">
             <div className="rounded-[16px] border border-white/8 bg-white/5 px-3 py-2">
-              <p className="text-[10px] uppercase tracking-[0.18em] text-light">Model</p>
-              <p className="mt-1 font-semibold text-dark">
+              <p className="text-[10px] uppercase tracking-[0.18em] text-on-dark-muted">Model</p>
+              <p className="mt-1 font-semibold text-on-dark">
                 {formatPct(verdict.model_probability)}
               </p>
             </div>
             <div className="rounded-[16px] border border-white/8 bg-white/5 px-3 py-2">
-              <p className="text-[10px] uppercase tracking-[0.18em] text-light">Market</p>
-              <p className="mt-1 font-semibold text-dark">
+              <p className="text-[10px] uppercase tracking-[0.18em] text-on-dark-muted">Market</p>
+              <p className="mt-1 font-semibold text-on-dark">
                 {formatPct(verdict.market_implied_probability)}
               </p>
             </div>
             <div className="rounded-[16px] border border-white/8 bg-white/5 px-3 py-2">
-              <p className="text-[10px] uppercase tracking-[0.18em] text-light">EV</p>
-              <p className="mt-1 font-semibold text-dark">
+              <p className="text-[10px] uppercase tracking-[0.18em] text-on-dark-muted">EV</p>
+              <p className="mt-1 font-semibold text-on-dark">
                 {formatPct(verdict.expected_value_pct)}
               </p>
             </div>
             <div className="rounded-[16px] border border-white/8 bg-white/5 px-3 py-2">
-              <p className="text-[10px] uppercase tracking-[0.18em] text-light">Decision</p>
-              <p className="mt-1 font-semibold uppercase text-dark">{verdict.decision}</p>
+              <p className="text-[10px] uppercase tracking-[0.18em] text-on-dark-muted">Decision</p>
+              <p className="mt-1 font-semibold uppercase text-on-dark">{verdict.decision}</p>
             </div>
             {isLineMoved ? (
               <div className="col-span-2 rounded-[16px] border border-yellow-400/25 bg-yellow-400/10 px-3 py-2">
-                <p className="text-[10px] uppercase tracking-[0.18em] text-yellow-700">Line moved</p>
-                <p className="mt-1 font-semibold text-dark">
+                <p className="text-[10px] uppercase tracking-[0.18em] text-accent">Line moved</p>
+                <p className="mt-1 font-semibold text-on-dark">
                   Original {verdict.queried_line ?? "N/A"} {"->"} Live {verdict.best_line ?? "N/A"}
                 </p>
                 {verdict.available_lines.length > 0 ? (
-                  <p className="mt-1 text-xs text-gray">
+                  <p className="mt-1 text-xs text-on-dark-muted">
                     Available lines: {verdict.available_lines.join(", ")}
                   </p>
                 ) : null}
@@ -85,39 +85,39 @@ const AnalysisContent = ({
             ) : null}
           </div>
         ) : (
-          <div className="mt-3 rounded-[18px] border border-white/8 bg-white/5 px-3 py-3 text-sm text-gray">
+          <div className="mt-3 rounded-[18px] border border-white/8 bg-white/5 px-3 py-3 text-sm text-on-dark-muted">
             Ask for a verdict to populate the market snapshot.
           </div>
         )}
       </div>
 
       <div>
-        <p className="text-[10px] uppercase tracking-[0.22em] text-light">Context</p>
+        <p className="text-[10px] uppercase tracking-[0.22em] text-on-dark-muted">Context</p>
         <div className="mt-3 space-y-2">
           {selectedPickContext ? (
             <div className="rounded-[18px] border border-white/8 bg-white/5 px-3 py-3">
-              <p className="text-sm font-semibold text-dark">
+              <p className="text-sm font-semibold text-on-dark">
                 {selectedPickContext.player_name} {selectedPickContext.metric}{" "}
                 {selectedPickContext.direction} {selectedPickContext.threshold}
               </p>
-              <p className="mt-1 text-sm text-gray">
+              <p className="mt-1 text-sm text-on-dark-muted">
                 {selectedPickContext.away_team} at {selectedPickContext.home_team}
               </p>
             </div>
           ) : null}
           <div className="rounded-[18px] border border-white/8 bg-white/5 px-3 py-3">
-            <p className="text-sm font-semibold text-dark">
+            <p className="text-sm font-semibold text-on-dark">
               {pageContext.date ? `Board for ${pageContext.date}` : "Current board"}
             </p>
-            <p className="mt-1 text-sm text-gray">
+            <p className="mt-1 text-sm text-on-dark-muted">
               {pageContext.selected_teams.length > 0
                 ? `${pageContext.selected_teams.length} team filter${pageContext.selected_teams.length > 1 ? "s" : ""}`
                 : "No active team filters"}
             </p>
           </div>
           <div className="rounded-[18px] border border-white/8 bg-white/5 px-3 py-3">
-            <p className="text-sm font-semibold text-dark">Slip status</p>
-            <p className="mt-1 text-sm text-gray">
+            <p className="text-sm font-semibold text-on-dark">Slip status</p>
+            <p className="mt-1 text-sm text-on-dark-muted">
               {slipCount > 0 ? `${slipCount} saved picks` : "No saved picks yet"}
             </p>
           </div>
@@ -125,14 +125,14 @@ const AnalysisContent = ({
       </div>
 
       <div>
-        <p className="text-[10px] uppercase tracking-[0.22em] text-light">Risk note</p>
-        <div className="mt-3 rounded-[18px] border border-white/8 bg-white/5 px-3 py-3 text-sm text-gray">
+        <p className="text-[10px] uppercase tracking-[0.22em] text-on-dark-muted">Risk note</p>
+        <div className="mt-3 rounded-[18px] border border-white/8 bg-white/5 px-3 py-3 text-sm text-on-dark-muted">
           {riskNote ?? "Open analysis after a verdict to see the highest-risk note here."}
         </div>
       </div>
 
       <div>
-        <p className="text-[10px] uppercase tracking-[0.22em] text-light">Breakdown</p>
+        <p className="text-[10px] uppercase tracking-[0.22em] text-on-dark-muted">Breakdown</p>
         <div className="mt-3">
           <AgentVerdictBreakdown
             breakdown={verdict?.breakdown}
@@ -143,21 +143,21 @@ const AnalysisContent = ({
       </div>
 
       <div>
-        <p className="text-[10px] uppercase tracking-[0.22em] text-light">Lineup Context</p>
+        <p className="text-[10px] uppercase tracking-[0.22em] text-on-dark-muted">Lineup Context</p>
         <div className="mt-3 space-y-2">
           {lineupContext ? (
             <>
-              <div className="rounded-[18px] border border-white/8 bg-white/5 px-3 py-3 text-sm text-gray">
+              <div className="rounded-[18px] border border-white/8 bg-white/5 px-3 py-3 text-sm text-on-dark-muted">
                 {lineupContext.summary || "Lineup context is unavailable."}
               </div>
               <div className="grid grid-cols-1 gap-2">
                 {lineupContext.player_team ? (
                   <div className="rounded-[18px] border border-white/8 bg-white/5 px-3 py-3">
-                    <p className="text-sm font-semibold text-dark">Player team</p>
-                    <p className="mt-1 text-sm text-gray">
+                    <p className="text-sm font-semibold text-on-dark">Player team</p>
+                    <p className="mt-1 text-sm text-on-dark-muted">
                       {lineupContext.player_team.team} · {lineupContext.player_team.confidence ?? "n/a"} confidence
                     </p>
-                    <p className="mt-1 text-xs text-gray">
+                    <p className="mt-1 text-xs text-on-dark-muted">
                       {lineupContext.player_team.player_is_projected_starter
                         ? "Player remains in the projected starting five."
                         : "Player is not locked into the projected starting five."}
@@ -166,11 +166,11 @@ const AnalysisContent = ({
                 ) : null}
                 {lineupContext.opponent_team ? (
                   <div className="rounded-[18px] border border-white/8 bg-white/5 px-3 py-3">
-                    <p className="text-sm font-semibold text-dark">Opponent team</p>
-                    <p className="mt-1 text-sm text-gray">
+                    <p className="text-sm font-semibold text-on-dark">Opponent team</p>
+                    <p className="mt-1 text-sm text-on-dark-muted">
                       {lineupContext.opponent_team.team} · {lineupContext.opponent_team.confidence ?? "n/a"} confidence
                     </p>
-                    <p className="mt-1 text-xs text-gray">
+                    <p className="mt-1 text-xs text-on-dark-muted">
                       {lineupContext.opponent_team.source_disagreement
                         ? "Lineup context still moving."
                         : "Sources are aligned for the opponent lineup."}
@@ -180,7 +180,7 @@ const AnalysisContent = ({
               </div>
             </>
           ) : (
-            <div className="rounded-[18px] border border-white/8 bg-white/5 px-3 py-3 text-sm text-gray">
+            <div className="rounded-[18px] border border-white/8 bg-white/5 px-3 py-3 text-sm text-on-dark-muted">
               Open analysis after a verdict to see lineup context here.
             </div>
           )}
@@ -212,15 +212,15 @@ export const AgentWidgetAnalysisPanel = ({
       <aside className="w-[20rem] border-l border-white/8 bg-[rgba(7,13,24,0.7)] p-5 backdrop-blur-xl">
         <div className="mb-4 flex items-center justify-between gap-3">
           <div>
-            <p className="text-[10px] uppercase tracking-[0.24em] text-light">
+            <p className="text-[10px] uppercase tracking-[0.24em] text-on-dark-muted">
               Analysis
             </p>
-            <h3 className="mt-2 text-lg font-semibold text-dark">Market snapshot</h3>
+            <h3 className="mt-2 text-lg font-semibold text-on-dark">Market snapshot</h3>
           </div>
           <button
             type="button"
             onClick={onClose}
-            className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-white/10 bg-white/5 text-light transition-colors hover:bg-white/10"
+            className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-white/10 bg-white/5 text-on-dark-muted transition-colors hover:bg-white/10"
             aria-label="Close analysis"
           >
             <X className="h-4 w-4" />
@@ -239,13 +239,13 @@ export const AgentWidgetAnalysisPanel = ({
     >
       <div className="mb-4 flex items-center justify-between gap-3">
         <div>
-          <p className="text-[10px] uppercase tracking-[0.24em] text-light">Analysis</p>
-          <h3 className="mt-2 text-lg font-semibold text-dark">Market snapshot</h3>
+          <p className="text-[10px] uppercase tracking-[0.24em] text-on-dark-muted">Analysis</p>
+          <h3 className="mt-2 text-lg font-semibold text-on-dark">Market snapshot</h3>
         </div>
         <button
           type="button"
           onClick={onClose}
-          className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-white/10 bg-white/5 text-light transition-colors hover:bg-white/10"
+          className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-white/10 bg-white/5 text-on-dark-muted transition-colors hover:bg-white/10"
           aria-label="Close analysis"
         >
           <X className="h-4 w-4" />

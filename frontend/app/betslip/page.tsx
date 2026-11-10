@@ -144,7 +144,7 @@ function BetSlipCard({
             <div className={`
               px-3 py-1.5 rounded-lg text-sm font-bold
               ${pick.direction === "over"
-                ? "bg-green-500/10 text-green-600 border border-green-500/30"
+                ? "bg-green-800/10 text-green-800 border border-green-500/30"
                 : "bg-blue-500/10 text-blue-600 border border-blue-500/30"
               }
             `}>
@@ -153,11 +153,11 @@ function BetSlipCard({
             
             <div className="flex items-center gap-2">
               {level === "high" && (
-                <Flame className="w-4 h-4 text-green-500" />
+                <Flame className="w-4 h-4 text-green-800" />
               )}
               <span className={`
                 text-2xl font-mono font-bold
-                ${level === "high" ? "text-green-500" : "text-yellow"}
+                ${level === "high" ? "text-green-800" : "text-yellow"}
               `}>
                 {formatProbability(pick.probability)}
               </span>
@@ -796,8 +796,8 @@ export default function BetSlipPage() {
                 >
                   {copySuccess ? (
                     <>
-                      <Check className="w-4 h-4 text-green-500" />
-                      <span className="text-green-500">Copied!</span>
+                      <Check className="w-4 h-4 text-green-800" />
+                      <span className="text-green-800">Copied!</span>
                     </>
                   ) : (
                     <>

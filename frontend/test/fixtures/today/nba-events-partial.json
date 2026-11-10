@@ -1,0 +1,12 @@
+{
+  "date": "2026-11-10",
+  "events": [
+    {
+      "event_id": "heat-bucks",
+      "sport_key": "basketball_nba",
+      "home_team": "Milwaukee Bucks",
+      "away_team": "Miami Heat",
+      "commence_time": ""
+    }
+  ]
+}

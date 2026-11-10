@@ -1,0 +1,1188 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<template id="__bundler_thumbnail"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><rect width="100" height="100" fill="#3E0F8D"/><text x="50" y="62" font-family="monospace" font-weight="700" font-size="30" text-anchor="middle" fill="#E4DA72">NV</text></svg></template>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Instrument+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@500;600;700&display=swap" rel="stylesheet">
+<style>
+html,body{margin:0;padding:0;background:#DCDADF;}
+*{box-sizing:border-box;}
+a{color:#3E0F8D;}
+a:hover{color:#9564DD;}
+input::placeholder{color:#8A8496;}
+@keyframes nvpulse{0%,100%{opacity:.3}50%{opacity:1}}
+</style>
+</helmet>
+
+<div style="min-height:100vh; display:flex; flex-direction:column; align-items:center; font-family:'Instrument Sans', system-ui, sans-serif; color:#1D1530;">
+  <div style="width:100%; display:flex; align-items:center; justify-content:space-between; gap:16px; padding:10px 20px; flex-wrap:wrap;">
+    <div style="font-size:13px; color:#4A4458; font-weight:600;">No-Vig NBA · redesign prototype</div>
+    <div style="display:flex; gap:4px; padding:4px; background:#FFFFFF; border-radius:999px; border:1px solid #CFCAD6;">
+      <sc-for list="{{ deviceTabs }}" as="d" hint-placeholder-count="2">
+        <button onClick="{{ d.onClick }}" style="border:none; cursor:pointer; padding:7px 16px; border-radius:999px; font:600 13px 'Instrument Sans', sans-serif; background:{{ d.bg }}; color:{{ d.fg }};">{{ d.label }}</button>
+      </sc-for>
+    </div>
+  </div>
+
+  <div style="position:relative; overflow:hidden; display:flex; flex-direction:column; background:#EEEEEE; width:{{ frameW }}; height:{{ frameH }}; border-radius:{{ frameR }}; border:{{ frameBorder }}; box-shadow:{{ frameShadow }};">
+
+    <sc-if value="{{ isWeb }}" hint-placeholder-val="{{ true }}">
+      <header style="flex:none; display:flex; align-items:center; justify-content:space-between; gap:24px; padding:0 32px; height:68px; background:#FFFFFF; border-bottom:1px solid #DEDAE5;">
+        <div onClick="{{ goToday }}" style="display:flex; align-items:center; gap:10px; cursor:pointer;">
+          <div style="width:34px; height:34px; border-radius:10px; background:#3E0F8D; color:#E4DA72; display:flex; align-items:center; justify-content:center; font:700 13px 'JetBrains Mono', monospace;">NV</div>
+          <div style="font-weight:700; font-size:18px; letter-spacing:-0.02em;">No-Vig</div>
+          <div style="font:700 11px 'JetBrains Mono', monospace; padding:3px 7px; border-radius:6px; background:#ECE6F7; color:#3E0F8D;">NBA</div>
+        </div>
+        <nav style="display:flex; gap:4px;">
+          <sc-for list="{{ navItems }}" as="n" hint-placeholder-count="4">
+            <button onClick="{{ n.onClick }}" style="border:none; cursor:pointer; display:flex; align-items:center; gap:8px; padding:9px 16px; border-radius:999px; font:600 14px 'Instrument Sans', sans-serif; background:{{ n.bg }}; color:{{ n.fg }};">
+              <span>{{ n.label }}</span>
+              <sc-if value="{{ n.hasBadge }}"><span style="min-width:20px; height:20px; padding:0 6px; border-radius:999px; background:#E4DA72; color:#2A0A60; font:700 11px 'JetBrains Mono', monospace; display:flex; align-items:center; justify-content:center;">{{ n.badge }}</span></sc-if>
+            </button>
+          </sc-for>
+        </nav>
+        <button onClick="{{ openAgentBlank }}" style="border:none; cursor:pointer; padding:10px 18px; border-radius:999px; background:#3E0F8D; color:#FFFFFF; font:600 14px 'Instrument Sans', sans-serif;" style-hover="background:#2F0A6E;">Ask the agent</button>
+      </header>
+    </sc-if>
+
+    <sc-if value="{{ isMobile }}" hint-placeholder-val="{{ false }}">
+      <header style="flex:none; display:flex; align-items:center; justify-content:space-between; padding:14px 16px 12px; background:#FFFFFF; border-bottom:1px solid #DEDAE5;">
+        <div onClick="{{ goToday }}" style="display:flex; align-items:center; gap:8px; cursor:pointer;">
+          <div style="width:30px; height:30px; border-radius:9px; background:#3E0F8D; color:#E4DA72; display:flex; align-items:center; justify-content:center; font:700 12px 'JetBrains Mono', monospace;">NV</div>
+          <div style="font-weight:700; font-size:17px; letter-spacing:-0.02em;">No-Vig</div>
+          <div style="font:700 10px 'JetBrains Mono', monospace; padding:3px 6px; border-radius:6px; background:#ECE6F7; color:#3E0F8D;">NBA</div>
+        </div>
+        <button onClick="{{ openAgentBlank }}" style="border:none; cursor:pointer; padding:9px 14px; min-height:40px; border-radius:999px; background:#3E0F8D; color:#FFFFFF; font:600 13px 'Instrument Sans', sans-serif;">Ask agent</button>
+      </header>
+    </sc-if>
+
+    <div ref="{{ scrollRef }}" data-nv-scroll="1" style="flex:1; overflow-y:auto; container-type:inline-size;">
+      <div style="max-width:1200px; margin:0 auto; padding:clamp(16px, 3.4cqi, 40px); padding-bottom:56px; display:flex; flex-direction:column; gap:clamp(20px, 3cqi, 32px);">
+
+        <!-- TODAY -->
+        <sc-if value="{{ isToday }}" hint-placeholder-val="{{ true }}">
+        <sc-if value="{{ isWeb }}" hint-placeholder-val="{{ true }}">
+          <section data-screen-label="Today" style="background:#3E0F8D; color:#FFFFFF; border-radius:28px; padding:clamp(22px, 4cqi, 44px); display:flex; flex-direction:column; gap:28px;">
+            <div style="display:flex; flex-wrap:wrap; justify-content:space-between; align-items:flex-end; gap:20px;">
+              <div style="display:flex; flex-direction:column; gap:12px; max-width:620px;">
+                <div style="font:600 12px 'JetBrains Mono', monospace; letter-spacing:0.12em; color:#E4DA72;">TUE · NOV 10 · 6 GAMES</div>
+                <h1 style="margin:0; font-size:clamp(34px, 6cqi, 60px); line-height:1; letter-spacing:-0.035em; font-weight:700;">Tonight’s best reads</h1>
+                <p style="margin:0; font-size:clamp(15px, 1.6cqi, 17px); line-height:1.55; color:#E6DDF6; text-wrap:pretty;">Each prop gets one probability, built from market prices, recent form, projection and matchup. Start with the strongest calls, or open any game.</p>
+              </div>
+              <div style="display:flex; gap:10px; flex-wrap:wrap; flex:none;">
+                <button onClick="{{ goPicks }}" style="border:none; cursor:pointer; padding:12px 20px; min-height:44px; border-radius:999px; background:#E4DA72; color:#2A0A60; font:700 14px 'Instrument Sans', sans-serif; white-space:nowrap;">All {{ picksCount }} picks →</button>
+                <button onClick="{{ openAgentBlank }}" style="cursor:pointer; padding:12px 20px; min-height:44px; border-radius:999px; background:transparent; color:#FFFFFF; border:1px solid rgba(255,255,255,0.4); font:600 14px 'Instrument Sans', sans-serif; white-space:nowrap;">Ask the agent</button>
+              </div>
+            </div>
+            <div style="display:grid; grid-template-columns:repeat(auto-fill, minmax(min(100%, 260px), 1fr)); gap:12px;">
+              <sc-for list="{{ topPicks }}" as="t" hint-placeholder-count="3">
+                <div onClick="{{ t.onClick }}" style="cursor:pointer; display:flex; flex-direction:column; gap:14px; padding:18px; border-radius:20px; background:rgba(255,255,255,0.08); border:1px solid rgba(255,255,255,0.16);" style-hover="background:rgba(255,255,255,0.14);">
+                  <div style="display:flex; justify-content:space-between; align-items:center; gap:10px;">
+                    <div style="font:700 11px 'JetBrains Mono', monospace; color:#E4DA72;">#{{ t.rank }}</div>
+                    <div style="font:700 11px 'Instrument Sans', sans-serif; padding:4px 9px; border-radius:999px; background:{{ t.tierBg }}; color:{{ t.tierFg }};">{{ t.tierLabel }}</div>
+                  </div>
+                  <div>
+                    <div style="font-size:17px; font-weight:700; letter-spacing:-0.01em;">{{ t.player }}</div>
+                    <div style="font-size:13px; color:#D9CEF0; margin-top:2px;">{{ t.matchup }}</div>
+                  </div>
+                  <div style="display:flex; justify-content:space-between; align-items:flex-end; gap:10px;">
+                    <div style="font-size:15px; font-weight:600;">{{ t.propText }}</div>
+                    <div style="font:700 30px 'JetBrains Mono', monospace; color:#E4DA72; line-height:1;">{{ t.probText }}</div>
+                  </div>
+                </div>
+              </sc-for>
+            </div>
+          </section>
+
+          <section style="display:flex; flex-direction:column; gap:16px;">
+            <div style="display:flex; justify-content:space-between; align-items:baseline; gap:12px; flex-wrap:wrap;">
+              <h2 style="margin:0; font-size:24px; letter-spacing:-0.02em;">Games</h2>
+              <div style="font-size:13px; color:#625B70;">Tap a game to check any player prop</div>
+            </div>
+            <div style="display:grid; grid-template-columns:repeat(auto-fill, minmax(min(100%, 330px), 1fr)); gap:14px;">
+              <sc-for list="{{ games }}" as="g" hint-placeholder-count="6">
+                <div onClick="{{ g.onClick }}" style="cursor:pointer; background:#FFFFFF; border:1px solid #DEDAE5; border-radius:22px; padding:20px; display:flex; flex-direction:column; gap:18px;" style-hover="border-color:#9564DD;">
+                  <div style="display:flex; align-items:center; justify-content:space-between; gap:12px;">
+                    <div style="display:flex; align-items:center; gap:10px; flex:1; min-width:0;">
+                      <div style="flex:none; width:42px; height:42px; border-radius:50%; border:1px solid #DEDAE5; display:flex; align-items:center; justify-content:center; font:700 12px 'JetBrains Mono', monospace; color:#3E0F8D;">{{ g.away }}</div>
+                      <div style="min-width:0;"><div style="font-weight:700; font-size:15px;">{{ g.awayName }}</div><div style="font-size:12px; color:#625B70;">Away</div></div>
+                    </div>
+                    <div style="font:600 12px 'JetBrains Mono', monospace; color:#625B70; padding:6px 10px; border-radius:999px; background:#F3F1F6;">{{ g.time }}</div>
+                    <div style="display:flex; align-items:center; gap:10px; flex:1; min-width:0; justify-content:flex-end; text-align:right;">
+                      <div style="min-width:0;"><div style="font-weight:700; font-size:15px;">{{ g.homeName }}</div><div style="font-size:12px; color:#625B70;">Home</div></div>
+                      <div style="flex:none; width:42px; height:42px; border-radius:50%; border:1px solid #DEDAE5; display:flex; align-items:center; justify-content:center; font:700 12px 'JetBrains Mono', monospace; color:#3E0F8D;">{{ g.home }}</div>
+                    </div>
+                  </div>
+                  <div style="display:flex; align-items:center; justify-content:space-between; gap:12px; padding-top:14px; border-top:1px solid #EEEBF2;">
+                    <div style="min-width:0;">
+                      <div style="font-size:11px; font-weight:600; letter-spacing:0.08em; text-transform:uppercase; color:#625B70;">Top read</div>
+                      <div style="font-size:14px; font-weight:600; margin-top:3px;">{{ g.topText }}</div>
+                    </div>
+                    <div style="flex:none; font:700 14px 'JetBrains Mono', monospace; padding:6px 10px; border-radius:10px; background:{{ g.tierBg }}; color:{{ g.tierFg }};">{{ g.topProb }}</div>
+                  </div>
+                </div>
+              </sc-for>
+            </div>
+          </section>
+        </sc-if>
+        <sc-if value="{{ isMobile }}" hint-placeholder-val="{{ false }}">
+          <section data-screen-label="Today (mobile)" style="display:flex; flex-direction:column; gap:14px;">
+            <div style="display:flex; flex-direction:column; gap:6px;">
+              <div style="font:600 11px 'JetBrains Mono', monospace; letter-spacing:0.12em; color:#7B4FC4;">TUE · NOV 10 · 6 GAMES</div>
+              <h1 style="margin:0; font-size:30px; line-height:1.05; letter-spacing:-0.03em;">Tonight’s best reads</h1>
+            </div>
+            <div style="display:flex; gap:10px; overflow-x:auto; scroll-snap-type:x mandatory; scroll-padding:0 16px; margin:0 -16px; padding:0 16px 4px; scrollbar-width:none;">
+              <sc-for list="{{ topPicks }}" as="t" hint-placeholder-count="3">
+                <div onClick="{{ t.onClick }}" style="flex:0 0 82%; scroll-snap-align:start; cursor:pointer; display:flex; flex-direction:column; gap:14px; padding:16px; border-radius:20px; background:#3E0F8D; color:#FFFFFF;">
+                  <div style="display:flex; justify-content:space-between; align-items:center;">
+                    <div style="font:700 11px 'JetBrains Mono', monospace; color:#E4DA72;">#{{ t.rank }}</div>
+                    <div style="font:700 11px 'Instrument Sans', sans-serif; padding:4px 9px; border-radius:999px; background:{{ t.tierBg }}; color:{{ t.tierFg }};">{{ t.tierLabel }}</div>
+                  </div>
+                  <div><div style="font-size:17px; font-weight:700;">{{ t.player }}</div><div style="font-size:12px; color:#D9CEF0; margin-top:2px;">{{ t.matchup }}</div></div>
+                  <div style="display:flex; justify-content:space-between; align-items:flex-end; gap:10px;">
+                    <div style="font-size:15px; font-weight:600;">{{ t.propText }}</div>
+                    <div style="font:700 30px 'JetBrains Mono', monospace; color:#E4DA72; line-height:1;">{{ t.probText }}</div>
+                  </div>
+                </div>
+              </sc-for>
+            </div>
+            <button onClick="{{ goPicks }}" style="cursor:pointer; min-height:48px; border-radius:14px; background:#FFFFFF; border:1px solid #D3CCDF; color:#3E0F8D; font:700 14px 'Instrument Sans', sans-serif;">See all {{ picksCount }} picks →</button>
+          </section>
+          <section style="display:flex; flex-direction:column; gap:10px;">
+            <h2 style="margin:0; font-size:20px; letter-spacing:-0.02em;">Games</h2>
+            <div style="display:flex; flex-direction:column; gap:1px; background:#E6E2EC; border:1px solid #DEDAE5; border-radius:20px; overflow:hidden;">
+              <sc-for list="{{ games }}" as="g" hint-placeholder-count="6">
+                <div onClick="{{ g.onClick }}" style="cursor:pointer; background:#FFFFFF; display:flex; align-items:center; gap:12px; padding:14px 14px 14px 16px; min-height:64px;">
+                  <div style="flex:1; min-width:0; display:flex; flex-direction:column; gap:5px;">
+                    <div style="display:flex; align-items:center; gap:8px;"><span style="width:36px; font:700 12px 'JetBrains Mono', monospace; color:#3E0F8D;">{{ g.away }}</span><span style="font-size:15px; font-weight:700;">{{ g.awayName }}</span></div>
+                    <div style="display:flex; align-items:center; gap:8px;"><span style="width:36px; font:700 12px 'JetBrains Mono', monospace; color:#3E0F8D;">{{ g.home }}</span><span style="font-size:15px; font-weight:700;">{{ g.homeName }}</span></div>
+                    <div style="font-size:12px; color:#625B70; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">Top read · {{ g.topText }}</div>
+                  </div>
+                  <div style="flex:none; display:flex; flex-direction:column; align-items:flex-end; gap:8px;">
+                    <div style="font:600 12px 'JetBrains Mono', monospace; color:#625B70;">{{ g.time }}</div>
+                    <div style="font:700 13px 'JetBrains Mono', monospace; padding:5px 9px; border-radius:9px; background:{{ g.tierBg }}; color:{{ g.tierFg }};">{{ g.topProb }}</div>
+                  </div>
+                  <div style="flex:none; color:#B9B3C4; font-size:20px;">›</div>
+                </div>
+              </sc-for>
+            </div>
+          </section>
+        </sc-if>
+        </sc-if>
+
+        <!-- EVENT -->
+        <sc-if value="{{ isEvent }}" hint-placeholder-val="{{ false }}">
+        <sc-if value="{{ isWeb }}" hint-placeholder-val="{{ true }}">
+          <div data-screen-label="Event" style="display:flex; flex-direction:column; gap:20px;">
+            <button onClick="{{ goToday }}" style="align-self:flex-start; border:none; background:none; cursor:pointer; padding:6px 0; font:600 14px 'Instrument Sans', sans-serif; color:#625B70;" style-hover="color:#3E0F8D;">← All games</button>
+            <section style="background:#FFFFFF; border:1px solid #DEDAE5; border-radius:24px; padding:clamp(18px, 3cqi, 28px); display:flex; flex-wrap:wrap; align-items:center; justify-content:space-between; gap:16px;">
+              <div style="display:flex; align-items:center; gap:14px; flex-wrap:wrap;">
+                <div style="display:flex;">
+                  <div style="width:48px; height:48px; border-radius:50%; background:#3E0F8D; color:#FFFFFF; display:flex; align-items:center; justify-content:center; font:700 13px 'JetBrains Mono', monospace; border:3px solid #FFFFFF;">{{ ev.away }}</div>
+                  <div style="width:48px; height:48px; margin-left:-10px; border-radius:50%; background:#9564DD; color:#FFFFFF; display:flex; align-items:center; justify-content:center; font:700 13px 'JetBrains Mono', monospace; border:3px solid #FFFFFF;">{{ ev.home }}</div>
+                </div>
+                <div>
+                  <h1 style="margin:0; font-size:clamp(24px, 3.6cqi, 36px); letter-spacing:-0.03em; line-height:1.05;">{{ ev.awayName }} @ {{ ev.homeName }}</h1>
+                  <div style="font-size:14px; color:#625B70; margin-top:4px;">Tue, Nov 10 · {{ ev.time }} ET</div>
+                </div>
+              </div>
+              <div style="display:flex; gap:8px; flex-wrap:wrap;">
+                <div style="font-size:12px; font-weight:600; padding:7px 12px; border-radius:999px; background:#ECE6F7; color:#3E0F8D;">{{ ev.away }} lineup confirmed</div>
+                <div style="font-size:12px; font-weight:600; padding:7px 12px; border-radius:999px; background:#F6F2D2; color:#5A5310;">{{ ev.home }} lineup projected</div>
+              </div>
+            </section>
+
+            <div style="display:flex; flex-wrap:wrap; gap:20px; align-items:flex-start;">
+              <aside style="flex:1 1 300px; min-width:0; position:{{ asidePos }}; top:0; z-index:1; background:#FFFFFF; border:1px solid #DEDAE5; border-radius:24px; padding:20px; display:flex; flex-direction:column; gap:20px;">
+                <div style="display:flex; flex-direction:column; gap:10px;">
+                  <div style="display:flex; align-items:center; justify-content:space-between; gap:12px; min-height:30px; flex-wrap:wrap;"><div style="font-size:12px; font-weight:700; letter-spacing:0.08em; text-transform:uppercase; color:#625B70;">1 · Stat</div></div>
+                  <div style="display:grid; grid-template-columns:repeat(5, minmax(0,1fr)); gap:6px;">
+                    <sc-for list="{{ marketChips }}" as="c" hint-placeholder-count="5">
+                      <button onClick="{{ c.onClick }}" style="cursor:pointer; min-height:40px; padding:8px 0; border-radius:12px; font:700 13px 'JetBrains Mono', monospace; background:{{ c.bg }}; color:{{ c.fg }}; border:1px solid {{ c.border }};">{{ c.label }}</button>
+                    </sc-for>
+                  </div>
+                </div>
+                <div style="display:flex; flex-direction:column; gap:10px;">
+                  <div style="display:flex; align-items:center; justify-content:space-between; gap:12px; min-height:30px; flex-wrap:wrap;"><div style="font-size:12px; font-weight:700; letter-spacing:0.08em; text-transform:uppercase; color:#625B70;">2 · Player</div><div style="font-size:12px; color:#625B70;">Line · our lean</div></div>
+                  <div style="display:flex; flex-direction:column; gap:6px;">
+                    <sc-for list="{{ playerRows }}" as="r" hint-placeholder-count="4">
+                      <div onClick="{{ r.onClick }}" style="cursor:pointer; display:grid; grid-template-columns:minmax(0,1fr) 44px 76px; align-items:center; gap:10px; padding:12px 14px; border-radius:16px; background:{{ r.bg }}; border:1px solid {{ r.border }};">
+                        <div style="min-width:0;">
+                          <div style="font-weight:700; font-size:14px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">{{ r.name }}</div>
+                          <div style="font-size:12px; color:#625B70;">{{ r.meta }}</div>
+                        </div>
+                        <div style="text-align:right; font:600 13px 'JetBrains Mono', monospace; color:#625B70;">{{ r.line }}</div>
+                        <div style="font:700 12px 'JetBrains Mono', monospace; padding:6px 0; border-radius:8px; text-align:center; background:{{ r.leanBg }}; color:{{ r.leanFg }};">{{ r.leanText }}</div>
+                      </div>
+                    </sc-for>
+                  </div>
+                </div>
+              </aside>
+
+              <div style="flex:999 1 520px; min-width:0; display:flex; flex-direction:column; gap:20px;">
+                <section style="background:#FFFFFF; border:1px solid #DEDAE5; border-radius:24px; padding:clamp(18px, 3cqi, 28px); display:flex; flex-direction:column; gap:22px;">
+                  <div style="display:flex; align-items:center; justify-content:space-between; gap:12px; min-height:30px; flex-wrap:wrap;">
+                    <div style="font-size:12px; font-weight:700; letter-spacing:0.08em; text-transform:uppercase; color:#625B70;">3 · Our read</div>
+                    <div style="font:700 12px 'Instrument Sans', sans-serif; padding:6px 12px; border-radius:999px; background:{{ v.tierBg }}; color:{{ v.tierFg }};">{{ v.tierLabel }}</div>
+                  </div>
+                  <div style="display:flex; flex-direction:column; gap:8px;">
+                    <div style="font-size:15px; color:#625B70; font-weight:600;">{{ v.player }} · {{ v.pos }}, {{ v.team }}</div>
+                    <div style="font-size:clamp(30px, 5cqi, 48px); font-weight:700; letter-spacing:-0.035em; line-height:1.05;">{{ v.lean }} {{ v.line }} <span style="color:#9564DD;">{{ v.marketName }}</span></div>
+                    <div style="font-size:15px; color:#1D1530;">{{ v.summary }}</div>
+                  </div>
+                  <div style="display:flex; flex-direction:column; gap:8px;">
+                    <div style="display:flex; justify-content:space-between; font:700 14px 'JetBrains Mono', monospace;">
+                      <span style="color:#3E0F8D;">Over {{ v.pOverText }}</span>
+                      <span style="color:#5B3A99;">Under {{ v.pUnderText }}</span>
+                    </div>
+                    <div style="display:flex; height:14px; border-radius:999px; overflow:hidden; background:#C9B4EE;">
+                      <div style="height:100%; background:#3E0F8D; border-right:3px solid #FFFFFF; width:{{ v.overW }};"></div>
+                    </div>
+                  </div>
+                  <div style="display:flex; gap:10px; flex-wrap:wrap;">
+                    <button onClick="{{ v.onAddLean }}" style="border:none; cursor:pointer; padding:13px 20px; min-height:46px; border-radius:999px; font:700 14px 'Instrument Sans', sans-serif; background:{{ v.addBg }}; color:{{ v.addFg }};">{{ v.addLabel }}</button>
+                    <button onClick="{{ v.onAddOther }}" style="cursor:pointer; padding:13px 18px; min-height:46px; border-radius:999px; font:600 14px 'Instrument Sans', sans-serif; background:#FFFFFF; color:#1D1530; border:1px solid #D3CCDF;">{{ v.otherLabel }}</button>
+                    <button onClick="{{ v.onAsk }}" style="border:none; cursor:pointer; padding:13px 18px; min-height:46px; border-radius:999px; font:600 14px 'Instrument Sans', sans-serif; background:#ECE6F7; color:#3E0F8D;">Ask the agent</button>
+                  </div>
+                  <div style="display:flex; flex-direction:column; border-top:1px solid #EEEBF2;">
+                    <sc-for list="{{ v.signals }}" as="s" hint-placeholder-count="5">
+                      <div style="display:flex; flex-wrap:wrap; align-items:center; gap:10px 24px; padding:14px 0; border-bottom:1px solid #EEEBF2;">
+                        <div style="flex:1 1 240px; min-width:0; display:grid; grid-template-columns:10px minmax(0,1fr); gap:12px; align-items:start;">
+                          <div style="width:10px; height:10px; border-radius:50%; margin-top:6px; background:{{ s.color }};"></div>
+                          <div style="min-width:0;">
+                            <div style="font-weight:700; font-size:14px;">{{ s.label }}</div>
+                            <div style="font-size:13px; color:#625B70;">{{ s.detail }}</div>
+                          </div>
+                        </div>
+                        <div style="flex:0 1 320px; min-width:240px; display:grid; grid-template-columns:minmax(0,1fr) 56px 72px; align-items:center; gap:14px;">
+                          <div style="height:6px; border-radius:999px; background:#EEEBF2; overflow:hidden;"><div style="height:100%; border-radius:999px; background:{{ s.color }}; width:{{ s.meter }};"></div></div>
+                          <div style="text-align:right; font:700 14px 'JetBrains Mono', monospace;">{{ s.value }}</div>
+                          <div style="font-size:12px; font-weight:600; color:{{ s.textColor }};">{{ s.verdict }}</div>
+                        </div>
+                      </div>
+                    </sc-for>
+                  </div>
+                </section>
+
+                <section style="background:#FFFFFF; border:1px solid #DEDAE5; border-radius:24px; padding:clamp(18px, 3cqi, 28px); display:flex; flex-direction:column; gap:20px;">
+                  <div style="display:flex; align-items:center; justify-content:space-between; gap:12px; min-height:30px; flex-wrap:wrap;">
+                    <div style="display:flex; align-items:baseline; gap:10px; flex-wrap:wrap;"><h3 style="margin:0; font-size:18px;">Game log</h3><div style="font-size:13px; color:#625B70;">{{ v.marketName }} · {{ h.note }}</div></div>
+                    <sc-if value="{{ h.hasFilters }}" hint-placeholder-val="{{ false }}"><button onClick="{{ h.onClear }}" style="border:none; background:none; cursor:pointer; padding:6px 0; font:600 13px 'Instrument Sans', sans-serif; color:#3E0F8D; text-decoration:underline;">Reset filters</button></sc-if>
+                  </div>
+                  <div style="display:grid; grid-template-columns:repeat(auto-fill, minmax(min(100%, 210px), 1fr)); gap:16px;">
+                    <div style="display:flex; flex-direction:column; gap:8px; min-width:0;"><div style="font-size:12px; font-weight:700; letter-spacing:0.08em; text-transform:uppercase; color:#625B70;">Range</div><div style="display:flex; gap:2px; padding:3px; border-radius:12px; background:#F3F1F6;"><sc-for list="{{ h.ranges }}" as="o" hint-placeholder-count="3"><button onClick="{{ o.onClick }}" style="flex:1; border:none; cursor:pointer; min-height:36px; padding:6px 8px; border-radius:9px; font:600 13px 'Instrument Sans', sans-serif; background:{{ o.bg }}; color:{{ o.fg }};">{{ o.label }}</button></sc-for></div></div>
+                    <div style="display:flex; flex-direction:column; gap:8px; min-width:0;"><div style="font-size:12px; font-weight:700; letter-spacing:0.08em; text-transform:uppercase; color:#625B70;">Line</div><div style="display:grid; grid-template-columns:42px minmax(0,1fr) 42px; gap:2px; padding:3px; border-radius:12px; background:#F3F1F6;">
+                        <button onClick="{{ h.onMinus }}" aria-label="Lower line" style="flex:1; border:none; cursor:pointer; min-height:36px; padding:6px 8px; border-radius:9px; font:600 13px 'Instrument Sans', sans-serif; background:#FFFFFF; color:#3E0F8D; font-size:16px;">−</button>
+                        <div style="display:flex; align-items:center; justify-content:center; gap:8px; font:700 14px 'JetBrains Mono', monospace;">{{ h.lineText }}<sc-if value="{{ h.lineChanged }}" hint-placeholder-val="{{ false }}"><span onClick="{{ h.onResetLine }}" style="cursor:pointer; font:600 11px 'Instrument Sans', sans-serif; color:#3E0F8D; text-decoration:underline;">reset</span></sc-if></div>
+                        <button onClick="{{ h.onPlus }}" aria-label="Raise line" style="flex:1; border:none; cursor:pointer; min-height:36px; padding:6px 8px; border-radius:9px; font:600 13px 'Instrument Sans', sans-serif; background:#FFFFFF; color:#3E0F8D; font-size:16px;">+</button>
+                      </div></div>
+                    <div style="display:flex; flex-direction:column; gap:8px; min-width:0;"><div style="font-size:12px; font-weight:700; letter-spacing:0.08em; text-transform:uppercase; color:#625B70;">Venue</div><div style="display:flex; gap:2px; padding:3px; border-radius:12px; background:#F3F1F6;"><sc-for list="{{ h.venues }}" as="o" hint-placeholder-count="3"><button onClick="{{ o.onClick }}" style="flex:1; border:none; cursor:pointer; min-height:36px; padding:6px 8px; border-radius:9px; font:600 13px 'Instrument Sans', sans-serif; background:{{ o.bg }}; color:{{ o.fg }};">{{ o.label }}</button></sc-for></div></div>
+                    <div style="display:flex; flex-direction:column; gap:8px; min-width:0;"><div style="font-size:12px; font-weight:700; letter-spacing:0.08em; text-transform:uppercase; color:#625B70;">Role</div><div style="display:flex; gap:2px; padding:3px; border-radius:12px; background:#F3F1F6;"><sc-for list="{{ h.roles }}" as="o" hint-placeholder-count="3"><button onClick="{{ o.onClick }}" style="flex:1; border:none; cursor:pointer; min-height:36px; padding:6px 8px; border-radius:9px; font:600 13px 'Instrument Sans', sans-serif; background:{{ o.bg }}; color:{{ o.fg }};">{{ o.label }}</button></sc-for></div></div>
+                    <div style="display:flex; flex-direction:column; gap:8px; min-width:0;"><div style="font-size:12px; font-weight:700; letter-spacing:0.08em; text-transform:uppercase; color:#625B70;">Opponent</div><select value="{{ h.opp }}" onChange="{{ h.onOpp }}" style="min-height:42px; padding:8px 12px; border-radius:12px; border:none; background:#F3F1F6; font:600 13px 'Instrument Sans', sans-serif; color:#1D1530; cursor:pointer;"><sc-for list="{{ h.oppOptions }}" as="op" hint-placeholder-count="1"><option value="{{ op.value }}">{{ op.label }}</option></sc-for></select></div>
+                    </div>
+                  <div style="display:flex; flex-direction:column; gap:12px; padding-top:16px; border-top:1px solid #EEEBF2;">
+                    <div style="display:flex; justify-content:space-between; align-items:baseline; gap:12px; flex-wrap:wrap;">
+                      <div style="font-size:12px; font-weight:700; letter-spacing:0.08em; text-transform:uppercase; color:#625B70;">Teammates</div>
+                      <div style="font-size:12px; color:#625B70;">{{ h.mateHint }}</div>
+                    </div>
+                    <div style="display:flex; flex-wrap:wrap; gap:12px; align-items:center;">
+                      <div style="flex:1 1 320px; min-width:0; display:flex; flex-wrap:wrap; gap:6px;">
+                        <sc-for list="{{ h.mateChips }}" as="m" hint-placeholder-count="4">
+                          <button onClick="{{ m.onClick }}" style="cursor:pointer; display:flex; align-items:center; gap:8px; min-height:38px; padding:7px 12px; border-radius:999px; font:600 13px 'Instrument Sans', sans-serif; background:{{ m.bg }}; color:{{ m.fg }}; border:1px solid {{ m.border }};">
+                            <span>{{ m.label }}</span>
+                            <span style="font:600 11px 'JetBrains Mono', monospace; opacity:0.75;">{{ m.sub }}</span>
+                          </button>
+                        </sc-for>
+                      </div>
+                      <div style="flex:0 1 300px; min-width:240px; opacity:{{ h.mateSegOpacity }};">
+                        <div style="display:flex; gap:2px; padding:3px; border-radius:12px; background:#F3F1F6;"><sc-for list="{{ h.mates }}" as="o" hint-placeholder-count="3"><button onClick="{{ o.onClick }}" style="flex:1; border:none; cursor:pointer; min-height:36px; padding:6px 8px; border-radius:9px; font:600 13px 'Instrument Sans', sans-serif; background:{{ o.bg }}; color:{{ o.fg }};">{{ o.label }}</button></sc-for></div>
+                      </div>
+                    </div>
+                  
+                  </div>
+
+                  <sc-if value="{{ h.has }}" hint-placeholder-val="{{ true }}">
+                    <div style="display:grid; grid-template-columns:repeat(auto-fill, minmax(min(100%, 130px), 1fr)); gap:10px;">
+                      <sc-for list="{{ h.stats }}" as="k" hint-placeholder-count="4">
+                        <div style="padding:14px; border-radius:16px; background:{{ k.bg }}; display:flex; flex-direction:column; gap:4px;">
+                          <div style="font-size:12px; font-weight:600; color:#4A4458;">{{ k.label }}</div>
+                          <div style="font:700 24px 'JetBrains Mono', monospace; color:{{ k.fg }}; line-height:1.1;">{{ k.value }}</div>
+                          <div style="font-size:12px; color:#625B70;">{{ k.sub }}</div>
+                        </div>
+                      </sc-for>
+                    </div>
+
+                    <div style="display:grid; grid-template-columns:34px minmax(0,1fr); gap:8px;">
+                      <div style="position:relative; height:220px;">
+                        <sc-for list="{{ h.ticks }}" as="t" hint-placeholder-count="4">
+                          <div style="position:absolute; right:0; transform:translateY(50%); font:600 10px 'JetBrains Mono', monospace; color:#8A8496; bottom:{{ t.pos }};">{{ t.label }}</div>
+                        </sc-for>
+                      </div>
+                      <div style="position:relative; height:220px; border-bottom:1px solid #D3CCDF;">
+                        <sc-for list="{{ h.ticks }}" as="t" hint-placeholder-count="4">
+                          <div style="position:absolute; left:0; right:0; border-top:1px solid #F1EEF4; bottom:{{ t.pos }};"></div>
+                        </sc-for>
+                        <div style="position:absolute; inset:0; display:flex; gap:4px;">
+                          <sc-for list="{{ h.bars }}" as="b" hint-placeholder-count="10">
+                            <div onClick="{{ b.onPick }}" onMouseEnter="{{ b.onPick }}" style="flex:1; min-width:0; position:relative; height:100%; cursor:pointer;">
+                              <div style="position:absolute; bottom:0; left:0; right:0; margin:0 auto; max-width:30px; border-radius:5px 5px 2px 2px; background:{{ b.bg }}; height:{{ b.h }}; box-shadow:{{ b.ring }};"></div>
+                              <sc-if value="{{ h.showVals }}" hint-placeholder-val="{{ true }}"><div style="position:absolute; left:0; right:0; text-align:center; font:600 11px 'JetBrains Mono', monospace; color:{{ b.valColor }}; bottom:calc({{ b.h }} + 4px);">{{ b.val }}</div></sc-if>
+                            </div>
+                          </sc-for>
+                        </div>
+                        <div style="position:absolute; left:0; right:0; border-top:2px dashed #B3A63A; pointer-events:none; bottom:{{ h.linePos }};"></div>
+                        <div style="position:absolute; left:-42px; width:38px; text-align:center; transform:translateY(50%); font:700 10px 'JetBrains Mono', monospace; color:#2A0A60; background:#E4DA72; padding:2px 0; border-radius:4px; bottom:{{ h.linePos }};">{{ h.lineText }}</div>
+                      </div>
+                      <div></div>
+                      <sc-if value="{{ h.showOpp }}" hint-placeholder-val="{{ true }}">
+                        <div style="display:flex; gap:4px;">
+                          <sc-for list="{{ h.bars }}" as="b" hint-placeholder-count="10">
+                            <div style="flex:1; min-width:0; text-align:center; font:600 10px 'JetBrains Mono', monospace; color:#8A8496; overflow:hidden;">{{ b.opp }}</div>
+                          </sc-for>
+                        </div>
+                      </sc-if>
+                    </div>
+
+                    <div style="display:flex; flex-wrap:wrap; justify-content:space-between; align-items:center; gap:12px;">
+                      <div style="display:flex; flex-wrap:wrap; align-items:center; gap:8px 16px; padding:10px 14px; border-radius:14px; background:#F7F6F9; font-size:13px;">
+                        <div style="font-weight:700;">{{ h.sel.date }} {{ h.sel.where }}</div>
+                        <div style="font:700 15px 'JetBrains Mono', monospace;">{{ h.sel.val }}</div>
+                        <div style="font-size:11px; font-weight:700; padding:3px 8px; border-radius:999px; background:{{ h.sel.resBg }}; color:{{ h.sel.resFg }};">{{ h.sel.res }}</div>
+                        <div style="color:#625B70;">{{ h.sel.min }} · {{ h.sel.role }} · {{ h.sel.mate }}</div>
+                      </div>
+                      <div style="display:flex; gap:14px; font-size:12px; color:#625B70;">
+                        <div style="display:flex; align-items:center; gap:6px;"><div style="width:10px; height:10px; border-radius:3px; background:#3E0F8D;"></div>Over</div>
+                        <div style="display:flex; align-items:center; gap:6px;"><div style="width:10px; height:10px; border-radius:3px; background:#C9B4EE;"></div>Under</div>
+                        <div style="display:flex; align-items:center; gap:6px;"><div style="width:14px; border-top:2px dashed #B3A63A;"></div>Line</div>
+                      </div>
+                    </div>
+                  </sc-if>
+                  <sc-if value="{{ h.empty }}" hint-placeholder-val="{{ false }}">
+                    <div style="padding:36px 16px; border-radius:16px; background:#F7F6F9; text-align:center; font-size:14px; color:#625B70;">No games match these filters. Widen the range or reset filters.</div>
+                  </sc-if>
+                </section>
+
+                <section style="background:#FFFFFF; border:1px solid #DEDAE5; border-radius:24px; padding:clamp(18px, 3cqi, 28px); display:flex; flex-direction:column; gap:12px;">
+                  <div style="display:flex; align-items:center; justify-content:space-between; gap:12px; min-height:30px; flex-wrap:wrap;">
+                    <h3 style="margin:0; font-size:18px;">Sportsbook prices</h3>
+                    <div style="font-size:13px; color:#625B70;">No-vig consensus {{ v.consensusText }} over</div>
+                  </div>
+                  <div style="display:grid; grid-template-columns:minmax(0,1.6fr) repeat(4, minmax(0,1fr)); gap:8px; padding:8px 0; border-bottom:1px solid #EEEBF2; font-size:12px; font-weight:700; letter-spacing:0.08em; text-transform:uppercase; color:#625B70;">
+                    <div>Book</div><div style="text-align:right;">Line</div><div style="text-align:right;">Over</div><div style="text-align:right;">Under</div><div style="text-align:right;">Fair O</div>
+                  </div>
+                  <sc-for list="{{ v.books }}" as="k" hint-placeholder-count="5">
+                    <div style="display:grid; grid-template-columns:minmax(0,1.6fr) repeat(4, minmax(0,1fr)); gap:8px; align-items:center; padding:4px 0; font:600 13px 'JetBrains Mono', monospace;">
+                      <div style="font-family:'Instrument Sans', sans-serif; min-width:0;"><div style="font-weight:700; font-size:14px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">{{ k.book }}</div><div style="font-size:11px; color:#625B70; font-weight:500;">vig {{ k.vig }}</div></div>
+                      <div style="text-align:right;">{{ k.line }}</div>
+                      <div style="text-align:right;">{{ k.over }}</div>
+                      <div style="text-align:right;">{{ k.under }}</div>
+                      <div style="text-align:right; color:#3E0F8D; font-weight:700;">{{ k.fair }}</div>
+                    </div>
+                  </sc-for>
+                </section>
+              </div>
+            </div>
+          </div>
+        </sc-if>
+        <sc-if value="{{ isMobile }}" hint-placeholder-val="{{ false }}">
+          <div data-screen-label="Event (mobile)" style="display:flex; flex-direction:column; gap:14px;">
+            <div style="display:flex; align-items:center; gap:12px;">
+              <button onClick="{{ goToday }}" aria-label="Back" style="flex:none; cursor:pointer; width:44px; height:44px; border-radius:50%; border:1px solid #D3CCDF; background:#FFFFFF; color:#1D1530; font:600 18px 'Instrument Sans', sans-serif;">←</button>
+              <div style="min-width:0;">
+                <div style="font-size:19px; font-weight:700; letter-spacing:-0.02em;">{{ ev.awayName }} @ {{ ev.homeName }}</div>
+                <div style="font-size:12px; color:#625B70;">{{ ev.time }} ET · {{ ev.away }} confirmed · {{ ev.home }} projected</div>
+              </div>
+            </div>
+            <div style="display:flex; gap:8px; overflow-x:auto; margin:0 -16px; padding:2px 16px 4px; scrollbar-width:none;"><sc-for list="{{ marketChips }}" as="c" hint-placeholder-count="5"><button onClick="{{ c.onClick }}" style="flex:none; cursor:pointer; min-height:40px; padding:8px 14px; border-radius:999px; white-space:nowrap; font:700 13px 'JetBrains Mono', monospace; background:{{ c.bg }}; color:{{ c.fg }}; border:1px solid {{ c.border }};">{{ c.label }}</button></sc-for></div>
+            <div style="display:flex; gap:8px; overflow-x:auto; margin:0 -16px; padding:2px 16px 4px; scrollbar-width:none; gap:8px;">
+              <sc-for list="{{ playerRowsM }}" as="r" hint-placeholder-count="4">
+                <div onClick="{{ r.onClick }}" style="flex:none; cursor:pointer; display:flex; flex-direction:column; gap:6px; padding:10px 12px; min-width:118px; border-radius:16px; background:{{ r.bg }}; border:1px solid {{ r.border }};">
+                  <div style="font-weight:700; font-size:14px; white-space:nowrap;">{{ r.short }}</div>
+                  <div style="display:flex; align-items:center; justify-content:space-between; gap:8px;">
+                    <span style="font:600 12px 'JetBrains Mono', monospace; color:#625B70;">{{ r.line }}</span>
+                    <span style="font:700 11px 'JetBrains Mono', monospace; padding:3px 6px; border-radius:6px; background:{{ r.leanBg }}; color:{{ r.leanFg }};">{{ r.leanText }}</span>
+                  </div>
+                </div>
+              </sc-for>
+            </div>
+            <div style="position:sticky; top:0; z-index:2; margin:0 -16px; padding:6px 16px 8px; background:#EEEEEE;"><div style="display:flex; gap:2px; padding:3px; border-radius:12px; background:#F3F1F6;"><sc-for list="{{ evTabs }}" as="o" hint-placeholder-count="3"><button onClick="{{ o.onClick }}" style="flex:1; border:none; cursor:pointer; min-height:38px; padding:6px 6px; border-radius:9px; font:600 13px 'Instrument Sans', sans-serif; background:{{ o.bg }}; color:{{ o.fg }};">{{ o.label }}</button></sc-for></div></div>
+
+            <sc-if value="{{ evRead }}" hint-placeholder-val="{{ true }}">
+              <section style="background:#FFFFFF; border:1px solid #DEDAE5; border-radius:20px; padding:18px; display:flex; flex-direction:column; gap:16px;">
+                <div style="display:flex; justify-content:space-between; align-items:center; gap:10px;">
+                  <div style="font-size:13px; color:#625B70; font-weight:600;">{{ v.player }} · {{ v.pos }}</div>
+                  <div style="font:700 11px 'Instrument Sans', sans-serif; padding:5px 10px; border-radius:999px; background:{{ v.tierBg }}; color:{{ v.tierFg }};">{{ v.tierLabel }}</div>
+                </div>
+                <div>
+                  <div style="font-size:32px; font-weight:700; letter-spacing:-0.03em; line-height:1.05;">{{ v.lean }} {{ v.line }} <span style="color:#9564DD;">{{ v.marketName }}</span></div>
+                  <div style="font-size:14px; margin-top:6px;">{{ v.summary }}</div>
+                </div>
+                <div style="display:flex; flex-direction:column; gap:6px;">
+                  <div style="display:flex; justify-content:space-between; font:700 13px 'JetBrains Mono', monospace;"><span style="color:#3E0F8D;">Over {{ v.pOverText }}</span><span style="color:#5B3A99;">Under {{ v.pUnderText }}</span></div>
+                  <div style="display:flex; height:12px; border-radius:999px; overflow:hidden; background:#C9B4EE;"><div style="height:100%; background:#3E0F8D; border-right:3px solid #FFFFFF; width:{{ v.overW }};"></div></div>
+                </div>
+              </section>
+              <section style="background:#FFFFFF; border:1px solid #DEDAE5; border-radius:20px; padding:4px 16px;">
+                <sc-for list="{{ v.signals }}" as="s" hint-placeholder-count="5">
+                  <div style="display:grid; grid-template-columns:10px minmax(0,1fr) auto; gap:12px; align-items:center; padding:13px 0; border-bottom:1px solid #EEEBF2;">
+                    <div style="width:10px; height:10px; border-radius:50%; background:{{ s.color }};"></div>
+                    <div style="min-width:0;"><div style="font-weight:700; font-size:14px;">{{ s.label }}</div><div style="font-size:12px; color:#625B70;">{{ s.detail }}</div></div>
+                    <div style="text-align:right;"><div style="font:700 15px 'JetBrains Mono', monospace;">{{ s.value }}</div><div style="font-size:11px; font-weight:600; color:{{ s.textColor }};">{{ s.verdict }}</div></div>
+                  </div>
+                </sc-for>
+              </section>
+            </sc-if>
+
+            <sc-if value="{{ evLog }}" hint-placeholder-val="{{ false }}">
+              <section style="background:#FFFFFF; border:1px solid #DEDAE5; border-radius:20px; padding:16px; display:flex; flex-direction:column; gap:14px;">
+                <div style="display:flex; justify-content:space-between; align-items:baseline; gap:10px;">
+                  <h3 style="margin:0; font-size:17px;">Game log</h3>
+                  <div style="font-size:12px; color:#625B70; text-align:right;">{{ h.note }}</div>
+                </div>
+                <div style="display:flex; gap:2px; padding:3px; border-radius:12px; background:#F3F1F6;"><sc-for list="{{ h.ranges }}" as="o" hint-placeholder-count="3"><button onClick="{{ o.onClick }}" style="flex:1; border:none; cursor:pointer; min-height:38px; padding:6px 6px; border-radius:9px; font:600 13px 'Instrument Sans', sans-serif; background:{{ o.bg }}; color:{{ o.fg }};">{{ o.label }}</button></sc-for></div>
+                <div style="display:flex; gap:8px;">
+                  <div style="flex:1; display:grid; grid-template-columns:44px minmax(0,1fr) 44px; gap:2px; padding:3px; border-radius:12px; background:#F3F1F6;">
+                    <button onClick="{{ h.onMinus }}" aria-label="Lower line" style="border:none; cursor:pointer; min-height:38px; border-radius:9px; background:#FFFFFF; color:#3E0F8D; font:600 17px 'Instrument Sans', sans-serif;">−</button>
+                    <div style="display:flex; flex-direction:column; align-items:center; justify-content:center;"><div style="font:600 10px 'Instrument Sans', sans-serif; color:#625B70;">LINE</div><div style="font:700 14px 'JetBrains Mono', monospace;">{{ h.lineText }}</div></div>
+                    <button onClick="{{ h.onPlus }}" aria-label="Raise line" style="border:none; cursor:pointer; min-height:38px; border-radius:9px; background:#FFFFFF; color:#3E0F8D; font:600 17px 'Instrument Sans', sans-serif;">+</button>
+                  </div>
+                  <button onClick="{{ openSheet }}" style="flex:none; cursor:pointer; min-height:44px; padding:0 16px; border-radius:12px; border:1px solid {{ h.filterBorder }}; background:{{ h.filterBg }}; color:{{ h.filterFg }}; font:700 13px 'Instrument Sans', sans-serif;">{{ h.filterLabel }}</button>
+                </div>
+                <sc-if value="{{ h.has }}" hint-placeholder-val="{{ true }}">
+                  <div style="display:grid; grid-template-columns:repeat(2, minmax(0,1fr)); gap:8px;">
+                    <sc-for list="{{ h.stats }}" as="k" hint-placeholder-count="4">
+                      <div style="padding:12px; border-radius:14px; background:{{ k.bg }};">
+                        <div style="font-size:11px; font-weight:600; color:#4A4458;">{{ k.label }}</div>
+                        <div style="font:700 21px 'JetBrains Mono', monospace; color:{{ k.fg }}; line-height:1.2;">{{ k.value }}</div>
+                        <div style="font-size:11px; color:#625B70;">{{ k.sub }}</div>
+                      </div>
+                    </sc-for>
+                  </div>
+                  <div style="display:grid; grid-template-columns:30px minmax(0,1fr); gap:6px;">
+                      <div style="position:relative; height:180px;">
+                        <sc-for list="{{ h.ticks }}" as="t" hint-placeholder-count="4"><div style="position:absolute; right:0; transform:translateY(50%); font:600 10px 'JetBrains Mono', monospace; color:#8A8496; bottom:{{ t.pos }};">{{ t.label }}</div></sc-for>
+                      </div>
+                      <div style="position:relative; height:180px; border-bottom:1px solid #D3CCDF;">
+                        <sc-for list="{{ h.ticks }}" as="t" hint-placeholder-count="4"><div style="position:absolute; left:0; right:0; border-top:1px solid #F1EEF4; bottom:{{ t.pos }};"></div></sc-for>
+                        <div style="position:absolute; inset:0; display:flex; gap:2px;">
+                          <sc-for list="{{ h.bars }}" as="b" hint-placeholder-count="10">
+                            <div onClick="{{ b.onPick }}" style="flex:1; min-width:0; position:relative; height:100%; cursor:pointer;">
+                              <div style="position:absolute; bottom:0; left:0; right:0; margin:0 auto; max-width:24px; border-radius:4px 4px 1px 1px; background:{{ b.bg }}; height:{{ b.h }}; box-shadow:{{ b.ring }};"></div>
+                              <sc-if value="{{ h.showValsM }}" hint-placeholder-val="{{ true }}"><div style="position:absolute; left:0; right:0; text-align:center; font:600 10px 'JetBrains Mono', monospace; color:{{ b.valColor }}; bottom:calc({{ b.h }} + 3px);">{{ b.val }}</div></sc-if>
+                            </div>
+                          </sc-for>
+                        </div>
+                        <div style="position:absolute; left:0; right:0; border-top:2px dashed #B3A63A; pointer-events:none; bottom:{{ h.linePos }};"></div>
+                        <div style="position:absolute; left:-36px; width:32px; text-align:center; transform:translateY(50%); font:700 9px 'JetBrains Mono', monospace; color:#2A0A60; background:#E4DA72; padding:2px 0; border-radius:4px; bottom:{{ h.linePos }};">{{ h.lineText }}</div>
+                      </div>
+                      <div></div>
+                      <sc-if value="{{ h.showValsM }}" hint-placeholder-val="{{ true }}">
+                        <div style="display:flex; gap:2px;"><sc-for list="{{ h.bars }}" as="b" hint-placeholder-count="10"><div style="flex:1; min-width:0; text-align:center; font:600 9px 'JetBrains Mono', monospace; color:#8A8496; overflow:hidden;">{{ b.opp }}</div></sc-for></div>
+                      </sc-if>
+                    </div>
+                  <div style="display:flex; flex-direction:column; gap:6px; padding:12px; border-radius:14px; background:#F7F6F9; font-size:13px;">
+                    <div style="display:flex; align-items:center; gap:10px;">
+                      <div style="font-weight:700; flex:1;">{{ h.sel.date }} {{ h.sel.where }}</div>
+                      <div style="font:700 15px 'JetBrains Mono', monospace;">{{ h.sel.val }}</div>
+                      <div style="font-size:11px; font-weight:700; padding:3px 8px; border-radius:999px; background:{{ h.sel.resBg }}; color:{{ h.sel.resFg }};">{{ h.sel.res }}</div>
+                    </div>
+                    <div style="color:#625B70; font-size:12px;">{{ h.sel.min }} · {{ h.sel.role }} · {{ h.sel.mate }}</div>
+                  </div>
+                  <div style="font-size:12px; color:#625B70;">Tap a bar to see that game.</div>
+                </sc-if>
+                <sc-if value="{{ h.empty }}" hint-placeholder-val="{{ false }}">
+                  <div style="padding:28px 12px; border-radius:14px; background:#F7F6F9; text-align:center; font-size:14px; color:#625B70;">No games match these filters.</div>
+                </sc-if>
+              </section>
+            </sc-if>
+
+            <sc-if value="{{ evOdds }}" hint-placeholder-val="{{ false }}">
+              <section style="background:#FFFFFF; border:1px solid #DEDAE5; border-radius:20px; padding:16px; display:flex; flex-direction:column; gap:10px;">
+                <div style="display:flex; justify-content:space-between; align-items:baseline; gap:10px;">
+                  <h3 style="margin:0; font-size:17px;">Sportsbook prices</h3>
+                  <div style="font-size:12px; color:#625B70;">Line {{ v.line }}</div>
+                </div>
+                <div style="padding:12px; border-radius:14px; background:#ECE6F7; display:flex; justify-content:space-between; align-items:center;">
+                  <div style="font-size:13px; font-weight:600; color:#3E0F8D;">No-vig consensus over</div>
+                  <div style="font:700 20px 'JetBrains Mono', monospace; color:#3E0F8D;">{{ v.consensusText }}</div>
+                </div>
+                <div style="display:grid; grid-template-columns:minmax(0,1fr) 58px 58px 48px; gap:6px; padding:6px 0; border-bottom:1px solid #EEEBF2; font-size:11px; font-weight:700; letter-spacing:0.06em; text-transform:uppercase; color:#625B70;">
+                  <div>Book</div><div style="text-align:right;">Over</div><div style="text-align:right;">Under</div><div style="text-align:right;">Fair</div>
+                </div>
+                <sc-for list="{{ v.books }}" as="k" hint-placeholder-count="5">
+                  <div style="display:grid; grid-template-columns:minmax(0,1fr) 58px 58px 48px; gap:6px; align-items:center; padding:4px 0; font:600 13px 'JetBrains Mono', monospace;">
+                    <div style="font-family:'Instrument Sans', sans-serif; min-width:0;"><div style="font-weight:700; font-size:14px;">{{ k.book }}</div><div style="font-size:11px; color:#625B70; font-weight:500;">vig {{ k.vig }}</div></div>
+                    <div style="text-align:right;">{{ k.over }}</div>
+                    <div style="text-align:right;">{{ k.under }}</div>
+                    <div style="text-align:right; color:#3E0F8D; font-weight:700;">{{ k.fair }}</div>
+                  </div>
+                </sc-for>
+              </section>
+            </sc-if>
+          </div>
+        </sc-if>
+        </sc-if>
+
+        <!-- PICKS -->
+        <sc-if value="{{ isPicks }}" hint-placeholder-val="{{ false }}">
+        <sc-if value="{{ isWeb }}" hint-placeholder-val="{{ true }}">
+          <div data-screen-label="Daily Picks" style="display:flex; flex-direction:column; gap:22px;">
+            <div style="display:flex; flex-wrap:wrap; justify-content:space-between; align-items:flex-end; gap:16px;">
+              <div style="display:flex; flex-direction:column; gap:8px; max-width:640px;">
+                <div style="font:600 12px 'JetBrains Mono', monospace; letter-spacing:0.12em; color:#7B4FC4;">TUE · NOV 10 · UPDATED 9:42 AM</div>
+                <h1 style="margin:0; font-size:clamp(32px, 5cqi, 52px); letter-spacing:-0.035em; line-height:1;">Daily Picks</h1>
+                <p style="margin:0; font-size:15px; line-height:1.55; color:#625B70;">Props where our model gives one side 65% or more, ranked by probability.</p>
+              </div>
+              <div style="display:flex; gap:10px;">
+                <div style="padding:10px 16px; border-radius:16px; background:#FFFFFF; border:1px solid #DEDAE5;"><div style="font:700 22px 'JetBrains Mono', monospace;">{{ picksCount }}</div><div style="font-size:12px; color:#625B70;">picks</div></div>
+                <div style="padding:10px 16px; border-radius:16px; background:#E4DA72;"><div style="font:700 22px 'JetBrains Mono', monospace; color:#2A0A60;">{{ strongCount }}</div><div style="font-size:12px; color:#2A0A60;">strong</div></div>
+              </div>
+            </div>
+
+            <div style="display:flex; flex-wrap:wrap; gap:16px 24px; align-items:center;">
+              <div style="display:flex; gap:6px; flex-wrap:wrap;">
+                <sc-for list="{{ confChips }}" as="c" hint-placeholder-count="3">
+                  <button onClick="{{ c.onClick }}" style="cursor:pointer; min-height:38px; padding:8px 14px; border-radius:999px; font:600 13px 'Instrument Sans', sans-serif; background:{{ c.bg }}; color:{{ c.fg }}; border:1px solid {{ c.border }};">{{ c.label }}</button>
+                </sc-for>
+              </div>
+              <div style="display:flex; gap:6px; flex-wrap:wrap;">
+                <sc-for list="{{ mkChips }}" as="c" hint-placeholder-count="6">
+                  <button onClick="{{ c.onClick }}" style="cursor:pointer; min-height:38px; padding:8px 12px; border-radius:999px; font:700 12px 'JetBrains Mono', monospace; background:{{ c.bg }}; color:{{ c.fg }}; border:1px solid {{ c.border }};">{{ c.label }}</button>
+                </sc-for>
+              </div>
+            </div>
+
+            <div style="display:flex; flex-direction:column; gap:10px;">
+              <sc-for list="{{ pickRows }}" as="p" hint-placeholder-count="6">
+                <div onClick="{{ p.onClick }}" style="cursor:pointer; background:#FFFFFF; border:1px solid {{ p.border }}; border-radius:20px; padding:16px 18px; display:flex; flex-wrap:wrap; align-items:center; gap:14px 20px;" style-hover="border-color:#9564DD;">
+                  <div style="flex:1 1 240px; min-width:0; display:flex; align-items:center; gap:14px;">
+                    <div style="flex:none; font:700 13px 'JetBrains Mono', monospace; color:#8A8496; width:22px;">{{ p.rank }}</div>
+                    <div style="flex:none; width:40px; height:40px; border-radius:50%; border:1px solid #DEDAE5; display:flex; align-items:center; justify-content:center; font:700 11px 'JetBrains Mono', monospace; color:#3E0F8D;">{{ p.team }}</div>
+                    <div style="min-width:0;">
+                      <div style="font-weight:700; font-size:16px;">{{ p.player }}</div>
+                      <div style="font-size:13px; color:#625B70;">{{ p.matchup }}</div>
+                    </div>
+                  </div>
+                  <div style="flex:1 1 220px; min-width:0; display:flex; flex-direction:column; gap:8px;">
+                    <div style="font-weight:700; font-size:15px;">{{ p.propText }}</div>
+                    <div style="display:flex; gap:6px; flex-wrap:wrap;">
+                      <sc-for list="{{ p.tags }}" as="t" hint-placeholder-count="3">
+                        <div style="font-size:11px; font-weight:600; padding:3px 8px; border-radius:6px; background:{{ t.bg }}; color:{{ t.fg }};">{{ t.text }}</div>
+                      </sc-for>
+                    </div>
+                  </div>
+                  <div style="flex:0 1 150px; min-width:120px; display:flex; flex-direction:column; gap:6px;">
+                    <div style="display:flex; justify-content:space-between; align-items:baseline;">
+                      <div style="font:700 24px 'JetBrains Mono', monospace; color:#3E0F8D;">{{ p.probText }}</div>
+                      <div style="font-size:11px; font-weight:700; padding:3px 8px; border-radius:999px; background:{{ p.tierBg }}; color:{{ p.tierFg }};">{{ p.tierShort }}</div>
+                    </div>
+                    <div style="height:6px; border-radius:999px; background:#EEEBF2; overflow:hidden;"><div style="height:100%; background:#3E0F8D; border-radius:999px; width:{{ p.w }};"></div></div>
+                  </div>
+                  <button onClick="{{ p.onToggle }}" style="flex:none; cursor:pointer; min-height:44px; padding:10px 16px; border-radius:999px; font:700 13px 'Instrument Sans', sans-serif; background:{{ p.btnBg }}; color:{{ p.btnFg }}; border:1px solid {{ p.btnBorder }};">{{ p.btnLabel }}</button>
+                </div>
+              </sc-for>
+              <sc-if value="{{ noPicks }}" hint-placeholder-val="{{ false }}">
+                <div style="background:#FFFFFF; border:1px solid #DEDAE5; border-radius:20px; padding:40px 20px; text-align:center; color:#625B70;">No picks match these filters.</div>
+              </sc-if>
+            </div>
+            <p style="margin:0; font-size:13px; color:#625B70; line-height:1.6;">Line = most common line across books. Tap a pick to see every signal behind it.</p>
+          </div>
+        </sc-if>
+        <sc-if value="{{ isMobile }}" hint-placeholder-val="{{ false }}">
+          <div data-screen-label="Daily Picks (mobile)" style="display:flex; flex-direction:column; gap:12px;">
+            <div style="display:flex; flex-direction:column; gap:6px;">
+              <div style="font:600 11px 'JetBrains Mono', monospace; letter-spacing:0.12em; color:#7B4FC4;">NOV 10 · UPDATED 9:42 AM</div>
+              <h1 style="margin:0; font-size:30px; letter-spacing:-0.03em; line-height:1.05;">Daily Picks</h1>
+              <div style="font-size:13px; color:#625B70;">{{ picksCount }} props at 65%+ · {{ strongCount }} strong</div>
+            </div>
+            <div style="display:flex; gap:8px; overflow-x:auto; margin:0 -16px; padding:2px 16px 4px; scrollbar-width:none;"><sc-for list="{{ confChips }}" as="c" hint-placeholder-count="5"><button onClick="{{ c.onClick }}" style="flex:none; cursor:pointer; min-height:40px; padding:8px 14px; border-radius:999px; white-space:nowrap; font:600 13px 'Instrument Sans', sans-serif; background:{{ c.bg }}; color:{{ c.fg }}; border:1px solid {{ c.border }};">{{ c.label }}</button></sc-for></div>
+            <div style="display:flex; gap:8px; overflow-x:auto; margin:0 -16px; padding:2px 16px 4px; scrollbar-width:none; margin-top:-4px;"><sc-for list="{{ mkChips }}" as="c" hint-placeholder-count="5"><button onClick="{{ c.onClick }}" style="flex:none; cursor:pointer; min-height:40px; padding:8px 14px; border-radius:999px; white-space:nowrap; font:700 13px 'JetBrains Mono', monospace; background:{{ c.bg }}; color:{{ c.fg }}; border:1px solid {{ c.border }};">{{ c.label }}</button></sc-for></div>
+            <div style="display:flex; flex-direction:column; gap:8px;">
+              <sc-for list="{{ pickRows }}" as="p" hint-placeholder-count="6">
+                <div onClick="{{ p.onClick }}" style="cursor:pointer; background:#FFFFFF; border:1px solid {{ p.border }}; border-radius:18px; padding:14px; display:flex; flex-direction:column; gap:10px;">
+                  <div style="display:flex; align-items:flex-start; gap:12px;">
+                    <div style="flex:1; min-width:0;">
+                      <div style="font-size:12px; color:#625B70;">{{ p.rank }} · {{ p.matchup }}</div>
+                      <div style="font-size:16px; font-weight:700; margin-top:2px;">{{ p.player }}</div>
+                      <div style="font-size:14px; font-weight:600; color:#3E0F8D; margin-top:2px;">{{ p.propText }}</div>
+                    </div>
+                    <div style="flex:none; display:flex; flex-direction:column; align-items:flex-end; gap:4px;">
+                      <div style="font:700 24px 'JetBrains Mono', monospace; color:#3E0F8D; line-height:1;">{{ p.probText }}</div>
+                      <div style="font-size:11px; font-weight:700; padding:3px 8px; border-radius:999px; background:{{ p.tierBg }}; color:{{ p.tierFg }};">{{ p.tierShort }}</div>
+                    </div>
+                  </div>
+                  <div style="display:flex; align-items:center; justify-content:space-between; gap:10px;">
+                    <div style="display:flex; gap:4px; flex-wrap:wrap; min-width:0;">
+                      <sc-for list="{{ p.tags }}" as="t" hint-placeholder-count="3"><div style="font-size:11px; font-weight:600; padding:3px 7px; border-radius:6px; background:{{ t.bg }}; color:{{ t.fg }};">{{ t.text }}</div></sc-for>
+                    </div>
+                    <button onClick="{{ p.onToggle }}" style="flex:none; cursor:pointer; min-height:40px; padding:8px 14px; border-radius:999px; font:700 13px 'Instrument Sans', sans-serif; background:{{ p.btnBg }}; color:{{ p.btnFg }}; border:1px solid {{ p.btnBorder }};">{{ p.btnLabel }}</button>
+                  </div>
+                </div>
+              </sc-for>
+              <sc-if value="{{ noPicks }}" hint-placeholder-val="{{ false }}">
+                <div style="background:#FFFFFF; border:1px solid #DEDAE5; border-radius:18px; padding:32px 16px; text-align:center; color:#625B70;">No picks match these filters.</div>
+              </sc-if>
+            </div>
+          </div>
+        </sc-if>
+        </sc-if>
+
+        <!-- SLIP -->
+        <sc-if value="{{ isSlip }}" hint-placeholder-val="{{ false }}">
+          <div data-screen-label="Bet Slip" style="display:flex; flex-direction:column; gap:22px;">
+            <div style="display:flex; flex-direction:column; gap:8px;">
+              <h1 style="margin:0; font-size:clamp(32px, 5cqi, 52px); letter-spacing:-0.035em; line-height:1;">Bet Slip</h1>
+              <p style="margin:0; font-size:15px; color:#625B70;">Your saved picks for tonight.</p>
+            </div>
+            <sc-if value="{{ slipEmpty }}" hint-placeholder-val="{{ false }}">
+              <div style="background:#FFFFFF; border:1px solid #DEDAE5; border-radius:24px; padding:48px 24px; display:flex; flex-direction:column; align-items:center; gap:14px; text-align:center;">
+                <div style="font-size:20px; font-weight:700;">Nothing saved yet</div>
+                <div style="font-size:14px; color:#625B70; max-width:360px;">Add picks from Daily Picks or any game page. They’ll collect here for review and sharing.</div>
+                <button onClick="{{ goPicks }}" style="border:none; cursor:pointer; padding:12px 20px; min-height:44px; border-radius:999px; background:#3E0F8D; color:#FFFFFF; font:700 14px 'Instrument Sans', sans-serif;">Browse Daily Picks</button>
+              </div>
+            </sc-if>
+            <sc-if value="{{ slipHas }}" hint-placeholder-val="{{ true }}">
+              <div style="display:flex; flex-wrap:wrap; gap:20px; align-items:flex-start;">
+                <div style="flex:3 1 420px; min-width:0; display:flex; flex-direction:column; gap:10px;">
+                  <sc-for list="{{ slipRows }}" as="s" hint-placeholder-count="2">
+                    <div style="background:#FFFFFF; border:1px solid #DEDAE5; border-radius:20px; padding:16px 18px; display:flex; align-items:center; gap:14px;">
+                      <div style="flex:none; width:40px; height:40px; border-radius:50%; border:1px solid #DEDAE5; display:flex; align-items:center; justify-content:center; font:700 11px 'JetBrains Mono', monospace; color:#3E0F8D;">{{ s.team }}</div>
+                      <div style="flex:1; min-width:0;">
+                        <div style="font-weight:700; font-size:15px;">{{ s.player }}</div>
+                        <div style="font-size:14px; font-weight:600; color:#3E0F8D; margin-top:2px;">{{ s.propText }}</div>
+                        <div style="font-size:12px; color:#625B70; margin-top:2px;">{{ s.matchup }} · {{ s.time }} · <span onClick="{{ s.onOpen }}" style="cursor:pointer; color:#3E0F8D; font-weight:600; text-decoration:underline;">Details</span></div>
+                      </div>
+                      <div style="text-align:right;">
+                        <div style="font:700 20px 'JetBrains Mono', monospace; color:#3E0F8D;">{{ s.probText }}</div>
+                        <div style="font-size:11px; font-weight:600; color:#625B70;">{{ s.tierShort }}</div>
+                      </div>
+                      <button onClick="{{ s.onRemove }}" aria-label="Remove" style="flex:none; cursor:pointer; width:36px; height:36px; border-radius:50%; border:1px solid #DEDAE5; background:#FFFFFF; color:#625B70; font:600 16px 'Instrument Sans', sans-serif;" style-hover="color:#B4436C; border-color:#B4436C;">×</button>
+                    </div>
+                  </sc-for>
+                  <div style="display:flex; gap:10px; flex-wrap:wrap; margin-top:6px;">
+                    <button onClick="{{ reviewSlip }}" style="border:none; cursor:pointer; padding:11px 18px; min-height:44px; border-radius:999px; background:#ECE6F7; color:#3E0F8D; font:600 14px 'Instrument Sans', sans-serif;">Review with agent</button>
+                    <button onClick="{{ clearSlip }}" style="border:none; cursor:pointer; padding:11px 18px; min-height:44px; border-radius:999px; background:transparent; color:#B4436C; font:600 14px 'Instrument Sans', sans-serif;">Clear all</button>
+                  </div>
+                </div>
+
+                <div style="flex:2 1 300px; min-width:0; display:flex; flex-direction:column; gap:14px;">
+                  <div style="background:#FFFFFF; border:1px solid #DEDAE5; border-radius:20px; padding:18px; display:grid; grid-template-columns:repeat(3, minmax(0,1fr)); gap:10px;">
+                    <div><div style="font:700 22px 'JetBrains Mono', monospace;">{{ slipCount }}</div><div style="font-size:12px; color:#625B70;">picks</div></div>
+                    <div><div style="font:700 22px 'JetBrains Mono', monospace;">{{ slipAvg }}</div><div style="font-size:12px; color:#625B70;">avg. probability</div></div>
+                    <div><div style="font:700 22px 'JetBrains Mono', monospace; color:#3E0F8D;">{{ slipAll }}</div><div style="font-size:12px; color:#625B70;">all hit</div></div>
+                  </div>
+                  <div style="background:#3E0F8D; border-radius:24px; padding:22px; color:#FFFFFF; display:flex; flex-direction:column; gap:14px;">
+                    <div style="display:flex; justify-content:space-between; align-items:center;">
+                      <div style="font-weight:700; font-size:18px;">My NBA Picks</div>
+                      <div style="font:600 11px 'JetBrains Mono', monospace; color:#E4DA72;">NOV 10</div>
+                    </div>
+                    <sc-for list="{{ slipRows }}" as="s" hint-placeholder-count="2">
+                      <div style="display:flex; justify-content:space-between; gap:10px; padding:10px 0; border-top:1px solid rgba(255,255,255,0.16);">
+                        <div style="min-width:0;"><div style="font-weight:700; font-size:14px;">{{ s.player }}</div><div style="font-size:12px; color:#D9CEF0;">{{ s.propText }}</div></div>
+                        <div style="font:700 16px 'JetBrains Mono', monospace; color:#E4DA72;">{{ s.probText }}</div>
+                      </div>
+                    </sc-for>
+                    <div style="font:500 10px 'JetBrains Mono', monospace; color:#BFAEE3;">novig-nba · for research only</div>
+                  </div>
+                  <div style="display:flex; gap:8px; flex-wrap:wrap;">
+                    <button style="border:none; cursor:pointer; flex:1; padding:12px 14px; min-height:44px; border-radius:999px; background:#3E0F8D; color:#FFFFFF; font:700 13px 'Instrument Sans', sans-serif;">Download PNG</button>
+                    <button style="cursor:pointer; flex:1; padding:12px 14px; min-height:44px; border-radius:999px; background:#FFFFFF; color:#1D1530; border:1px solid #D3CCDF; font:600 13px 'Instrument Sans', sans-serif;">Copy image</button>
+                    <button style="cursor:pointer; flex:1; padding:12px 14px; min-height:44px; border-radius:999px; background:#FFFFFF; color:#1D1530; border:1px solid #D3CCDF; font:600 13px 'Instrument Sans', sans-serif;">Share</button>
+                  </div>
+                </div>
+              </div>
+            </sc-if>
+          </div>
+        </sc-if>
+
+        <!-- METHOD -->
+        <sc-if value="{{ isMethod }}" hint-placeholder-val="{{ false }}">
+          <div data-screen-label="Method" style="display:flex; flex-direction:column; gap:22px; max-width:880px;">
+            <div style="display:flex; flex-direction:column; gap:10px;">
+              <h1 style="margin:0; font-size:clamp(32px, 5cqi, 52px); letter-spacing:-0.035em; line-height:1;">How we read a prop</h1>
+              <p style="margin:0; font-size:16px; line-height:1.6; color:#625B70; text-wrap:pretty;">Two steps: strip the bookmaker margin out of the price, then weigh that fair price against the player’s own numbers.</p>
+            </div>
+
+            <section style="background:#FFFFFF; border:1px solid #DEDAE5; border-radius:24px; padding:clamp(18px, 3cqi, 28px); display:flex; flex-direction:column; gap:18px;">
+              <div style="display:flex; gap:12px; align-items:baseline;"><div style="font:700 13px 'JetBrains Mono', monospace; color:#9564DD;">01</div><h2 style="margin:0; font-size:20px;">Remove the vig</h2></div>
+              <p style="margin:0; font-size:15px; line-height:1.6;">Books price both sides so their implied probabilities add up to more than 100%. The extra is their margin. Dividing each side by the total gives the fair price.</p>
+              <div style="display:flex; flex-direction:column; gap:10px;">
+                <div style="display:flex; align-items:center; gap:12px; flex-wrap:wrap;">
+                  <div style="width:110px; font:600 13px 'JetBrains Mono', monospace;">Over −110</div>
+                  <div style="flex:1 1 200px; height:22px; border-radius:6px; background:#EEEBF2; position:relative; overflow:hidden;"><div style="position:absolute; inset:0 auto 0 0; width:50%; background:#3E0F8D;"></div><div style="position:absolute; top:0; bottom:0; left:50%; width:2.4%; background:#E4DA72;"></div></div>
+                  <div style="width:70px; text-align:right; font:700 13px 'JetBrains Mono', monospace;">52.38%</div>
+                </div>
+                <div style="display:flex; align-items:center; gap:12px; flex-wrap:wrap;">
+                  <div style="width:110px; font:600 13px 'JetBrains Mono', monospace;">Under −110</div>
+                  <div style="flex:1 1 200px; height:22px; border-radius:6px; background:#EEEBF2; position:relative; overflow:hidden;"><div style="position:absolute; inset:0 auto 0 0; width:50%; background:#9564DD;"></div><div style="position:absolute; top:0; bottom:0; left:50%; width:2.4%; background:#E4DA72;"></div></div>
+                  <div style="width:70px; text-align:right; font:700 13px 'JetBrains Mono', monospace;">52.38%</div>
+                </div>
+                <div style="display:flex; gap:8px; align-items:center; font-size:13px; color:#625B70;"><div style="width:12px; height:12px; border-radius:3px; background:#E4DA72;"></div>Vig: 104.76% − 100% = 4.76%. Fair price: 50% / 50%.</div>
+              </div>
+              <div style="background:#1D1530; color:#EDE7F8; border-radius:16px; padding:16px 18px; font:500 13px/1.9 'JetBrains Mono', monospace; overflow-x:auto;">
+                <div>p = |odds| / (|odds| + 100)   <span style="color:#8F86A3;">// odds &lt; 0</span></div>
+                <div>p = 100 / (odds + 100)       <span style="color:#8F86A3;">// odds &gt; 0</span></div>
+                <div style="color:#E4DA72;">p_fair = p / (p_over + p_under)</div>
+                <div style="color:#E4DA72;">consensus = mean(p_fair across books)</div>
+              </div>
+            </section>
+
+            <section style="background:#FFFFFF; border:1px solid #DEDAE5; border-radius:24px; padding:clamp(18px, 3cqi, 28px); display:flex; flex-direction:column; gap:16px;">
+              <div style="display:flex; gap:12px; align-items:baseline;"><div style="font:700 13px 'JetBrains Mono', monospace; color:#9564DD;">02</div><h2 style="margin:0; font-size:20px;">Blend five signals</h2></div>
+              <div style="display:flex; flex-direction:column;">
+                <sc-for list="{{ weights }}" as="w" hint-placeholder-count="5">
+                  <div style="display:flex; align-items:center; gap:14px; padding:12px 0; border-top:1px solid #EEEBF2; flex-wrap:wrap;">
+                    <div style="flex:1 1 220px; min-width:0;"><div style="font-weight:700; font-size:15px;">{{ w.label }}</div><div style="font-size:13px; color:#625B70;">{{ w.detail }}</div></div>
+                    <div style="flex:0 1 180px; display:flex; align-items:center; gap:10px;"><div style="flex:1; height:6px; background:#EEEBF2; border-radius:999px; overflow:hidden;"><div style="height:100%; background:#3E0F8D; width:{{ w.w }};"></div></div><div style="width:40px; text-align:right; font:700 13px 'JetBrains Mono', monospace;">{{ w.pct }}</div></div>
+                  </div>
+                </sc-for>
+              </div>
+            </section>
+
+            <section style="background:#FFFFFF; border:1px solid #DEDAE5; border-radius:24px; padding:clamp(18px, 3cqi, 28px); display:flex; flex-direction:column; gap:14px;">
+              <div style="display:flex; gap:12px; align-items:baseline;"><div style="font:700 13px 'JetBrains Mono', monospace; color:#9564DD;">03</div><h2 style="margin:0; font-size:20px;">Read the tier</h2></div>
+              <div style="display:grid; grid-template-columns:repeat(auto-fill, minmax(min(100%, 180px), 1fr)); gap:10px;">
+                <div style="padding:14px; border-radius:16px; background:#E4DA72; color:#2A0A60;"><div style="font-weight:700;">Strong play</div><div style="font:600 13px 'JetBrains Mono', monospace; margin-top:4px;">≥ 70%</div></div>
+                <div style="padding:14px; border-radius:16px; background:#3E0F8D; color:#FFFFFF;"><div style="font-weight:700;">Playable</div><div style="font:600 13px 'JetBrains Mono', monospace; margin-top:4px;">65 – 70%</div></div>
+                <div style="padding:14px; border-radius:16px; background:#E3DAF3; color:#3E0F8D;"><div style="font-weight:700;">Lean only</div><div style="font:600 13px 'JetBrains Mono', monospace; margin-top:4px;">56 – 65%</div></div>
+                <div style="padding:14px; border-radius:16px; background:#E2E2E2; color:#4A4458;"><div style="font-weight:700;">Pass</div><div style="font:600 13px 'JetBrains Mono', monospace; margin-top:4px;">&lt; 56%</div></div>
+              </div>
+            </section>
+
+            <p style="margin:0; font-size:13px; line-height:1.6; color:#625B70;">For informational and research purposes only. This is not betting advice. Odds and lineup data may be delayed or missing; check official sources.</p>
+          </div>
+        </sc-if>
+      </div>
+    </div>
+
+    <sc-if value="{{ mobileEventBar }}" hint-placeholder-val="{{ false }}">
+      <div style="flex:none; display:flex; gap:8px; padding:10px 12px; background:#FFFFFF; border-top:1px solid #DEDAE5;">
+        <button onClick="{{ v.onAddLean }}" style="flex:1; border:none; cursor:pointer; min-height:48px; border-radius:14px; display:flex; align-items:center; justify-content:center; gap:8px; font:700 14px 'Instrument Sans', sans-serif; background:{{ v.addBg }}; color:{{ v.addFg }};"><span>{{ v.addShort }}</span><span style="font-family:'JetBrains Mono', monospace;">{{ v.addProb }}</span></button>
+        <button onClick="{{ v.onAddOther }}" style="flex:none; cursor:pointer; min-height:48px; padding:0 12px; border-radius:14px; border:1px solid #D3CCDF; background:#FFFFFF; color:#1D1530; font:600 13px 'Instrument Sans', sans-serif;">{{ v.otherShort }}</button>
+        <button onClick="{{ v.onAsk }}" aria-label="Ask the agent" style="flex:none; border:none; cursor:pointer; min-height:48px; padding:0 14px; border-radius:14px; background:#ECE6F7; color:#3E0F8D; font:700 13px 'Instrument Sans', sans-serif;">Ask</button>
+      </div>
+    </sc-if>
+
+    <sc-if value="{{ sheetOpen }}" hint-placeholder-val="{{ false }}">
+      <div onClick="{{ closeSheet }}" style="position:absolute; inset:0; z-index:30; background:rgba(29,21,48,0.36);"></div>
+      <div style="position:absolute; left:0; right:0; bottom:0; z-index:31; max-height:82%; overflow-y:auto; background:#FFFFFF; border-radius:24px 24px 0 0; padding:10px 18px 18px; display:flex; flex-direction:column; gap:16px;">
+        <div style="align-self:center; width:40px; height:4px; border-radius:999px; background:#D3CCDF;"></div>
+        <div style="display:flex; justify-content:space-between; align-items:center;">
+          <div style="font-size:18px; font-weight:700;">Filter games</div>
+          <div style="font-size:13px; color:#625B70;">{{ h.note }}</div>
+        </div>
+        <div style="display:flex; flex-direction:column; gap:8px;"><div style="font-size:12px; font-weight:700; letter-spacing:0.08em; text-transform:uppercase; color:#625B70;">Venue</div><div style="display:flex; gap:2px; padding:3px; border-radius:12px; background:#F3F1F6;"><sc-for list="{{ h.venues }}" as="o" hint-placeholder-count="3"><button onClick="{{ o.onClick }}" style="flex:1; border:none; cursor:pointer; min-height:38px; padding:6px 6px; border-radius:9px; font:600 13px 'Instrument Sans', sans-serif; background:{{ o.bg }}; color:{{ o.fg }};">{{ o.label }}</button></sc-for></div></div>
+        <div style="display:flex; flex-direction:column; gap:8px;"><div style="font-size:12px; font-weight:700; letter-spacing:0.08em; text-transform:uppercase; color:#625B70;">Role</div><div style="display:flex; gap:2px; padding:3px; border-radius:12px; background:#F3F1F6;"><sc-for list="{{ h.roles }}" as="o" hint-placeholder-count="3"><button onClick="{{ o.onClick }}" style="flex:1; border:none; cursor:pointer; min-height:38px; padding:6px 6px; border-radius:9px; font:600 13px 'Instrument Sans', sans-serif; background:{{ o.bg }}; color:{{ o.fg }};">{{ o.label }}</button></sc-for></div></div>
+        <div style="display:flex; flex-direction:column; gap:8px;"><div style="font-size:12px; font-weight:700; letter-spacing:0.08em; text-transform:uppercase; color:#625B70;">Opponent</div><select value="{{ h.opp }}" onChange="{{ h.onOpp }}" style="min-height:44px; padding:8px 12px; border-radius:12px; border:none; background:#F3F1F6; font:600 14px 'Instrument Sans', sans-serif; color:#1D1530;"><sc-for list="{{ h.oppOptions }}" as="op" hint-placeholder-count="1"><option value="{{ op.value }}">{{ op.label }}</option></sc-for></select></div>
+        <div style="display:flex; flex-direction:column; gap:8px;">
+          <div style="font-size:12px; font-weight:700; letter-spacing:0.08em; text-transform:uppercase; color:#625B70;">Teammates</div>
+          <div style="display:flex; flex-wrap:wrap; gap:6px;">
+            <sc-for list="{{ h.mateChips }}" as="m" hint-placeholder-count="4">
+              <button onClick="{{ m.onClick }}" style="cursor:pointer; display:flex; align-items:center; gap:6px; min-height:40px; padding:7px 12px; border-radius:999px; font:600 13px 'Instrument Sans', sans-serif; background:{{ m.bg }}; color:{{ m.fg }}; border:1px solid {{ m.border }};"><span>{{ m.label }}</span><span style="font:600 11px 'JetBrains Mono', monospace; opacity:0.75;">{{ m.sub }}</span></button>
+            </sc-for>
+          </div>
+          <div style="opacity:{{ h.mateSegOpacity }};"><div style="display:flex; gap:2px; padding:3px; border-radius:12px; background:#F3F1F6;"><sc-for list="{{ h.mates }}" as="o" hint-placeholder-count="3"><button onClick="{{ o.onClick }}" style="flex:1; border:none; cursor:pointer; min-height:38px; padding:6px 6px; border-radius:9px; font:600 13px 'Instrument Sans', sans-serif; background:{{ o.bg }}; color:{{ o.fg }};">{{ o.label }}</button></sc-for></div></div>
+          <div style="font-size:12px; color:#625B70;">{{ h.mateHint }}</div>
+        </div>
+        <div style="display:flex; gap:8px; padding-top:4px;">
+          <button onClick="{{ h.onClear }}" style="flex:1; cursor:pointer; min-height:48px; border-radius:14px; border:1px solid #D3CCDF; background:#FFFFFF; color:#1D1530; font:600 14px 'Instrument Sans', sans-serif;">Reset</button>
+          <button onClick="{{ closeSheet }}" style="flex:2; border:none; cursor:pointer; min-height:48px; border-radius:14px; background:#3E0F8D; color:#FFFFFF; font:700 14px 'Instrument Sans', sans-serif;">Show {{ h.count }} games</button>
+        </div>
+      </div>
+    </sc-if>
+
+    <sc-if value="{{ isMobile }}" hint-placeholder-val="{{ false }}">
+      <nav style="flex:none; display:flex; background:#FFFFFF; border-top:1px solid #DEDAE5; padding:0 6px 10px;">
+        <sc-for list="{{ navItems }}" as="n" hint-placeholder-count="4">
+          <button onClick="{{ n.onClick }}" style="flex:1; border:none; background:none; cursor:pointer; display:flex; flex-direction:column; align-items:center; gap:6px; padding:0 0 4px; min-height:56px; font:600 12px 'Instrument Sans', sans-serif; color:{{ n.tabFg }};">
+            <div style="width:28px; height:3px; border-radius:0 0 3px 3px; background:{{ n.tabBar }};"></div>
+            <div style="position:relative; padding-top:6px;">{{ n.label }}<sc-if value="{{ n.hasBadge }}"><span style="position:absolute; top:0; right:-20px; min-width:18px; height:18px; padding:0 5px; border-radius:999px; background:#E4DA72; color:#2A0A60; font:700 10px 'JetBrains Mono', monospace; display:flex; align-items:center; justify-content:center;">{{ n.badge }}</span></sc-if></div>
+          </button>
+        </sc-for>
+      </nav>
+    </sc-if>
+
+    <!-- AGENT -->
+    <sc-if value="{{ agentOpen }}" hint-placeholder-val="{{ false }}">
+      <div onClick="{{ closeAgent }}" style="position:absolute; inset:0; background:rgba(29,21,48,0.32); z-index:20;"></div>
+      <aside data-screen-label="Agent" style="position:absolute; top:0; right:0; bottom:0; width:min(440px, 100%); z-index:21; background:#F7F6F9; display:flex; flex-direction:column; box-shadow:-20px 0 60px rgba(29,21,48,0.18);">
+        <div style="flex:none; display:flex; align-items:center; justify-content:space-between; gap:12px; padding:16px 18px; background:#3E0F8D; color:#FFFFFF;">
+          <div>
+            <div style="font-weight:700; font-size:17px;">Betting agent</div>
+            <div style="font-size:12px; color:#D9CEF0;">Checks market, form, projection and matchup</div>
+          </div>
+          <button onClick="{{ closeAgent }}" aria-label="Close" style="cursor:pointer; width:40px; height:40px; border-radius:50%; border:1px solid rgba(255,255,255,0.3); background:transparent; color:#FFFFFF; font:600 18px 'Instrument Sans', sans-serif;">×</button>
+        </div>
+        <div style="flex:1; overflow-y:auto; padding:18px; display:flex; flex-direction:column; gap:14px;">
+          <sc-for list="{{ messages }}" as="m" hint-placeholder-count="2">
+            <sc-if value="{{ m.isUser }}">
+              <div style="align-self:flex-end; max-width:85%; padding:11px 14px; border-radius:18px 18px 4px 18px; background:#3E0F8D; color:#FFFFFF; font-size:14px; line-height:1.45;">{{ m.text }}</div>
+            </sc-if>
+            <sc-if value="{{ m.isAgent }}">
+              <div style="align-self:flex-start; max-width:94%; display:flex; flex-direction:column; gap:10px;">
+                <div style="padding:11px 14px; border-radius:18px 18px 18px 4px; background:#FFFFFF; border:1px solid #E3DFE9; font-size:14px; line-height:1.5;">{{ m.text }}</div>
+                <sc-if value="{{ m.hasCard }}">
+                  <div onClick="{{ m.onOpen }}" style="cursor:pointer; background:#FFFFFF; border:1px solid #E3DFE9; border-radius:18px; padding:14px; display:flex; flex-direction:column; gap:12px;">
+                    <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:10px;">
+                      <div><div style="font-weight:700; font-size:15px;">{{ m.title }}</div><div style="font-size:12px; color:#625B70; margin-top:2px;">{{ m.sub }}</div></div>
+                      <div style="text-align:right;"><div style="font:700 22px 'JetBrains Mono', monospace; color:#3E0F8D;">{{ m.probText }}</div><div style="font-size:11px; font-weight:700; padding:2px 8px; border-radius:999px; background:{{ m.tierBg }}; color:{{ m.tierFg }};">{{ m.tierLabel }}</div></div>
+                    </div>
+                    <div style="display:flex; flex-direction:column; gap:6px;">
+                      <sc-for list="{{ m.bullets }}" as="b" hint-placeholder-count="4">
+                        <div style="display:flex; gap:8px; align-items:flex-start; font-size:13px; line-height:1.4;"><div style="flex:none; width:8px; height:8px; border-radius:50%; margin-top:5px; background:{{ b.dot }};"></div><div>{{ b.text }}</div></div>
+                      </sc-for>
+                    </div>
+                    <div style="font-size:12px; color:#625B70; padding-top:10px; border-top:1px solid #EEEBF2;">{{ m.risk }}</div>
+                  </div>
+                </sc-if>
+              </div>
+            </sc-if>
+          </sc-for>
+          <sc-if value="{{ typing }}" hint-placeholder-val="{{ false }}">
+            <div style="align-self:flex-start; padding:12px 16px; border-radius:18px; background:#FFFFFF; border:1px solid #E3DFE9; font-size:13px; color:#625B70;">{{ typingEl }}</div>
+          </sc-if>
+        </div>
+        <div style="flex:none; padding:12px 14px 16px; border-top:1px solid #E3DFE9; background:#FFFFFF; display:flex; flex-direction:column; gap:10px;">
+          <div style="display:flex; gap:6px; overflow-x:auto;">
+            <sc-for list="{{ suggestions }}" as="q" hint-placeholder-count="3">
+              <button onClick="{{ q.onClick }}" style="flex:none; cursor:pointer; padding:8px 12px; border-radius:999px; border:1px solid #D3CCDF; background:#FFFFFF; color:#3E0F8D; font:600 12px 'Instrument Sans', sans-serif; white-space:nowrap;">{{ q.label }}</button>
+            </sc-for>
+          </div>
+          <div style="display:flex; gap:8px;">
+            <input value="{{ input }}" onChange="{{ onInput }}" onKeyDown="{{ onKey }}" placeholder="Ask about a player, prop or your slip" style="flex:1; min-width:0; min-height:44px; padding:10px 14px; border-radius:999px; border:1px solid #D3CCDF; font:500 14px 'Instrument Sans', sans-serif; color:#1D1530; outline:none; background:#F7F6F9;">
+            <button onClick="{{ send }}" style="border:none; cursor:pointer; min-height:44px; padding:0 18px; border-radius:999px; background:#3E0F8D; color:#FFFFFF; font:700 14px 'Instrument Sans', sans-serif;">Send</button>
+          </div>
+        </div>
+      </aside>
+    </sc-if>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;startDevice&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;web&quot;,&quot;mobile&quot;],&quot;default&quot;:&quot;web&quot;,&quot;tsType&quot;:&quot;'web'|'mobile'&quot;},&quot;probabilityStyle&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;Percent&quot;,&quot;Fair odds&quot;],&quot;default&quot;:&quot;Percent&quot;,&quot;tsType&quot;:&quot;string&quot;}}">
+const TEAMS={NYK:'Knicks',BOS:'Celtics',OKC:'Thunder',LAL:'Lakers',MIN:'Timberwolves',DEN:'Nuggets',DAL:'Mavericks',SAS:'Spurs',ORL:'Magic',CLE:'Cavaliers',PHX:'Suns',GSW:'Warriors'};
+const EVENTS=[{id:'e1',away:'CLE',home:'ORL',time:'7:00 PM'},{id:'e2',away:'BOS',home:'NYK',time:'7:30 PM'},{id:'e3',away:'LAL',home:'OKC',time:'8:00 PM'},{id:'e4',away:'DEN',home:'MIN',time:'8:00 PM'},{id:'e5',away:'SAS',home:'DAL',time:'8:30 PM'},{id:'e6',away:'GSW',home:'PHX',time:'10:00 PM'}];
+const PLAYERS=[
+['Donovan Mitchell','CLE','SG',27.6,4.6,5.4,3.3,34],['Evan Mobley','CLE','PF',18.2,9.2,3.4,0.8,33],
+['Paolo Banchero','ORL','PF',24.8,7.6,4.6,1.4,35],['Franz Wagner','ORL','SF',22.4,5.6,4.4,1.6,34],
+['Jaylen Brown','BOS','SF',27.1,6.0,4.5,2.2,34],['Derrick White','BOS','SG',17.4,4.4,5.0,3.2,33],
+['Jalen Brunson','NYK','PG',27.5,3.2,7.0,2.6,35],['Karl-Anthony Towns','NYK','C',24.6,12.4,3.1,2.0,34],
+['Luka Dončić','LAL','PG',32.4,8.1,8.6,3.6,36],['Austin Reaves','LAL','SG',24.0,4.8,6.6,2.8,35],
+['Shai Gilgeous-Alexander','OKC','PG',31.6,5.0,6.4,2.0,34],['Chet Holmgren','OKC','C',18.2,8.4,2.0,1.6,30],
+['Nikola Jokić','DEN','C',29.5,12.6,10.2,1.9,36],['Jamal Murray','DEN','PG',21.4,4.2,6.0,2.6,34],
+['Anthony Edwards','MIN','SG',28.4,5.6,4.0,3.6,36],['Julius Randle','MIN','PF',21.6,6.4,5.0,1.6,33],
+['Victor Wembanyama','SAS','C',25.8,11.6,3.6,2.6,33],["De'Aaron Fox",'SAS','PG',19.6,3.6,6.4,1.6,32],
+['Cooper Flagg','DAL','SF',20.1,6.6,4.4,1.2,33],['Anthony Davis','DAL','PF',21.9,10.8,3.0,0.6,32],
+['Stephen Curry','GSW','PG',26.8,4.2,5.6,4.4,33],['Jimmy Butler','GSW','SF',19.8,5.6,5.4,0.6,32],
+['Devin Booker','PHX','SG',26.6,4.2,7.0,2.2,36],['Jalen Green','PHX','SG',19.6,4.0,3.0,2.4,32]
+].map(a=>({name:a[0],team:a[1],pos:a[2],pts:a[3],reb:a[4],ast:a[5],tpm:a[6],min:a[7]}));
+const MARKETS=[
+{k:'PTS',name:'points',f:p=>p.pts,sd:a=>Math.max(4,a*.24)},
+{k:'REB',name:'rebounds',f:p=>p.reb,sd:a=>Math.max(1.6,a*.3)},
+{k:'AST',name:'assists',f:p=>p.ast,sd:a=>Math.max(1.4,a*.32)},
+{k:'3PM',name:'threes',f:p=>p.tpm,sd:a=>Math.max(.9,a*.45)},
+{k:'PRA',name:'pts+reb+ast',f:p=>p.pts+p.reb+p.ast,sd:a=>Math.max(5,a*.18)}];
+const BOOKS=['DraftKings','FanDuel','BetMGM','Caesars','ESPN BET'];
+const P='#3E0F8D',Y='#E4DA72',FOR='#3E0F8D',NEU='#B9B3C4',AGN='#B4436C';
+
+function hash(s){let h=2166136261;for(let i=0;i<s.length;i++){h^=s.charCodeAt(i);h=Math.imul(h,16777619);}return h>>>0;}
+function rng(seed){let a=seed;return()=>{a|=0;a=a+0x6D2B79F5|0;let t=Math.imul(a^a>>>15,1|a);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296;};}
+function normal(r){const u=r()||1e-9,v=r();return Math.sqrt(-2*Math.log(u))*Math.cos(2*Math.PI*v);}
+function erf(x){const s=Math.sign(x);x=Math.abs(x);const t=1/(1+0.3275911*x);const y=1-(((((1.061405429*t-1.453152735)*t)+1.421413741)*t-0.284496736)*t+0.254829592)*t*Math.exp(-x*x);return s*y;}
+const phi=z=>0.5*(1+erf(z/Math.SQRT2));
+const clamp=(x,a,b)=>Math.max(a,Math.min(b,x));
+const pct=p=>Math.round(p*100)+'%';
+function toAm(p){return p>=0.5?'−'+Math.round(p/(1-p)*100):'+'+Math.round((1-p)/p*100);}
+function tier(p){
+  if(p>=.70)return{label:'Strong play',short:'Strong',bg:Y,fg:'#2A0A60'};
+  if(p>=.65)return{label:'Playable',short:'Playable',bg:P,fg:'#FFFFFF'};
+  if(p>=.56)return{label:'Lean only',short:'Lean',bg:'#E3DAF3',fg:P};
+  return{label:'Pass',short:'Pass',bg:'#E2E2E2',fg:'#4A4458'};
+}
+
+const LOGS={};
+const SEASON_START=new Date(2026,9,21);
+const ROSTER={CLE:['Darius Garland','Jarrett Allen',"De'Andre Hunter"],ORL:['Jalen Suggs','Desmond Bane','Wendell Carter Jr.'],BOS:['Payton Pritchard','Anfernee Simons','Neemias Queta'],NYK:['OG Anunoby','Mikal Bridges','Josh Hart'],LAL:['LeBron James','Deandre Ayton','Rui Hachimura'],OKC:['Jalen Williams','Isaiah Hartenstein','Luguentz Dort'],DEN:['Aaron Gordon','Cameron Johnson','Christian Braun'],MIN:['Rudy Gobert','Jaden McDaniels','Naz Reid'],SAS:['Stephon Castle','Harrison Barnes','Devin Vassell'],DAL:['Kyrie Irving','Klay Thompson','P.J. Washington'],GSW:['Draymond Green','Jonathan Kuminga','Brandin Podziemski'],PHX:['Dillon Brooks','Grayson Allen','Mark Williams']};
+function gameLog(pl){
+  if(LOGS[pl.name])return LOGS[pl.name];
+  const r=rng(hash(pl.name+'log'));
+  const mates=[...PLAYERS.filter(p=>p.team===pl.team&&p.name!==pl.name).map(p=>p.name),...(ROSTER[pl.team]||[])];
+  const others=Object.keys(TEAMS).filter(t=>t!==pl.team);
+  const games=[];let d=new Date(2026,10,8);
+  for(let i=0;i<40;i++){
+    const starter=r()>0.08, out=mates.filter((_,j)=>r()<(j===0?0.2:0.14));
+    const min=Math.round(clamp(pl.min+normal(r)*3.5-(starter?0:8),12,44));
+    const sc=min/pl.min*(1+out.length*0.04);
+    const val=(avg,f)=>Math.max(0,Math.round(avg*sc+normal(r)*Math.max(1,avg*f)));
+    const g={date:new Date(d),opp:others[Math.floor(r()*others.length)],home:r()<0.5,starter,min,out,PTS:val(pl.pts,.22),REB:val(pl.reb,.3),AST:val(pl.ast,.32),'3PM':val(pl.tpm,.45)};
+    g.PRA=g.PTS+g.REB+g.AST;
+    games.push(g);
+    d.setDate(d.getDate()-(2+Math.floor(r()*2)));
+    if(d<SEASON_START&&d>new Date(2026,3,14))d=new Date(2026,3,12);
+  }
+  return LOGS[pl.name]={games,mates};
+}
+const HR={hLine:null,hOpp:'all',hMate:'all',hMates:[],hSel:null};
+function buildProp(pl,m,ev){
+  const r=rng(hash(pl.name+m.k));
+  const avg=m.f(pl), sd=m.sd(avg);
+  const strong=r()<0.38;
+  const b=(strong?(r()<0.5?-1:1)*(0.6+r()*0.4):(r()-0.5)*0.7)*sd;
+  const line=Math.max(0.5,Math.floor(avg-b)+0.5);
+  const others=Object.keys(TEAMS).filter(t=>t!==pl.team);
+  const last10=gameLog(pl).games.slice(0,10).map(g=>({v:g[m.k],opp:g.opp}));
+  const hOver=last10.filter(g=>g.v>line).length/10;
+  const season=1-phi((line-avg)/sd);
+  const books=BOOKS.map(bk=>{const vig=0.035+r()*0.035;const fo=clamp(0.5+(season-0.5)*0.45+(r()-0.5)*0.05,.3,.7);return{book:bk,line,vig,fo,over:toAm(fo*(1+vig)),under:toAm((1-fo)*(1+vig))};});
+  const mOver=books.reduce((s,x)=>s+x.fo,0)/books.length;
+  const proj=Math.round((avg+normal(r)*sd*0.15)*10)/10;
+  const pjOver=1-phi((line-proj)/sd);
+  const rank=1+Math.floor(r()*30);
+  const muOver=rank<=10?0.6:rank>20?0.4:0.5;
+  const pOver=0.25*hOver+0.25*season+0.25*mOver+0.15*pjOver+0.10*muOver;
+  const over=pOver>=0.5, lean=over?'Over':'Under', prob=over?pOver:1-pOver;
+  const opp=ev.away===pl.team?ev.home:ev.away;
+  const k=over?Math.round(hOver*10):10-Math.round(hOver*10)-last10.filter(g=>g.v===line).length;
+  const sHit=over?season:1-season, mk=over?mOver:1-mOver, edge=over?proj-line:line-proj;
+  const mu=rank<=10?'Easy':rank>20?'Tough':'Average';
+  const muFor=over?(rank<=10?'for':rank>20?'against':'neutral'):(rank>20?'for':rank<=10?'against':'neutral');
+  const sig=(label,detail,value,meter,verdict)=>({label,detail,value,meter:clamp(meter,4,100)+'%',v:verdict});
+  const signals=[
+    sig('Market price',`No-vig ${lean.toLowerCase()} across 5 books`,pct(mk),mk*100,mk>=0.52?'for':mk<=0.48?'against':'neutral'),
+    sig('Last 10 games',`Went ${lean.toLowerCase()} ${line} in ${k} of 10`,k+'/10',k*10,k>=6?'for':k<=4?'against':'neutral'),
+    sig('Season hit rate',`Season avg ${avg.toFixed(1)} vs line ${line}`,pct(sHit),sHit*100,sHit>=0.55?'for':sHit<=0.45?'against':'neutral'),
+    sig('Projection',`${proj} projected, ${edge>=0?'+':''}${edge.toFixed(1)} vs line`,proj.toFixed(1),50+edge/sd*60,edge>=0.5?'for':edge<=-0.5?'against':'neutral'),
+    sig('Opponent defense',`${opp} ranks #${rank} vs ${pl.pos}s · ${mu}`,'#'+rank,over?(31-rank)/30*100:rank/30*100,muFor)
+  ];
+  return{id:pl.name+'|'+m.k,eventId:ev.id,player:pl.name,team:pl.team,pos:pl.pos,opp,ev,market:m.k,marketName:m.name,line,avg,sd,last10,books,mOver,proj,edge,rank,lean,prob,pOver,signals,min:pl.min,k,
+    matchup:`${ev.away} @ ${ev.home}`,time:ev.time,
+    propText:`${lean} ${line} ${m.name}`};
+}
+const ALL=[];
+EVENTS.forEach(ev=>PLAYERS.filter(p=>p.team===ev.away||p.team===ev.home).forEach(pl=>MARKETS.forEach(m=>ALL.push(buildProp(pl,m,ev)))));
+const BY_ID={};ALL.forEach(p=>BY_ID[p.id]=p);
+const PICKS=ALL.filter(p=>p.prob>=0.65).sort((a,b)=>b.prob-a.prob);
+const sigColor=v=>v==='for'?FOR:v==='against'?AGN:NEU;
+
+class Component extends DCLogic {
+  state = {
+    device: this.props.startDevice==='mobile'?'mobile':'web',
+    page:'today', eventId:'e2', market:'PTS', player:'Jalen Brunson',
+    slip:PICKS.slice(0,2).map(p=>({id:p.id,dir:p.lean})),
+    hRange:10, hLine:null, hVenue:'all', hRole:'all', hMate:'all', hMates:[], hOpp:'all', hSel:null, evTab:'read', sheet:false, agentOpen:false, messages:[], typing:false, input:'', conf:'all', mk:'all'
+  };
+  scrollRef = React.createRef();
+  scrollEl(){return this.scrollRef.current||document.querySelector('[data-nv-scroll]');}
+  toTop(){requestAnimationFrame(()=>{const el=this.scrollEl();if(el)el.scrollTop=0;});}
+  nav(patch){const el=this.scrollEl();if(el)el.scrollTop=0;this.setState(patch);setTimeout(()=>{const e=this.scrollEl();if(e)e.scrollTop=0;},30);}
+  componentDidMount(){
+    this.ro=new ResizeObserver(()=>{const el=this.scrollEl();if(!el)return;const w=el.clientWidth>=920;if(w!==this.state.wide)this.setState({wide:w});});
+    const se=this.scrollEl();if(se)this.ro.observe(se);
+  }
+  componentWillUnmount(){clearTimeout(this.t);if(this.ro)this.ro.disconnect();}
+  fmt(p){return (this.props.probabilityStyle==='Fair odds')?toAm(p):pct(p);}
+  go(page){this.nav({page});}
+  openProp(p){this.nav({page:'event',eventId:p.eventId,market:p.market,player:p.player,agentOpen:false,evTab:'read',...HR});}
+  openEvent(id){
+    const best=ALL.filter(p=>p.eventId===id&&p.market==='PTS').sort((a,b)=>b.prob-a.prob)[0];
+    this.nav({page:'event',eventId:id,market:'PTS',player:best.player,evTab:'read',...HR});
+  }
+  slipItem(id){return this.state.slip.find(s=>s.id===id);}
+  setSlip(id,dir){this.setState(s=>{const cur=s.slip.find(x=>x.id===id);const rest=s.slip.filter(x=>x.id!==id);if(cur&&cur.dir===dir)return{slip:rest};return{slip:[...rest,{id,dir}]};});}
+  removeSlip(id){this.setState(s=>({slip:s.slip.filter(x=>x.id!==id)}));}
+  slipProb(s){const p=BY_ID[s.id];return s.dir===p.lean?p.prob:1-p.prob;}
+
+  cardFor(p){
+    const t=tier(p.prob);
+    const against=p.signals.filter(s=>s.v==='against');
+    return{hasCard:true,title:`${p.player} ${p.lean} ${p.line} ${p.market}`,sub:`${p.matchup} · ${p.time}`,probText:this.fmt(p.prob),tierLabel:t.label,tierBg:t.bg,tierFg:t.fg,
+      bullets:p.signals.map(s=>({text:`${s.label}: ${s.detail}`,dot:sigColor(s.v)})),
+      risk:against.length?`Watch: ${against.map(s=>s.label.toLowerCase()).join(', ')} points the other way.`:'No signal points the other way.',propId:p.id};
+  }
+  reply(text,prop){
+    let msg;
+    if(prop){
+      const t=tier(prop.prob);
+      const intro={'Strong play':'Yes. This is one of the stronger reads on tonight’s board.','Playable':'It’s playable. Most signals agree, but size it smaller than a strong play.','Lean only':'I’d lean it but not bet it. The signals are split.','Pass':'I’d pass. There’s no real edge on either side.'}[t.label];
+      msg={role:'agent',text:intro,...this.cardFor(prop)};
+    } else if(/slip/i.test(text)){
+      const s=this.state.slip;
+      if(!s.length) msg={role:'agent',text:'Your slip is empty. Add a few picks and I’ll check them together.'};
+      else{
+        const probs=s.map(x=>this.slipProb(x));const all=probs.reduce((a,b)=>a*b,1);
+        const weakest=s[probs.indexOf(Math.min(...probs))];const wp=BY_ID[weakest.id];
+        msg={role:'agent',text:`You have ${s.length} picks. Each one is ${pct(Math.min(...probs))}–${pct(Math.max(...probs))} on its own; all of them hitting together is about ${pct(all)}. The weakest leg is ${wp.player} ${weakest.dir} ${wp.line} ${wp.market}. Dropping it raises the all-hit chance the most.`};
+      }
+    } else if(/vig|work|how/i.test(text)){
+      msg={role:'agent',text:'Books price both sides so they add up to more than 100%. I remove that margin to get a fair price, then weigh it against the player’s last 10 games, season hit rate, projection and opponent defense. The result is one probability per side.'};
+    } else {
+      msg={role:'agent',text:'The cleanest bet on tonight’s board:',...this.cardFor(PICKS[0])};
+    }
+    this.setState(s=>({typing:false,messages:[...s.messages,msg]}));
+  }
+  ask(text,prop){
+    if(!text.trim())return;
+    clearTimeout(this.t);
+    this.setState(s=>({agentOpen:true,input:'',typing:true,messages:[...s.messages,{role:'user',text}]}));
+    this.t=setTimeout(()=>this.reply(text,prop),850);
+  }
+  openAgent(){
+    this.setState(s=>({agentOpen:true,messages:s.messages.length?s.messages:[{role:'agent',text:'I check any prop against market price, recent form, projection and matchup. What do you want to look at?'}]}));
+  }
+
+  renderVals(){
+    const st=this.state, web=st.device==='web';
+    const chip=(on)=>({bg:on?P:'#FFFFFF',fg:on?'#FFFFFF':'#1D1530',border:on?P:'#D3CCDF'});
+    const nav=[['today','Today'],['picks','Picks'],['slip','Bet Slip'],['method','Method']].map(([k,l])=>{
+      const on=st.page===k||(k==='today'&&st.page==='event');
+      return{label:l,onClick:()=>this.go(k),bg:on?'#ECE6F7':'transparent',fg:on?P:'#4A4458',tabFg:on?P:'#625B70',tabBar:on?P:'transparent',hasBadge:k==='slip'&&st.slip.length>0,badge:st.slip.length};
+    });
+
+    const topPicks=PICKS.slice(0,3).map((p,i)=>{const t=tier(p.prob);return{rank:i+1,player:p.player,matchup:`${p.matchup} · ${p.time}`,propText:`${p.lean} ${p.line} ${p.market}`,probText:this.fmt(p.prob),tierLabel:t.label,tierBg:t.bg,tierFg:t.fg,onClick:()=>this.openProp(p)};});
+    const games=EVENTS.map(ev=>{const best=ALL.filter(p=>p.eventId===ev.id).sort((a,b)=>b.prob-a.prob)[0];const t=tier(best.prob);
+      return{away:ev.away,home:ev.home,awayName:TEAMS[ev.away],homeName:TEAMS[ev.home],time:ev.time,topText:`${best.player.split(' ').slice(-1)[0]} ${best.lean} ${best.line} ${best.market}`,topProb:this.fmt(best.prob),tierBg:t.bg,tierFg:t.fg,onClick:()=>this.openEvent(ev.id)};});
+
+    const evObj=EVENTS.find(e=>e.id===st.eventId);
+    const ev={...evObj,awayName:TEAMS[evObj.away],homeName:TEAMS[evObj.home]};
+    const marketChips=MARKETS.map(m=>({label:m.k,...chip(st.market===m.k),onClick:()=>this.setState({market:m.k,...HR})}));
+    const evProps=ALL.filter(p=>p.eventId===st.eventId&&p.market===st.market);
+    const playerRows=evProps.map(p=>{const on=p.player===st.player;const t=tier(p.prob);
+      return{name:p.player,short:p.player.split(' ').slice(-1)[0],meta:`${p.pos} · ${p.team}`,line:p.line,leanText:`${p.lean==='Over'?'O':'U'} ${this.fmt(p.prob)}`,leanBg:t.bg,leanFg:t.fg,bg:on?'#ECE6F7':'#FFFFFF',border:on?P:'#EEEBF2',onClick:()=>this.setState({player:p.player,...HR})};});
+    const cur=evProps.find(p=>p.player===st.player)||evProps[0];
+    const ct=tier(cur.prob);
+    const forN=cur.signals.filter(s=>s.v==='for').length;
+    const other=cur.lean==='Over'?'Under':'Over';
+    const inS=this.slipItem(cur.id);
+    const maxV=Math.max(...cur.last10.map(g=>g.v),cur.line)*1.12||1;
+    const v={player:cur.player,pos:cur.pos,team:cur.team,lean:cur.lean,line:cur.line,marketName:cur.marketName,
+      tierLabel:ct.label,tierBg:ct.bg,tierFg:ct.fg,
+      summary:`${forN} of 5 signals support the ${cur.lean.toLowerCase()}.`,
+      pOverText:this.fmt(cur.pOver),pUnderText:this.fmt(1-cur.pOver),overW:(cur.pOver*100).toFixed(1)+'%',
+      addLabel:inS&&inS.dir===cur.lean?`✓ ${cur.lean} ${cur.line} in slip`:`Add ${cur.lean} ${cur.line} to slip`,
+      addBg:inS&&inS.dir===cur.lean?Y:P,addFg:inS&&inS.dir===cur.lean?'#2A0A60':'#FFFFFF',
+      otherLabel:inS&&inS.dir===other?`✓ ${other} in slip`:`${other} instead (${this.fmt(1-cur.prob)})`,
+      addShort:inS&&inS.dir===cur.lean?'✓ '+cur.player.split(' ').slice(-1)[0]+' in slip':'Add '+cur.player.split(' ').slice(-1)[0]+' '+(cur.lean==='Over'?'O':'U')+' '+cur.line,addProb:this.fmt(cur.prob),
+      otherShort:(inS&&inS.dir===other?'✓ ':'')+other+' '+this.fmt(1-cur.prob),
+      onAddLean:()=>this.setSlip(cur.id,cur.lean),onAddOther:()=>this.setSlip(cur.id,other),
+      onAsk:()=>this.ask(`Should I bet ${cur.player} ${cur.lean} ${cur.line} ${cur.market}?`,cur),
+      signals:cur.signals.map(s=>({...s,color:sigColor(s.v),textColor:s.v==='for'?P:s.v==='against'?AGN:'#625B70',verdict:s.v==='for'?'Supports':s.v==='against'?'Against':'Neutral'})),
+      histNote:`${cur.k}/10 ${cur.lean.toLowerCase()} · avg ${(cur.last10.reduce((a,g)=>a+g.v,0)/10).toFixed(1)}`,
+      lineBottom:(cur.line/maxV*100*0.86).toFixed(1)+'%',
+      bars:cur.last10.map(g=>{const hit=cur.lean==='Over'?g.v>cur.line:g.v<cur.line;return{val:g.v,opp:g.opp,h:Math.max(3,g.v/maxV*100*0.86/0.9)+'%',bg:hit?P:'#D6D0E0'};}),
+      consensusText:pct(cur.mOver),
+      books:cur.books.map(b=>({book:b.book,vig:(b.vig*100).toFixed(1)+'%',line:b.line,over:b.over,under:b.under,fair:pct(b.fo)}))
+    };
+
+    const confChips=[['all','All'],['strong','Strong ≥70%'],['play','Playable 65–70%']].map(([k,l])=>({label:l,...chip(st.conf===k),onClick:()=>this.setState({conf:k})}));
+    const mkChips=[['all','ALL'],...MARKETS.map(m=>[m.k,m.k])].map(([k,l])=>({label:l,...chip(st.mk===k),onClick:()=>this.setState({mk:k})}));
+    const filtered=PICKS.filter(p=>(st.conf==='all'||(st.conf==='strong'?p.prob>=.7:p.prob<.7))&&(st.mk==='all'||p.market===st.mk));
+    const pickRows=filtered.map((p,i)=>{const t=tier(p.prob);const s=this.slipItem(p.id);const added=s&&s.dir===p.lean;
+      const sg=p.signals;
+      const tags=[{text:`L10 ${p.k}/10`,v:sg[1].v},{text:`Proj ${p.proj.toFixed(1)}`,v:sg[3].v},{text:`Def #${p.rank}`,v:sg[4].v}].map(x=>({text:x.text,bg:x.v==='for'?'#ECE6F7':x.v==='against'?'#F6E3EA':'#F1F0F3',fg:x.v==='for'?P:x.v==='against'?'#8E2C50':'#4A4458'}));
+      return{rank:String(i+1).padStart(2,'0'),team:p.team,player:p.player,matchup:`${p.matchup} · ${p.time}`,propText:`${p.lean} ${p.line} ${p.marketName}`,tags,probText:this.fmt(p.prob),w:(p.prob*100)+'%',tierShort:t.short,tierBg:t.bg,tierFg:t.fg,border:added?P:'#DEDAE5',
+        btnLabel:added?'✓ In slip':'+ Slip',btnBg:added?Y:'#FFFFFF',btnFg:added?'#2A0A60':P,btnBorder:added?Y:'#D3CCDF',
+        onClick:()=>this.openProp(p),onToggle:(e)=>{e.stopPropagation();this.setSlip(p.id,p.lean);}};});
+
+    const slipRows=st.slip.map(s=>{const p=BY_ID[s.id];const pr=this.slipProb(s);return{team:p.team,player:p.player,propText:`${s.dir} ${p.line} ${p.marketName}`,matchup:p.matchup,time:p.time,probText:this.fmt(pr),tierShort:tier(pr).label,onRemove:()=>this.removeSlip(s.id),onOpen:()=>this.openProp(p)};});
+    const sp=st.slip.map(s=>this.slipProb(s));
+
+    const ctxProp=null;
+    const messages=st.messages.map(m=>({...m,isUser:m.role==='user',isAgent:m.role==='agent',hasCard:!!m.hasCard,bullets:m.bullets||[],onOpen:()=>m.propId&&this.openProp(BY_ID[m.propId])}));
+    const suggestions=['What’s the cleanest bet tonight?','Review my slip','How does no-vig work?'].map(q=>({label:q,onClick:()=>this.ask(q)}));
+    const weights=[['Last 10 games','How often the player cleared this line recently',25],['Season hit rate','Season average and spread vs the line',25],['Market price','No-vig consensus across 5 sportsbooks',25],['Projection','Projected stat line vs the posted line',15],['Opponent defense','Opponent rank against the player’s position',10]].map(([l,d,w])=>({label:l,detail:d,pct:w+'%',w:(w*4)+'%'}));
+
+    const plObj=PLAYERS.find(p=>p.name===cur.player), LG=gameLog(plObj), mkK=cur.market;
+    const hLine=st.hLine??cur.line;
+    let pool=LG.games.slice(0,st.hRange);
+    if(st.hVenue!=='all')pool=pool.filter(g=>g.home===(st.hVenue==='home'));
+    if(st.hRole!=='all')pool=pool.filter(g=>g.starter===(st.hRole==='starter'));
+    if(st.hMates.length&&st.hMate!=='all')pool=pool.filter(g=>st.hMates.every(m=>g.out.includes(m)===(st.hMate==='out')));
+    if(st.hOpp!=='all')pool=pool.filter(g=>g.opp===st.hOpp);
+    const vals=pool.map(g=>g[mkK]), n=vals.length;
+    const nOver=vals.filter(x=>x>hLine).length, nUnder=vals.filter(x=>x<hLine).length;
+    const hAvg=n?vals.reduce((a,b)=>a+b,0)/n:0;
+    const topV=Math.max(...vals,hLine,1)*1.15;
+    const stepV=[1,2,5,10,20].find(x=>topV/x<=4)||20;
+    const ticks=[];for(let t=0;t<=topV;t+=stepV)ticks.push({label:t,pos:(t/topV*100).toFixed(2)+'%'});
+    const chron=pool.slice().reverse();
+    const selI=st.hSel!=null&&st.hSel<chron.length?st.hSel:chron.length-1;
+    const segOf=(key,opts)=>opts.map(([k,l])=>{const on=st[key]===k;return{label:l,bg:on?P:'transparent',fg:on?'#FFFFFF':'#4A4458',onClick:()=>this.setState({[key]:k,hSel:null})};});
+    const fd=d=>d.toLocaleDateString('en-US',{month:'short',day:'numeric'});
+    const sg=chron[selI];
+    const oppSet=[...new Set(LG.games.map(g=>g.opp))].sort();
+    const lastN=nm=>nm.split(' ').slice(-1)[0].replace('Jr.',nm.split(' ').slice(-2)[0]);
+    const selNames=st.hMates.map(lastN).join(' + ');
+    const rangeGames=LG.games.slice(0,st.hRange);
+    const filt=[st.hVenue!=='all'&&(st.hVenue==='home'?'Home':'Away'),st.hRole!=='all'&&(st.hRole==='starter'?'Starter':'Bench'),st.hMates.length&&st.hMate!=='all'&&(selNames+(st.hMate==='out'?' out':' playing')),st.hOpp!=='all'&&'vs '+st.hOpp].filter(Boolean);
+    const lineChanged=st.hLine!=null&&st.hLine!==cur.line;
+    const edgeH=cur.proj-hLine, dAvg=hAvg-hLine;
+    const resOf=x=>x>hLine?['Over',P,'#FFFFFF']:x<hLine?['Under','#C9B4EE','#2A0A60']:['Push',Y,'#2A0A60'];
+    const sr=sg?resOf(sg[mkK]):['','',''];
+    const h={
+      ranges:segOf('hRange',[[5,'L5'],[10,'L10'],[20,'L20'],[40,'L40']]),
+      venues:segOf('hVenue',[['all','All'],['home','Home'],['away','Away']]),
+      roles:segOf('hRole',[['all','All'],['starter','Starter'],['bench','Bench']]),
+      mates:segOf('hMate',[['all','Any'],['in','Playing'],['out','Out']]).map(o=>({...o,onClick:st.hMates.length?o.onClick:()=>{}})),
+      mateSegOpacity:st.hMates.length?1:0.45,
+      mateHint:st.hMates.length?(st.hMate==='all'?'Choose Playing or Out to filter':'Games where '+selNames+(st.hMates.length>1?' were all ':' was ')+(st.hMate==='out'?'out':'playing')):'Pick one or more teammates, then Playing or Out',
+      mateChips:LG.mates.map(nm=>{const on=st.hMates.includes(nm);const no=rangeGames.filter(g=>g.out.includes(nm)).length;return{label:nm,sub:no+' out',bg:on?P:'#FFFFFF',fg:on?'#FFFFFF':'#1D1530',border:on?P:'#D3CCDF',onClick:()=>this.setState(s=>{const next=on?s.hMates.filter(x=>x!==nm):[...s.hMates,nm];return{hMates:next,hMate:next.length===0?'all':(s.hMate==='all'?'out':s.hMate),hSel:null};})};}),
+      lineText:hLine.toFixed(1),lineChanged,
+      onMinus:()=>this.setState({hLine:Math.max(0.5,hLine-0.5)}),onPlus:()=>this.setState({hLine:hLine+0.5}),onResetLine:()=>this.setState({hLine:null}),
+      opp:st.hOpp,oppOptions:[{value:'all',label:'All opponents'},...oppSet.map(o=>({value:o,label:'vs '+o}))],
+      onOpp:e=>this.setState({hOpp:e.target.value,hSel:null}),
+      onClear:()=>this.setState({hVenue:'all',hRole:'all',hMate:'all',hMates:[],hOpp:'all',hLine:null,hSel:null}),
+      hasFilters:filt.length>0||lineChanged,
+      note:n+' games'+(filt.length?' · '+filt.join(' · '):''),
+      empty:n===0,has:n>0,
+      stats:[
+        {label:'Over '+hLine.toFixed(1),value:n?pct(nOver/n):'—',sub:nOver+' of '+n+' games',bg:'#ECE6F7',fg:P},
+        {label:'Under '+hLine.toFixed(1),value:n?pct(nUnder/n):'—',sub:nUnder+' of '+n+' games',bg:'#F3F1F6',fg:'#5B3A99'},
+        {label:'Average',value:n?hAvg.toFixed(1):'—',sub:(dAvg>=0?'+':'')+dAvg.toFixed(1)+' vs line',bg:'#F7F6F9',fg:'#1D1530'},
+        {label:'Projected',value:cur.proj.toFixed(1),sub:(edgeH>=0?'+':'')+edgeH.toFixed(1)+' vs line',bg:'#F6F2D2',fg:'#2A0A60'}
+      ],
+      ticks,linePos:(hLine/topV*100).toFixed(2)+'%',
+      showVals:n<=20,showOpp:n<=20,showValsM:n<=10,count:n,
+      filterLabel:filt.length?'Filters · '+filt.length:'Filters',filterBg:filt.length?P:'#FFFFFF',filterFg:filt.length?'#FFFFFF':'#1D1530',filterBorder:filt.length?P:'#D3CCDF',
+      bars:chron.map((g,i)=>{const x=g[mkK];const on=i===selI;return{val:x,opp:g.opp,h:Math.max(1.5,x/topV*100).toFixed(2)+'%',bg:resOf(x)[1],ring:on?'0 0 0 2px #FFFFFF, 0 0 0 4px #1D1530':'none',valColor:on?'#1D1530':'#8A8496',onPick:()=>{if(this.state.hSel!==i)this.setState({hSel:i});}};}),
+      sel:sg?{date:fd(sg.date),where:(sg.home?'vs ':'@ ')+sg.opp,val:sg[mkK],res:sr[0],resBg:sr[1],resFg:sr[2],min:sg.min+' min',role:sg.starter?'Starter':'Bench',mate:sg.out.length?'Out: '+sg.out.map(lastN).join(', '):'Full roster'}:{}
+    };
+
+    return {
+      evTabs:[['read','Our read'],['log','Game log'],['odds','Odds']].map(([k,l])=>{const on=st.evTab===k;return{label:l,bg:on?'#FFFFFF':'transparent',fg:on?P:'#4A4458',onClick:()=>this.setState({evTab:k})};}),
+      evRead:st.evTab==='read',evLog:st.evTab==='log',evOdds:st.evTab==='odds',
+      sheetOpen:!web&&st.sheet&&st.page==='event',openSheet:()=>this.setState({sheet:true}),closeSheet:()=>this.setState({sheet:false}),
+      mobileEventBar:!web&&st.page==='event',
+      h,asidePos:(web&&this.state.wide)?'sticky':'static',
+      deviceTabs:[['web','Web'],['mobile','Mobile']].map(([k,l])=>({label:l,bg:st.device===k?P:'transparent',fg:st.device===k?'#FFFFFF':'#4A4458',onClick:()=>this.nav({device:k})})),
+      isWeb:web,isMobile:!web,
+      frameW:web?'100%':'390px',frameH:web?'calc(100vh - 58px)':'min(844px, calc(100vh - 76px))',frameR:web?'0':'40px',frameBorder:web?'none':'8px solid #1D1530',frameShadow:web?'none':'0 30px 80px rgba(29,21,48,0.25)',
+      navItems:nav,
+      isToday:st.page==='today',isEvent:st.page==='event',isPicks:st.page==='picks',isSlip:st.page==='slip',isMethod:st.page==='method',
+      goToday:()=>this.go('today'),goPicks:()=>this.go('picks'),
+      picksCount:PICKS.length,strongCount:PICKS.filter(p=>p.prob>=.7).length,
+      topPicks,games,ev,marketChips,playerRows,v,
+      playerRowsM:[...playerRows.filter(r=>r.name===cur.player),...playerRows.filter(r=>r.name!==cur.player)],
+      confChips,mkChips,pickRows,noPicks:pickRows.length===0,
+      slipRows,slipEmpty:st.slip.length===0,slipHas:st.slip.length>0,slipCount:st.slip.length,
+      slipAvg:sp.length?pct(sp.reduce((a,b)=>a+b,0)/sp.length):'—',slipAll:sp.length?pct(sp.reduce((a,b)=>a*b,1)):'—',
+      reviewSlip:()=>this.ask('Review my slip'),clearSlip:()=>this.setState({slip:[]}),
+      weights,
+      agentOpen:st.agentOpen,openAgentBlank:()=>this.openAgent(),closeAgent:()=>this.setState({agentOpen:false}),
+      messages,typing:st.typing,
+      typingEl:React.createElement('span',{style:{animation:'nvpulse 1.2s ease-in-out infinite'}},'Checking market, form and matchup…'),
+      suggestions,input:st.input,
+      onInput:(e)=>this.setState({input:e.target.value}),
+      onKey:(e)=>{if(e.key==='Enter')this.ask(st.input);},
+      send:()=>this.ask(st.input)
+    };
+  }
+}
+</script>
+</body>
+</html>
