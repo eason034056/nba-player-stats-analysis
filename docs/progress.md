@@ -1,6 +1,6 @@
 # Sports Lab Progress
 
-> Engineers update the row for their ticket in the pull request that changes that ticket. This file is a snapshot of ticket state, not a heartbeat log. Last updated: **2026-11-10** (SPO-107 added under In flight; earlier rows were not re-audited). Facts below were checked against `docs/task-summaries/`, `git log` on `dev`, and `gh pr list --base dev`. Titles that were not in those sources are left blank.
+> Engineers update the row for their ticket in the pull request that changes that ticket. This file is a snapshot of ticket state, not a heartbeat log. Last updated: **2026-11-10** (SPO-105 on `dev`; SPO-107 added under In flight). Facts below were checked against `docs/task-summaries/`, `git log` on `dev`, and `gh pr list --base dev`. Titles that were not in those sources are left blank.
 
 ## Shipped
 
@@ -84,6 +84,7 @@ Stale pull requests the owner is closing. Not merged.
 | SPO-101 | SPO-10 Phase 4: live integration tests for the 12-tile `/event` surface and the DD round-trip (`feature/SPO-101-spo10-phase4-integration-tests`). Skipped unless `RUN_INTEGRATION=1`. One batched odds call (expected 10 paid units when FTM/FGM are empty, ceiling 12). Not run live (`ODDS_API_KEY` unset). Production code unchanged. In review, awaiting squash-merge. |
 | SPO-102 | Wire `PlayerDDTile` to double-double history and yes/no odds. Open on `feature/SPO-102-player-dd-tile-wiring`. Summary: `docs/task-summaries/SPO-102-player-dd-tile-wiring.md`. |
 | SPO-103 | SPO-10 Phase 5 final review. Open. |
+| SPO-105 | Frontend fixes from the SPO-103 review. Open on `feature/SPO-105-frontend-review-fixes`. Summary: `docs/task-summaries/SPO-105-frontend-review-fixes.md`. |
 
 ### SPO-99 — walk-forward backtest
 

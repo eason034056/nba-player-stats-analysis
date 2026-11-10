@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest";
 
+import {
+  SINGLE_LEG_PRIOR_LABEL,
+  consensusPriorCaption,
+  usesSingleLegPrior,
+} from "@/lib/no-vig-display";
 import { selectDDHistory, selectDDOdds } from "@/lib/player-dd";
 import {
   noVigResponseSchema,
@@ -301,4 +306,219 @@ describe("recorded double-double payloads", () => {
       expect(parsed.data_age_seconds).toBe(90);
     },
   );
+
+  it("keeps fetched_at and data_age_seconds on the no-vig schema", () => {
+    const parsed = noVigResponseSchema.parse({
+      ...recordedNoVig,
+      fetched_at: "2026-11-10T03:00:00Z",
+      data_age_seconds: 47,
+      debug_trace: "strip-me",
+    });
+    expect(parsed.fetched_at).toBe("2026-11-10T03:00:00Z");
+    expect(parsed.data_age_seconds).toBe(47);
+    expect(parsed.cache_state).toBe("fresh");
+    expect(parsed.source).toBe("snapshot_cache");
+    expect("debug_trace" in parsed).toBe(false);
+  });
+
+  it("accepts a one-sided row before the synthetic-line flags exist", () => {
+    const legacy = noVigResponseSchema.parse(recordedNoVig);
+    expect(legacy.results[1]?.under_odds).toBe(-240);
+    expect(legacy.results[1]?.no_price).toBeNull();
+    expect(legacy.results[1]?.line_is_synthetic).toBeUndefined();
+    expect(legacy.results[1]?.market_kind).toBeUndefined();
+  });
+
+  it("accepts null under_odds with line_is_synthetic and market_kind", () => {
+    const parsed = noVigResponseSchema.parse({
+      ...recordedNoVig,
+      market: "player_double_double",
+      results: [
+        {
+          ...recordedNoVig.results[1],
+          under_odds: null,
+          p_under_imp: null,
+          no_price: null,
+          p_no_imp: null,
+          line_is_synthetic: true,
+          market_kind: "binary",
+        },
+      ],
+    });
+    expect(parsed.results[0]?.under_odds).toBeNull();
+    expect(parsed.results[0]?.p_under_imp).toBeNull();
+    expect(parsed.results[0]?.p_under_fair).toBe(0.3245);
+    expect(parsed.results[0]?.no_fair_prob).toBe(0.3245);
+    expect(parsed.results[0]?.line_is_synthetic).toBe(true);
+    expect(parsed.results[0]?.market_kind).toBe("binary");
+  });
+
+  it("accepts uses_prior true, false, and absent", () => {
+    const absent = noVigResponseSchema.parse(recordedNoVig);
+    expect(absent.results[0]?.uses_prior).toBeUndefined();
+    expect(absent.results[1]?.uses_prior).toBeUndefined();
+
+    const parsed = noVigResponseSchema.parse({
+      ...recordedNoVig,
+      results: [
+        { ...recordedNoVig.results[0], uses_prior: true },
+        { ...recordedNoVig.results[1], uses_prior: false },
+        { ...recordedNoVig.results[1], bookmaker: "betmgm", uses_prior: null },
+      ],
+    });
+    expect(parsed.results[0]?.uses_prior).toBe(true);
+    expect(parsed.results[1]?.uses_prior).toBe(false);
+    expect(parsed.results[2]?.uses_prior).toBeNull();
+    expect(usesSingleLegPrior(parsed.results[0]!)).toBe(true);
+    expect(usesSingleLegPrior(parsed.results[1]!)).toBe(false);
+    expect(usesSingleLegPrior(parsed.results[2]!)).toBe(true);
+  });
+
+  it("reads consensus_uses_prior only from the consensus object", () => {
+    const onConsensus = noVigResponseSchema.parse({
+      ...recordedNoVig,
+      consensus: {
+        ...recordedNoVig.consensus,
+        consensus_uses_prior: true,
+        consensus_prior_book_count: 1,
+      },
+    });
+    expect(onConsensus.consensus?.consensus_uses_prior).toBe(true);
+    expect(onConsensus.consensus?.consensus_prior_book_count).toBe(1);
+    expect(consensusPriorCaption(onConsensus)).toBe(
+      "includes 1 book on the 4.5% single-leg prior",
+    );
+
+    const envelopeIgnored = noVigResponseSchema.parse({
+      ...recordedNoVig,
+      line_is_synthetic: true,
+      market_kind: "binary",
+      uses_prior: false,
+      consensus_uses_prior: false,
+      consensus_prior_book_count: 9,
+    });
+    expect("consensus_uses_prior" in envelopeIgnored).toBe(false);
+    expect("line_is_synthetic" in envelopeIgnored).toBe(false);
+    expect("uses_prior" in envelopeIgnored).toBe(false);
+    expect(envelopeIgnored.consensus?.consensus_uses_prior).toBeUndefined();
+    expect(consensusPriorCaption(envelopeIgnored)).toBe(SINGLE_LEG_PRIOR_LABEL);
+
+    const omitted = noVigResponseSchema.parse({
+      ...recordedNoVig,
+      consensus: undefined,
+    });
+    const { consensus: _consensus, ...withoutConsensus } = recordedNoVig;
+    const missing = noVigResponseSchema.parse(withoutConsensus);
+    expect(omitted.consensus).toBeUndefined();
+    expect(missing.consensus).toBeUndefined();
+    expect(consensusPriorCaption(missing)).toBeNull();
+    const nulled = noVigResponseSchema.parse({ ...recordedNoVig, consensus: null });
+    expect(nulled.consensus).toBeNull();
+    expect(consensusPriorCaption(nulled)).toBeNull();
+  });
+
+  it("accepts a null p_no_imp on a Yes-only row", () => {
+    const parsed = noVigResponseSchema.parse({
+      ...recordedNoVig,
+      results: [
+        {
+          ...recordedNoVig.results[1],
+          under_odds: null,
+          p_under_imp: null,
+          no_price: null,
+          p_no_imp: null,
+          uses_prior: true,
+          line_is_synthetic: true,
+          market_kind: "binary",
+        },
+      ],
+    });
+    expect(parsed.results[0]?.p_no_imp).toBeNull();
+    expect(parsed.results[0]?.under_odds).toBeNull();
+    expect(parsed.results[0]?.uses_prior).toBe(true);
+  });
+
+  it("parses a no-vig body when fetched_at and data_age_seconds are omitted or null", () => {
+    const omitted = noVigResponseSchema.parse({
+      event_id: "evt-old",
+      player_name: "Stephen Curry",
+      market: "player_points",
+      results: [
+        {
+          bookmaker: "draftkings",
+          line: 24.5,
+          over_odds: -110,
+          under_odds: -110,
+          p_over_imp: 0.5238,
+          p_under_imp: 0.5238,
+          vig: 0.0476,
+          p_over_fair: 0.5,
+          p_under_fair: 0.5,
+        },
+      ],
+      consensus: { method: "mean", p_over_fair: 0.5, p_under_fair: 0.5 },
+      message: null,
+    });
+    expect(omitted.fetched_at).toBeUndefined();
+    expect(omitted.data_age_seconds).toBeUndefined();
+    expect(omitted.cache_state).toBeUndefined();
+    expect(omitted.source).toBeUndefined();
+    expect(omitted.results[0]?.uses_prior).toBeUndefined();
+    expect(omitted.consensus?.consensus_uses_prior).toBeUndefined();
+
+    const nulled = noVigResponseSchema.parse({
+      event_id: "evt-old",
+      player_name: "Stephen Curry",
+      market: "player_points",
+      results: [
+        {
+          bookmaker: "draftkings",
+          line: 24.5,
+          over_odds: -110,
+          under_odds: -110,
+          p_over_imp: 0.5238,
+          p_under_imp: 0.5238,
+          vig: 0.0476,
+          p_over_fair: 0.5,
+          p_under_fair: 0.5,
+          fetched_at: null,
+          uses_prior: null,
+        },
+      ],
+      consensus: {
+        method: "mean",
+        p_over_fair: 0.5,
+        p_under_fair: 0.5,
+        consensus_uses_prior: null,
+        consensus_prior_book_count: null,
+      },
+      message: null,
+      fetched_at: null,
+      data_age_seconds: null,
+      cache_state: null,
+      source: null,
+      consensus_uses_prior: null,
+      consensus_prior_book_count: null,
+    });
+    expect(nulled.fetched_at).toBeNull();
+    expect(nulled.data_age_seconds).toBeNull();
+    expect(nulled.results[0]?.fetched_at).toBeNull();
+    expect(nulled.results[0]?.uses_prior).toBeNull();
+    expect(nulled.consensus?.consensus_uses_prior).toBeNull();
+    expect(nulled.consensus?.consensus_prior_book_count).toBeNull();
+    expect("consensus_uses_prior" in nulled).toBe(false);
+    expect("consensus_prior_book_count" in nulled).toBe(false);
+    expect("uses_prior" in nulled).toBe(false);
+  });
+
+  it("still parses a payload from before uses_prior existed", () => {
+    const parsed = noVigResponseSchema.parse(recordedNoVig);
+    expect(parsed.results[1]?.no_price).toBeNull();
+    expect(parsed.results[1]?.p_no_imp).toBeNull();
+    expect(parsed.results[1]?.uses_prior).toBeUndefined();
+    expect("consensus_uses_prior" in parsed).toBe(false);
+    expect(parsed.consensus?.consensus_uses_prior).toBeUndefined();
+    expect(usesSingleLegPrior(parsed.results[1]!)).toBe(true);
+    expect(consensusPriorCaption(parsed)).toBe(SINGLE_LEG_PRIOR_LABEL);
+  });
 });
