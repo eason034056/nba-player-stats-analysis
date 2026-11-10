@@ -29,7 +29,7 @@ MAX_ROLE_WEIGHT = 0.85
 MINIMUM_ROLE_SAMPLE = 4
 # Pre-gate bands on P(over). The market-price gate below can still rewrite
 # the candidate to "avoid"; callers that want the ungated side use
-# `decision_from_over_probability` on the returned model probability.
+# `decision_from_over_probability` on `model_probability_unrounded`.
 OVER_DECISION_THRESHOLD = 0.55
 UNDER_DECISION_THRESHOLD = 0.45
 
