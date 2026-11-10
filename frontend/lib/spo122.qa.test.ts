@@ -140,6 +140,58 @@ describe("SPO-122 eventTeammates", () => {
       }),
     ).toEqual(["Derrick White"]);
   });
+
+  it("excludes the player when history or lineup uses initials or accents", () => {
+    expect(
+      eventTeammates({
+        player: "V.J. Edgecombe",
+        awayLineup: null,
+        homeLineup: lineup("PHI", ["Tyrese Maxey", "VJ Edgecombe"]),
+        historyTeammates: ["VJ Edgecombe", "Joel Embiid"],
+      }),
+    ).toEqual(["Joel Embiid", "Tyrese Maxey"]);
+    expect(
+      eventTeammates({
+        player: "Nikola Jokić",
+        awayLineup: lineup("DEN", ["Nikola Jokic", "Jamal Murray"]),
+        homeLineup: null,
+        historyTeammates: ["Jamal Murray", "Nikola Jokic"],
+      }),
+    ).toEqual(["Jamal Murray"]);
+  });
+
+  it("treats Jr. punctuation as the same person and keeps the unsuffixed name", () => {
+    expect(
+      eventTeammates({
+        player: "Derrick White",
+        awayLineup: lineup("BOS", ["Derrick White", "Tim Hardaway Jr"]),
+        homeLineup: null,
+        historyTeammates: ["Tim Hardaway Jr.", "Tim Hardaway"],
+      }),
+    ).toEqual(["Tim Hardaway Jr.", "Tim Hardaway"]);
+  });
+
+  it("does not merge a hyphenated name with a different player", () => {
+    expect(
+      eventTeammates({
+        player: "Derrick White",
+        awayLineup: lineup("BOS", ["Derrick White", "Shai Alexander"]),
+        homeLineup: null,
+        historyTeammates: ["Shai Gilgeous-Alexander"],
+      }),
+    ).toEqual(["Shai Gilgeous-Alexander", "Shai Alexander"]);
+  });
+
+  it("folds typographic apostrophes in dedupe and self-exclusion", () => {
+    expect(
+      eventTeammates({
+        player: "D'Angelo Russell",
+        awayLineup: lineup("LAL", ["D’Angelo Russell", "LeBron James"]),
+        homeLineup: null,
+        historyTeammates: ["LeBron James"],
+      }),
+    ).toEqual(["LeBron James"]);
+  });
 });
 
 describe("SPO-122 player-history query", () => {
