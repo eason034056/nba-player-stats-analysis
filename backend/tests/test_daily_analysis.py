@@ -1114,8 +1114,11 @@ class TestPickFields:
         assert pick.direction == "over"
         assert pick.probability == 0.80
         assert pick.n_games == 40
-        assert pick.bookmakers_count == 3
-        assert pick.all_lines == sorted([15.5, 16.5, 15.5])
+        # One book posts 15.5, 16.5, and 15.5. Those rows are one book,
+        # so the book votes its posted mode (15.5) once.
+        assert pick.bookmakers_count == 1
+        assert pick.all_lines == [15.5]
+        assert pick.threshold == 15.5
         assert pick.player_team == "Heat"
         assert pick.player_team_code == "MIA"
         assert pick.p_over == 0.80

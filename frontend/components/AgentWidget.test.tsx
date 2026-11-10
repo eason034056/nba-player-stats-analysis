@@ -42,7 +42,7 @@ const mockViewport = (isDesktop: boolean) => {
 };
 
 function AgentHarness() {
-  const { setPageContext, setSelectedPickContext } = useAgentWidget();
+  const { openWidget, setPageContext, setSelectedPickContext } = useAgentWidget();
 
   useEffect(() => {
     setPageContext({
@@ -65,7 +65,11 @@ function AgentHarness() {
     });
   }, [setPageContext, setSelectedPickContext]);
 
-  return null;
+  return (
+    <button type="button" onClick={openWidget}>
+      Ask the agent
+    </button>
+  );
 }
 
 const singlePickResponse = {
@@ -109,8 +113,8 @@ const singlePickResponse = {
   ],
 };
 
-const openWidget = async (user: ReturnType<typeof userEvent.setup>) => {
-  await user.click(screen.getByRole("button", { name: /ask the board/i }));
+const openFromAsk = async (user: ReturnType<typeof userEvent.setup>) => {
+  await user.click(screen.getByRole("button", { name: "Ask the agent" }));
   return screen.getByRole("dialog", { name: /betting agent/i });
 };
 
@@ -124,7 +128,14 @@ describe("AgentWidget", () => {
     mockViewport(true);
   });
 
-  it("starts collapsed, opens from the launcher, and closes on Escape in panel mode", async () => {
+  it("does not render a floating launcher", () => {
+    renderWithProviders(<AgentHarness />, { withAgentWidget: true });
+
+    expect(screen.queryByRole("button", { name: /ask the board/i })).not.toBeInTheDocument();
+    expect(screen.queryByText(/cinematic desk/i)).not.toBeInTheDocument();
+  });
+
+  it("starts collapsed, opens from Ask the agent, and closes on Escape in panel mode", async () => {
     const user = userEvent.setup();
 
     renderWithProviders(<AgentHarness />, { withAgentWidget: true });
@@ -133,11 +144,18 @@ describe("AgentWidget", () => {
       screen.queryByRole("dialog", { name: /betting agent/i }),
     ).not.toBeInTheDocument();
 
-    await openWidget(user);
+    const dialog = await openFromAsk(user);
 
+    expect(dialog).toBeInTheDocument();
+    const send = within(dialog).getByRole("button", { name: "Send" });
+    expect(send.className).toContain("bg-brand");
+    expect(send.className).toContain("text-white");
+    expect(send.className).not.toContain("text-on-dark");
+    expect(dialog).toHaveAttribute("data-layout", "drawer");
     expect(
-      screen.getByRole("dialog", { name: /betting agent/i }),
+      within(dialog).getByText(/checks market, form, projection and matchup/i),
     ).toBeInTheDocument();
+    expect(dialog.querySelector('[class*="fff7e5"]')).not.toBeInTheDocument();
 
     await user.keyboard("{Escape}");
 
@@ -153,7 +171,7 @@ describe("AgentWidget", () => {
 
     renderWithProviders(<AgentHarness />, { withAgentWidget: true });
 
-    const dialog = await openWidget(user);
+    const dialog = await openFromAsk(user);
 
     expect(within(dialog).getByText(/^Current pick$/i)).toBeInTheDocument();
     expect(
@@ -185,7 +203,7 @@ describe("AgentWidget", () => {
 
     renderWithProviders(<AgentHarness />, { withAgentWidget: true });
 
-    const dialog = await openWidget(user);
+    const dialog = await openFromAsk(user);
 
     await user.click(
       within(dialog).getByRole("button", { name: /ask for verdict/i }),
@@ -225,7 +243,7 @@ describe("AgentWidget", () => {
 
     renderWithProviders(<AgentHarness />, { withAgentWidget: true });
 
-    await openWidget(user);
+    await openFromAsk(user);
 
     const composer = screen.getByRole("textbox", { name: /message betting agent/i });
     expect(
@@ -270,7 +288,7 @@ describe("AgentWidget", () => {
 
     expect(document.body.style.overflow).toBe("");
 
-    await openWidget(user);
+    await openFromAsk(user);
 
     expect(document.body.style.overflow).toBe("hidden");
 
@@ -286,7 +304,7 @@ describe("AgentWidget", () => {
 
     renderWithProviders(<AgentHarness />, { withAgentWidget: true });
 
-    await openWidget(user);
+    await openFromAsk(user);
 
     expect(
       screen.getByRole("log", { name: /betting agent transcript/i }),
@@ -300,7 +318,7 @@ describe("AgentWidget", () => {
       withAgentWidget: true,
     });
 
-    const dialog = await openWidget(user);
+    const dialog = await openFromAsk(user);
     await user.click(
       within(dialog).getByRole("button", { name: /expand workspace/i }),
     );
@@ -329,7 +347,8 @@ describe("AgentWidget", () => {
 
     renderWithProviders(<AgentHarness />, { withAgentWidget: true });
 
-    const dialog = await openWidget(user);
+    const dialog = await openFromAsk(user);
+    expect(dialog).toHaveAttribute("data-layout", "full");
     await user.click(
       within(dialog).getByRole("button", { name: /expand workspace/i }),
     );
@@ -355,7 +374,7 @@ describe("AgentWidget", () => {
 
     renderWithProviders(<AgentHarness />, { withAgentWidget: true });
 
-    const dialog = await openWidget(user);
+    const dialog = await openFromAsk(user);
     await user.click(
       within(dialog).getByRole("button", { name: /ask for verdict/i }),
     );
@@ -381,7 +400,7 @@ describe("AgentWidget", () => {
 
     renderWithProviders(<AgentHarness />, { withAgentWidget: true });
 
-    await openWidget(user);
+    await openFromAsk(user);
 
     const composer = screen.getByRole("textbox", { name: /message betting agent/i });
     await user.type(composer, "Should I bet this?");
@@ -423,7 +442,7 @@ describe("AgentWidget", () => {
 
     renderWithProviders(<AgentHarness />, { withAgentWidget: true });
 
-    const dialog = await openWidget(user);
+    const dialog = await openFromAsk(user);
     await user.click(
       within(dialog).getByRole("button", { name: /expand workspace/i }),
     );

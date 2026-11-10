@@ -1,0 +1,67 @@
+{
+  "player": "Bam Adebayo",
+  "metric": "points",
+  "threshold": 18.5,
+  "n_games": 40,
+  "p_over": 0.62,
+  "p_under": 0.35,
+  "equal_count": 1,
+  "mean": 19.4,
+  "std": 4,
+  "histogram": [],
+  "game_logs": [
+    {
+      "date": "11/01",
+      "date_full": "2026-11-01",
+      "opponent": "PHI",
+      "value": 12,
+      "is_over": false,
+      "team": "MIA",
+      "minutes": 34,
+      "is_starter": true
+    },
+    {
+      "date": "11/03",
+      "date_full": "2026-11-03",
+      "opponent": "PHI",
+      "value": 14,
+      "is_over": false,
+      "team": "MIA",
+      "minutes": 34,
+      "is_starter": true
+    },
+    {
+      "date": "11/08",
+      "date_full": "2026-11-08",
+      "opponent": "BOS",
+      "value": 22,
+      "is_over": true,
+      "team": "MIA",
+      "minutes": 34,
+      "is_starter": true
+    },
+    {
+      "date": "11/09",
+      "date_full": "2026-11-09",
+      "opponent": "BOS",
+      "value": 16,
+      "is_over": false,
+      "team": "MIA",
+      "minutes": 30,
+      "is_starter": true
+    },
+    {
+      "date": "11/10",
+      "date_full": "2026-11-10",
+      "opponent": "BOS",
+      "value": 24,
+      "is_over": true,
+      "team": "MIA",
+      "minutes": 30,
+      "is_starter": true
+    }
+  ],
+  "opponents": ["BOS", "PHI"],
+  "teammates": ["Tyler Herro"],
+  "message": null
+}

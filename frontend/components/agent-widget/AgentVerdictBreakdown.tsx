@@ -17,24 +17,24 @@ interface AgentVerdictBreakdownProps {
 }
 
 const sectionToneStyles: Record<AgentVerdictBreakdownSection["tone"], string> = {
-  support: "border-emerald-400/20 bg-emerald-400/6",
-  caution: "border-amber-300/20 bg-amber-300/8",
-  neutral: "border-white/8 bg-white/4",
-  unavailable: "border-white/6 bg-white/[0.03]",
+  support: "border-emerald-400/20 bg-emerald-400/5",
+  caution: "border-amber-300/20 bg-amber-300/10",
+  neutral: "border-white/10 bg-white/5",
+  unavailable: "border-white/5 bg-white/[0.03]",
 };
 
 const toneBadgeStyles: Record<AgentVerdictBreakdownSection["tone"], string> = {
-  support: "border-emerald-400/25 bg-emerald-400/12 text-emerald-200",
-  caution: "border-amber-300/25 bg-amber-300/12 text-amber-100",
-  neutral: "border-white/10 bg-white/6 text-light",
-  unavailable: "border-white/8 bg-white/4 text-gray",
+  support: "border-emerald-400/25 bg-emerald-400/10 text-emerald-200",
+  caution: "border-amber-300/25 bg-amber-300/10 text-amber-100",
+  neutral: "border-white/10 bg-white/5 text-on-dark-muted",
+  unavailable: "border-white/10 bg-white/5 text-on-dark-muted",
 };
 
 const statToneStyles: Record<NonNullable<AgentVerdictEvidenceStat["tone"]>, string> = {
-  positive: "border-emerald-400/20 bg-emerald-400/8 text-emerald-100",
-  neutral: "border-white/10 bg-white/6 text-light",
-  caution: "border-amber-300/20 bg-amber-300/8 text-amber-100",
-  muted: "border-white/8 bg-white/[0.03] text-gray",
+  positive: "border-emerald-400/20 bg-emerald-400/10 text-emerald-100",
+  neutral: "border-white/10 bg-white/5 text-on-dark-muted",
+  caution: "border-amber-300/20 bg-amber-300/10 text-amber-100",
+  muted: "border-white/10 bg-white/[0.03] text-on-dark-muted",
 };
 
 const formatReliability = (value: number | null | undefined) => {
@@ -74,8 +74,8 @@ const BreakdownCard = ({ section }: { section: AgentVerdictBreakdownSection }) =
   >
     <div className="flex flex-wrap items-start justify-between gap-3">
       <div className="min-w-0 flex-1">
-        <p className="text-[10px] uppercase tracking-[0.22em] text-light">{section.label}</p>
-        <p className="mt-1 text-xs text-gray">{formatReliability(section.reliability)}</p>
+        <p className="text-[10px] uppercase tracking-[0.22em] text-on-dark-muted">{section.label}</p>
+        <p className="mt-1 text-xs text-on-dark-muted">{formatReliability(section.reliability)}</p>
       </div>
       <span
         className={cn(
@@ -89,13 +89,13 @@ const BreakdownCard = ({ section }: { section: AgentVerdictBreakdownSection }) =
 
     <div className="mt-3 space-y-3">
       <div>
-        <p className="text-[10px] uppercase tracking-[0.18em] text-light">Signal</p>
-        <p className="mt-1 text-sm text-dark">{section.signal_note}</p>
+        <p className="text-[10px] uppercase tracking-[0.18em] text-on-dark-muted">Signal</p>
+        <p className="mt-1 text-sm text-on-dark">{section.signal_note}</p>
       </div>
 
       <div>
-        <p className="text-[10px] uppercase tracking-[0.18em] text-light">Risk</p>
-        <p className={cn("mt-1 text-sm", section.risk_note ? "text-dark" : "text-gray")}>
+        <p className="text-[10px] uppercase tracking-[0.18em] text-on-dark-muted">Risk</p>
+        <p className={cn("mt-1 text-sm", section.risk_note ? "text-on-dark" : "text-on-dark-muted")}>
           {section.risk_note ?? "No material caution."}
         </p>
       </div>
@@ -119,7 +119,7 @@ export const AgentVerdictBreakdown = ({
 }: AgentVerdictBreakdownProps) => {
   if (!breakdown || breakdown.sections.length === 0) {
     return (
-      <div className="rounded-[18px] border border-white/8 bg-white/[0.03] px-4 py-3 text-sm text-gray">
+      <div className="rounded-[18px] border border-white/10 bg-white/[0.03] px-4 py-3 text-sm text-on-dark-muted">
         {emptyMessage}
       </div>
     );

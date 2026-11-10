@@ -40,7 +40,7 @@ export function LineupStatusBadge({
     className = "bg-red-500/10 text-red-600";
   } else {
     label = "Lineup aligned";
-    className = "bg-green-500/10 text-green-700";
+    className = "bg-green-800/10 text-green-700";
   }
 
   return (

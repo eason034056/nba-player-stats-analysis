@@ -1,36 +1,37 @@
-"""Load recorded The Odds API bodies.
+"""Load recorded external API bodies from ``backend/tests/fixtures``.
 
-The JSON files in this directory are byte-for-byte responses. Tests must
-call ``load_odds_fixture`` instead of typing an event or odds payload.
+Unit tests call ``load_odds_fixture`` instead of typing an Odds API body.
+The bytes on disk are the capture. This module only parses them.
 """
+
+from __future__ import annotations
 
 import json
 from pathlib import Path
-from typing import Any
 
-_DIR = Path(__file__).resolve().parent
+_FIXTURE_DIR = Path(__file__).resolve().parent
 
 
-def load_odds_fixture(name: str) -> Any:
-    """Return the parsed JSON for one recorded Odds API fixture.
+def load_odds_fixture(name: str) -> dict:
+    """Parse one JSON fixture that sits next to this module.
 
     Args:
-        name: File name inside ``backend/tests/fixtures``, for example
-            ``odds_api_events__basketball_nba.json``. A path with a
-            directory segment is rejected so a test cannot read an
-            arbitrary file through this helper.
+        name: File name only, for example
+            ``odds_api_event_odds__player_points.json``. A path separator
+            is rejected so a test cannot read outside the fixture directory.
 
     Returns:
-        The parsed JSON value. Events fixtures are a list. Odds fixtures
-        are one event object.
+        The parsed JSON object. A new object is returned on every call,
+        so a test can edit its copy without changing the file or the
+        next call.
 
     Raises:
-        ValueError: ``name`` is not a bare file name.
-        FileNotFoundError: That fixture was not recorded.
+        ValueError: ``name`` is not a bare ``.json`` file name.
+        FileNotFoundError: That file is not in the fixture directory.
     """
-    if Path(name).name != name or not name.endswith(".json"):
-        raise ValueError(f"fixture name must be a recorded json file, got {name!r}")
-    path = _DIR / name
+    if not name.endswith(".json") or "/" in name or "\\" in name or name in {".", ".."}:
+        raise ValueError(f"fixture name must be a single json file, got {name!r}")
+    path = _FIXTURE_DIR / name
     if not path.is_file():
         raise FileNotFoundError(path)
-    return json.loads(path.read_text())
+    return json.loads(path.read_text(encoding="utf-8"))

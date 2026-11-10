@@ -260,7 +260,7 @@ export function MarketSelect({
                     <span
                       className={cn(
                         "mt-1 text-[11px] uppercase tracking-[0.22em]",
-                        isSelected ? "text-white/72" : "text-light",
+                        isSelected ? "text-white/70" : "text-light",
                       )}
                     >
                       {market.shortName}
@@ -268,7 +268,7 @@ export function MarketSelect({
 
                     {/* Selected indicator */}
                     {isSelected && (
-                      <div className="absolute right-3 top-3 flex h-6 w-6 items-center justify-center rounded-full border border-white/22 bg-white/12">
+                      <div className="absolute right-3 top-3 flex h-6 w-6 items-center justify-center rounded-full border border-white/20 bg-white/10">
                         <div className="h-2.5 w-2.5 rounded-full bg-white" />
                       </div>
                     )}

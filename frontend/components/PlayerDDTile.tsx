@@ -445,7 +445,7 @@ export function PlayerDDTile({
                 <div
                   className={cn(
                     "absolute left-0 top-0 h-full",
-                    edge >= 0 ? "bg-green-500" : "bg-red",
+                    edge >= 0 ? "bg-green-800" : "bg-red",
                   )}
                   style={{ width: `${Math.min(Math.abs(edge) * 100, 100)}%` }}
                 />
@@ -453,7 +453,7 @@ export function PlayerDDTile({
               <p
                 className={cn(
                   "mt-1 text-xs font-bold",
-                  edge >= 0 ? "text-green-600" : "text-red",
+                  edge >= 0 ? "text-green-800" : "text-red",
                 )}
               >
                 {edge >= 0 ? "+" : ""}

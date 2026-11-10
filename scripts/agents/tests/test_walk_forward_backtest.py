@@ -417,6 +417,8 @@ def test_report_states_the_three_assumptions_when_no_odds_are_loaded():
     assert ASSUMPTION_C in text
     assert "CLV hook is inactive" in text
     assert "SPO-97" in text and "SPO-98" in text
+    assert "Playoffs and play-in" in text
+    assert "regular-season" in text
 
 
 def test_production_decision_thresholds_match_the_shared_functions():

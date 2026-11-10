@@ -10,35 +10,52 @@ const config: Config = {
   theme: {
     extend: {
       colors: {
+        canvas: "#EEEEEE",
+        ink: "#1D1530",
+        muted: "#625B70",
+        line: "#DEDAE5",
+        brand: {
+          DEFAULT: "#3E0F8D",
+          deep: "#2F0A6E",
+          soft: "#9564DD",
+          tint: "#ECE6F7",
+          mist: "#E6DDF6",
+          ink: "#2A0A60",
+        },
+        accent: {
+          DEFAULT: "#E4DA72",
+          ink: "#2A0A60",
+        },
         cream: {
           DEFAULT: "#F6EFE2",
           light: "#FFFAF2",
           dark: "#D6CAB7",
         },
         red: {
-          DEFAULT: "#FF886C",
-          light: "#FFD0C1",
-          dark: "#DF6B52",
+          DEFAULT: "#8E2C50",
+          light: "#F6E3EA",
+          dark: "#6E1E34",
         },
         yellow: {
-          DEFAULT: "#F3C775",
-          light: "#FAE3AB",
-          dark: "#E0B55D",
+          DEFAULT: "#E4DA72",
+          light: "#F6F2D2",
+          dark: "#5A5310",
         },
         dark: {
-          DEFAULT: "#08101D",
-          light: "#15233A",
+          DEFAULT: "#1D1530",
+          light: "#4A4458",
         },
         gray: {
-          DEFAULT: "#95A6C5",
-          light: "#CAD4E6",
+          DEFAULT: "#625B70",
+          // Light ink for text that sits on a dark code block.
+          light: "#D9CEF0",
         },
       },
 
       fontFamily: {
-        sans: ["var(--font-sans)", "system-ui", "sans-serif"],
-        display: ["var(--font-display)", "serif"],
-        mono: ["JetBrains Mono", "monospace"],
+        sans: ["var(--font-sans)", "Instrument Sans", "system-ui", "sans-serif"],
+        display: ["var(--font-sans)", "Instrument Sans", "system-ui", "sans-serif"],
+        mono: ["var(--font-mono)", "JetBrains Mono", "ui-monospace", "monospace"],
       },
 
       animation: {
@@ -64,9 +81,10 @@ const config: Config = {
 
       borderRadius: {
         sm: "10px",
-        md: "16px",
-        lg: "24px",
-        xl: "32px",
+        md: "14px",
+        lg: "20px",
+        xl: "24px",
+        "2xl": "28px",
       },
 
       borderWidth: {

@@ -1,13 +1,20 @@
 """Walk-forward replay of Daily Picks and the agent scorecard.
 
-Every target game is scored with games dated strictly before it. The daily
-path calls ``choose_daily_pick_side`` and the same empirical rate that
+Every headline target is a regular-season game scored with regular-season
+games dated strictly before it. That is the set
+``CSVPlayerHistoryService._allowed_game_types`` uses in production
+(playoffs and the play-in off). The daily path calls
+``choose_daily_pick_side`` and the same empirical rate that
 ``CSVPlayerHistoryService.get_player_stats`` returns (``n=0``,
 ``exclude_dnp=True``). A sample of those rates is checked against the real
 method at the end of each league. The agent path calls
 ``tools.historical`` and ``scoring.compute_scorecard`` on a cache that has
 been temporarily replaced with that same prior-game list, so the tools
 cannot see the target or anything after it.
+
+Playoff and play-in games are still scored, with that same regular-season
+history, and stored on ``LeagueReplay.postseason_daily`` and
+``postseason_agent``. They are not headline rows.
 
 There is no historical market, lineup, or injury feed. ``compute_scorecard``
 therefore gates every agent row to ``avoid`` with ``no market price
@@ -77,6 +84,7 @@ class DailyRow(tuple):
         price: int | None = None,
         clv_prob: float | None = None,
         clv_line: float | None = None,
+        game_type: str = "",
     ):
         return tuple.__new__(
             cls,
@@ -99,6 +107,7 @@ class DailyRow(tuple):
                 price,
                 clv_prob,
                 clv_line,
+                game_type,
             ),
         )
 
@@ -120,6 +129,7 @@ class DailyRow(tuple):
     price = property(lambda self: self[15])
     clv_prob = property(lambda self: self[16])
     clv_line = property(lambda self: self[17])
+    game_type = property(lambda self: self[18])
 
 
 class AgentRow(tuple):
@@ -156,6 +166,7 @@ class AgentRow(tuple):
         price: int | None = None,
         clv_prob: float | None = None,
         clv_line: float | None = None,
+        game_type: str = "",
     ):
         return tuple.__new__(
             cls,
@@ -181,6 +192,7 @@ class AgentRow(tuple):
                 price,
                 clv_prob,
                 clv_line,
+                game_type,
             ),
         )
 
@@ -205,6 +217,7 @@ class AgentRow(tuple):
     price = property(lambda self: self[18])
     clv_prob = property(lambda self: self[19])
     clv_line = property(lambda self: self[20])
+    game_type = property(lambda self: self[21])
 
 
 @dataclass
@@ -232,6 +245,12 @@ class LeagueReplay:
     target_end: str | None = None
     exposure: dict = field(default_factory=dict)
     validation: dict = field(default_factory=dict)
+    # Playoff and play-in targets. History for these rows is the regular
+    # season, and the rows are not part of ``daily`` / ``agent``.
+    postseason_daily: list[DailyRow] = field(default_factory=list)
+    postseason_agent: list[AgentRow] = field(default_factory=list)
+    postseason_targets: int = 0
+    postseason_by_type: dict = field(default_factory=dict)
 
 
 def _box_identity(game: dict) -> tuple:
@@ -321,13 +340,89 @@ def _prior_games_only(
         cache[player] = previous
 
 
-def _active_games(logs: list[dict]) -> list[dict]:
+def _player_history_service():
+    """The production service that owns the game-type set."""
+    from app.services.csv_player_history import CSVPlayerHistoryService
+
+    return CSVPlayerHistoryService
+
+
+def _game_type(game: dict) -> str:
+    """Production label. A missing ``game_type`` counts as regular season."""
+    return _player_history_service()._game_type_of(game)
+
+
+def _history_types() -> set[str]:
+    """Game types that feed a production stat. Regular season only."""
+    return _player_history_service()._allowed_game_types()
+
+
+def _breakdown_types() -> set[str]:
+    """Playoffs and the play-in: the types production can opt into.
+
+    The difference from ``_history_types`` is the definition. Adding a new
+    opt-in on the service adds it here, and the Cup final stays out because
+    ``_allowed_game_types`` never includes it.
+    """
+    service = _player_history_service()
+    return service._allowed_game_types(True, True) - service._allowed_game_types()
+
+
+def _dated_played(logs: list[dict]) -> list[dict]:
     """Non-DNP games with a date, oldest first. Equal dates keep cache order."""
     active = [
         game for game in logs if game.get("minutes", 0) > 0 and game.get("game_date")
     ]
     active.sort(key=lambda game: game["game_date"])
     return active
+
+
+def _active_games(logs: list[dict]) -> list[dict]:
+    """Regular-season history, oldest first.
+
+    This is the list production would score: minutes above zero, a date,
+    and ``game_type`` inside ``CSVPlayerHistoryService._allowed_game_types()``.
+    Headline targets are this same list. Playoffs and the play-in are not
+    in it, so they are neither history nor headline targets.
+    """
+    allowed = _history_types()
+    return [game for game in _dated_played(logs) if _game_type(game) in allowed]
+
+
+def _breakdown_games(logs: list[dict]) -> list[dict]:
+    """Playoff and play-in games, oldest first. Scored, not used as history."""
+    allowed = _breakdown_types()
+    return [game for game in _dated_played(logs) if _game_type(game) in allowed]
+
+
+def _prior_before(history: list[dict], game_date: datetime) -> list[dict]:
+    """History strictly before ``game_date``. Identical box scores count once."""
+    prior: list[dict] = []
+    seen_boxes: set[tuple] = set()
+    for earlier in history:
+        if earlier["game_date"] >= game_date:
+            continue
+        identity = _box_identity(earlier)
+        if identity in seen_boxes:
+            # Identical box score on that date. Keep one copy so a
+            # duplicated row is not counted twice in a later prior.
+            continue
+        seen_boxes.add(identity)
+        prior.append(earlier)
+    return prior
+
+
+def _note_postseason(result: LeagueReplay, game_type: str, date_text: str) -> None:
+    """Count one playoff or play-in player-game. Dates are ISO text."""
+    result.postseason_targets += 1
+    bucket = result.postseason_by_type.setdefault(
+        game_type, {"targets": 0, "start": date_text, "end": date_text}
+    )
+    bucket["targets"] += 1
+    if date_text < bucket["start"]:
+        bucket["start"] = date_text
+    if date_text > bucket["end"]:
+        bucket["end"] = date_text
 
 
 def _price_fields(
@@ -363,9 +458,10 @@ def replay_league(
     """Replay one league.
 
     Args:
-        service: A ``CSVPlayerHistoryService``. The agent path requires the
+        service:         A ``CSVPlayerHistoryService``. The agent path requires the
             singleton ``tools.historical._csv_for(league)`` returns, because
-            that is the cache the tools read.
+            that is the cache the tools read. Headline history and headline
+            targets are that service's default game types (regular season).
         league: ``nba`` or ``wnba``.
         proxies: Proxy kinds to score on the daily path.
         eval_start: First eligible target date. Defaults to ``EVAL_START``.
@@ -384,8 +480,9 @@ def replay_league(
             NBA regular season sitting inside a player's prior window).
 
     Returns:
-        Daily rows, agent rows, target-date range, exposure counts, and
-        the validation tally.
+        Headline daily and agent rows (regular season), playoff and play-in
+        rows on the postseason lists, the headline target-date range,
+        exposure counts, and the validation tally.
     """
     bootstrap()
     from app.services.csv_player_history import CONTINUOUS_METRIC_EXTRACTORS
@@ -442,44 +539,23 @@ def replay_league(
     cache = service._cache  # type: ignore[attr-defined]
     n_players = 0
 
-    for player, logs in cache.items():
-        if players is not None and player not in players:
-            continue
-        n_players += 1
-        if n_players % 50 == 0:
-            logger.info("%s: %s players replayed", league, n_players)
-        active = _active_games(logs)
-        dup_dates = {
-            date
-            for date, count in Counter(game["game_date"] for game in active).items()
-            if count > 1
-        }
-        seen_dates: set[datetime] = set()
-        for index, game in enumerate(active):
-            game_date = game["game_date"]
-            if game_date in seen_dates:
-                # Same player-date twice. The second row is not its own target.
-                continue
-            seen_dates.add(game_date)
-            if game_date < start:
-                continue
-            prior = []
-            seen_boxes: set[tuple] = set()
-            for earlier in active[:index]:
-                if earlier["game_date"] >= game_date:
-                    continue
-                identity = _box_identity(earlier)
-                if identity in seen_boxes:
-                    # Identical box score on that date. Keep one copy so a
-                    # duplicated row is not counted twice in a later prior.
-                    continue
-                seen_boxes.add(identity)
-                prior.append(earlier)
-            if len(prior) < min_games:
-                continue
-            prior_nf = prior[::-1]
-            l10_min = float(np.mean([earlier["minutes"] for earlier in prior_nf[:10]]))
-            date_text = game_date.strftime("%Y-%m-%d")
+    def score_one(
+        player: str,
+        game: dict,
+        prior: list[dict],
+        dup_dates: set[datetime],
+        *,
+        headline: bool,
+    ) -> None:
+        nonlocal seen_cases
+        if len(prior) < min_games:
+            return
+        prior_nf = prior[::-1]
+        l10_min = float(np.mean([earlier["minutes"] for earlier in prior_nf[:10]]))
+        game_date = game["game_date"]
+        date_text = game_date.strftime("%Y-%m-%d")
+        labeled = _game_type(game)
+        if headline:
             exposure["targets"] += 1
             target_dates.append(date_text)
             if any(earlier["game_date"] < cutoff for earlier in prior):
@@ -488,102 +564,144 @@ def replay_league(
                 exposure["last_20_includes_pre_cutoff"] += 1
             if any(earlier["game_date"] in dup_dates for earlier in prior):
                 exposure["prior_includes_duplicate_date"] += 1
+            daily_rows = result.daily
+            agent_rows = result.agent
+        else:
+            _note_postseason(result, labeled, date_text)
+            daily_rows = result.postseason_daily
+            agent_rows = result.postseason_agent
 
-            for _odds_key, metric in markets:
-                extractor = CONTINUOUS_METRIC_EXTRACTORS[metric]
-                actual = extractor(game)
-                if actual is None:
+        for _odds_key, metric in markets:
+            extractor = CONTINUOUS_METRIC_EXTRACTORS[metric]
+            actual = extractor(game)
+            if actual is None:
+                continue
+            values = [
+                value
+                for value in (extractor(earlier) for earlier in prior_nf)
+                if value is not None
+            ]
+            if len(values) < min_games:
+                continue
+            array = np.asarray(values, dtype=float)
+            for kind in proxies:
+                raw_line = proxy_line(values, kind)
+                if raw_line is None:
                     continue
-                values = [
-                    value
-                    for value in (extractor(earlier) for earlier in prior_nf)
-                    if value is not None
-                ]
-                if len(values) < min_games:
-                    continue
-                array = np.asarray(values, dtype=float)
-                for kind in proxies:
-                    raw_line = proxy_line(values, kind)
-                    if raw_line is None:
-                        continue
-                    quote = (
-                        odds.lookup(league, player, date_text, metric)
-                        if odds.active
-                        else None
-                    )
-                    # Rates are computed on the line that will actually be graded.
-                    graded_line = (
-                        float(quote.open_line) if quote is not None else raw_line
-                    )
-                    p_over, p_under, n_games = empirical_rates(array, graded_line)
-                    side, _rounded = choose_daily_pick_side(p_over, p_under, threshold)
-                    line, line_source, price, clv_prob, clv_line = _price_fields(
-                        quote, side, graded_line
-                    )
-                    over_hit = int(actual > line)
-                    hit = _grade(side, float(actual), line)
-                    prob = (
-                        None
-                        if side is None
-                        else (p_over if side == "over" else p_under)
-                    )
-                    result.daily.append(
-                        DailyRow(
-                            league,
-                            kind,
-                            date_text,
-                            metric,
-                            line,
-                            float(actual),
-                            n_games,
-                            l10_min,
-                            p_over,
-                            p_under,
-                            over_hit,
-                            side,
-                            prob,
-                            hit,
-                            line_source,
-                            price,
-                            clv_prob,
-                            clv_line,
-                        )
-                    )
-                    if validate and line_source == "proxy" and kind == "L10":
-                        seen_cases += 1
-                        case = ValidationCase(
-                            player, metric, line, p_over, p_under, n_games, prior_nf
-                        )
-                        if len(cases) < validate:
-                            cases.append(case)
-                        else:
-                            slot = rng.randrange(seen_cases)
-                            if slot < validate:
-                                cases[slot] = case
-
-            if (
-                do_agent
-                and historical is not None
-                and scorecard is not None
-                and decide is not None
-            ):
-                result.agent.extend(
-                    _agent_rows(
-                        historical,
-                        scorecard,
-                        decide,
-                        service,
+                quote = (
+                    odds.lookup(league, player, date_text, metric)
+                    if odds.active
+                    else None
+                )
+                # Rates are computed on the line that will actually be graded.
+                graded_line = float(quote.open_line) if quote is not None else raw_line
+                p_over, p_under, n_games = empirical_rates(array, graded_line)
+                side, _rounded = choose_daily_pick_side(p_over, p_under, threshold)
+                line, line_source, price, clv_prob, clv_line = _price_fields(
+                    quote, side, graded_line
+                )
+                over_hit = int(actual > line)
+                hit = _grade(side, float(actual), line)
+                prob = None if side is None else (p_over if side == "over" else p_under)
+                daily_rows.append(
+                    DailyRow(
                         league,
-                        player,
-                        game,
+                        kind,
                         date_text,
-                        prior_nf,
+                        metric,
+                        line,
+                        float(actual),
+                        n_games,
                         l10_min,
-                        agent_kinds,
-                        agent_min,
-                        odds,
+                        p_over,
+                        p_under,
+                        over_hit,
+                        side,
+                        prob,
+                        hit,
+                        line_source,
+                        price,
+                        clv_prob,
+                        clv_line,
+                        labeled,
                     )
                 )
+                if headline and validate and line_source == "proxy" and kind == "L10":
+                    seen_cases += 1
+                    case = ValidationCase(
+                        player, metric, line, p_over, p_under, n_games, prior_nf
+                    )
+                    if len(cases) < validate:
+                        cases.append(case)
+                    else:
+                        slot = rng.randrange(seen_cases)
+                        if slot < validate:
+                            cases[slot] = case
+
+        if (
+            do_agent
+            and historical is not None
+            and scorecard is not None
+            and decide is not None
+        ):
+            agent_rows.extend(
+                _agent_rows(
+                    historical,
+                    scorecard,
+                    decide,
+                    service,
+                    league,
+                    player,
+                    game,
+                    date_text,
+                    prior_nf,
+                    l10_min,
+                    agent_kinds,
+                    agent_min,
+                    odds,
+                    labeled,
+                )
+            )
+
+    def walk(
+        player: str,
+        games: list[dict],
+        history: list[dict],
+        dup_dates: set,
+        *,
+        headline: bool,
+    ) -> None:
+        seen_dates: set[datetime] = set()
+        for game in games:
+            game_date = game["game_date"]
+            if game_date in seen_dates:
+                # Same player-date twice. The second row is not its own target.
+                continue
+            seen_dates.add(game_date)
+            if game_date < start:
+                continue
+            score_one(
+                player,
+                game,
+                _prior_before(history, game_date),
+                dup_dates,
+                headline=headline,
+            )
+
+    for player, logs in cache.items():
+        if players is not None and player not in players:
+            continue
+        n_players += 1
+        if n_players % 50 == 0:
+            logger.info("%s: %s players replayed", league, n_players)
+        history = _active_games(logs)
+        dup_dates = {
+            date
+            for date, count in Counter(game["game_date"] for game in history).items()
+            if count > 1
+        }
+        walk(player, history, history, dup_dates, headline=True)
+        walk(player, _breakdown_games(logs), history, dup_dates, headline=False)
 
     result.targets = exposure["targets"]
     result.exposure = exposure
@@ -612,6 +730,7 @@ def _agent_rows(
     proxies: list[str],
     min_games: int,
     odds: OddsHistory,
+    game_type: str,
 ) -> list[AgentRow]:
     rows: list[AgentRow] = []
     with _prior_games_only(service, player, prior_nf):
@@ -696,6 +815,7 @@ def _agent_rows(
                         price,
                         clv_prob,
                         clv_line,
+                        game_type,
                     )
                 )
     return rows

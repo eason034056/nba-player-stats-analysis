@@ -813,6 +813,23 @@ export async function getTeamLineup(
   return teamLineupSchema.parse(data);
 }
 
+export async function getWNBATeamLineup(
+  team: string,
+  date?: string,
+): Promise<TeamLineup> {
+  const encodedTeam = encodeURIComponent(team);
+  const params = new URLSearchParams();
+  if (date) {
+    params.set("date", date);
+  }
+  const queryString = params.toString();
+  const url = queryString
+    ? `/api/wnba/lineups/${encodedTeam}?${queryString}`
+    : `/api/wnba/lineups/${encodedTeam}`;
+  const data = await fetchApi<TeamLineup>(url);
+  return teamLineupSchema.parse(data);
+}
+
 export async function refreshLineups(
   date?: string,
 ): Promise<LineupRefreshResponse> {

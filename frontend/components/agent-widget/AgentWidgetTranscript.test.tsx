@@ -150,4 +150,67 @@ describe("AgentWidgetTranscript", () => {
     expect(screen.getByText(/^Unavailable$/i)).toBeInTheDocument();
     expect(screen.getByText(/same-line ev is gone/i)).toBeInTheDocument();
   });
+
+  it("paints the light-surface Line moved badge with yellow ink on the accent fill", () => {
+    renderWithProviders(
+      <AgentWidgetTranscript
+        transcriptRef={createRef<HTMLDivElement>()}
+        surface="light"
+        messages={[
+          {
+            id: "assistant-line-moved",
+            role: "assistant",
+            text: "The line moved.",
+            action: "analyze_pick",
+            status: "line_moved",
+            verdict: {
+              subject: "Bam Adebayo points over 18.5",
+              decision: "over",
+              confidence: 0.7,
+              model_probability: 0.72,
+              market_implied_probability: 0.54,
+              expected_value_pct: null,
+              market_pricing_mode: "line_moved",
+              queried_line: 18.5,
+              best_line: 19.5,
+              available_lines: [19.5],
+              summary: "The original line is gone.",
+              reasons: [],
+              risk_factors: [],
+              recommendation: null,
+            },
+            quick_actions: [],
+          },
+        ]}
+        starterActions={[]}
+        isPending={false}
+        error={null}
+        onAction={vi.fn(async () => {})}
+        onRetryLastRequest={vi.fn(async () => {})}
+      />,
+    );
+
+    const label = screen.getByText("Line moved");
+    expect(label.parentElement).toHaveClass("text-yellow");
+    expect(label.parentElement).not.toHaveClass("text-accent");
+    expect(label.parentElement?.parentElement).toHaveClass("bg-accent", "border-accent");
+
+    // text-yellow is #5A5310 and bg-accent is #E4DA72. 10px text needs 4.5:1.
+    expect(contrast("#5A5310", "#E4DA72")).toBeGreaterThanOrEqual(4.5);
+    expect(contrast("#5A5310", "#E4DA72")).toBeCloseTo(5.44, 2);
+  });
 });
+
+function channel(hex: string, shift: number): number {
+  const value = (parseInt(hex.slice(1), 16) >> shift) & 255;
+  const unit = value / 255;
+  return unit <= 0.04045 ? unit / 12.92 : ((unit + 0.055) / 1.055) ** 2.4;
+}
+
+function contrast(foreground: string, background: string): number {
+  const luminance = (hex: string) =>
+    0.2126 * channel(hex, 16) + 0.7152 * channel(hex, 8) + 0.0722 * channel(hex, 0);
+  const lighter = Math.max(luminance(foreground), luminance(background));
+  const darker = Math.min(luminance(foreground), luminance(background));
+  return (lighter + 0.05) / (darker + 0.05);
+}
