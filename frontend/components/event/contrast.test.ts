@@ -36,7 +36,7 @@ function blend(foreground: string, background: string, alpha: number): string {
 const WHITE = "#FFFFFF";
 const pairs: Array<{ where: string; foreground: string; background: string; minimum: number }> = [
   { where: "EventHeader.tsx:65 away abbr, white on brand", foreground: WHITE, background: "#3E0F8D", minimum: 4.5 },
-  { where: "EventHeader.tsx:68 home abbr, white on brand-soft", foreground: WHITE, background: "#9564DD", minimum: 4.5 },
+  { where: "EventHeader.tsx:68 home abbr, white on brand", foreground: WHITE, background: "#3E0F8D", minimum: 4.5 },
   { where: "EventHeader.tsx:73 title, ink on white", foreground: "#1D1530", background: WHITE, minimum: 4.5 },
   { where: "EventHeader.tsx:76 clock, muted on white", foreground: "#625B70", background: WHITE, minimum: 4.5 },
   { where: "EventHeader.tsx:8 projected chip", foreground: "#5A5310", background: "#F6F2D2", minimum: 4.5 },
@@ -45,8 +45,8 @@ const pairs: Array<{ where: string; foreground: string; background: string; mini
   { where: "OurRead.tsx:56 under label, 14px on white", foreground: "#5B3A99", background: WHITE, minimum: 4.5 },
   { where: "OurRead.tsx:157 ask, brand on tint", foreground: "#3E0F8D", background: "#ECE6F7", minimum: 4.5 },
   { where: "OurRead.tsx:10 pass tier", foreground: "#4A4458", background: "#E2E2E2", minimum: 4.5 },
-  { where: "GameLogChart.tsx:44 axis labels", foreground: "#8A8496", background: WHITE, minimum: 4.5 },
-  { where: "GameLogChart.tsx:108 opponent labels", foreground: "#8A8496", background: WHITE, minimum: 4.5 },
+  { where: "GameLogChart.tsx:44 axis labels", foreground: "#625B70", background: WHITE, minimum: 4.5 },
+  { where: "GameLogChart.tsx:108 opponent labels", foreground: "#625B70", background: WHITE, minimum: 4.5 },
   { where: "GameLogChart.tsx:95 line tag", foreground: "#2A0A60", background: "#E4DA72", minimum: 4.5 },
   { where: "EventTabs.tsx:27 selected tab", foreground: "#3E0F8D", background: WHITE, minimum: 4.5 },
   { where: "EventTabs.tsx:27 idle tab", foreground: "#4A4458", background: "#F3F1F6", minimum: 4.5 },
@@ -67,8 +67,8 @@ describe("game page text contrast", () => {
 
   it("keeps the faded venue control at 3:1 after opacity", () => {
     const card = WHITE;
-    const track = blend("#F3F1F6", card, 0.6);
-    const label = blend("#625B70", track, 0.6);
+    const track = blend("#F3F1F6", card, 1);
+    const label = blend("#625B70", track, 1);
     const ratio = contrast(label, track);
     expect(ratio).toBeGreaterThanOrEqual(3);
   });

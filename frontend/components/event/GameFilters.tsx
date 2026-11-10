@@ -89,7 +89,7 @@ export function GameFilters({
       <div className="flex items-center justify-between gap-3">
         <h3 className="text-lg font-bold text-ink">Filter games</h3>
         <p className="text-[13px] text-muted">
-          {gameCount == null ? "Line not posted" : `${gameCount} games`}
+          {gameCount == null ? "Line not posted" : `${gameCount} ${gameCount === 1 ? "game" : "games"}`}
         </p>
       </div>
       <div className="grid gap-4 md:grid-cols-2">
@@ -136,12 +136,13 @@ export function GameFilters({
         </div>
         <div className="flex min-w-0 flex-col gap-2">
           <div className="text-xs font-bold uppercase tracking-[0.08em] text-muted">Venue</div>
-          <div className="flex gap-0.5 rounded-xl bg-[#F3F1F6] p-[3px] opacity-60">
+          <div className="flex gap-0.5 rounded-xl bg-[#F3F1F6] p-[3px]" aria-disabled="true">
             {["All", "Home", "Away"].map((label) => (
               <button
                 key={label}
                 type="button"
                 disabled
+                aria-disabled="true"
                 aria-pressed={label === "All"}
                 className={cn(
                   "min-h-9 flex-1 rounded-[9px] text-[13px] font-semibold",

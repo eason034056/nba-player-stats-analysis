@@ -322,7 +322,7 @@ describe("EventDetail fixtures", () => {
       expect.objectContaining({ n: 20, threshold: 18.5, player: "Bam Adebayo", metric: "points" }),
     );
     await user.selectOptions(within(filters).getByRole("combobox", { name: "Opponent" }), "PHI");
-    expect(await within(chart).findByText("Points · 1 games")).toBeInTheDocument();
+    expect(await within(chart).findByText("Points · 1 game")).toBeInTheDocument();
     expect(apiMocks.getPlayerHistory).toHaveBeenCalledWith(
       expect.objectContaining({ opponent: "PHI", threshold: 18.5 }),
     );

@@ -72,6 +72,7 @@ import {
   type PlayerHistoryRequest,
   type PlayerHistoryResponse,
 } from "@/lib/schemas";
+import { formatPercent } from "@/lib/player-dd";
 import { teamAbbr } from "@/lib/team-abbr";
 import { getLocalDateString, getTodayString, cn } from "@/lib/utils";
 
@@ -504,7 +505,9 @@ export function EventDetail({ league }: { league: League }) {
                 model={chart}
                 note={
                   chartQuery.data
-                    ? `${getMarketDisplayName(selectedMarket)} · ${chartQuery.data.n_games} games`
+                    ? `${getMarketDisplayName(selectedMarket)} · ${chartQuery.data.n_games} ${
+                        chartQuery.data.n_games === 1 ? "game" : "games"
+                      }`
                     : getMarketDisplayName(selectedMarket)
                 }
                 selectedKey={selectedBar}
@@ -516,8 +519,8 @@ export function EventDetail({ league }: { league: League }) {
               />
               {chartQuery.data && chartQuery.data.n_games > 0 ? (
                 <div className="mt-4 grid grid-cols-2 gap-2 md:grid-cols-4">
-                  <StatTile label="Over" value={chartQuery.data.p_over == null ? "—" : `${(chartQuery.data.p_over * 100).toFixed(1)}%`} />
-                  <StatTile label="Under" value={chartQuery.data.p_under == null ? "—" : `${(chartQuery.data.p_under * 100).toFixed(1)}%`} />
+                  <StatTile label="Over" value={formatPercent(chartQuery.data.p_over)} />
+                  <StatTile label="Under" value={formatPercent(chartQuery.data.p_under)} />
                   <StatTile label="Average" value={chartQuery.data.mean == null ? "—" : chartQuery.data.mean.toFixed(1)} />
                   <StatTile label="Games" value={String(chartQuery.data.n_games)} />
                 </div>
@@ -557,14 +560,9 @@ export function EventDetail({ league }: { league: League }) {
               <h3 className="text-lg font-bold text-ink">Sportsbook prices</h3>
               <p className="text-[13px] text-muted">
                 {result?.consensus
-                  ? `No-vig consensus ${binary ? "yes" : "over"} ${
-                      (binary
-                        ? result.consensus.p_yes_fair
-                        : result.consensus.p_over_fair
-                      ) == null
-                        ? "—"
-                        : `${(((binary ? result.consensus.p_yes_fair : result.consensus.p_over_fair) as number) * 100).toFixed(1)}%`
-                    }`
+                  ? `No-vig consensus ${binary ? "yes" : "over"} ${formatPercent(
+                      binary ? result.consensus.p_yes_fair : result.consensus.p_over_fair,
+                    )}`
                   : "No-vig consensus is not on this response."}
               </p>
             </div>

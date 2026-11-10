@@ -65,7 +65,7 @@ export function EventHeader({
                 <div className="flex h-12 w-12 items-center justify-center rounded-full border-[3px] border-white bg-brand font-mono text-[13px] font-bold text-white">
                   {awayAbbr || "—"}
                 </div>
-                <div className="-ml-2.5 flex h-12 w-12 items-center justify-center rounded-full border-[3px] border-white bg-brand-soft font-mono text-[13px] font-bold text-white">
+                <div className="-ml-2.5 flex h-12 w-12 items-center justify-center rounded-full border-[3px] border-white bg-brand font-mono text-[13px] font-bold text-white">
                   {homeAbbr || "—"}
                 </div>
               </div>
