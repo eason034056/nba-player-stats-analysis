@@ -50,6 +50,8 @@ import {
   getWNBAPlayerSuggestions,
   getWNBACSVPlayers,
   getWNBAPlayerHistory,
+  getPlayerDDHistory,
+  getWNBAPlayerDDHistory,
 } from "@/lib/api";
 import { TeamLogo } from "@/components/TeamLogo";
 import {
@@ -61,6 +63,8 @@ import {
   type CSVPlayersResponse,
   type PlayerHistoryRequest,
   type PlayerHistoryResponse,
+  type PlayerDDHistoryRequest,
+  type PlayerDDHistoryResponse,
 } from "@/lib/schemas";
 import { formatFullDate, getLocalDateString } from "@/lib/utils";
 import { PlayerInput, type PlayerSuggestFn } from "@/components/PlayerInput";
@@ -93,6 +97,9 @@ interface LeagueEventConfig {
   cacheNamespace: League;
   getCSVPlayersFn: (query?: string) => Promise<CSVPlayersResponse>;
   getPlayerHistoryFn: (request: PlayerHistoryRequest) => Promise<PlayerHistoryResponse>;
+  getPlayerDDHistoryFn: (
+    request: PlayerDDHistoryRequest,
+  ) => Promise<PlayerDDHistoryResponse>;
   supportsLineup: boolean;
   supportsProjection: boolean;
 }
@@ -110,6 +117,7 @@ const LEAGUE_CONFIG: Record<League, LeagueEventConfig> = {
     cacheNamespace: "nba",
     getCSVPlayersFn: getCSVPlayers,
     getPlayerHistoryFn: getPlayerHistory,
+    getPlayerDDHistoryFn: getPlayerDDHistory,
     supportsLineup: true,
     supportsProjection: true,
   },
@@ -125,6 +133,7 @@ const LEAGUE_CONFIG: Record<League, LeagueEventConfig> = {
     cacheNamespace: "wnba",
     getCSVPlayersFn: getWNBACSVPlayers,
     getPlayerHistoryFn: getWNBAPlayerHistory,
+    getPlayerDDHistoryFn: getWNBAPlayerDDHistory,
     // No WNBA projection endpoint and no WNBA lineup ingestion yet → empty states.
     supportsLineup: false,
     supportsProjection: false,
@@ -520,6 +529,7 @@ export function EventDetail({ league }: EventDetailProps) {
             projection={projectionData ?? undefined}
             getCSVPlayersFn={cfg.getCSVPlayersFn}
             getPlayerHistoryFn={cfg.getPlayerHistoryFn}
+            getPlayerDDHistoryFn={cfg.getPlayerDDHistoryFn}
             calculateNoVigFn={cfg.calculateNoVig}
             cacheNamespace={cfg.cacheNamespace}
           />

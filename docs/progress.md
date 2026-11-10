@@ -81,7 +81,7 @@ Stale pull requests the owner is closing. Not merged.
 | SPO-97 | CSV season hygiene. No task summary on `dev` yet. |
 | SPO-99 | In flight. Title not in `docs/task-summaries/` or `git log` on `dev`. |
 | SPO-101 | SPO-10 Phase 4 integration tests. Open. |
-| SPO-102 | In flight. Title not in `docs/task-summaries/` or `git log` on `dev`. |
+| SPO-102 | Wire `PlayerDDTile` to double-double history and yes/no odds. Open on `feature/SPO-102-player-dd-tile-wiring`. Summary: `docs/task-summaries/SPO-102-player-dd-tile-wiring.md`. |
 | SPO-103 | SPO-10 Phase 5 final review. Open. |
 
 ## Not classified
