@@ -10,12 +10,14 @@ import { PlayerRail } from "@/components/event/PlayerRail";
 import { StatChips } from "@/components/event/StatChips";
 import { buildOurRead, buildReadSignals, gameLogChart, lineupChip } from "@/lib/event-page";
 import { dailyPicksResponseSchema, playerHistoryResponseSchema } from "@/lib/schemas";
+import edgesFixture from "@/test/fixtures/event/nba-history-threshold-edges.json";
 import nbaHistoryFixture from "@/test/fixtures/event/nba-history-bam.json";
 import wnbaPicksFixture from "@/test/fixtures/event/wnba-daily-picks.json";
 import { renderWithProviders } from "@/test/test-utils";
 
 const noop = vi.fn();
 const bamHistory = playerHistoryResponseSchema.parse(nbaHistoryFixture);
+const edgeHistory = playerHistoryResponseSchema.parse(edgesFixture);
 const wilsonPick = dailyPicksResponseSchema.parse(wnbaPicksFixture).picks[0];
 
 function logOn(dateFull: string) {
@@ -328,6 +330,26 @@ describe("GameLogChart", () => {
       />,
     );
     expect(screen.getByText("No games match these filters.")).toBeInTheDocument();
+  });
+
+  it("labels a value on the line as a push", () => {
+    const model = gameLogChart(edgeHistory.game_logs, 18.5);
+    const push = model.bars.find((bar) => bar.value === 18.5);
+    renderWithProviders(
+      <GameLogChart
+        model={model}
+        note="Points · 3 games"
+        selectedKey={push?.key ?? null}
+        onSelect={noop}
+        isLoading={false}
+        isError={false}
+        errorText={null}
+        emptyMessage={null}
+      />,
+    );
+    expect(screen.getByText("Push")).toBeInTheDocument();
+    expect(screen.getAllByText(/Minutes not on this row/).length).toBeGreaterThan(0);
+    expect(screen.getByRole("button", { name: "11/03 BOS 18.5" })).toBeInTheDocument();
   });
 });
 

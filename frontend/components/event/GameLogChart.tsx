@@ -41,7 +41,7 @@ export function GameLogChart({
               {model.ticks.map((tick) => (
                 <div
                   key={tick.pos}
-                  className="absolute right-0 translate-y-1/2 font-mono text-[10px] font-semibold text-[#8A8496]"
+                  className="absolute right-0 translate-y-1/2 font-mono text-[10px] font-semibold text-muted"
                   style={{ bottom: tick.pos }}
                 >
                   {tick.label}
@@ -105,7 +105,7 @@ export function GameLogChart({
               {model.bars.map((bar) => (
                 <div
                   key={`${bar.key}-opp`}
-                  className="min-w-0 flex-1 truncate text-center font-mono text-[10px] font-semibold text-[#8A8496]"
+                  className="min-w-0 flex-1 truncate text-center font-mono text-[10px] font-semibold text-muted"
                 >
                   {bar.opponent}
                 </div>

@@ -45,7 +45,7 @@ Suggest returns names only. A no-vig request per name would call the odds provid
 
 ## Tests / Verification
 
-- `npx vitest run` — 35 files, 231 tests, passed (`TZ=America/Chicago`), after merging `720cddc` and `1dde92c` from `feature/SPO-110a-design-system-shell-today`.
+- `npx vitest run` — 38 files, 249 tests, passed (`TZ=America/Chicago`), including the checks added in `c6ec64a`.
 - `npx tsc --noEmit` — passed.
 - `npm run lint` — passed, 0 warnings.
 

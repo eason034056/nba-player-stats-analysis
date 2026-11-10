@@ -1,0 +1,16 @@
+{
+  "player": "Bam Adebayo",
+  "metric": "points",
+  "threshold": 18.5,
+  "n_games": 0,
+  "p_over": null,
+  "p_under": null,
+  "equal_count": 0,
+  "mean": null,
+  "std": null,
+  "histogram": [],
+  "game_logs": [],
+  "opponents": [],
+  "teammates": [],
+  "message": "Player 'Bam Adebayo' has no valid points stats"
+}
