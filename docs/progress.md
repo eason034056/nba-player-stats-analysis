@@ -1,6 +1,6 @@
 # Sports Lab Progress
 
-> Engineers update the row for their ticket in the pull request that changes that ticket. This file is a snapshot of ticket state, not a heartbeat log. Last updated: **2026-11-10** (SPO-105 on `dev`; SPO-107 added under In flight; SPO-110a; SPO-110c; SPO-112). Facts below were checked against `docs/task-summaries/`, `git log` on `dev`, and `gh pr list --base dev`. Titles that were not in those sources are left blank.
+> Engineers update the row for their ticket in the pull request that changes that ticket. This file is a snapshot of ticket state, not a heartbeat log. Last updated: **2026-11-10** (SPO-105 on `dev`; SPO-107 added under In flight; SPO-110a; SPO-110c). Facts below were checked against `docs/task-summaries/`, `git log` on `dev`, and `gh pr list --base dev`. Titles that were not in those sources are left blank.
 
 ## Shipped
 
@@ -111,10 +111,6 @@ Stale pull requests the owner is closing. Not merged.
 | SPO-107 | Harness game types match production regular season. Playoffs and play-in are a separate report section. Open on `feature/SPO-107-harness-gametype-parity`. Entry below. |
 | SPO-102 | Wire `PlayerDDTile` to double-double history and yes/no odds. Open on `feature/SPO-102-player-dd-tile-wiring`. Summary: `docs/task-summaries/SPO-102-player-dd-tile-wiring.md`. |
 | SPO-103 | SPO-10 Phase 5 final review. Open. |
-
-### SPO-112 — Signal verdicts and combined probability
-
-NBA Daily Picks carry five side-relative signals and a calibrated `combined_probability`. WNBA leaves both null. Backtest Analyst verdict INSUFFICIENT REAL-LINE DATA (2026-11-10): `probability` stays the headline until a separate real-line check. Open on `feature/SPO-112-signal-verdicts` into `dev`. Summary: `docs/task-summaries/SPO-112-signal-verdicts.md`. Decision: `docs/decisions/SPO-112/decision_20261110_signal-verdicts-combined-probability.md`.
 
 ### SPO-107 — harness game-type parity
 
