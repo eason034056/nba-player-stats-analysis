@@ -28,6 +28,8 @@ SPO-111 labels `DailyPick.tier` from the chosen side's historical hit rate. That
 
 `combined_probability` is `build_nba_signals`. This ticket does not change that function.
 
+The two paths do not see the same prices. Daily analysis passes the full bookmaker array, and `american_pairs_at_line` keeps every pair posted at the modal line. `/reads` rebuilds books from `odds_line_snapshots`. That table stores one pair per book: the last Over and the last Under in the payload (`rows_from_bookmakers`). Feeding `/reads` the daily-analysis ladder would mean storing every rung. That is the open snapshot-writer issue, not a change to the blend. On the recorded player_points capture the lines, sides, and tiers match. The largest absolute gap in `combined_probability` is 0.0069 (Nickeil Alexander-Walker, 0.6730 on the daily pick and 0.6661 on the read). The test locks that gap at or below 0.01.
+
 ## Decision 2 — NBA tier and the board use combined probability
 
 `READ_TIER_CUTOFFS` is unchanged:
@@ -44,6 +46,10 @@ For NBA, the input is now `combined_probability`, not the historical `probabilit
 This replaces the SPO-111 sentence that `tier` stays a function of the historical probability only. The cutoff table in that decision is still the table. WNBA is unchanged: `combined_probability` stays null, `select_daily_picks(..., league="wnba")` still filters on `probability`, and the WNBA tier is still `read_tier(probability)`.
 
 Storage is unchanged. A candidate is still kept when a historical side clears 0.56 (and the default NBA sample floor of 5). A player below that historical floor is not stored, so a high combined value cannot put them on the board. `top_read` is still the highest historical probability. `GET /api/picks/today` still filters on the historical rate.
+
+An NBA row is constructed with `tier` null. The signal step then sets `tier` from the blend. If `build_nba_signals` raises, the stored row keeps `combined_probability` null and `tier` null, so `board_score` drops it at every floor. WNBA still writes the historical tier at construction, because it does not run that step.
+
+The stored list is ordered by `sort_stored_picks`. NBA uses `combined_probability`. WNBA uses the historical rate. A missing score sorts last. Equal scores keep analysis order. `best_top_reads` still selects the highest historical probability. On a tie it keeps the earlier row of this list, so an NBA tie keeps the higher blend. `high_prob_count` is the length of that blended board for NBA.
 
 ## Measured shift on one recorded capture
 
@@ -81,4 +87,6 @@ This is one event and one market. It is not a full slate. Players under the hist
 
 `season_mean` is the mean of the metric on the same season games as `season_n_games`. It ignores the line and the `n` window. An empty season is null. WNBA does not compute it; the response field is null.
 
-`BulkPropPlayer.position` and `team_code` come from the newest NBA game log (`Pos`, and `Team` passed through `canonical_team_code`). They are filled on the way out of the props response, including a cache hit. The cached JSON does not store them, so a log correction is not frozen for 60 seconds. A lookup miss is null and is not an error.
+`BulkPropPlayer.position` and `team_code` come from the newest NBA game log (`Pos`, and `Team` passed through `canonical_team_code`). They are filled on the way out of the props response, including a cache hit. The cached JSON does not store them, so a log correction is not frozen for 60 seconds. A lookup miss is null and is not an error. The lookup runs on the event loop. Moving it off the loop waits until the slate is large enough to matter.
+
+`team_code` follows the latest log row. A player who has changed teams can show the new team before SPO-122 (#53) teaches the log which game belongs to which team. The frontend on `dev` does not read this field.

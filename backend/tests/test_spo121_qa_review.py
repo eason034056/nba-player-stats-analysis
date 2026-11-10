@@ -23,6 +23,7 @@ from app.services.daily_analysis import (
     present_daily_picks,
     read_tier,
     select_daily_picks,
+    sort_stored_picks,
 )
 from app.services.event_reads import (
     EVENT_READS_CACHE_TTL_SECONDS,
@@ -184,6 +185,39 @@ class TestCombinedTierAndBoard:
         assert [p.player_name for p in presented.picks] == ["on"]
         assert presented.total_picks == 1
 
+    def test_nba_order_follows_the_blend_and_a_missing_blend_sorts_last(self):
+        high_blend = _pick(probability=0.58, combined=0.80, name="blend")
+        high_history = _pick(probability=0.90, combined=0.60, name="history")
+        missing = _pick(probability=0.95, combined=None, name="missing")
+        picks = [high_history, missing, high_blend]
+        sort_stored_picks(picks, "nba")
+        assert [pick.player_name for pick in picks] == ["blend", "history", "missing"]
+
+        wnba = [
+            _pick(probability=0.66, combined=None, name="lower"),
+            _pick(probability=0.80, combined=0.40, name="higher"),
+        ]
+        for pick in wnba:
+            pick.tier = read_tier(pick.probability)
+        sort_stored_picks(wnba, "wnba")
+        assert [pick.player_name for pick in wnba] == ["higher", "lower"]
+
+    def test_signal_failure_leaves_a_null_tier_off_the_board(self, monkeypatch):
+        def explode(*args, **kwargs):
+            raise RuntimeError("signals failed")
+
+        monkeypatch.setattr(
+            "app.services.daily_analysis.build_nba_signals",
+            explode,
+        )
+        picks = _stored_picks()
+        assert picks
+        for pick in picks:
+            assert pick.combined_probability is None
+            assert pick.tier is None
+            assert pick.signals is None
+        assert select_daily_picks(picks, min_probability=0.0, min_games=0) == []
+
 
 class TestWnbaUnchanged:
     def test_wnba_board_ignores_combined(self):
@@ -219,7 +253,24 @@ class TestRecordedCapture:
             assert read.line == pick.threshold
             assert read.side == pick.direction
             assert read.tier == pick.tier
-            assert read.combined_probability == pytest.approx(pick.combined_probability, abs=0.01)
+            # Snapshot rows keep one pair per book. Daily analysis blends
+            # every rung at the modal line. On this capture the gap stays
+            # inside 0.01, and line, side, and tier still match.
+            assert read.combined_probability == pytest.approx(
+                pick.combined_probability, abs=0.01
+            )
+        gaps = [
+            abs(reads[pick.player_name].combined_probability - pick.combined_probability)
+            for pick in picks
+            if pick.combined_probability is not None
+            and reads[pick.player_name].combined_probability is not None
+        ]
+        assert max(gaps) == pytest.approx(0.0069, abs=0.0001)
+        walker = next(pick for pick in picks if pick.player_name == "Nickeil Alexander-Walker")
+        assert walker.combined_probability == pytest.approx(0.6730)
+        assert reads[walker.player_name].combined_probability == pytest.approx(0.6661)
+        assert walker.tier == "Playable"
+        assert reads[walker.player_name].tier == "Playable"
 
     def test_under_pick_tier_is_from_the_under_side_blend(self):
         picks = {pick.player_name: pick for pick in _stored_picks()}

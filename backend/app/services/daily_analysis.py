@@ -336,6 +336,32 @@ def board_score(pick: DailyPick, league: str = "nba") -> float | None:
     return number
 
 
+def sort_stored_picks(picks: List[DailyPick], league: str = "nba") -> None:
+    """Order a stored list by the score that board uses.
+
+    NBA orders by ``combined_probability``. WNBA orders by the historical
+    rate. A missing or non-finite score sorts last, so a row that cannot
+    reach the board does not sit above one that can. Equal scores keep
+    the order analysis produced them in.
+
+    ``best_top_reads`` still picks the highest historical probability.
+    On a tie it keeps the earlier row of this list, so an NBA tie keeps
+    the higher blend.
+
+    Args:
+        picks: Stored candidates. Sorted in place.
+        league: ``nba`` or ``wnba``. Passed to ``board_score``.
+    """
+
+    def key(pick: DailyPick) -> tuple[bool, float]:
+        score = board_score(pick, league)
+        if score is None:
+            return (False, 0.0)
+        return (True, score)
+
+    picks.sort(key=key, reverse=True)
+
+
 def select_daily_picks(
     picks: List[DailyPick],
     min_probability: float = HIGH_PROBABILITY_THRESHOLD,
@@ -921,8 +947,10 @@ class DailyAnalysisService:
                 print(f"⚠️ Failed to analyze event {event_id}: {e}")
                 continue
 
-        # 4. Sort picks by probability (descending)
-        all_picks.sort(key=lambda x: x.probability, reverse=True)
+        # 4. Order the stored list by the score the board uses.
+        # NBA: combined_probability. WNBA: the historical rate. A missing
+        # score sorts last. Equal scores keep analysis order.
+        sort_stored_picks(all_picks, league_normalized)
 
         # 5. Calculate statistics. high_prob_count stays the published
         # board (0.65 and 10 games) even when NBA storage also kept Lean
@@ -1240,7 +1268,16 @@ class DailyAnalysisService:
                         opponent_position_rank_note=opponent_position_rank_note,
                         injury_status=injury_status,
                         lineup_confirmed=lineup_confirmed,
-                        tier=read_tier(side_probability),
+                        # NBA tier is filled after the signal step. Starting
+                        # at None means a raised signal call cannot leave
+                        # the historical label on a row whose blend is null.
+                        # WNBA never runs that step, so it keeps the
+                        # historical label here.
+                        tier=(
+                            None
+                            if league.lower() == "nba"
+                            else read_tier(side_probability)
+                        ),
                         p_over=round(p_over, 4) if p_over is not None else None,
                         p_under=round(p_under, 4) if p_under is not None else None,
                         season_mean=_optional_stat(history_stats.get("season_mean")),
@@ -1442,8 +1479,9 @@ def best_top_reads(cached: Any) -> Dict[str, TopRead]:
     """Pick the highest-probability stored pick for each event.
 
     The cache payload is the JSON written by ``run_daily_analysis``.
-    Equal probabilities keep the earlier row. Analysis sorts by
-    probability descending, so a tie keeps the row that was stored first.
+    Equal historical probabilities keep the earlier row. The stored
+    list is ordered by ``sort_stored_picks`` (the blend for NBA, the
+    historical rate for WNBA), so an NBA tie keeps the higher blend.
 
     Args:
         cached: Daily-picks cache document, or anything that is not one.

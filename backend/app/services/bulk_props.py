@@ -561,7 +561,9 @@ def attach_roster_fields(
     A lookup failure leaves both fields null and still returns the lines.
     The props cache stores the lines without these fields so a roster
     correction is visible on the next read. The caller attaches them on
-    the way out, including a cache hit.
+    the way out, including a cache hit. The lookup is synchronous on
+    the event loop. Moving it off the loop is a follow-up; the current
+    game log is small enough that the response does not wait on it.
 
     Args:
         payload: Assembled bulk props.

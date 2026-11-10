@@ -96,3 +96,6 @@ Entered: Dyson Daniels over (0.6316 → 0.6862), Nickeil Alexander-Walker over (
 - Storage still drops anyone below historical 0.56, so a high blend cannot add them.
 - The recorded shift is one event and one market, with projections omitted.
 - Default `season_mean` is often null: the shipped log is mostly 2025-2026, and the season label for 2026-11-10 is 2026-2027.
+- `/reads` and the daily pick can differ by up to 0.01 on `combined_probability` because the snapshot stores one pair per book. On the recorded capture the max gap is 0.0069. Line, side, and tier match.
+- `team_code` can be wrong for a traded player until SPO-122 (#53) merges.
+- `attach_roster_fields` still does the name lookup on the event loop.

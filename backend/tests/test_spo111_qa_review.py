@@ -283,20 +283,24 @@ class TestTierBoundariesMatchReadTier:
 
         strong = by_name[_ROLES["exact_strong"]]
         assert strong.probability == pytest.approx(0.70)
-        assert strong.tier == read_tier(strong.combined_probability)
+        assert strong.combined_probability == pytest.approx(0.5904)
+        assert strong.tier == "Lean"
         below_strong = by_name[_ROLES["just_below_strong"]]
         assert below_strong.probability == pytest.approx(0.6999)
-        assert below_strong.tier == read_tier(below_strong.combined_probability)
+        assert below_strong.combined_probability == pytest.approx(0.6048)
+        assert below_strong.tier == "Lean"
         playable = by_name[_ROLES["exact_playable"]]
         assert playable.probability == pytest.approx(0.65)
         assert playable.n_games == 10
-        assert playable.tier == read_tier(playable.combined_probability)
+        assert playable.combined_probability == pytest.approx(0.6051)
+        assert playable.tier == "Lean"
         lean = by_name[_ROLES["exact_lean"]]
         assert lean.probability == pytest.approx(0.56)
-        assert lean.tier == read_tier(lean.combined_probability)
-        assert by_name[_ROLES["just_below_playable"]].tier == read_tier(
-            by_name[_ROLES["just_below_playable"]].combined_probability
-        )
+        assert lean.combined_probability == pytest.approx(0.5594)
+        assert lean.tier is None
+        below_playable = by_name[_ROLES["just_below_playable"]]
+        assert below_playable.combined_probability == pytest.approx(0.6167)
+        assert below_playable.tier == "Lean"
         assert _ROLES["just_below_lean"] not in by_name
         assert _ROLES["too_few"] not in by_name
         assert _ROLES["missing_both"] not in by_name
