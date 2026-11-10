@@ -8,15 +8,17 @@
 
 NBA Daily Picks now carry five side-relative signals and a calibrated `combined_probability`. A missing input is null on that signal, not a neutral verdict. No modal-line price, or an injury status of Out or Doubtful, leaves `combined_probability` null. WNBA picks get `signals=None` and `combined_probability=None`.
 
-The blend starts from the market no-vig log-odds, adds four capped adjustments, and applies Platt only to the adjustment total. The market coefficient stays 1. Stored constants are the full-sample NBA MED20 fit (`PLATT_A = 0.22281199`, `PLATT_B = 2.37285635`). On the same 53,327 settled picks the combined Brier is 0.2235 (gap 0.0000) against a `probability` Brier of 0.2306 (gap 0.0908). A chronological holdout is 0.2279 versus 0.2420. The frontend headline stays `probability` until the Backtest Analyst signs off, including real lines from `odds_line_snapshots` if enough exist. If they do not, the switch waits.
+The blend starts from the market no-vig log-odds, adds four capped adjustments, and applies Platt only to the adjustment total. The market coefficient stays 1. Stored constants are the fit on rows dated ≤ 2026-03-17 (`PLATT_A = 0.28010420`, `PLATT_B = 2.16005911`, n = 34,510). The holdout is 2026-03-18 → 2026-05-11 (n = 18,817): combined Brier 0.2279 (0.2258–0.2300), signed gap +0.0161, against `probability` Brier 0.2420, signed gap +0.1081. Paired Brier difference −0.0140 (−0.0157 to −0.0124). Scores on the rows that chose A and B, and the earlier full-sample fit that included the holdout, are not comparable to that holdout.
+
+`combined_probability` is not the headline. `probability` stays the headline until a separate real-line calibration check passes. That check is a separate ticket. Backtest Analyst verdict: INSUFFICIENT REAL-LINE DATA (2026-11-10).
 
 ## Changes
 
 | 檔案 | 變更 |
 |---|---|
-| `backend/app/models/schemas.py` | `PickSignal` above `DailyPick`. `signals` and `combined_probability` in a self-contained block at the end of `DailyPick`. `probability` is unchanged. |
+| `backend/app/models/schemas.py` | `PickSignal` above `DailyPick`. `signals` and `combined_probability` in a self-contained block at the end of `DailyPick`. The block comment names `tier`, `p_over`, and `p_under`. `probability` is unchanged. |
 | `backend/app/services/pick_signals.py` | Pure verdicts, modal-line no-vig consensus, and the combined probability. |
-| `backend/app/services/pick_signal_constants.py` | Versioned priors and the fitted Platt pair. |
+| `backend/app/services/pick_signal_constants.py` | Versioned priors. Platt pair fit on rows dated ≤ 2026-03-17. `FIT_SAMPLE` records the cutoff. |
 | `backend/app/services/daily_analysis.py` | NBA picks call a new helper after the pick is built. `_group_props_by_player` and both `bookmakers_count=len(lines)` lines are untouched. |
 | `backend/tests/test_pick_signals.py` | Thresholds on both sides, missing inputs, recorded Odds API fixture, DailyPick JSON shape, WNBA stays null. |
 | `backend/tests/test_daily_analysis_league.py` | WNBA pick asserts `signals is None` and `combined_probability is None`. |
@@ -26,7 +28,7 @@ The blend starts from the market no-vig log-odds, adds four capped adjustments, 
 | `scripts/agents/evaluation/calibration_guard.py` | Same 0.30 / 0.15 bounds on the new column when n ≥ 30. Empty column is skipped. |
 | `scripts/agents/evaluation/report.py` | Combined calibration section. |
 | `scripts/agents/evaluation/backtest.py` | Daily CSV gains the two columns. |
-| `scripts/agents/evaluation/fit_combined_platt.py` | Refits `PLATT_A` and `PLATT_B` and prints the holdout. |
+| `scripts/agents/evaluation/fit_combined_platt.py` | Default `--cutoff 2026-03-17`. Writes that fit. Scores later dates as the holdout. |
 | `scripts/agents/tests/test_combined_metrics.py` | Log loss, ECE, and a separate combined column. |
 | `scripts/agents/tests/test_defense_ranks.py` | Rank direction, same-day exclusion, position-rank preference. |
 | `scripts/agents/tests/test_calibration_guard.py` | Combined failure and the empty-column skip. |
@@ -52,7 +54,7 @@ cd scripts/agents && python3 -m pytest
 # 94 passed
 ```
 
-The two backend failures are `test_agent_chat_endpoint_validates_action_and_uses_service` and `test_lineups_api_returns_team_count`. Both die in the rate limiter because Redis is not running in this environment (`ConnectionError` has no `detail`). They do not import the signal module.
+Rerun after the cutoff coefficients were written. Same results. The two backend failures are `test_agent_chat_endpoint_validates_action_and_uses_service` and `test_lineups_api_returns_team_count`. Both die in the rate limiter because Redis is not running in this environment (`ConnectionError` has no `detail`). They do not import the signal module.
 
 - Verdict boundaries for over and under, including the exact cuts.
 - Each missing input stays null and adds 0 to the blend.
@@ -65,16 +67,28 @@ The two backend failures are `test_agent_chat_endpoint_validates_action_and_uses
 
 ## Calibration
 
-Same settled NBA MED20 picks. Market term is the fair 0.5 prior. Full-sample constants are what the module stores.
+Stored coefficients: `PLATT_A = 0.28010420`, `PLATT_B = 2.16005911`, fit on 34,510 NBA MED20 rows dated 2025-11-09 → 2026-03-17. The market term is the fair 0.5 prior. The holdout below is scored with those coefficients and was not used to choose them.
 
-| Slice | n | Combined Brier | Combined gap | Probability Brier | Probability gap |
+| Slice | n | Combined Brier | Combined signed gap | Probability Brier | Probability signed gap |
 |---|---|---|---|---|---|
-| In-sample | 53,327 | 0.2235 (0.2223–0.2248) | 0.0000 | 0.2306 (0.2288–0.2325) | 0.0908 |
-| Holdout after 2026-03-17 | 18,817 | 0.2279 (0.2258–0.2300) | 0.0161 | 0.2420 (0.2388–0.2451) | 0.1081 |
+| Holdout 2026-03-18 → 2026-05-11 | 18,817 | 0.2279 (0.2258–0.2300) | +0.0161 | 0.2420 (0.2388–0.2451) | +0.1081 |
+| Regular-season slice 2026-03-18 → 2026-04-12 | 13,778 | 0.2308 | +0.0180 | 0.2440 | +0.1105 |
 
-In-sample combined log loss 0.6386, ECE 0.0024, widest bucket gap 0.0149. Holdout log loss 0.6475, ECE 0.0229, widest bucket gap 0.0359. Probability log loss is 0.7030 in-sample and 0.6980 on the holdout. ECE on the pick edges (from 0.65) matches the probability gap on both slices.
+Holdout ECE 0.0229, widest combined bucket 0.0359, log loss 0.6475. `probability` widest bucket 0.1336, log loss 0.6980. Paired Brier difference −0.0140 (95% CI −0.0157 to −0.0124).
 
-`backtest_report.md` (2026-11-09) measured probability Brier 0.227 and gap 0.077 on 55,708 picks. This CSV load is 573 NBA players and 53,327 settled picks. Compare combined with `probability` on the same rows.
+The regular-season slice uses the same coefficients. It is not a refit. About 5,039 holdout rows are playoff or play-in. Rebaseline after PR #38 merges is pending.
+
+A score on the 34,510 fit rows is not comparable to the holdout. The earlier full-sample fit on all 53,327 rows (Brier 0.2235, gap 0.0000) included the holdout and is not comparable either. Those coefficients are not stored.
+
+## Validation status
+
+INSUFFICIENT REAL-LINE DATA (2026-11-10). The proxy-line holdout met the pass bar. `odds_line_snapshots` could not be queried (no production DB access). `combined_probability` is not the headline. A separate ticket owns the real-line check: at least 1,000 graded two-sided rows.
+
+## Known limitations
+
+- About 5,039 holdout rows are playoff or play-in games, because this branch predates PR #38. Rebaseline after #38 merges into `dev`. Pending. Coefficients were not refit to drop them.
+- Early-season fits are unstable. January 2026, trained on November–December only (n = 8,902), had combined Brier 0.2171 versus `probability` 0.2149, and the 0.4–0.5 bucket gap was −0.102.
+- With a constant 0.5 market, offline `combined_probability` is a recalibrated adjustment total. It shares `history_rate` with `probability` (correlation 0.39). `A = 0.2801` encodes that the pick side beats a coin flip, and on a real no-vig market that can double-count recent form. Refit A and B once real lines exist.
 
 Regenerate:
 
@@ -85,7 +99,8 @@ python scripts/agents/evaluation/backtest.py --report backtest_report.md
 
 ## Follow-ups
 
-- Backtest Analyst validates before `combined_probability` replaces `probability` as the headline. That includes production `odds_line_snapshots` when the table has enough two-sided lines. If it does not, the switch waits.
+- Separate ticket: real-line calibration before `combined_probability` can replace `probability` as the headline. Needs at least 1,000 graded two-sided rows from `odds_line_snapshots`.
+- Rebaseline after PR #38 merges into `dev`. Not done here.
 - Scale the ±0.5 projection cut by each metric's spread.
 - SPO-115 owns the `bookmakers_count` double-count. This branch does not edit that function.
 - `PlayerProjectionPanel` still describes rank 1 as the strongest defense.

@@ -101,14 +101,15 @@ combined = sigmoid(logit(market) + PLATT_A + PLATT_B * clipped_adjustment)
 
 On the training rows the market prior is 0.5, so `logit(market)` is 0 and this is ordinary Platt of the adjustment. Applying Platt to `logit(market) + adjustment` would multiply the unfitted market by `PLATT_B`. The market coefficient stays 1 because the training set has no market variation. The result is rounded to 4 decimals and clipped to `[0.0001, 0.9999]`.
 
-Fitted on the NBA MED20 walk-forward replay (`cd scripts/agents && python -m evaluation.fit_combined_platt`), full sample, market prior 0.5:
+Stored coefficients are the NBA MED20 fit on rows dated on or before 2026-03-17 (`cd scripts/agents && python -m evaluation.fit_combined_platt`, market prior 0.5). Rows after that date were not used to choose A or B.
 
 | | Value |
 |---|---|
-| `PLATT_A` | 0.22281199 |
-| `PLATT_B` | 2.37285635 |
-| Settled picks | 53,327 |
-| Dates | 2025-11-09 → 2026-05-11 |
+| `PLATT_A` | 0.28010420 |
+| `PLATT_B` | 2.16005911 |
+| Fit rows | 34,510 |
+| Fit dates | 2025-11-09 → 2026-03-17 |
+| Cutoff | 2026-03-17 |
 
 What is fit: the intercept and the slope on the adjustment total. What is a prior: the four weights, the caps, the projection term (the replay has no projection, so that adjustment is 0), and the market coefficient. The replay's defense rank is a no-lookahead CSV proxy (mean of that stat allowed before the date), not the SportsDataIO fantasy rank production will load. Position rank is used when that position has at least 8 prior player-games against the opponent; otherwise the overall rank is used when the opponent has at least 20; otherwise the rank is missing. Same-day games are excluded. Ties break by opponent name.
 
@@ -116,7 +117,7 @@ What is fit: the intercept and the slope on the adjustment total. What is a prio
 
 `probability` is the published historical rate of the chosen side. `p_over` and `p_under` (added on the SPO-111 branch, not here) are the stored per-side historical rates the tier and the default side are based on. `choose_daily_pick_side` and the 0.65 publish rule keep using those rates.
 
-`combined_probability` is a separate estimate for the pick's side. It is not a replacement for `probability` in this change. The frontend keeps `probability` as the headline until the Backtest Analyst signs off, and that check has to include real lines from production `odds_line_snapshots` when enough of them exist. This repo has no historical sportsbook lines, so that check cannot be closed here. If there are not enough real lines, the headline switch waits.
+`combined_probability` is a separate estimate for the pick's side. It is not the headline. `probability` stays the headline until a separate real-line calibration check passes. That check is its own ticket. It needs a real no-vig comparison, which this replay cannot supply.
 
 ### Reading the values against PR #40
 
@@ -124,35 +125,30 @@ PR #40 names the five keys and labels and does not assign Supports / Neutral / A
 
 The prototype also showed the over percent for market and history, and counted only overs for the last 10. This API returns the side's number for all three, so the displayed value and the verdict describe the same side. That is intentional: the approved rules are side-relative, and the history input is the existing `probability`.
 
-### Calibration on this replay
+### Calibration
 
-Same settled NBA MED20 picks. The market term is the fair 0.5 prior. `probability` is the published side rate. Intervals are a normal approximation of the Brier score.
+The market term on every replay row is the fair 0.5 prior. `probability` is the published side rate. Intervals are a normal approximation. A signed gap is mean prediction minus hit rate, so a positive gap means the score is high. Bucket gaps below use deciles `(0.0, 0.1, …, 1.0, 1.0001)` for both columns. ECE for `probability` in the fit log also reports the pick edges, which start at 0.65; on this holdout that ECE equals the signed gap.
 
-In-sample (the stored constants; not the final validation):
+**Holdout, stored coefficients.** Fit on dates ≤ 2026-03-17 (`A = 0.28010420`, `B = 2.16005911`). Scored on 2026-03-18 → 2026-05-11. n = 18,817.
 
-| | n | Brier (95% CI) | Gap | Log loss | ECE | Widest \|bucket gap\| | Mean predicted | Hit rate |
-|---|---|---|---|---|---|---|---|---|
-| `combined_probability` | 53,327 | 0.2235 (0.2223–0.2248) | 0.0000 | 0.6386 | 0.0024 | 0.0149 | 0.6434 | 0.6434 |
-| `probability` | 53,327 | 0.2306 (0.2288–0.2325) | 0.0908 | 0.7030 | 0.0908 | — | 0.7343 | 0.6434 |
+| | Brier (95% CI) | Signed gap | Log loss | ECE | Widest \|bucket gap\| | Mean predicted | Hit rate |
+|---|---|---|---|---|---|---|---|
+| `combined_probability` | 0.2279 (0.2258–0.2300) | +0.0161 | 0.6475 | 0.0229 | 0.0359 | 0.6369 | 0.6208 |
+| `probability` | 0.2420 (0.2388–0.2451) | +0.1081 | 0.6980 | 0.1081 | 0.1336 | 0.7289 | 0.6208 |
 
-Chronological holdout. Platt was fit on dates on or before 2026-03-17 (about the first 70% of unique pick dates) and scored on the rest. Those constants are not the ones stored. Stored constants are the full-sample fit.
+Paired Brier difference (`combined` minus `probability`): −0.0140 (95% CI −0.0157 to −0.0124).
 
-| | n | Brier (95% CI) | Gap | Log loss | ECE | Widest \|bucket gap\| | Mean predicted | Hit rate |
-|---|---|---|---|---|---|---|---|---|
-| `combined_probability` | 18,817 | 0.2279 (0.2258–0.2300) | 0.0161 | 0.6475 | 0.0229 | 0.0359 | 0.6369 | 0.6208 |
-| `probability` | 18,817 | 0.2420 (0.2388–0.2451) | 0.1081 | 0.6980 | 0.1081 | — | 0.7289 | 0.6208 |
+On proxy lines this holdout beats `probability` on Brier, gap, log loss, and ECE, and no combined bucket is wider than 0.10. That is not a headline change. See Validation status.
 
-Holdout fit: `A = 0.28010420`, `B = 2.16005911`.
+**Regular-season slice of the same holdout.** 2026-03-18 → 2026-04-12, n = 13,778, same stored coefficients, not a refit. Combined Brier 0.2308, signed gap +0.0180. `probability` Brier 0.2440, signed gap +0.1105. The remaining holdout rows stay in the headline table. Dropping them and refitting waits until PR #38 is on `dev`.
 
-On these rows, both the in-sample and the holdout combined score beat `probability` on Brier, gap, log loss, and ECE. No combined reliability bucket is wider than 0.10. The in-sample gap is ~0 because the intercept was fit on those same rows. That is not a license to change the headline.
+**Scores that are not comparable.** A score on the 34,510 rows dated ≤ 2026-03-17 uses the same rows that chose A and B. It is not comparable to the holdout. The earlier full-sample fit (`A = 0.22281199`, `B = 2.37285635` on all 53,327 rows, combined Brier 0.2235, gap 0.0000) included the holdout dates in the fit. Those figures are leaky. They are not comparable to the holdout above, and they are not the stored constants.
 
-The checked-in `backtest_report.md` (generated 2026-11-09) reports NBA MED20 `probability` at Brier 0.227 and gap 0.077 on 55,708 picks, from a CSV load of 579 players. This replay loaded 573 players and scored 53,327 settled picks. The comparison above is same-row. It is not a claim that 0.2235 replaces the 0.227 headline in that older report.
-
-Combined ECE uses deciles `(0.0, 0.1, …, 1.0, 1.0001)`. ECE for `probability` uses the existing pick edges, which start at 0.65, because a published pick is never below that. A prediction outside the edges is left out of ECE.
+The checked-in `backtest_report.md` (generated 2026-11-09) reports NBA MED20 `probability` at Brier 0.227 and gap 0.077 on 55,708 picks, from a CSV load of 579 players. This replay loaded 573 players and 53,327 settled picks. Compare columns on the same rows.
 
 WNBA rows leave the column null. The calibration guard skips a league with fewer than 30 combined values instead of failing it. At 30 or more it uses the same bounds as the published probability: Brier 0.30 and absolute gap 0.15.
 
-Regenerate the fit (no external API):
+Regenerate the stored pair (no external API). The default cutoff is 2026-03-17:
 
 ```
 cd scripts/agents && python -m evaluation.fit_combined_platt
@@ -166,6 +162,18 @@ python scripts/agents/evaluation/backtest.py --report backtest_report.md
 
 The guard sample the CI job already runs is `pytest` on `scripts/agents/tests/test_calibration_guard.py` (40 players per league, seed 7, MED20).
 
+### Validation status
+
+**Verdict: INSUFFICIENT REAL-LINE DATA (2026-11-10).** The Backtest Analyst reproduced the holdout.
+
+The proxy-line holdout met the pass bar against `probability`. `odds_line_snapshots` could not be queried, because this run had no production database access. `combined_probability` is not the headline. `probability` stays the headline until a separate real-line calibration check passes. That check is a separate ticket. It needs a real no-vig comparison with at least 1,000 graded two-sided rows.
+
+### Known limitations
+
+- About 5,039 of the 18,817 holdout rows are playoff or play-in games, because this branch predates PR #38. Rebaseline after #38 merges into `dev`. That rebaseline is pending. The stored coefficients were not refit to drop those rows.
+- Early-season fits are unstable. In a rolling monthly check, January 2026 (trained on November–December only, n = 8,902) had combined Brier 0.2171 versus `probability` 0.2149, and the 0.4–0.5 bucket gap was −0.102.
+- Under the 0.5 market prior the market term is constant, so offline `combined_probability` is a recalibrated adjustment total. It shares `history_rate` with `probability` (correlation 0.39). The stored intercept `A = 0.2801` encodes that the pick side beats a coin flip. On top of a real no-vig market that can double-count recent form. Only a real-line test can settle this. Refit A and B once real lines exist.
+
 ## Alternatives
 
 1. **Prototype blend, 25/25/25/15/10.** The redesign prototype averages the five signals with those weights. Rejected. The weights are not calibrated, a missing input would have to be invented or the weights renormalized, and the average is not a probability of the side.
@@ -174,7 +182,7 @@ The guard sample the CI job already runs is `pytest` on `scripts/agents/tests/te
 
 ## Tradeoffs
 
-The in-sample intercept absorbs the known overconfidence of `probability` (about 0.73 predicted versus about 0.64 hits on this replay). A later fit on real closing lines can move both coefficients. Until then, a live market far from 0.5 is passed through at coefficient 1 and only shifted by the adjustment.
+The stored intercept was fit where the market term is a constant 0.5, so it absorbs "the published side beats a coin flip" on rows through 2026-03-17. A live market far from 0.5 is passed through at coefficient 1 and only shifted by the adjustment. A later fit on real lines can move both coefficients. See Known limitations.
 
 Projection barely moves the blend. That is deliberate. There is nothing in the CSV to fit it against.
 
@@ -187,7 +195,7 @@ The walk-forward defense rank will not match tomorrow's SportsDataIO rank. It ex
 - NBA `GET` daily picks responses gain `signals` and `combined_probability`. Cached payloads written before this change still parse: both fields default to null.
 - WNBA responses gain the same keys, always null.
 - The walk-forward CSV gains `combined_probability` and `combined_adjustment`. The second column is the pre-Platt clipped total, so Platt can be refit without another feature pass.
-- Frontend headline stays `probability`.
+- `probability` stays the headline. `combined_probability` does not replace it. A separate ticket owns the real-line calibration check.
 
 ## Links
 

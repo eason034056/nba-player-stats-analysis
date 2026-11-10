@@ -550,9 +550,8 @@ class DailyPick(BaseModel):
     )
 
     # --- SPO-112 signal verdicts (self-contained; leave this block intact) ---
-    # Separate from `probability` and from the per-side historical rates
-    # (`p_over` / `p_under`) and `tier` added on another branch. NBA picks
-    # carry five signals. WNBA leaves both fields null.
+    # Separate from `probability` and from `tier`, `p_over`, and `p_under`.
+    # NBA picks carry five signals. WNBA leaves both fields null.
     signals: list[PickSignal] | None = Field(
         default=None,
         description="Five NBA signal verdicts in a fixed order. None for WNBA",

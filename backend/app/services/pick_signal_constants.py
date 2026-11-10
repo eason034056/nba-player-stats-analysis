@@ -15,14 +15,16 @@ Fitted on walk-forward data:
 
 * ``PLATT_A`` and ``PLATT_B`` only. They map the clipped adjustment total
   onto the log-odds residual versus a fair 0.5 market. ``FIT_SAMPLE``
-  records the replay those two numbers came from.
+  records the rows those two numbers came from, including the cutoff.
+  Rows dated after the cutoff are the holdout and are not in the fit.
 
 Regenerate the fitted pair (does not call an external API)::
 
     cd scripts/agents && python -m evaluation.fit_combined_platt
 
-That command replays NBA MED20, refits Platt, and rewrites ``PLATT_A``,
-``PLATT_B``, and ``FIT_SAMPLE`` in this file.
+That command replays NBA MED20, fits Platt on rows dated on or before
+2026-03-17 (pass ``--cutoff`` to use another date), and rewrites
+``PLATT_A``, ``PLATT_B``, and ``FIT_SAMPLE`` in this file.
 """
 
 from __future__ import annotations
@@ -67,15 +69,16 @@ OFFLINE_MARKET_PRIOR = 0.5
 
 # Platt on the clipped adjustment total. Rewritten by fit_combined_platt.
 # Market log-odds is added afterwards with coefficient 1.
-PLATT_A = 0.22281199
-PLATT_B = 2.37285635
+PLATT_A = 0.28010420
+PLATT_B = 2.16005911
 
 FIT_SAMPLE = {
     "league": "nba",
     "proxy": "MED20",
     "market_prior": OFFLINE_MARKET_PRIOR,
-    "n": 53327,
+    "cutoff": "2026-03-17",
+    "n": 34510,
     "date_start": "2025-11-09",
-    "date_end": "2026-05-11",
-    "note": "Platt fit on the clipped adjustment total. Market log-odds coefficient is fixed at 1. In-sample Brier 0.2235, gap 0.0000.",
+    "date_end": "2026-03-17",
+    "note": "Platt fit on rows dated on or before cutoff. Later rows are the holdout and were not used to choose A or B. Market log-odds coefficient is fixed at 1. Holdout n=18817, Brier 0.2279, signed gap +0.0161.",
 }

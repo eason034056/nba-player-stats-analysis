@@ -110,7 +110,7 @@ Stale pull requests the owner is closing. Not merged.
 
 ### SPO-112 — Signal verdicts and combined probability
 
-NBA Daily Picks carry five side-relative signals and a calibrated `combined_probability`. WNBA leaves both null. The headline stays `probability` until a later validation on real lines. Open on `feature/SPO-112-signal-verdicts` into `dev`. Summary: `docs/task-summaries/SPO-112-signal-verdicts.md`. Decision: `docs/decisions/SPO-112/decision_20261110_signal-verdicts-combined-probability.md`.
+NBA Daily Picks carry five side-relative signals and a calibrated `combined_probability`. WNBA leaves both null. Backtest Analyst verdict INSUFFICIENT REAL-LINE DATA (2026-11-10): `probability` stays the headline until a separate real-line check. Open on `feature/SPO-112-signal-verdicts` into `dev`. Summary: `docs/task-summaries/SPO-112-signal-verdicts.md`. Decision: `docs/decisions/SPO-112/decision_20261110_signal-verdicts-combined-probability.md`.
 
 ## Not classified
 
