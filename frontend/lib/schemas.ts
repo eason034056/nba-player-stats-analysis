@@ -286,6 +286,8 @@ export const gameLogSchema = z.object({
   team: z.string().optional().default(""),  // 球員所屬球隊
   minutes: z.number().optional().default(0),  // 上場時間（分鐘）
   is_starter: z.boolean().optional().default(false),  // 是否先發
+  game_type: z.string().optional(),  // regular_season / playoffs / play_in
+  season: z.string().optional(),  // 賽季標籤，例如 2025-2026
 });
 
 export type GameLog = z.infer<typeof gameLogSchema>;

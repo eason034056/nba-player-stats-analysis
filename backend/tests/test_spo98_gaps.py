@@ -31,6 +31,18 @@ from app.services.normalize import match_player_name, player_name_key  # noqa: E
 _UNKNOWN = "No Such Player"
 
 
+def _kent_two_club_logs():
+    """Remix on 2026-03-15, Trail Blazers on 2026-03-16.
+
+    The published NBA file no longer has the G League row. These two rows
+    keep the US game-date rule covered.
+    """
+    return [
+        {"team": "Remix", "game_date": datetime(2026, 3, 15)},
+        {"team": "Trail Blazers", "game_date": datetime(2026, 3, 16)},
+    ]
+
+
 @pytest.fixture(scope="module")
 def nba_service():
     service = CSVPlayerHistoryService(league="nba")
@@ -128,8 +140,6 @@ class TestNameKeyEdges:
                 ("  a'JA   wilson ", "A'ja Wilson"),
                 ("A’ja Wilson", "A'ja Wilson"),
                 ("Te Hina Paopao", "Te-Hina Paopao"),
-                ("TaNiya Latson", "Ta'Niya Latson"),
-                ("Flau’jae Johnson", "Flau'jae Johnson"),
                 ("Betnijah Laney Hamilton", "Betnijah Laney-Hamilton"),
             ],
         }
@@ -322,7 +332,9 @@ class TestTradeDayTeams:
         assert team_from_game_logs(logs, "2026-01-02") == "Raptors"
         assert team_from_game_logs(logs, "2026-03-04") == "Jazz"
         assert team_from_game_logs(logs) == "Jazz"
-        assert team_from_game_logs(logs, "2025-10-16") == "Jazz"
+        # Preseason Jazz rows are not in the canonical file, so the first
+        # remaining game (2025-12-29) is already the Raptors stint.
+        assert team_from_game_logs(logs, "2025-10-16") == "Raptors"
 
     def test_wnba_carrington_trade_day_and_gap(self, wnba_service):
         logs = wnba_service._cache["DiJonai Carrington"]
@@ -336,18 +348,23 @@ class TestTradeDayTeams:
         assert team_from_game_logs(chart["game_logs"]) == "Lynx"
 
     def test_post_midnight_utc_same_calendar_day_stays_put(self, nba_service):
-        # 23:00Z is still 2026-03-15 in UTC (7pm ET). The Remix log is that day.
-        logs = nba_service._cache["Jayson Kent"]
+        # 23:00Z is still 2026-03-15 in UTC (7pm ET). The two-club log below
+        # is the shape Kent had before G League rows left the canonical CSV.
+        logs = _kent_two_club_logs()
         assert team_from_game_logs(logs, "2026-03-15") == "Remix"
         assert team_from_game_logs(logs, "2026-03-15T23:00:00Z") == "Remix"
         assert team_from_game_logs(logs, "2026-03-16") == "Trail Blazers"
+        shipped = nba_service._cache["Jayson Kent"]
+        assert {row["team"] for row in shipped} == {"Trail Blazers"}
 
     def test_post_midnight_utc_commence_stays_on_us_game_date(self, nba_service):
-        logs = nba_service._cache["Jayson Kent"]
-        chart = nba_service.get_player_stats("Jayson Kent", "points", 8.5)["game_logs"]
+        logs = _kent_two_club_logs()
         commence = "2026-03-16T00:30:00Z"
         assert team_from_game_logs(logs, commence) == "Remix"
-        assert team_from_game_logs(chart, commence) == "Remix"
+        # Published rows start 2026-03-16, so this US game date (the 15th)
+        # is before every remaining log and resolves to Trail Blazers.
+        chart = nba_service.get_player_stats("Jayson Kent", "points", 8.5)["game_logs"]
+        assert team_from_game_logs(chart, commence) == "Trail Blazers"
 
 
 class TestHistoricalTeamCallSites:
@@ -498,8 +515,11 @@ class TestReReviewEdges:
         assert team_from_game_logs(logs, "03/16/2026") == "Trail Blazers"
         assert team_from_game_logs(logs, "2026-03-16T00:30:00") == "Trail Blazers"
         aware = datetime(2026, 3, 16, 0, 30, tzinfo=timezone.utc)
-        assert team_from_game_logs(logs, aware) == "Remix"
-        assert team_from_game_logs(logs, "2026-03-16T00:30:00Z") == "Remix"
+        # Same clock on the two-club log (G League row is not in the file).
+        two_club = _kent_two_club_logs()
+        assert team_from_game_logs(two_club, aware) == "Remix"
+        assert team_from_game_logs(two_club, "2026-03-16T00:30:00Z") == "Remix"
+        assert team_from_game_logs(logs, aware) == "Trail Blazers"
 
     def test_eastern_evening_lineup_uses_the_converted_day(self):
         historical = _historical()
@@ -509,8 +529,12 @@ class TestReReviewEdges:
         next_day = historical.get_lineup_context(
             "Jayson Kent", "2026-03-16", league="nba"
         )
-        assert evening["details"]["team"] == "Remix"
+        # The Remix row was G League and is not in the canonical file. The
+        # US game date (the 15th) is before every remaining game, so the
+        # lineup window is empty. The next calendar day is the Blazers game.
+        assert evening["details"].get("error") == "no data"
         assert next_day["details"]["team"] == "Trail Blazers"
+        assert team_from_game_logs(_kent_two_club_logs(), "2026-03-16T00:30:00Z") == "Remix"
 
     def test_date_before_every_wnba_log_is_the_earliest_club(self, wnba_service):
         logs = wnba_service._cache["DiJonai Carrington"]

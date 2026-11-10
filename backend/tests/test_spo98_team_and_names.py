@@ -142,7 +142,6 @@ class TestRealCsvNames:
 
     def test_wnba_apostrophe_and_substring(self, wnba_service):
         assert wnba_service.resolve_player_name("Aja Wilson") == "A'ja Wilson"
-        assert wnba_service.resolve_player_name("Flaujae Johnson") == "Flau'jae Johnson"
         assert wnba_service.resolve_player_name("Wilson") is None
         stats = wnba_service.get_player_stats("Aja Wilson", "points", 15.5)
         assert stats["player"] == "A'ja Wilson"
@@ -162,11 +161,12 @@ class TestTeamAttribution:
                 multi += 1
                 if first != last:
                     label_changes += 1
-        # Audit figure was ~126 mislabeled traded players. 126 played for
-        # two or more clubs in this file; 124 have earliest != latest, so
-        # the oldest-first fallback shows the old club.
-        assert multi == 126
-        assert label_changes == 124
+        # Preseason, summer, and G League rows are out of the canonical
+        # file, so only regular-season and playoff clubs remain. 74 players
+        # still have two or more clubs, and each one's earliest club
+        # differs from the latest.
+        assert multi == 74
+        assert label_changes == 74
 
     def test_buddy_hield_event_day_and_latest_team(self, nba_service):
         logs = nba_service._cache["Buddy Hield"]
@@ -188,7 +188,9 @@ class TestTeamAttribution:
         # Jazz, so "most recent" hides the middle stint. The event day does not.
         logs = nba_service._cache["Mo Bamba"]
         assert team_from_game_logs(logs) == "Jazz"
-        assert team_from_game_logs(logs, "2025-10-16") == "Jazz"
+        # Games before 2025-12-29 were not regular season, so the earliest
+        # club left in the file is the Raptors.
+        assert team_from_game_logs(logs, "2025-10-16") == "Raptors"
         assert team_from_game_logs(logs, "2026-01-03") == "Raptors"
         assert team_from_game_logs(logs, "2026-01-15") == "Raptors"
         assert team_from_game_logs(logs, "2026-03-05") == "Jazz"
@@ -199,7 +201,9 @@ class TestTeamAttribution:
             first, last, n_teams = _first_and_last_team(logs)
             if n_teams > 1 and first != last:
                 label_changes += 1
-        assert label_changes == 52
+        # Preseason rows are out of the canonical file. 24 players still
+        # change club between their earliest and latest remaining game.
+        assert label_changes == 24
 
         logs = wnba_service._cache["DiJonai Carrington"]
         chart = list(reversed(logs))

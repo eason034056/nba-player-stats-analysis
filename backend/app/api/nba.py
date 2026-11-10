@@ -811,7 +811,15 @@ async def get_player_history(
     teammate_played: Optional[bool] = Query(
         default=None,
         description="Star teammate played filter: True (all played), False (all DNP), None (no filter)"
-    )
+    ),
+    include_playoffs: bool = Query(
+        default=False,
+        description="Include playoff games. Default is regular season only.",
+    ),
+    include_play_in: bool = Query(
+        default=False,
+        description="Include play-in games. Default is regular season only.",
+    ),
 ) -> PlayerHistoryResponse:
     """
     Get player historical statistical summary
@@ -897,7 +905,9 @@ async def get_player_history(
             opponent=opponent,
             is_starter=is_starter,
             teammate_filter=teammate_list,
-            teammate_played=teammate_played
+            teammate_played=teammate_played,
+            include_playoffs=include_playoffs,
+            include_play_in=include_play_in,
         )
         
         # Convert histogram to Pydantic model
@@ -920,7 +930,9 @@ async def get_player_history(
                 is_over=log["is_over"],
                 team=log.get("team", ""),
                 minutes=log.get("minutes", 0.0),  # Playing time
-                is_starter=log.get("is_starter", False)  # Starter status
+                is_starter=log.get("is_starter", False),  # Starter status
+                game_type=log.get("game_type", "regular_season"),
+                season=log.get("season", ""),
             )
             for log in stats.get("game_logs", [])
         ]
@@ -976,6 +988,14 @@ async def get_player_dd_history(
         default=None,
         description="Season filter (e.g. '2024-25'); None means use all seasons",
     ),
+    include_playoffs: bool = Query(
+        default=False,
+        description="Include playoff games. Default is regular season only.",
+    ),
+    include_play_in: bool = Query(
+        default=False,
+        description="Include play-in games. Default is regular season only.",
+    ),
 ) -> PlayerDDHistoryResponse:
     """
     Get player Double-Double historical rate.
@@ -1000,6 +1020,8 @@ async def get_player_dd_history(
         stats = csv_player_service.player_dd_history(
             player_name=player,
             season=season,
+            include_playoffs=include_playoffs,
+            include_play_in=include_play_in,
         )
 
         return PlayerDDHistoryResponse(
