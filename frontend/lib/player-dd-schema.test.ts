@@ -438,6 +438,79 @@ describe("recorded double-double payloads", () => {
     expect(parsed.results[0]?.uses_prior).toBe(true);
   });
 
+  it("parses a no-vig body when fetched_at and data_age_seconds are omitted or null", () => {
+    const omitted = noVigResponseSchema.parse({
+      event_id: "evt-old",
+      player_name: "Stephen Curry",
+      market: "player_points",
+      results: [
+        {
+          bookmaker: "draftkings",
+          line: 24.5,
+          over_odds: -110,
+          under_odds: -110,
+          p_over_imp: 0.5238,
+          p_under_imp: 0.5238,
+          vig: 0.0476,
+          p_over_fair: 0.5,
+          p_under_fair: 0.5,
+        },
+      ],
+      consensus: { method: "mean", p_over_fair: 0.5, p_under_fair: 0.5 },
+      message: null,
+    });
+    expect(omitted.fetched_at).toBeUndefined();
+    expect(omitted.data_age_seconds).toBeUndefined();
+    expect(omitted.cache_state).toBeUndefined();
+    expect(omitted.source).toBeUndefined();
+    expect(omitted.results[0]?.uses_prior).toBeUndefined();
+    expect(omitted.consensus?.consensus_uses_prior).toBeUndefined();
+
+    const nulled = noVigResponseSchema.parse({
+      event_id: "evt-old",
+      player_name: "Stephen Curry",
+      market: "player_points",
+      results: [
+        {
+          bookmaker: "draftkings",
+          line: 24.5,
+          over_odds: -110,
+          under_odds: -110,
+          p_over_imp: 0.5238,
+          p_under_imp: 0.5238,
+          vig: 0.0476,
+          p_over_fair: 0.5,
+          p_under_fair: 0.5,
+          fetched_at: null,
+          uses_prior: null,
+        },
+      ],
+      consensus: {
+        method: "mean",
+        p_over_fair: 0.5,
+        p_under_fair: 0.5,
+        consensus_uses_prior: null,
+        consensus_prior_book_count: null,
+      },
+      message: null,
+      fetched_at: null,
+      data_age_seconds: null,
+      cache_state: null,
+      source: null,
+      consensus_uses_prior: null,
+      consensus_prior_book_count: null,
+    });
+    expect(nulled.fetched_at).toBeNull();
+    expect(nulled.data_age_seconds).toBeNull();
+    expect(nulled.results[0]?.fetched_at).toBeNull();
+    expect(nulled.results[0]?.uses_prior).toBeNull();
+    expect(nulled.consensus?.consensus_uses_prior).toBeNull();
+    expect(nulled.consensus?.consensus_prior_book_count).toBeNull();
+    expect("consensus_uses_prior" in nulled).toBe(false);
+    expect("consensus_prior_book_count" in nulled).toBe(false);
+    expect("uses_prior" in nulled).toBe(false);
+  });
+
   it("still parses a payload from before uses_prior existed", () => {
     const parsed = noVigResponseSchema.parse(recordedNoVig);
     expect(parsed.results[1]?.no_price).toBeNull();

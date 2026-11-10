@@ -162,6 +162,127 @@ describe("ResultsTable double-double rows", () => {
     expect(within(fanduel).getByText("67.6%")).toBeInTheDocument();
   });
 
+  it("agrees with the tile on 0.6745 and 0.1005 and dashes a null No price", async () => {
+    const parsed = noVigResponseSchema.parse({
+      event_id: "evt-edges",
+      player_name: "Nikola Jokic",
+      market: "player_double_double",
+      results: [
+        binaryRow("draftkings", {
+          over_odds: -110,
+          under_odds: -110,
+          no_price: -110,
+          p_under_imp: 0.5238,
+          p_over_fair: 0.6745,
+          p_under_fair: 0.3255,
+          yes_price: -110,
+          yes_fair_prob: 0.6745,
+          no_fair_prob: 0.3255,
+          uses_prior: false,
+        }),
+        binaryRow("fanduel", {
+          over_odds: -240,
+          under_odds: null,
+          no_price: null,
+          p_under_imp: null,
+          p_no_imp: null,
+          p_over_fair: 0.1005,
+          p_under_fair: 0.8995,
+          yes_price: -240,
+          yes_fair_prob: 0.1005,
+          no_fair_prob: 0.8995,
+          uses_prior: true,
+        }),
+      ],
+      consensus: {
+        method: "mean",
+        p_over_fair: 0.3875,
+        p_under_fair: 0.6125,
+        p_yes_fair: 0.3875,
+        p_no_fair: 0.6125,
+        consensus_uses_prior: true,
+        consensus_prior_book_count: 1,
+      },
+      message: null,
+    });
+
+    const { unmount } = renderTable(parsed);
+    const draftkings = screen.getByTestId("result-row-draftkings");
+    expect(within(draftkings).getByTestId("result-yes-fair")).toHaveTextContent("67.5%");
+    expect(within(draftkings).getByTestId("result-no-price")).toHaveTextContent("-110");
+    const fanduel = screen.getByTestId("result-row-fanduel");
+    expect(within(fanduel).getByTestId("result-yes-fair")).toHaveTextContent("10.1%");
+    expect(within(fanduel).getByTestId("result-yes-price")).toHaveTextContent("-240");
+    expect(within(fanduel).getByTestId("result-no-price")).toHaveTextContent("—");
+    expect(within(fanduel).getByTestId("result-no-price").textContent).not.toContain("-240");
+    expect(within(fanduel).getByTestId("result-no-price").textContent).not.toContain("NaN");
+    expect(screen.getAllByTestId("consensus-prior")[0]).toHaveTextContent(
+      "includes 1 book on the 4.5% single-leg prior",
+    );
+    unmount();
+
+    renderWithProviders(
+      <PlayerDDTile
+        playerName="Nikola Jokic"
+        league="nba"
+        eventId="evt-edges"
+        getPlayerDDHistoryFn={() => Promise.resolve(jokicHistory)}
+        calculateNoVigFn={() => Promise.resolve(parsed)}
+      />,
+    );
+    const tileDraftKings = await screen.findByRole("article", { name: /draftkings/i });
+    expect(within(tileDraftKings).getByText("67.5%")).toBeInTheDocument();
+    const tileFanDuel = screen.getByRole("article", { name: /fanduel/i });
+    expect(within(tileFanDuel).getByText("10.1%")).toBeInTheDocument();
+    expect(within(tileFanDuel).getByText("90.0%")).toBeInTheDocument();
+    expect(within(tileFanDuel).getByText("-240")).toBeInTheDocument();
+    expect(within(tileFanDuel).getAllByText("Unavailable")).toHaveLength(2);
+    expect(within(tileFanDuel).queryByText("+200")).not.toBeInTheDocument();
+  });
+
+  it("renders a dash for null fair values and never copies a null under price", () => {
+    const data = {
+      event_id: "evt-null-fair",
+      player_name: "Nikola Jokic",
+      market: "player_double_double",
+      results: [
+        {
+          bookmaker: "fanduel",
+          line: 0.5,
+          over_odds: -240,
+          under_odds: null,
+          p_over_imp: 0.7059,
+          p_under_imp: null,
+          vig: 0.045,
+          p_over_fair: null,
+          p_under_fair: null,
+          yes_price: -240,
+          no_price: null,
+          p_yes_imp: 0.7059,
+          p_no_imp: null,
+          yes_fair_prob: null,
+          no_fair_prob: null,
+          line_is_synthetic: true,
+          market_kind: "binary",
+          uses_prior: true,
+        },
+      ],
+      consensus: null,
+      message: null,
+    } as unknown as NoVigResponse;
+
+    renderTable(data);
+    const row = screen.getByTestId("result-row-fanduel");
+    expect(within(row).getByTestId("result-yes-price")).toHaveTextContent("-240");
+    expect(within(row).getByTestId("result-no-price")).toHaveTextContent("—");
+    expect(within(row).getByTestId("result-no-implied")).toHaveTextContent("—");
+    expect(within(row).getByTestId("result-yes-fair")).toHaveTextContent("—");
+    expect(within(row).getByTestId("result-no-fair")).toHaveTextContent("—");
+    expect(row.textContent).not.toMatch(/NaN/);
+    expect(row.textContent).not.toMatch(/-110/);
+    expect(within(row).getByTestId("result-no-price").textContent).not.toContain("-240");
+  });
+
   it("prefers uses_prior when it is present and falls back when it is absent", () => {
     const flagged = noVigResponseSchema.parse(
       ddBody([

@@ -146,6 +146,35 @@ describe("PlayerHistoryStats review fixes", () => {
     expect(history).not.toHaveBeenCalled();
   });
 
+  it("does not compute an Over/Under rate when the odds fetch fails", async () => {
+    const history = vi.fn().mockResolvedValue(
+      historyBody({
+        metric: "ftm",
+        threshold: 24.5,
+        p_over: 0.99,
+        n_games: 40,
+      }),
+    );
+
+    renderWithProviders(
+      <PlayerHistoryStats
+        eventId="evt-1"
+        initialPlayer="A'ja Wilson"
+        initialMarket="player_frees_made"
+        cacheNamespace="wnba"
+        getCSVPlayersFn={players}
+        getPlayerHistoryFn={history}
+        calculateNoVigFn={vi.fn().mockRejectedValue(new Error("odds down"))}
+      />,
+    );
+
+    expect(await screen.findByTestId("no-posted-line")).toHaveTextContent("No posted line");
+    expect(screen.queryByText("24.5")).not.toBeInTheDocument();
+    expect(screen.queryByText(/Over Probability/)).not.toBeInTheDocument();
+    expect(screen.queryByText("NaN")).not.toBeInTheDocument();
+    expect(history).not.toHaveBeenCalled();
+  });
+
   it("renders historyData.message when the sample has zero games", async () => {
     const history = vi.fn().mockResolvedValue(
       historyBody({
