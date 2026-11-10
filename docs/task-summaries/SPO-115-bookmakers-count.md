@@ -49,7 +49,6 @@ A different slate can change the mode. Two books at 20.5 and one book with three
 | Frontend copy | `frontend/lib/schemas.ts` | Same three comments, in Traditional Chinese. The Zod types are unchanged. The picks pages already print `bookmakers_count` and do not render `all_lines`. |
 | Existing unit test | `backend/tests/test_daily_analysis.py` | One book posting 15.5, 16.5, 15.5 is one book. `bookmakers_count` is 1 and `all_lines` is `[15.5]`. |
 | Regression | `backend/tests/test_spo115_bookmakers_count.py` | Recorded `player_points` fixture. Count equals distinct books. Mode matches the old outcome-row mode. Bovada's ladder votes the even-money rung. |
-| Docs | `docs/progress.md` | SPO-115 in-flight row. |
 
 ### Exact lines in `daily_analysis.py`
 
