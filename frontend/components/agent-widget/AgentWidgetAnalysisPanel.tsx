@@ -48,25 +48,25 @@ const AnalysisContent = ({
         </p>
         {verdict ? (
           <div className="mt-3 grid grid-cols-2 gap-2 text-sm">
-            <div className="rounded-[16px] border border-white/8 bg-white/5 px-3 py-2">
+            <div className="rounded-[16px] border border-white/10 bg-white/5 px-3 py-2">
               <p className="text-[10px] uppercase tracking-[0.18em] text-on-dark-muted">Model</p>
               <p className="mt-1 font-semibold text-on-dark">
                 {formatPct(verdict.model_probability)}
               </p>
             </div>
-            <div className="rounded-[16px] border border-white/8 bg-white/5 px-3 py-2">
+            <div className="rounded-[16px] border border-white/10 bg-white/5 px-3 py-2">
               <p className="text-[10px] uppercase tracking-[0.18em] text-on-dark-muted">Market</p>
               <p className="mt-1 font-semibold text-on-dark">
                 {formatPct(verdict.market_implied_probability)}
               </p>
             </div>
-            <div className="rounded-[16px] border border-white/8 bg-white/5 px-3 py-2">
+            <div className="rounded-[16px] border border-white/10 bg-white/5 px-3 py-2">
               <p className="text-[10px] uppercase tracking-[0.18em] text-on-dark-muted">EV</p>
               <p className="mt-1 font-semibold text-on-dark">
                 {formatPct(verdict.expected_value_pct)}
               </p>
             </div>
-            <div className="rounded-[16px] border border-white/8 bg-white/5 px-3 py-2">
+            <div className="rounded-[16px] border border-white/10 bg-white/5 px-3 py-2">
               <p className="text-[10px] uppercase tracking-[0.18em] text-on-dark-muted">Decision</p>
               <p className="mt-1 font-semibold uppercase text-on-dark">{verdict.decision}</p>
             </div>
@@ -85,7 +85,7 @@ const AnalysisContent = ({
             ) : null}
           </div>
         ) : (
-          <div className="mt-3 rounded-[18px] border border-white/8 bg-white/5 px-3 py-3 text-sm text-on-dark-muted">
+          <div className="mt-3 rounded-[18px] border border-white/10 bg-white/5 px-3 py-3 text-sm text-on-dark-muted">
             Ask for a verdict to populate the market snapshot.
           </div>
         )}
@@ -95,7 +95,7 @@ const AnalysisContent = ({
         <p className="text-[10px] uppercase tracking-[0.22em] text-on-dark-muted">Context</p>
         <div className="mt-3 space-y-2">
           {selectedPickContext ? (
-            <div className="rounded-[18px] border border-white/8 bg-white/5 px-3 py-3">
+            <div className="rounded-[18px] border border-white/10 bg-white/5 px-3 py-3">
               <p className="text-sm font-semibold text-on-dark">
                 {selectedPickContext.player_name} {selectedPickContext.metric}{" "}
                 {selectedPickContext.direction} {selectedPickContext.threshold}
@@ -105,7 +105,7 @@ const AnalysisContent = ({
               </p>
             </div>
           ) : null}
-          <div className="rounded-[18px] border border-white/8 bg-white/5 px-3 py-3">
+          <div className="rounded-[18px] border border-white/10 bg-white/5 px-3 py-3">
             <p className="text-sm font-semibold text-on-dark">
               {pageContext.date ? `Board for ${pageContext.date}` : "Current board"}
             </p>
@@ -115,7 +115,7 @@ const AnalysisContent = ({
                 : "No active team filters"}
             </p>
           </div>
-          <div className="rounded-[18px] border border-white/8 bg-white/5 px-3 py-3">
+          <div className="rounded-[18px] border border-white/10 bg-white/5 px-3 py-3">
             <p className="text-sm font-semibold text-on-dark">Slip status</p>
             <p className="mt-1 text-sm text-on-dark-muted">
               {slipCount > 0 ? `${slipCount} saved picks` : "No saved picks yet"}
@@ -126,7 +126,7 @@ const AnalysisContent = ({
 
       <div>
         <p className="text-[10px] uppercase tracking-[0.22em] text-on-dark-muted">Risk note</p>
-        <div className="mt-3 rounded-[18px] border border-white/8 bg-white/5 px-3 py-3 text-sm text-on-dark-muted">
+        <div className="mt-3 rounded-[18px] border border-white/10 bg-white/5 px-3 py-3 text-sm text-on-dark-muted">
           {riskNote ?? "Open analysis after a verdict to see the highest-risk note here."}
         </div>
       </div>
@@ -147,12 +147,12 @@ const AnalysisContent = ({
         <div className="mt-3 space-y-2">
           {lineupContext ? (
             <>
-              <div className="rounded-[18px] border border-white/8 bg-white/5 px-3 py-3 text-sm text-on-dark-muted">
+              <div className="rounded-[18px] border border-white/10 bg-white/5 px-3 py-3 text-sm text-on-dark-muted">
                 {lineupContext.summary || "Lineup context is unavailable."}
               </div>
               <div className="grid grid-cols-1 gap-2">
                 {lineupContext.player_team ? (
-                  <div className="rounded-[18px] border border-white/8 bg-white/5 px-3 py-3">
+                  <div className="rounded-[18px] border border-white/10 bg-white/5 px-3 py-3">
                     <p className="text-sm font-semibold text-on-dark">Player team</p>
                     <p className="mt-1 text-sm text-on-dark-muted">
                       {lineupContext.player_team.team} · {lineupContext.player_team.confidence ?? "n/a"} confidence
@@ -165,7 +165,7 @@ const AnalysisContent = ({
                   </div>
                 ) : null}
                 {lineupContext.opponent_team ? (
-                  <div className="rounded-[18px] border border-white/8 bg-white/5 px-3 py-3">
+                  <div className="rounded-[18px] border border-white/10 bg-white/5 px-3 py-3">
                     <p className="text-sm font-semibold text-on-dark">Opponent team</p>
                     <p className="mt-1 text-sm text-on-dark-muted">
                       {lineupContext.opponent_team.team} · {lineupContext.opponent_team.confidence ?? "n/a"} confidence
@@ -180,7 +180,7 @@ const AnalysisContent = ({
               </div>
             </>
           ) : (
-            <div className="rounded-[18px] border border-white/8 bg-white/5 px-3 py-3 text-sm text-on-dark-muted">
+            <div className="rounded-[18px] border border-white/10 bg-white/5 px-3 py-3 text-sm text-on-dark-muted">
               Open analysis after a verdict to see lineup context here.
             </div>
           )}
@@ -209,7 +209,7 @@ export const AgentWidgetAnalysisPanel = ({
 
   if (isDesktop) {
     return (
-      <aside className="w-[20rem] border-l border-white/8 bg-[rgba(7,13,24,0.7)] p-5 backdrop-blur-xl">
+      <aside className="w-[20rem] border-l border-white/10 bg-[rgba(7,13,24,0.7)] p-5 backdrop-blur-xl">
         <div className="mb-4 flex items-center justify-between gap-3">
           <div>
             <p className="text-[10px] uppercase tracking-[0.24em] text-on-dark-muted">

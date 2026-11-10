@@ -17,24 +17,24 @@ interface AgentVerdictBreakdownProps {
 }
 
 const sectionToneStyles: Record<AgentVerdictBreakdownSection["tone"], string> = {
-  support: "border-emerald-400/20 bg-emerald-400/6",
-  caution: "border-amber-300/20 bg-amber-300/8",
-  neutral: "border-white/8 bg-white/4",
-  unavailable: "border-white/6 bg-white/[0.03]",
+  support: "border-emerald-400/20 bg-emerald-400/5",
+  caution: "border-amber-300/20 bg-amber-300/10",
+  neutral: "border-white/10 bg-white/5",
+  unavailable: "border-white/5 bg-white/[0.03]",
 };
 
 const toneBadgeStyles: Record<AgentVerdictBreakdownSection["tone"], string> = {
-  support: "border-emerald-400/25 bg-emerald-400/12 text-emerald-200",
-  caution: "border-amber-300/25 bg-amber-300/12 text-amber-100",
-  neutral: "border-white/10 bg-white/6 text-on-dark-muted",
-  unavailable: "border-white/8 bg-white/4 text-on-dark-muted",
+  support: "border-emerald-400/25 bg-emerald-400/10 text-emerald-200",
+  caution: "border-amber-300/25 bg-amber-300/10 text-amber-100",
+  neutral: "border-white/10 bg-white/5 text-on-dark-muted",
+  unavailable: "border-white/10 bg-white/5 text-on-dark-muted",
 };
 
 const statToneStyles: Record<NonNullable<AgentVerdictEvidenceStat["tone"]>, string> = {
-  positive: "border-emerald-400/20 bg-emerald-400/8 text-emerald-100",
-  neutral: "border-white/10 bg-white/6 text-on-dark-muted",
-  caution: "border-amber-300/20 bg-amber-300/8 text-amber-100",
-  muted: "border-white/8 bg-white/[0.03] text-on-dark-muted",
+  positive: "border-emerald-400/20 bg-emerald-400/10 text-emerald-100",
+  neutral: "border-white/10 bg-white/5 text-on-dark-muted",
+  caution: "border-amber-300/20 bg-amber-300/10 text-amber-100",
+  muted: "border-white/10 bg-white/[0.03] text-on-dark-muted",
 };
 
 const formatReliability = (value: number | null | undefined) => {
@@ -119,7 +119,7 @@ export const AgentVerdictBreakdown = ({
 }: AgentVerdictBreakdownProps) => {
   if (!breakdown || breakdown.sections.length === 0) {
     return (
-      <div className="rounded-[18px] border border-white/8 bg-white/[0.03] px-4 py-3 text-sm text-on-dark-muted">
+      <div className="rounded-[18px] border border-white/10 bg-white/[0.03] px-4 py-3 text-sm text-on-dark-muted">
         {emptyMessage}
       </div>
     );
