@@ -1,3 +1,5 @@
+> Historical record only. The dev-agent process described in this file is retired. Kept so the original prompt drafts stay readable.
+
 ---
 date: 2026-05-02
 role: CEO+CTO (initial paperclip hire)

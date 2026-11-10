@@ -1,8 +1,9 @@
 <!--
 Sports Lab — Pull Request
 
-Sentinel auto-fills this template from `docs/task-summaries/<TICKET>-<slug>.md`
-after a QA PASS. If you (the owner) are opening a manual PR, fill it in by hand.
+Copy this from `docs/task-summaries/<TICKET>-<slug>.md`.
+The engineer opens the PR into `dev`. QA Reviewer tests and reviews.
+The owner squash-merges. Only the owner merges.
 -->
 
 ## Summary
@@ -33,8 +34,8 @@ after a QA PASS. If you (the owner) are opening a manual PR, fill it in by hand.
 
 ---
 
-**Paperclip ticket**: SPO-<NN>
+**Ticket**: SPO-<NN>
 **Branch**: `feature/SPO-<NN>-<slug>`
 **Task summary**: `docs/task-summaries/SPO-<NN>-<slug>.md`
 
-> Sentinel opened this PR after QA PASS. Owner: review, then squash-merge into `dev`. Do NOT auto-merge.
+> Owner: review, then squash-merge into `dev`. Only the owner merges.
