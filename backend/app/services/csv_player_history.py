@@ -317,6 +317,31 @@ def team_from_game_logs(
 CSV_PATH = _get_csv_path("nba")
 
 
+def _nba_schedule_index():
+    """Recorded NBA schedule, built once. An unreadable fixture is an empty index."""
+    global _NBA_SCHEDULE_INDEX
+    if _NBA_SCHEDULE_INDEX is not None:
+        return _NBA_SCHEDULE_INDEX
+    from app.services.game_log_hygiene import (
+        ScheduleIndex,
+        build_schedule_index,
+        leagues_for_csv,
+        load_schedule_events,
+    )
+
+    try:
+        events = load_schedule_events(league="nba")
+        _NBA_SCHEDULE_INDEX = build_schedule_index(
+            events, leagues=leagues_for_csv("nba")
+        )
+    except (OSError, ValueError):
+        _NBA_SCHEDULE_INDEX = ScheduleIndex()
+    return _NBA_SCHEDULE_INDEX
+
+
+_NBA_SCHEDULE_INDEX = None
+
+
 class CSVPlayerHistoryService:
     """
     CSV Player History Data Service
@@ -728,6 +753,147 @@ class CSVPlayerHistoryService:
         teammates.discard(player_name)
         return sorted(teammates)
 
+    def latest_position(self, player_name: str) -> Optional[str]:
+        """``Pos`` on the most recent loaded game, or None.
+
+        The game log is already newest-first. A blank ``Pos`` is skipped
+        so one missing cell does not hide the last real position. This
+        is the roster field already on the CSV. It does not call a
+        lineup or projection API.
+        """
+        self.load_csv()
+        resolved = self.resolve_player_name(player_name)
+        if not resolved:
+            return None
+        for game in self._cache.get(resolved, []):
+            position = str(game.get("pos") or "").strip()
+            if position:
+                return position
+        return None
+
+    def _history_season_label(self, season: Optional[str]) -> Optional[str]:
+        """Season label for the season-scoped rate. NBA only.
+
+        A blank query uses the recorded current NBA season. WNBA returns
+        None so the shared response leaves the season fields null.
+        """
+        if self.league != "nba":
+            return None
+        from app.services.nba_season import (
+            normalize_nba_season_label,
+            recorded_nba_season_label,
+        )
+
+        if season and season.strip():
+            return normalize_nba_season_label(season)
+        return recorded_nba_season_label()
+
+    @staticmethod
+    def _season_matches(row_season: str, label: str) -> bool:
+        from app.services.nba_season import normalize_nba_season_label
+
+        text = (row_season or "").strip()
+        if not label:
+            return False
+        return text == label or normalize_nba_season_label(text) == label
+
+    def _venue_for(self, day: str, team: str, opponent: str) -> Optional[str]:
+        """``home`` or ``away`` from the recorded NBA schedule. NBA only."""
+        if self.league != "nba" or not day or not team or not opponent:
+            return None
+        return _nba_schedule_index().venue(day, team, opponent)
+
+    def _event_id_for(self, day: str, team: str, opponent: str) -> Optional[str]:
+        if self.league != "nba" or not day or not team or not opponent:
+            return None
+        return _nba_schedule_index().event_id_for(day, team, opponent)
+
+    def _teammate_context(
+        self,
+        teammates: List[str],
+        games: List[Dict[str, Any]],
+    ) -> List[Dict[str, Any]]:
+        """Games each listed teammate missed inside ``games``.
+
+        ``games`` is the sample behind ``n_games`` (after ``n`` and the
+        other filters). A teammate is out of a game when they are not in
+        the lineup cache for that team and date. ``with_mean`` /
+        ``without_mean`` are the player's stat on those two splits.
+        WNBA returns an empty list and keeps ``teammates`` as names.
+        """
+        if self.league != "nba":
+            return []
+        context: List[Dict[str, Any]] = []
+        ordered = list(reversed(games))
+        for name in teammates:
+            missed: List[Dict[str, Any]] = []
+            with_values: List[float] = []
+            without_values: List[float] = []
+            for game in ordered:
+                team = game.get("team") or ""
+                day = game.get("date_full") or ""
+                lineup = (
+                    self._lineup_cache.get((team, day), set())
+                    if team and day
+                    else set()
+                )
+                value = game.get("value")
+                if name in lineup:
+                    if value is not None:
+                        with_values.append(float(value))
+                    continue
+                if value is not None:
+                    without_values.append(float(value))
+                missed.append(
+                    {
+                        "date": day,
+                        "game_id": self._event_id_for(
+                            day, team, game.get("opponent") or ""
+                        ),
+                    }
+                )
+            context.append(
+                {
+                    "name": name,
+                    "games_missed": len(missed),
+                    "missed_games": missed,
+                    "with_n": len(with_values),
+                    "without_n": len(without_values),
+                    "with_mean": round(statistics.mean(with_values), 2) if with_values else None,
+                    "without_mean": (
+                        round(statistics.mean(without_values), 2) if without_values else None
+                    ),
+                }
+            )
+        return context
+
+    def _season_fields(
+        self,
+        season_label: Optional[str],
+        season_games: List[Dict[str, Any]],
+        threshold: float,
+    ) -> Dict[str, Any]:
+        """Season hit rate beside the all-games rate. Empty for WNBA."""
+        if self.league != "nba":
+            return {}
+        values = [float(game["value"]) for game in season_games if game.get("value") is not None]
+        if not values:
+            return {
+                "season": season_label,
+                "season_n_games": 0,
+                "season_p_over": None,
+                "season_p_under": None,
+            }
+        count = len(values)
+        over_count = sum(1 for value in values if value > threshold)
+        under_count = sum(1 for value in values if value < threshold)
+        return {
+            "season": season_label,
+            "season_n_games": count,
+            "season_p_over": round(over_count / count, 4),
+            "season_p_under": round(under_count / count, 4),
+        }
+
     def get_player_stats(
         self,
         player_name: str,
@@ -742,6 +908,7 @@ class CSVPlayerHistoryService:
         teammate_played: Optional[bool] = None,
         include_playoffs: bool = False,
         include_play_in: bool = False,
+        season: Optional[str] = None,
     ) -> Dict[str, Any]:
         """
         Calculate player historical statistics
@@ -791,8 +958,10 @@ class CSVPlayerHistoryService:
             player_name = resolved
         player_games = self._cache.get(player_name, []) if resolved else []
 
+        season_label = self._history_season_label(season)
+
         if not player_games:
-            return {
+            missing = {
                 "player": player_name,
                 "metric": metric,
                 "threshold": threshold,
@@ -807,6 +976,10 @@ class CSVPlayerHistoryService:
                 "teammates": [],
                 "message": f"Player '{player_name}' not found"
             }
+            missing.update(self._season_fields(season_label, [], threshold))
+            if self.league == "nba":
+                missing["teammate_context"] = []
+            return missing
 
         # Get all opponents (for filters)
         all_opponents = self.get_player_opponents(
@@ -891,18 +1064,34 @@ class CSVPlayerHistoryService:
                 minutes = game.get("minutes", 0)
                 game_is_starter = game.get("is_starter", False)
 
-                valid_games.append({
+                day_full = game_date.strftime("%Y-%m-%d") if game_date else ""
+                team_name = game.get("team", "")
+                opponent_name = game.get("opponent", "")
+                log_row = {
                     "date": game_date.strftime("%m/%d") if game_date else "",
-                    "date_full": game_date.strftime("%Y-%m-%d") if game_date else "",
-                    "opponent": game.get("opponent", ""),
+                    "date_full": day_full,
+                    "opponent": opponent_name,
                     "value": value,
                     "is_over": value > threshold,
-                    "team": game.get("team", ""),
+                    "team": team_name,
                     "minutes": round(minutes, 1),  # minutes played
                     "is_starter": game_is_starter,  # whether started
                     "game_type": self._game_type_of(game),
                     "season": game.get("season", ""),
-                })
+                }
+                if self.league == "nba":
+                    log_row["home_or_away"] = self._venue_for(
+                        day_full, team_name, opponent_name
+                    )
+                valid_games.append(log_row)
+
+        season_games = valid_games
+        if season_label:
+            season_games = [
+                game
+                for game in valid_games
+                if self._season_matches(str(game.get("season") or ""), season_label)
+            ]
 
         # Take the most recent N games
         if n > 0 and len(valid_games) > n:
@@ -910,7 +1099,7 @@ class CSVPlayerHistoryService:
             values = values[:n]
 
         if not values:
-            return {
+            empty = {
                 "player": player_name,
                 "metric": metric,
                 "threshold": threshold,
@@ -925,6 +1114,10 @@ class CSVPlayerHistoryService:
                 "teammates": all_teammates,
                 "message": f"Player '{player_name}' has no valid {metric} stats"
             }
+            empty.update(self._season_fields(season_label, season_games, threshold))
+            if self.league == "nba":
+                empty["teammate_context"] = self._teammate_context(all_teammates, [])
+            return empty
 
         # Calculate Over/Under probabilities
         # Over: value > threshold
@@ -947,7 +1140,7 @@ class CSVPlayerHistoryService:
         # Reverse game_logs order so the oldest is first (for time series charts)
         game_logs_for_chart = list(reversed(valid_games))
 
-        return {
+        result = {
             "player": player_name,
             "metric": metric,
             "threshold": threshold,
@@ -966,6 +1159,10 @@ class CSVPlayerHistoryService:
             "teammate_played": teammate_played,
             "message": None
         }
+        result.update(self._season_fields(season_label, season_games, threshold))
+        if self.league == "nba":
+            result["teammate_context"] = self._teammate_context(all_teammates, valid_games)
+        return result
 
     def player_dd_history(
         self,

@@ -23,11 +23,13 @@ from app.models.schemas import (
     BookmakerResult,
     Consensus,
     PlayerSuggestResponse,
+    PlayerSuggestion,
     CSVPlayersResponse,
     PlayerHistoryResponse,
     PlayerDDHistoryResponse,
     HistogramBin,
-    GameLog
+    GameLog,
+    TeammateContext,
 )
 from app.services.odds_theoddsapi import odds_provider
 from app.services.odds_provider import OddsAPIError
@@ -35,6 +37,8 @@ from app.services.cache import cache_service, CacheService
 from app.services.odds_gateway import odds_gateway, MarketSnapshotResult
 from app.services.odds_snapshot_service import BINARY_MARKET_KEYS
 from app.services.game_log_hygiene import coalesce_game_type
+from app.services.event_fields import enrich_nba_event
+from app.services.lineup_service import lineup_service
 from app.services.prob import (
     american_to_prob,
     posted_american_odds,
@@ -347,8 +351,11 @@ async def get_events(
     cached_data = await cache_service.get(cache_key)
     
     if cached_data:
-        # Cache hit
-        return EventsResponse(**cached_data)
+        # Cache hit. Clock and lineup confirmation are applied on the way
+        # out so a stored payload from before those fields, and a lineup
+        # that changed after the events cache was written, still come back
+        # filled. The cached body itself stays the Odds API shape.
+        return await _with_event_fields(EventsResponse(**cached_data))
     
     # 2. Cache miss, call external API
     try:
@@ -420,7 +427,7 @@ async def get_events(
             ttl=settings.cache_ttl_events
         )
         
-        return response
+        return await _with_event_fields(response)
         
     except OddsAPIError as e:
         raise HTTPException(
@@ -432,6 +439,25 @@ async def get_events(
             status_code=500,
             detail=f"Internal error: {str(e)}"
         )
+
+
+async def _with_event_fields(response: EventsResponse) -> EventsResponse:
+    """Attach the ET clock and the lineup confirmation.
+
+    Lineups are read from cache only. A scrape belongs on
+    ``GET /api/nba/lineups``, not on the events list.
+    """
+    try:
+        lineups = await lineup_service.peek_lineups(response.date)
+    except Exception:
+        lineups = {}
+    return response.model_copy(
+        update={
+            "events": [
+                enrich_nba_event(event, lineups) for event in response.events
+            ]
+        }
+    )
 
 
 @router.post(
@@ -701,6 +727,13 @@ async def suggest_players(
     
     return PlayerSuggestResponse(
         players=all_players,
+        suggestions=[
+            PlayerSuggestion(
+                name=name,
+                position=csv_player_service.latest_position(name),
+            )
+            for name in all_players
+        ],
         **_snapshot_metadata(snapshot),
     )
 
@@ -838,6 +871,15 @@ async def get_player_history(
         default=False,
         description="Include play-in games. Default is regular season only.",
     ),
+    season: Optional[str] = Query(
+        default=None,
+        description=(
+            "Season for season_n_games / season_p_over / season_p_under. "
+            "2025-26 and 2025-2026 are the same label. Omit it to use the "
+            "current NBA season from the recorded ESPN window. n_games, "
+            "p_over, and p_under stay the all-games sample."
+        ),
+    ),
 ) -> PlayerHistoryResponse:
     """
     Get player historical statistical summary
@@ -926,6 +968,7 @@ async def get_player_history(
             teammate_played=teammate_played,
             include_playoffs=include_playoffs,
             include_play_in=include_play_in,
+            season=season,
         )
         
         # Convert histogram to Pydantic model
@@ -951,6 +994,7 @@ async def get_player_history(
                 is_starter=log.get("is_starter", False),  # Starter status
                 game_type=coalesce_game_type(log.get("game_type")),
                 season=log.get("season", ""),
+                home_or_away=log.get("home_or_away"),
             )
             for log in stats.get("game_logs", [])
         ]
@@ -969,6 +1013,14 @@ async def get_player_history(
             game_logs=game_logs,
             opponents=stats.get("opponents", []),
             teammates=stats.get("teammates", []),
+            teammate_context=[
+                TeammateContext.model_validate(item)
+                for item in stats.get("teammate_context") or []
+            ],
+            season=stats.get("season"),
+            season_n_games=stats.get("season_n_games"),
+            season_p_over=stats.get("season_p_over"),
+            season_p_under=stats.get("season_p_under"),
             opponent_filter=stats.get("opponent_filter"),
             teammate_filter=stats.get("teammate_filter"),
             teammate_played=stats.get("teammate_played"),

@@ -747,6 +747,11 @@ class DailyAnalysisService:
                         game_logs = history_stats.get("game_logs", [])
                         player_team = team_from_game_logs(game_logs, commence_time)
                     player_team_code = canonical_team_code(player_team, league=league)
+                    position = None
+                    if league.lower() == "nba":
+                        raw_position = csv_service.latest_position(player_name)
+                        if isinstance(raw_position, str) and raw_position.strip():
+                            position = raw_position.strip()
 
                     # Get projection value for this metric.
                     # 💡 Translate via PROJECTION_FIELD_ALIASES because the
@@ -779,6 +784,7 @@ class DailyAnalysisService:
                             player_name=player_name,
                             player_team=player_team,
                             player_team_code=player_team_code,
+                            position=position,
                             event_id=event_id,
                             home_team=home_team,
                             away_team=away_team,
@@ -812,6 +818,7 @@ class DailyAnalysisService:
                             player_name=player_name,
                             player_team=player_team,
                             player_team_code=player_team_code,
+                            position=position,
                             event_id=event_id,
                             home_team=home_team,
                             away_team=away_team,
