@@ -94,11 +94,18 @@ export function PlayerRail({
                   {row.lineText}
                 </span>
                 <span
+                  aria-label={nba && row.hasLean ? `History ${row.leanText}` : undefined}
                   className={cn(
                     "w-fit rounded-[6px] px-1.5 py-0.5 font-mono text-[11px] font-bold md:w-full md:rounded-lg md:px-0 md:py-1.5 md:text-center md:text-xs",
+                    nba && row.hasLean && "flex flex-col items-center gap-0.5",
                     pill,
                   )}
                 >
+                  {nba && row.hasLean ? (
+                    <span className="text-[9px] font-semibold uppercase leading-none tracking-[0.04em]">
+                      History
+                    </span>
+                  ) : null}
                   {row.leanText}
                 </span>
               </button>

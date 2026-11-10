@@ -136,7 +136,29 @@ describe("PlayerRail", () => {
     );
     expect(screen.getByText("O 72.0%")).toBeInTheDocument();
     expect(screen.getByText("No read")).toBeInTheDocument();
+    expect(screen.queryByText("History")).not.toBeInTheDocument();
     expect(screen.queryByText("Jalen Brunson")).not.toBeInTheDocument();
+  });
+
+  it("labels an NBA lean as History and leaves a missing read unlabeled", () => {
+    renderWithProviders(
+      <PlayerRail
+        league="nba"
+        rows={rows}
+        selected="Bam Adebayo"
+        onSelect={noop}
+        isLoading={false}
+        isError={false}
+        errorText={null}
+        onRetry={noop}
+      />,
+    );
+    const bam = screen.getByRole("button", { name: /History O 72\.0%/ });
+    expect(bam).toHaveTextContent("History");
+    expect(bam).toHaveTextContent("O 72.0%");
+    const herro = screen.getByRole("button", { name: /Tyler Herro/ });
+    expect(herro).toHaveTextContent("No read");
+    expect(herro).not.toHaveTextContent("History");
   });
 
   it("shows loading, empty, and error states", () => {
