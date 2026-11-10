@@ -78,6 +78,7 @@ Stale pull requests the owner is closing. Not merged.
 | Ticket | Note |
 |---|---|
 | SPO-96 | This docs rewrite (`feature/SPO-96-claude-md-workflow-rewrite`). |
+| SPO-104 | One-sided DD quotes (`under_odds` / `p_under_imp` null, `line_is_synthetic`, `market_kind`), league-scoped team codes, and the SPO-97 schedule-index follow-ups. PR into `dev` from `feature/SPO-104-dd-one-sided-and-followups`. Summary: `docs/task-summaries/SPO-104-dd-one-sided-and-followups.md`. |
 | SPO-97 | CSV season hygiene. No task summary on `dev` yet. |
 | SPO-99 | In flight. Title not in `docs/task-summaries/` or `git log` on `dev`. |
 | SPO-101 | SPO-10 Phase 4 integration tests. Open. |

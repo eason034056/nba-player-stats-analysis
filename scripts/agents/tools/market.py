@@ -80,6 +80,19 @@ def _same_line_lines(lines: List[Dict[str, Any]], threshold: float) -> List[Dict
     return [l for l in lines if abs(l["line"] - float(threshold)) < 1e-9]
 
 
+def _best_by_odds(lines: List[Dict[str, Any]], key: str) -> Optional[Dict[str, Any]]:
+    """Highest American price on ``key``, skipping a missing price.
+
+    A one-sided quote stores ``None`` for the side that was not posted.
+    ``max`` cannot order ``None`` against a number, so those rows are
+    left out of the comparison instead of raising.
+    """
+    priced = [line for line in lines if line.get(key) is not None]
+    if not priced:
+        return None
+    return max(priced, key=lambda line: line[key])
+
+
 def _same_line_side_prob(lines: List[Dict[str, Any]], direction: str) -> Optional[float]:
     if not lines:
         return None
@@ -122,7 +135,7 @@ def _build_market_quote_for_line(
         )
         nearest_matches = _same_line_lines(lines, nearest_line)
         key = "over_odds" if dir_lower == "over" else "under_odds"
-        best = max(nearest_matches, key=lambda line: line[key]) if nearest_matches else None
+        best = _best_by_odds(nearest_matches, key)
         return {
             "signal": "caution",
             "effect_size": 0,
@@ -147,7 +160,25 @@ def _build_market_quote_for_line(
 
     key = "over_odds" if dir_lower == "over" else "under_odds"
     fair_key = "fair_over" if dir_lower == "over" else "fair_under"
-    best = max(matched, key=lambda l: l[key])
+    best = _best_by_odds(matched, key)
+    if best is None:
+        return {
+            "signal": "unavailable",
+            "effect_size": 0,
+            "sample_size": len(matched),
+            "reliability": 0,
+            "window": "today",
+            "source": "odds_api",
+            "as_of": _NOW_ISO(),
+            "details": {
+                "error": "no posted price for the selected side",
+                "pricing_mode": "unavailable",
+                "direction": dir_lower,
+                "queried_line": float(threshold),
+                "available_lines": available_lines,
+                "matched_n_books": len(matched),
+            },
+        }
     query_prob = _same_line_side_prob(matched, dir_lower)
     reliability = min(len(matched) / 6, 1.0)
 
@@ -477,7 +508,12 @@ async def get_best_price(
 
     key = "over_odds" if dir_lower == "over" else "under_odds"
     fair_key = "fair_over" if dir_lower == "over" else "fair_under"
-    best = max(lines, key=lambda l: l[key])
+    best = _best_by_odds(lines, key)
+    if best is None:
+        return _signal_payload(
+            "unavailable", 0, len(lines), 0, "today", "odds_api",
+            {"error": "no posted price for the selected side", "direction": dir_lower},
+        )
 
     return _signal_payload("neutral", 0, len(lines), min(len(lines) / 6, 1.0), "today", "odds_api",
                            {"direction": dir_lower,

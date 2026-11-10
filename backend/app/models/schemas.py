@@ -7,7 +7,7 @@ Defines all API request and response data structures
 """
 
 from pydantic import BaseModel, Field
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Literal, Optional
 from datetime import datetime
 
 
@@ -92,8 +92,15 @@ class BookmakerResult(BaseModel):
         - over_odds/p_over_imp/p_over_fair carry the **Yes** leg values; the
           explicit ``yes_price``/``p_yes_imp``/``yes_fair_prob`` mirrors are
           provided for self-documenting consumers.
-        - under_odds/p_under_imp/p_under_fair carry the **No** leg values;
-          mirrored as ``no_price``/``p_no_imp``/``no_fair_prob``.
+        - under_odds/p_under_imp carry the **posted** No price and its
+          implied probability. When the book did not post No, both are
+          None. They are never a copy of the Yes price and never
+          ``1 - p_yes_imp``.
+        - p_under_fair / no_fair_prob stay the complement of the
+          de-vigged Yes fair. On a one-sided quote that complement is a
+          model output of the single-leg prior, not a posted price.
+        - ``line_is_synthetic`` is True and ``market_kind`` is
+          ``"binary"`` when ``line`` is the 0.5 sentinel.
         - Anti-hallucination guard: rows where ``yes_fair_prob`` cannot be
           honestly derived (vig prior fails on a single-leg quote) are
           NOT emitted — the route surfaces that via ``message`` rather
@@ -102,13 +109,27 @@ class BookmakerResult(BaseModel):
     bookmaker: str = Field(..., description="Bookmaker name")
     line: float = Field(..., description="Threshold value (Over/Under) or 0.5 sentinel for binary markets")
     over_odds: float = Field(..., description="Over odds (or Yes price for binary markets)")
-    under_odds: float = Field(..., description="Under odds (or No price for binary markets)")
+    under_odds: Optional[float] = Field(
+        default=None,
+        description="Posted Under odds, or the posted No price. None when a binary market has no No price.",
+    )
     p_over_imp: float = Field(..., description="Over implied probability (or Yes implied for binary markets)")
-    p_under_imp: float = Field(..., description="Under implied probability (or No implied for binary markets)")
+    p_under_imp: Optional[float] = Field(
+        default=None,
+        description="Implied probability of a posted Under or No price. None when that price was not posted.",
+    )
     vig: float = Field(..., description="Vig (bookmaker edge)")
     p_over_fair: float = Field(..., description="Over fair (no-vig) probability (or Yes fair for binary markets)")
     p_under_fair: float = Field(..., description="Under fair (no-vig) probability (or No fair for binary markets)")
     fetched_at: datetime = Field(..., description="Data fetch time")
+    line_is_synthetic: bool = Field(
+        ...,
+        description="True when line is the 0.5 sentinel for a binary market, not a posted total.",
+    )
+    market_kind: Literal["binary", "over_under"] = Field(
+        ...,
+        description="binary for Yes/No markets such as player_double_double; over_under for a posted total.",
+    )
 
     # === Binary-market explicit mirrors (SPO-26) ===================
     # For binary markets the over_*/under_* fields above carry the Yes/No

@@ -113,8 +113,13 @@ def _build_binary_no_vig_response(
     Both new explicit binary fields (`yes_price`, `p_yes_imp`,
     `yes_fair_prob`, etc.) AND the legacy over/under fields are populated
     on each emitted row. The legacy fields use the convention
-    "over = Yes leg, under = No leg" so existing frontend Zod parsers
-    keep working without schema changes.
+    "over = Yes leg, under = posted No leg". A missing No price stays
+    None on `under_odds`, `p_under_imp`, `no_price`, and `p_no_imp`.
+    It is not copied from Yes, and `p_under_imp` is not `1 - p_yes_imp`.
+    `p_under_fair` / `no_fair_prob` remain the complement of the
+    de-vigged Yes fair, which is a model output. `line_is_synthetic`
+    is True and `market_kind` is "binary" because `line` is the 0.5
+    sentinel, not a posted total.
     """
     results: List[BookmakerResult] = []
     fair_probs_for_consensus: List[tuple] = []
@@ -179,30 +184,24 @@ def _build_binary_no_vig_response(
                     p_no_fair = 1.0 - p_yes_fair
                     vig = DEFAULT_BINARY_VIG  # the prior we assumed
 
-                # Build the row. Legacy over/under fields encode
-                # "over = Yes" / "under = No" so the existing schema
-                # surface keeps working; new explicit yes_*/no_* fields
-                # provide self-documenting access for SPO-26-aware callers.
-                # `under_odds` falls back to `yes_price` as a non-null
-                # placeholder ONLY when the No leg isn't posted; consumers
-                # MUST dispatch on `market` and ignore under_odds for
-                # binary markets in that case (mirrors the snapshot
-                # service's 0.5/None convention).
-                under_odds_for_legacy = float(no_price) if no_price is not None else float(yes_price)
-                p_under_imp_for_legacy = p_no_imp if p_no_imp is not None else (1.0 - p_yes_imp)
-
+                # Legacy over/under fields encode "over = Yes" and
+                # "under = posted No". A book that did not post No leaves
+                # under_odds and p_under_imp empty. The fair No probability
+                # below is still the complement of the de-vigged Yes fair.
                 results.append(
                     BookmakerResult(
                         bookmaker=bookmaker_key,
                         line=_BINARY_LINE_SENTINEL,
                         over_odds=float(yes_price),
-                        under_odds=under_odds_for_legacy,
+                        under_odds=float(no_price) if no_price is not None else None,
                         p_over_imp=round(p_yes_imp, 4),
-                        p_under_imp=round(p_under_imp_for_legacy, 4),
+                        p_under_imp=round(p_no_imp, 4) if p_no_imp is not None else None,
                         vig=round(vig, 4),
                         p_over_fair=round(p_yes_fair, 4),
                         p_under_fair=round(p_no_fair, 4),
                         fetched_at=snapshot.fetched_at,
+                        line_is_synthetic=True,
+                        market_kind="binary",
                         # Explicit binary mirrors — preferred for new
                         # consumers (e.g. SPO-20 PlayerDDTile).
                         yes_price=float(yes_price),
@@ -581,7 +580,9 @@ async def calculate_no_vig(request: Request, body: NoVigRequest) -> NoVigRespons
                         vig=round(vig, 4),
                         p_over_fair=round(p_over_fair, 4),
                         p_under_fair=round(p_under_fair, 4),
-                        fetched_at=snapshot.fetched_at
+                        fetched_at=snapshot.fetched_at,
+                        line_is_synthetic=False,
+                        market_kind="over_under",
                     )
                     results.append(result)
                     fair_probs_for_consensus.append((p_over_fair, p_under_fair))

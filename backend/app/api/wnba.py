@@ -316,9 +316,12 @@ def _build_binary_no_vig_response(
       be safely applied (extreme prices), the row is dropped and counted in
       `rows_dropped_due_to_prior` — surfaced in the aggregate message so the
       omission is visible rather than fabricated.
-    - Legacy `over_*/under_*` fields encode "over=Yes, under=No" so existing
-      frontend Zod parsers keep working; explicit `yes_*/no_*` mirrors are
-      populated alongside for SPO-26-aware consumers.
+    - Legacy `over_*/under_*` fields encode "over=Yes, under=posted No".
+      A missing No price stays None on `under_odds` and `p_under_imp`.
+      It is not copied from Yes, and `p_under_imp` is not `1 - p_yes_imp`.
+      `p_under_fair` / `no_fair_prob` remain the complement of the
+      de-vigged Yes fair. `line_is_synthetic` is True and `market_kind`
+      is "binary".
     - `Consensus.p_yes_fair/p_no_fair` mirrors are populated for binary.
 
     Deliberate divergence from `nba.py` — null-safe `name` parsing
@@ -380,25 +383,20 @@ def _build_binary_no_vig_response(
                     p_no_fair = 1.0 - p_yes_fair
                     vig = DEFAULT_BINARY_VIG
 
-                under_odds_for_legacy = (
-                    float(no_price) if no_price is not None else float(yes_price)
-                )
-                p_under_imp_for_legacy = (
-                    p_no_imp if p_no_imp is not None else (1.0 - p_yes_imp)
-                )
-
                 results.append(
                     BookmakerResult(
                         bookmaker=bookmaker_key,
                         line=_BINARY_LINE_SENTINEL,
                         over_odds=float(yes_price),
-                        under_odds=under_odds_for_legacy,
+                        under_odds=float(no_price) if no_price is not None else None,
                         p_over_imp=round(p_yes_imp, 4),
-                        p_under_imp=round(p_under_imp_for_legacy, 4),
+                        p_under_imp=round(p_no_imp, 4) if p_no_imp is not None else None,
                         vig=round(vig, 4),
                         p_over_fair=round(p_yes_fair, 4),
                         p_under_fair=round(p_no_fair, 4),
                         fetched_at=snapshot.fetched_at,
+                        line_is_synthetic=True,
+                        market_kind="binary",
                         yes_price=float(yes_price),
                         no_price=no_price,
                         p_yes_imp=round(p_yes_imp, 4),
@@ -674,6 +672,8 @@ async def calculate_no_vig(request: Request, body: NoVigRequest) -> NoVigRespons
                             p_over_fair=round(p_over_fair, 4),
                             p_under_fair=round(p_under_fair, 4),
                             fetched_at=snapshot.fetched_at,
+                            line_is_synthetic=False,
+                            market_kind="over_under",
                         )
                     )
                     fair_probs_for_consensus.append((p_over_fair, p_under_fair))
