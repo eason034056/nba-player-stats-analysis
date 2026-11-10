@@ -1,0 +1,63 @@
+{
+  "event_id": "evt-spo104-one-sided",
+  "player_name": "Nikola Jokic",
+  "market": "player_double_double",
+  "results": [
+    {
+      "bookmaker": "draftkings",
+      "line": 0.5,
+      "line_is_synthetic": true,
+      "market_kind": "binary",
+      "uses_prior": false,
+      "over_odds": -250.0,
+      "under_odds": 200.0,
+      "p_over_imp": 0.7143,
+      "p_under_imp": 0.3333,
+      "vig": 0.0476,
+      "p_over_fair": 0.6818,
+      "p_under_fair": 0.3182,
+      "fetched_at": "2026-05-08T12:00:00Z",
+      "yes_price": -250.0,
+      "no_price": 200.0,
+      "p_yes_imp": 0.7143,
+      "p_no_imp": 0.3333,
+      "yes_fair_prob": 0.6818,
+      "no_fair_prob": 0.3182
+    },
+    {
+      "bookmaker": "fanduel",
+      "line": 0.5,
+      "line_is_synthetic": true,
+      "market_kind": "binary",
+      "uses_prior": true,
+      "over_odds": -240.0,
+      "under_odds": null,
+      "p_over_imp": 0.7059,
+      "p_under_imp": null,
+      "vig": 0.045,
+      "p_over_fair": 0.6755,
+      "p_under_fair": 0.3245,
+      "fetched_at": "2026-05-08T12:00:00Z",
+      "yes_price": -240.0,
+      "no_price": null,
+      "p_yes_imp": 0.7059,
+      "p_no_imp": null,
+      "yes_fair_prob": 0.6755,
+      "no_fair_prob": 0.3245
+    }
+  ],
+  "consensus": {
+    "method": "mean",
+    "p_over_fair": 0.6787,
+    "p_under_fair": 0.3213,
+    "p_yes_fair": 0.6787,
+    "p_no_fair": 0.3213,
+    "consensus_uses_prior": true,
+    "consensus_prior_book_count": 1
+  },
+  "message": null,
+  "fetched_at": "2026-05-08T12:00:00Z",
+  "data_age_seconds": 12,
+  "cache_state": "fresh",
+  "source": "snapshot_cache"
+}

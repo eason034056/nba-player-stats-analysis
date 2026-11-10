@@ -19,6 +19,7 @@ import { AlertCircle, Award, Info, Loader2, Target } from "lucide-react";
 
 import { SectionUnavailable } from "@/components/SectionUnavailable";
 import { ApiError } from "@/lib/api";
+import { SINGLE_LEG_PRIOR_LABEL } from "@/lib/no-vig-display";
 import {
   formatPercent,
   historicalEdgeVsFairYes,
@@ -159,6 +160,9 @@ function BookQuoteCard({ quote }: { quote: DDBookQuote }) {
             kind="percent"
             missingLabel="vig prior unavailable"
           />
+          {quote.usesSingleLegPrior && quote.yesFair !== null && (
+            <p className="text-[10px] text-gray mt-0.5">{SINGLE_LEG_PRIOR_LABEL}</p>
+          )}
           {quote.yesFair === null && (
             <p className="text-[10px] text-gray mt-0.5">fair probability withheld</p>
           )}
@@ -170,6 +174,9 @@ function BookQuoteCard({ quote }: { quote: DDBookQuote }) {
             kind="percent"
             missingLabel="Unavailable"
           />
+          {quote.usesSingleLegPrior && quote.noFair !== null && (
+            <p className="text-[10px] text-gray mt-0.5">{SINGLE_LEG_PRIOR_LABEL}</p>
+          )}
         </div>
       </div>
     </article>
@@ -292,6 +299,8 @@ function OddsBlock({
     );
   }
 
+  const priorCaption = selection.consensusPriorLabel;
+
   return (
     <div className="space-y-4" data-testid="dd-odds">
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -311,6 +320,11 @@ function OddsBlock({
                 missingLabel="Unavailable"
                 valueClassName="text-green-800"
               />
+              {priorCaption && selection.consensusYesFair !== null && (
+                <p className="text-[10px] text-gray mt-0.5" data-testid="dd-consensus-prior">
+                  {priorCaption}
+                </p>
+              )}
             </div>
             <div>
               <p className="text-[10px] uppercase tracking-wide text-gray">No fair</p>
@@ -320,6 +334,11 @@ function OddsBlock({
                 missingLabel="Unavailable"
                 valueClassName="text-green-800"
               />
+              {priorCaption && selection.consensusNoFair !== null && (
+                <p className="text-[10px] text-gray mt-0.5" data-testid="dd-consensus-prior">
+                  {priorCaption}
+                </p>
+              )}
             </div>
           </div>
         </div>

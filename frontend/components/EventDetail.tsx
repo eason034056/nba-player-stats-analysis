@@ -72,6 +72,10 @@ import { BookmakerSelect } from "@/components/BookmakerSelect";
 import { MarketSelect, type MarketKey } from "@/components/MarketSelect";
 import { ResultsTable } from "@/components/ResultsTable";
 import { PlayerHistoryStats } from "@/components/PlayerHistoryStats";
+import {
+  lineForProjectionEdge,
+  marketToProjectionCard,
+} from "@/lib/projection-metric";
 import { PlayerProjectionPanel } from "@/components/PlayerProjectionPanel";
 import { TeamLineupPanel } from "@/components/TeamLineupPanel";
 import { SectionUnavailable } from "@/components/SectionUnavailable";
@@ -256,33 +260,16 @@ export function EventDetail({ league }: EventDetailProps) {
     retry: false,
   });
 
-  // marketToProjectionMetric: 把 MarketKey 轉成投影面板用的 metric key。
-  // 見 NBA 原始註解（SPO-20 12-tile expansion note）— 新 tile 落到最近的單一 stat。
-  const projectionMetric = (() => {
-    switch (selectedMarket) {
-      case "player_points":
-      case "player_threes":
-      case "player_steals":
-      case "player_frees_made":
-      case "player_field_goals":
-        return "points" as const;
-      case "player_rebounds":
-        return "rebounds" as const;
-      case "player_assists":
-        return "assists" as const;
-      case "player_points_rebounds_assists":
-      case "player_rebounds_assists":
-      case "player_points_rebounds":
-      case "player_points_assists":
-      case "player_double_double":
-        return "pra" as const;
-      default:
-        return "points" as const;
-    }
-  })();
-
-  // 從計算結果取出 threshold（盤口線）— 取第一家盤口的 line。
-  const currentThreshold = result?.results?.[0]?.line ?? null;
+  // Each market highlights its own projection card. Double-double has no
+  // card, so nothing is highlighted. The 0.5 sentinel is not an edge.
+  const projectionMetric = marketToProjectionCard(selectedMarket);
+  const firstResult = result?.results?.[0];
+  const currentThreshold = lineForProjectionEdge({
+    market: result?.market ?? selectedMarket,
+    line: firstResult?.line ?? null,
+    lineIsSynthetic: firstResult?.line_is_synthetic,
+    marketKind: firstResult?.market_kind,
+  });
 
   const handleMarketChange = (market: MarketKey) => {
     setSelectedMarket(market);
