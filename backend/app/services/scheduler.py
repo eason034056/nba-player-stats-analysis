@@ -504,8 +504,10 @@ class SchedulerService:
         print("=" * 50)
 
         try:
-            today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
-            result = await odds_snapshot_service.take_snapshot(today)
+            # US game date, not the UTC date. take_snapshot() applies the
+            # America/New_York offset. Passing UTC today with the old
+            # UTC+8 default matched no evening NBA slate.
+            result = await odds_snapshot_service.take_snapshot()
 
             print(f"✅ Odds snapshot complete!")
             print(f"   Date: {result['date']}")
@@ -577,13 +579,13 @@ class SchedulerService:
         without waiting for the scheduled time. Used in API endpoints for manual triggering.
 
         Args:
-            date: Date (YYYY-MM-DD), None means today
+            date: US game date (YYYY-MM-DD). None means today in New York.
 
         Returns:
             Snapshot result dict (contains date, event_count, total_lines, duration_ms)
         """
         if date is None:
-            date = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+            return await odds_snapshot_service.take_snapshot()
         return await odds_snapshot_service.take_snapshot(date)
 
     async def trigger_projection_fetch_now(self, date: Optional[str] = None) -> dict:

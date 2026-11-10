@@ -242,7 +242,7 @@ async def get_odds_history(
 async def trigger_snapshot(
     date: Optional[str] = Query(
         default=None,
-        description="Snapshot date (YYYY-MM-DD), defaults to today"
+        description="US game date (YYYY-MM-DD). Defaults to today in America/New_York."
     ),
 ):
     """
@@ -252,16 +252,16 @@ async def trigger_snapshot(
     captures all event odds, computes no-vig, writes to PostgreSQL.
 
     Args:
-        date: Snapshot date, defaults to UTC today
+        date: US game date (YYYY-MM-DD). Omitted means today in New York.
 
     Returns:
         OddsSnapshotTriggerResponse: Snapshot execution result summary
     """
-    if date is None:
-        date = datetime.now(timezone.utc).strftime("%Y-%m-%d")
-
     try:
-        result = await odds_snapshot_service.take_snapshot(date)
+        if date is None:
+            result = await odds_snapshot_service.take_snapshot()
+        else:
+            result = await odds_snapshot_service.take_snapshot(date)
 
         return OddsSnapshotTriggerResponse(
             date=result["date"],

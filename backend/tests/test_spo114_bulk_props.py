@@ -30,6 +30,7 @@ from app.services.bulk_props import (
     assemble_bulk_props,
     get_event_bulk_props,
 )
+from app.services.daily_analysis import _even_money_distance
 from app.services.odds_snapshot_service import OddsSnapshotService
 from app.services.prob import american_to_prob, calculate_mode_threshold
 
@@ -180,8 +181,16 @@ def _expected_players(rows: list[dict]) -> dict[tuple[str, str], dict]:
     expected = {}
     for key, votes in by_player.items():
         votes = sorted(votes, key=lambda row: row["bookmaker"].casefold())
+        lines = [float(row["line"]) for row in votes]
+        distances = [
+            _even_money_distance(
+                None if row["over_odds"] is None else float(row["over_odds"]),
+                None if row["under_odds"] is None else float(row["under_odds"]),
+            )
+            for row in votes
+        ]
         expected[key] = {
-            "line": calculate_mode_threshold([float(row["line"]) for row in votes]),
+            "line": calculate_mode_threshold(lines, distances),
             "bookmakers_count": len(votes),
             "books": votes,
         }

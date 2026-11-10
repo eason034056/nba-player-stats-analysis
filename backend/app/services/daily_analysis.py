@@ -554,34 +554,21 @@ def _posted_point(points: list[float]) -> float:
     return float(modes[(len(modes) // 2) - 1])
 
 
-def _main_book_line(outcomes: list[dict[str, Any]]) -> float | None:
-    """The one line a book votes with for one player on one market.
+def _main_line_vote(outcomes: list[dict[str, Any]]) -> tuple[float, float] | None:
+    """The main line and how far that rung sits from even money.
 
-    Each distinct ``point`` is a rung. Over and Under at that point are
-    the two sides of the rung, not two lines. Use this when reducing a
-    book's outcomes to the single float that ``_group_props_by_player``
-    appends.
-
-    Choice, in order:
-
-    1. A two-sided rung beats a one-sided rung. The main line is a
-       number the book will take on both sides.
-    2. Among those rungs, the one closest to a coin flip
-       (``_even_money_distance``) is the main line. The other rungs are
-       alternates. They do not get their own vote, so one book's ladder
-       cannot outvote the rest of the market.
-    3. An equal distance keeps the lower posted point.
-    4. With no usable prices, ``_posted_point`` returns a posted number.
-       It does not average two different points.
+    The point is the same one ``_main_book_line`` returns. The distance is
+    ``_even_money_distance`` of that rung, so a cross-book tie can prefer
+    the vote closest to a coin flip. When the book posted no usable price,
+    the distance is ``1.0``, which is farther than any priced rung. The
+    point in that case is still ``_posted_point``.
 
     Args:
         outcomes: Outcome objects for one player from one book and one
-            market. ``point`` is the line. ``name`` is ``Over`` or
-            ``Under``. ``price`` is American odds.
+            market.
 
     Returns:
-        The main line rounded to one decimal, or None when no outcome
-        has a numeric ``point``.
+        ``(point, distance)``, or None when no outcome has a numeric point.
     """
     rungs: dict[float, dict[str, float | None]] = {}
     bare_points: list[float] = []
@@ -621,13 +608,49 @@ def _main_book_line(outcomes: list[dict[str, Any]]) -> float | None:
     ]
     candidates = two_sided or priced
     if not candidates:
-        return _posted_point(bare_points)
+        return _posted_point(bare_points), 1.0
 
     def _sort_key(point: float) -> tuple[float, float]:
         rung = rungs[point]
         return (_even_money_distance(rung["over"], rung["under"]), point)
 
-    return float(min(candidates, key=_sort_key))
+    chosen = min(candidates, key=_sort_key)
+    return float(chosen), float(_sort_key(chosen)[0])
+
+
+def _main_book_line(outcomes: list[dict[str, Any]]) -> float | None:
+    """The one line a book votes with for one player on one market.
+
+    Each distinct ``point`` is a rung. Over and Under at that point are
+    the two sides of the rung, not two lines. Use this when reducing a
+    book's outcomes to the single float that ``_group_props_by_player``
+    appends.
+
+    Choice, in order:
+
+    1. A two-sided rung beats a one-sided rung. The main line is a
+       number the book will take on both sides.
+    2. Among those rungs, the one closest to a coin flip
+       (``_even_money_distance``) is the main line. The other rungs are
+       alternates. They do not get their own vote, so one book's ladder
+       cannot outvote the rest of the market.
+    3. An equal distance keeps the lower posted point.
+    4. With no usable prices, ``_posted_point`` returns a posted number.
+       It does not average two different points.
+
+    Args:
+        outcomes: Outcome objects for one player from one book and one
+            market. ``point`` is the line. ``name`` is ``Over`` or
+            ``Under``. ``price`` is American odds.
+
+    Returns:
+        The main line rounded to one decimal, or None when no outcome
+        has a numeric ``point``.
+    """
+    vote = _main_line_vote(outcomes)
+    if vote is None:
+        return None
+    return vote[0]
 
 
 class DailyAnalysisService:
@@ -1066,15 +1089,18 @@ class DailyAnalysisService:
                 if not props_data:
                     continue
 
-                # Group by player
-                player_props = self._group_props_by_player(props_data)
+                # Group by player. Each vote is the book's main line and
+                # that rung's distance from even money, so a tied mode can
+                # prefer the sharper quote instead of averaging.
+                player_votes = self._group_main_votes(props_data)
 
-                for player_name, lines in player_props.items():
+                for player_name, votes in player_votes.items():
+                    lines = [line for line, _distance in votes]
+                    distances = [distance for _line, distance in votes]
                     all_players.add(player_name)
                     total_props += 1
 
-                    # Calculate mode threshold
-                    mode_threshold = calculate_mode_threshold(lines)
+                    mode_threshold = calculate_mode_threshold(lines, distances)
 
                     if mode_threshold is None:
                         continue
@@ -1257,6 +1283,53 @@ class DailyAnalysisService:
                 return []
             raise
 
+    def _group_main_votes(
+        self,
+        bookmakers_data: List[Dict[str, Any]],
+    ) -> Dict[str, List[Tuple[float, float]]]:
+        """One ``(main line, even-money distance)`` per bookmaker.
+
+        Same grouping as ``_group_props_by_player``. The distance is the
+        second half of the cross-book tie in ``calculate_mode_threshold``.
+
+        Args:
+            bookmakers_data: ``bookmakers`` array from an event-odds response.
+
+        Returns:
+            Player name to one pair per bookmaker per market, in the order
+            the books appear in ``bookmakers_data``.
+        """
+        buckets: Dict[Tuple[str, str, str], List[Dict[str, Any]]] = {}
+        order: List[Tuple[str, str, str]] = []
+
+        for index, bookmaker in enumerate(bookmakers_data):
+            book_id = _book_id(bookmaker, index)
+            markets = bookmaker.get("markets") or []
+            for market_index, market in enumerate(markets):
+                market_key = market.get("key")
+                if not isinstance(market_key, str) or not market_key.strip():
+                    market_key = f"#{market_index}"
+                else:
+                    market_key = market_key.strip()
+                for outcome in market.get("outcomes") or []:
+                    player_name = outcome.get("description", "")
+                    if not isinstance(player_name, str) or not player_name:
+                        continue
+                    if outcome.get("point") is None:
+                        continue
+                    slot = (player_name, book_id, market_key)
+                    if slot not in buckets:
+                        buckets[slot] = []
+                        order.append(slot)
+                    buckets[slot].append(outcome)
+
+        player_votes: Dict[str, List[Tuple[float, float]]] = defaultdict(list)
+        for player_name, slot_book, slot_market in order:
+            vote = _main_line_vote(buckets[(player_name, slot_book, slot_market)])
+            if vote is not None:
+                player_votes[player_name].append(vote)
+        return dict(player_votes)
+
     def _group_props_by_player(
         self,
         bookmakers_data: List[Dict[str, Any]]
@@ -1292,39 +1365,11 @@ class DailyAnalysisService:
             ``[24.5]``, not ``[24.5, 24.5]``. A second book at 25.5
             makes ``[24.5, 25.5]``.
         """
-        # (player, book id, market key) -> that book's outcomes.
-        # Insertion order is the vote order.
-        buckets: Dict[Tuple[str, str, str], List[Dict[str, Any]]] = {}
-        order: List[Tuple[str, str, str]] = []
-
-        for index, bookmaker in enumerate(bookmakers_data):
-            book_id = _book_id(bookmaker, index)
-            markets = bookmaker.get("markets") or []
-            for market_index, market in enumerate(markets):
-                market_key = market.get("key")
-                if not isinstance(market_key, str) or not market_key.strip():
-                    # Two market objects with no key are still two markets.
-                    market_key = f"#{market_index}"
-                else:
-                    market_key = market_key.strip()
-                for outcome in market.get("outcomes") or []:
-                    player_name = outcome.get("description", "")
-                    if not isinstance(player_name, str) or not player_name:
-                        continue
-                    if outcome.get("point") is None:
-                        continue
-                    slot = (player_name, book_id, market_key)
-                    if slot not in buckets:
-                        buckets[slot] = []
-                        order.append(slot)
-                    buckets[slot].append(outcome)
-
-        player_lines: Dict[str, List[float]] = defaultdict(list)
-        for player_name, slot_book, slot_market in order:
-            line = _main_book_line(buckets[(player_name, slot_book, slot_market)])
-            if line is not None:
-                player_lines[player_name].append(line)
-        return dict(player_lines)
+        votes = self._group_main_votes(bookmakers_data)
+        return {
+            player: [line for line, _distance in pairs]
+            for player, pairs in votes.items()
+        }
 
 
 def _recent_stat_values(game_logs: List[Dict[str, Any]]) -> List[float]:

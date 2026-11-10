@@ -499,6 +499,25 @@ class TestJobErrorHandling:
         await svc._run_odds_snapshot_job()
 
     @pytest.mark.asyncio
+    async def test_odds_snapshot_job_lets_the_service_pick_the_us_slate(
+        self, scheduler_cls, mock_services
+    ):
+        svc = scheduler_cls()
+        mock_snap = mock_services["app.services.scheduler.odds_snapshot_service"]
+        mock_snap.take_snapshot = AsyncMock(
+            return_value={
+                "date": "2026-11-09",
+                "event_count": 1,
+                "total_lines": 1,
+                "duration_ms": 1,
+            }
+        )
+        await svc._run_odds_snapshot_job()
+        # No UTC date and no Taipei offset. take_snapshot() reads
+        # America/New_York itself.
+        mock_snap.take_snapshot.assert_awaited_once_with()
+
+    @pytest.mark.asyncio
     async def test_hot_key_prewarm_job_handles_exception(
         self, scheduler_cls, mock_services
     ):
