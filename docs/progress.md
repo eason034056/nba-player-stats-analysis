@@ -1,9 +1,13 @@
 # Sports Lab Progress
 
-> Maintained by CTO. Last refresh: **2026-11-09** — SPO-99 walk-forward backtest (section below). Prior snapshot: **2026-05-08T08:24Z** (heartbeat: SPO-24 `issue_assigned` — Lens APPROVED test-prob English-regex fix → CTO reassigning to owner (CEO triage → Eason) for squash-merge to `dev`; CTO does NOT push/merge per role). Prior refreshes: 2026-05-08T08:14Z (SPO-27 productivity review closed as productive); 06:11Z (Phase 3 done, Phase 3.5 SPO-26 opened); 01:56Z (Phase 3 dispatch — file later reverted to 01:18Z snapshot); 01:18Z (SPO-15 closed); 2026-05-03T02:59Z–02:38Z (SPO-16 Lens APPROVED chain); 2026-05-02T23:27Z (SPO-11 v3 accept → SPO-16 dispatch); 23:20Z (plan v3 + Addendum 1).
+> Maintained by CTO. Last refresh: **2026-11-10** — SPO-99 walk-forward backtest, with SPO-95 CI triggers merged from `dev`. Prior snapshot: **2026-05-08T08:24Z** (heartbeat: SPO-24 `issue_assigned` — Lens APPROVED test-prob English-regex fix → CTO reassigning to owner (CEO triage → Eason) for squash-merge to `dev`; CTO does NOT push/merge per role). Prior refreshes: 2026-05-08T08:14Z (SPO-27 productivity review closed as productive); 06:11Z (Phase 3 done, Phase 3.5 SPO-26 opened); 01:56Z (Phase 3 dispatch — file later reverted to 01:18Z snapshot); 01:18Z (SPO-15 closed); 2026-05-03T02:59Z–02:38Z (SPO-16 Lens APPROVED chain); 2026-05-02T23:27Z (SPO-11 v3 accept → SPO-16 dispatch); 23:20Z (plan v3 + Addendum 1).
 > Source of truth: Paperclip API. This file is a snapshot — when in doubt, query paperclip directly. The May 2026 tables below are that snapshot and were not rewritten.
 
 ---
+
+## SPO-95 — CI branch triggers (2026-11-09)
+
+`ci.yml` and `deploy-staging.yml` filtered on `main`. This repo has no `main` ref; `origin/HEAD` is `master`, and integrated work lands on `dev`. CI now runs on push to `master` and `dev`, and on pull requests that target either branch. Staging deploy runs on push to `master` (the branch the workflow called `main`). Production deploy stays on `v*` tags (that file never named `main`). Neither deploy workflow runs on pull requests. Backend lint is `ruff==0.17.4 --select E9,F63,F7,F82` plus `compileall`. Frontend tests set `TZ: America/Chicago`.
 
 ## SPO-99 — walk-forward backtest (2026-11-09)
 
@@ -20,7 +24,7 @@ Agent path, same MED20 window, market gate ignored: NBA 60,781 picks, hit 57.9% 
 
 Command: `python scripts/agents/evaluation/backtest.py --report backtest_report.md`
 
-CI: the `walk-forward-guard` job runs the harness tests, including a 40-player sample (seed 7) that fails if MED20 Brier exceeds 0.30 or the calibration gap exceeds 0.15. Thresholds: `BACKTEST_GUARD_MAX_BRIER`, `BACKTEST_GUARD_MAX_GAP`, `BACKTEST_GUARD_PLAYERS`.
+CI: `walk-forward-guard` sits between `frontend-test` and `docker-build` on the SPO-95 workflow (push and pull requests to `master` and `dev`). It runs the harness tests, including a 40-player sample (seed 7) that fails if MED20 Brier exceeds 0.30 or the calibration gap exceeds 0.15. Thresholds: `BACKTEST_GUARD_MAX_BRIER`, `BACKTEST_GUARD_MAX_GAP`, `BACKTEST_GUARD_PLAYERS`.
 
 SPO-97 and SPO-98 are not fixed here. Relabeling the Season column alone does not move these tables, because the replay never reads it. Dropping the 3,416 NBA rows dated before 2025-10-21 out of history would move the NBA hit rate, ROI, Brier, calibration, and the October–November months. The Maria Conde duplicate (2026-05-08) is not inside any scored prior window, so the WNBA headlines do not move if it is deleted. The oldest-team fallback and the substring name match are not used by this harness, so these tables do not move when those are fixed. The picks page does.
 
