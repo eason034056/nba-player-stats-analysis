@@ -27,6 +27,28 @@ MIN_SAMPLE_FOR_BET = 10
 MIN_EV_FOR_BET = 0.01        # 1 %
 MAX_ROLE_WEIGHT = 0.85
 MINIMUM_ROLE_SAMPLE = 4
+# Pre-gate bands on P(over). The market-price gate below can still rewrite
+# the candidate to "avoid"; callers that want the ungated side use
+# `decision_from_over_probability` on `model_probability_unrounded`.
+OVER_DECISION_THRESHOLD = 0.55
+UNDER_DECISION_THRESHOLD = 0.45
+
+
+def decision_from_over_probability(p_over: float) -> str:
+    """Map a P(over) to the scorecard candidate before eligibility gates.
+
+    Args:
+        p_over: Probability of the over, on a 0–1 scale.
+
+    Returns:
+        "over" at or above `OVER_DECISION_THRESHOLD`, "under" at or below
+        `UNDER_DECISION_THRESHOLD`, otherwise "avoid".
+    """
+    if p_over >= OVER_DECISION_THRESHOLD:
+        return "over"
+    if p_over <= UNDER_DECISION_THRESHOLD:
+        return "under"
+    return "avoid"
 
 
 def _safe(d: dict, *keys, default=0.0):
@@ -483,12 +505,7 @@ def compute_scorecard(
     # ------------------------------------------------------------------
     # Decision
     # ------------------------------------------------------------------
-    if model_prob >= 0.55:
-        decision_candidate = "over"
-    elif model_prob <= 0.45:
-        decision_candidate = "under"
-    else:
-        decision_candidate = "avoid"
+    decision_candidate = decision_from_over_probability(model_prob)
 
     # ------------------------------------------------------------------
     # Confidence (reliability-weighted)
@@ -552,6 +569,10 @@ def compute_scorecard(
         "direction": dir_lower,  # 用戶問的方向，供 CLI 顯示
         "confidence": round(confidence, 3),
         "model_probability": round(model_prob_display, 4),
+        # Unrounded P(over) after the clamp. The pre-gate side is this value,
+        # not the 4-decimal model_probability. Rounding 0.54995 becomes 0.5500
+        # and would cross the 0.55 band.
+        "model_probability_unrounded": model_prob,
         "market_implied_probability": round(market_implied, 4) if market_implied is not None else None,
         "expected_value_pct": round(ev_pct, 4) if ev_pct is not None else None,
         "market_pricing_mode": pricing_mode,
