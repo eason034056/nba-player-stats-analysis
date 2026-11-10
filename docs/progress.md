@@ -4,6 +4,12 @@
 
 ## Shipped
 
+### SPO-101 — event-page integration tests
+
+Shipped on `dev` in #34. The progress row that came in with the merge still said the pull request was awaiting squash-merge.
+
+Live tests for the 12-tile `/event` surface and the double-double round-trip. Skipped unless `RUN_INTEGRATION=1`. One batched odds call. Not run in this environment (`ODDS_API_KEY` unset).
+
 ### SPO-99 — walk-forward backtest
 
 Shipped on `dev` in #32. The progress section that came in with the merge still said the pull request was open and not merged.
@@ -64,7 +70,7 @@ Phases 0–3.5 are done. Phases 4 and 5 are still open.
 | 2 backend services | SPO-16 / SPO-17 / SPO-18, PR #1 (`35a25dd`) |
 | 3 frontend | SPO-20, PR #3 (`e36cb57`) |
 | 3.5 API route gap | SPO-26, PR #4 (`490b9be`) |
-| 4 integration tests | SPO-101, open. Gated integration tests for the `/event` 12 tiles and the DD round-trip. No merge yet. |
+| 4 integration tests | SPO-101, shipped on `dev` in #34. Gated with `RUN_INTEGRATION=1`. |
 | 5 final review | SPO-103, open. Final review; closes SPO-10 and SPO-11. No merge yet. |
 
 ## Abandoned
@@ -95,7 +101,6 @@ Stale pull requests the owner is closing. Not merged.
 |---|---|
 | SPO-96 | This docs rewrite (`feature/SPO-96-claude-md-workflow-rewrite`). |
 | SPO-104 | One-sided DD quotes (`under_odds` / `p_under_imp` null, `line_is_synthetic`, `market_kind`, `uses_prior`), league-scoped team codes, and the SPO-97 schedule-index follow-ups. PR into `dev` from `feature/SPO-104-dd-one-sided-and-followups`. Summary: `docs/task-summaries/SPO-104-dd-one-sided-and-followups.md`. |
-| SPO-101 | SPO-10 Phase 4 integration tests. Open. |
 | SPO-102 | Wire `PlayerDDTile` to double-double history and yes/no odds. Open on `feature/SPO-102-player-dd-tile-wiring`. Summary: `docs/task-summaries/SPO-102-player-dd-tile-wiring.md`. |
 | SPO-103 | SPO-10 Phase 5 final review. Open. |
 
