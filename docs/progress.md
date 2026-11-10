@@ -79,10 +79,20 @@ Stale pull requests the owner is closing. Not merged.
 |---|---|
 | SPO-96 | This docs rewrite (`feature/SPO-96-claude-md-workflow-rewrite`). |
 | SPO-97 | Game-log season labels and game-type hygiene, in review on `feature/SPO-97-csv-season-hygiene`. CSVs relabeled from the ESPN schedule; Summer League and preseason dropped; playoffs and play-in are opt-in, so default hit rates are regular season only. Cup finals are `cup_championship` and stay out of that sample, as do unclassified rows. Task summary: `docs/task-summaries/SPO-97-csv-season-hygiene.md` (not on `dev` until this merges). |
-| SPO-99 | In flight. Title not in `docs/task-summaries/` or `git log` on `dev`. |
+| SPO-99 | Walk-forward backtest, open as #32. Entry below. |
 | SPO-101 | SPO-10 Phase 4: live integration tests for the 12-tile `/event` surface and the DD round-trip (`feature/SPO-101-spo10-phase4-integration-tests`). Skipped unless `RUN_INTEGRATION=1`. One batched odds call (expected 10 paid units when FTM/FGM are empty, ceiling 12). Not run live (`ODDS_API_KEY` unset). Production code unchanged. In review, awaiting squash-merge. |
 | SPO-102 | Wire `PlayerDDTile` to double-double history and yes/no odds. Open on `feature/SPO-102-player-dd-tile-wiring`. Summary: `docs/task-summaries/SPO-102-player-dd-tile-wiring.md`. |
 | SPO-103 | SPO-10 Phase 5 final review. Open. |
+
+### SPO-99 — walk-forward backtest
+
+Open as #32 (`feature/SPO-99-walk-forward-backtest`), base `dev`. Not merged.
+
+Replaces the in-sample five-player `scripts/agents/evaluation/backtest.py` with a walk-forward harness. Each player-game uses only games dated strictly before it. Daily Picks goes through `choose_daily_pick_side`. The agent path calls `compute_scorecard` on a prior-only cache.
+
+Proxy lines are MED20 by default; L10 is also supported. ROI assumes -110. Closing-line value is not measured. The CLV hook stays inactive unless an odds-history file is passed.
+
+CI job `walk-forward-guard` sits between `frontend-test` and `docker-build` on the workflow from #29. It runs the harness tests, including a 40-player sample (seed 7) that fails if MED20 Brier exceeds 0.30 or the calibration gap exceeds 0.15.
 
 ## Not classified
 

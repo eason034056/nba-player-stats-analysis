@@ -161,6 +161,40 @@ PROJECTION_FIELD_ALIASES: Dict[str, str] = {
 # High probability threshold
 HIGH_PROBABILITY_THRESHOLD = 0.65
 
+# Minimum non-DNP games before a historical rate can become a pick.
+# The walk-forward harness imports this so it gates on the same sample size.
+MIN_SAMPLE_GAMES = 10
+
+
+def choose_daily_pick_side(
+    p_over: float | None,
+    p_under: float | None,
+    threshold: float = HIGH_PROBABILITY_THRESHOLD,
+) -> tuple[str | None, float | None]:
+    """Choose the Daily Picks side from empirical over/under rates.
+
+    OVER wins when both rates clear `threshold`. That is the order in
+    `_analyze_single_event`: a player who is extreme on both sides of a
+    line is published as an over, not an under.
+
+    Args:
+        p_over: Share of prior games strictly above the line, or None.
+        p_under: Share of prior games strictly below the line, or None.
+        threshold: Minimum rate. Defaults to `HIGH_PROBABILITY_THRESHOLD`.
+
+    Returns:
+        `("over", rate)` or `("under", rate)` when a side clears the
+        threshold. The rate is rounded to 4 decimals, which is what
+        `DailyPick.probability` stores. `(None, None)` when neither side
+        clears the threshold.
+    """
+    if p_over is not None and p_over >= threshold:
+        return "over", round(p_over, 4)
+    if p_under is not None and p_under >= threshold:
+        return "under", round(p_under, 4)
+    return None, None
+
+
 # Cache key prefix
 DAILY_PICKS_CACHE_KEY = "daily_picks"
 
@@ -670,8 +704,8 @@ class DailyAnalysisService:
                     p_under = history_stats.get("p_under")
                     n_games = history_stats.get("n_games", 0)
 
-                    # Require at least 10 game samples
-                    if n_games < 10:
+                    # Same floor the walk-forward harness imports.
+                    if n_games < MIN_SAMPLE_GAMES:
                         continue
 
                     # === Integrate projection data (Value Edge Detection) ===
@@ -713,8 +747,14 @@ class DailyAnalysisService:
                     if projected_value is not None and mode_threshold is not None:
                         edge = round(projected_value - mode_threshold, 2)
 
-                    # Check if it passes probability threshold
-                    if p_over is not None and p_over >= self.probability_threshold:
+                    # Check if it passes probability threshold.
+                    # OVER is preferred when both sides clear it.
+                    side, _side_probability = choose_daily_pick_side(
+                        p_over,
+                        p_under,
+                        self.probability_threshold,
+                    )
+                    if side == "over":
                         pick = DailyPick(
                             player_name=player_name,
                             player_team=player_team,
@@ -747,7 +787,7 @@ class DailyAnalysisService:
                         min_str = f" [{projected_minutes:.0f}min]" if projected_minutes is not None else ""
                         print(f"  ✨ {player_name} ({player_team}) {metric_key} OVER {mode_threshold}: {p_over:.1%}{edge_str}{min_str}")
 
-                    elif p_under is not None and p_under >= self.probability_threshold:
+                    elif side == "under":
                         pick = DailyPick(
                             player_name=player_name,
                             player_team=player_team,
