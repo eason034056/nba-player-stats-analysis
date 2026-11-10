@@ -76,8 +76,8 @@ export function Providers({ children }: { children: React.ReactNode }) {
     // 讓所有子元件都能使用 useQuery、useMutation 等 hooks
     <QueryClientProvider client={queryClient}>
       {/* BetSlipProvider + WnbaBetSlipProvider: two independent slips, both
-          visible to the whole tree (Navbar reads both counts; the active one
-          is picked path-based in the Navbar layer per SPO-29). Nesting one
+          visible to the whole tree (AppShell reads both counts; the active one
+          is picked path-based in the shell per SPO-29). Nesting one
           inside the other is fine for React; the order does not imply
           dependence. */}
       <BetSlipProvider>

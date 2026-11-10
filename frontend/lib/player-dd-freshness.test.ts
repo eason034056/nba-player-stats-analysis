@@ -24,6 +24,12 @@ describe("formatPercent", () => {
     expect(formatPercent(-0)).toBe("0.0%");
   });
 
+  it("returns an em dash for null instead of 0.0%", () => {
+    expect(formatPercent(null)).toBe("—");
+    expect(formatPercent(undefined)).toBe("—");
+    expect(formatPercent(null)).not.toBe("0.0%");
+  });
+
   it("does not throw or invent 0% when the input is not finite", () => {
     expect(formatPercent(Number.NaN)).toBe("NaN%");
     expect(formatPercent(Number.POSITIVE_INFINITY)).toBe("Infinity%");

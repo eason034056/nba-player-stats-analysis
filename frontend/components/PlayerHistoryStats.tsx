@@ -800,7 +800,7 @@ export function PlayerHistoryStats({
                 <TrendingUp className="w-4 h-4" />
                 <span className="text-sm font-bold">Over Probability</span>
               </div>
-              <p className="text-2xl font-bold text-green-600">
+              <p className="text-2xl font-bold text-green-800">
                 {historyData.p_over !== null && historyData.p_over !== undefined
                   ? `${(historyData.p_over * 100).toFixed(1)}%`
                   : "N/A"}
@@ -872,7 +872,7 @@ export function PlayerHistoryStats({
                 {threshold && !isNaN(parseFloat(threshold)) && (
                   <p className={cn(
                     "text-xs font-bold mt-1",
-                    projectedValue >= parseFloat(threshold) ? "text-green-600" : "text-red"
+                    projectedValue >= parseFloat(threshold) ? "text-green-800" : "text-red"
                   )}>
                     Edge: {projectedValue >= parseFloat(threshold) ? "+" : ""}
                     {(projectedValue - parseFloat(threshold)).toFixed(1)} vs line
@@ -1037,7 +1037,7 @@ export function PlayerHistoryStats({
               </div>
               <div className="flex justify-center gap-6 mt-4 text-xs flex-wrap">
                 <div className="flex items-center gap-2">
-                  <div className="w-4 h-4 rounded bg-green-500" />
+                  <div className="w-4 h-4 rounded bg-green-800" />
                   <span className="text-dark font-medium">Over (above threshold)</span>
                 </div>
                 <div className="flex items-center gap-2">

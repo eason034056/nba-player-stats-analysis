@@ -73,7 +73,7 @@ function getProbabilityLevel(probability: number): "high" | "medium" {
  */
 function getMatchupLevel(rank: number | null | undefined): { label: string; color: string } | null {
   if (rank == null) return null;
-  if (rank <= 10) return { label: "Easy", color: "text-green-600 bg-green-500/10" };
+  if (rank <= 10) return { label: "Easy", color: "text-green-800 bg-green-800/10" };
   if (rank <= 20) return { label: "Avg", color: "text-yellow-600 bg-yellow-500/10" };
   return { label: "Hard", color: "text-red-600 bg-red-500/10" };
 }
@@ -200,7 +200,7 @@ function PickCard({
           <Link href={linkHref} className="block cursor-pointer">
             {isAdded && (
               <div className="absolute top-4 left-4">
-                <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-green-500 text-white text-xs font-bold">
+                <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-green-800 text-white text-xs font-bold">
                   <ClipboardList className="w-3 h-3" />
                   IN SLIP
                 </div>
@@ -209,7 +209,7 @@ function PickCard({
 
             {level === "high" && (
               <div className="absolute top-4 right-4">
-                <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-green-500 text-white text-xs font-bold">
+                <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-green-800 text-white text-xs font-bold">
                   <Flame className="w-3 h-3" />
                   HOT
                 </div>
@@ -246,7 +246,7 @@ function PickCard({
                 className={`
                   px-4 py-2 rounded-lg text-sm font-bold
                   ${pick.direction === "over"
-                    ? "bg-green-500/10 text-green-600 border-2 border-green-500/30"
+                    ? "bg-green-800/10 text-green-800 border-2 border-green-500/30"
                     : "bg-blue-500/10 text-blue-600 border-2 border-blue-500/30"
                   }
                 `}
@@ -257,7 +257,7 @@ function PickCard({
               <div
                 className={`
                   text-3xl font-mono font-bold
-                  ${level === "high" ? "text-green-500" : "text-yellow"}
+                  ${level === "high" ? "text-green-800" : "text-yellow"}
                 `}
               >
                 {formatProbability(pick.probability)}
@@ -274,7 +274,7 @@ function PickCard({
                       className={`
                         inline-flex items-center gap-1 px-2 py-1 rounded-md text-xs font-bold
                         ${edgeInfo.favorable
-                          ? "bg-green-500/10 text-green-600"
+                          ? "bg-green-800/10 text-green-800"
                           : "bg-red-500/10 text-red-600"
                         }
                       `}
@@ -342,7 +342,7 @@ function PickCard({
               </div>
 
               <div className="flex items-center gap-2">
-                <span className="text-xs text-gray/60 hidden group-hover:inline">
+                <span className="text-xs text-gray hidden group-hover:inline">
                   Right-click for more
                 </span>
                 <ChevronRight className="w-5 h-5 text-gray group-hover:text-red transition-colors" />
@@ -357,7 +357,7 @@ function PickCard({
               className={`
                 inline-flex items-center gap-2 rounded-lg px-3 py-2.5 text-sm font-bold transition-colors min-h-[44px]
                 ${isAdded && !isReversedInSlip
-                  ? "bg-green-500 text-white"
+                  ? "bg-green-800 text-white"
                   : "bg-dark text-cream hover:bg-dark/85"
                 }
               `}
@@ -372,7 +372,7 @@ function PickCard({
               className={`
                 inline-flex items-center gap-2 rounded-lg border px-3 py-2.5 text-sm font-semibold transition-colors min-h-[44px]
                 ${isReversedInSlip
-                  ? "border-blue-500 bg-blue-500 text-white"
+                  ? "border-blue-700 bg-blue-700 text-white"
                   : "border-dark/20 bg-white text-dark hover:border-blue-500 hover:text-blue-600"
                 }
               `}
@@ -839,7 +839,7 @@ export default function PicksPage() {
                   className={`rounded-full px-2.5 py-1 text-xs font-semibold uppercase tracking-[0.18em] ${
                     isStaleBoard
                       ? "bg-yellow-500/15 text-yellow-700"
-                      : "bg-green-500/15 text-green-700"
+                      : "bg-green-800/15 text-green-700"
                   }`}
                 >
                   {isStaleBoard ? "Stale board" : "Fresh board"}
@@ -1033,12 +1033,12 @@ export default function PicksPage() {
             {highProbCount > 0 && (
               <div className="mb-10">
                 <div className="flex items-center gap-3 mb-6">
-                  <div className="w-10 h-10 rounded-lg bg-green-500 flex items-center justify-center">
+                  <div className="w-10 h-10 rounded-lg bg-green-800 flex items-center justify-center">
                     <Flame className="w-5 h-5 text-white" />
                   </div>
                   <h3 className="text-xl font-bold text-dark">
                     High Confidence Picks
-                    <span className="text-green-500 ml-2">≥70%</span>
+                    <span className="text-green-800 ml-2">≥70%</span>
                   </h3>
                   <span className="badge-success">
                     {highProbCount}
