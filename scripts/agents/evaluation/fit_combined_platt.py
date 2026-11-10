@@ -40,8 +40,6 @@ from evaluation.paths import PROJECT_ROOT, bootstrap
 # Rows on or before this date choose the stored coefficients.
 # The next date through the end of the replay is the holdout.
 DEFAULT_CUTOFF = "2026-03-17"
-# Informational slice only. Not a second fit. Rebaseline waits on PR #38.
-REGULAR_SEASON_HOLDOUT_END = "2026-04-12"
 
 
 def fit_platt(adjustments: np.ndarray, outcomes: np.ndarray) -> tuple[float, float]:
@@ -280,20 +278,6 @@ def main(argv: list[str] | None = None) -> None:
         "scored with the stored coefficients"
     )
     holdout = _report("holdout", _score(hold_x, hold_y, intercept, slope), hold_y, hold_base)
-
-    regular = [row for row in hold if row.date <= REGULAR_SEASON_HOLDOUT_END]
-    if len(regular) >= 30:
-        reg_x, reg_y, reg_base = _arrays(regular)
-        print(
-            f"regular-season slice {regular[0].date} → {regular[-1].date} "
-            "uses the same coefficients. It is not a refit."
-        )
-        _report(
-            "regular-season holdout",
-            _score(reg_x, reg_y, intercept, slope),
-            reg_y,
-            reg_base,
-        )
 
     _write_constants(
         intercept,

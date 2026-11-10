@@ -125,7 +125,7 @@ jobs:
             backend/requirements.txt
             scripts/agents/requirements_agents.txt
       - run: pip install -r backend/requirements.txt -r scripts/agents/requirements_agents.txt
-      - run: python -m pytest scripts/agents/tests/test_walk_forward_backtest.py scripts/agents/tests/test_calibration_guard.py scripts/agents/tests/test_spo107_harness_gametype.py -q --tb=short
+      - run: python -m pytest scripts/agents/tests/test_walk_forward_backtest.py scripts/agents/tests/test_calibration_guard.py scripts/agents/tests/test_spo107_harness_gametype.py scripts/agents/tests/test_spo112_platt_cutoff.py -q --tb=short
 
   docker-build:
     name: Docker Build

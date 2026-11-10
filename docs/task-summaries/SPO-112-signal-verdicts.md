@@ -33,7 +33,7 @@ The blend starts from the market no-vig log-odds, adds four capped adjustments, 
 | `scripts/agents/tests/test_defense_ranks.py` | Rank direction, same-day exclusion, position-rank preference. |
 | `scripts/agents/tests/test_calibration_guard.py` | Combined failure and the empty-column skip. |
 | `docs/decisions/SPO-112/decision_20261110_signal-verdicts-combined-probability.md` | Rules, blend, rank check, numbers, rejected alternatives. |
-| `docs/progress.md` | In-flight SPO-112 note. |
+| `docs/progress.md` | Not edited. Feature pull requests leave this file as it is on `dev`. |
 
 ## Why
 
@@ -75,7 +75,7 @@ Stored coefficients: `PLATT_A = 0.28036258`, `PLATT_B = 2.15982400`, fit on 34,5
 
 Holdout ECE 0.0192, widest combined bucket 0.0270, log loss 0.6539. `probability` ECE 0.1105, widest bucket 0.1565, log loss 0.7067. Paired Brier difference −0.0132 (95% CI −0.0151 to −0.0112).
 
-The rebaseline after PR #38 is done. The holdout is regular season only and ends 2026-04-12. 4,692 settled playoff and play-in rows were kept out of the fit.
+The rebaseline after PR #38 is done. The holdout is regular season only and ends 2026-04-12. 4,692 settled playoff and play-in rows were kept out of the fit. After #38, the 60 postseason 2024-25 rows no longer feed prior history, so fit n moved 34,510 to 34,507 and holdout 13,778 to 13,751.
 
 A score on the 34,507 fit rows is not comparable to the holdout. The earlier full-sample fit on all 53,327 rows (Brier 0.2235, gap 0.0000) included the holdout and postseason games and is not comparable either. Those coefficients are not stored.
 
@@ -85,8 +85,20 @@ INSUFFICIENT REAL-LINE DATA (2026-11-10). The proxy-line holdout met the pass ba
 
 ## Known limitations
 
-- Early-season fits are unstable. In a rolling monthly check before this rebaseline, January 2026 (trained on November–December only, n = 8,902) had combined Brier 0.2171 versus `probability` 0.2149, and the 0.4–0.5 bucket gap was −0.102.
-- With a constant 0.5 market, offline `combined_probability` is a recalibrated adjustment total. On the sample before this rebaseline it shared `history_rate` with `probability` (correlation 0.38 overall, 0.40 on the fit rows, 0.35 on the holdout). `A = 0.2804` encodes that the pick side beats a coin flip, and on a real no-vig market that can double-count recent form. Refit A and B once real lines exist.
+Backtest Analyst regular-season recheck. These figures were not recomputed here.
+
+Rolling check, each month fit on all prior months. The paired Brier is combined minus `probability`:
+
+- January, fit on November–December (n = 8,902, A/B 0.2533/2.0263), fails: combined Brier 0.2171 versus `probability` 0.2149, paired difference +0.0022 (CI +0.0002 to +0.0042). The 0.4–0.5 bucket (n = 269) gap is −0.1016.
+- February: −0.0057.
+- March: −0.0093.
+- April 1–12: −0.0178.
+
+Require a minimum training window, or freeze the constants, before any early-season refit.
+
+Holdout buckets for `combined_probability`: 0.4–0.5 n = 577, gap −0.012; 0.5–0.6 n = 3,436, gap +0.019; 0.6–0.7 n = 6,547, gap +0.027; 0.7–0.8 n = 3,191, gap +0.005. Constant baseline Brier 0.2371.
+
+On the 48,258 regular-season rows, `history_rate` equals `probability` by construction (`walk_forward.py` around line 682), correlation 1.0. The history log-odds term correlates 0.932 with `probability` and is capped on 15.1% of rows. The adjustment total correlates 0.395 with `probability`; mean 0.164, of which 0.097 is from history. 10.3% of rows (4,975) sit at the +0.35 cap. 1,583 rows score below 0.5 and hit 50.9%. The market term is a constant 0.5 offline. Refit A and B once real lines exist.
 
 Regenerate:
 
