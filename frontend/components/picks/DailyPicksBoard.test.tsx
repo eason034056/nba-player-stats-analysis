@@ -34,7 +34,7 @@ vi.mock("next/navigation", () => ({
   useRouter: () => ({ push: vi.fn() }),
 }));
 
-function renderBoard(overrides: Partial<DailyPicksBoardProps> = {}) {
+function boardProps(overrides: Partial<DailyPicksBoardProps> = {}): DailyPicksBoardProps {
   const props: DailyPicksBoardProps = {
     league: "nba",
     selectedDate: "2026-11-10",
@@ -64,7 +64,11 @@ function renderBoard(overrides: Partial<DailyPicksBoardProps> = {}) {
     onToggleSlip: vi.fn(),
     ...overrides,
   };
-  return renderWithProviders(<DailyPicksBoard {...props} />);
+  return props;
+}
+
+function renderBoard(overrides: Partial<DailyPicksBoardProps> = {}) {
+  return renderWithProviders(<DailyPicksBoard {...boardProps(overrides)} />);
 }
 
 describe("DailyPicksBoard", () => {
@@ -133,5 +137,35 @@ describe("DailyPicksBoard", () => {
     expect(screen.getByText("board down")).toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: /click to retry/i }));
     expect(onRetry).toHaveBeenCalledOnce();
+  });
+
+  it("keeps the playable band below 70% and stacks the card on a narrow layout", async () => {
+    const user = userEvent.setup();
+    renderBoard();
+
+    const card = screen.getByRole("link", { name: "Bam Adebayo" }).closest("article");
+    expect(card?.className).toContain("flex-col");
+    expect(card?.className).toContain("md:flex-row");
+    const confidence = screen.getByRole("group", { name: "Confidence" });
+    expect(confidence.className).toContain("overflow-x-auto");
+    expect(confidence.className).toContain("md:flex-wrap");
+
+    await user.click(screen.getByRole("button", { name: /Playable 65/ }));
+    expect(screen.getByText("Tyrese Haliburton")).toBeInTheDocument();
+    expect(screen.queryByText("Bam Adebayo")).not.toBeInTheDocument();
+    expect(screen.queryByText("Joel Embiid")).not.toBeInTheDocument();
+  });
+
+  it("clears the confidence chip when the date changes", async () => {
+    const user = userEvent.setup();
+    const { rerender } = renderBoard();
+
+    await user.click(screen.getByRole("button", { name: "Strong ≥70%" }));
+    expect(screen.queryByText("Tyrese Haliburton")).not.toBeInTheDocument();
+
+    rerender(<DailyPicksBoard {...boardProps({ selectedDate: "2026-11-11" })} />);
+
+    expect(screen.getByText("Tyrese Haliburton")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "All" })).toHaveAttribute("aria-pressed", "true");
   });
 });

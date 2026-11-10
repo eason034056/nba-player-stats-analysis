@@ -98,4 +98,57 @@ describe("PlayerProjectionPanel highlights", () => {
     expect(screen.getByText("—")).toBeInTheDocument();
     expect(screen.queryByText(/Easy #|Avg #|Hard #/)).not.toBeInTheDocument();
   });
+
+  it("keeps the 10/11 and 20/21 cuts, and still labels 0 and 31", () => {
+    const base = playerProjectionSchema.parse(rankFixture.weakest);
+    const cases: Array<[number, string, string]> = [
+      [10, "Easy #10", "text-green-700"],
+      [11, "Avg #11", "text-yellow-700"],
+      [20, "Avg #20", "text-yellow-700"],
+      [21, "Hard #21", "text-red"],
+      [0, "Easy #0", "text-green-700"],
+      [31, "Hard #31", "text-red"],
+    ];
+
+    const { rerender } = renderWithProviders(
+      <PlayerProjectionPanel projection={{ ...base, opponent_rank: 10 }} metric="points" threshold={18.5} />,
+    );
+    for (const [rank, label, color] of cases) {
+      rerender(
+        <PlayerProjectionPanel
+          projection={{ ...base, opponent_rank: rank }}
+          metric="points"
+          threshold={18.5}
+        />,
+      );
+      expect(screen.getByText(label)).toHaveClass(color);
+    }
+
+    // The projection schema does not clamp the documented 1-30 range.
+    expect(playerProjectionSchema.parse({ ...rankFixture.weakest, opponent_rank: 0 }).opponent_rank).toBe(0);
+    expect(playerProjectionSchema.parse({ ...rankFixture.weakest, opponent_rank: 31 }).opponent_rank).toBe(31);
+    expect(
+      playerProjectionSchema.parse({ ...rankFixture.weakest, opponent_rank: Number.POSITIVE_INFINITY }).opponent_rank,
+    ).toBe(Number.POSITIVE_INFINITY);
+
+    rerender(
+      <PlayerProjectionPanel
+        projection={{ ...base, opponent_rank: Number.NaN }}
+        metric="points"
+        threshold={18.5}
+      />,
+    );
+    expect(screen.getByText("—")).toBeInTheDocument();
+    expect(screen.queryByText(/Easy #|Avg #|Hard #/)).not.toBeInTheDocument();
+
+    rerender(
+      <PlayerProjectionPanel
+        projection={{ ...base, opponent_rank: Number.POSITIVE_INFINITY }}
+        metric="points"
+        threshold={18.5}
+      />,
+    );
+    expect(screen.getByText("—")).toBeInTheDocument();
+    expect(screen.queryByText(/Easy #|Avg #|Hard #/)).not.toBeInTheDocument();
+  });
 });
