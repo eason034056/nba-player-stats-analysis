@@ -34,8 +34,10 @@ from app.services.odds_provider import OddsAPIError
 from app.services.cache import cache_service, CacheService
 from app.services.odds_gateway import odds_gateway, MarketSnapshotResult
 from app.services.odds_snapshot_service import BINARY_MARKET_KEYS
+from app.services.game_log_hygiene import coalesce_game_type
 from app.services.prob import (
     american_to_prob,
+    posted_american_odds,
     calculate_vig,
     devig,
     calculate_consensus_mean,
@@ -150,17 +152,21 @@ def _build_binary_no_vig_response(
             if yes_outcome is None:
                 continue
 
-            yes_price = yes_outcome.get("price", 0)
-            if yes_price == 0:
+            yes_price = posted_american_odds(yes_outcome.get("price"))
+            if yes_price is None:
                 continue
-            no_price_raw = no_outcome.get("price", 0) if no_outcome is not None else 0
+            no_price_raw = (
+                posted_american_odds(no_outcome.get("price"))
+                if no_outcome is not None
+                else None
+            )
 
             try:
                 p_yes_imp = american_to_prob(yes_price)
                 no_price: Optional[float]
                 p_no_imp: Optional[float]
 
-                if no_price_raw != 0:
+                if no_price_raw is not None:
                     # Both legs posted — derive vig directly from the leg
                     # pair, matching the Over/Under flow's higher-fidelity
                     # path. No prior assumption needed.
@@ -943,7 +949,7 @@ async def get_player_history(
                 team=log.get("team", ""),
                 minutes=log.get("minutes", 0.0),  # Playing time
                 is_starter=log.get("is_starter", False),  # Starter status
-                game_type=log.get("game_type", "regular_season"),
+                game_type=coalesce_game_type(log.get("game_type")),
                 season=log.get("season", ""),
             )
             for log in stats.get("game_logs", [])

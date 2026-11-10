@@ -300,10 +300,15 @@ def _parse_event_instant(value: str) -> datetime | None:
 def _local_dates(instant: datetime) -> set[str]:
     """Calendar dates to try when joining to a RealGM date cell.
 
-    RealGM prints the arena-local date. East-coast and west-coast
-    conversions of the same UTC kickoff cover that without treating the
-    UTC date itself as a third candidate (that extra day collides with
-    the next day's back-to-back).
+    RealGM prints the arena-local date. A west-coast tip after midnight
+    UTC is still the previous evening in Los Angeles and already the next
+    morning in New York, so one kickoff is indexed under both the Pacific
+    date and the Eastern date. A CSV cell written in either convention
+    still matches this event. ``match`` returns the event once for the
+    date on the row, so the two keys are not two games.
+
+    The UTC date itself is not a third candidate. That extra day collides
+    with the next day's back-to-back.
     """
     return {
         instant.astimezone(_EASTERN).date().isoformat(),
@@ -411,9 +416,10 @@ def _overlay_recorded_team_schedules(
     compact file).
 
     ``league`` is the fixture slug (``nba`` or ``wnba``) passed by the
-    caller. A non-blank value is applied to every recorded file, and
-    the filename is not consulted. When ``league`` is omitted or blank,
-    each file's slug is the prefix before ``_team_`` and a warning is
+    caller. A file whose name starts with a different league is skipped,
+    so ``league="wnba"`` does not relabel an NBA recording. A file with
+    no ``{league}_`` prefix uses the explicit league. When ``league`` is
+    omitted or blank, each file's slug is that prefix and a warning is
     logged. A filename with no prefix raises ``ValueError``.
 
     ``Path.glob`` is not recursive, so both the schedule directory and
@@ -431,7 +437,13 @@ def _overlay_recorded_team_schedules(
         paths.extend(sorted(recorded_dir.glob(_TEAM_SCHEDULE_GLOB)))
     for raw_path in paths:
         if explicit:
-            file_league = explicit
+            try:
+                prefix = _league_slug_from_schedule_filename(raw_path)
+            except ValueError:
+                prefix = ""
+            if prefix and prefix != explicit:
+                continue
+            file_league = prefix or explicit
         else:
             file_league = _league_slug_from_schedule_filename(raw_path)
             logger.warning(
@@ -455,10 +467,11 @@ def load_schedule_events(
 ) -> list[dict[str, Any]]:
     """Load the recorded event list. ``path`` overrides the default fixture.
 
-    ``league`` is forwarded to the recorded-schedule overlay. Callers
-    that know the file is one league should pass it. Omitting it logs a
-    warning and falls back to the filename prefix. The cache key
-    includes the league so an explicit call does not reuse a guessed one.
+    ``league`` is forwarded to the recorded-schedule overlay. An explicit
+    league reads only files for that league (a filename with no prefix
+    still uses it). Omitting it logs a warning and falls back to the
+    filename prefix. The cache key includes the league so an explicit
+    call does not reuse a guessed one.
     """
     schedule_path = (path or default_schedule_path()).resolve()
     cache_key = f"{schedule_path}|{(league or '').strip()}"

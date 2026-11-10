@@ -97,7 +97,10 @@ def _same_line_side_prob(lines: List[Dict[str, Any]], direction: str) -> Optiona
     if not lines:
         return None
     fair_key = "fair_over" if direction == "over" else "fair_under"
-    return statistics.mean([l[fair_key] for l in lines])
+    values = [line[fair_key] for line in lines if line.get(fair_key) is not None]
+    if not values:
+        return None
+    return statistics.mean(values)
 
 
 def _build_market_quote_for_line(

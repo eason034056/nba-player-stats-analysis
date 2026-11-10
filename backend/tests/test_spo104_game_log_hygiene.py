@@ -50,13 +50,17 @@ def test_offline_index_labels_commissioners_cup_final():
     )
 
 
-def test_explicit_league_is_not_read_from_the_filename(caplog):
+def test_explicit_league_does_not_relabel_another_league(caplog):
     with caplog.at_level(logging.WARNING):
         events = load_schedule_events(league="wnba")
     assert not any("No league was passed" in record.message for record in caplog.records)
     event = next(event for event in events if str(event.get("id")) == _CUP_EVENT_ID)
     assert event["league"] == "wnba"
     assert game_type_for_event(event) == GAME_TYPE_CUP
+    # Bucks at 76ers is an NBA recording. The explicit WNBA argument must
+    # not rewrite that file's league.
+    bucks = next(event for event in events if str(event.get("id")) == "401704632")
+    assert bucks["league"] == "nba"
 
 
 def test_missing_league_falls_back_to_the_filename_with_a_warning(caplog):

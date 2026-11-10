@@ -23,7 +23,7 @@ The offline ESPN index now reads `tests/fixtures/espn/recorded/`. Event 40173643
 | US game date | `backend/app/services/csv_player_history.py` | Aware timestamps use `America/Los_Angeles`. Naive datetimes and date-only strings are unchanged. |
 | Rosters | `backend/app/services/lineup_source_support.py` | `_build_team_roster_cache`, `_get_team_roster_candidates`, `resolve_canonical_player_name`, and `normalize_source_players` take `league` (default `"nba"`). NBA and WNBA lists are not merged. |
 | Team codes | `backend/app/services/daily_analysis.py`, `scripts/agents/tools/historical.py` | `canonical_team_code` and `_team_code_from_name` take `league` (default `"nba"`). WNBA callers pass it through. Lynx → MIN and Wings → DAL only for `league="wnba"`. |
-| Schedule index | `backend/app/services/game_log_hygiene.py`, `backend/app/services/espn_schedule.py` | Overlay includes `recorded/`. `league` is an argument; a missing league logs a warning and uses the filename, and a filename with no prefix raises. `coalesce_game_type` maps blank, None, and missing to `regular_season`. WNBA Commissioner's Cup final is `cup_championship`. |
+| Schedule index | `backend/app/services/game_log_hygiene.py`, `backend/app/services/espn_schedule.py` | Overlay includes `recorded/`. An explicit `league` skips files for another league. A missing league logs a warning and uses the filename, and a filename with no prefix raises. `coalesce_game_type` maps blank, None, and missing to `regular_season`. A kickoff is indexed on both the Pacific and Eastern dates. WNBA Commissioner's Cup final is `cup_championship`. |
 | Fixtures | `tests/fixtures/espn/schedule_events.json`, `tests/fixtures/espn/recorded/wnba_team_5_schedule_2025_type_2.json` | Recorded ESPN bodies used by the offline index. Not edited. |
 | Tests | `backend/tests/test_spo104_one_sided_dd.py`, `backend/tests/test_spo104_game_log_hygiene.py`, `backend/tests/test_spo98_gaps.py` | One-sided and two-sided DD, Over/Under flags, cup final, league argument, blank GameType. SPO-98 xfails removed. |
 | Docs | `docs/progress.md` | SPO-104 row. |
@@ -68,9 +68,11 @@ TOR is the Raptors and the Tempo. One roster list made `T. Key` ambiguous. The d
 
 SPO-97 landed on `dev` as #30 while this branch was open, and this branch merges that tip. The parent glob `*_team_*_schedule_*_type_*.json` does not enter `recorded/`, so `load_schedule_events()` left 401736430 on the compact index's regular-season label and null competition. The recorded body has competition type `CC` / `commissioners-cup` and the headline `WNBA Commissioner's Cup Championship`. After the overlay, that id is `cup_championship`. `GAME_TYPE_NBA_CUP` is the same token.
 
-When `league` is omitted, the overlay logs a warning and reads the slug from `{league}_team_...`. A name with an empty prefix raises `ValueError`. Callers that know the league pass `league=`.
+When `league` is omitted, the overlay logs a warning and reads the slug from `{league}_team_...`. A name with an empty prefix raises `ValueError`. An explicit `league` only overlays files for that league. A file whose prefix is a different league is skipped, so `league="wnba"` leaves NBA event 401704632 labeled `nba`. A filename with no prefix still uses the explicit league.
 
-`coalesce_game_type` is the only blank-GameType rule: None, `""`, whitespace, and a missing cell are `regular_season`. Other tokens pass through.
+`coalesce_game_type` is the only blank-GameType rule: None, `""`, whitespace, and a missing cell are `regular_season`. Other tokens pass through. The player-history routes use that helper when they copy `game_type` onto a response row.
+
+The schedule join indexes each kickoff on both the Pacific date and the Eastern date. RealGM prints the arena-local date, and a 10:30pm Pacific tip (`2026-03-16T05:30:00Z`) is March 15 in Los Angeles and March 16 in New York. Either CSV cell joins that one event. `match` returns the event once for the date on the row.
 
 ## Tests
 
@@ -78,7 +80,7 @@ When `league` is omitted, the overlay logs a warning and reads the slug from `{l
 cd backend && pytest
 ```
 
-Local run with Redis down: 730 passed, 2 failed, 23 skipped, 0 xfailed. The extra skips are the SPO-101 live Odds API tests (`RUN_INTEGRATION` unset). The failures are the two known Redis cases named below. `pytest scripts/agents/tests`: 87 passed.
+Local run with Redis down: 763 passed, 2 failed, 23 skipped, 1 xfailed. The failure pair is the two known Redis cases named below. The remaining strict xfail is `test_agent_today_matches_the_pacific_game_date`. `pytest scripts/agents/tests`: 87 passed.
 
 New coverage:
 
@@ -98,6 +100,8 @@ The two Redis failures that already fail on `dev` when Redis is down are expecte
 
 ## Follow-ups
 
-- SPO-105 owns the frontend read of null `under_odds`, `line_is_synthetic`, `market_kind`, and `uses_prior`. This branch does not change the Zod schema. `consensus_uses_prior` and `consensus_prior_book_count` are on the consensus object for a mixed board.
+- #36 makes `under_odds` nullable in the frontend schema. It is merged into this branch from `origin/dev`, and it has to land before or together with this PR. Reverting the frontend ahead of this backend change would reject a null Under price.
+- A shared America/Los_Angeles "today" helper is not in this PR. `test_agent_today_matches_the_pacific_game_date` stays a strict xfail. The clocks that still use UTC or the process zone are `scripts/agents/tools/historical.py` (`_today_date_string`), `scripts/agents/date_utils.py` (`normalize_date("today")`), `daily_analysis.py`, `odds_snapshot_service.py`, the NBA events default, the WNBA date defaults, and the scheduler.
+- `test_spo104_one_sided_dd.py` still builds the Odds API `bookmakers` list in code from a response fixture. Switch that test, and the QA HTTP test, to a recorded `player_double_double` body once SPO-106 records one.
 - `cup_championship` stays in the canonical game-type set, so the final is kept and stays out of the default regular-season sample. `GAME_TYPE_NBA_CUP` is an alias of that token.
 - The snapshot table still stores the 0.5 sentinel in `line`. The new flags are on the no-vig response, not a new SQL column.

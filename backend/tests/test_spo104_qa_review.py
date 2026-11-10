@@ -285,10 +285,6 @@ def test_missing_consensus_is_json_null(client, one_sided, path, module):
 
 
 @pytest.mark.parametrize(("path", "module"), _ROUTES)
-@pytest.mark.xfail(
-    strict=True,
-    reason="SPO-104 QA: a No outcome with price null raises instead of the one-sided prior",
-)
 def test_null_no_price_outcome_stays_one_sided(client, one_sided, path, module):
     yes = next(row for row in one_sided["results"] if row["no_price"] is None)
     odds = {
@@ -333,10 +329,44 @@ def test_null_no_price_outcome_stays_one_sided(client, one_sided, path, module):
     assert row["uses_prior"] is True
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason="SPO-104 QA: a null No price crashes the snapshot binary parser",
-)
+@pytest.mark.parametrize(("path", "module"), _ROUTES)
+def test_null_yes_price_drops_the_row(client, one_sided, path, module):
+    yes = next(row for row in one_sided["results"] if row["no_price"] is None)
+    odds = {
+        "bookmakers": [
+            {
+                "key": yes["bookmaker"],
+                "markets": [
+                    {
+                        "key": one_sided["market"],
+                        "outcomes": [
+                            {
+                                "name": "Yes",
+                                "description": one_sided["player_name"],
+                                "price": None,
+                            }
+                        ],
+                    }
+                ],
+            }
+        ]
+    }
+    response = _post(
+        client,
+        module,
+        path,
+        odds,
+        {
+            "event_id": one_sided["event_id"],
+            "player_name": one_sided["player_name"],
+            "market": one_sided["market"],
+        },
+    )
+    assert response.status_code == 200, response.text
+    assert response.json()["results"] == []
+    assert response.json()["consensus"] is None
+
+
 def test_snapshot_parser_treats_null_no_price_as_missing(one_sided):
     yes = next(row for row in one_sided["results"] if row["no_price"] is None)
     market = {
@@ -410,10 +440,6 @@ def test_market_quote_skips_a_missing_under_price(player_points):
     assert posted
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason="SPO-104 QA: a null fair_under crashes the under-side probability average",
-)
 def test_market_quote_ignores_a_null_fair_under(player_points):
     from scripts.agents.tools.market import (
         _build_market_quote_for_line,
@@ -544,12 +570,17 @@ def test_pacific_offset_matches_the_game_date_helper():
         assert local.strftime("%Y-%m-%d") == _as_us_game_date(moment).isoformat()
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason="SPO-104 QA: schedule join still indexes the Eastern morning of a late Pacific tip",
-)
-def test_late_pacific_tip_is_indexed_only_on_the_pacific_date():
-    assert _local_dates(_instant("2026-03-16T05:30:00Z")) == {"2026-03-15"}
+def test_late_pacific_tip_is_indexed_on_both_arena_dates():
+    """One kickoff is indexed on the Pacific date and the Eastern date.
+
+    2026-03-16T05:30:00Z is 10:30pm Pacific on the 15th and 12:30am
+    Eastern on the 16th. A RealGM cell in either convention joins this
+    event. The two keys are not two games.
+    """
+    assert _local_dates(_instant("2026-03-16T05:30:00Z")) == {
+        "2026-03-15",
+        "2026-03-16",
+    }
 
 
 @pytest.mark.xfail(

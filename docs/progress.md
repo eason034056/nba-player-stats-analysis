@@ -4,6 +4,10 @@
 
 ## Shipped
 
+### SPO-105 — frontend review fixes
+
+Shipped on `dev` in #36. The in-flight row that came in with the merge still said the branch was open. `under_odds` is nullable in the frontend schema. This PR lands with that change.
+
 ### SPO-101 — event-page integration tests
 
 Shipped on `dev` in #34. The progress row that came in with the merge still said the pull request was awaiting squash-merge.
@@ -100,10 +104,9 @@ Stale pull requests the owner is closing. Not merged.
 | Ticket | Note |
 |---|---|
 | SPO-96 | This docs rewrite (`feature/SPO-96-claude-md-workflow-rewrite`). |
-| SPO-104 | One-sided DD quotes (`under_odds` / `p_under_imp` null, `line_is_synthetic`, `market_kind`, `uses_prior`), league-scoped team codes, and the SPO-97 schedule-index follow-ups. PR into `dev` from `feature/SPO-104-dd-one-sided-and-followups`. Summary: `docs/task-summaries/SPO-104-dd-one-sided-and-followups.md`. |
+| SPO-104 | One-sided DD quotes (`under_odds` / `p_under_imp` null, including a JSON null No price; `line_is_synthetic`, `market_kind`, `uses_prior`), league-scoped team codes, and the SPO-97 schedule-index follow-ups. Lands with #36. PR #37 into `dev`. Summary: `docs/task-summaries/SPO-104-dd-one-sided-and-followups.md`. |
 | SPO-102 | Wire `PlayerDDTile` to double-double history and yes/no odds. Open on `feature/SPO-102-player-dd-tile-wiring`. Summary: `docs/task-summaries/SPO-102-player-dd-tile-wiring.md`. |
 | SPO-103 | SPO-10 Phase 5 final review. Open. |
-| SPO-105 | Frontend fixes from the SPO-103 review. Open on `feature/SPO-105-frontend-review-fixes`. Summary: `docs/task-summaries/SPO-105-frontend-review-fixes.md`. |
 
 ## Not classified
 

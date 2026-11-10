@@ -541,11 +541,11 @@ class TestReReviewEdges:
         assert team_from_game_logs(logs, "2020-01-01") == "Wings"
 
     def test_pacific_late_tip_stays_on_the_us_game_date(self, nba_service):
-        # 2026-03-16T06:30:00Z is 10:30pm Pacific on the 15th. The published
+        # 2026-03-16T05:30:00Z is 10:30pm Pacific on the 15th (PDT). The published
         # file dropped that G League row, so the two-club log is what still
         # has Remix that night. The UTC calendar day is the Blazers game.
         logs = _kent_two_club_logs()
-        assert team_from_game_logs(logs, "2026-03-16T06:30:00Z") == "Remix"
+        assert team_from_game_logs(logs, "2026-03-16T05:30:00Z") == "Remix"
         pacific = datetime(2026, 3, 15, 22, 30, tzinfo=ZoneInfo("America/Los_Angeles"))
         assert team_from_game_logs(logs, pacific) == "Remix"
         assert team_from_game_logs(logs, "2026-03-16") == "Trail Blazers"
@@ -553,7 +553,7 @@ class TestReReviewEdges:
         assert {row["team"] for row in shipped} == {"Trail Blazers"}
         historical = _historical()
         late = historical.get_lineup_context(
-            "Jayson Kent", "2026-03-16T06:30:00Z", league="nba"
+            "Jayson Kent", "2026-03-16T05:30:00Z", league="nba"
         )
         # US game date is the 15th, before every remaining canonical game.
         assert late["details"].get("error") == "no data"
