@@ -9,6 +9,8 @@ Includes:
 This is the core functional module of the application.
 """
 
+import logging
+
 from fastapi import APIRouter, HTTPException, Query, Request
 from datetime import datetime, timezone, timedelta, time
 from typing import List, Optional
@@ -29,6 +31,7 @@ from app.models.schemas import (
     HistogramBin,
     GameLog
 )
+from app.services.daily_analysis import attach_top_reads, load_stored_top_reads
 from app.services.odds_theoddsapi import odds_provider
 from app.services.odds_provider import OddsAPIError
 from app.services.cache import cache_service, CacheService
@@ -65,6 +68,26 @@ router = APIRouter(
     prefix="/api/nba",
     tags=["nba"]
 )
+
+logger = logging.getLogger(__name__)
+
+
+async def _events_with_top_reads(
+    response: EventsResponse,
+    offset_minutes: int,
+) -> EventsResponse:
+    """Attach the best stored NBA pick to each event.
+
+    Reads the daily-picks cache for this date and timezone. It does not
+    run analysis and does not call the Odds API. A join failure leaves
+    every top_read null so the event list still returns.
+    """
+    try:
+        reads = await load_stored_top_reads(response.date, offset_minutes)
+    except Exception:
+        logger.exception("NBA top_read join failed for %s", response.date)
+        return response
+    return attach_top_reads(response, reads)
 
 
 def _snapshot_metadata(snapshot: MarketSnapshotResult) -> dict:
@@ -327,7 +350,8 @@ async def get_events(
                     "sport_key": "basketball_nba",
                     "home_team": "Los Angeles Lakers",
                     "away_team": "Golden State Warriors",
-                    "commence_time": "2026-01-15T01:00:00Z"
+                    "commence_time": "2026-01-15T01:00:00Z",
+                    "top_read": null
                 }
             ]
         }
@@ -347,8 +371,12 @@ async def get_events(
     cached_data = await cache_service.get(cache_key)
     
     if cached_data:
-        # Cache hit
-        return EventsResponse(**cached_data)
+        # Cache hit. top_read is joined after the read so a fresher
+        # daily-picks cache is not stuck behind the events TTL.
+        return await _events_with_top_reads(
+            EventsResponse(**cached_data),
+            offset_minutes,
+        )
     
     # 2. Cache miss, call external API
     try:
@@ -413,14 +441,16 @@ async def get_events(
             events=events
         )
         
-        # 5. Store in cache
+        # 5. Store the event list. top_read is joined on the way out and
+        # is not part of this payload's freshness: the next read joins
+        # whatever daily picks are stored for this date and offset.
         await cache_service.set(
             cache_key,
             response.model_dump(mode='json'),
             ttl=settings.cache_ttl_events
         )
-        
-        return response
+
+        return await _events_with_top_reads(response, offset_minutes)
         
     except OddsAPIError as e:
         raise HTTPException(

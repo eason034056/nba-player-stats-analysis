@@ -336,9 +336,15 @@ class TestAnalyzeSingleEvent:
         assert points_pick.projected_value == 30.1
         assert points_pick.edge == round(30.1 - 28.5, 2)
 
-    def test_filters_out_players_with_fewer_than_10_games(self):
+    def test_filters_out_players_below_the_stored_sample_floor(self):
+        """Fewer than 5 games are not stored.
+
+        5–9 game rows are stored for the default NBA service and hidden
+        by the query default of 10. That split is covered in
+        test_spo111_read_data.
+        """
         service = self._build_service(
-            csv_stats=_default_csv_stats(p_over=0.80, n_games=5),
+            csv_stats=_default_csv_stats(p_over=0.80, n_games=4),
         )
 
         picks, _, _ = asyncio.run(
@@ -571,7 +577,9 @@ class TestAnalyzeSingleEvent:
         assert all(p.direction == "over" for p in picks)
 
     def test_threshold_boundary_just_below_065(self):
-        """Probability at 0.6499 should NOT be included."""
+        """0.6499 is stored as Lean and is off the default 0.65 board."""
+        from app.services.daily_analysis import select_daily_picks
+
         service = self._build_service(
             csv_stats=_default_csv_stats(p_over=0.6499, p_under=0.3001, n_games=15),
         )
@@ -586,7 +594,10 @@ class TestAnalyzeSingleEvent:
             )
         )
 
-        assert len(picks) == 0
+        assert len(picks) > 0
+        assert all(p.tier == "Lean" for p in picks)
+        assert all(p.direction == "over" for p in picks)
+        assert select_daily_picks(picks) == []
 
 
 # ===========================================================================
@@ -1107,3 +1118,6 @@ class TestPickFields:
         assert pick.all_lines == sorted([15.5, 16.5, 15.5])
         assert pick.player_team == "Heat"
         assert pick.player_team_code == "MIA"
+        assert pick.p_over == 0.80
+        assert pick.p_under == 0.15
+        assert pick.tier == "Strong play"

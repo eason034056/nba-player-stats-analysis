@@ -37,7 +37,13 @@ from app.services.csv_player_history import (
 from app.services.prob import calculate_mode_threshold
 from app.services.cache import cache_service
 from app.services.projection_service import projection_service
-from app.models.schemas import DailyPick, DailyPicksResponse, AnalysisStats
+from app.models.schemas import (
+    AnalysisStats,
+    DailyPick,
+    DailyPicksResponse,
+    EventsResponse,
+    TopRead,
+)
 
 
 # ==================== League routing (SPO-35) ====================
@@ -137,6 +143,27 @@ BINARY_MARKETS = [
     ("player_double_double", "dd"),
 ]
 
+# CSV metric key -> Odds API market key. DailyPick.metric stores the CSV
+# key. top_read.market and the no-vig request use the Odds API key.
+_METRIC_TO_MARKET_KEY: Dict[str, str] = {
+    metric: market for market, metric in (*SUPPORTED_MARKETS, *BINARY_MARKETS)
+}
+
+
+def market_key_for_metric(metric: str) -> str:
+    """Return the Odds API market key for a daily-pick metric.
+
+    ``points`` becomes ``player_points``. An unknown metric is returned
+    unchanged so this helper does not invent a market key.
+
+    Args:
+        metric: CSV / DailyPick metric key.
+
+    Returns:
+        Odds API market key when the metric is known.
+    """
+    return _METRIC_TO_MARKET_KEY.get(metric, metric)
+
 
 # Alias map: CSV metric key -> SportsDataIO projection field name.
 # Most metrics use the same key in both places (points, rebounds, etc.) but
@@ -163,7 +190,47 @@ HIGH_PROBABILITY_THRESHOLD = 0.65
 
 # Minimum non-DNP games before a historical rate can become a pick.
 # The walk-forward harness imports this so it gates on the same sample size.
+# The NBA daily-picks query uses this as its default, not as the storage floor.
 MIN_SAMPLE_GAMES = 10
+
+# Read tiers for a stored pick. Frontend has no readTier helper (searched
+# frontend/ on 2026-11-10). Strong / Playable match the picks-page buckets
+# (high at 0.70, medium from 0.65). Lean is the floor added here. Highest
+# cutoff is first; read_tier stops at the first match.
+# See docs/decisions/spo-111-read-data/decision_20261110_read-tier-cutoffs.md.
+READ_TIER_CUTOFFS: tuple[tuple[str, float], ...] = (
+    ("Strong play", 0.70),
+    ("Playable", 0.65),
+    ("Lean", 0.56),
+)
+
+# NBA candidate storage stops at the Lean cutoff. The published board is
+# still HIGH_PROBABILITY_THRESHOLD, applied when the query is served.
+LEAN_PROBABILITY_FLOOR = READ_TIER_CUTOFFS[-1][1]
+
+# Lowest sample the NBA daily-picks query accepts (Query ge=5). Default NBA
+# storage keeps rows down to this count. The default query still asks for
+# MIN_SAMPLE_GAMES, so those shorter rows stay off the default board.
+STORED_MIN_SAMPLE_GAMES = 5
+
+
+def read_tier(probability: float | None) -> str | None:
+    """Map a pick probability onto a read tier.
+
+    Args:
+        probability: Chosen-side historical rate, or None.
+
+    Returns:
+        ``"Strong play"`` when probability >= 0.70, ``"Playable"`` when
+        probability >= 0.65, ``"Lean"`` when probability >= 0.56, or None
+        below that cutoff and when probability is missing.
+    """
+    if probability is None:
+        return None
+    for name, cutoff in READ_TIER_CUTOFFS:
+        if probability >= cutoff:
+            return name
+    return None
 
 
 def choose_daily_pick_side(
@@ -200,6 +267,70 @@ DAILY_PICKS_CACHE_KEY = "daily_picks"
 
 # Cache TTL (15 minutes)
 DAILY_PICKS_CACHE_TTL = 15 * 60
+
+
+def daily_picks_cache_key(league: str, date: str, tz_offset_minutes: int) -> str:
+    """Redis key for one league, local date, and timezone offset.
+
+    Args:
+        league: ``nba`` or ``wnba``.
+        date: Local date YYYY-MM-DD.
+        tz_offset_minutes: Minutes east of UTC. UTC+8 is 480.
+
+    Returns:
+        ``daily_picks:{league}:{date}:tz{offset}``.
+    """
+    return f"{DAILY_PICKS_CACHE_KEY}:{league.lower()}:{date}:tz{tz_offset_minutes}"
+
+
+def select_daily_picks(
+    picks: List[DailyPick],
+    min_probability: float = HIGH_PROBABILITY_THRESHOLD,
+    min_games: int = MIN_SAMPLE_GAMES,
+) -> List[DailyPick]:
+    """Keep picks that clear the query floors.
+
+    The stored list can include Lean rows and short NBA samples. This is
+    the filter the daily-picks route applies. Defaults are the published
+    board: probability 0.65 and 10 games.
+
+    Args:
+        picks: Stored picks, highest probability first.
+        min_probability: Inclusive probability floor.
+        min_games: Inclusive sample floor.
+
+    Returns:
+        Picks that meet both floors, in the original order.
+    """
+    return [
+        pick
+        for pick in picks
+        if pick.probability >= min_probability and pick.n_games >= min_games
+    ]
+
+
+def present_daily_picks(
+    result: DailyPicksResponse,
+    min_probability: float = HIGH_PROBABILITY_THRESHOLD,
+    min_games: int = MIN_SAMPLE_GAMES,
+) -> DailyPicksResponse:
+    """Return a copy of ``result`` whose picks match the query floors.
+
+    ``stats.high_prob_count`` stays the published-board count written at
+    analysis time. ``total_picks`` becomes the filtered length. The stored
+    object is not mutated, so a later lower ``min_probability`` still sees
+    the Lean rows that were cached.
+
+    Args:
+        result: Stored analysis, including candidates below the board.
+        min_probability: Inclusive probability floor.
+        min_games: Inclusive sample floor.
+
+    Returns:
+        Response the route can send.
+    """
+    filtered = select_daily_picks(result.picks, min_probability, min_games)
+    return result.model_copy(update={"picks": filtered, "total_picks": len(filtered)})
 
 TEAM_CODE_ALIASES: Dict[str, str] = {
     "ATL": "ATL",
@@ -351,15 +482,79 @@ class DailyAnalysisService:
     5. Return picks sorted by probability
     """
 
-    def __init__(self, probability_threshold: float = HIGH_PROBABILITY_THRESHOLD):
+    def __init__(self, probability_threshold: float | None = None):
         """
-        Initialize the analysis service
+        Initialize the analysis service.
 
         Args:
-            probability_threshold: High probability threshold, default 0.65 (65%)
+            probability_threshold: When set, this cutoff is the only storage
+                gate and the sample floor stays ``MIN_SAMPLE_GAMES``. When
+                omitted, NBA storage uses the Lean floor and
+                ``STORED_MIN_SAMPLE_GAMES``. WNBA stays on 0.65 and 10 games
+                either way. The default HTTP query, not this constructor, is
+                what the published board shows.
         """
-        self.probability_threshold = probability_threshold
+        if probability_threshold is None:
+            self.probability_threshold = HIGH_PROBABILITY_THRESHOLD
+            self._explicit_probability_threshold = False
+        else:
+            self.probability_threshold = probability_threshold
+            self._explicit_probability_threshold = True
         self.csv_service = csv_player_service
+
+    def _candidate_min_games(self, league: str) -> int:
+        """Sample floor for a row that can be stored.
+
+        The default NBA service stores down to ``STORED_MIN_SAMPLE_GAMES``
+        so the query's ``min_games`` can go below 10. WNBA, and a service
+        constructed with an explicit probability threshold, keep
+        ``MIN_SAMPLE_GAMES``.
+
+        Args:
+            league: ``nba`` or ``wnba``.
+
+        Returns:
+            Inclusive minimum ``n_games``.
+        """
+        if league.lower() == "nba" and not self._explicit_probability_threshold:
+            return STORED_MIN_SAMPLE_GAMES
+        return MIN_SAMPLE_GAMES
+
+    def _choose_stored_side(
+        self,
+        p_over: float | None,
+        p_under: float | None,
+        league: str,
+    ) -> tuple[str | None, float | None]:
+        """Choose the side written onto a stored pick.
+
+        The published side is chosen at ``HIGH_PROBABILITY_THRESHOLD``.
+        Over wins when both sides clear that bar. The default NBA service
+        tries the Lean floor only after that first choice misses. Trying
+        Lean first would store a 0.57 over and drop a 0.90 under, and the
+        default query would then lose the under. WNBA and an explicit
+        threshold use one cutoff only.
+
+        Args:
+            p_over: Share of prior games strictly above the line.
+            p_under: Share of prior games strictly below the line.
+            league: ``nba`` or ``wnba``.
+
+        Returns:
+            ``("over"|"under", rate)`` or ``(None, None)``.
+        """
+        if league.lower() != "nba" or self._explicit_probability_threshold:
+            return choose_daily_pick_side(
+                p_over, p_under, self.probability_threshold
+            )
+        side, probability = choose_daily_pick_side(
+            p_over,
+            p_under,
+            HIGH_PROBABILITY_THRESHOLD,
+        )
+        if side is not None:
+            return side, probability
+        return choose_daily_pick_side(p_over, p_under, LEAN_PROBABILITY_FLOOR)
 
     async def run_daily_analysis(
         self,
@@ -414,8 +609,8 @@ class DailyAnalysisService:
         # have produced cross-league collisions once WNBA shipped. They roll
         # off naturally within 15 min (DAILY_PICKS_CACHE_TTL).
         if use_cache:
-            cache_key = (
-                f"{DAILY_PICKS_CACHE_KEY}:{league_normalized}:{date}:tz{tz_offset_minutes}"
+            cache_key = daily_picks_cache_key(
+                league_normalized, date, tz_offset_minutes
             )
             cached_data = await cache_service.get(cache_key)
             if cached_data:
@@ -511,13 +706,17 @@ class DailyAnalysisService:
         # 4. Sort picks by probability (descending)
         all_picks.sort(key=lambda x: x.probability, reverse=True)
 
-        # 5. Calculate statistics
+        # 5. Calculate statistics. high_prob_count stays the published
+        # board (0.65 and 10 games) even when NBA storage also kept Lean
+        # rows and shorter samples. The default query then reports the
+        # same total_picks as this count.
         duration = time.time() - start_time
+        published_count = len(select_daily_picks(all_picks))
         stats = AnalysisStats(
             total_events=len(events),
             total_players=total_players,
             total_props=total_props,
-            high_prob_count=len(all_picks),
+            high_prob_count=published_count,
             analysis_duration_seconds=round(duration, 2)
         )
 
@@ -534,8 +733,9 @@ class DailyAnalysisService:
         # 7. Store in cache (league + timezone scoped). Even when
         # use_cache=False (force-refresh), still write so the next GET
         # gets the latest analysis without re-triggering the work.
-        cache_key = (
-            f"{DAILY_PICKS_CACHE_KEY}:{league_normalized}:{date}:tz{tz_offset_minutes}"
+        # The cached list is the candidate set. GET applies the query floors.
+        cache_key = daily_picks_cache_key(
+            league_normalized, date, tz_offset_minutes
         )
         await cache_service.set(
             cache_key,
@@ -724,8 +924,19 @@ class DailyAnalysisService:
                     p_under = history_stats.get("p_under")
                     n_games = history_stats.get("n_games", 0)
 
-                    # Same floor the walk-forward harness imports.
-                    if n_games < MIN_SAMPLE_GAMES:
+                    # Published board stays at MIN_SAMPLE_GAMES via the query.
+                    # Default NBA storage keeps a shorter sample so min_games
+                    # can ask for it. WNBA stays at MIN_SAMPLE_GAMES.
+                    if n_games < self._candidate_min_games(league):
+                        continue
+
+                    # Published side first (0.65). Lean is only the fallback
+                    # for the default NBA service, so a 0.90 under is not
+                    # replaced by a 0.57 over.
+                    side, side_probability = self._choose_stored_side(
+                        p_over, p_under, league
+                    )
+                    if side is None or side_probability is None:
                         continue
 
                     # === Integrate projection data (Value Edge Detection) ===
@@ -767,77 +978,42 @@ class DailyAnalysisService:
                     if projected_value is not None and mode_threshold is not None:
                         edge = round(projected_value - mode_threshold, 2)
 
-                    # Check if it passes probability threshold.
-                    # OVER is preferred when both sides clear it.
-                    side, _side_probability = choose_daily_pick_side(
-                        p_over,
-                        p_under,
-                        self.probability_threshold,
+                    pick = DailyPick(
+                        player_name=player_name,
+                        player_team=player_team,
+                        player_team_code=player_team_code,
+                        event_id=event_id,
+                        home_team=home_team,
+                        away_team=away_team,
+                        commence_time=commence_time,
+                        metric=metric_key,
+                        threshold=mode_threshold,
+                        direction=side,
+                        probability=side_probability,
+                        n_games=n_games,
+                        bookmakers_count=len(lines),
+                        all_lines=sorted(lines),
+                        has_projection=has_projection,
+                        projected_value=round(projected_value, 2) if projected_value is not None else None,
+                        projected_minutes=round(projected_minutes, 1) if projected_minutes is not None else None,
+                        edge=edge,
+                        opponent_rank=opponent_rank,
+                        opponent_position_rank=opponent_position_rank,
+                        injury_status=injury_status,
+                        lineup_confirmed=lineup_confirmed,
+                        tier=read_tier(side_probability),
+                        p_over=round(p_over, 4) if p_over is not None else None,
+                        p_under=round(p_under, 4) if p_under is not None else None,
                     )
-                    if side == "over":
-                        pick = DailyPick(
-                            player_name=player_name,
-                            player_team=player_team,
-                            player_team_code=player_team_code,
-                            event_id=event_id,
-                            home_team=home_team,
-                            away_team=away_team,
-                            commence_time=commence_time,
-                            metric=metric_key,
-                            threshold=mode_threshold,
-                            direction="over",
-                            probability=round(p_over, 4),
-                            n_games=n_games,
-                            bookmakers_count=len(lines),
-                            all_lines=sorted(lines),
-                            # Projection data
-                            has_projection=has_projection,
-                            projected_value=round(projected_value, 2) if projected_value is not None else None,
-                            projected_minutes=round(projected_minutes, 1) if projected_minutes is not None else None,
-                            edge=edge,
-                            opponent_rank=opponent_rank,
-                            opponent_position_rank=opponent_position_rank,
-                            injury_status=injury_status,
-                            lineup_confirmed=lineup_confirmed,
-                        )
-                        picks.append(pick)
+                    picks.append(pick)
 
-                        # Print log with edge info
-                        edge_str = f" (edge: {edge:+.1f})" if edge is not None else ""
-                        min_str = f" [{projected_minutes:.0f}min]" if projected_minutes is not None else ""
-                        print(f"  ✨ {player_name} ({player_team}) {metric_key} OVER {mode_threshold}: {p_over:.1%}{edge_str}{min_str}")
-
-                    elif side == "under":
-                        pick = DailyPick(
-                            player_name=player_name,
-                            player_team=player_team,
-                            player_team_code=player_team_code,
-                            event_id=event_id,
-                            home_team=home_team,
-                            away_team=away_team,
-                            commence_time=commence_time,
-                            metric=metric_key,
-                            threshold=mode_threshold,
-                            direction="under",
-                            probability=round(p_under, 4),
-                            n_games=n_games,
-                            bookmakers_count=len(lines),
-                            all_lines=sorted(lines),
-                            # Projection data
-                            has_projection=has_projection,
-                            projected_value=round(projected_value, 2) if projected_value is not None else None,
-                            projected_minutes=round(projected_minutes, 1) if projected_minutes is not None else None,
-                            edge=edge,
-                            opponent_rank=opponent_rank,
-                            opponent_position_rank=opponent_position_rank,
-                            injury_status=injury_status,
-                            lineup_confirmed=lineup_confirmed,
-                        )
-                        picks.append(pick)
-
-                        edge_str = f" (edge: {edge:+.1f})" if edge is not None else ""
-                        min_str = f" [{projected_minutes:.0f}min]" if projected_minutes is not None else ""
-                        print(f"  ✨ {player_name} ({player_team}) {metric_key} UNDER {mode_threshold}: {p_under:.1%}{edge_str}{min_str}")
+                    edge_str = f" (edge: {edge:+.1f})" if edge is not None else ""
+                    min_str = f" [{projected_minutes:.0f}min]" if projected_minutes is not None else ""
+                    print(
+                        f"  ✨ {player_name} ({player_team}) {metric_key} "
+                        f"{side.upper()} {mode_threshold}: {side_probability:.1%}"
+                        f"{edge_str}{min_str}"
+                    )
 
             except OddsAPIError as e:
                 print(f"  ⚠️ Failed to fetch {market_key}: {e}")
@@ -930,6 +1106,107 @@ class DailyAnalysisService:
                         player_lines[player_name].append(float(line))
 
         return dict(player_lines)
+
+
+def best_top_reads(cached: Any) -> Dict[str, TopRead]:
+    """Pick the highest-probability stored pick for each event.
+
+    The cache payload is the JSON written by ``run_daily_analysis``.
+    Equal probabilities keep the earlier row. Analysis sorts by
+    probability descending, so a tie keeps the row that was stored first.
+
+    Args:
+        cached: Daily-picks cache document, or anything that is not one.
+
+    Returns:
+        Map of event_id to ``TopRead``. Empty when nothing is stored.
+    """
+    if not isinstance(cached, dict):
+        return {}
+
+    best: Dict[str, Dict[str, Any]] = {}
+    for pick in cached.get("picks") or []:
+        if not isinstance(pick, dict):
+            continue
+        event_id = pick.get("event_id")
+        player = pick.get("player_name")
+        side = pick.get("direction")
+        if not event_id or not player or side not in ("over", "under"):
+            continue
+        try:
+            probability = float(pick["probability"])
+            line = float(pick["threshold"])
+        except (KeyError, TypeError, ValueError):
+            continue
+        current = best.get(str(event_id))
+        if current is not None and probability <= current["probability"]:
+            continue
+        best[str(event_id)] = {
+            "player": str(player),
+            "market": market_key_for_metric(str(pick.get("metric") or "")),
+            "side": side,
+            "line": line,
+            "probability": probability,
+        }
+
+    return {
+        event_id: TopRead(
+            player=row["player"],
+            market=row["market"],
+            side=row["side"],
+            line=row["line"],
+            probability=row["probability"],
+        )
+        for event_id, row in best.items()
+    }
+
+
+def attach_top_reads(
+    response: EventsResponse,
+    reads: Dict[str, TopRead],
+) -> EventsResponse:
+    """Copy ``response`` with ``top_read`` set from ``reads``.
+
+    Events with no stored pick get null. The input response is not mutated.
+
+    Args:
+        response: Event list already filtered to the requested date.
+        reads: Best stored pick per event_id.
+
+    Returns:
+        Event list the NBA events route can send.
+    """
+    events = [
+        event.model_copy(update={"top_read": reads.get(event.event_id)})
+        for event in response.events
+    ]
+    return response.model_copy(update={"events": events})
+
+
+async def load_stored_top_reads(
+    date: str,
+    tz_offset_minutes: int,
+) -> Dict[str, TopRead]:
+    """Read the NBA daily-picks cache and index it by event.
+
+    This does not run analysis and does not call the Odds API. A cache
+    miss, including a Redis error that ``CacheService.get`` turns into
+    None, yields an empty map so every event's ``top_read`` stays null.
+
+    Args:
+        date: Local date YYYY-MM-DD. Must be the same date the events
+            request used.
+        tz_offset_minutes: Same offset the events request used. Daily
+            picks are cached per offset, and a different offset is a
+            different local slate.
+
+    Returns:
+        Best stored pick per event_id.
+    """
+    cached = await cache_service.get(
+        daily_picks_cache_key("nba", date, tz_offset_minutes)
+    )
+    return best_top_reads(cached)
 
 
 # Create a global service instance
