@@ -1,0 +1,31 @@
+{
+  "date": "2026-11-10",
+  "analyzed_at": "2026-11-10T18:00:00Z",
+  "total_picks": 1,
+  "picks": [
+    {
+      "player_name": "Bam Adebayo",
+      "player_team": "Heat",
+      "player_team_code": "MIA",
+      "event_id": "evt-mia-bos",
+      "home_team": "Miami Heat",
+      "away_team": "Boston Celtics",
+      "commence_time": "2026-11-11T00:30:00Z",
+      "metric": "points",
+      "threshold": 18.5,
+      "direction": "over",
+      "probability": 0.72,
+      "n_games": 40,
+      "bookmakers_count": 4,
+      "all_lines": [18.5, 18.5, 19.5],
+      "has_projection": true,
+      "projected_value": 20.4,
+      "projected_minutes": 34,
+      "edge": 1.9,
+      "opponent_rank": 22,
+      "opponent_position_rank": 9,
+      "injury_status": null,
+      "lineup_confirmed": null
+    }
+  ]
+}

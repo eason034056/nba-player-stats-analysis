@@ -1,0 +1,23 @@
+{
+  "date": "2026-11-10",
+  "team": "BOS",
+  "opponent": "MIA",
+  "home_or_away": "",
+  "status": "projected",
+  "starters": ["Jayson Tatum", "Jrue Holiday", "Kristaps Porzingis", "Al Horford", "Payton Pritchard"],
+  "bench_candidates": ["Sam Hauser"],
+  "sources": ["rotowire"],
+  "source_disagreement": false,
+  "confidence": "high",
+  "updated_at": "2026-11-10T17:00:00Z",
+  "source_snapshots": {
+    "rotowire": {
+      "team": "BOS",
+      "opponent": "MIA",
+      "home_or_away": "",
+      "status": "confirmed",
+      "starters": ["Jayson Tatum", "Jrue Holiday", "Kristaps Porzingis", "Al Horford", "Payton Pritchard"],
+      "bench_candidates": ["Sam Hauser"]
+    }
+  }
+}

@@ -22,8 +22,10 @@ Numbers come from the events, daily-picks, suggest, lineup, no-vig, player-histo
 | `frontend/components/event/EventTabs.tsx` | Mobile tabs. `?tab=` opens one of them. |
 | `frontend/lib/event-page.ts` | View models: chips, signals, rows, chart, slip seeds. |
 | `frontend/lib/api.ts` | `getWNBATeamLineup` for `GET /api/wnba/lineups/{team}`. |
-| `frontend/lib/event-page.test.ts` | Lineup, signals, rows, chart, slip, clock. |
+| `frontend/lib/event-page.test.ts` | Lineup, signals, rows, chart, slip, clock. Payloads come from `frontend/test/fixtures/event/`. |
 | `frontend/components/event/event-ui.test.tsx` | Data, empty, loading, error, missing signal, WNBA. |
+| `frontend/components/EventDetail.fixtures.test.tsx` | NBA and WNBA pages rendered from those fixtures. Ask the agent calls `openWidget()`. |
+| `frontend/test/fixtures/event/` | Events, picks, suggest, lineups, history, no-vig, and the NBA projection. |
 | `frontend/app/event/[eventId]/page.test.tsx` | MarketSelect mock keeps `isBinaryMarket`. |
 | `docs/progress.md` | SPO-110b row. |
 
@@ -43,7 +45,7 @@ Suggest returns names only. A no-vig request per name would call the odds provid
 
 ## Tests / Verification
 
-- `npx vitest run` — 34 files, 224 tests, passed (`TZ=America/Chicago`), after merging the latest `feature/SPO-110a-design-system-shell-today`.
+- `npx vitest run` — 35 files, 231 tests, passed (`TZ=America/Chicago`), after merging `720cddc` and `1dde92c` from `feature/SPO-110a-design-system-shell-today`.
 - `npx tsc --noEmit` — passed.
 - `npm run lint` — passed, 0 warnings.
 
@@ -77,6 +79,8 @@ Suggest returns names only. A no-vig request per name would call the odds provid
 | Chart loading, error, empty | `shows loading, error, and empty copy` |
 | Venue disabled | `disables venue because home and away are not on the game log` |
 | Route date | `uses the route date when fetching events for the detail page` |
+| NBA page from fixture JSON, Ask opens the agent | `reads the NBA game from the fixture payloads and opens the agent` |
+| WNBA page from fixture JSON, no NBA projection call | `reads the WNBA game from the WNBA fixtures` |
 | 3PM highlight, no DD edge on 0.5 | `highlights 3PM on its own card and does not edge a double-double against 0.5` |
 
 Screenshots in `docs/task-summaries/SPO-110b-screenshots/` are the running app against a local fixture API. Players are Bam Adebayo, Tyler Herro, Jayson Tatum, A'ja Wilson, Breanna Stewart, and Jackie Young.

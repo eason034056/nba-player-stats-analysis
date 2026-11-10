@@ -9,22 +9,19 @@ import { OurRead } from "@/components/event/OurRead";
 import { PlayerRail } from "@/components/event/PlayerRail";
 import { StatChips } from "@/components/event/StatChips";
 import { buildOurRead, buildReadSignals, gameLogChart, lineupChip } from "@/lib/event-page";
-import type { GameLog } from "@/lib/schemas";
+import { dailyPicksResponseSchema, playerHistoryResponseSchema } from "@/lib/schemas";
+import nbaHistoryFixture from "@/test/fixtures/event/nba-history-bam.json";
+import wnbaPicksFixture from "@/test/fixtures/event/wnba-daily-picks.json";
 import { renderWithProviders } from "@/test/test-utils";
 
 const noop = vi.fn();
+const bamHistory = playerHistoryResponseSchema.parse(nbaHistoryFixture);
+const wilsonPick = dailyPicksResponseSchema.parse(wnbaPicksFixture).picks[0];
 
-function log(date: string, value: number): GameLog {
-  return {
-    date: "11/01",
-    date_full: date,
-    opponent: "BOS",
-    value,
-    is_over: value > 18.5,
-    team: "MIA",
-    minutes: 30,
-    is_starter: true,
-  };
+function logOn(dateFull: string) {
+  const game = bamHistory.game_logs.find((row) => row.date_full === dateFull);
+  if (!game) throw new Error(`missing game ${dateFull}`);
+  return game;
 }
 
 describe("EventHeader", () => {
@@ -177,8 +174,8 @@ describe("OurRead", () => {
     commenceTime: "2026-11-11T00:00:00Z",
     team: "LVA",
     position: null,
-    line: 22.5,
-    pick: null,
+    line: wilsonPick.threshold,
+    pick: wilsonPick,
     consensus: null,
     last10: [],
     history: null,
@@ -202,6 +199,7 @@ describe("OurRead", () => {
     expect(screen.getByText(/A'ja Wilson/)).toBeInTheDocument();
     expect(screen.getByText(/Projection is not available for WNBA/)).toBeInTheDocument();
     expect(screen.queryByText(/supports|neutral|against/i)).not.toBeInTheDocument();
+    expect(screen.getByText("Playable")).toBeInTheDocument();
     expect(screen.queryByText("Strong play")).not.toBeInTheDocument();
   });
 
@@ -271,7 +269,7 @@ describe("OurRead", () => {
 
 describe("GameLogChart", () => {
   it("renders bars for fixture games", () => {
-    const model = gameLogChart([log("2026-11-01", 24), log("2026-11-03", 16)], 18.5);
+    const model = gameLogChart([logOn("2026-11-10"), logOn("2026-11-09")], 18.5);
     renderWithProviders(
       <GameLogChart
         model={model}

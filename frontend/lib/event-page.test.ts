@@ -10,116 +10,45 @@ import {
   lineupChip,
   postedLine,
 } from "@/lib/event-page";
-import type { DailyPick, GameLog, PlayerHistoryResponse, TeamLineup } from "@/lib/schemas";
+import {
+  dailyPicksResponseSchema,
+  noVigResponseSchema,
+  playerHistoryResponseSchema,
+  teamLineupSchema,
+  type DailyPick,
+} from "@/lib/schemas";
+import nbaPicksFixture from "@/test/fixtures/event/nba-daily-picks.json";
+import nbaHistoryFixture from "@/test/fixtures/event/nba-history-bam.json";
+import confirmedLineupFixture from "@/test/fixtures/event/nba-lineup-confirmed.json";
+import mixedLineupFixture from "@/test/fixtures/event/nba-lineup-mixed.json";
+import nbaNoVigFixture from "@/test/fixtures/event/nba-no-vig-bam.json";
+import syntheticNoVigFixture from "@/test/fixtures/event/nba-no-vig-synthetic.json";
 
-function lineup(
-  status: TeamLineup["status"],
-  snapshots: Array<{ source: string; status: string }>,
-): TeamLineup {
-  return {
-    date: "2026-11-10",
-    team: "MIA",
-    opponent: "BOS",
-    home_or_away: "HOME",
-    status,
-    starters: ["Bam Adebayo"],
-    bench_candidates: ["Kevin Love"],
-    sources: snapshots.map((item) => item.source),
-    source_disagreement: false,
-    confidence: "high",
-    updated_at: "2026-11-10T18:00:00Z",
-    source_snapshots: Object.fromEntries(
-      snapshots.map((item) => [
-        item.source,
-        {
-          team: "MIA",
-          opponent: "BOS",
-          home_or_away: "HOME",
-          status: item.status,
-          starters: ["Bam Adebayo"],
-          bench_candidates: [],
-        },
-      ]),
-    ),
-  };
-}
+const bamPick = dailyPicksResponseSchema.parse(nbaPicksFixture).picks[0];
+const bamHistory = playerHistoryResponseSchema.parse(nbaHistoryFixture);
+const confirmedLineup = teamLineupSchema.parse(confirmedLineupFixture);
+const mixedLineup = teamLineupSchema.parse(mixedLineupFixture);
+const bamNoVig = noVigResponseSchema.parse(nbaNoVigFixture);
+const bamConsensus = bamNoVig.consensus ?? null;
+const syntheticNoVig = noVigResponseSchema.parse(syntheticNoVigFixture);
 
-function game(date: string, value: number, opponent: string): GameLog {
-  return {
-    date: date.slice(5).replace("-", "/"),
-    date_full: date,
-    opponent,
-    value,
-    is_over: value > 18.5,
-    team: "MIA",
-    minutes: 34,
-    is_starter: true,
-    game_type: "regular_season",
-    season: "2025-2026",
-  };
+function logOn(dateFull: string) {
+  const game = bamHistory.game_logs.find((row) => row.date_full === dateFull);
+  if (!game) throw new Error(`missing game ${dateFull}`);
+  return game;
 }
 
 function pick(overrides: Partial<DailyPick> = {}): DailyPick {
-  return {
-    player_name: "Bam Adebayo",
-    player_team: "Heat",
-    player_team_code: "MIA",
-    event_id: "evt-mia",
-    home_team: "Miami Heat",
-    away_team: "Boston Celtics",
-    commence_time: "2026-11-11T00:00:00Z",
-    metric: "points",
-    threshold: 18.5,
-    direction: "over",
-    probability: 0.72,
-    n_games: 40,
-    bookmakers_count: 4,
-    all_lines: [18.5],
-    has_projection: true,
-    projected_value: 20.4,
-    projected_minutes: 34,
-    edge: 1.9,
-    opponent_rank: 22,
-    opponent_position_rank: 9,
-    injury_status: null,
-    lineup_confirmed: null,
-    ...overrides,
-  };
-}
-
-function history(overrides: Partial<PlayerHistoryResponse> = {}): PlayerHistoryResponse {
-  return {
-    player: "Bam Adebayo",
-    metric: "points",
-    threshold: 18.5,
-    n_games: 40,
-    p_over: 0.62,
-    p_under: 0.35,
-    equal_count: 1,
-    mean: 19.4,
-    std: 4,
-    histogram: [],
-    game_logs: [],
-    opponents: ["BOS"],
-    teammates: ["Tyler Herro"],
-    message: null,
-    ...overrides,
-  };
+  return { ...bamPick, ...overrides };
 }
 
 describe("lineup chips", () => {
   it("says confirmed only when every source snapshot says confirmed", () => {
-    expect(lineupChip("MIA", lineup("projected", [
-      { source: "rotowire", status: "confirmed" },
-      { source: "rotogrinders", status: "confirmed" },
-    ])).label).toBe("MIA lineup confirmed");
+    expect(lineupChip("MIA", confirmedLineup).label).toBe("MIA lineup confirmed");
   });
 
   it("keeps the consensus word when sources disagree", () => {
-    const chip = lineupChip("MIA", lineup("projected", [
-      { source: "rotowire", status: "confirmed" },
-      { source: "rotogrinders", status: "expected" },
-    ]));
+    const chip = lineupChip("MIA", mixedLineup);
     expect(chip.tone).toBe("projected");
     expect(chip.label).toBe("MIA lineup projected");
   });
@@ -138,9 +67,9 @@ describe("read signals", () => {
     binary: false,
     supportsProjection: true,
     line: 18.5,
-    consensus: { p_over_fair: 0.54, p_under_fair: 0.46 },
-    last10: [game("2026-11-01", 22, "BOS"), game("2026-11-03", 14, "PHI")],
-    history: history(),
+    consensus: bamConsensus,
+    last10: [logOn("2026-11-08"), logOn("2026-11-03")],
+    history: bamHistory,
     projection: null,
     pick: pick(),
     market: "player_points",
@@ -191,11 +120,11 @@ describe("player rows and lines", () => {
       suggested: ["Bam Adebayo", "Tyler Herro"],
       picks: [pick()],
       metric: "player_points",
-      eventId: "evt-mia",
+      eventId: "evt-mia-bos",
       selectedName: "Tyler Herro",
       postedLine: 16.5,
       awayLineup: null,
-      homeLineup: lineup("projected", []),
+      homeLineup: mixedLineup,
       awayAbbr: "BOS",
       homeAbbr: "MIA",
       league: "nba",
@@ -210,25 +139,19 @@ describe("player rows and lines", () => {
   });
 
   it("ignores a synthetic double-double line", () => {
-    expect(postedLine([
-      { line: 0.5, line_is_synthetic: true, market_kind: "binary" },
-    ])).toBeNull();
-    expect(postedLine([
-      { line: 18.5, market_kind: "over_under" },
-      { line: 18.5, market_kind: "over_under" },
-      { line: 19.5, market_kind: "over_under" },
-    ])).toBe(18.5);
+    expect(postedLine(syntheticNoVig.results)).toBeNull();
+    expect(postedLine(bamNoVig.results)).toBe(18.5);
   });
 });
 
 describe("game log chart", () => {
   it("draws oldest to newest and marks the posted line", () => {
     const model = gameLogChart(
-      [game("2026-11-08", 24, "BOS"), game("2026-11-01", 12, "PHI")],
+      [logOn("2026-11-10"), logOn("2026-11-01")],
       18.5,
     );
     expect(model.empty).toBe(false);
-    expect(model.bars.map((bar) => bar.dateFull)).toEqual(["2026-11-01", "2026-11-08"]);
+    expect(model.bars.map((bar) => bar.dateFull)).toEqual(["2026-11-01", "2026-11-10"]);
     expect(model.bars[0]?.over).toBe(false);
     expect(model.bars[1]?.over).toBe(true);
     expect(model.lineText).toBe("18.5");
@@ -252,12 +175,12 @@ describe("our read", () => {
       eventId: "evt-mia",
       homeTeam: "Miami Heat",
       awayTeam: "Boston Celtics",
-      commenceTime: "2026-11-11T00:00:00Z",
+      commenceTime: "2026-11-11T00:30:00Z",
       team: "MIA",
       position: "C",
       line: 18.5,
       pick: pick(),
-      consensus: { p_over_fair: 0.54, p_under_fair: 0.46 },
+      consensus: bamConsensus,
       last10: [],
       history: null,
       projection: null,
@@ -281,14 +204,14 @@ describe("our read", () => {
       eventId: "evt-mia",
       homeTeam: "Miami Heat",
       awayTeam: "Boston Celtics",
-      commenceTime: "2026-11-11T00:00:00Z",
+      commenceTime: "2026-11-11T00:30:00Z",
       team: "MIA",
       position: null,
       line: 18.5,
       pick: pick(),
       consensus: null,
       last10: [],
-      history: history(),
+      history: bamHistory,
       projection: null,
     });
     expect(model.other?.direction).toBe("under");
@@ -307,7 +230,7 @@ describe("our read", () => {
       eventId: "evt-mia",
       homeTeam: "Miami Heat",
       awayTeam: "Boston Celtics",
-      commenceTime: "2026-11-11T00:00:00Z",
+      commenceTime: "2026-11-11T00:30:00Z",
       team: null,
       position: null,
       line: null,
