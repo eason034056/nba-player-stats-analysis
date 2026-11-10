@@ -3,8 +3,9 @@ nba.py - NBA related API endpoints
 
 Includes:
 1. Game List API (GET /api/nba/events)
-2. No-Vig Probability Calculation API (POST /api/nba/props/no-vig)
-3. Player Suggestions API (GET /api/nba/players/suggest)
+2. One game from that list (GET /api/nba/events/{event_id})
+3. No-Vig Probability Calculation API (POST /api/nba/props/no-vig)
+4. Player Suggestions API (GET /api/nba/players/suggest)
 
 This is the core functional module of the application.
 """
@@ -524,6 +525,92 @@ async def get_events(
             status_code=500,
             detail=f"Internal error: {str(e)}"
         )
+
+
+@router.get(
+    "/events/{event_id}",
+    response_model=NBAEvent,
+    summary="Get one NBA game",
+    description="""
+    One game from the same list as GET /api/nba/events.
+
+    The handler calls that list. A Redis hit for the same date, regions,
+    and tz_offset returns the stored list. A miss uses the same events
+    request the list uses, then stores that list. This route does not
+    call the per-event odds endpoint or the odds gateway.
+
+    Query date, regions, and tz_offset match GET /api/nba/events, so
+    the cache key matches. Omit them for the same defaults (today UTC,
+    us, timezone offset 480).
+
+    A malformed event_id is HTTP 404 and the list is not read. The id
+    rule is the same as GET /api/nba/events/{event_id}/props: 1–128
+    characters from [A-Za-z0-9_-], starting with a letter or digit. A
+    well-formed id that is not on that date's list is HTTP 404.
+
+    The body is one NBAEvent, the same model WNBA's event list uses,
+    with the fields GET /api/nba/events already adds for an NBA event
+    (commence_time_et, display_tz, lineup_status, top_read).
+    """,
+)
+@limiter.limit(settings.rate_limit_props)
+async def get_event(
+    request: Request,
+    event_id: str,
+    date: Optional[str] = Query(
+        default=None,
+        description="Query date (YYYY-MM-DD), defaults to today. Same as GET /api/nba/events.",
+        pattern=r"^\d{4}-\d{2}-\d{2}$",
+    ),
+    regions: str = Query(
+        default="us",
+        description="Region code (us, uk, eu, au). Same as GET /api/nba/events.",
+    ),
+    tz_offset: Optional[int] = Query(
+        default=None,
+        description=(
+            "Timezone offset in minutes. Omitted values use 480, the same "
+            "default as GET /api/nba/events."
+        ),
+    ),
+) -> NBAEvent:
+    """One NBA event from the events list.
+
+    ``get_event`` is the HTTP handler. The name is the singular of
+    ``get_events``: one game, not the day's list. Call it as
+    ``GET /api/nba/events/{event_id}``. Pass the same ``date``,
+    ``regions``, and ``tz_offset`` as the list so both share one cache
+    key.
+
+    The handler checks the id with ``event_id_is_well_formed``, then
+    calls ``get_events``. That function reads Redis and, on a miss,
+    ``odds_provider.get_events``. It does not call ``odds_gateway``.
+
+    Args:
+        request: Incoming request. The slowapi limiter reads it. Same
+            limit as ``GET /api/nba/events/{event_id}/props``
+            (``settings.rate_limit_props``).
+        event_id: Path id. Malformed ids and ids missing from that
+            date's list are 404.
+        date: List date, or omitted for today UTC.
+        regions: Region code. Default ``us``.
+        tz_offset: Minutes east of UTC. Omitted uses 480.
+
+    Returns:
+        The ``NBAEvent`` for this id on that date's list.
+
+    Raises:
+        HTTPException: 404 when the id is malformed or not on the list.
+            Odds API errors from the list path pass through.
+    """
+    if not event_id_is_well_formed(event_id):
+        raise HTTPException(status_code=404, detail="Malformed event_id")
+
+    listing = await get_events(date=date, regions=regions, tz_offset=tz_offset)
+    for event in listing.events:
+        if event.event_id == event_id:
+            return event
+    raise HTTPException(status_code=404, detail="Event not found")
 
 
 @router.get(
