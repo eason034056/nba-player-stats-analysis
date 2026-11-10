@@ -1,0 +1,12 @@
+{
+  "event_id": "evt-mia-bos",
+  "player_name": "Bam Adebayo",
+  "market": "player_points",
+  "results": [],
+  "consensus": null,
+  "message": "No props data for this player at the selected bookmakers",
+  "fetched_at": "2026-11-10T18:05:00Z",
+  "data_age_seconds": 12,
+  "cache_state": "fresh",
+  "source": "snapshot_cache"
+}
