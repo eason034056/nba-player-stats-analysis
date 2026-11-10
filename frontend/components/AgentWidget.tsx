@@ -53,7 +53,6 @@ export const AgentWidget = () => {
     isPending,
     isSuggestionsOpen,
     messages,
-    openWidget,
     pageContext,
     retryLastRequest,
     selectedPickContext,
@@ -314,7 +313,7 @@ export const AgentWidget = () => {
         className="relative flex h-[min(82vh,44rem)] w-full max-w-[28rem] flex-col overflow-hidden rounded-[30px] border border-white/10 bg-[linear-gradient(180deg,rgba(255,255,255,0.06)_0%,rgba(255,255,255,0.03)_100%),rgba(8,15,26,0.94)] shadow-[0_38px_120px_rgba(2,8,20,0.52)] backdrop-blur-2xl"
       >
         <div className="flex items-center gap-3 border-b border-white/8 px-4 py-3 sm:px-5">
-          <div className="inline-flex h-10 w-10 items-center justify-center rounded-full border border-white/12 bg-[radial-gradient(circle_at_top,#fff7e5_0%,#ff9f84_100%)] text-on-dark shadow-[0_12px_36px_rgba(255,136,108,0.3)]">
+          <div className="inline-flex h-10 w-10 items-center justify-center rounded-full border border-white/12 bg-[radial-gradient(circle_at_top,#fff7e5_0%,#ff9f84_100%)] text-ink shadow-[0_12px_36px_rgba(255,136,108,0.3)]">
             <Bot className="h-4 w-4" />
           </div>
 
@@ -371,30 +370,5 @@ export const AgentWidget = () => {
     </div>
   );
 
-  return (
-    <>
-      <button
-        type="button"
-        onClick={openWidget}
-        className="fixed bottom-24 right-5 z-50 inline-flex items-center gap-3 rounded-full border border-white/15 bg-[rgba(8,16,29,0.86)] px-4 py-3 text-left shadow-[0_24px_70px_rgba(2,8,20,0.48)] backdrop-blur-xl transition-all duration-200 hover:-translate-y-1 hover:border-white/25 md:bottom-5"
-        aria-label="Ask the Board"
-      >
-        <span className="relative flex h-11 w-11 items-center justify-center rounded-full border border-white/12 bg-[radial-gradient(circle_at_top,#fff7e5_0%,#ff9f84_100%)] text-ink shadow-[0_12px_36px_rgba(255,136,108,0.3)]">
-          <Bot className="h-5 w-5" />
-          {isPending ? (
-            <span className="absolute inset-0 animate-ping rounded-full border border-white/35" />
-          ) : null}
-        </span>
-        <span className="hidden min-w-0 flex-col sm:flex">
-          <span className="text-[11px] uppercase tracking-[0.26em] text-on-dark-muted">
-            Cinematic desk
-          </span>
-          <span className="text-sm font-semibold text-on-dark">Ask the Board</span>
-        </span>
-        <ChevronRight className="hidden h-4 w-4 text-on-dark-muted sm:block" />
-      </button>
-
-      {isOpen ? (viewMode === "workspace" ? workspaceContent : panelContent) : null}
-    </>
-  );
+  return isOpen ? (viewMode === "workspace" ? workspaceContent : panelContent) : null;
 };

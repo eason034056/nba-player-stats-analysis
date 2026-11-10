@@ -80,6 +80,9 @@ describe("teamAbbr", () => {
     expect(teamAbbr("Toronto Raptors", "wnba")).toBe("RAP");
     expect(teamAbbr("Seattle Storm", "nba")).toBe("STO");
     expect(teamAbbr("Connecticut Sun", "nba")).toBe("SUN");
+    expect(teamAbbr("Connecticut", "wnba")).toBe("CON");
+    expect(teamAbbr("Connecticut", "nba")).toBe("CONN");
+    expect(teamAbbr("Connecticut", "nba")).not.toBe("CON");
   });
 
   it("returns an empty label for an empty name", () => {

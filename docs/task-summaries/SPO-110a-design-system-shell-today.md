@@ -23,7 +23,7 @@ Picks, Bet Slip, and Method keep their current pages. The design reference is `d
 | `frontend/app/wnba/page.tsx` | WNBA Today, with the roster search kept underneath. |
 | `frontend/lib/player-dd.ts` | `formatPercent(null)` and `formatPercent(undefined)` return `—`. |
 | `frontend/components/Navbar.tsx` | Removed. The shell replaces it. |
-| `frontend/components/agent-widget/*`, `AgentWidget.tsx` | Dark-panel text uses the on-dark tokens. The launcher sits above the mobile tabs. |
+| `frontend/components/agent-widget/*`, `AgentWidget.tsx` | Dark-panel text uses the on-dark tokens. The old floating launcher is gone. Ask the agent and Ask agent open the panel. |
 | `frontend/components/PickContextMenu.tsx` | Light menu so `text-dark` stays readable. |
 | `frontend/app/about/page.tsx` | Formula lines on the dark block use `text-accent`. |
 | `frontend/components/AppShell.test.tsx` | Nav, tabs, league switch, slip count, Ask the agent. |
@@ -43,7 +43,7 @@ The league switch is a real control. The prototype only draws a static NBA pill.
 
 ## Tests / Verification
 
-- `npx vitest run` — 29 files, 171 tests, passed.
+- `npx vitest run` — 32 files, 202 tests, passed.
 - `npx tsc --noEmit` — passed.
 - `npm run lint` — passed, 0 warnings.
 - Integration test: SKIPPED. Today reads the existing events and daily-picks routes. No new external client.
@@ -83,4 +83,3 @@ These are fields the prototype draws, or that a reader might expect on Today, wh
 
 - [ ] PR C restyles Picks, Bet Slip, and Method.
 - [ ] Today has no date picker. Other dates remain on the picks pages.
-- [ ] The floating agent launcher still exists beside "Ask the agent". It is offset above the mobile tabs.

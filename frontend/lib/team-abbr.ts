@@ -52,6 +52,14 @@ export function teamAbbr(name: string, league: LeagueSegment): string {
     return WNBA_LOOKUP[compact(name)] ?? fallbackAbbr(name);
   }
   const code = getCanonicalTeamCode(name);
+  const wnbaCode = WNBA_LOOKUP[compact(name)];
+  // A miss from the NBA table echoes the whole name. Shortening
+  // "Connecticut" would print CON, which is a WNBA code.
+  if (wnbaCode && (code === wnbaCode || fallbackAbbr(name) === wnbaCode)) {
+    const last = name.trim().split(/\s+/).filter(Boolean).pop() ?? name;
+    const letters = last.replace(/[^A-Za-z0-9]/g, "");
+    return (letters.slice(0, 4) || letters).toUpperCase();
+  }
   if (code && code.length <= 4) return code;
   return fallbackAbbr(name);
 }

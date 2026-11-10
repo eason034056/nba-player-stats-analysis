@@ -131,6 +131,39 @@ describe("AppShell", () => {
     expect(within(primary).queryByText("1")).not.toBeInTheDocument();
   });
 
+  it("keeps an Ask control on every NBA and WNBA route", () => {
+    const paths = [
+      "/",
+      "/picks",
+      "/betslip",
+      "/about",
+      "/event/heat-bucks",
+      "/wnba",
+      "/wnba/picks",
+      "/wnba/betslip",
+      "/wnba/event/aces-liberty",
+      "/wnba/player/A%27ja%20Wilson",
+    ];
+    const { rerender } = renderWithProviders(
+      <AppShell>
+        <p>Board</p>
+      </AppShell>,
+      { withAgentWidget: true },
+    );
+
+    for (const path of paths) {
+      navigationMocks.usePathname.mockReturnValue(path);
+      rerender(
+        <AppShell>
+          <p>Board</p>
+        </AppShell>,
+      );
+      expect(screen.getByRole("button", { name: "Ask the agent" })).toBeInTheDocument();
+      expect(screen.getByRole("button", { name: "Ask agent" })).toBeInTheDocument();
+      expect(screen.queryByRole("button", { name: /ask the board/i })).not.toBeInTheDocument();
+    }
+  });
+
   it("opens the betting agent from Ask the agent", async () => {
     const user = userEvent.setup();
     renderWithProviders(

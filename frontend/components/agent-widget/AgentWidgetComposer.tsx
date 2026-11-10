@@ -116,7 +116,7 @@ export const AgentWidgetComposer = ({
             className={
               viewMode === "workspace"
                 ? "btn-primary px-4 py-2 disabled:cursor-not-allowed disabled:opacity-45"
-                : "inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/90 px-3.5 py-1.5 text-sm font-semibold text-on-dark transition-colors hover:bg-white disabled:cursor-not-allowed disabled:opacity-45"
+                : "inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/90 px-3.5 py-1.5 text-sm font-semibold text-ink transition-colors hover:bg-white disabled:cursor-not-allowed disabled:opacity-45"
             }
           >
             <Send className="h-4 w-4" />
