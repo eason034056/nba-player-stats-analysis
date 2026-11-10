@@ -426,7 +426,7 @@ class SchedulerService:
             if success:
                 print(f"✅ CSV download job completed!")
             else:
-                print(f"⚠️ CSV download job failed, please check network or URL")
+                print("⚠️ CSV download job did not report success")
                 
         except Exception as e:
             print(f"❌ CSV download job exception: {e}")

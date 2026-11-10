@@ -163,6 +163,14 @@ async def get_player_history(
     is_starter: Optional[bool] = Query(default=None, description="Starter filter"),
     teammate_filter: Optional[str] = Query(default=None, description="Comma-separated teammate names"),
     teammate_played: Optional[bool] = Query(default=None, description="Teammate played filter"),
+    include_playoffs: bool = Query(
+        default=False,
+        description="Include playoff games. Default is regular season only.",
+    ),
+    include_play_in: bool = Query(
+        default=False,
+        description="Include play-in games. Default is regular season only.",
+    ),
 ) -> PlayerHistoryResponse:
     """Get WNBA player historical statistical summary."""
     valid_metrics = sorted(CONTINUOUS_METRIC_EXTRACTORS.keys())
@@ -188,6 +196,8 @@ async def get_player_history(
             is_starter=is_starter,
             teammate_filter=teammate_list,
             teammate_played=teammate_played,
+            include_playoffs=include_playoffs,
+            include_play_in=include_play_in,
         )
 
         histogram_bins = [
@@ -204,6 +214,8 @@ async def get_player_history(
                 team=log.get("team", ""),
                 minutes=log.get("minutes", 0.0),
                 is_starter=log.get("is_starter", False),
+                game_type=log.get("game_type", "regular_season"),
+                season=log.get("season", ""),
             )
             for log in stats.get("game_logs", [])
         ]
@@ -246,10 +258,23 @@ async def get_player_dd_history(
         description="Player name (normalized exact match: case, accents, punctuation, suffixes)",
     ),
     season: Optional[str] = Query(default=None, description="Season filter; None means all seasons"),
+    include_playoffs: bool = Query(
+        default=False,
+        description="Include playoff games. Default is regular season only.",
+    ),
+    include_play_in: bool = Query(
+        default=False,
+        description="Include play-in games. Default is regular season only.",
+    ),
 ) -> PlayerDDHistoryResponse:
     """Get WNBA player Double-Double historical rate."""
     try:
-        stats = wnba_csv_player_service.player_dd_history(player_name=player, season=season)
+        stats = wnba_csv_player_service.player_dd_history(
+            player_name=player,
+            season=season,
+            include_playoffs=include_playoffs,
+            include_play_in=include_play_in,
+        )
         return PlayerDDHistoryResponse(
             player=stats["player"],
             season=stats.get("season"),

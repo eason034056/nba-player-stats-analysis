@@ -223,6 +223,11 @@ class GameLog(BaseModel):
     team: str = Field(default="", description="Player's team")
     minutes: float = Field(default=0.0, description="Minutes played")
     is_starter: bool = Field(default=False, description="Is starter")
+    game_type: str = Field(
+        default="regular_season",
+        description="regular_season, playoffs, or play_in",
+    )
+    season: str = Field(default="", description="Season label for this game")
 
 
 class PlayerHistoryResponse(BaseModel):
