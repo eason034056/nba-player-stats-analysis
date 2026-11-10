@@ -16,13 +16,11 @@ Recorded today (SPO-98, 2026-11-09):
 - ``odds_api_event_odds__player_points.json`` — one NBA event, market
   ``player_points`` only. Lakers at Hawks.
 
-Not recorded (``record_fixtures.py`` writes these when ``ODDS_API_KEY``
-is set; both are absent until that run):
+Not recorded (``record_fixtures.py`` writes this when ``ODDS_API_KEY``
+is set; the file is absent until that run):
 
 - ``odds_api_event_odds__nba_expanded_markets.json`` — one NBA event,
   the markets that were not in the SPO-98 capture.
-- ``odds_api_event_odds__wnba_expanded_markets.json`` — one WNBA event,
-  written only when the free WNBA events list is non-empty.
 """
 
 from __future__ import annotations
@@ -41,7 +39,6 @@ RECORDED_PLAYER_POINTS = "odds_api_event_odds__player_points.json"
 
 # Written by record_fixtures.py. Absent until that script runs with a key.
 NBA_EXPANDED_MARKETS = "odds_api_event_odds__nba_expanded_markets.json"
-WNBA_EXPANDED_MARKETS = "odds_api_event_odds__wnba_expanded_markets.json"
 
 # Markets the recorder requests in one ``markets=`` parameter.
 # player_points is already on disk, so it is not requested again.

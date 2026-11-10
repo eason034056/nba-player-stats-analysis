@@ -12,10 +12,6 @@ Calls, in order:
    ``regions=us``, ``bookmakers=draftkings,fanduel``,
    ``oddsFormat=american``. Saves that body as
    ``odds_api_event_odds__nba_expanded_markets.json``.
-3. ``GET /v4/sports/basketball_wnba/events`` — free. If the list is
-   empty, prints that and stops. If it has an event, one WNBA odds
-   call with the same markets and filters, saved as
-   ``odds_api_event_odds__wnba_expanded_markets.json``.
 
 Each response is written as the raw bytes. The only edit is removing
 ``apiKey`` if it appears in those bytes. Quota headers are printed
@@ -46,7 +42,6 @@ from pathlib import Path
 _FIXTURES_DIR = Path(__file__).resolve().parent.parent
 
 NBA_EXPANDED_MARKETS = "odds_api_event_odds__nba_expanded_markets.json"
-WNBA_EXPANDED_MARKETS = "odds_api_event_odds__wnba_expanded_markets.json"
 
 # Keep this tuple aligned with tests.fixtures.odds_api.UNRECORDED_MARKET_KEYS.
 UNRECORDED_MARKET_KEYS: tuple[str, ...] = (
@@ -161,7 +156,7 @@ def _first_event_id(raw: bytes) -> str | None:
 
 
 def main() -> int:
-    """Record the NBA odds body, and the WNBA body only if an event is listed."""
+    """Record one NBA odds body. The events list is free and is not saved."""
     api_key = os.environ.get("ODDS_API_KEY", "").strip()
     if not api_key:
         print("ODDS_API_KEY is not set; no request was sent and no file was written.")
@@ -187,22 +182,6 @@ def main() -> int:
         print(strip_api_key(body, api_key).decode("utf-8", errors="replace")[:500])
         return 2
     saved = _save(NBA_EXPANDED_MARKETS, body, api_key)
-    print(f"wrote {saved}")
-
-    status, _headers, body = _events(base, api_key, "basketball_wnba")
-    if status != 200:
-        print(f"WNBA events list failed with HTTP {status}; WNBA odds call skipped.")
-        return 0
-    wnba_event_id = _first_event_id(body)
-    if not wnba_event_id:
-        print("No WNBA event is listed; WNBA odds call skipped.")
-        return 0
-
-    status, _headers, body = _odds(base, api_key, "basketball_wnba", wnba_event_id)
-    if status != 200:
-        print(f"WNBA odds call failed with HTTP {status}; WNBA fixture not written.")
-        return 1
-    saved = _save(WNBA_EXPANDED_MARKETS, body, api_key)
     print(f"wrote {saved}")
     return 0
 

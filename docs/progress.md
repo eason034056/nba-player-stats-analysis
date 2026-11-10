@@ -107,7 +107,7 @@ Stale pull requests the owner is closing. Not merged.
 | SPO-104 | One-sided DD quotes (`under_odds` / `p_under_imp` null, including a JSON null No price; `line_is_synthetic`, `market_kind`, `uses_prior`), league-scoped team codes, and the SPO-97 schedule-index follow-ups. Lands with #36. PR #37 into `dev`. Summary: `docs/task-summaries/SPO-104-dd-one-sided-and-followups.md`. |
 | SPO-102 | Wire `PlayerDDTile` to double-double history and yes/no odds. Open on `feature/SPO-102-player-dd-tile-wiring`. Summary: `docs/task-summaries/SPO-102-player-dd-tile-wiring.md`. |
 | SPO-103 | SPO-10 Phase 5 final review. Open. |
-| SPO-106 | Recorded Odds API fixtures for unit tests, plus gated WNBA live coverage for rebounds, assists, threes, and the combo markets. Draft on `feature/SPO-106-recorded-odds-fixtures`. `player_points` and the NBA events list load through `tests.fixtures.odds_api`. REB, AST, 3PM, STL, FTM, FGM, R+A, P+R, P+A, PRA, DD, and WNBA stay on inline builders until `record_fixtures.py` runs with `ODDS_API_KEY` (not run: no key). Summary: `docs/task-summaries/SPO-106-recorded-odds-fixtures.md`. |
+| SPO-106 | Recorded NBA Odds API fixtures for unit tests. Draft on `feature/SPO-106-recorded-odds-fixtures`. `player_points` and the NBA events list load through `tests.fixtures.odds_api`. REB, AST, 3PM, STL, FTM, FGM, R+A, P+R, P+A, PRA, and DD stay on inline builders until `record_fixtures.py` runs with `ODDS_API_KEY` (not run: no key). WNBA fixture work is deferred while WNBA work is paused. Summary: `docs/task-summaries/SPO-106-recorded-odds-fixtures.md`. |
 
 ## Not classified
 
