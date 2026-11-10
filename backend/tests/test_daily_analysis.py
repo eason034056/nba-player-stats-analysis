@@ -1,4 +1,5 @@
 import asyncio
+import copy
 import os
 import sys
 from dataclasses import dataclass
@@ -15,6 +16,7 @@ from app.services.daily_analysis import (
     DailyAnalysisService,
     canonical_team_code,
 )
+from tests.fixtures.odds_api import derive_line_board
 
 
 # ---------------------------------------------------------------------------
@@ -33,12 +35,15 @@ class _FakeSnapshotResult:
 
 
 def _make_bookmakers_data(player_lines: Dict[str, list[float]]):
-    """Build bookmakers list from {player_name: [line, ...]} for convenience."""
-    outcomes = []
-    for name, lines in player_lines.items():
-        for line in lines:
-            outcomes.append({"description": name, "point": line})
-    return [{"key": "testbook", "markets": [{"outcomes": outcomes}]}]
+    """One recorded bookmaker, with this test's players and lines.
+
+    ``derive_line_board`` copies FanDuel from the recorded player_points
+    event and the first outcome on that book (Dyson Daniels Over, -113).
+    ``description`` and ``point`` are replaced with ``player_lines``.
+    The bookmaker key, market key, outcome name, and price stay recorded.
+    Consensus and ``bookmakers_count`` read the lines passed here.
+    """
+    return derive_line_board([player_lines])
 
 
 def _make_service(**kwargs) -> DailyAnalysisService:
@@ -170,50 +175,28 @@ class TestGroupPropsByPlayer:
         self.service = _make_service()
 
     def test_groups_correctly(self):
-        bookmakers_data = [
-            {
-                "key": "draftkings",
-                "markets": [
-                    {
-                        "outcomes": [
-                            {"description": "Stephen Curry", "point": 24.5},
-                            {"description": "LeBron James", "point": 27.5},
-                        ]
-                    }
-                ],
-            },
-            {
-                "key": "fanduel",
-                "markets": [
-                    {
-                        "outcomes": [
-                            {"description": "Stephen Curry", "point": 25.5},
-                            {"description": "LeBron James", "point": 27.5},
-                        ]
-                    }
-                ],
-            },
-        ]
+        # Two recorded bookmakers (FanDuel, then DraftKings). Names and
+        # lines are this test's controls; the shells are the capture.
+        bookmakers_data = derive_line_board(
+            [
+                {"Stephen Curry": [24.5], "LeBron James": [27.5]},
+                {"Stephen Curry": [25.5], "LeBron James": [27.5]},
+            ]
+        )
         result = self.service._group_props_by_player(bookmakers_data)
         assert set(result.keys()) == {"Stephen Curry", "LeBron James"}
         assert result["Stephen Curry"] == [24.5, 25.5]
         assert result["LeBron James"] == [27.5, 27.5]
 
     def test_ignores_entries_with_no_point(self):
-        bookmakers_data = [
-            {
-                "key": "draftkings",
-                "markets": [
-                    {
-                        "outcomes": [
-                            {"description": "Player A", "point": 10.5},
-                            {"description": "Player B"},  # no point
-                            {"description": "Player C", "point": None},  # explicit None
-                        ]
-                    }
-                ],
-            }
-        ]
+        # Derivation of the recorded FanDuel board: Player B loses
+        # ``point`` entirely, Player C keeps the key with a null value.
+        bookmakers_data = derive_line_board(
+            [{"Player A": [10.5], "Player B": [10.5], "Player C": [10.5]}]
+        )
+        outcomes = bookmakers_data[0]["markets"][0]["outcomes"]
+        outcomes[1].pop("point", None)
+        outcomes[2]["point"] = None
         result = self.service._group_props_by_player(bookmakers_data)
         assert "Player A" in result
         assert result["Player A"] == [10.5]
@@ -221,19 +204,14 @@ class TestGroupPropsByPlayer:
         assert "Player C" not in result
 
     def test_ignores_entries_with_no_description(self):
-        bookmakers_data = [
-            {
-                "key": "book1",
-                "markets": [
-                    {
-                        "outcomes": [
-                            {"description": "", "point": 10.5},
-                            {"point": 12.5},  # no description key
-                        ]
-                    }
-                ],
-            }
-        ]
+        # Derivation: blank the recorded description, then delete it on
+        # the second outcome. Both lines stay on the recorded outcome.
+        bookmakers_data = derive_line_board(
+            [{"Player A": [10.5], "Player B": [12.5]}]
+        )
+        outcomes = bookmakers_data[0]["markets"][0]["outcomes"]
+        outcomes[0]["description"] = ""
+        outcomes[1].pop("description", None)
         result = self.service._group_props_by_player(bookmakers_data)
         # Empty description is falsy, skipped
         assert len(result) == 0
@@ -243,31 +221,24 @@ class TestGroupPropsByPlayer:
         assert result == {}
 
     def test_multiple_markets_per_bookmaker(self):
-        bookmakers_data = [
-            {
-                "key": "book1",
-                "markets": [
-                    {"outcomes": [{"description": "Player A", "point": 5.5}]},
-                    {"outcomes": [{"description": "Player A", "point": 6.5}]},
-                ],
-            }
-        ]
+        # One book, two market keys. The second market is a copy of the
+        # recorded player_points market with key player_rebounds and
+        # point 6.5. The same key twice is one vote (SPO-115); two keys
+        # stay two votes.
+        bookmakers_data = derive_line_board([{"Player A": [5.5]}])
+        second = copy.deepcopy(bookmakers_data[0]["markets"][0])
+        second["key"] = "player_rebounds"
+        second["outcomes"][0]["point"] = 6.5
+        bookmakers_data[0]["markets"].append(second)
         result = self.service._group_props_by_player(bookmakers_data)
         assert result["Player A"] == [5.5, 6.5]
 
     def test_line_values_stored_as_floats(self):
-        bookmakers_data = [
-            {
-                "key": "book1",
-                "markets": [
-                    {
-                        "outcomes": [
-                            {"description": "Player A", "point": 10},  # int
-                        ]
-                    }
-                ],
-            }
-        ]
+        # The recorded point is a float. This case assigns the int 10
+        # so the grouper is what turns it into 10.0.
+        bookmakers_data = derive_line_board([{"Player A": [10]}])
+        point = bookmakers_data[0]["markets"][0]["outcomes"][0]["point"]
+        assert isinstance(point, int)
         result = self.service._group_props_by_player(bookmakers_data)
         assert result["Player A"] == [10.0]
         assert isinstance(result["Player A"][0], float)

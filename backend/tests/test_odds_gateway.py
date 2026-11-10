@@ -17,6 +17,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from app.services.odds_provider import OddsAPIError
 from app.services.odds_gateway import HOT_KEYS_ZSET_KEY, OddsMarketGateway, QuotaUsage
+from tests.fixtures.odds_api import RECORDED_PLAYER_POINTS, load_odds_fixture
 
 
 class FakeCache:
@@ -91,40 +92,61 @@ class FakeProvider:
         return copy.deepcopy(payload), usage
 
 
-def _sample_payload(player_name: str = "Stephen Curry", line: float = 28.5):
-    return {
-        "id": "evt_123",
-        "bookmakers": [
-            {
-                "key": "draftkings",
-                "markets": [
-                    {
-                        "key": "player_points",
-                        "outcomes": [
-                            {
-                                "name": "Over",
-                                "description": player_name,
-                                "point": line,
-                                "price": -110,
-                            },
-                            {
-                                "name": "Under",
-                                "description": player_name,
-                                "point": line,
-                                "price": -110,
-                            },
-                        ],
-                    }
-                ],
-            }
-        ],
-    }
+def _recorded_gateway_payload() -> dict:
+    """FanDuel's first Over/Under pair from the recorded player_points event.
+
+    Starts at ``odds_api_event_odds__player_points.json``. Keeps the event
+    shell and the first bookmaker (FanDuel). Keeps the first player's
+    Over and Under (Dyson Daniels, 10.5, -113/-113 in that capture) and
+    drops every other bookmaker and outcome. Prices, the market key, and
+    the event id stay as recorded.
+    """
+    event = load_odds_fixture(RECORDED_PLAYER_POINTS)
+    book = copy.deepcopy(event["bookmakers"][0])
+    market = book["markets"][0]
+    player_name = market["outcomes"][0]["description"]
+    market["outcomes"] = [
+        outcome
+        for outcome in market["outcomes"]
+        if outcome.get("description") == player_name
+        and outcome.get("name") in ("Over", "Under")
+    ]
+    # One pair is enough for the gateway. Later alt-lines for the same
+    # player, if a future capture adds them, are not part of this slice.
+    pair: list[dict] = []
+    seen: set[str] = set()
+    for outcome in market["outcomes"]:
+        side = outcome["name"]
+        if side in seen:
+            continue
+        seen.add(side)
+        pair.append(outcome)
+    market["outcomes"] = pair
+    book["markets"] = [market]
+    event = copy.deepcopy(event)
+    event["bookmakers"] = [book]
+    return event
+
+
+def _derive_gateway_payload(description: str, line: float) -> dict:
+    """Relabel the recorded FanDuel pair.
+
+    ``_recorded_gateway_payload`` is the start. ``description`` and
+    ``point`` on both outcomes are then set to the values this test uses
+    to tell a stale snapshot from the refresh. The event id, FanDuel
+    key, market key, and prices stay recorded.
+    """
+    payload = _recorded_gateway_payload()
+    for outcome in payload["bookmakers"][0]["markets"][0]["outcomes"]:
+        outcome["description"] = description
+        outcome["point"] = line
+    return payload
 
 
 @pytest.mark.asyncio
 async def test_same_semantic_key_hits_upstream_once():
     cache = FakeCache()
-    provider = FakeProvider([_sample_payload()])
+    provider = FakeProvider([_recorded_gateway_payload()])
     gateway = OddsMarketGateway(
         provider=provider,
         cache=cache,
@@ -163,8 +185,8 @@ async def test_same_semantic_key_hits_upstream_once():
 async def test_stale_snapshot_returns_cached_value_and_refreshes_in_background():
     cache = FakeCache()
     provider = FakeProvider([
-        _sample_payload(player_name="old value", line=28.5),
-        _sample_payload(player_name="fresh value", line=29.5),
+        _derive_gateway_payload("old value", 28.5),
+        _derive_gateway_payload("fresh value", 29.5),
     ])
     gateway = OddsMarketGateway(
         provider=provider,
@@ -229,7 +251,9 @@ async def test_stale_snapshot_returns_cached_value_and_refreshes_in_background()
 @pytest.mark.asyncio
 async def test_concurrent_requests_share_single_upstream_fetch():
     cache = FakeCache()
-    provider = FakeProvider([_sample_payload()], delay=0.05)
+    recorded = _recorded_gateway_payload()
+    recorded_id = recorded["id"]
+    provider = FakeProvider([recorded], delay=0.05)
     gateway = OddsMarketGateway(
         provider=provider,
         cache=cache,
@@ -254,13 +278,13 @@ async def test_concurrent_requests_share_single_upstream_fetch():
     results = await asyncio.gather(*[_fetch() for _ in range(20)])
 
     assert len(provider.calls) == 1
-    assert all(result.data["id"] == "evt_123" for result in results)
+    assert all(result.data["id"] == recorded_id for result in results)
 
 
 @pytest.mark.asyncio
 async def test_background_priority_skips_upstream_when_quota_protected_and_stale_exists():
     cache = FakeCache()
-    provider = FakeProvider([_sample_payload()])
+    provider = FakeProvider([_recorded_gateway_payload()])
     gateway = OddsMarketGateway(
         provider=provider,
         cache=cache,
@@ -313,7 +337,7 @@ async def test_background_priority_skips_upstream_when_quota_protected_and_stale
 @pytest.mark.asyncio
 async def test_prewarm_cleans_expired_hot_keys():
     cache = FakeCache()
-    provider = FakeProvider([_sample_payload(player_name="fresh value", line=29.5)])
+    provider = FakeProvider([_recorded_gateway_payload()])
     gateway = OddsMarketGateway(
         provider=provider,
         cache=cache,
@@ -355,7 +379,7 @@ async def test_prewarm_cleans_expired_hot_keys():
 @pytest.mark.asyncio
 async def test_prewarm_skips_hot_keys_that_are_still_fresh():
     cache = FakeCache()
-    provider = FakeProvider([_sample_payload()])
+    provider = FakeProvider([_recorded_gateway_payload()])
     gateway = OddsMarketGateway(
         provider=provider,
         cache=cache,
