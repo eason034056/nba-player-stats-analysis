@@ -46,6 +46,10 @@ describe("ResultsTable double-double rows", () => {
     expect(next.results[1]?.under_odds).toBeNull();
     expect(next.results[1]?.p_under_imp).toBeNull();
     expect(next.results[1]?.no_price).toBeNull();
+    expect(next.results[1]?.p_no_imp).toBeNull();
+    expect(next.results[1]?.uses_prior).toBe(true);
+    expect(next.consensus?.consensus_uses_prior).toBe(true);
+    expect(next.consensus?.consensus_prior_book_count).toBe(1);
     expect(next.results[1]?.line_is_synthetic).toBe(true);
     expect(next.results[1]?.market_kind).toBe("binary");
     expect(next.fetched_at).toBe("2026-05-08T12:00:00Z");
@@ -183,7 +187,17 @@ describe("ResultsTable double-double rows", () => {
           p_under_imp: null,
           uses_prior: false,
         }),
-      ], { consensus_uses_prior: false }),
+      ], {
+        consensus: {
+          method: "mean",
+          p_over_fair: 0.6755,
+          p_under_fair: 0.3245,
+          p_yes_fair: 0.6755,
+          p_no_fair: 0.3245,
+          consensus_uses_prior: false,
+          consensus_prior_book_count: 0,
+        },
+      }),
     );
     const { unmount: unmountSuppressed } = renderTable(suppressed);
     expect(within(screen.getByTestId("result-row-fanduel")).queryByText(SINGLE_LEG_PRIOR_LABEL)).not.toBeInTheDocument();
@@ -221,7 +235,7 @@ describe("ResultsTable double-double rows", () => {
     ]);
   });
 
-  it("reads consensus_uses_prior from the consensus object and from the envelope", () => {
+  it("reads consensus_uses_prior from the consensus object", () => {
     const onObject = noVigResponseSchema.parse(
       ddBody(
         [
@@ -248,22 +262,47 @@ describe("ResultsTable double-double rows", () => {
     expect(within(screen.getByTestId("result-row-draftkings")).queryByText(SINGLE_LEG_PRIOR_LABEL)).not.toBeInTheDocument();
     expect(within(screen.getByTestId("result-row-fanduel")).queryByText(SINGLE_LEG_PRIOR_LABEL)).not.toBeInTheDocument();
     unmount();
+  });
 
-    const onEnvelope = noVigResponseSchema.parse(
-      ddBody(
-        [binaryRow("draftkings", { under_odds: 200, no_price: 200, uses_prior: false })],
-        {
-          consensus_uses_prior: true,
-          consensus_prior_book_count: 2,
-        },
-      ),
-    );
-    expect(onEnvelope.consensus?.consensus_uses_prior).toBeUndefined();
-    expect(onEnvelope.consensus_uses_prior).toBe(true);
-    renderTable(onEnvelope);
+  it("ignores envelope flags, skips a missing consensus, and dashes a null No implied probability", () => {
+    const withEnvelope = noVigResponseSchema.parse({
+      ...oneSidedNoVig,
+      line_is_synthetic: false,
+      market_kind: "over_under",
+      uses_prior: false,
+      consensus_uses_prior: false,
+      consensus_prior_book_count: 0,
+    });
+    expect("line_is_synthetic" in withEnvelope).toBe(false);
+    expect("market_kind" in withEnvelope).toBe(false);
+    expect("uses_prior" in withEnvelope).toBe(false);
+    expect("consensus_uses_prior" in withEnvelope).toBe(false);
+    expect("consensus_prior_book_count" in withEnvelope).toBe(false);
+    expect(withEnvelope.results[1]?.uses_prior).toBe(true);
+    expect(withEnvelope.results[1]?.p_no_imp).toBeNull();
+    expect(withEnvelope.consensus?.consensus_uses_prior).toBe(true);
+    expect(withEnvelope.consensus?.consensus_prior_book_count).toBe(1);
+
+    const { unmount } = renderTable(withEnvelope);
     expect(screen.getAllByTestId("consensus-prior")[0]).toHaveTextContent(
-      "includes 2 books on the 4.5% single-leg prior",
+      "includes 1 book on the 4.5% single-leg prior",
     );
+    expect(within(screen.getByTestId("result-row-fanduel")).getByTestId("result-no-implied")).toHaveTextContent("—");
+    unmount();
+
+    const { consensus: _consensus, ...withoutConsensus } = oneSidedNoVig;
+    const omitted = noVigResponseSchema.parse(withoutConsensus);
+    expect(omitted.consensus).toBeUndefined();
+    const nulled = noVigResponseSchema.parse({ ...oneSidedNoVig, consensus: null });
+    expect(nulled.consensus).toBeNull();
+
+    renderTable(omitted);
+    expect(screen.queryByText("Market Consensus")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("consensus-prior")).not.toBeInTheDocument();
+    const fanduel = screen.getByTestId("result-row-fanduel");
+    expect(within(fanduel).getByTestId("result-no-price")).toHaveTextContent("—");
+    expect(within(fanduel).getByTestId("result-no-implied")).toHaveTextContent("—");
+    expect(within(fanduel).getByTestId("result-line")).toHaveTextContent("Yes/No");
   });
 });
 

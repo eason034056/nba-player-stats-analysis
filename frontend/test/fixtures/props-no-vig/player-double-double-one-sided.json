@@ -8,6 +8,7 @@
       "line": 0.5,
       "line_is_synthetic": true,
       "market_kind": "binary",
+      "uses_prior": false,
       "over_odds": -250.0,
       "under_odds": 200.0,
       "p_over_imp": 0.7143,
@@ -28,6 +29,7 @@
       "line": 0.5,
       "line_is_synthetic": true,
       "market_kind": "binary",
+      "uses_prior": true,
       "over_odds": -240.0,
       "under_odds": null,
       "p_over_imp": 0.7059,
@@ -49,7 +51,9 @@
     "p_over_fair": 0.6787,
     "p_under_fair": 0.3213,
     "p_yes_fair": 0.6787,
-    "p_no_fair": 0.3213
+    "p_no_fair": 0.3213,
+    "consensus_uses_prior": true,
+    "consensus_prior_book_count": 1
   },
   "message": null,
   "fetched_at": "2026-05-08T12:00:00Z",

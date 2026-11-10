@@ -565,6 +565,8 @@ describe("PlayerDDTile", () => {
     const next = noVigResponseSchema.parse(oneSidedNoVig);
     expect(next.results[1]?.under_odds).toBeNull();
     expect(next.results[1]?.no_price).toBeNull();
+    expect(next.results[1]?.p_no_imp).toBeNull();
+    expect(next.results[1]?.uses_prior).toBe(true);
     renderTile({
       getPlayerDDHistoryFn: vi.fn().mockResolvedValue(jokicHistory),
       calculateNoVigFn: vi.fn().mockResolvedValue({
@@ -577,6 +579,9 @@ describe("PlayerDDTile", () => {
     expect(within(fanduel).getAllByText(SINGLE_LEG_PRIOR_LABEL).length).toBeGreaterThan(0);
     expect(within(fanduel).getByText("67.6%")).toBeInTheDocument();
     expect(within(fanduel).getByText("32.5%")).toBeInTheDocument();
-    expect(screen.getAllByText(SINGLE_LEG_PRIOR_LABEL).length).toBeGreaterThanOrEqual(4);
+    expect(screen.getAllByTestId("dd-consensus-prior").map((node) => node.textContent)).toEqual([
+      "includes 1 book on the 4.5% single-leg prior",
+      "includes 1 book on the 4.5% single-leg prior",
+    ]);
   });
 });

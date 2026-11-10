@@ -112,11 +112,11 @@ export const bookmakerResultSchema = z.object({
   p_no_imp: z.number().nullable().optional(),
   yes_fair_prob: z.number().nullable().optional(),
   no_fair_prob: z.number().nullable().optional(),
-  // SPO-104。缺席時前端改用 market === player_double_double 判斷。
+  // SPO-104（PR #37）。這些欄位在每一列上，不在回應外層。
+  // 仍是 optional + nullable，合併前的 dev payload 才過得了。
+  // 缺席時前端改用 market === player_double_double，或 null 的 No 價。
   line_is_synthetic: z.boolean().nullable().optional(),
   market_kind: marketKindSchema.nullable().optional(),
-  // SPO-104 預定欄位，名稱等後端 PR 確認。有布林值就用它；
-  // 缺席才退回 null 的 under_odds / no_price。
   uses_prior: z.boolean().nullable().optional(),
 });
 
@@ -134,7 +134,8 @@ export const consensusSchema = z.object({
   // 二元市場共識。Over/Under 回應裡這兩個欄位是 null 或缺席。
   p_yes_fair: z.number().nullable().optional(),
   p_no_fair: z.number().nullable().optional(),
-  // 任一家書用了 4.5% prior 即為 true。缺席時前端改看各列。
+  // 跟 p_yes_fair 放在同一個共識物件。任一家書用了 prior 即為 true。
+  // 沒有共識時整個物件缺席或是 null，這兩個鍵不會出現在外層。
   consensus_uses_prior: z.boolean().nullable().optional(),
   consensus_prior_book_count: z.number().int().nullable().optional(),
 });
@@ -160,9 +161,6 @@ export const noVigResponseSchema = z.object({
   data_age_seconds: z.number().int().nullable().optional(),
   cache_state: z.string().nullable().optional(),
   source: z.string().nullable().optional(),
-  // 共識物件不存在時，這兩個預定欄位可以放在回應外層。
-  consensus_uses_prior: z.boolean().nullable().optional(),
-  consensus_prior_book_count: z.number().int().nullable().optional(),
 });
 
 export type NoVigResponse = z.infer<typeof noVigResponseSchema>;

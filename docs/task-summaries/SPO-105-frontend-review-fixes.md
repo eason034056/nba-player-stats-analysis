@@ -37,7 +37,7 @@ WNBA regular season is 44 games. The shared history panel is the caller on both 
 
 ## Tests / Verification
 
-- `npx vitest run` — 26 files, 105 tests, passed.
+- `npx vitest run` — 26 files, 107 tests, passed.
 - `npx tsc --noEmit` — passed.
 - `npm run lint` — passed, 0 warnings.
 - Integration test: SKIPPED. No new external API client. The UI reads the existing `/props/no-vig` and `/player-dd-history` routes.
@@ -56,7 +56,8 @@ WNBA regular season is 44 games. The shared history panel is the caller on both 
 | Fair percents use the same half-away rounding as the DD tile | `renders 0.6755 as 67.6% in ResultsTable and PlayerDDTile` |
 | `uses_prior` wins when present and a null No price is the fallback | `prefers uses_prior when it is present and falls back when it is absent` |
 | A mixed consensus is labeled when any book used the prior | `labels a mixed consensus when any book used the prior` |
-| `consensus_uses_prior` is read from the consensus object or the envelope | `reads consensus_uses_prior from the consensus object and from the envelope` |
+| `consensus_uses_prior` is read from the consensus object | `reads consensus_uses_prior from the consensus object` |
+| Envelope copies of the SPO-104 flags are ignored, a missing consensus renders no consensus block, and a null `p_no_imp` is `—` | `ignores envelope flags, skips a missing consensus, and dashes a null No implied probability` |
 
 Companion schema locks in `frontend/lib/player-dd-schema.test.ts`: `keeps fetched_at and data_age_seconds on the no-vig schema`, `accepts a one-sided row before the synthetic-line flags exist`, `accepts null under_odds with line_is_synthetic and market_kind`.
 
@@ -70,27 +71,24 @@ Companion schema locks in `frontend/lib/player-dd-schema.test.ts`: `keeps fetche
 
 ## Follow-ups
 
-- `line_is_synthetic` and `market_kind` are read from each result row. They are not read from the response envelope.
 - The hand-typed Odds API bodies called out in the SPO-103 review are backend fixtures. This ticket does not replace them.
 - Implied probabilities and continuous history percents still use `toFixed`. Fair probabilities in the results table and the DD tile share half-away rounding.
 
-## SPO-104 contract used
+## SPO-104 contract
 
-One-sided DD quote: `under_odds: null`, `no_price: null`, `p_under_imp: null`. `over_odds` is the Yes price. `p_under_fair` and `no_fair_prob` stay populated as the complement of the single-leg de-vig and are labeled `4.5% single-leg prior`.
+Final names are the ones in backend PR #37 (`965b05f`). NBA and WNBA share `noVigResponseSchema`. The new fields stay optional and nullable so a payload from current `dev` still parses.
 
-Every result row may include `line_is_synthetic: boolean` (true for DD) and `market_kind: "binary" | "over_under"`.
+A Yes-only quote sets `under_odds`, `p_under_imp`, `no_price`, and `p_no_imp` to null. `over_odds` is the Yes price. `p_under_fair` and `no_fair_prob` stay populated as the complement of the single-leg de-vig and are labeled `4.5% single-leg prior`. A null `p_no_imp` renders `—`.
 
-WNBA uses the same schema and the same components.
+| Field | Where |
+|---|---|
+| `line_is_synthetic` | each result row. True for DD, where `0.5` is a placeholder. |
+| `market_kind` | each result row. `"binary"` or `"over_under"`. |
+| `uses_prior` | each result row. True when that book only posted Yes. A boolean wins. When the field is absent, a null `under_odds` or `no_price` is still the signal. |
+| `consensus_uses_prior` | consensus object, next to `p_yes_fair`. True if any book in that consensus used the prior. |
+| `consensus_prior_book_count` | consensus object. When present and the consensus used the prior, the caption is `includes N book(s) on the 4.5% single-leg prior`. |
 
-### Provisional fields
-
-These names are not on the merged backend yet. They are optional and nullable on the shared NBA/WNBA no-vig schema so either shape parses. Final names wait on the backend PR.
-
-| Field | Where | Meaning |
-|---|---|---|
-| `uses_prior` | each result row and each DD book quote | True when that book only posted Yes and the fair value came from the 4.5% prior. A boolean wins. When the field is absent, a null `under_odds` or `no_price` is still the signal. |
-| `consensus_uses_prior` | consensus object, or the response envelope when the consensus object does not carry it | True if any book in the consensus used the prior. The consensus is labeled in that case. When the flag is absent, the consensus is labeled if any row used the prior. |
-| `consensus_prior_book_count` | same places as `consensus_uses_prior` | When present, the caption is `includes N book(s) on the 4.5% single-leg prior`. |
+These flags are not read from the response envelope. Zod drops envelope copies. When there is no consensus, the object is null or absent and the consensus block is not rendered. If the consensus object is present but `consensus_uses_prior` is absent, the block is labeled when any row used the prior.
 
 **Ticket**: SPO-105
 **Branch**: `feature/SPO-105-frontend-review-fixes`

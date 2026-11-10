@@ -7,9 +7,12 @@
  * `under_odds` and leave `no_price` null. Either null means the fair
  * No number came from the 4.5% single-leg prior.
  *
- * `uses_prior` and `consensus_uses_prior` are provisional names. When
- * a boolean is present it wins. When it is absent, a null No price on
- * any row is still the prior signal.
+ * `uses_prior` is on each result row. `consensus_uses_prior` and
+ * `consensus_prior_book_count` sit on the consensus object, next to
+ * `p_yes_fair`. Copies of those flags on the response envelope are
+ * ignored. A boolean on the row or consensus wins. When `uses_prior`
+ * is absent, a null No price is still the prior signal. A missing
+ * consensus object is not labeled.
  */
 
 import type { BookmakerResult, NoVigResponse } from "@/lib/schemas";
@@ -43,8 +46,6 @@ export interface ConsensusPriorSource {
     consensus_uses_prior?: boolean | null;
     consensus_prior_book_count?: number | null;
   } | null;
-  consensus_uses_prior?: boolean | null;
-  consensus_prior_book_count?: number | null;
   results: Array<{
     uses_prior?: boolean | null;
     under_odds?: number | null;
@@ -56,18 +57,17 @@ function finiteCount(value: number | null | undefined): number | null {
   return typeof value === "number" && Number.isFinite(value) ? value : null;
 }
 
-/** True when the consensus includes at least one 4.5% prior book. */
+/** True when the consensus object says any book used the 4.5% prior. */
 export function consensusUsesPrior(data: ConsensusPriorSource): boolean {
-  const onConsensus = data.consensus?.consensus_uses_prior;
+  if (data.consensus == null) return false;
+  const onConsensus = data.consensus.consensus_uses_prior;
   if (typeof onConsensus === "boolean") return onConsensus;
-  if (typeof data.consensus_uses_prior === "boolean") return data.consensus_uses_prior;
   return data.results.some((row) => usesSingleLegPrior(row));
 }
 
 export function consensusPriorBookCount(data: ConsensusPriorSource): number | null {
-  const onConsensus = finiteCount(data.consensus?.consensus_prior_book_count);
-  if (onConsensus !== null) return onConsensus;
-  return finiteCount(data.consensus_prior_book_count);
+  if (data.consensus == null) return null;
+  return finiteCount(data.consensus.consensus_prior_book_count);
 }
 
 /**

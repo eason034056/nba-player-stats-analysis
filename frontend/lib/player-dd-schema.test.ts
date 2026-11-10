@@ -374,7 +374,7 @@ describe("recorded double-double payloads", () => {
     expect(usesSingleLegPrior(parsed.results[2]!)).toBe(true);
   });
 
-  it("accepts consensus_uses_prior on the consensus object and on the envelope", () => {
+  it("reads consensus_uses_prior only from the consensus object", () => {
     const onConsensus = noVigResponseSchema.parse({
       ...recordedNoVig,
       consensus: {
@@ -389,31 +389,61 @@ describe("recorded double-double payloads", () => {
       "includes 1 book on the 4.5% single-leg prior",
     );
 
-    const onEnvelope = noVigResponseSchema.parse({
+    const envelopeIgnored = noVigResponseSchema.parse({
       ...recordedNoVig,
+      line_is_synthetic: true,
+      market_kind: "binary",
+      uses_prior: false,
       consensus_uses_prior: false,
-      consensus_prior_book_count: 2,
+      consensus_prior_book_count: 9,
     });
-    expect(onEnvelope.consensus?.consensus_uses_prior).toBeUndefined();
-    expect(onEnvelope.consensus_uses_prior).toBe(false);
-    expect(onEnvelope.consensus_prior_book_count).toBe(2);
-    expect(consensusPriorCaption(onEnvelope)).toBeNull();
+    expect("consensus_uses_prior" in envelopeIgnored).toBe(false);
+    expect("line_is_synthetic" in envelopeIgnored).toBe(false);
+    expect("uses_prior" in envelopeIgnored).toBe(false);
+    expect(envelopeIgnored.consensus?.consensus_uses_prior).toBeUndefined();
+    expect(consensusPriorCaption(envelopeIgnored)).toBe(SINGLE_LEG_PRIOR_LABEL);
 
-    const countedOnEnvelope = noVigResponseSchema.parse({
+    const omitted = noVigResponseSchema.parse({
       ...recordedNoVig,
-      results: recordedNoVig.results.map((row) => ({ ...row, uses_prior: false })),
-      consensus_uses_prior: true,
-      consensus_prior_book_count: null,
+      consensus: undefined,
     });
-    expect(countedOnEnvelope.consensus_prior_book_count).toBeNull();
-    expect(consensusPriorCaption(countedOnEnvelope)).toBe(SINGLE_LEG_PRIOR_LABEL);
+    const { consensus: _consensus, ...withoutConsensus } = recordedNoVig;
+    const missing = noVigResponseSchema.parse(withoutConsensus);
+    expect(omitted.consensus).toBeUndefined();
+    expect(missing.consensus).toBeUndefined();
+    expect(consensusPriorCaption(missing)).toBeNull();
+    const nulled = noVigResponseSchema.parse({ ...recordedNoVig, consensus: null });
+    expect(nulled.consensus).toBeNull();
+    expect(consensusPriorCaption(nulled)).toBeNull();
+  });
+
+  it("accepts a null p_no_imp on a Yes-only row", () => {
+    const parsed = noVigResponseSchema.parse({
+      ...recordedNoVig,
+      results: [
+        {
+          ...recordedNoVig.results[1],
+          under_odds: null,
+          p_under_imp: null,
+          no_price: null,
+          p_no_imp: null,
+          uses_prior: true,
+          line_is_synthetic: true,
+          market_kind: "binary",
+        },
+      ],
+    });
+    expect(parsed.results[0]?.p_no_imp).toBeNull();
+    expect(parsed.results[0]?.under_odds).toBeNull();
+    expect(parsed.results[0]?.uses_prior).toBe(true);
   });
 
   it("still parses a payload from before uses_prior existed", () => {
     const parsed = noVigResponseSchema.parse(recordedNoVig);
     expect(parsed.results[1]?.no_price).toBeNull();
+    expect(parsed.results[1]?.p_no_imp).toBeNull();
     expect(parsed.results[1]?.uses_prior).toBeUndefined();
-    expect(parsed.consensus_uses_prior).toBeUndefined();
+    expect("consensus_uses_prior" in parsed).toBe(false);
     expect(parsed.consensus?.consensus_uses_prior).toBeUndefined();
     expect(usesSingleLegPrior(parsed.results[1]!)).toBe(true);
     expect(consensusPriorCaption(parsed)).toBe(SINGLE_LEG_PRIOR_LABEL);
