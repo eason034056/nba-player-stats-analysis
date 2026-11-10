@@ -19,7 +19,7 @@ One table is the cutoff list. `read_tier` in `backend/app/services/daily_analysi
 | Strong play | probability >= 0.70 |
 | Playable | probability >= 0.65 and < 0.70 |
 | Lean | probability >= 0.56 and < 0.65 |
-| null | probability < 0.56, or probability missing |
+| null | probability < 0.56, probability missing, or probability not finite (`NaN`, `Infinity`) |
 
 ```python
 READ_TIER_CUTOFFS = (
@@ -32,6 +32,8 @@ READ_TIER_CUTOFFS = (
 `LEAN_PROBABILITY_FLOOR` is the last cutoff in that tuple, so the storage floor and the Lean label cannot drift apart.
 
 The 0.70, 0.65, and 0.56 cuts are the same numbers `readTier` uses (`strong` / `playable` / `lean`; below that is `pass`). The API `tier` strings are `"Strong play"`, `"Playable"`, and `"Lean"`. Below 0.56 the API sends null, which is the `pass` bucket on the frontend. The picks page on `dev` uses the same 0.70 and 0.65 splits.
+
+`read_tier` returns null when the probability is not finite. `Infinity >= 0.70` is true in Python, so without that check `Infinity` would be labeled `"Strong play"`. Frontend `readTier` already returns null for non-finite values. The same check drops a non-finite probability or line out of `top_read` instead of letting `NaN` replace a real pick (`NaN <= x` is false). A pick whose metric is missing or not in the market map is also left off `top_read`, so the join does not emit an empty `market`.
 
 A pick whose chosen side is at least 0.65 stays on the published board. The default NBA analysis stores a row that misses 0.65 when a side still clears 0.56. The query default remains 0.65, so that row appears only when the client asks for it.
 

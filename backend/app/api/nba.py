@@ -316,7 +316,11 @@ async def get_events(
     ),
     tz_offset: Optional[int] = Query(
         default=None,
-        description="Timezone offset (minutes), e.g. UTC-6 send -360, UTC+8 send 480. Used for filtering local date games."
+        description=(
+            "Timezone offset in minutes, e.g. UTC-6 send -360, UTC+8 send 480. "
+            "Used for filtering local date games. Omitted values use 480, the "
+            "same default as GET /api/nba/daily-picks, so the top_read cache key matches."
+        ),
     )
 ) -> EventsResponse:
     """
@@ -360,11 +364,14 @@ async def get_events(
     if date is None:
         date = datetime.now(timezone.utc).strftime("%Y-%m-%d")
     
-    # Handle timezone offset: default UTC (0 minutes)
-    # Note: JavaScript's getTimezoneOffset() returns "UTC - Local" minutes
-    # Example: UTC-6 returns 360 (positive), UTC+8 returns -480 (negative)
-    # But front-end should send "normal" offset (UTC-6 send -360, UTC+8 send 480)
-    offset_minutes = tz_offset if tz_offset is not None else 0
+    # Omitted tz_offset uses 480 (UTC+8), the same default as
+    # GET /api/nba/daily-picks. top_read is loaded with
+    # daily_picks:nba:{date}:tz{offset}, so a different default would miss
+    # the cache and leave every top_read null. The frontend sends an
+    # explicit offset; this default is only for callers who omit it.
+    # JavaScript's getTimezoneOffset() returns "UTC - Local" minutes
+    # (UTC+8 is -480). Callers should send the normal offset (UTC+8 is 480).
+    offset_minutes = tz_offset if tz_offset is not None else 480
     
     # 1. Check cache (include timezone offset to distinguish different local time requests)
     cache_key = f"{CacheService.build_events_key(date, regions)}:tz{offset_minutes}"

@@ -6,7 +6,9 @@ Defines all API request and response data structures
 - Field: Used to define extra info for fields (description, default values, etc)
 """
 
-from pydantic import BaseModel, Field
+import math
+
+from pydantic import BaseModel, Field, field_validator
 from typing import Any, Dict, List, Literal, Optional
 from datetime import datetime
 
@@ -39,10 +41,32 @@ class TopRead(BaseModel):
     - probability: Chosen-side historical rate, from 0 to 1
     """
     player: str = Field(..., description="Player name")
-    market: str = Field(..., description="Odds API market key, for example player_points")
+    market: str = Field(
+        ...,
+        min_length=1,
+        description="Odds API market key, for example player_points",
+    )
     side: Literal["over", "under"] = Field(..., description="Stored pick side")
     line: float = Field(..., description="Modal bookmaker line")
     probability: float = Field(..., description="Chosen-side historical probability (0-1)")
+
+    @field_validator("line", "probability")
+    @classmethod
+    def _must_be_finite(cls, value: float) -> float:
+        """Reject NaN and Infinity before a TopRead can be built.
+
+        Args:
+            value: Parsed line or probability.
+
+        Returns:
+            The same number when it is finite.
+
+        Raises:
+            ValueError: ``value`` is NaN or Infinity.
+        """
+        if not math.isfinite(value):
+            raise ValueError("must be a finite number")
+        return value
 
 
 class NBAEvent(BaseModel):

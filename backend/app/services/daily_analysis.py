@@ -20,6 +20,7 @@ Dependencies:
 """
 
 import asyncio
+import math
 import re
 import time
 from datetime import datetime, timezone, timedelta
@@ -150,19 +151,22 @@ _METRIC_TO_MARKET_KEY: Dict[str, str] = {
 }
 
 
-def market_key_for_metric(metric: str) -> str:
+def market_key_for_metric(metric: str | None) -> str | None:
     """Return the Odds API market key for a daily-pick metric.
 
-    ``points`` becomes ``player_points``. An unknown metric is returned
-    unchanged so this helper does not invent a market key.
+    ``points`` becomes ``player_points``. A missing or unknown metric
+    returns None. Callers skip that pick instead of emitting ``market: ""``.
 
     Args:
-        metric: CSV / DailyPick metric key.
+        metric: CSV / DailyPick metric key, or None.
 
     Returns:
-        Odds API market key when the metric is known.
+        Odds API market key when the metric is in the supported map.
+        None when it is missing or not a market we can name.
     """
-    return _METRIC_TO_MARKET_KEY.get(metric, metric)
+    if not isinstance(metric, str) or not metric:
+        return None
+    return _METRIC_TO_MARKET_KEY.get(metric)
 
 
 # Alias map: CSV metric key -> SportsDataIO projection field name.
@@ -193,10 +197,11 @@ HIGH_PROBABILITY_THRESHOLD = 0.65
 # The NBA daily-picks query uses this as its default, not as the storage floor.
 MIN_SAMPLE_GAMES = 10
 
-# Read tiers for a stored pick. Frontend has no readTier helper (searched
-# frontend/ on 2026-11-10). Strong / Playable match the picks-page buckets
-# (high at 0.70, medium from 0.65). Lean is the floor added here. Highest
-# cutoff is first; read_tier stops at the first match.
+# Read tiers for a stored pick. Same numeric cutoffs as frontend/lib/today-board.ts
+# readTier on Frontend PR #39 (strong 0.70, playable 0.65, lean 0.56).
+# Backend labels are "Strong play" / "Playable" / "Lean". Below 0.56 and
+# non-finite values are null. Highest cutoff is first; read_tier stops at
+# the first match.
 # See docs/decisions/spo-111-read-data/decision_20261110_read-tier-cutoffs.md.
 READ_TIER_CUTOFFS: tuple[tuple[str, float], ...] = (
     ("Strong play", 0.70),
@@ -223,9 +228,14 @@ def read_tier(probability: float | None) -> str | None:
     Returns:
         ``"Strong play"`` when probability >= 0.70, ``"Playable"`` when
         probability >= 0.65, ``"Lean"`` when probability >= 0.56, or None
-        below that cutoff and when probability is missing.
+        below that cutoff, when probability is missing, and when it is
+        not finite (NaN or Infinity).
     """
     if probability is None:
+        return None
+    if isinstance(probability, bool) or not isinstance(probability, (int, float)):
+        return None
+    if not math.isfinite(probability):
         return None
     for name, cutoff in READ_TIER_CUTOFFS:
         if probability >= cutoff:
@@ -1138,12 +1148,19 @@ def best_top_reads(cached: Any) -> Dict[str, TopRead]:
             line = float(pick["threshold"])
         except (KeyError, TypeError, ValueError):
             continue
+        # NaN compares false against every number, so a later NaN would
+        # replace a real pick. Skip it, and skip a non-finite line.
+        if not math.isfinite(probability) or not math.isfinite(line):
+            continue
+        market = market_key_for_metric(pick.get("metric"))
+        if market is None:
+            continue
         current = best.get(str(event_id))
         if current is not None and probability <= current["probability"]:
             continue
         best[str(event_id)] = {
             "player": str(player),
-            "market": market_key_for_metric(str(pick.get("metric") or "")),
+            "market": market,
             "side": side,
             "line": line,
             "probability": probability,

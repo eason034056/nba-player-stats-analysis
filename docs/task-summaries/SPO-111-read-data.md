@@ -16,6 +16,10 @@ WNBA routes were not extended. Shared models serialize the new optional fields. 
 
 NBA endpoints only. Existing fields are unchanged. Types are JSON types. `top_read` is joined from the NBA daily-picks cache for the same `date` and `tz_offset` as the events request. A cache miss, or an event with no stored pick, is null. This join does not call the Odds API.
 
+When `tz_offset` is omitted, `GET /api/nba/events` uses 480 (UTC+8). That is the same default as `GET /api/nba/daily-picks` and `POST /api/nba/daily-picks/trigger`, so the cache key `daily_picks:nba:{date}:tz480` lines up and `top_read` can join. The frontend still sends an explicit offset. `GET /api/wnba/events` still defaults to 0.
+
+A stored row is skipped, and that event's `top_read` stays null, when its probability or line is not finite, or when `metric` is missing or is not in the market map. The join does not emit `market: ""`.
+
 ### `GET /api/nba/events`
 
 Each object in `events` gains:
@@ -43,7 +47,7 @@ Each object in `picks` gains:
 | `p_over` | number | yes |
 | `p_under` | number | yes |
 
-`tier` is null when the chosen side's probability is below 0.56. `p_over` is the share of prior games strictly above the line. `p_under` is the share strictly below the line. Either is null when that rate was not computed. Both are returned even though `direction` / `probability` still describe the chosen side.
+`tier` is null when the chosen side's probability is below 0.56, and when that probability is not finite (`NaN`, `Infinity`). `p_over` is the share of prior games strictly above the line. `p_under` is the share strictly below the line. Either is null when that rate was not computed. Both are returned even though `direction` / `probability` still describe the chosen side.
 
 Query defaults on `GET` are unchanged:
 
@@ -74,7 +78,7 @@ The default response still requires probability >= 0.65 and `n_games` >= 10. `mi
 | `"Strong play"` | >= 0.70 |
 | `"Playable"` | >= 0.65 and < 0.70 |
 | `"Lean"` | >= 0.56 and < 0.65 |
-| `null` | < 0.56 |
+| `null` | < 0.56, missing, or not finite |
 
 ## Changes
 
@@ -91,7 +95,7 @@ The default response still requires probability >= 0.65 and `n_games` >= 10. `mi
 
 ## Why
 
-`top_read` sits on the event because the Today page already loads `GET /api/nba/events` per game. The number is the best stored pick for that `event_id`, which is what the redesign asked for. Putting it on the daily-picks payload instead would make the events screen wait on a second join in the client. The join reads Redis only. Running analysis from the events route would call the Odds API for props, and this ticket forbids that. Until a daily-picks run has filled the cache for the same date and timezone offset, `top_read` is null.
+`top_read` sits on the event because the Today page already loads `GET /api/nba/events` per game. The number is the best stored pick for that `event_id`, which is what the redesign asked for. Putting it on the daily-picks payload instead would make the events screen wait on a second join in the client. The join reads Redis only. Running analysis from the events route would call the Odds API for props, and this ticket forbids that. Until a daily-picks run has filled the cache for the same date and timezone offset, `top_read` is null. Callers who omit `tz_offset` on the events route used to key that join at offset 0 while daily picks keyed it at 480, so the join missed. Both NBA defaults are now 480.
 
 The published side is chosen at 0.65 before the Lean floor is considered. If Lean were applied first, a 0.57 over would be the stored side and the 0.90 under would never be stored. The default query would then drop the over and the under would be gone. That would change the default board. The regression test builds that case and expects the under.
 
@@ -105,14 +109,14 @@ WNBA uses the same analysis service. The wider storage is gated on `league == "n
 
 ```
 cd backend && pytest --tb=line -q
-2 failed, 829 passed, 23 skipped, 6 xfailed
+2 failed, 856 passed, 23 skipped, 6 xfailed
 ```
 
 The two failures are the known Redis cases: `test_agent_chat_endpoint_validates_action_and_uses_service` and `test_lineups_api_returns_team_count` (connection refused on `localhost:6379`). No other failures.
 
-`tests/test_spo111_read_data.py` covers the tier boundaries, the default-board identity (including the 0.57-over / 0.90-under case), `min_probability=0.56`, `min_games=5`, both rates, `top_read` from cache with a single events fetch and no props fetch, and WNBA storage still dropping Lean and short samples.
+`tests/test_spo111_read_data.py` covers the tier boundaries, the default-board identity (including the 0.57-over / 0.90-under case), `min_probability=0.56`, `min_games=5`, both rates, `top_read` from cache with a single events fetch and no props fetch, and WNBA storage still dropping Lean and short samples. Odds API bookmakers and event objects in that file are deep copies of the recorded fixtures. Non-finite probabilities are skipped, `read_tier` returns null for `Infinity`, an unmapped metric does not become a `top_read`, and an omitted events `tz_offset` reads the `tz480` daily-picks key.
 
-No new external fixture. The events join does not call a provider.
+No new fixture file. The events join does not call a provider.
 
 ## Follow-ups
 
