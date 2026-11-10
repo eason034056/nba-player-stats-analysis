@@ -302,11 +302,31 @@ TEAM_CODE_ALIASES: Dict[str, str] = {
 }
 
 
-def canonical_team_code(team_name: str) -> str:
+def canonical_team_code(team_name: str, league: str = "nba") -> str:
+    """Map a team name to its league's code.
+
+    ``league`` defaults to ``"nba"`` so existing callers keep the NBA
+    alias table. WNBA callers pass ``league="wnba"``. Lynx and Wings
+    are not NBA aliases, so they stay unresolved on the default path
+    and resolve to MIN and DAL only for WNBA. An unknown league raises
+    rather than borrowing the other table.
+    """
     if not team_name:
         return ""
 
+    league_key = (league or "nba").strip().lower()
+    if league_key == "wnba":
+        from app.services.lineup_source_support import detect_team_code
+
+        code = detect_team_code(team_name, league="wnba")
+        if code:
+            return code
+    elif league_key != "nba":
+        raise ValueError(f"Unknown league for team code: {league!r}")
+
     normalized = re.sub(r"[^A-Z0-9]", "", team_name.upper())
+    if league_key == "wnba":
+        return normalized
     return TEAM_CODE_ALIASES.get(normalized, normalized)
 
 
@@ -726,7 +746,7 @@ class DailyAnalysisService:
                         # club on or before it (a gap day keeps the prior club).
                         game_logs = history_stats.get("game_logs", [])
                         player_team = team_from_game_logs(game_logs, commence_time)
-                    player_team_code = canonical_team_code(player_team)
+                    player_team_code = canonical_team_code(player_team, league=league)
 
                     # Get projection value for this metric.
                     # 💡 Translate via PROJECTION_FIELD_ALIASES because the

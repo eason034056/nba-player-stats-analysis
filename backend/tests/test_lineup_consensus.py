@@ -320,7 +320,7 @@ def test_rotowire_parser_normalizes_status_suffixes_and_resolves_team_abbreviati
     monkeypatch.setattr(
         source_support,
         "_get_team_roster_candidates",
-        lambda team_code: {
+        lambda team_code, league="nba": {
             "GSW": [
                 "Stephen Curry",
                 "Buddy Hield",
@@ -370,7 +370,7 @@ def test_rotogrinders_parser_strips_dfs_metadata_and_bench_noise(monkeypatch):
     monkeypatch.setattr(
         source_support,
         "_get_team_roster_candidates",
-        lambda team_code: {
+        lambda team_code, league="nba": {
             "GSW": [
                 "Stephen Curry",
                 "Buddy Hield",
@@ -411,7 +411,7 @@ def test_resolver_keeps_ambiguous_initials_unresolved(monkeypatch):
     monkeypatch.setattr(
         source_support,
         "_get_team_roster_candidates",
-        lambda team_code: ["Jalen Williams", "Jaylin Williams"] if team_code == "OKC" else [],
+        lambda team_code, league="nba": ["Jalen Williams", "Jaylin Williams"] if team_code == "OKC" else [],
     )
 
     result = source_support.resolve_canonical_player_name("J. Williams", "OKC")

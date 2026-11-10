@@ -4,6 +4,32 @@
 
 ## Shipped
 
+### SPO-105 — frontend review fixes
+
+Shipped on `dev` in #36. The in-flight row that came in with the merge still said the branch was open. `under_odds` is nullable in the frontend schema. This PR lands with that change.
+
+### SPO-101 — event-page integration tests
+
+Shipped on `dev` in #34. The progress row that came in with the merge still said the pull request was awaiting squash-merge.
+
+Live tests for the 12-tile `/event` surface and the double-double round-trip. Skipped unless `RUN_INTEGRATION=1`. One batched odds call. Not run in this environment (`ODDS_API_KEY` unset).
+
+### SPO-99 — walk-forward backtest
+
+Shipped on `dev` in #32. The progress section that came in with the merge still said the pull request was open and not merged.
+
+Replaces the in-sample five-player `scripts/agents/evaluation/backtest.py` with a walk-forward harness. Each player-game uses only games dated strictly before it. Daily Picks goes through `choose_daily_pick_side`. The agent path calls `compute_scorecard` on a prior-only cache.
+
+Proxy lines are MED20 by default; L10 is also supported. ROI assumes -110. Closing-line value is not measured. The CLV hook stays inactive unless an odds-history file is passed.
+
+CI job `walk-forward-guard` sits between `frontend-test` and `docker-build` on the workflow from #29. It runs the harness tests, including a 40-player sample (seed 7) that fails if MED20 Brier exceeds 0.30 or the calibration gap exceeds 0.15.
+
+### SPO-97 — Game-log season labels and game types
+
+Shipped on `dev` in #30. Task summary: `docs/task-summaries/SPO-97-csv-season-hygiene.md`.
+
+Cup finals are `cup_championship` and stay out of the default regular-season sample. The progress row that came in with the merge still said the branch was in review and the summary was not on `dev`.
+
 ### SPO-98 — Player team attribution and exact name matching
 
 Shipped on `dev` in #28 (`fad723a`). Task summary: `docs/task-summaries/SPO-98-team-attribution-exact-names.md`.
@@ -48,7 +74,7 @@ Phases 0–3.5 are done. Phases 4 and 5 are still open.
 | 2 backend services | SPO-16 / SPO-17 / SPO-18, PR #1 (`35a25dd`) |
 | 3 frontend | SPO-20, PR #3 (`e36cb57`) |
 | 3.5 API route gap | SPO-26, PR #4 (`490b9be`) |
-| 4 integration tests | SPO-101, open. Gated integration tests for the `/event` 12 tiles and the DD round-trip. No merge yet. |
+| 4 integration tests | SPO-101, shipped on `dev` in #34. Gated with `RUN_INTEGRATION=1`. |
 | 5 final review | SPO-103, open. Final review; closes SPO-10 and SPO-11. No merge yet. |
 
 ## Abandoned
@@ -78,23 +104,10 @@ Stale pull requests the owner is closing. Not merged.
 | Ticket | Note |
 |---|---|
 | SPO-96 | This docs rewrite (`feature/SPO-96-claude-md-workflow-rewrite`). |
-| SPO-97 | Game-log season labels and game-type hygiene, in review on `feature/SPO-97-csv-season-hygiene`. CSVs relabeled from the ESPN schedule; Summer League and preseason dropped; playoffs and play-in are opt-in, so default hit rates are regular season only. Cup finals are `cup_championship` and stay out of that sample, as do unclassified rows. Task summary: `docs/task-summaries/SPO-97-csv-season-hygiene.md` (not on `dev` until this merges). |
-| SPO-99 | Walk-forward backtest, open as #32. Entry below. |
+| SPO-104 | One-sided DD quotes (`under_odds` / `p_under_imp` null, including a JSON null No price; `line_is_synthetic`, `market_kind`, `uses_prior`), league-scoped team codes, and the SPO-97 schedule-index follow-ups. Lands with #36. PR #37 into `dev`. Summary: `docs/task-summaries/SPO-104-dd-one-sided-and-followups.md`. |
 | SPO-107 | Harness game types match production regular season. Playoffs and play-in are a separate report section. Open on `feature/SPO-107-harness-gametype-parity`. Entry below. |
-| SPO-101 | SPO-10 Phase 4: live integration tests for the 12-tile `/event` surface and the DD round-trip (`feature/SPO-101-spo10-phase4-integration-tests`). Skipped unless `RUN_INTEGRATION=1`. One batched odds call (expected 10 paid units when FTM/FGM are empty, ceiling 12). Not run live (`ODDS_API_KEY` unset). Production code unchanged. In review, awaiting squash-merge. |
 | SPO-102 | Wire `PlayerDDTile` to double-double history and yes/no odds. Open on `feature/SPO-102-player-dd-tile-wiring`. Summary: `docs/task-summaries/SPO-102-player-dd-tile-wiring.md`. |
 | SPO-103 | SPO-10 Phase 5 final review. Open. |
-| SPO-105 | Frontend fixes from the SPO-103 review. Open on `feature/SPO-105-frontend-review-fixes`. Summary: `docs/task-summaries/SPO-105-frontend-review-fixes.md`. |
-
-### SPO-99 — walk-forward backtest
-
-Open as #32 (`feature/SPO-99-walk-forward-backtest`), base `dev`. Not merged.
-
-Replaces the in-sample five-player `scripts/agents/evaluation/backtest.py` with a walk-forward harness. Each player-game uses only games dated strictly before it. Daily Picks goes through `choose_daily_pick_side`. The agent path calls `compute_scorecard` on a prior-only cache.
-
-Proxy lines are MED20 by default; L10 is also supported. ROI assumes -110. Closing-line value is not measured. The CLV hook stays inactive unless an odds-history file is passed.
-
-CI job `walk-forward-guard` sits between `frontend-test` and `docker-build` on the workflow from #29. It runs the harness tests, including a 40-player sample (seed 7) that fails if MED20 Brier exceeds 0.30 or the calibration gap exceeds 0.15.
 
 ### SPO-107 — harness game-type parity
 
