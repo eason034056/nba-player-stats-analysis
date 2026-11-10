@@ -10,10 +10,23 @@
 "use client";
 
 import { TrendingUp, TrendingDown, AlertCircle, Calculator } from "lucide-react";
+import {
+  MISSING_QUOTE,
+  SINGLE_LEG_PRIOR_LABEL,
+  fairNoValue,
+  fairYesValue,
+  lineText,
+  noImpliedText,
+  noPriceText,
+  oddsAgeLabel,
+  responseIsBinary,
+  usesSingleLegPrior,
+  yesImpliedText,
+  yesPriceText,
+} from "@/lib/no-vig-display";
 import { type NoVigResponse, type BookmakerResult } from "@/lib/schemas";
 import {
   formatProbability,
-  formatAmericanOdds,
   formatVig,
   getBookmakerDisplayName,
   getMarketDisplayName,
@@ -53,41 +66,49 @@ function ProbabilityBar({
 /**
  * Single Result Row
  */
-function ResultRow({ result }: { result: BookmakerResult }) {
+function priceClass(text: string): string {
+  if (text === MISSING_QUOTE) return "text-gray";
+  return text.startsWith("-") ? "text-red" : "text-green-600";
+}
+
+function ResultRow({
+  result,
+  market,
+  binary,
+}: {
+  result: BookmakerResult;
+  market: string;
+  binary: boolean;
+}) {
   const isHighVig = result.vig > 0.06;
   const isLowVig = result.vig < 0.04;
+  const prior = binary && usesSingleLegPrior(result);
+  const yesFair = fairYesValue(result);
+  const noFair = fairNoValue(result);
+  const yesOdds = yesPriceText(result);
+  const noOdds = noPriceText(result, binary);
 
   return (
-    <tr className="group hover:bg-cream transition-colors">
-      {/* Bookmaker name */}
+    <tr
+      className="group hover:bg-cream transition-colors"
+      data-testid={`result-row-${result.bookmaker}`}
+    >
       <td className="font-semibold text-dark">
         {getBookmakerDisplayName(result.bookmaker)}
       </td>
 
-      {/* Line */}
-      <td className="font-mono text-lg text-red font-bold">
-        {result.line}
+      <td className="font-mono text-lg text-red font-bold" data-testid="result-line">
+        {lineText(result, market)}
       </td>
 
-      {/* Over odds */}
-      <td className="font-mono font-semibold">
-        <span className={cn(
-          result.over_odds < 0 ? "text-red" : "text-green-600"
-        )}>
-          {formatAmericanOdds(result.over_odds)}
-        </span>
+      <td className="font-mono font-semibold" data-testid="result-yes-price">
+        <span className={priceClass(yesOdds)}>{yesOdds}</span>
       </td>
 
-      {/* Under odds */}
-      <td className="font-mono font-semibold">
-        <span className={cn(
-          result.under_odds < 0 ? "text-red" : "text-green-600"
-        )}>
-          {formatAmericanOdds(result.under_odds)}
-        </span>
+      <td className="font-mono font-semibold" data-testid="result-no-price">
+        <span className={priceClass(noOdds)}>{noOdds}</span>
       </td>
 
-      {/* Vig */}
       <td>
         <span className={cn(
           "inline-flex items-center px-2.5 py-1 rounded-full text-xs font-bold",
@@ -99,24 +120,42 @@ function ResultRow({ result }: { result: BookmakerResult }) {
         </span>
       </td>
 
-      {/* Over probability */}
-      <td>
+      <td data-testid="result-yes-fair">
         <div className="flex items-center gap-2">
           <span className="font-mono text-blue-600 font-bold w-16">
-            {formatProbability(result.p_over_fair)}
+            {yesFair === null ? MISSING_QUOTE : formatProbability(yesFair)}
           </span>
-          <ProbabilityBar probability={result.p_over_fair} color="blue" />
+          {yesFair !== null && (
+            <ProbabilityBar probability={yesFair} color="blue" />
+          )}
         </div>
+        {binary && (
+          <p className="text-[10px] text-gray mt-1" data-testid="result-yes-implied">
+            {yesImpliedText(result)}
+          </p>
+        )}
+        {prior && yesFair !== null && (
+          <p className="text-[10px] text-gray">{SINGLE_LEG_PRIOR_LABEL}</p>
+        )}
       </td>
 
-      {/* Under probability */}
-      <td>
+      <td data-testid="result-no-fair">
         <div className="flex items-center gap-2">
           <span className="font-mono text-yellow font-bold w-16">
-            {formatProbability(result.p_under_fair)}
+            {noFair === null ? MISSING_QUOTE : formatProbability(noFair)}
           </span>
-          <ProbabilityBar probability={result.p_under_fair} color="amber" />
+          {noFair !== null && (
+            <ProbabilityBar probability={noFair} color="amber" />
+          )}
         </div>
+        {binary && (
+          <p className="text-[10px] text-gray mt-1" data-testid="result-no-implied">
+            {noImpliedText(result, binary)}
+          </p>
+        )}
+        {prior && noFair !== null && (
+          <p className="text-[10px] text-gray">{SINGLE_LEG_PRIOR_LABEL}</p>
+        )}
       </td>
     </tr>
   );
@@ -125,12 +164,27 @@ function ResultRow({ result }: { result: BookmakerResult }) {
 /**
  * Consensus Block
  */
-function ConsensusBlock({ 
-  consensus 
-}: { 
+function ConsensusBlock({
+  consensus,
+  binary,
+  priorOnly,
+}: {
   consensus: NoVigResponse["consensus"];
+  binary: boolean;
+  priorOnly: boolean;
 }) {
   if (!consensus) return null;
+
+  const yesFair =
+    typeof consensus.p_yes_fair === "number"
+      ? consensus.p_yes_fair
+      : consensus.p_over_fair;
+  const noFair =
+    typeof consensus.p_no_fair === "number"
+      ? consensus.p_no_fair
+      : consensus.p_under_fair;
+  const yesLabel = binary ? "Yes" : "Over";
+  const noLabel = binary ? "No" : "Under";
 
   return (
     <div className="card mt-6 border-red">
@@ -147,36 +201,40 @@ function ConsensusBlock({
       </div>
 
       <div className="grid grid-cols-2 gap-4">
-        {/* Over */}
         <div className="bg-blue-50 rounded-lg p-4 border-2 border-blue-200">
           <div className="flex items-center gap-2 mb-2">
             <TrendingUp className="w-4 h-4 text-blue-600" />
-            <span className="text-sm text-blue-600 font-semibold">Over</span>
+            <span className="text-sm text-blue-600 font-semibold">{yesLabel}</span>
           </div>
           <p className="text-3xl font-mono font-bold text-blue-600">
-            {formatProbability(consensus.p_over_fair)}
+            {formatProbability(yesFair)}
           </p>
+          {priorOnly && (
+            <p className="text-[10px] text-gray mt-1">{SINGLE_LEG_PRIOR_LABEL}</p>
+          )}
           <div className="mt-2 w-full bg-blue-200 rounded-full h-2">
             <div
               className="bg-blue-600 h-full rounded-full transition-all duration-500"
-              style={{ width: `${consensus.p_over_fair * 100}%` }}
+              style={{ width: `${yesFair * 100}%` }}
             />
           </div>
         </div>
 
-        {/* Under */}
         <div className="bg-yellow/20 rounded-lg p-4 border-2 border-yellow">
           <div className="flex items-center gap-2 mb-2">
             <TrendingDown className="w-4 h-4 text-dark" />
-            <span className="text-sm text-dark font-semibold">Under</span>
+            <span className="text-sm text-dark font-semibold">{noLabel}</span>
           </div>
           <p className="text-3xl font-mono font-bold text-dark">
-            {formatProbability(consensus.p_under_fair)}
+            {formatProbability(noFair)}
           </p>
+          {priorOnly && (
+            <p className="text-[10px] text-gray mt-1">{SINGLE_LEG_PRIOR_LABEL}</p>
+          )}
           <div className="mt-2 w-full bg-yellow/50 rounded-full h-2">
             <div
               className="bg-yellow h-full rounded-full transition-all duration-500"
-              style={{ width: `${consensus.p_under_fair * 100}%` }}
+              style={{ width: `${noFair * 100}%` }}
             />
           </div>
         </div>
@@ -268,9 +326,15 @@ export function ResultsTable({ data, isLoading }: ResultsTableProps) {
     );
   }
 
+  const binary = responseIsBinary(data);
+  const priorOnly =
+    binary &&
+    data.results.length > 0 &&
+    data.results.every((row) => usesSingleLegPrior(row));
+  const ageLabel = oddsAgeLabel(data);
+
   return (
     <div className="animate-fade-in">
-      {/* Title */}
       <div className="flex items-center gap-3 mb-4">
         <h2 className="text-xl font-bold text-dark">
           {data.player_name}
@@ -280,32 +344,44 @@ export function ResultsTable({ data, isLoading }: ResultsTableProps) {
         </span>
       </div>
 
-      {/* Table */}
+      {ageLabel && (
+        <p className="mb-4 text-xs text-gray" data-testid="odds-age">
+          {ageLabel}
+        </p>
+      )}
+
       <div className="table-container overflow-hint">
         <table className="table">
           <thead>
             <tr>
               <th>Bookmaker</th>
-              <th>Line</th>
-              <th>Over Odds</th>
-              <th>Under Odds</th>
+              <th>{binary ? "Market" : "Line"}</th>
+              <th>{binary ? "Yes Odds" : "Over Odds"}</th>
+              <th>{binary ? "No Odds" : "Under Odds"}</th>
               <th>Vig</th>
-              <th>Over Probability</th>
-              <th>Under Probability</th>
+              <th>{binary ? "Yes Probability" : "Over Probability"}</th>
+              <th>{binary ? "No Probability" : "Under Probability"}</th>
             </tr>
           </thead>
           <tbody>
             {data.results.map((result) => (
-              <ResultRow key={result.bookmaker} result={result} />
+              <ResultRow
+                key={result.bookmaker}
+                result={result}
+                market={data.market}
+                binary={binary}
+              />
             ))}
           </tbody>
         </table>
       </div>
 
-      {/* Consensus */}
-      <ConsensusBlock consensus={data.consensus} />
+      <ConsensusBlock
+        consensus={data.consensus}
+        binary={binary}
+        priorOnly={priorOnly}
+      />
 
-      {/* Note */}
       <p className="mt-4 text-xs text-gray">
         * Lower vig indicates the bookmaker&apos;s odds are closer to fair;
         No-vig probability is the fair probability estimate after removing vig

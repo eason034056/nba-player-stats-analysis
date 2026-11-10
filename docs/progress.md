@@ -1,6 +1,6 @@
 # Sports Lab Progress
 
-> Engineers update the row for their ticket in the pull request that changes that ticket. This file is a snapshot of ticket state, not a heartbeat log. Last updated: **2026-11-10** (SPO-96, after merging `origin/dev` through `fad723a`). Facts below were checked against `docs/task-summaries/`, `git log` on `dev`, and `gh pr list --base dev`. Titles that were not in those sources are left blank.
+> Engineers update the row for their ticket in the pull request that changes that ticket. This file is a snapshot of ticket state, not a heartbeat log. Last updated: **2026-11-10** (SPO-105). Facts below were checked against `docs/task-summaries/`, `git log` on `dev`, and `gh pr list --base dev`. Titles that were not in those sources are left blank.
 
 ## Shipped
 
@@ -83,6 +83,7 @@ Stale pull requests the owner is closing. Not merged.
 | SPO-101 | SPO-10 Phase 4 integration tests. Open. |
 | SPO-102 | Wire `PlayerDDTile` to double-double history and yes/no odds. Open on `feature/SPO-102-player-dd-tile-wiring`. Summary: `docs/task-summaries/SPO-102-player-dd-tile-wiring.md`. |
 | SPO-103 | SPO-10 Phase 5 final review. Open. |
+| SPO-105 | Frontend fixes from the SPO-103 review. Open on `feature/SPO-105-frontend-review-fixes`. Summary: `docs/task-summaries/SPO-105-frontend-review-fixes.md`. |
 
 ## Not classified
 

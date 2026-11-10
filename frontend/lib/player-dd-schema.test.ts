@@ -301,4 +301,50 @@ describe("recorded double-double payloads", () => {
       expect(parsed.data_age_seconds).toBe(90);
     },
   );
+
+  it("keeps fetched_at and data_age_seconds on the no-vig schema", () => {
+    const parsed = noVigResponseSchema.parse({
+      ...recordedNoVig,
+      fetched_at: "2026-11-10T03:00:00Z",
+      data_age_seconds: 47,
+      debug_trace: "strip-me",
+    });
+    expect(parsed.fetched_at).toBe("2026-11-10T03:00:00Z");
+    expect(parsed.data_age_seconds).toBe(47);
+    expect(parsed.cache_state).toBe("fresh");
+    expect(parsed.source).toBe("snapshot_cache");
+    expect("debug_trace" in parsed).toBe(false);
+  });
+
+  it("accepts a one-sided row before the synthetic-line flags exist", () => {
+    const legacy = noVigResponseSchema.parse(recordedNoVig);
+    expect(legacy.results[1]?.under_odds).toBe(-240);
+    expect(legacy.results[1]?.no_price).toBeNull();
+    expect(legacy.results[1]?.line_is_synthetic).toBeUndefined();
+    expect(legacy.results[1]?.market_kind).toBeUndefined();
+  });
+
+  it("accepts null under_odds with line_is_synthetic and market_kind", () => {
+    const parsed = noVigResponseSchema.parse({
+      ...recordedNoVig,
+      market: "player_double_double",
+      results: [
+        {
+          ...recordedNoVig.results[1],
+          under_odds: null,
+          p_under_imp: null,
+          no_price: null,
+          p_no_imp: null,
+          line_is_synthetic: true,
+          market_kind: "binary",
+        },
+      ],
+    });
+    expect(parsed.results[0]?.under_odds).toBeNull();
+    expect(parsed.results[0]?.p_under_imp).toBeNull();
+    expect(parsed.results[0]?.p_under_fair).toBe(0.3245);
+    expect(parsed.results[0]?.no_fair_prob).toBe(0.3245);
+    expect(parsed.results[0]?.line_is_synthetic).toBe(true);
+    expect(parsed.results[0]?.market_kind).toBe("binary");
+  });
 });

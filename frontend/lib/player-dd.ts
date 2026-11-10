@@ -5,10 +5,12 @@
  * `yes_*` / `no_*` fields. It must not invent a rate from `dd_games`,
  * and it must not treat legacy `over_*` / `under_*` values as Yes/No.
  * Those legacy fields stay on the row so older Over/Under screens keep
- * parsing, including the `line = 0.5` sentinel and the single-leg case
- * where `under_odds` is copied from the Yes price.
+ * parsing. A one-sided quote is `no_price: null`. SPO-104 also sends
+ * `under_odds: null` instead of copying the Yes price. Either null means
+ * the fair pair came from the 4.5% single-leg prior.
  */
 
+import { usesSingleLegPrior } from "@/lib/no-vig-display";
 import type {
   BookmakerResult,
   NoVigResponse,
@@ -36,6 +38,8 @@ export interface DDBookQuote {
   noImplied: number | null;
   yesFair: number | null;
   noFair: number | null;
+  /** True when No was not posted and fair values use the 4.5% prior. */
+  usesSingleLegPrior: boolean;
 }
 
 /**
@@ -90,6 +94,7 @@ function quoteFromRow(row: BookmakerResult): DDBookQuote | null {
     noImplied: isProbability(row.p_no_imp) ? row.p_no_imp : null,
     yesFair: isProbability(row.yes_fair_prob) ? row.yes_fair_prob : null,
     noFair: isProbability(row.no_fair_prob) ? row.no_fair_prob : null,
+    usesSingleLegPrior: usesSingleLegPrior(row),
   };
 }
 
