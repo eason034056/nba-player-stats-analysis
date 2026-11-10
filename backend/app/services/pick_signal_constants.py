@@ -69,16 +69,17 @@ OFFLINE_MARKET_PRIOR = 0.5
 
 # Platt on the clipped adjustment total. Rewritten by fit_combined_platt.
 # Market log-odds is added afterwards with coefficient 1.
-PLATT_A = 0.28010420
-PLATT_B = 2.16005911
+PLATT_A = 0.28036258
+PLATT_B = 2.15982400
 
 FIT_SAMPLE = {
     "league": "nba",
     "proxy": "MED20",
     "market_prior": OFFLINE_MARKET_PRIOR,
     "cutoff": "2026-03-17",
-    "n": 34510,
+    "n": 34507,
     "date_start": "2025-11-09",
     "date_end": "2026-03-17",
-    "note": "Platt fit on rows dated on or before cutoff. Later rows are the holdout and were not used to choose A or B. Market log-odds coefficient is fixed at 1. Holdout n=18817, Brier 0.2279, signed gap +0.0161.",
+    "game_types": "regular_season",
+    "note": "Platt fit on regular-season rows dated on or before cutoff. Playoffs and the play-in are excluded by the walk-forward game-type filter, the same set CSVPlayerHistoryService._allowed_game_types uses. Later regular-season rows are the holdout and were not used to choose A or B. Market log-odds coefficient is fixed at 1. Holdout n=13751, Brier 0.2309, signed gap +0.0181.",
 }

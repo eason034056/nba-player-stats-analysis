@@ -8,7 +8,7 @@
 
 NBA Daily Picks now carry five side-relative signals and a calibrated `combined_probability`. A missing input is null on that signal, not a neutral verdict. No modal-line price, or an injury status of Out or Doubtful, leaves `combined_probability` null. WNBA picks get `signals=None` and `combined_probability=None`.
 
-The blend starts from the market no-vig log-odds, adds four capped adjustments, and applies Platt only to the adjustment total. The market coefficient stays 1. Stored constants are the fit on rows dated ≤ 2026-03-17 (`PLATT_A = 0.28010420`, `PLATT_B = 2.16005911`, n = 34,510). The holdout is 2026-03-18 → 2026-05-11 (n = 18,817): combined Brier 0.2279 (0.2258–0.2300), signed gap +0.0161, against `probability` Brier 0.2420, signed gap +0.1081. Paired Brier difference −0.0140 (−0.0157 to −0.0124). Scores on the rows that chose A and B, and the earlier full-sample fit that included the holdout, are not comparable to that holdout.
+The blend starts from the market no-vig log-odds, adds four capped adjustments, and applies Platt only to the adjustment total. The market coefficient stays 1. Stored constants are the regular-season fit on rows dated ≤ 2026-03-17 (`PLATT_A = 0.28036258`, `PLATT_B = 2.15982400`, n = 34,507). Playoffs and the play-in are excluded. The holdout is 2026-03-18 → 2026-04-12 (n = 13,751): combined Brier 0.2309 (0.2284–0.2333), signed gap +0.0181, ECE 0.0192, widest bucket 0.0270, against `probability` Brier 0.2440 (0.2403–0.2477), signed gap +0.1105, ECE 0.1105, widest bucket 0.1565. Paired Brier difference −0.0132 (−0.0151 to −0.0112). Scores on the rows that chose A and B are not comparable to that holdout.
 
 `combined_probability` is not the headline. `probability` stays the headline until a separate real-line calibration check passes. That check is a separate ticket. Backtest Analyst verdict: INSUFFICIENT REAL-LINE DATA (2026-11-10).
 
@@ -51,10 +51,10 @@ Rank 1 is weakest. The loader copies SportsDataIO's integer with no inversion. T
 cd backend && python3 -m pytest
 # 856 passed, 23 skipped, 6 xfailed, 2 failed
 cd scripts/agents && python3 -m pytest
-# 96 passed
+# 114 passed
 ```
 
-Rerun after the NaN and modal-line fixes. The two backend failures are `test_agent_chat_endpoint_validates_action_and_uses_service` and `test_lineups_api_returns_team_count`. Both die in the rate limiter because Redis is not running in this environment (`ConnectionError` has no `detail`). They do not import the signal module. The same two fail on `dev` at `a14370d`.
+Rerun after the regular-season merge and the refit. The two backend failures are `test_agent_chat_endpoint_validates_action_and_uses_service` and `test_lineups_api_returns_team_count`. Both die in the rate limiter because Redis is not running in this environment (`ConnectionError` has no `detail`). They do not import the signal module.
 
 - Verdict boundaries for over and under, including the exact cuts.
 - Each missing input stays null and adds 0 to the blend.
@@ -67,28 +67,26 @@ Rerun after the NaN and modal-line fixes. The two backend failures are `test_age
 
 ## Calibration
 
-Stored coefficients: `PLATT_A = 0.28010420`, `PLATT_B = 2.16005911`, fit on 34,510 NBA MED20 rows dated 2025-11-09 → 2026-03-17. The market term is the fair 0.5 prior. The holdout below is scored with those coefficients and was not used to choose them.
+Stored coefficients: `PLATT_A = 0.28036258`, `PLATT_B = 2.15982400`, fit on 34,507 regular-season NBA MED20 rows dated 2025-11-09 → 2026-03-17. Playoffs and the play-in are excluded by the walk-forward game-type filter. The market term is the fair 0.5 prior. The holdout below is scored with those coefficients and was not used to choose them.
 
 | Slice | n | Combined Brier | Combined signed gap | Probability Brier | Probability signed gap |
 |---|---|---|---|---|---|
-| Holdout 2026-03-18 → 2026-05-11 | 18,817 | 0.2279 (0.2258–0.2300) | +0.0161 | 0.2420 (0.2388–0.2451) | +0.1081 |
-| Regular-season slice 2026-03-18 → 2026-04-12 | 13,778 | 0.2308 | +0.0180 | 0.2440 | +0.1105 |
+| Holdout 2026-03-18 → 2026-04-12 | 13,751 | 0.2309 (0.2284–0.2333) | +0.0181 | 0.2440 (0.2403–0.2477) | +0.1105 |
 
-Holdout ECE 0.0229, widest combined bucket 0.0359, log loss 0.6475. `probability` widest bucket 0.1336, log loss 0.6980. Paired Brier difference −0.0140 (95% CI −0.0157 to −0.0124).
+Holdout ECE 0.0192, widest combined bucket 0.0270, log loss 0.6539. `probability` ECE 0.1105, widest bucket 0.1565, log loss 0.7067. Paired Brier difference −0.0132 (95% CI −0.0151 to −0.0112).
 
-The regular-season slice uses the same coefficients. It is not a refit. About 5,039 holdout rows are playoff or play-in. Rebaseline after PR #38 merges is pending.
+The rebaseline after PR #38 is done. The holdout is regular season only and ends 2026-04-12. 4,692 settled playoff and play-in rows were kept out of the fit.
 
-A score on the 34,510 fit rows is not comparable to the holdout. The earlier full-sample fit on all 53,327 rows (Brier 0.2235, gap 0.0000) included the holdout and is not comparable either. Those coefficients are not stored.
+A score on the 34,507 fit rows is not comparable to the holdout. The earlier full-sample fit on all 53,327 rows (Brier 0.2235, gap 0.0000) included the holdout and postseason games and is not comparable either. Those coefficients are not stored.
 
 ## Validation status
 
-INSUFFICIENT REAL-LINE DATA (2026-11-10). The proxy-line holdout met the pass bar. `odds_line_snapshots` could not be queried (no production DB access). `combined_probability` is not the headline. A separate ticket owns the real-line check: at least 1,000 graded two-sided rows.
+INSUFFICIENT REAL-LINE DATA (2026-11-10). The proxy-line holdout met the pass bar. `combined_probability` is not the headline. A separate ticket owns the real-line check: at least 1,000 graded two-sided rows. The Backtest Analyst queried the local project database read-only and found `odds_line_snapshots` has 0 rows, even though `odds_snapshot_logs` has 22 runs. The real-line check cannot start until lines are being stored.
 
 ## Known limitations
 
-- About 5,039 holdout rows are playoff or play-in games, because this branch predates PR #38. Rebaseline after #38 merges into `dev`. Pending. Coefficients were not refit to drop them.
-- Early-season fits are unstable. January 2026, trained on November–December only (n = 8,902), had combined Brier 0.2171 versus `probability` 0.2149, and the 0.4–0.5 bucket gap was −0.102.
-- With a constant 0.5 market, offline `combined_probability` is a recalibrated adjustment total. It shares `history_rate` with `probability` (correlation 0.38 overall, 0.40 on the fit rows, 0.35 on the holdout). `A = 0.2801` encodes that the pick side beats a coin flip, and on a real no-vig market that can double-count recent form. Refit A and B once real lines exist.
+- Early-season fits are unstable. In a rolling monthly check before this rebaseline, January 2026 (trained on November–December only, n = 8,902) had combined Brier 0.2171 versus `probability` 0.2149, and the 0.4–0.5 bucket gap was −0.102.
+- With a constant 0.5 market, offline `combined_probability` is a recalibrated adjustment total. On the sample before this rebaseline it shared `history_rate` with `probability` (correlation 0.38 overall, 0.40 on the fit rows, 0.35 on the holdout). `A = 0.2804` encodes that the pick side beats a coin flip, and on a real no-vig market that can double-count recent form. Refit A and B once real lines exist.
 
 Regenerate:
 
@@ -99,8 +97,8 @@ python scripts/agents/evaluation/backtest.py --report backtest_report.md
 
 ## Follow-ups
 
-- Separate ticket: real-line calibration before `combined_probability` can replace `probability` as the headline. Needs at least 1,000 graded two-sided rows from `odds_line_snapshots`.
-- Rebaseline after PR #38 merges into `dev`. Not done here.
+- Separate ticket: real-line calibration before `combined_probability` can replace `probability` as the headline. Needs at least 1,000 graded two-sided rows from `odds_line_snapshots`. That table has 0 rows in the local project database (22 runs are in `odds_snapshot_logs`), so the check cannot start until lines are being stored.
+- Regular-season rebaseline after PR #38: done. Stored coefficients are the regular-season fit.
 - Scale the ±0.5 projection cut by each metric's spread.
 - SPO-115 owns the `bookmakers_count` double-count. This branch does not edit that function.
 - `PlayerProjectionPanel` still describes rank 1 as the strongest defense.

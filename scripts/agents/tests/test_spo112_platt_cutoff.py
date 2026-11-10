@@ -40,6 +40,7 @@ def _row(date: str, adjustment: float, hit: int, *, proxy: str = "MED20", pick: 
         None,
         None,
         None,
+        "regular_season",
         0.60,
         adjustment,
     )
@@ -111,7 +112,8 @@ def test_default_cutoff_is_an_inclusive_string_compare(monkeypatch):
     rows.append(
         DailyRow(
             "nba", "MED20", "2026-01-03", "points", 20.5, 22.0, 20, 32.0,
-            0.7, 0.25, 1, "over", 0.7, 1, "proxy", None, None, None, 0.6, None,
+            0.7, 0.25, 1, "over", 0.7, 1, "proxy", None, None, None,
+            "regular_season", 0.6, None,
         )
     )
 
@@ -200,15 +202,20 @@ def test_stored_constants_match_the_default_cutoff_on_committed_data():
     adjustments = np.array([float(row.combined_adjustment) for row in train])
     outcomes = np.array([float(row.hit) for row in train])
     intercept, slope = fit_platt(adjustments, outcomes)
-    assert f"{intercept:.8f}" == f"{PLATT_A:.8f}" == "0.28010420"
-    assert f"{slope:.8f}" == f"{PLATT_B:.8f}" == "2.16005911"
-    assert len(train) == FIT_SAMPLE["n"] == 34510
+    assert f"{intercept:.8f}" == f"{PLATT_A:.8f}" == "0.28036258"
+    assert f"{slope:.8f}" == f"{PLATT_B:.8f}" == "2.15982400"
+    assert len(train) == FIT_SAMPLE["n"] == 34507
     assert train[0].date == FIT_SAMPLE["date_start"] == "2025-11-09"
     assert train[-1].date == FIT_SAMPLE["date_end"] == "2026-03-17"
     assert FIT_SAMPLE["cutoff"] == cutoff
     assert FIT_SAMPLE["market_prior"] == 0.5
-    assert len(hold) == 18817
+    assert FIT_SAMPLE["game_types"] == "regular_season"
+    assert len(hold) == 13751
+    from evaluation.walk_forward import _history_types
 
-    regular = [row for row in hold if row.date <= "2026-04-12"]
-    assert len(regular) == 13778
-    assert len(hold) - len(regular) == 5039
+    allowed = _history_types()
+    assert allowed == {"regular_season"}
+    assert all(row.game_type in allowed for row in rows)
+    assert all(row.game_type not in {"playoffs", "play_in"} for row in rows)
+    assert replay.postseason_daily
+    assert all(row.game_type not in allowed for row in replay.postseason_daily)

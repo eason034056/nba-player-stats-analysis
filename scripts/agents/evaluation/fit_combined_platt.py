@@ -177,8 +177,11 @@ def _write_constants(intercept: float, slope: float, sample: dict) -> None:
         f"    \"n\": {sample['n']},\n"
         f"    \"date_start\": \"{sample['date_start']}\",\n"
         f"    \"date_end\": \"{sample['date_end']}\",\n"
-        '    "note": "Platt fit on rows dated on or before cutoff. '
-        "Later rows are the holdout and were not used to choose A or B. "
+        '    "game_types": "regular_season",\n'
+        '    "note": "Platt fit on regular-season rows dated on or before cutoff. '
+        "Playoffs and the play-in are excluded by the walk-forward game-type filter, "
+        "the same set CSVPlayerHistoryService._allowed_game_types uses. "
+        "Later regular-season rows are the holdout and were not used to choose A or B. "
         "Market log-odds coefficient is fixed at 1. "
         f"Holdout n={sample['holdout_n']}, "
         f"Brier {sample['holdout_brier']:.4f}, "
@@ -213,7 +216,7 @@ def main(argv: list[str] | None = None) -> None:
     args = parser.parse_args(argv)
     cutoff = args.cutoff
     bootstrap()
-    from evaluation.walk_forward import load_historical, replay_league
+    from evaluation.walk_forward import _history_types, load_historical, replay_league
 
     historical = load_historical()
     service = historical._csv_for("nba")
@@ -225,6 +228,7 @@ def main(argv: list[str] | None = None) -> None:
         do_agent=False,
         validate=0,
     )
+    allowed = _history_types()
     rows = [
         row
         for row in replay.daily
@@ -233,6 +237,22 @@ def main(argv: list[str] | None = None) -> None:
         and row.hit is not None
         and row.combined_adjustment is not None
     ]
+    off_type = sorted({row.game_type for row in rows if row.game_type not in allowed})
+    if off_type:
+        raise RuntimeError(
+            "regular-season filter failed: settled rows include "
+            + ", ".join(off_type)
+        )
+    postseason = [
+        row
+        for row in getattr(replay, "postseason_daily", [])
+        if row.proxy == "MED20" and row.pick is not None and row.hit is not None
+    ]
+    print(
+        f"regular-season filter: {len(rows)} settled MED20 rows, "
+        f"game types {sorted(allowed)}. "
+        f"Playoff and play-in rows kept out of the fit: {len(postseason)}."
+    )
     rows.sort(key=lambda row: row.date)
     train = [row for row in rows if row.date <= cutoff]
     hold = [row for row in rows if row.date > cutoff]

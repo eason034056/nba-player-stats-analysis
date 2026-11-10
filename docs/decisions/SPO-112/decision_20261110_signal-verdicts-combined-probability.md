@@ -105,9 +105,9 @@ Stored coefficients are the NBA MED20 fit on rows dated on or before 2026-03-17 
 
 | | Value |
 |---|---|
-| `PLATT_A` | 0.28010420 |
-| `PLATT_B` | 2.16005911 |
-| Fit rows | 34,510 |
+| `PLATT_A` | 0.28036258 |
+| `PLATT_B` | 2.15982400 |
+| Fit rows | 34,507 regular-season |
 | Fit dates | 2025-11-09 → 2026-03-17 |
 | Cutoff | 2026-03-17 |
 
@@ -129,22 +129,22 @@ The prototype also showed the over percent for market and history, and counted o
 
 The market term on every replay row is the fair 0.5 prior. `probability` is the published side rate. Intervals are a normal approximation. A signed gap is mean prediction minus hit rate, so a positive gap means the score is high. Bucket gaps below use deciles `(0.0, 0.1, …, 1.0, 1.0001)` for both columns. ECE for `probability` in the fit log also reports the pick edges, which start at 0.65; on this holdout that ECE equals the signed gap.
 
-**Holdout, stored coefficients.** Fit on dates ≤ 2026-03-17 (`A = 0.28010420`, `B = 2.16005911`). Scored on 2026-03-18 → 2026-05-11. n = 18,817.
+**Holdout, stored coefficients.** Fit on regular-season rows dated ≤ 2026-03-17 (`A = 0.28036258`, `B = 2.15982400`, n = 34,507). The walk-forward loader uses `CSVPlayerHistoryService._allowed_game_types` (regular season). Playoffs and the play-in are not in the fit or the holdout. 4,692 settled MED20 playoff and play-in rows were kept out. Scored on 2026-03-18 → 2026-04-12. n = 13,751.
 
 | | Brier (95% CI) | Signed gap | Log loss | ECE | Widest \|bucket gap\| | Mean predicted | Hit rate |
 |---|---|---|---|---|---|---|---|
-| `combined_probability` | 0.2279 (0.2258–0.2300) | +0.0161 | 0.6475 | 0.0229 | 0.0359 | 0.6369 | 0.6208 |
-| `probability` | 0.2420 (0.2388–0.2451) | +0.1081 | 0.6980 | 0.1081 | 0.1336 | 0.7289 | 0.6208 |
+| `combined_probability` | 0.2309 (0.2284–0.2333) | +0.0181 | 0.6539 | 0.0192 | 0.0270 | 0.6374 | 0.6193 |
+| `probability` | 0.2440 (0.2403–0.2477) | +0.1105 | 0.7067 | 0.1105 | 0.1565 | 0.7298 | 0.6193 |
 
-Paired Brier difference (`combined` minus `probability`): −0.0140 (95% CI −0.0157 to −0.0124).
+Paired Brier difference (`combined` minus `probability`): −0.0132 (95% CI −0.0151 to −0.0112).
 
 On proxy lines this holdout beats `probability` on Brier, gap, log loss, and ECE, and no combined bucket is wider than 0.10. That is not a headline change. See Validation status.
 
-**Regular-season slice of the same holdout.** 2026-03-18 → 2026-04-12, n = 13,778, same stored coefficients, not a refit. Combined Brier 0.2308, signed gap +0.0180. `probability` Brier 0.2440, signed gap +0.1105. The remaining holdout rows stay in the headline table. Dropping them and refitting waits until PR #38 is on `dev`.
+The rebaseline after PR #38 is done. The holdout is the regular-season window. It ends 2026-04-12 because later games are playoffs or the play-in and the loader drops them. There is no separate date slice left to apply.
 
-**Scores that are not comparable.** A score on the 34,510 rows dated ≤ 2026-03-17 uses the same rows that chose A and B. It is not comparable to the holdout. The earlier full-sample fit (`A = 0.22281199`, `B = 2.37285635` on all 53,327 rows, combined Brier 0.2235, gap 0.0000) included the holdout dates in the fit. Those figures are leaky. They are not comparable to the holdout above, and they are not the stored constants.
+**Scores that are not comparable.** A score on the 34,507 rows dated ≤ 2026-03-17 uses the same rows that chose A and B. It is not comparable to the holdout. The earlier full-sample fit (`A = 0.22281199`, `B = 2.37285635` on all 53,327 rows, combined Brier 0.2235, gap 0.0000) included the holdout dates and postseason games. Those figures are leaky. They are not comparable to the holdout above, and they are not the stored constants. The pair stored before this rebaseline (`A = 0.28010420`, `B = 2.16005911`, holdout n = 18,817 through 2026-05-11) also included playoff and play-in rows. It is not the stored pair.
 
-The checked-in `backtest_report.md` (generated 2026-11-09) reports NBA MED20 `probability` at Brier 0.227 and gap 0.077 on 55,708 picks, from a CSV load of 579 players. This replay loaded 573 players and 53,327 settled picks. Compare columns on the same rows.
+The checked-in `backtest_report.md` (generated 2026-11-09) reports NBA MED20 `probability` at Brier 0.227 and gap 0.077 on 55,708 picks, from a CSV load of 579 players. This replay loaded 573 players and 48,258 settled regular-season picks. Compare columns on the same rows.
 
 WNBA rows leave the column null. The calibration guard skips a league with fewer than 30 combined values instead of failing it. At 30 or more it uses the same bounds as the published probability: Brier 0.30 and absolute gap 0.15.
 
@@ -166,13 +166,14 @@ The guard sample the CI job already runs is `pytest` on `scripts/agents/tests/te
 
 **Verdict: INSUFFICIENT REAL-LINE DATA (2026-11-10).** The Backtest Analyst reproduced the holdout.
 
-The proxy-line holdout met the pass bar against `probability`. `odds_line_snapshots` could not be queried, because this run had no production database access. `combined_probability` is not the headline. `probability` stays the headline until a separate real-line calibration check passes. That check is a separate ticket. It needs a real no-vig comparison with at least 1,000 graded two-sided rows.
+The proxy-line holdout met the pass bar against `probability`. `combined_probability` is not the headline. `probability` stays the headline until a separate real-line calibration check passes. That check is a separate ticket. It needs a real no-vig comparison with at least 1,000 graded two-sided rows.
+
+The Backtest Analyst queried the local project database read-only. `odds_line_snapshots` has 0 rows, even though `odds_snapshot_logs` has 22 runs. The real-line check cannot start until lines are being stored.
 
 ### Known limitations
 
-- About 5,039 of the 18,817 holdout rows are playoff or play-in games, because this branch predates PR #38. Rebaseline after #38 merges into `dev`. That rebaseline is pending. The stored coefficients were not refit to drop those rows.
-- Early-season fits are unstable. In a rolling monthly check, January 2026 (trained on November–December only, n = 8,902) had combined Brier 0.2171 versus `probability` 0.2149, and the 0.4–0.5 bucket gap was −0.102.
-- Under the 0.5 market prior the market term is constant, so offline `combined_probability` is a recalibrated adjustment total. It shares `history_rate` with `probability` (correlation 0.38 overall, 0.40 on the fit rows, 0.35 on the holdout). The stored intercept `A = 0.2801` encodes that the pick side beats a coin flip. On top of a real no-vig market that can double-count recent form. Only a real-line test can settle this. Refit A and B once real lines exist.
+- Early-season fits are unstable. In a rolling monthly check before this rebaseline, January 2026 (trained on November–December only, n = 8,902) had combined Brier 0.2171 versus `probability` 0.2149, and the 0.4–0.5 bucket gap was −0.102.
+- Under the 0.5 market prior the market term is constant, so offline `combined_probability` is a recalibrated adjustment total. On the sample before this rebaseline it shared `history_rate` with `probability` (correlation 0.38 overall, 0.40 on the fit rows, 0.35 on the holdout). The stored intercept `A = 0.2804` encodes that the pick side beats a coin flip. On top of a real no-vig market that can double-count recent form. Only a real-line test can settle this. Refit A and B once real lines exist.
 
 ## Alternatives
 
