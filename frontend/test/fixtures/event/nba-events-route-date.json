@@ -1,0 +1,12 @@
+{
+  "date": "2026-03-16",
+  "events": [
+    {
+      "event_id": "evt-1",
+      "sport_key": "basketball_nba",
+      "home_team": "Los Angeles Lakers",
+      "away_team": "Golden State Warriors",
+      "commence_time": "2026-03-17T01:00:00Z"
+    }
+  ]
+}

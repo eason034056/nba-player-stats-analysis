@@ -130,7 +130,7 @@ function PickCard({
                 shrink-0 flex items-center gap-1 px-2 py-1 rounded
                 text-sm font-semibold
                 ${level === "high"
-                  ? "bg-green-500/10 text-green-600"
+                  ? "bg-green-800/10 text-green-800"
                   : "bg-yellow/10 text-yellow"}
               `}
             >
@@ -145,7 +145,7 @@ function PickCard({
             <span className="font-medium">{metricName}</span>
             <DirectionIcon
               className={`w-4 h-4 ${
-                pick.direction === "over" ? "text-green-600" : "text-red-500"
+                pick.direction === "over" ? "text-green-800" : "text-red"
               }`}
             />
             <span className="font-semibold">
@@ -322,7 +322,7 @@ export default function WNBADailyPicksPage() {
 
       {isError && (
         <div className="card p-4 flex items-start gap-3 border-red-500">
-          <AlertCircle className="w-5 h-5 text-red-500 shrink-0 mt-0.5" />
+          <AlertCircle className="w-5 h-5 text-red shrink-0 mt-0.5" />
           <div>
             <div className="font-medium">Failed to load WNBA picks</div>
             <div className="text-sm text-muted-foreground mt-1">

@@ -1,29 +1,26 @@
 /**
- * layout.tsx - Root Layout (Minimalist Version)
- * 
- * Root layout file for Next.js App Router
- * 
- * Design Philosophy:
- * - Pure beige background (#FFF2DF)
- * - No decorative elements
- * - Clean structure
+ * layout.tsx - Root layout
+ *
+ * No-Vig shell. Instrument Sans is the UI face. JetBrains Mono is the
+ * face for numbers. The page canvas is #EEEEEE.
  */
 
 import type { Metadata, Viewport } from "next";
-import { Cormorant_Garamond, Manrope } from "next/font/google";
+import { Instrument_Sans, JetBrains_Mono } from "next/font/google";
 import "./globals.css";
 import { Providers } from "./providers";
-import { Navbar } from "@/components/Navbar";
+import { AppShell } from "@/components/AppShell";
 
-const sans = Manrope({
+const sans = Instrument_Sans({
   subsets: ["latin"],
+  weight: ["400", "500", "600", "700"],
   variable: "--font-sans",
 });
 
-const display = Cormorant_Garamond({
+const mono = JetBrains_Mono({
   subsets: ["latin"],
   weight: ["500", "600", "700"],
-  variable: "--font-display",
+  variable: "--font-mono",
 });
 
 /**
@@ -34,7 +31,7 @@ export const viewport: Viewport = {
   initialScale: 1,
   maximumScale: 5,
   viewportFit: "cover",
-  themeColor: "#07101d",
+  themeColor: "#EEEEEE",
 };
 
 export const metadata: Metadata = {
@@ -79,26 +76,9 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en">
-      <body className={`${sans.variable} ${display.variable}`}>
+      <body className={`${sans.variable} ${mono.variable} font-sans`}>
         <Providers>
-          <Navbar />
-
-          <main className="page-shell min-h-screen pt-28">
-            {children}
-          </main>
-
-          <footer className="footer">
-            <div className="mx-auto max-w-6xl px-6">
-              <div className="rounded-[28px] border border-white/8 bg-white/4 px-6 py-6 backdrop-blur-xl">
-                <p className="text-sm text-dark mb-2">
-                  No-Vig NBA organizes schedules, probabilities, projections, and historical performances into a more readable analytical experience.
-                </p>
-                <p className="text-xs text-light">
-                  The content on this site is for informational and research purposes only and does not constitute betting advice. Live odds and data may be delayed or missing; please refer to official sources for accuracy.
-                </p>
-              </div>
-            </div>
-          </footer>
+          <AppShell>{children}</AppShell>
         </Providers>
       </body>
     </html>

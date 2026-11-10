@@ -1,0 +1,28 @@
+{
+  "date": "2026-11-10",
+  "team_count": 1,
+  "fetched_at": "2026-11-10T17:00:00Z",
+  "cache_state": "fresh",
+  "lineups": [
+    {
+      "date": "2026-11-10",
+      "team": "MIA",
+      "opponent": "BOS",
+      "home_or_away": "HOME",
+      "status": "projected",
+      "starters": ["Bam Adebayo", "Tyler Herro", "Jimmy Butler", "Nikola Jovic", "Kel'el Ware"],
+      "bench_candidates": ["Duncan Robinson"],
+      "sources": ["rotowire"],
+      "source_disagreement": false,
+      "confidence": "high",
+      "updated_at": "2026-11-10T17:00:00Z",
+      "source_snapshots": {
+        "rotowire": {
+          "team": "MIA",
+          "status": "projected",
+          "starters": ["Bam Adebayo"]
+        }
+      }
+    }
+  ]
+}

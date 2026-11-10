@@ -314,7 +314,7 @@ export function PickContextMenu({
   const menuContent = isOpen && (
     <div
       ref={menuRef}
-      className="fixed min-w-[200px] py-2 bg-dark rounded-lg shadow-2xl border border-white/10 animate-fade-in"
+      className="fixed min-w-[200px] py-2 bg-white rounded-lg shadow-2xl border border-line animate-fade-in"
       style={{
         left: position.x,
         top: position.y,
@@ -322,7 +322,7 @@ export function PickContextMenu({
       }}
     >
       {/* Menu Header */}
-      <div className="px-4 py-2 border-b border-white/10">
+      <div className="px-4 py-2 border-b border-line">
         <p className="text-sm font-bold text-dark truncate">
           {pick.player_name}
         </p>
@@ -341,7 +341,7 @@ export function PickContextMenu({
             transition-colors duration-150
             ${isAdded
               ? "text-red hover:bg-red/10"
-              : "text-dark hover:bg-white/5"
+              : "text-dark hover:bg-brand-tint"
             }
           `}
         >
@@ -359,7 +359,7 @@ export function PickContextMenu({
         </button>
 
         {/* Divider */}
-        <div className="mx-3 my-1 border-t border-white/10" />
+        <div className="mx-3 my-1 border-t border-line" />
 
         {/* Reverse bet */}
         <button
@@ -368,8 +368,8 @@ export function PickContextMenu({
             w-full flex items-center gap-3 px-4 py-2.5 text-sm font-medium
             transition-colors duration-150
             ${isReversedInSlip
-              ? "text-orange-300 hover:bg-orange-500/10"
-              : "text-dark hover:bg-white/5"
+              ? "text-red hover:bg-red/10"
+              : "text-dark hover:bg-brand-tint"
             }
           `}
         >
@@ -381,18 +381,18 @@ export function PickContextMenu({
             }
           </span>
           {/* Reverse probability hint (small text) */}
-          <span className="text-xs text-gray opacity-70">
+          <span className="text-xs text-gray">
             {(reverseProbability * 100).toFixed(0)}%
           </span>
         </button>
 
         {/* Divider */}
-        <div className="mx-3 my-1 border-t border-white/10" />
+        <div className="mx-3 my-1 border-t border-line" />
 
         {/* View details */}
         <button
           onClick={handleViewDetails}
-          className="w-full flex items-center gap-3 px-4 py-2.5 text-sm font-medium text-dark hover:bg-white/5 transition-colors duration-150"
+          className="w-full flex items-center gap-3 px-4 py-2.5 text-sm font-medium text-dark hover:bg-brand-tint transition-colors duration-150"
         >
           <ExternalLink className="w-4 h-4" />
           <span>View Details</span>
@@ -401,8 +401,8 @@ export function PickContextMenu({
 
       {/* Already added hint */}
       {isAdded && (
-        <div className="px-4 py-2 border-t border-white/10">
-          <p className={`text-xs flex items-center gap-1.5 ${isReversedInSlip ? "text-orange-300" : "text-green-400"}`}>
+        <div className="px-4 py-2 border-t border-line">
+          <p className={`text-xs flex items-center gap-1.5 ${isReversedInSlip ? "text-red" : "text-green-800"}`}>
             {isReversedInSlip ? (
               <>
                 <ArrowLeftRight className="w-3 h-3" />

@@ -1,0 +1,19 @@
+{
+  "date": "2026-11-10",
+  "events": [
+    {
+      "event_id": "aces-liberty",
+      "sport_key": "basketball_wnba",
+      "away_team": "Las Vegas Aces",
+      "home_team": "New York Liberty",
+      "commence_time": "2026-11-11T01:00:00Z"
+    },
+    {
+      "event_id": "storm-lynx",
+      "sport_key": "basketball_wnba",
+      "away_team": "Seattle Storm",
+      "home_team": "Minnesota Lynx",
+      "commence_time": "2026-11-11T02:00:00Z"
+    }
+  ]
+}

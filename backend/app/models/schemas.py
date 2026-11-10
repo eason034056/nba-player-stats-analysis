@@ -650,12 +650,12 @@ class DailyPick(BaseModel):
     - home_team / away_team: Home/away teams
     - commence_time: Game start time (ISO 8601 format)
     - metric: Stat metric (points/assists/rebounds/pra)
-    - threshold: Modal line (mode of all bookmaker lines)
+    - threshold: Modal line (mode of one main line per bookmaker)
     - direction: "over" or "under," higher probability direction
     - probability: Historical probability (>= 0.65)
     - n_games: Number of historical games used
-    - bookmakers_count: Number of bookmakers offering this line
-    - all_lines: List of all bookmaker lines (for distribution display)
+    - bookmakers_count: Distinct bookmakers that posted this player on this market
+    - all_lines: One main line per bookmaker, sorted. Alternate rungs are not repeated.
     """
     player_name: str = Field(..., description="Player name")
     player_team: str = Field(default="", description="Player's team (short name)")
@@ -669,12 +669,18 @@ class DailyPick(BaseModel):
     away_team: str = Field(..., description="Away team")
     commence_time: str = Field(..., description="Game start time")
     metric: str = Field(..., description="Stat metric (points/assists/rebounds/pra)")
-    threshold: float = Field(..., description="Modal threshold")
+    threshold: float = Field(..., description="Modal threshold (one main line per bookmaker)")
     direction: str = Field(..., description="Direction (over/under)")
     probability: float = Field(..., description="Historical probability")
     n_games: int = Field(..., description="Sample size (games)")
-    bookmakers_count: int = Field(..., description="Bookmakers count")
-    all_lines: List[float] = Field(default_factory=list, description="All bookmaker lines")
+    bookmakers_count: int = Field(
+        ...,
+        description="Distinct bookmakers posting this player on this market",
+    )
+    all_lines: List[float] = Field(
+        default_factory=list,
+        description="One main line per bookmaker",
+    )
 
     # === Projection fields (from SportsDataIO Projection API) ===
     has_projection: bool = Field(default=False, description="Has projection data")

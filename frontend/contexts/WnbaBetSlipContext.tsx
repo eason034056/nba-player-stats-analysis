@@ -61,7 +61,7 @@ interface WnbaBetSlipContextType {
   clearAll: () => void;
   /** Check whether a (player, metric) pair is already in the WNBA slip */
   isInSlip: (playerName: string, metric: string) => boolean;
-  /** Current count — used by Navbar badge when path is under /wnba */
+  /** Current count — used by the AppShell badge when path is under /wnba */
   count: number;
 }
 
