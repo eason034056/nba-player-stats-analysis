@@ -31,6 +31,7 @@ from app.services.odds_theoddsapi import odds_provider
 from app.services.odds_provider import OddsAPIError
 from app.services.csv_player_history import (
     csv_player_service,
+    team_from_game_logs,
     wnba_csv_player_service,
 )
 from app.services.prob import calculate_mode_threshold
@@ -685,10 +686,12 @@ class DailyAnalysisService:
                     if proj and proj.get("team"):
                         player_team = proj.get("team")
                     else:
-                        # Fallback: last game's team from CSV
+                        # Chart logs are oldest-first. ``commence_time`` is
+                        # UTC; ``team_from_game_logs`` converts it to the US
+                        # game date, then uses that day's club or the latest
+                        # club on or before it (a gap day keeps the prior club).
                         game_logs = history_stats.get("game_logs", [])
-                        if game_logs and len(game_logs) > 0:
-                            player_team = game_logs[0].get("team", "")
+                        player_team = team_from_game_logs(game_logs, commence_time)
                     player_team_code = canonical_team_code(player_team)
 
                     # Get projection value for this metric.
