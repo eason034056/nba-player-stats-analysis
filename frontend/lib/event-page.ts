@@ -388,13 +388,33 @@ export interface EventPlayerRow {
 
 /** Fold a name so CSV and lineup spellings compare as the same person. */
 function nameKey(name: string): string {
-  return name
+  const folded = name
     .normalize("NFD")
-    .replace(/\p{M}/gu, "")
-    .replace(/[.'’`-]/g, "")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/-/g, " ")
+    .replace(/[.'’`]/g, "")
     .replace(/\s+/g, " ")
     .trim()
     .toLowerCase();
+  return joinInitials(folded);
+}
+
+function joinInitials(folded: string): string {
+  const out: string[] = [];
+  let initials = "";
+  for (const part of folded.split(" ")) {
+    if (part.length === 1) {
+      initials += part;
+      continue;
+    }
+    if (initials) {
+      out.push(initials);
+      initials = "";
+    }
+    if (part) out.push(part);
+  }
+  if (initials) out.push(initials);
+  return out.join(" ");
 }
 
 function namesMatch(a: string, b: string): boolean {

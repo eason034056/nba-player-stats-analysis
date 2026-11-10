@@ -94,7 +94,7 @@ $ python3 -m pytest -q --tb=line
 ## Follow-ups
 
 - The CSV still ends on 2026-05-11. A blank event label is the honest result until a later game log, or a lineup/projection that names a club in the game, is available. This change does not invent the 2026-27 club.
-- `lineup_source_support._build_team_roster_cache` still takes the latest CSV club, so a player can stay on last season's roster candidates.
+- `lineup_source_support._build_team_roster_cache` still takes the latest CSV club, so a player can stay on last season's roster candidates. That belongs to SPO-124, which is on hold.
 - A player traded between the two clubs in this game can mix the history list from one side with the lineup from the other.
 - WNBA projection codes `LV`, `NY`, `PHO`, `LA`, `GS`, and `WSH` are not aliased, and `Portland Fire` has no alias. WNBA projections are not wired yet.
 - A teammate who appears only on tonight's lineup can filter the history sample down to 0 games. The UI does not say that there is no shared game.

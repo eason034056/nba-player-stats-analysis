@@ -230,6 +230,25 @@ describe("player rows and lines", () => {
     ).toEqual(["V.J. Edgecombe", "Nikola Jokić"]);
   });
 
+  it("joins spaced initials and treats a hyphen as a space", () => {
+    const bos = teamLineupSchema.parse({
+      date: "2026-11-10",
+      team: "BOS",
+      status: "projected",
+      confidence: "medium",
+      starters: ["Derrick White", "A.J. Green", "AJ Green", "Shai Gilgeous Alexander"],
+      bench_candidates: ["Shai Alexander"],
+    });
+    expect(
+      eventTeammates({
+        player: "Derrick White",
+        awayLineup: bos,
+        homeLineup: null,
+        historyTeammates: ["A. J. Green", "Shai Gilgeous-Alexander", "Shai Alexander"],
+      }),
+    ).toEqual(["A. J. Green", "Shai Gilgeous-Alexander", "Shai Alexander"]);
+  });
+
   it("keeps a teammate who is out and appends lineup names", () => {
     const phi = teamLineupSchema.parse({
       date: "2026-11-10",
