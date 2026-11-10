@@ -481,10 +481,12 @@ function rosterNames(lineup: TeamLineup | null | undefined): string[] {
 /**
  * Teammates for the event filter.
  *
- * When the player is on one lineup, the other names on that lineup are
- * the teammates for this game. The history list is the fallback, and the
- * history request is scoped to a club in the game so a finished stint
- * (Bulls, for a Celtics at 76ers tip) is not offered.
+ * ``historyTeammates`` is already limited to a club in this game. A
+ * teammate who is out tonight is absent from the lineup and still belongs
+ * in the filter. When the player is on exactly one side, that side's
+ * starters and bench are appended. Names already in the history list stay
+ * in that order. The lineup list is used alone only when history is empty.
+ * The player himself is left out.
  */
 export function eventTeammates(args: {
   player: string;
@@ -492,11 +494,24 @@ export function eventTeammates(args: {
   homeLineup: TeamLineup | null;
   historyTeammates: string[];
 }): string[] {
+  const history = args.historyTeammates.filter((name) => name.trim() && !namesMatch(name, args.player));
   const onAway = onRoster(args.player, args.awayLineup);
   const onHome = onRoster(args.player, args.homeLineup);
   const side = onAway && !onHome ? args.awayLineup : onHome && !onAway ? args.homeLineup : null;
-  if (!side) return args.historyTeammates;
-  return rosterNames(side).filter((name) => !namesMatch(name, args.player));
+  if (!side) return history;
+  const lineup = rosterNames(side).filter((name) => name.trim() && !namesMatch(name, args.player));
+  if (history.length === 0) return uniqueNames(lineup);
+  return uniqueNames([...history, ...lineup]);
+}
+
+function uniqueNames(names: string[]): string[] {
+  const out: string[] = [];
+  for (const name of names) {
+    const trimmed = name.trim();
+    if (!trimmed || out.some((existing) => namesMatch(existing, trimmed))) continue;
+    out.push(trimmed);
+  }
+  return out;
 }
 
 export interface PostedLineRow {

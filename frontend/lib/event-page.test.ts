@@ -145,8 +145,16 @@ describe("player rows and lines", () => {
       team: "PHI",
       status: "projected",
       confidence: "medium",
-      starters: ["Tyrese Maxey", "Jaylen Brown"],
+      starters: ["Tyrese Maxey"],
       bench_candidates: ["Anfernee Simons"],
+    });
+    const bos = teamLineupSchema.parse({
+      date: "2026-11-10",
+      team: "BOS",
+      status: "projected",
+      confidence: "medium",
+      starters: ["Jaylen Brown", "Jayson Tatum"],
+      bench_candidates: [],
     });
     const rows = eventPlayerRows({
       suggested: ["Anfernee Simons", "Jaylen Brown"],
@@ -172,14 +180,14 @@ describe("player rows and lines", () => {
       eventId: "bos-phi",
       selectedName: "Anfernee Simons",
       postedLine: 9.5,
-      awayLineup: null,
+      awayLineup: bos,
       homeLineup: phi,
       awayAbbr: "BOS",
       homeAbbr: "PHI",
       league: "nba",
     });
     expect(rows.find((row) => row.name === "Anfernee Simons")?.team).toBe("PHI");
-    expect(rows.find((row) => row.name === "Jaylen Brown")?.team).toBe("PHI");
+    expect(rows.find((row) => row.name === "Jaylen Brown")?.team).toBe("BOS");
     const unlabeled = eventPlayerRows({
       suggested: ["Anfernee Simons"],
       picks: [
@@ -203,13 +211,13 @@ describe("player rows and lines", () => {
     expect(unlabeled.find((row) => row.name === "Anfernee Simons")?.team).toBeNull();
   });
 
-  it("uses the lineup for teammates when the player is on it", () => {
+  it("keeps a teammate who is out and appends lineup names", () => {
     const phi = teamLineupSchema.parse({
       date: "2026-11-10",
       team: "PHI",
       status: "projected",
       confidence: "medium",
-      starters: ["Tyrese Maxey"],
+      starters: ["Tyrese Maxey", "Paul George"],
       bench_candidates: ["Anfernee Simons"],
     });
     expect(
@@ -217,9 +225,17 @@ describe("player rows and lines", () => {
         player: "Anfernee Simons",
         awayLineup: null,
         homeLineup: phi,
-        historyTeammates: ["Josh Giddey", "Derrick White"],
+        historyTeammates: ["Joel Embiid", "Tyrese Maxey", "Anfernee Simons"],
       }),
-    ).toEqual(["Tyrese Maxey"]);
+    ).toEqual(["Joel Embiid", "Tyrese Maxey", "Paul George"]);
+    expect(
+      eventTeammates({
+        player: "Anfernee Simons",
+        awayLineup: null,
+        homeLineup: phi,
+        historyTeammates: [],
+      }),
+    ).toEqual(["Tyrese Maxey", "Paul George"]);
     expect(
       eventTeammates({
         player: "Anfernee Simons",

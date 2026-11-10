@@ -18,12 +18,12 @@ The lookup does not substitute the older Celtics stint. That stint ended before 
 | `backend/app/services/csv_player_history.py` | `team_on_event` keeps a projection or log club only when its code is home or away. `get_teammates(..., only_team=)` limits the walk. `get_player_stats` takes `home_team`, `away_team`, and `as_of`. |
 | `backend/app/services/daily_analysis.py` | Daily picks call `team_on_event` instead of applying `team_from_game_logs` whenever the projection club is empty. |
 | `backend/app/api/nba.py`, `backend/app/api/wnba.py` | Player-history accepts `home_team`, `away_team`, and `as_of`. Omitting them keeps the previous list. |
-| `frontend/lib/event-page.ts` | Lineup side wins. A code that is neither home nor away is not shown. `eventTeammates` uses the lineup when the player is on exactly one side. |
+| `frontend/lib/event-page.ts` | Lineup side wins for the team label. A code that is neither home nor away is not shown. `eventTeammates` keeps the scoped history list and appends that side's lineup names. |
 | `frontend/lib/api.ts`, `frontend/lib/schemas.ts`, `frontend/components/EventDetail.tsx`, `frontend/components/PlayerHistoryStats.tsx` | The event history request sends the two clubs and the tip time. |
 | `backend/tests/fixtures/csv/spo122_anfernee_simons_excerpt.csv` | Real lines copied from `data/nba_player_game_logs.csv`. |
 | `backend/tests/test_spo122_csv_team_attribution.py` | Simons on the recorded Celtics at 76ers tip stays unlabeled, and Josh Giddey is not a teammate. |
 | `backend/tests/test_spo98_team_and_names.py`, `backend/tests/test_daily_analysis.py`, `backend/tests/test_spo113_field_enrichment.py` | Existing callers pass a slate that contains the club under test, or the new history arguments. |
-| `frontend/lib/event-page.test.ts` | CHI is not shown on BOS@PHI. A lineup name replaces the history list. |
+| `frontend/lib/event-page.test.ts` | CHI is not shown on BOS@PHI. Jaylen Brown stays on the Celtics lineup. A teammate who is out tonight stays in the filter. |
 
 ## Root cause
 
@@ -43,7 +43,7 @@ Two facts, and only the second one is a code bug.
 
 Daily picks use the same helper. A projection abbreviation that is not in the game is dropped, and so is a last-season CSV club that is not in the game.
 
-The event page prefers the lineup side. A stored `player_team_code` that is neither home nor away is not shown. When the player is on exactly one lineup, the teammate filter uses that lineup. Otherwise it uses the history list, which the request now scopes to a club in the game.
+The event page prefers the lineup side for the team label. A stored `player_team_code` that is neither home nor away is not shown. The teammate filter keeps the history list, which the request scopes to a club in the game, and appends starters and bench from the player's side. A teammate who is out tonight is not on the lineup and still appears. The lineup names are used alone only when that history list is empty.
 
 ## Other players on the recorded boards
 
