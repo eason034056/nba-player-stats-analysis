@@ -135,14 +135,14 @@ export function TeamLineupPanel({
           lineup.starters.map((starter, index) => (
             <div
               key={`${lineup.team}-${starter}`}
-              className="flex items-center justify-between rounded-[16px] border border-white/8 bg-white/5 px-4 py-3 text-sm"
+              className="flex items-center justify-between rounded-[16px] border border-white/10 bg-white/5 px-4 py-3 text-sm"
             >
               <span className="font-semibold text-dark">{starter}</span>
               <span className="text-xs uppercase tracking-[0.16em] text-light">Starter {index + 1}</span>
             </div>
           ))
         ) : (
-          <div className="rounded-[16px] border border-white/8 bg-white/5 px-4 py-3 text-sm text-gray">
+          <div className="rounded-[16px] border border-white/10 bg-white/5 px-4 py-3 text-sm text-gray">
             No projected starters available yet.
           </div>
         )}

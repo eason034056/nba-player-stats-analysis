@@ -148,11 +148,14 @@ describe("AgentWidget", () => {
 
     expect(dialog).toBeInTheDocument();
     const send = within(dialog).getByRole("button", { name: "Send" });
-    expect(send.className).toContain("text-ink");
+    expect(send.className).toContain("bg-brand");
+    expect(send.className).toContain("text-white");
     expect(send.className).not.toContain("text-on-dark");
-    const mark = dialog.querySelector('[class*="fff7e5"]');
-    expect(mark?.className).toContain("text-ink");
-    expect(mark?.className).not.toContain("text-on-dark");
+    expect(dialog).toHaveAttribute("data-layout", "drawer");
+    expect(
+      within(dialog).getByText(/checks market, form, projection and matchup/i),
+    ).toBeInTheDocument();
+    expect(dialog.querySelector('[class*="fff7e5"]')).not.toBeInTheDocument();
 
     await user.keyboard("{Escape}");
 
@@ -345,6 +348,7 @@ describe("AgentWidget", () => {
     renderWithProviders(<AgentHarness />, { withAgentWidget: true });
 
     const dialog = await openFromAsk(user);
+    expect(dialog).toHaveAttribute("data-layout", "full");
     await user.click(
       within(dialog).getByRole("button", { name: /expand workspace/i }),
     );

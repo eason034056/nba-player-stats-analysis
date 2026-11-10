@@ -60,6 +60,11 @@ export interface BetSlipPick {
   direction: string;
   /** 歷史機率 */
   probability: number;
+  /**
+   * `complement` means this rate is 1 − the other side's stored hit rate.
+   * It is not a de-vigged price. SPO-111 owns a real other side.
+   */
+  rate_basis?: "complement";
   /** 樣本場次數 */
   n_games: number;
   /** 添加到列表的時間（ISO 8601 格式） */

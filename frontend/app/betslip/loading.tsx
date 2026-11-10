@@ -13,11 +13,11 @@ export default function BetSlipLoading() {
         <div className="card">
           <div className="skeleton h-3 w-20 mb-3" />
           <div className="grid grid-cols-2 gap-3">
-            <div className="rounded-[22px] border border-white/8 bg-white/4 p-4">
+            <div className="rounded-[22px] border border-white/10 bg-white/5 p-4">
               <div className="skeleton h-3 w-16 mb-2" />
               <div className="skeleton h-8 w-8 mt-2" />
             </div>
-            <div className="rounded-[22px] border border-white/8 bg-white/4 p-4">
+            <div className="rounded-[22px] border border-white/10 bg-white/5 p-4">
               <div className="skeleton h-3 w-16 mb-2" />
               <div className="skeleton h-4 w-14 mt-2" />
             </div>

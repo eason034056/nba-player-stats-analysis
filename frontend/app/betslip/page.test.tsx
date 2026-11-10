@@ -112,7 +112,7 @@ describe("BetSlipPage", () => {
     renderWithProviders(<BetSlipPage />);
 
     expect(
-      screen.getByRole("heading", { name: /your bet slip is empty/i }),
+      screen.getByRole("heading", { name: /nothing saved yet/i }),
     ).toBeInTheDocument();
     expect(
       screen.getByRole("link", { name: /browse daily picks/i }),
@@ -136,7 +136,7 @@ describe("BetSlipPage", () => {
       screen.getByRole("button", { name: /download png/i }),
     ).toBeInTheDocument();
     expect(
-      screen.getByRole("button", { name: /copy to clipboard/i }),
+      screen.getByRole("button", { name: /copy image/i }),
     ).toBeInTheDocument();
   });
 
@@ -152,7 +152,7 @@ describe("BetSlipPage", () => {
       ).toBeInTheDocument();
     });
 
-    await user.click(screen.getByRole("button", { name: /review my slip/i }));
+    await user.click(screen.getByRole("button", { name: /review with agent/i }));
 
     expect(await screen.findByRole("dialog", { name: /betting agent/i })).toBeInTheDocument();
     expect(apiMocks.sendAgentChat).toHaveBeenCalledWith(
@@ -175,7 +175,7 @@ describe("BetSlipPage", () => {
     renderWithProviders(<BetSlipPage />);
 
     const detailLink = await screen.findByRole("link", {
-      name: /view details/i,
+      name: /details/i,
     });
 
     expect(detailLink).toHaveAttribute(
