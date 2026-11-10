@@ -485,9 +485,40 @@ class PlayerProjection(BaseModel):
     injury_status: Optional[str] = Field(default=None, description="Injury status (Free Trial: None)")
     injury_body_part: Optional[str] = Field(default=None, description="Injured body part")
 
-    # Matchup difficulty
-    opponent_rank: Optional[int] = Field(default=None, description="Opponent overall defense rank (1-30)")
-    opponent_position_rank: Optional[int] = Field(default=None, description="Opponent defense vs position rank")
+    # Matchup difficulty. 1 is the most points allowed (weakest defense).
+    opponent_rank: Optional[int] = Field(
+        default=None,
+        ge=1,
+        le=30,
+        description="Opponent overall defense rank. 1-30, 1 = most points allowed (weakest).",
+    )
+    opponent_position_rank: Optional[int] = Field(
+        default=None,
+        ge=1,
+        le=30,
+        description="Opponent defense vs this position. Ranked inside that position only, 1-30.",
+    )
+    opponent_rank_source: Optional[Literal["csv", "sportsdata"]] = Field(
+        default=None,
+        description=(
+            "csv when a null rank was filled from the game log. "
+            "sportsdata when the projection row already carried the number."
+        ),
+    )
+    opponent_rank_season: Optional[str] = Field(
+        default=None,
+        description=(
+            "Game-log season the csv rank used, e.g. 2025-2026 (the 2025-26 "
+            "season). Null when the rank came from SportsData or is still null."
+        ),
+    )
+    opponent_rank_note: Optional[str] = Field(
+        default=None,
+        description=(
+            "Present on a csv rank: computed from real points allowed, "
+            "not fantasy points."
+        ),
+    )
 
     # DFS related
     draftkings_salary: Optional[float] = Field(default=None, description="DraftKings DFS salary")
@@ -525,11 +556,30 @@ class ProjectionRefreshResponse(BaseModel):
 
 
 class TeamLineup(BaseModel):
+    """One team's lineup for a date.
+
+    ``status`` and ``confirmation_status`` are different words.
+    ``status`` is completeness from the starter count: ``projected``
+    (five names), ``partial`` (fewer than five), or ``unavailable``.
+    ``confirmation_status`` is whether any source snapshot reported
+    ``confirmed``. A four-name slate can be ``status="partial"`` and
+    ``confirmation_status="confirmed"`` at the same time. Both fields
+    can also read ``projected``: completeness means the names are a
+    projected five, and confirmation means nobody has reported the
+    lineup confirmed.
+    """
     date: str = Field(..., description="Query date YYYY-MM-DD")
     team: str = Field(..., description="Team code")
     opponent: str = Field(default="", description="Opponent team code")
     home_or_away: str = Field(default="", description="HOME or AWAY")
-    status: str = Field(..., description="projected | partial | unavailable")
+    status: str = Field(
+        ...,
+        description=(
+            "Completeness from the starter count: projected (five names), "
+            "partial (fewer than five), or unavailable. This is not "
+            "confirmation. See confirmation_status."
+        ),
+    )
     starters: List[str] = Field(default_factory=list, description="Projected starting five")
     bench_candidates: List[str] = Field(default_factory=list, description="Primary bench candidates")
     sources: List[str] = Field(default_factory=list, description="Consensus sources")
@@ -543,10 +593,12 @@ class TeamLineup(BaseModel):
     confirmation_status: Optional[Literal["confirmed", "projected"]] = Field(
         default=None,
         description=(
-            "Lineup confirmation consensus. confirmed if any source snapshot "
-            "status is confirmed; projected when a lineup exists and none is "
-            "confirmed; null when the lineup is empty. The status field above "
-            "stays the completeness word (projected, partial, unavailable)."
+            "Confirmation consensus, separate from status. confirmed when "
+            "any source_snapshots status is confirmed, including a stale "
+            "confirmation next to a fresh projected snapshot. projected "
+            "when a snapshot or a starter exists and nobody reported "
+            "confirmed (expected lands here). null when the record has "
+            "neither. Does not read updated_at."
         ),
     )
 
@@ -622,11 +674,27 @@ class DailyPick(BaseModel):
     )
     opponent_rank: Optional[int] = Field(
         default=None,
-        description="Opponent overall defense rank (1-30, 1=weakest defense)"
+        ge=1,
+        le=30,
+        description="Opponent overall defense rank (1-30, 1=weakest defense, most points allowed)"
     )
     opponent_position_rank: Optional[int] = Field(
         default=None,
-        description="Opponent defense vs position rank (1-30)"
+        ge=1,
+        le=30,
+        description="Opponent defense vs position rank, ranked inside that position (1-30)"
+    )
+    opponent_rank_source: Optional[Literal["csv", "sportsdata"]] = Field(
+        default=None,
+        description="csv when this pick's null rank was filled from the game log; sportsdata when the projection already had it.",
+    )
+    opponent_rank_season: Optional[str] = Field(
+        default=None,
+        description="Game-log season for a csv rank, e.g. 2025-2026 (the 2025-26 season). Null for a SportsData rank.",
+    )
+    opponent_rank_note: Optional[str] = Field(
+        default=None,
+        description="On a csv rank: computed from real points allowed, not fantasy points.",
     )
     injury_status: Optional[str] = Field(
         default=None,

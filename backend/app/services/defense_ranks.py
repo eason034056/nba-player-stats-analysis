@@ -69,10 +69,53 @@ def _team_code(name: Any) -> str:
     return canonical_team_code(str(name or ""), league="nba")
 
 
+def _counts_toward_points(game: dict[str, Any]) -> bool:
+    """False for a zero-minute row. A row with no minutes field still counts.
+
+    History already drops ``minutes == 0``. The shipped log's three
+    zero-minute rows also have 0 points, so the totals do not move, but
+    a later non-zero DNP must not enter the sum.
+    """
+    minutes = game.get("minutes")
+    if minutes is None:
+        return True
+    if isinstance(minutes, (int, float)):
+        return float(minutes) > 0
+    text = str(minutes).strip()
+    if text in {"", "0", "0.0", "0:00", "00:00"}:
+        return False
+    if ":" in text:
+        parts = text.split(":", 1)
+        try:
+            return int(parts[0]) > 0 or int(parts[1]) > 0
+        except (ValueError, IndexError):
+            return True
+    try:
+        return float(text) > 0
+    except ValueError:
+        return True
+
+
+_RANK_LIMIT = 30
+CSV_RANK_SOURCE = "csv"
+SPORTSDATA_RANK_SOURCE = "sportsdata"
+CSV_RANK_NOTE = "Computed from real points allowed, not fantasy points."
+
+
 def _rank_descending(ppg: dict[str, float]) -> dict[str, int]:
-    """1 = highest points allowed per game. Ties break by team code."""
+    """1 = highest points allowed per game. Ties break by team code.
+
+    Only the first 30 places are kept. A 31st opponent code does not
+    become rank 31. Call this once per position, not on a map that
+    mixes every team-position pair.
+    """
     ordered = sorted(ppg.items(), key=lambda item: (-item[1], item[0]))
-    return {team: index for index, (team, _ppg) in enumerate(ordered, start=1)}
+    ranked = {
+        team: index
+        for index, (team, _ppg) in enumerate(ordered, start=1)
+        if index <= _RANK_LIMIT
+    }
+    return ranked
 
 
 def build_defense_rank_table(games: list[dict[str, Any]]) -> DefenseRankTable:
@@ -108,6 +151,8 @@ def build_defense_rank_table(games: list[dict[str, Any]]) -> DefenseRankTable:
     for game in regular:
         if season and normalize_nba_season_label(str(game.get("season") or "")) != season:
             continue
+        if not _counts_toward_points(game):
+            continue
         team = _team_code(game.get("team"))
         opponent = _team_code(game.get("opponent"))
         day = _game_day(game)
@@ -141,13 +186,15 @@ def build_defense_rank_table(games: list[dict[str, Any]]) -> DefenseRankTable:
         return statistics.fmean(values) if values else 0.0
 
     overall = _rank_descending({team: _ppg(values) for team, values in allowed.items()})
-    by_position = _rank_descending(
-        {f"{team}|{position}": _ppg(values) for (team, position), values in allowed_pos.items()}
-    )
-    position_ranks = {
-        (key.split("|", 1)[0], key.split("|", 1)[1]): rank
-        for key, rank in by_position.items()
-    }
+    position_ranks: dict[tuple[str, str], int] = {}
+    for position in _POSITIONS:
+        subset = {
+            team: _ppg(values)
+            for (team, spot), values in allowed_pos.items()
+            if spot == position
+        }
+        for team, rank in _rank_descending(subset).items():
+            position_ranks[(team, position)] = rank
     return DefenseRankTable(season=season, overall=overall, by_position=position_ranks)
 
 
@@ -187,16 +234,27 @@ def fill_null_defense_ranks(
     overall = projection.get("opponent_rank")
     positional = projection.get("opponent_position_rank")
     if overall is not None and positional is not None:
-        return projection
+        labeled = dict(projection)
+        labeled["opponent_rank_source"] = SPORTSDATA_RANK_SOURCE
+        return labeled
     updated = dict(projection)
     code = _team_code(projection.get("opponent"))
+    filled_from_csv = False
     if overall is None:
         updated["opponent_rank"] = table.overall.get(code) if code else None
+        filled_from_csv = updated["opponent_rank"] is not None
     if positional is None:
         position = _primary_position(projection.get("position"))
         updated["opponent_position_rank"] = (
             table.by_position.get((code, position)) if code and position else None
         )
+        filled_from_csv = filled_from_csv or updated["opponent_position_rank"] is not None
+    if filled_from_csv:
+        updated["opponent_rank_source"] = CSV_RANK_SOURCE
+        updated["opponent_rank_season"] = table.season
+        updated["opponent_rank_note"] = CSV_RANK_NOTE
+    elif overall is not None or positional is not None:
+        updated["opponent_rank_source"] = SPORTSDATA_RANK_SOURCE
     return updated
 
 

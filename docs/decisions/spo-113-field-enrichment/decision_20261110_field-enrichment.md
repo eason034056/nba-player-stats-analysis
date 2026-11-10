@@ -25,6 +25,8 @@ Enrichment runs on the way out of `GET /api/nba/events`, including a cache hit. 
 
 Two words were being asked to do one job. `TeamLineup.status` already means completeness from the starter count: `projected`, `partial`, or `unavailable`. This change does not redefine it.
 
+`TeamLineup.status` is completeness from the starter count: `projected` when five names are present, `partial` when fewer than five are present, `unavailable` when none are. It is not a confirmation word. A four-name slate can be `status="partial"` and still be confirmed.
+
 Confirmation is a new field, `confirmation_status`, on `GET /api/nba/lineups` and `GET /api/nba/lineups/{team}`:
 
 - `"confirmed"` when any `source_snapshots` entry has `status` equal to `confirmed`, compared case-insensitively. One confirmation is enough.
@@ -47,7 +49,7 @@ The game log CSV has no venue column. `game_logs[].home_or_away` is `"home"`, `"
 
 `GET /api/nba/player-history` takes an optional `season` query. The response echoes `season` and adds `season_n_games`, `season_p_over`, and `season_p_under`. `n_games`, `p_over`, and `p_under` stay the all-games sample, including the `n` window.
 
-The default season is the recorded ESPN window that contains the UTC date, read from `tests/fixtures/espn/seasons/nba_*.json`. Overlapping windows use the one that started latest. A gap uses the season that started most recently. `season_label_for_event` turns `2026-27` into `2026-2027`. `2025-26` and `2025-2026` are the same label. On 2026-11-10 the window is `2026-2027` (`nba_2027.json` runs 2026-09-30 through 2027-06-26).
+The default season is the recorded ESPN window that contains the UTC date, read from `tests/fixtures/espn/seasons/nba_*.json`. Overlapping windows use the one that started latest. A gap uses the season that started most recently. `season_label_for_event` turns `2026-27` into `2026-2027`. `2025-26` and `2025-2026` are the same label. On 2026-11-10 the window is `2026-2027` (`nba_2027.json` runs 2026-09-30 through 2027-06-26). The date compared with those windows is the UTC calendar date. QA pins that, including a Chicago evening whose UTC date has already crossed the boundary. The events clock is still displayed in Eastern time.
 
 Season rates use the same filters as the all-games sample: game type through `coalesce_game_type` (a blank type is regular season), opponent, starter, teammate, and DNP. They ignore `n`. They are computed before the last-N trim. An empty season returns `season_n_games: 0` and null rates. The shipped CSV is `2025-2026` and `2024-2025`, so the default season can be an empty sample until the log is refreshed. WNBA history does not compute these keys; the response model leaves them null.
 
@@ -59,7 +61,11 @@ The nulls come from a missing source, not from the league parameter. `FIELD_MAPP
 
 Filling a null by matching the raw abbreviation would still miss six clubs. SportsData writes `GS`, `NO`, `NY`, `SA`, `PHO`, and `UTAH`. The canonical codes are `GSW`, `NOP`, `NYK`, `SAS`, `PHX`, and `UTA`. The lookup uses `canonical_team_code`, which already maps those aliases.
 
-When a rank is null, it is computed from NBA regular-season game logs. A team's points on a date are the sum of its players' points. That sum is points allowed by the opponent. Rank 1 is the most points allowed per game (the weakest defense). Ties break by team code so ranks are unique. Position rank is points allowed to `PG`, `SG`, `SF`, `PF`, or `C`, using the first token of the logged position. A number already on the projection is kept. An unknown opponent stays null.
+When a rank is null, it is computed from NBA regular-season game logs. A team's points on a date are the sum of its players' points, excluding rows with zero minutes. That sum is points allowed by the opponent. Rank 1 is the most real points allowed per game (the weakest defense), not fantasy points. Ties break by team code so ranks are unique. Only places 1 through 30 are emitted. Position rank is points allowed to `PG`, `SG`, `SF`, `PF`, or `C`, ranked inside that position, using the first token of the logged position. One combined list of every team-position pair is not used. A number already on the projection is kept, including a vendor value outside 1–30; `PlayerProjection` and `DailyPick` declare `ge=1, le=30`, so a serialized rank has to sit in that range. An unknown opponent stays null.
+
+The CSV spells Philadelphia `Sixers`. `TEAM_CODE_ALIASES` maps `SIXERS` to `PHI`, next to `76ERS`.
+
+A filled rank carries `opponent_rank_source: "csv"`, `opponent_rank_season` (the game-log label, `2025-2026` for the 2025-26 season), and `opponent_rank_note` (`Computed from real points allowed, not fantasy points.`). A number that arrived on the projection is `opponent_rank_source: "sportsdata"` and leaves season and note null. Redis stores the unfilled dict from both `fetch_and_store` and the Postgres fallback. The fill runs on the way out of `get_projections`.
 
 The rank season is the recorded current season when the log has regular-season games for it, otherwise the latest season label that does. In November 2026 the CSV has not been refreshed for `2026-2027`, so ranks use `2025-2026`.
 

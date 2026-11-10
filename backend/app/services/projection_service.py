@@ -232,10 +232,11 @@ class ProjectionService:
             pg_data = await self._read_from_postgres(date)
             if pg_data:
                 print(f"📀 Projections loaded from PostgreSQL: {date} ({len(pg_data)} records)")
-                # Backfill Redis
-                filled = self._with_defense_ranks(pg_data)
-                await self._write_to_redis(date, filled)
-                return filled
+                # Backfill Redis with the unfilled rows. A later cache
+                # hit runs _with_defense_ranks again, so a CSV rank is
+                # not stored as if SportsData had sent it.
+                await self._write_to_redis(date, pg_data)
+                return self._with_defense_ranks(pg_data)
             
             print(f"❌ Unable to get projections: {date}")
             return {}

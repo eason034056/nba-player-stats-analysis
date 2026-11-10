@@ -7,6 +7,7 @@ WNBA stays on the previous payload: new fields are absent or null.
 
 from __future__ import annotations
 
+import copy
 import csv
 import json
 from datetime import datetime, timezone
@@ -85,6 +86,39 @@ def _row(
         "REB": "1",
         "AST": "1",
     }
+
+
+def load_odds_fixture(name: str) -> object:
+    """Recorded Odds API body. Callers edit a deepcopy, not this object."""
+    path = Path(__file__).resolve().parent / "fixtures" / name
+    return json.loads(path.read_text(encoding="utf-8"))
+
+
+def _lakers_warriors_event() -> dict:
+    """Recorded events row, with the clubs and tip this test needs."""
+    events = load_odds_fixture("odds_api_events__basketball_nba.json")
+    event = copy.deepcopy(events[0])
+    event["home_team"] = "Los Angeles Lakers"
+    event["away_team"] = "Golden State Warriors"
+    event["commence_time"] = "2026-01-15T01:00:00Z"
+    return event
+
+
+def _player_points_bookmakers(rows: list[tuple[str, str, float | None]]) -> list[dict]:
+    """One recorded bookmaker, outcomes copied and then edited."""
+    recorded = load_odds_fixture("odds_api_event_odds__player_points.json")
+    book = copy.deepcopy(recorded["bookmakers"][0])
+    template = book["markets"][0]["outcomes"][0]
+    outcomes = []
+    for player_name, side, point in rows:
+        outcome = copy.deepcopy(template)
+        outcome["description"] = player_name
+        outcome["name"] = side
+        if point is not None:
+            outcome["point"] = point
+        outcomes.append(outcome)
+    book["markets"][0]["outcomes"] = outcomes
+    return [book]
 
 
 def _knicks_opener() -> dict:
@@ -202,15 +236,7 @@ async def test_team_lineup_route_exposes_confirmation_without_changing_status(mo
 @pytest.mark.asyncio
 async def test_events_add_et_clock_and_per_team_lineup_status(monkeypatch):
     async def fake_events(**kwargs):
-        return [
-            {
-                "id": "evt-1",
-                "sport_key": "basketball_nba",
-                "home_team": "Los Angeles Lakers",
-                "away_team": "Golden State Warriors",
-                "commence_time": "2026-01-15T01:00:00Z",
-            }
-        ]
+        return [_lakers_warriors_event()]
 
     async def fake_peek(date):
         assert date == "2026-01-15"
@@ -289,19 +315,12 @@ class TestPosition:
 
         class _Snapshot:
             data = {
-                "bookmakers": [
-                    {
-                        "markets": [
-                            {
-                                "key": "player_points",
-                                "outcomes": [
-                                    {"description": "Stephen Curry", "name": "Over"},
-                                    {"description": "Nobody On The Log", "name": "Over"},
-                                ],
-                            }
-                        ]
-                    }
-                ]
+                "bookmakers": _player_points_bookmakers(
+                    [
+                        ("Stephen Curry", "Over", None),
+                        ("Nobody On The Log", "Over", None),
+                    ]
+                )
             }
             fetched_at = datetime(2026, 11, 10, tzinfo=timezone.utc)
             data_age_seconds = 1
@@ -329,19 +348,12 @@ class TestPosition:
         service = DailyAnalysisService()
         service.csv_service = _service(path)
         service._get_props_for_market = AsyncMock(
-            return_value=[
-                {
-                    "key": "draftkings",
-                    "markets": [
-                        {
-                            "outcomes": [
-                                {"description": "Stephen Curry", "name": "Over", "point": 10.5},
-                                {"description": "Stephen Curry", "name": "Under", "point": 10.5},
-                            ]
-                        }
-                    ],
-                }
-            ]
+            return_value=_player_points_bookmakers(
+                [
+                    ("Stephen Curry", "Over", 10.5),
+                    ("Stephen Curry", "Under", 10.5),
+                ]
+            )
         )
         picks, _, _ = await service._analyze_single_event(
             event_id="evt-1",

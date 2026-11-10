@@ -107,7 +107,7 @@ Stale pull requests the owner is closing. Not merged.
 | SPO-104 | One-sided DD quotes (`under_odds` / `p_under_imp` null, including a JSON null No price; `line_is_synthetic`, `market_kind`, `uses_prior`), league-scoped team codes, and the SPO-97 schedule-index follow-ups. Lands with #36. PR #37 into `dev`. Summary: `docs/task-summaries/SPO-104-dd-one-sided-and-followups.md`. |
 | SPO-102 | Wire `PlayerDDTile` to double-double history and yes/no odds. Open on `feature/SPO-102-player-dd-tile-wiring`. Summary: `docs/task-summaries/SPO-102-player-dd-tile-wiring.md`. |
 | SPO-103 | SPO-10 Phase 5 final review. Open. |
-| SPO-113 | NBA field enrichment for the No-Vig redesign. Open on `feature/SPO-113-field-enrichment`. One PR into `dev`. Summary: `docs/task-summaries/SPO-113-field-enrichment.md`. Decision: `docs/decisions/spo-113-field-enrichment/decision_20261110_field-enrichment.md`. |
+| SPO-113 | NBA field enrichment for the No-Vig redesign. Open on `feature/SPO-113-field-enrichment`, PR #45 into `dev`. Position ranks are 1–30 inside each position, `Sixers` maps to `PHI`, and a csv rank is labeled on the response. Summary: `docs/task-summaries/SPO-113-field-enrichment.md`. Decision: `docs/decisions/spo-113-field-enrichment/decision_20261110_field-enrichment.md`. Do not rebase onto #42; that conflict waits until #42 is on `dev`. |
 
 ## Not classified
 

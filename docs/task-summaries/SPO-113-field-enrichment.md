@@ -4,7 +4,7 @@
 
 Frontend PRs #39 and #40 need fields the NBA API does not return yet. This change adds them on the NBA routes only. WNBA routes are unchanged. New fields on the shared models default to null or an empty list, so a WNBA payload still parses and the new keys are null or `[]`.
 
-`commence_time` stays the UTC timestamp. NBA events also return `commence_time_et` (ISO 8601 with the `America/New_York` offset, via `zoneinfo`, so EST and EDT are both right) and `display_tz` (`"ET"`). Each event carries `lineup_status.home` and `lineup_status.away`. `GET /api/nba/lineups` and `GET /api/nba/lineups/{team}` add `confirmation_status`. The existing lineup `status` field is still the completeness word (`projected`, `partial`, `unavailable`).
+`commence_time` stays the UTC timestamp. NBA events also return `commence_time_et` (ISO 8601 with the `America/New_York` offset, via `zoneinfo`, so EST and EDT are both right) and `display_tz` (`"ET"`). Each event carries `lineup_status.home` and `lineup_status.away`. `GET /api/nba/lineups` and `GET /api/nba/lineups/{team}` add `confirmation_status`. `status` stays completeness (`projected` = five names, `partial` = fewer, `unavailable`). `confirmation_status` is a different word: `confirmed` when any snapshot says confirmed. A four-name slate can be `status="partial"` and `confirmation_status="confirmed"`. Both fields can read `projected` for different reasons.
 
 `DailyPick.position` and suggest `suggestions[].position` come from the `Pos` column on the player's most recent NBA game log. Player-history game logs gain `home_or_away`. The history route accepts `season` and returns season-scoped hit rate and sample size beside the existing all-games numbers. `teammates` stays the name list. `teammate_context` adds how many sample games each of those teammates missed, the dates and ESPN ids, and the player's mean with and without them.
 
@@ -48,7 +48,11 @@ The nulls exist because the value is missing at the source. `projection_provider
 
 A fill that looked the abbreviation up as-is would still miss six clubs. SportsData writes `GS`, `NO`, `NY`, `SA`, `PHO`, and `UTAH`. `canonical_team_code` and the lineup table use `GSW`, `NOP`, `NYK`, `SAS`, `PHX`, and `UTA`. The lookup goes through `canonical_team_code`, which already has those aliases. The league query param is not the NBA bug: the projection URL is hardcoded to `/v3/nba/`. WNBA is not in the projection leagues, and its ranks stay null on purpose.
 
-Rank 1 is the most points allowed per game (the weakest defense), which is the scale the picks page already uses: 1–10 easy, 11–20 average, 21–30 hard. Position rank is points allowed to `PG`, `SG`, `SF`, `PF`, or `C`. A number already on the projection is kept. An unknown opponent stays null. The rank season is the recorded current season when the log has regular-season games for it, otherwise the latest season that does. In November 2026 that is `2025-2026`.
+Rank 1 is the most real points allowed per game (the weakest defense), which is the scale the picks page already uses: 1–10 easy, 11–20 average, 21–30 hard. Position rank is points allowed to `PG`, `SG`, `SF`, `PF`, or `C`, and each position is ranked on its own 1–30 list. A single list of every team-position pair is not used, because that list runs to 150. `_rank_descending` keeps only places 1 through 30. A number already on the projection is kept, including a vendor 0 or 31; the response models reject those with `ge=1, le=30` when they are serialized. An unknown opponent stays null. Zero-minute rows are left out of the sum, the same way history leaves them out.
+
+The CSV spells Philadelphia as `Sixers`. That token was missing from `TEAM_CODE_ALIASES`, so the table stored `SIXERS` and a lookup for `PHI` stayed null. `SIXERS` now maps to `PHI`, beside the existing `76ERS` alias.
+
+The rank season is the recorded current season when the log has regular-season games for it, otherwise the latest season that does. In November 2026 that is `2025-2026` (the 2025-26 season). A filled rank is labeled `opponent_rank_source: "csv"`, `opponent_rank_season: "2025-2026"`, and `opponent_rank_note` saying it is real points allowed, not fantasy points. A number that was already on the row is `opponent_rank_source: "sportsdata"`. Redis stores the unfilled dict on both the fetch path and the Postgres fallback, and the fill runs after the read. The season label used to choose that window stays the UTC date. QA pins that choice (`test_chicago_evening_uses_the_utc_date` and the inclusive window edges). An Eastern evening can already be the next UTC date.
 
 ## API contract
 
@@ -69,8 +73,8 @@ Shared models also serialize these keys on WNBA. WNBA routes do not compute them
 
 | Field | JSON type | Null | Notes |
 |---|---|---|---|
-| `status` | string | no | Unchanged. Completeness: `projected`, `partial`, or `unavailable`. |
-| `confirmation_status` | string | yes | `"confirmed"` if any `source_snapshots.*.status` is `confirmed` (case-insensitive). `"projected"` if a snapshot or a starter exists and nobody reported confirmed (`expected` lands here). Null when the record has neither. |
+| `status` | string | no | Completeness from the starter count. `projected` = five names, `partial` = fewer than five, `unavailable` = none. This word is not confirmation. |
+| `confirmation_status` | string | yes | Confirmation, separate from `status`. `"confirmed"` if any `source_snapshots.*.status` is `confirmed` (case-insensitive), including a stale confirmation next to a fresh `projected` snapshot. `"projected"` if a snapshot or a starter exists and nobody reported confirmed (`expected` lands here). Null when the record has neither. Does not read `updated_at`. A partial slate can still be confirmed. |
 
 ### `GET /api/nba/players/suggest`
 
@@ -86,8 +90,11 @@ Shared models also serialize these keys on WNBA. WNBA routes do not compute them
 | Field | JSON type | Null | Notes |
 |---|---|---|---|
 | `picks[].position` | string | yes | Same `Pos` source as suggest. Null on WNBA and when the log has no position. |
-| `picks[].opponent_rank` | integer | yes | Existing field. Now filled when the projection left it null. See ranks below. |
-| `picks[].opponent_position_rank` | integer | yes | Existing field. Same fill. |
+| `picks[].opponent_rank` | integer | yes | 1–30 (`ge=1`, `le=30`). 1 = most real points allowed. Filled when the projection left it null. |
+| `picks[].opponent_position_rank` | integer | yes | 1–30, ranked inside that position only. |
+| `picks[].opponent_rank_source` | string | yes | `"csv"` or `"sportsdata"`. |
+| `picks[].opponent_rank_season` | string | yes | Game-log season for a csv rank, e.g. `"2025-2026"` (the 2025-26 season). Null for a SportsData rank. |
+| `picks[].opponent_rank_note` | string | yes | On a csv rank: computed from real points allowed, not fantasy points. |
 
 ### `GET /api/nba/player-history`
 
@@ -116,8 +123,11 @@ Query `season`: optional string. Omit it and the season is the current recorded 
 
 | Field | JSON type | Null | Notes |
 |---|---|---|---|
-| `opponent_rank` | integer | yes | Existing field. 1–30 when filled. 1 is the most points allowed per game. Kept when the projection already has a number. Null when the opponent code is unknown or the log has no regular-season games. |
-| `opponent_position_rank` | integer | yes | Same scale, points allowed to the player's `PG` / `SG` / `SF` / `PF` / `C`. |
+| `opponent_rank` | integer | yes | 1–30. 1 is the most real points allowed per game. Kept when the projection already has a number. Null when the opponent code is unknown or the log has no regular-season games. |
+| `opponent_position_rank` | integer | yes | 1–30 inside `PG` / `SG` / `SF` / `PF` / `C`. A center rank is not compared with a point-guard rank. |
+| `opponent_rank_source` | string | yes | `"csv"` when a null rank was filled from the game log. `"sportsdata"` when the row already carried the number. |
+| `opponent_rank_season` | string | yes | Season of the csv table, e.g. `"2025-2026"`. Null for `"sportsdata"` and when the rank stays null. |
+| `opponent_rank_note` | string | yes | `"Computed from real points allowed, not fantasy points."` when `opponent_rank_source` is `"csv"`. |
 
 ## Tests / Verification
 
@@ -127,6 +137,8 @@ No live Odds API call. No live SportsData call. The home/away assertion reads `t
 
 ## Follow-ups
 
-- SPO-111 still adds `tier`, `p_over`, `p_under` on `DailyPick` and `top_read` on `NBAEvent`. SPO-112 adds `signals` and `combined_probability`. Those lines were left untouched.
+- SPO-111 (PR #42, not merged) still adds `tier`, `p_over`, `p_under` on `DailyPick` and `top_read` on `NBAEvent`. A trial merge conflicts in `backend/app/api/nba.py` (`_with_event_fields` vs `_events_with_top_reads`), `backend/app/models/schemas.py` (`NBAEvent` / `EventLineupStatus` vs `top_read`), and `backend/app/services/daily_analysis.py` (the pick constructor). Resolve that after #42 lands on `dev`. This branch was not rebased onto #42.
+- SPO-112 adds `signals` and `combined_probability`. Those lines were left untouched. A position rank above 30 used to look like a strong defense to that verdict; position ranks are now 1–30.
 - The shipped CSV has no `2026-2027` rows. Default season hit rate stays empty until that log is refreshed. Opponent ranks fall back to `2025-2026` for the same reason.
 - The events lineup chip is only as fresh as the last lineup cache or Postgres row. The events route does not refresh it.
+- Until the picks-page rank colors land, `PlayerProjectionPanel` on this branch still treats ranks 1–10 as Hard.
