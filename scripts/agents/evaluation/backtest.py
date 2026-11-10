@@ -161,6 +161,8 @@ _DAILY_FIELDS = (
     "price",
     "clv_prob",
     "clv_line",
+    "combined_probability",
+    "combined_adjustment",
 )
 _AGENT_FIELDS = (
     "league",

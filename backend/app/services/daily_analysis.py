@@ -38,6 +38,7 @@ from app.services.prob import calculate_mode_threshold
 from app.services.cache import cache_service
 from app.services.projection_service import projection_service
 from app.models.schemas import DailyPick, DailyPicksResponse, AnalysisStats
+from app.services.pick_signals import build_nba_signals
 
 
 # ==================== League routing (SPO-35) ====================
@@ -806,6 +807,12 @@ class DailyAnalysisService:
                         edge_str = f" (edge: {edge:+.1f})" if edge is not None else ""
                         min_str = f" [{projected_minutes:.0f}min]" if projected_minutes is not None else ""
                         print(f"  ✨ {player_name} ({player_team}) {metric_key} OVER {mode_threshold}: {p_over:.1%}{edge_str}{min_str}")
+                        pick = _with_nba_signal_verdicts(
+                            pick,
+                            league=league,
+                            bookmakers_data=props_data,
+                            game_logs=history_stats.get("game_logs") or [],
+                        )
 
                     elif side == "under":
                         pick = DailyPick(
@@ -838,6 +845,12 @@ class DailyAnalysisService:
                         edge_str = f" (edge: {edge:+.1f})" if edge is not None else ""
                         min_str = f" [{projected_minutes:.0f}min]" if projected_minutes is not None else ""
                         print(f"  ✨ {player_name} ({player_team}) {metric_key} UNDER {mode_threshold}: {p_under:.1%}{edge_str}{min_str}")
+                        pick = _with_nba_signal_verdicts(
+                            pick,
+                            league=league,
+                            bookmakers_data=props_data,
+                            game_logs=history_stats.get("game_logs") or [],
+                        )
 
             except OddsAPIError as e:
                 print(f"  ⚠️ Failed to fetch {market_key}: {e}")
@@ -930,6 +943,57 @@ class DailyAnalysisService:
                         player_lines[player_name].append(float(line))
 
         return dict(player_lines)
+
+
+def _recent_stat_values(game_logs: List[Dict[str, Any]]) -> List[float]:
+    """Stat values from ``get_player_stats`` logs, oldest first.
+
+    Logs without a numeric ``value`` are skipped. The last ten of what
+    remains are the non-DNP games the last-10 signal reads.
+    """
+    values: List[float] = []
+    for game in game_logs:
+        raw = game.get("value") if isinstance(game, dict) else None
+        if isinstance(raw, bool) or not isinstance(raw, (int, float)):
+            continue
+        values.append(float(raw))
+    return values
+
+
+def _with_nba_signal_verdicts(
+    pick: DailyPick,
+    *,
+    league: str,
+    bookmakers_data: List[Dict[str, Any]],
+    game_logs: List[Dict[str, Any]],
+) -> DailyPick:
+    """Attach the five signals on an NBA pick. WNBA is returned unchanged.
+
+    Both new fields stay None for WNBA. The bookmaker list is the snapshot
+    already fetched for this market; this does not request odds again and
+    does not change how lines are grouped.
+    """
+    if league.lower() != "nba":
+        return pick
+    values = _recent_stat_values(game_logs)
+    last10 = values[-10:] if len(values) >= 10 else None
+    signals, combined, _adjustment = build_nba_signals(
+        side=pick.direction,
+        line=pick.threshold,
+        player_name=pick.player_name,
+        bookmakers=bookmakers_data,
+        last10_values=last10,
+        history_rate=pick.probability,
+        projected_value=pick.projected_value,
+        opponent_rank=pick.opponent_rank,
+        opponent_position_rank=pick.opponent_position_rank,
+        injury_status=pick.injury_status,
+    )
+    # Mutate the instance already appended to the pick list. model_copy
+    # would leave the list holding the pre-signal object.
+    pick.signals = signals
+    pick.combined_probability = combined
+    return pick
 
 
 # Create a global service instance

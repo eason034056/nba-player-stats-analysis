@@ -23,6 +23,7 @@ from evaluation.metrics import (
     grouped,
     is_postable,
     pearson,
+    COMBINED_EDGES,
     reliability,
     summarize,
     tier_name,
@@ -307,6 +308,56 @@ def render_report(
             )
         )
         add("")
+    add("### Calibration of combined_probability")
+    add("")
+    add(
+        "NBA only. The column is empty for WNBA. With no historical price the "
+        "market term is the fair 0.5 prior, so this table is the Platt-scaled "
+        "adjustment model, not a test of live sportsbook prices. A loaded odds "
+        "file replaces that prior with the opening no-vig price."
+    )
+    add("")
+    for league in replays:
+        picked = [row for row in med if row.league == league and row.pick is not None]
+        summary = summarize(picked)
+        add(f"**{league.upper()}**")
+        add("")
+        if summary.combined_n == 0:
+            add("_No combined_probability values._")
+            add("")
+            continue
+        add(
+            f"n={summary.combined_n}. "
+            f"Brier {_num(summary.combined_brier)} "
+            f"({_ci(summary.combined_brier_lo, summary.combined_brier_hi, digits=3, scale=1.0)}). "
+            f"Log loss {_num(summary.combined_log_loss)}. "
+            f"ECE {_num(summary.combined_ece)}. "
+            f"Gap {_num(summary.combined_calibration_gap)}. "
+            f"Mean predicted {_pct(summary.combined_avg_pred)} vs "
+            f"hit rate {_pct(summary.combined_hit_rate)}."
+        )
+        add("")
+        add(
+            _reliability_table(
+                reliability(
+                    picked,
+                    lambda row: row.combined_probability,
+                    lambda row: row.hit,
+                    COMBINED_EDGES,
+                )
+            )
+        )
+        add("")
+        buckets = reliability(
+            picked,
+            lambda row: row.combined_probability,
+            lambda row: row.hit,
+            COMBINED_EDGES,
+        )
+        if buckets:
+            widest = max(abs(item.gap) for item in buckets)
+            add(f"Widest absolute bucket gap: {_num(widest)}.")
+            add("")
     add("### Calibration of p_over on every prop")
     add("")
     add(_overall_brier_table(med))

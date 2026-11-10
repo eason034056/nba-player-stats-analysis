@@ -5,6 +5,9 @@ the Daily Picks rule on the default MED20 proxy:
 
 * Brier score of the selected picks, ``mean((probability - hit)^2)``.
 * Calibration gap, ``|mean(probability) - hit rate|`` on those picks.
+* The same two statistics on ``combined_probability``, when that column
+  has at least 30 settled picks. WNBA leaves the column empty, so the
+  extra check is skipped there.
 
 Both are per league. A league with fewer than 30 picks falls back to the
 Brier score of ``p_over`` on every prop and the absolute gap between mean
@@ -116,7 +119,43 @@ def evaluate_guard(
             result.failures.append(
                 f"{league} calibration gap {gap:.3f} > {bounds.max_calibration_gap:.3f}"
             )
+        _check_combined(result, league, summary, bounds)
     return result
+
+
+def _check_combined(
+    result: GuardResult, league: str, summary: Summary, bounds: Thresholds
+) -> None:
+    """Apply the same Brier and gap bounds to ``combined_probability``.
+
+    Fewer than 30 values is reported and not failed. Zero values (WNBA,
+    or a replay that did not fill the column) is reported the same way.
+    """
+    if summary.combined_n < 30:
+        result.lines.append(
+            f"skip {league} combined_probability: n={summary.combined_n} (need 30)"
+        )
+        return
+    brier = summary.combined_brier
+    gap = summary.combined_calibration_gap
+    brier_ok = brier <= bounds.max_brier
+    gap_ok = gap <= bounds.max_calibration_gap + 1e-12
+    status = "ok" if brier_ok and gap_ok else "FAIL"
+    result.lines.append(
+        f"{status} {league} combined_probability: Brier {brier:.3f}, "
+        f"calibration gap {gap:.3f} (n={summary.combined_n})"
+    )
+    if not brier_ok:
+        result.ok = False
+        result.failures.append(
+            f"{league} combined_probability Brier {brier:.3f} > {bounds.max_brier:.3f}"
+        )
+    if not gap_ok:
+        result.ok = False
+        result.failures.append(
+            f"{league} combined_probability calibration gap {gap:.3f} > "
+            f"{bounds.max_calibration_gap:.3f}"
+        )
 
 
 def run_sample_guard(

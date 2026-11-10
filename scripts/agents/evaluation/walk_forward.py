@@ -77,6 +77,8 @@ class DailyRow(tuple):
         price: int | None = None,
         clv_prob: float | None = None,
         clv_line: float | None = None,
+        combined_probability: float | None = None,
+        combined_adjustment: float | None = None,
     ):
         return tuple.__new__(
             cls,
@@ -99,6 +101,8 @@ class DailyRow(tuple):
                 price,
                 clv_prob,
                 clv_line,
+                combined_probability,
+                combined_adjustment,
             ),
         )
 
@@ -120,6 +124,8 @@ class DailyRow(tuple):
     price = property(lambda self: self[15])
     clv_prob = property(lambda self: self[16])
     clv_line = property(lambda self: self[17])
+    combined_probability = property(lambda self: self[18])
+    combined_adjustment = property(lambda self: self[19])
 
 
 class AgentRow(tuple):
@@ -330,6 +336,61 @@ def _active_games(logs: list[dict]) -> list[dict]:
     return active
 
 
+def _nba_combined(
+    *,
+    league: str,
+    side: str | None,
+    line: float,
+    values: list[float],
+    history_rate: float | None,
+    game: dict,
+    metric: str,
+    defense_index: object | None,
+    quote: object | None,
+) -> tuple[float | None, float | None]:
+    """Calibrated side probability and the pre-Platt adjustment total.
+
+    NBA only. WNBA returns ``(None, None)``. With no quote the market term
+    is the fair 0.5 prior (logit 0). A two-sided quote uses its opening
+    no-vig price instead. Projection is always missing in this replay.
+
+    Returns:
+        ``(combined_probability, adjustment_total)``. The probability is
+        None when ``side`` is None. The adjustment is None in that same case.
+    """
+    if league != "nba" or side is None:
+        return None, None
+    from app.services.pick_signal_constants import OFFLINE_MARKET_PRIOR
+    from app.services.pick_signals import build_nba_signals
+    from app.services.prob import american_to_prob, devig
+
+    market = OFFLINE_MARKET_PRIOR
+    if quote is not None:
+        fair_over, fair_under = devig(
+            american_to_prob(float(quote.open_over_price)),  # type: ignore[attr-defined]
+            american_to_prob(float(quote.open_under_price)),  # type: ignore[attr-defined]
+        )
+        market = fair_over if side == "over" else fair_under
+    rank = None
+    if defense_index is not None:
+        rank = defense_index.rank(  # type: ignore[attr-defined]
+            game.get("game_date"),
+            str(game.get("opponent") or ""),
+            metric,
+            str(game.get("pos") or "").strip() or None,
+        )
+    _signals, combined, adjustment = build_nba_signals(
+        side=side,
+        line=line,
+        player_name=str(game.get("player_name") or ""),
+        market_probability=market,
+        last10_values=values[:10] if len(values) >= 10 else None,
+        history_rate=history_rate,
+        opponent_position_rank=rank,
+    )
+    return combined, adjustment
+
+
 def _price_fields(
     quote: object | None, pick: str | None, line: float
 ) -> tuple[float, str, int | None, float | None, float | None]:
@@ -440,6 +501,16 @@ def replay_league(
     }
     target_dates: list[str] = []
     cache = service._cache  # type: ignore[attr-defined]
+    defense_index = None
+    if league == "nba":
+        from app.services.csv_player_history import CONTINUOUS_METRIC_EXTRACTORS
+        from evaluation.defense_ranks import DefenseRankIndex
+
+        defense_index = DefenseRankIndex.from_cache(
+            cache,
+            [metric for _odds_key, metric in markets],
+            CONTINUOUS_METRIC_EXTRACTORS,
+        )
     n_players = 0
 
     for player, logs in cache.items():
@@ -527,6 +598,17 @@ def replay_league(
                         if side is None
                         else (p_over if side == "over" else p_under)
                     )
+                    combined, adjustment = _nba_combined(
+                        league=league,
+                        side=side,
+                        line=line,
+                        values=values,
+                        history_rate=prob,
+                        game=game,
+                        metric=metric,
+                        defense_index=defense_index,
+                        quote=quote,
+                    )
                     result.daily.append(
                         DailyRow(
                             league,
@@ -547,6 +629,8 @@ def replay_league(
                             price,
                             clv_prob,
                             clv_line,
+                            combined,
+                            adjustment,
                         )
                     )
                     if validate and line_source == "proxy" and kind == "L10":

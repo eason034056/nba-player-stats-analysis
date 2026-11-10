@@ -32,7 +32,7 @@ are too narrow: many props share a game.
 from __future__ import annotations
 
 import math
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Callable, Sequence
 
 from evaluation.odds_history import ASSUMED_AMERICAN_ODDS, unit_profit
@@ -44,6 +44,9 @@ HIGH_TIER_PROBABILITY = 0.70
 
 PICK_EDGES = (0.65, 0.70, 0.75, 0.80, 0.85, 0.90, 0.95, 1.0001)
 P_OVER_EDGES = (0.0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0, 1.0001)
+# combined_probability is not floored at 0.65, so its reliability diagram
+# uses equal-width deciles across [0, 1].
+COMBINED_EDGES = (0.0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0, 1.0001)
 AGENT_P_OVER_EDGES = (0.0, 0.3, 0.4, 0.45, 0.5, 0.55, 0.6, 0.7, 1.0001)
 CONFIDENCE_EDGES = (0.0, 0.3, 0.5, 0.6, 0.7, 0.76)
 
@@ -115,6 +118,17 @@ class Summary:
     clv_line: float | None
     clv_n: int
     priced_picks: int
+    log_loss: float = float("nan")
+    ece: float = float("nan")
+    combined_n: int = 0
+    combined_hits: int = 0
+    combined_hit_rate: float = float("nan")
+    combined_avg_pred: float = float("nan")
+    combined_brier: float = float("nan")
+    combined_brier_lo: float = float("nan")
+    combined_brier_hi: float = float("nan")
+    combined_log_loss: float = float("nan")
+    combined_ece: float = float("nan")
 
     @property
     def calibration_gap(self) -> float:
@@ -126,6 +140,21 @@ class Summary:
         if self.picks <= 0 or math.isnan(self.avg_pred) or math.isnan(self.hit_rate):
             return float("nan")
         return abs(self.avg_pred - self.hit_rate)
+
+    @property
+    def combined_calibration_gap(self) -> float:
+        """Absolute gap between mean ``combined_probability`` and its hit rate.
+
+        Rows with no combined probability are not in this gap. WNBA leaves
+        the column empty, so the gap is NaN there.
+        """
+        if (
+            self.combined_n <= 0
+            or math.isnan(self.combined_avg_pred)
+            or math.isnan(self.combined_hit_rate)
+        ):
+            return float("nan")
+        return abs(self.combined_avg_pred - self.combined_hit_rate)
 
 
 @dataclass
@@ -151,6 +180,12 @@ class Accumulator:
     p_over_brier_sum: float = 0.0
     assumed_profit_picks: int = 0
     pushes: int = 0
+    pick_probs: list[float] = field(default_factory=list)
+    pick_hits: list[float] = field(default_factory=list)
+    combined_probs: list[float] = field(default_factory=list)
+    combined_hits: list[float] = field(default_factory=list)
+    combined_brier_sum: float = 0.0
+    combined_brier_sq: float = 0.0
 
     def add(self, row: object) -> None:
         """Add one daily or agent row. Missing prices fall back to -110."""
@@ -187,8 +222,20 @@ class Accumulator:
         self.picks += 1
         self.hits += hit
         self.prob_sum += prob
+        self.pick_probs.append(prob)
+        self.pick_hits.append(float(hit))
         self.brier_sum += se * se
         self.brier_sq += (se * se) * (se * se)
+        combined = getattr(row, "combined_probability", None)
+        if combined is not None:
+            combined_prob = float(combined)
+            combined_error = combined_prob - hit
+            self.combined_probs.append(combined_prob)
+            self.combined_hits.append(float(hit))
+            self.combined_brier_sum += combined_error * combined_error
+            self.combined_brier_sq += (combined_error * combined_error) * (
+                combined_error * combined_error
+            )
         self.over_picks += int(pick == "over")
         self.profit_sum += profit
         self.profit_sq += profit * profit
@@ -247,6 +294,26 @@ class Accumulator:
             roi_method = "none"
         clv_prob = self.clv_prob_sum / self.clv_n if self.clv_n else None
         clv_line = self.clv_line_sum / self.clv_n if self.clv_n else None
+        log_loss_value = binary_log_loss(self.pick_probs, self.pick_hits)
+        ece_value = expected_calibration_error(self.pick_probs, self.pick_hits, PICK_EDGES)
+        combined_n = len(self.combined_probs)
+        if combined_n:
+            combined_hits = int(sum(self.combined_hits))
+            combined_hit_rate = combined_hits / combined_n
+            combined_avg = sum(self.combined_probs) / combined_n
+            combined_brier = self.combined_brier_sum / combined_n
+            combined_lo, combined_hi = _normal_ci(
+                self.combined_brier_sum, self.combined_brier_sq, combined_n
+            )
+            combined_log_loss = binary_log_loss(self.combined_probs, self.combined_hits)
+            combined_ece = expected_calibration_error(
+                self.combined_probs, self.combined_hits, COMBINED_EDGES
+            )
+        else:
+            combined_hits = 0
+            combined_hit_rate = combined_avg = combined_brier = float("nan")
+            combined_lo = combined_hi = float("nan")
+            combined_log_loss = combined_ece = float("nan")
         return Summary(
             props=props,
             picks=picks,
@@ -272,6 +339,17 @@ class Accumulator:
             clv_line=clv_line,
             clv_n=self.clv_n,
             priced_picks=self.priced_picks,
+            log_loss=log_loss_value,
+            ece=ece_value,
+            combined_n=combined_n,
+            combined_hits=combined_hits,
+            combined_hit_rate=combined_hit_rate,
+            combined_avg_pred=combined_avg,
+            combined_brier=combined_brier,
+            combined_brier_lo=combined_lo,
+            combined_brier_hi=combined_hi,
+            combined_log_loss=combined_log_loss,
+            combined_ece=combined_ece,
         )
 
 
@@ -319,6 +397,66 @@ class ReliabilityBin:
     @property
     def gap(self) -> float:
         return self.avg_pred - self.actual
+
+
+def binary_log_loss(
+    predictions: Sequence[float], outcomes: Sequence[float], eps: float = 1e-15
+) -> float:
+    """Mean binary log loss. Predictions are clipped away from 0 and 1.
+
+    Args:
+        predictions: Probabilities of the outcome that was bet.
+        outcomes: 1 for a hit, 0 for a miss. Same length as ``predictions``.
+        eps: Floor and ceiling so ``log(0)`` is not taken.
+
+    Returns:
+        The mean log loss, or NaN when ``predictions`` is empty.
+    """
+    n = len(predictions)
+    if n == 0 or n != len(outcomes):
+        return float("nan")
+    total = 0.0
+    for prediction, outcome in zip(predictions, outcomes):
+        probability = min(max(float(prediction), eps), 1.0 - eps)
+        result = float(outcome)
+        total += -(
+            result * math.log(probability) + (1.0 - result) * math.log(1.0 - probability)
+        )
+    return total / n
+
+
+def expected_calibration_error(
+    predictions: Sequence[float],
+    outcomes: Sequence[float],
+    edges: Sequence[float],
+) -> float:
+    """Weighted mean of ``|avg prediction − actual|`` across bins of ``edges``.
+
+    Empty bins are skipped. A prediction that falls outside ``edges`` is
+    left out of both the weights and the total, matching ``reliability``.
+    Returns NaN when nothing lands in a bin.
+    """
+    if not predictions or len(predictions) != len(outcomes):
+        return float("nan")
+    counts = [0 for _ in range(len(edges) - 1)]
+    pred_sum = [0.0 for _ in counts]
+    out_sum = [0.0 for _ in counts]
+    for prediction, outcome in zip(predictions, outcomes):
+        for index in range(len(edges) - 1):
+            if edges[index] <= prediction < edges[index + 1]:
+                counts[index] += 1
+                pred_sum[index] += prediction
+                out_sum[index] += outcome
+                break
+    total = sum(counts)
+    if total == 0:
+        return float("nan")
+    error = 0.0
+    for index, count in enumerate(counts):
+        if count == 0:
+            continue
+        error += (count / total) * abs(pred_sum[index] / count - out_sum[index] / count)
+    return error
 
 
 def reliability(

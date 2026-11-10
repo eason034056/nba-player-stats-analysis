@@ -462,6 +462,27 @@ class LineupRefreshResponse(BaseModel):
 
 # ==================== Daily High Probability Players Analysis ====================
 
+
+class PickSignal(BaseModel):
+    """One signal on a Daily Pick, judged relative to the pick's side.
+
+    ``value`` is display text. None means the input was missing.
+    ``verdict`` is supports, neutral, or against. None means the input was
+    missing, which is not the same as neutral.
+    """
+
+    key: str = Field(..., description="Stable key: market, last10, history, projection, defense")
+    label: str = Field(..., description="Display label")
+    value: str | None = Field(
+        default=None,
+        description="Display-ready text. None when the input is missing",
+    )
+    verdict: Literal["supports", "neutral", "against"] | None = Field(
+        default=None,
+        description="Relative to the pick's side. None when the input cannot be judged",
+    )
+
+
 class DailyPick(BaseModel):
     """
     Single high-probability player pick
@@ -526,6 +547,25 @@ class DailyPick(BaseModel):
     lineup_confirmed: Optional[bool] = Field(
         default=None,
         description="Is lineup confirmed"
+    )
+
+    # --- SPO-112 signal verdicts (self-contained; leave this block intact) ---
+    # Separate from `probability` and from the per-side historical rates
+    # (`p_over` / `p_under`) and `tier` added on another branch. NBA picks
+    # carry five signals. WNBA leaves both fields null.
+    signals: list[PickSignal] | None = Field(
+        default=None,
+        description="Five NBA signal verdicts in a fixed order. None for WNBA",
+    )
+    combined_probability: float | None = Field(
+        default=None,
+        ge=0.0,
+        le=1.0,
+        description=(
+            "Calibrated probability for the pick's side, 0 to 1. "
+            "None when the market price is missing, the player is Out or "
+            "Doubtful, or the league is not NBA"
+        ),
     )
 
 
