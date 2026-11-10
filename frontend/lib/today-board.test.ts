@@ -43,15 +43,14 @@ describe("today board dates", () => {
 });
 
 describe("today board numbers", () => {
-  it("shows the stored probability, not a second vig pass", () => {
+  it("shows an em dash when the NBA pick has no combined probability", () => {
     const [bam] = todayReads(nbaPicks.picks, "nba", nbaPicks.date);
-    expect(bam.probabilityText).toBe(formatPercent(0.724));
-    expect(bam.probabilityText).toBe("72.4%");
-    expect(bam.probabilityText).not.toBe("7240.0%");
-    expect(bam.tier).toEqual({ name: "strong", label: "Strong play" });
+    expect(bam.probabilityText).toBe("—");
+    expect(bam.tier).toBeNull();
+    expect(bam.probabilityText).not.toBe(formatPercent(0.724));
   });
 
-  it("buckets the display tiers on the stored probability", () => {
+  it("buckets WNBA display tiers on the stored probability", () => {
     expect(readTier(0.7)?.name).toBe("strong");
     expect(readTier(0.699)?.name).toBe("playable");
     expect(readTier(0.65)?.name).toBe("playable");

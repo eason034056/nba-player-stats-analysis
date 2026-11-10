@@ -92,6 +92,8 @@ const apiMocks = vi.hoisted(() => ({
   getWNBACSVPlayers: vi.fn(),
   getPlayerDDHistory: vi.fn(),
   getWNBAPlayerDDHistory: vi.fn(),
+  useEventReads: vi.fn(),
+  useEventBulkProps: vi.fn(),
 }));
 
 vi.mock("next/navigation", () => ({
@@ -142,6 +144,8 @@ describe("EventDetail fixtures", () => {
     apiMocks.getWNBACSVPlayers.mockResolvedValue(emptyCsv);
     apiMocks.getPlayerDDHistory.mockResolvedValue(nbaDdEmpty);
     apiMocks.getWNBAPlayerDDHistory.mockResolvedValue(wnbaDdEmpty);
+    apiMocks.useEventReads.mockReturnValue({ data: undefined });
+    apiMocks.useEventBulkProps.mockReturnValue({ data: undefined });
   });
 
   it("reads the NBA game from the fixture payloads and opens the agent", async () => {
@@ -153,8 +157,9 @@ describe("EventDetail fixtures", () => {
     ).toBeInTheDocument();
     expect(await screen.findByText("BOS lineup confirmed")).toBeInTheDocument();
     expect(screen.getByText("MIA lineup projected")).toBeInTheDocument();
-    expect(screen.getByText("Strong play")).toBeInTheDocument();
-    expect(screen.getByText("O 72.0%")).toBeInTheDocument();
+    expect(screen.queryByText("Strong play")).not.toBeInTheDocument();
+    expect(screen.getByText("O —")).toBeInTheDocument();
+    expect(screen.getByText(/Historical hit rate 72.0%/)).toBeInTheDocument();
     expect(screen.getAllByText("No read").length).toBeGreaterThan(0);
     expect(screen.getByText("Tue, Nov 10 · 6:30 PM")).toBeInTheDocument();
     expect(screen.queryByText(/supports|neutral|against/i)).not.toBeInTheDocument();

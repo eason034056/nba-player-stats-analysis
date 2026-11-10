@@ -124,7 +124,7 @@ describe("reverse slip and league storage keys", () => {
     expect(shown).toBe("28.0%");
     expect((await screen.findAllByText("Under 18.5 points")).length).toBeGreaterThan(0);
     expect(screen.getAllByText(shown).length).toBeGreaterThan(0);
-    expect(screen.getByText("Pass")).toBeInTheDocument();
+    expect(screen.queryByText("Pass")).not.toBeInTheDocument();
 
     await waitFor(() => {
       const legs = stored(NBA_KEY);

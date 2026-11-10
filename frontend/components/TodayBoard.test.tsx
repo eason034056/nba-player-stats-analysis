@@ -100,9 +100,9 @@ describe("TodayBoard", () => {
     expect(within(web).getByRole("link", { name: /all 3 picks/i })).toHaveAttribute("href", "/picks");
 
     const bam = within(web).getByRole("link", { name: /bam adebayo/i });
-    expect(bam).toHaveTextContent(formatPercent(nbaPicks.picks[0].probability));
-    expect(bam).toHaveTextContent("72.4%");
-    expect(bam).toHaveTextContent("Strong play");
+    expect(bam).toHaveTextContent("—");
+    expect(bam).not.toHaveTextContent(formatPercent(nbaPicks.picks[0].probability));
+    expect(bam).not.toHaveTextContent("Strong play");
     expect(bam).toHaveTextContent("Over 10.5 REB");
     expect(bam).toHaveTextContent("MIA @ MIL · 7:00 PM");
     expect(bam).not.toHaveTextContent("1:00 AM");
@@ -111,8 +111,9 @@ describe("TodayBoard", () => {
     expect(bam.getAttribute("href")).toContain("market=player_rebounds");
     expect(bam.getAttribute("href")).toContain("threshold=10.5");
 
-    expect(within(web).getByRole("link", { name: /joel embiid/i })).toHaveTextContent("70.2%");
-    expect(within(web).getByRole("link", { name: /tyrese haliburton/i })).toHaveTextContent("Playable");
+    expect(within(web).getByRole("link", { name: /joel embiid/i })).toHaveTextContent("—");
+    expect(within(web).getByRole("link", { name: /joel embiid/i })).not.toHaveTextContent("70.2%");
+    expect(within(web).getByRole("link", { name: /tyrese haliburton/i })).not.toHaveTextContent("Playable");
     expect(within(web).getByText("Adebayo Over 10.5 REB")).toBeInTheDocument();
     expect(within(web).getByText("Embiid Over 29.5 PTS")).toBeInTheDocument();
     expect(within(web).getByText("No read on this game")).toBeInTheDocument();
@@ -130,7 +131,8 @@ describe("TodayBoard", () => {
     expect(web).not.toHaveTextContent("null");
 
     expect(within(mobile).getByRole("link", { name: /see all 3 picks/i })).toHaveAttribute("href", "/picks");
-    expect(within(mobile).getByRole("link", { name: /bam adebayo/i })).toHaveTextContent("72.4%");
+    expect(within(mobile).getByRole("link", { name: /bam adebayo/i })).toHaveTextContent("—");
+    expect(within(mobile).getByRole("link", { name: /bam adebayo/i })).not.toHaveTextContent("72.4%");
 
     expect(apiMocks.getEvents).toHaveBeenCalledWith("2026-11-10");
     expect(apiMocks.getDailyPicks).toHaveBeenCalledWith({ date: "2026-11-10" });
