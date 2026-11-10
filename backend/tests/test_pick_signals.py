@@ -502,6 +502,7 @@ class TestLeagueWiring:
         # Oldest first, matching get_player_stats. The last 10 are six overs of 36.5.
         logs = [{"team": "Lakers", "value": value} for value in [10, 40, 41, 42, 43, 44, 45, 20, 21, 22, 23]]
         service.csv_service = MagicMock()
+        service.csv_service.latest_position = MagicMock(return_value="PG")
         service.csv_service.get_player_stats = MagicMock(
             return_value={
                 "p_over": 0.72,
@@ -542,4 +543,9 @@ class TestLeagueWiring:
         assert pick.signals[2].verdict == "supports"
         assert pick.signals[4].value == "#8"
         assert pick.combined_probability is not None
-        assert pick.bookmakers_count == 2
+        assert pick.tier == "Strong play"
+        assert pick.p_over == 0.72
+        assert pick.p_under == 0.21
+        assert pick.position == "PG"
+        # One book, both sides. SPO-115 counts the book once.
+        assert pick.bookmakers_count == 1

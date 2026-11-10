@@ -9,6 +9,8 @@ Includes:
 This is the core functional module of the application.
 """
 
+import logging
+
 from fastapi import APIRouter, HTTPException, Query, Request
 from datetime import datetime, timezone, timedelta, time
 from typing import List, Optional
@@ -23,18 +25,32 @@ from app.models.schemas import (
     BookmakerResult,
     Consensus,
     PlayerSuggestResponse,
+    PlayerSuggestion,
     CSVPlayersResponse,
     PlayerHistoryResponse,
     PlayerDDHistoryResponse,
     HistogramBin,
-    GameLog
+    GameLog,
+    TeammateContext,
+    BulkPropsResponse,
 )
+from app.services.bulk_props import (
+    BulkPropsQueryFailed,
+    BulkPropsStoreUnavailable,
+    UnknownMarkets,
+    event_id_is_well_formed,
+    get_event_bulk_props,
+    parse_market_filter,
+)
+from app.services.daily_analysis import attach_top_reads, load_stored_top_reads
 from app.services.odds_theoddsapi import odds_provider
 from app.services.odds_provider import OddsAPIError
 from app.services.cache import cache_service, CacheService
 from app.services.odds_gateway import odds_gateway, MarketSnapshotResult
 from app.services.odds_snapshot_service import BINARY_MARKET_KEYS
 from app.services.game_log_hygiene import coalesce_game_type
+from app.services.event_fields import enrich_nba_event
+from app.services.lineup_service import lineup_service
 from app.services.prob import (
     american_to_prob,
     posted_american_odds,
@@ -65,6 +81,60 @@ router = APIRouter(
     prefix="/api/nba",
     tags=["nba"]
 )
+
+logger = logging.getLogger(__name__)
+
+
+async def _events_with_top_reads(
+    response: EventsResponse,
+    offset_minutes: int,
+) -> EventsResponse:
+    """Attach the best stored NBA pick to each event.
+
+    Reads the daily-picks cache for this date and timezone. It does not
+    run analysis and does not call the Odds API. A join failure leaves
+    every top_read null so the event list still returns.
+    """
+    try:
+        reads = await load_stored_top_reads(response.date, offset_minutes)
+    except Exception:
+        logger.exception("NBA top_read join failed for %s", response.date)
+        return response
+    return attach_top_reads(response, reads)
+
+
+async def _with_event_fields(response: EventsResponse) -> EventsResponse:
+    """Attach the ET clock and the lineup confirmation.
+
+    Lineups are read from cache only. A scrape belongs on
+    ``GET /api/nba/lineups``, not on the events list.
+    """
+    try:
+        lineups = await lineup_service.peek_lineups(response.date)
+    except Exception:
+        lineups = {}
+    return response.model_copy(
+        update={
+            "events": [
+                enrich_nba_event(event, lineups) for event in response.events
+            ]
+        }
+    )
+
+
+async def _with_reads_and_event_fields(
+    response: EventsResponse,
+    offset_minutes: int,
+) -> EventsResponse:
+    """Join ``top_read``, then the ET clock and lineup confirmation.
+
+    ``_events_with_top_reads`` copies each event and sets only
+    ``top_read``. ``_with_event_fields`` copies that result and sets
+    only the clock and ``lineup_status``. The second copy keeps
+    ``top_read``.
+    """
+    with_reads = await _events_with_top_reads(response, offset_minutes)
+    return await _with_event_fields(with_reads)
 
 
 def _snapshot_metadata(snapshot: MarketSnapshotResult) -> dict:
@@ -293,7 +363,11 @@ async def get_events(
     ),
     tz_offset: Optional[int] = Query(
         default=None,
-        description="Timezone offset (minutes), e.g. UTC-6 send -360, UTC+8 send 480. Used for filtering local date games."
+        description=(
+            "Timezone offset in minutes, e.g. UTC-6 send -360, UTC+8 send 480. "
+            "Used for filtering local date games. Omitted values use 480, the "
+            "same default as GET /api/nba/daily-picks, so the top_read cache key matches."
+        ),
     )
 ) -> EventsResponse:
     """
@@ -327,7 +401,8 @@ async def get_events(
                     "sport_key": "basketball_nba",
                     "home_team": "Los Angeles Lakers",
                     "away_team": "Golden State Warriors",
-                    "commence_time": "2026-01-15T01:00:00Z"
+                    "commence_time": "2026-01-15T01:00:00Z",
+                    "top_read": null
                 }
             ]
         }
@@ -336,19 +411,29 @@ async def get_events(
     if date is None:
         date = datetime.now(timezone.utc).strftime("%Y-%m-%d")
     
-    # Handle timezone offset: default UTC (0 minutes)
-    # Note: JavaScript's getTimezoneOffset() returns "UTC - Local" minutes
-    # Example: UTC-6 returns 360 (positive), UTC+8 returns -480 (negative)
-    # But front-end should send "normal" offset (UTC-6 send -360, UTC+8 send 480)
-    offset_minutes = tz_offset if tz_offset is not None else 0
+    # Omitted tz_offset uses 480 (UTC+8), the same default as
+    # GET /api/nba/daily-picks. top_read is loaded with
+    # daily_picks:nba:{date}:tz{offset}, so a different default would miss
+    # the cache and leave every top_read null. The frontend sends an
+    # explicit offset; this default is only for callers who omit it.
+    # JavaScript's getTimezoneOffset() returns "UTC - Local" minutes
+    # (UTC+8 is -480). Callers should send the normal offset (UTC+8 is 480).
+    offset_minutes = tz_offset if tz_offset is not None else 480
     
     # 1. Check cache (include timezone offset to distinguish different local time requests)
     cache_key = f"{CacheService.build_events_key(date, regions)}:tz{offset_minutes}"
     cached_data = await cache_service.get(cache_key)
     
     if cached_data:
-        # Cache hit
-        return EventsResponse(**cached_data)
+        # Cache hit. top_read is joined after the read so a fresher
+        # daily-picks cache is not stuck behind the events TTL. The ET
+        # clock and lineup confirmation are applied on that result, so
+        # a stored payload from before those fields still comes back
+        # filled. The cached body itself stays the Odds API shape.
+        return await _with_reads_and_event_fields(
+            EventsResponse(**cached_data),
+            offset_minutes,
+        )
     
     # 2. Cache miss, call external API
     try:
@@ -413,14 +498,16 @@ async def get_events(
             events=events
         )
         
-        # 5. Store in cache
+        # 5. Store the event list. top_read is joined on the way out and
+        # is not part of this payload's freshness: the next read joins
+        # whatever daily picks are stored for this date and offset.
         await cache_service.set(
             cache_key,
             response.model_dump(mode='json'),
             ttl=settings.cache_ttl_events
         )
-        
-        return response
+
+        return await _with_reads_and_event_fields(response, offset_minutes)
         
     except OddsAPIError as e:
         raise HTTPException(
@@ -432,6 +519,96 @@ async def get_events(
             status_code=500,
             detail=f"Internal error: {str(e)}"
         )
+
+
+@router.get(
+    "/events/{event_id}/props",
+    response_model=BulkPropsResponse,
+    summary="Stored lines for every player in one NBA game",
+    description="""
+    Read the latest `odds_line_snapshots` capture for this event.
+
+    The capture is written by the odds snapshot scheduler. This route does
+    not call The Odds API, including when no capture is stored.
+
+    A well-formed `event_id` with no snapshot is HTTP 200: `markets` is
+    empty, and `snapshot_at` and `data_age_seconds` are null. A malformed
+    `event_id` (empty, or anything other than 1–128 characters from
+    `[A-Za-z0-9_-]` starting with a letter or digit) is HTTP 404 and is
+    not looked up.
+
+    `markets` is an optional comma-separated list of snapshot market keys.
+    An unknown key is HTTP 400. Omit it to return every market in the
+    capture. `player` is an optional exact name, case-insensitive. A
+    filter that matches nobody still returns the snapshot timestamp when
+    a capture exists.
+
+    `source` is always `"snapshot"`. Each bookmaker votes once. The
+    player's `line` is the modal consensus of those votes.
+    """,
+)
+@limiter.limit(settings.rate_limit_props)
+async def get_event_props(
+    request: Request,
+    event_id: str,
+    markets: Optional[str] = Query(
+        default=None,
+        description=(
+            "Comma-separated snapshot market keys. "
+            "Omit to return every market in the latest capture"
+        ),
+    ),
+    player: Optional[str] = Query(
+        default=None,
+        description="Exact player name, case-insensitive. Omit to return every player",
+    ),
+) -> BulkPropsResponse:
+    """
+    Stored props for one NBA event.
+
+    ``get_event_props`` is the HTTP handler. "Event" is the Odds API game
+    id. "Props" is every player line in that game. Call it as
+    ``GET /api/nba/events/{event_id}/props``. Optional query ``markets``
+    (comma-separated keys) and ``player`` (exact name).
+
+    The handler checks the id and the market list, then calls
+    ``get_event_bulk_props``. That function reads Postgres (and a 60s
+    Redis copy of the assembled JSON). It does not call the Odds API.
+
+    Args:
+        request: Incoming request. The slowapi limiter reads it. Same
+            limit as ``POST /api/nba/props/no-vig``
+            (``settings.rate_limit_props``).
+        event_id: Path id. Malformed ids are 404.
+        markets: Comma-separated market filter, or omitted.
+        player: Exact player name, or omitted.
+
+    Returns:
+        BulkPropsResponse. Empty markets and a null snapshot time when
+        nothing is stored.
+
+    Raises:
+        HTTPException: 404 malformed id, 400 unknown market, 503 database
+            disconnected, 500 snapshot query failed.
+    """
+    if not event_id_is_well_formed(event_id):
+        raise HTTPException(status_code=404, detail="Malformed event_id")
+
+    try:
+        market_filter = parse_market_filter(markets)
+    except UnknownMarkets as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    try:
+        return await get_event_bulk_props(
+            event_id,
+            markets=market_filter,
+            player=player,
+        )
+    except BulkPropsStoreUnavailable as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+    except BulkPropsQueryFailed as exc:
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
 
 
 @router.post(
@@ -701,6 +878,13 @@ async def suggest_players(
     
     return PlayerSuggestResponse(
         players=all_players,
+        suggestions=[
+            PlayerSuggestion(
+                name=name,
+                position=csv_player_service.latest_position(name),
+            )
+            for name in all_players
+        ],
         **_snapshot_metadata(snapshot),
     )
 
@@ -838,6 +1022,15 @@ async def get_player_history(
         default=False,
         description="Include play-in games. Default is regular season only.",
     ),
+    season: Optional[str] = Query(
+        default=None,
+        description=(
+            "Season for season_n_games / season_p_over / season_p_under. "
+            "2025-26 and 2025-2026 are the same label. Omit it to use the "
+            "current NBA season from the recorded ESPN window. n_games, "
+            "p_over, and p_under stay the all-games sample."
+        ),
+    ),
 ) -> PlayerHistoryResponse:
     """
     Get player historical statistical summary
@@ -926,6 +1119,7 @@ async def get_player_history(
             teammate_played=teammate_played,
             include_playoffs=include_playoffs,
             include_play_in=include_play_in,
+            season=season,
         )
         
         # Convert histogram to Pydantic model
@@ -951,6 +1145,7 @@ async def get_player_history(
                 is_starter=log.get("is_starter", False),  # Starter status
                 game_type=coalesce_game_type(log.get("game_type")),
                 season=log.get("season", ""),
+                home_or_away=log.get("home_or_away"),
             )
             for log in stats.get("game_logs", [])
         ]
@@ -969,6 +1164,14 @@ async def get_player_history(
             game_logs=game_logs,
             opponents=stats.get("opponents", []),
             teammates=stats.get("teammates", []),
+            teammate_context=[
+                TeammateContext.model_validate(item)
+                for item in stats.get("teammate_context") or []
+            ],
+            season=stats.get("season"),
+            season_n_games=stats.get("season_n_games"),
+            season_p_over=stats.get("season_p_over"),
+            season_p_under=stats.get("season_p_under"),
             opponent_filter=stats.get("opponent_filter"),
             teammate_filter=stats.get("teammate_filter"),
             teammate_played=stats.get("teammate_played"),
