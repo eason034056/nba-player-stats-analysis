@@ -58,27 +58,48 @@ function nbaRead(p: DailyPick | null, history: PlayerHistoryResponse | null = nu
 }
 
 describe("QA: Bet Slip other side on the NBA read", () => {
-  it("stores 1 - combined for the other side when combined is present", () => {
+  // The first review stored 1 - combined_probability on the other side.
+  // That mixed the model into one slip button and the historical rate into
+  // the other. Both sides now stay on the historical pick: p_under / p_over
+  // first, then the history rate. combined_probability stays on the model bar.
+  it("stores the history rate, not 1 - combined, when the pick has no opposite field", () => {
     const model = nbaRead(pick({ probability: 0.59, tier: "Lean", combined_probability: 0.673 }), bamHistory);
     expect(model.other?.direction).toBe("under");
-    expect(model.other?.probability).toBeCloseTo(0.327, 10);
+    expect(model.other?.probability).toBe(bamHistory.p_under);
+    expect(model.other?.probability).not.toBeCloseTo(0.327, 2);
+    expect(model.primary?.probability).toBe(0.59);
     expect(model.other?.threshold).toBe(18.5);
   });
 
-  it("flips correctly for an under pick", () => {
-    const model = nbaRead(pick({ direction: "under", combined_probability: 0.61 }), bamHistory);
-    expect(model.primary?.direction).toBe("under");
-    expect(model.other?.direction).toBe("over");
-    expect(model.other?.probability).toBeCloseTo(0.39, 10);
+  it("prefers the pick's own opposite field over history and over 1 - combined", () => {
+    const model = nbaRead(
+      pick({ probability: 0.59, tier: "Lean", p_under: 0.41, combined_probability: 0.673 }),
+      bamHistory,
+    );
+    expect(model.other?.probability).toBe(0.41);
+    expect(model.other?.probability).not.toBe(bamHistory.p_under);
+    expect(model.other?.probability).not.toBeCloseTo(1 - 0.673, 2);
   });
 
-  it("stays inside [0, 1] at the backend clamp edges", () => {
-    for (const combined of [0.0001, 0.9999, 0, 1]) {
-      const p = nbaRead(pick({ combined_probability: combined })).other?.probability ?? Number.NaN;
-      expect(p).toBeGreaterThanOrEqual(0);
-      expect(p).toBeLessThanOrEqual(1);
-      expect(p).toBeCloseTo(1 - combined, 10);
-    }
+  it("flips an under pick onto p_over, then history, not 1 - combined", () => {
+    const fromHistory = nbaRead(pick({ direction: "under", combined_probability: 0.61 }), bamHistory);
+    expect(fromHistory.primary?.direction).toBe("under");
+    expect(fromHistory.other?.direction).toBe("over");
+    expect(fromHistory.other?.probability).toBe(bamHistory.p_over);
+    expect(fromHistory.other?.probability).not.toBeCloseTo(0.39, 2);
+
+    const fromPick = nbaRead(
+      pick({ direction: "under", probability: 0.62, p_over: 0.38, combined_probability: 0.61 }),
+      bamHistory,
+    );
+    expect(fromPick.other?.probability).toBe(0.38);
+    expect(fromPick.other?.probability).not.toBe(bamHistory.p_over);
+  });
+
+  it("clamps the pick field into [0, 1] and does not invent a side from combined alone", () => {
+    expect(nbaRead(pick({ combined_probability: 0.673 })).other).toBeNull();
+    expect(nbaRead(pick({ p_under: 1.4, combined_probability: 0.2 })).other?.probability).toBe(1);
+    expect(nbaRead(pick({ p_under: -0.2, combined_probability: 0.2 })).other?.probability).toBe(0);
   });
 
   it("falls back to the strict history rate, never 1 - probability, when combined is null", () => {
