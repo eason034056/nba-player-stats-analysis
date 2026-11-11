@@ -10,6 +10,7 @@ from __future__ import annotations
 import os
 import re
 import subprocess
+import time
 from pathlib import Path
 from shutil import which
 from urllib.parse import urlsplit, urlunsplit
@@ -302,6 +303,8 @@ CREATE TABLE first_table (id serial PRIMARY KEY, v integer NOT NULL);
 INSERT INTO first_table (v) VALUES (1);
 CREATE TABLE second_table (id serial PRIMARY KEY, v integer NOT NULL);
 INSERT INTO second_table (v) VALUES (1), (2);
+CREATE SEQUENCE extra_seq START WITH 4;
+SELECT nextval('extra_seq');
 """
     try:
         for name in names:
@@ -336,8 +339,190 @@ INSERT INTO second_table (v) VALUES (1), (2);
         )
         combined = result.stdout + result.stderr
         assert result.returncode != 0, _redact(combined, [source, target, password])
+        assert "first_table|count|1|1|OK" in result.stdout
         assert "second_table|count|2|1|MISMATCH" in result.stdout
+        assert "extra_seq|last_value|4|4|OK" in result.stdout
         _assert_no_secrets(combined, [admin, source, target], password)
     finally:
         for name in created:
             _psql(psql, admin, f"DROP DATABASE IF EXISTS {name} WITH (FORCE)")
+
+
+_DOCKER_SCHEMA = """
+CREATE TABLE alpha_table (id serial PRIMARY KEY, v integer NOT NULL);
+INSERT INTO alpha_table (v) VALUES (1);
+CREATE TABLE beta_table (id serial PRIMARY KEY, v integer NOT NULL);
+INSERT INTO beta_table (v) VALUES (1), (2);
+CREATE TABLE gamma_table (id serial PRIMARY KEY, v integer NOT NULL);
+INSERT INTO gamma_table (v) VALUES (7);
+CREATE SEQUENCE extra_seq START WITH 5;
+SELECT nextval('extra_seq');
+"""
+
+
+def _docker_ready() -> bool:
+    if which("docker") is None:
+        return False
+    probe = subprocess.run(
+        ["docker", "info"],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    return probe.returncode == 0
+
+
+def _wait_postgres(container: str) -> None:
+    for _ in range(40):
+        ready = subprocess.run(
+            ["docker", "exec", container, "pg_isready", "-U", "novig", "-d", "novig"],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        if ready.returncode == 0:
+            return
+        time.sleep(0.5)
+    raise AssertionError(f"{container} did not become ready")
+
+
+def _docker_psql(container: str, sql: str) -> subprocess.CompletedProcess[str]:
+    return subprocess.run(
+        [
+            "docker",
+            "exec",
+            "-i",
+            container,
+            "psql",
+            "-U",
+            "novig",
+            "-d",
+            "novig",
+            "-v",
+            "ON_ERROR_STOP=1",
+        ],
+        input=sql,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+
+def test_verify_only_real_docker_exec_compares_every_table() -> None:
+    """docker exec into Postgres 16 must compare every public table.
+
+    Host mode is covered separately and does not skip when docker is
+    missing. This case skips only when the docker client cannot run.
+    """
+    if not _docker_ready():
+        pytest.skip(
+            "docker is not available; docker-exec verify against Postgres was not run"
+        )
+
+    password = "spo132d-docker-pw"
+    suffix = os.urandom(3).hex()
+    network = f"spo132d{suffix}"
+    source_name = f"spo132dsrc{suffix}"
+    target_name = f"spo132ddst{suffix}"
+    created: list[str] = []
+    network_created = False
+    try:
+        made = subprocess.run(
+            ["docker", "network", "create", network],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        if made.returncode != 0:
+            raise AssertionError(made.stderr.strip() or "docker network create failed")
+        network_created = True
+        for name in (source_name, target_name):
+            started = subprocess.run(
+                [
+                    "docker",
+                    "run",
+                    "-d",
+                    "--name",
+                    name,
+                    "--network",
+                    network,
+                    "-e",
+                    "POSTGRES_USER=novig",
+                    "-e",
+                    f"POSTGRES_PASSWORD={password}",
+                    "-e",
+                    "POSTGRES_DB=novig",
+                    "postgres:16",
+                ],
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+            if started.returncode != 0:
+                detail = started.stderr.replace(password, "***")
+                raise AssertionError(detail.strip() or "docker run failed")
+            created.append(name)
+        for name in created:
+            _wait_postgres(name)
+            loaded = _docker_psql(name, _DOCKER_SCHEMA)
+            if loaded.returncode != 0:
+                raise AssertionError(loaded.stderr.replace(password, "***"))
+
+        source = f"postgresql://novig:{password}@127.0.0.1:5432/novig?sslmode=disable"
+        target = (
+            f"postgresql://novig:{password}@{target_name}:5432/novig?sslmode=disable"
+        )
+        matched = _verify(
+            source,
+            target,
+            extra_env={
+                "PG_CLIENT": "docker-exec",
+                "LOCAL_PG_CONTAINER": source_name,
+            },
+        )
+        combined = matched.stdout + matched.stderr
+        assert matched.returncode == 0, _redact(combined, [source, target], password)
+        assert "MISMATCH" not in matched.stdout
+        assert "alpha_table|count|1|1|OK" in matched.stdout
+        assert "beta_table|count|2|2|OK" in matched.stdout
+        assert "gamma_table|count|1|1|OK" in matched.stdout
+        assert "extra_seq|last_value|5|5|OK" in matched.stdout
+        assert "ok:" in matched.stdout
+        _assert_no_secrets(combined, [source, target], password)
+
+        deleted = _docker_psql(
+            target_name,
+            "DELETE FROM beta_table WHERE id = (SELECT max(id) FROM beta_table);",
+        )
+        if deleted.returncode != 0:
+            raise AssertionError(deleted.stderr.replace(password, "***"))
+        mismatched = _verify(
+            source,
+            target,
+            extra_env={
+                "PG_CLIENT": "docker-exec",
+                "LOCAL_PG_CONTAINER": source_name,
+            },
+        )
+        mismatched_text = mismatched.stdout + mismatched.stderr
+        assert mismatched.returncode != 0, _redact(
+            mismatched_text, [source, target], password
+        )
+        assert "alpha_table|count|1|1|OK" in mismatched.stdout
+        assert "beta_table|count|2|1|MISMATCH" in mismatched.stdout
+        assert "gamma_table|count|1|1|OK" in mismatched.stdout
+        assert "extra_seq|last_value|5|5|OK" in mismatched.stdout
+        _assert_no_secrets(mismatched_text, [source, target], password)
+    finally:
+        if created:
+            subprocess.run(
+                ["docker", "rm", "-f", *created],
+                capture_output=True,
+                check=False,
+            )
+        if network_created:
+            subprocess.run(
+                ["docker", "network", "rm", network],
+                capture_output=True,
+                check=False,
+            )
