@@ -8,10 +8,9 @@ data "aws_iam_policy_document" "runtime" {
     condition {
       test     = "StringLike"
       variable = "s3:prefix"
-      values = concat(
-        [for prefix in local.s3_prefixes : "${prefix}*"],
-        [""],
-      )
+      # No empty string. s3:prefix "" would allow listing the whole bucket.
+      # `aws s3 ls s3://bucket/bdl-raw/` still matches `bdl-raw/*`.
+      values = [for prefix in local.s3_prefixes : "${prefix}*"]
     }
   }
 

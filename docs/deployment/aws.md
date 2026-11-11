@@ -6,7 +6,7 @@ The backend and Postgres both run on that Mac. Postgres is the `no-vig-nba-postg
 
 Step-by-step for that Mac, in Traditional Chinese: [docs/deployment/aws-steps-zh-TW.md](aws-steps-zh-TW.md).
 
-Placeholders only in `env.example` and `.env.example` (same template). Never commit `.env`, `terraform.tfvars`, or `terraform.tfstate`.
+Placeholders only in `env.example` (`cp env.example .env`). Never commit `.env`, `terraform.tfvars`, or `terraform.tfstate`.
 
 ## Environment variables
 
@@ -26,6 +26,8 @@ Placeholders only in `env.example` and `.env.example` (same template). Never com
 ```text
 postgresql://sportslab_app:REPLACE_ME@REPLACE_ME.rds.amazonaws.com:5432/novig_nba?sslmode=verify-full&sslrootcert=/app/certs/global-bundle.pem
 ```
+
+If the password contains `@`, `:`, `/`, or `%`, percent-encode it before it goes into the URL (`/` becomes `%2F`). An unencoded `/` is not a legal password character in a URL. Startup still masks a password that was pasted with a raw `/`, and it masks a `password=` query value without dropping the rest of the query.
 
 `sslmode=require` is the minimum. `verify-full` checks the server name against the RDS CA bundle. asyncpg 0.30 reads `sslmode` and `sslrootcert` from that query string, and also honors `PGSSLROOTCERT`. No extra SSL setting is appended in code. Download the public bundle once (it is not a secret):
 
@@ -53,17 +55,33 @@ On PostgreSQL 15+ the `public` schema does not allow `CREATE` for every role. Th
 
 ## Cutover
 
-The AWS account already exists. Check its plan and billing, set a monthly $25 budget alarm, then apply. Do not treat this as creating a new account or as an upgrade to the Paid plan.
+The AWS account already exists. Check its plan and billing, set a monthly $25 budget alarm, then apply. Do not treat this as creating a new account or as an upgrade. There is no Paid-plan button. $25 is a budget cap, not the bill: the `db.t4g.micro` compute price is about $0.016 per hour (about $12 per month) in both `us-east-1` and `us-east-2`. 20 GB of gp3, backups, S3, data transfer from the public endpoint, and t4g Unlimited CPU credits are extra.
 
 1. On the Mac, `aws configure` with Eason's own keys. Those keys stay in `~/.aws`. They do not go in the repo or in chat.
 2. `cd infra/aws && cp terraform.tfvars.example terraform.tfvars`. Set the bucket name. `allowed_cidrs` is `184.193.214.44/32` plus the Mac's current public `/32`. `./scripts/aws_update_my_ip.sh` rewrites the Mac line and prints `terraform apply`; it does not call AWS unless `--apply` is passed.
-3. `terraform init`, `terraform plan`, `terraform apply`. Read `db_endpoint`, `master_user_secret_arn`, and `bucket_name`. Read the master password in Secrets Manager. Do not paste it into chat.
+3. `terraform init`, `terraform plan`, `terraform apply`. Read `db_endpoint`, `master_user_secret_arn`, `bucket_name`, and `app_security_group_id`. The migration and dump scripts do not call Secrets Manager. They read `RDS_DATABASE_URL`, which you build. `SecretString` is JSON. Take only the password field:
+
+```bash
+aws secretsmanager get-secret-value \
+  --secret-id "$(terraform output -raw master_user_secret_arn)" \
+  --query SecretString --output text \
+  --region us-east-2 | jq -r .password
+```
+
+Do not paste that JSON, or the password, into the URL, into chat, or into git. The terminal keeps the output. Percent-encode `@`, `:`, `/`, and `%` in the password before it goes into `RDS_DATABASE_URL`.
 4. Create `sportslab_app`. Start the backend once against the empty database and confirm the six tables and the SPO-117 key (`\d odds_line_snapshots`). Stop it before the restore. If that startup created tables, drop them or recreate `novig_nba` so the restore target is empty.
 5. Stop the local backend so the scheduler is not writing. Dump with the Postgres 16 container (the compose port is not published to the Mac):
 
+Put the two URLs in a mode `600` file that is not in the repo, then load it. A password on the same line as the command is stored in shell history.
+
 ```bash
-LOCAL_DATABASE_URL='postgresql://novig:novig@localhost:5432/novig_nba' \
-RDS_DATABASE_URL='postgresql://sportslab_admin:REPLACE_ME@ENDPOINT:5432/novig_nba' \
+touch ~/.sportslab-migrate.env
+chmod 600 ~/.sportslab-migrate.env
+# LOCAL_DATABASE_URL=postgresql://novig:novig@localhost:5432/novig_nba
+# RDS_DATABASE_URL=postgresql://sportslab_admin:ENCODED@ENDPOINT:5432/novig_nba
+set -a
+source ~/.sportslab-migrate.env
+set +a
 ./scripts/db_migrate_to_rds.sh
 ```
 

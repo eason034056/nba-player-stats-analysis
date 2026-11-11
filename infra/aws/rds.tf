@@ -41,7 +41,10 @@ resource "aws_db_instance" "postgres" {
   auto_minor_version_upgrade = true
   deletion_protection        = true
   skip_final_snapshot        = false
-  final_snapshot_identifier  = "${local.name_prefix}-postgres-final"
+  # A fixed name collides on the second destroy while the first final snapshot
+  # still exists. timestamp() is only used when the instance is deleted.
+  # Colons are not legal in a snapshot identifier.
+  final_snapshot_identifier = "${local.name_prefix}-postgres-final-${replace(timestamp(), ":", "-")}"
 
   apply_immediately = false
 }

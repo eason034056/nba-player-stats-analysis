@@ -112,6 +112,28 @@ class TestMaskDatabaseUrl:
         assert mask_database_url(None) == ""
         assert mask_database_url("") == ""
 
+    def test_unencoded_slash_in_password_is_masked(self) -> None:
+        masked = mask_database_url("postgresql://user:p/ss@host:5432/db")
+        assert masked == "postgresql://user:***@host:5432/db"
+        assert "p/ss" not in masked
+
+    def test_userinfo_and_query_password_are_both_masked(self) -> None:
+        masked = mask_database_url(
+            "postgresql://user:secret1@host/db?password=secret2"
+        )
+        assert masked.startswith("postgresql://user:***@host/db?")
+        assert "secret1" not in masked
+        assert "secret2" not in masked
+        assert "password=***" in masked
+
+    def test_query_string_password_only(self) -> None:
+        masked = mask_database_url(
+            "postgresql://user@host/db?password=supersecret&sslmode=require"
+        )
+        assert "supersecret" not in masked
+        assert "password=***" in masked
+        assert "sslmode=require" in masked
+
     def test_redact_url_inside_a_sentence(self) -> None:
         text = f"connect failed for {LOCAL_URL} (timeout)."
         masked = redact_secrets(text)
@@ -293,6 +315,7 @@ exit 0
         bindir / "pg_dump",
         f"""#!/bin/sh
 printf called >> "{bindir / "dump-called"}"
+printf '%s\\n' "$@" > "{bindir / "pg_dump.argv"}"
 prev=""
 for arg in "$@"; do
   if [ "$prev" = "--file" ]; then
@@ -306,8 +329,13 @@ exit 0
     _write_executable(
         bindir / "psql",
         r"""#!/bin/sh
+printf '%s\n' "$@" >> "$0.argv"
 url="$1"
 shift
+case "$url" in
+  *://*) ;;
+  *) url="${PGHOST:-}" ;;
+esac
 sql=""
 prev=""
 for arg in "$@"; do
@@ -390,12 +418,18 @@ class TestMigrateScript:
 
     def test_match_exits_zero(self, tmp_path: Path) -> None:
         env = _client_bin(tmp_path, restore_version="16.4")
-        env.pop("_BIN")
+        bindir = Path(env.pop("_BIN"))
         result = _run(MIGRATE, env)
         assert result.returncode == 0, result.stderr
         assert "MISMATCH" not in result.stdout
         assert "ok:" in result.stdout
         assert SECRET not in result.stdout + result.stderr
+        argv = Path(str(env["PSQL"]) + ".argv").read_text()
+        dump_argv = (bindir / "pg_dump.argv").read_text()
+        assert SECRET not in argv
+        assert "postgresql://" not in argv
+        assert SECRET not in dump_argv
+        assert "--dbname" not in dump_argv
 
     def test_dump_stderr_is_redacted(self, tmp_path: Path) -> None:
         env = _client_bin(tmp_path, restore_version="16.4")
@@ -534,6 +568,102 @@ exit 0
         help_text = _run(DUMP, {}, "--help")
         assert help_text.returncode == 0
         assert "90 days" in help_text.stdout
+
+    def test_dump_mktemp_is_bsd_portable(self, tmp_path: Path) -> None:
+        bindir = tmp_path / "bin"
+        bindir.mkdir()
+        log = tmp_path / "mktemp-log"
+        _write_executable(
+            bindir / "mktemp",
+            f"""#!/bin/sh
+printf '%s\\n' "$@" >> "{log}"
+for arg in "$@"; do
+  case "$arg" in
+    --suffix|--suffix=*)
+      echo "mktemp: illegal option -- suffix" >&2
+      exit 1
+      ;;
+  esac
+done
+template=""
+for arg in "$@"; do
+  template="$arg"
+done
+out=$(printf '%s' "$template" | tr X a)
+: > "$out"
+printf '%s\\n' "$out"
+""",
+        )
+        _write_executable(
+            bindir / "pg_dump",
+            """#!/bin/sh
+prev=""
+for arg in "$@"; do
+  if [ "$prev" = "--file" ]; then
+    printf 'PGDMP' > "$arg"
+  fi
+  prev="$arg"
+done
+exit 0
+""",
+        )
+        _write_executable(bindir / "aws", "#!/bin/sh\nexit 0\n")
+        env = {
+            "PATH": f"{bindir}:/usr/bin:/bin",
+            "TMPDIR": str(tmp_path),
+            "PG_DUMP": str(bindir / "pg_dump"),
+            "AWS_CLI": str(bindir / "aws"),
+            "S3_BUCKET": "example-bucket",
+            "AWS_ACCESS_KEY_ID": "EXAMPLE",
+            "AWS_SECRET_ACCESS_KEY": "EXAMPLE",
+            "AWS_REGION": "us-east-2",
+            "RDS_DATABASE_URL": RDS_URL,
+            "DUMP_DATE": "2026-11-11",
+        }
+        result = _run(DUMP, env)
+        assert result.returncode == 0, result.stderr
+        text = log.read_text()
+        assert "--suffix" not in text
+        assert "sportslab-pgdump.XXXXXX" in text
+
+    def test_dump_does_not_put_the_dsn_on_pg_dump_argv(self, tmp_path: Path) -> None:
+        bindir = tmp_path / "bin"
+        bindir.mkdir()
+        log = tmp_path / "pgdump-argv"
+        _write_executable(
+            bindir / "pg_dump",
+            f"""#!/bin/sh
+printf '%s\\n' "$@" > "{log}"
+prev=""
+for arg in "$@"; do
+  if [ "$prev" = "--file" ]; then
+    printf 'PGDMP' > "$arg"
+  fi
+  prev="$arg"
+done
+exit 0
+""",
+        )
+        _write_executable(bindir / "aws", "#!/bin/sh\nexit 0\n")
+        env = {
+            "PATH": f"{bindir}:/usr/bin:/bin",
+            "PG_DUMP": str(bindir / "pg_dump"),
+            "AWS_CLI": str(bindir / "aws"),
+            "S3_BUCKET": "example-bucket",
+            "AWS_ACCESS_KEY_ID": "EXAMPLE",
+            "AWS_SECRET_ACCESS_KEY": "EXAMPLE",
+            "AWS_REGION": "us-east-2",
+            "RDS_DATABASE_URL": RDS_URL,
+            "DUMP_DATE": "2026-11-11",
+        }
+        result = _run(DUMP, env)
+        assert result.returncode == 0, result.stderr
+        text = log.read_text()
+        assert SECRET not in text
+        assert "postgresql://" not in text
+        assert "--dbname" not in text
+        assert "-Fc" in text
+        assert "--file" in text
 
 
 def _fake_docker(path: Path, log: Path, sslmark: Path) -> None:

@@ -31,17 +31,19 @@ variable "tags" {
 
 variable "allowed_cidrs" {
   type        = list(string)
-  description = "IPv4 host CIDRs (/32) allowed to open TCP 5432. No default. Use the box 184.193.214.44/32 and the Mac's current public IP/32 until the EC2 backend exists. Set to [] to remove those CIDR rules. 0.0.0.0/0 and ::/0 are rejected. An empty list is allowed."
+  description = "IPv4 /32 CIDRs allowed to open TCP 5432. No default. Use the box 184.193.214.44/32 and the Mac's current public IP/32 until the EC2 backend exists. Set to [] to remove those CIDR rules. An empty list is allowed. Every set entry must be an IPv4 /32. 0.0.0.0/0, 0.0.0.0/32, duplicates, and every IPv6 CIDR are rejected."
 
   validation {
-    condition = alltrue([
-      for cidr in var.allowed_cidrs :
-      cidr != "0.0.0.0/0" &&
-      cidr != "::/0" &&
-      can(cidrhost(cidr, 0)) &&
-      can(regex("/(3[2-9]|[4-9][0-9])$", cidr))
-    ])
-    error_message = "allowed_cidrs may be empty. Every entry that is set must be a valid host CIDR (/32 or narrower). 0.0.0.0/0 and ::/0 are rejected."
+    condition = (
+      length(distinct(var.allowed_cidrs)) == length(var.allowed_cidrs) &&
+      alltrue([
+        for cidr in var.allowed_cidrs :
+        cidr != "0.0.0.0/32" &&
+        can(cidrhost(cidr, 0)) &&
+        can(regex("^((25[0-5]|2[0-4][0-9]|1?[0-9]{1,2}|[0-9])\\.){3}(25[0-5]|2[0-4][0-9]|1?[0-9]{1,2}|[0-9])/32$", cidr))
+      ])
+    )
+    error_message = "allowed_cidrs may be empty. Every entry must be an IPv4 /32. 0.0.0.0/0, 0.0.0.0/32, duplicate entries, and any IPv6 CIDR are rejected."
   }
 }
 
