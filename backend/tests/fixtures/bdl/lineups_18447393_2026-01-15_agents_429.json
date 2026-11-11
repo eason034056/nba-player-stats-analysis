@@ -1,0 +1,13 @@
+{
+ "request": "https://api.balldontlie.io/nba/v1/lineups?game_ids%5B%5D=18447393&per_page=100",
+ "status": 429,
+ "elapsed_s": 0.14,
+ "rate_headers": {
+  "x-ratelimit-limit": "5",
+  "x-ratelimit-remaining": "0",
+  "x-ratelimit-reset": "1794370905"
+ },
+ "response": {
+  "_raw": "Too many requests, please try again later."
+ }
+}

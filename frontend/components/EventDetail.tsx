@@ -39,23 +39,25 @@ import {
 } from "@/lib/api";
 import { createAgentPickContextFromDailyPick } from "@/lib/agent-chat";
 import {
-  actionBarPercent,
   buildOurRead,
   nbaReadsStatus,
   nbaRequestNote,
   chartLine,
   errorText,
+  eventClock,
+  eventLineupChips,
   eventPlayerRows,
   eventTeammates,
-  eventWhen,
   gameLogChart,
-  lineupChip,
   marketToMetric,
+  NBA_EVENT_TABS,
   postedLine,
   type EventTab,
 } from "@/lib/event-page";
+import { EventActionBar } from "@/components/event/EventActionBar";
 import { EventHeader } from "@/components/event/EventHeader";
 import { EventTabs } from "@/components/event/EventTabs";
+import { FilterSheet } from "@/components/event/FilterSheet";
 import { GameFilters, type LogRange, type LogRole, type MateMode } from "@/components/event/GameFilters";
 import { GameLogChart } from "@/components/event/GameLogChart";
 import { OurRead } from "@/components/event/OurRead";
@@ -73,13 +75,14 @@ import { lineForProjectionEdge, marketToProjectionCard } from "@/lib/projection-
 import {
   calculatorFormSchema,
   type CalculatorFormData,
+  type NBAEvent,
   type NoVigRequest,
   type NoVigResponse,
   type PlayerHistoryRequest,
   type PlayerHistoryResponse,
 } from "@/lib/schemas";
 import { formatPercent } from "@/lib/player-dd";
-import { teamAbbr } from "@/lib/team-abbr";
+import { teamAbbr, teamShortName } from "@/lib/team-abbr";
 import { getLocalDateString, getTodayString, cn } from "@/lib/utils";
 
 export type League = "nba" | "wnba";
@@ -87,7 +90,7 @@ export type League = "nba" | "wnba";
 interface LeagueEventConfig {
   eventsQueryKey: string;
   picksQueryKey: string;
-  getEvents: (date?: string) => Promise<{ date: string; events: Array<{ event_id: string; sport_key: string; home_team: string; away_team: string; commence_time: string }> }>;
+  getEvents: (date?: string) => Promise<{ date: string; events: NBAEvent[] }>;
   getPicks: (date: string) => Promise<{ picks: import("@/lib/schemas").DailyPick[] }>;
   calculateNoVig: (request: NoVigRequest) => Promise<NoVigResponse>;
   suggestFn: PlayerSuggestFn;
@@ -171,10 +174,11 @@ export function EventDetail({ league }: { league: League }) {
   const initialMarket = (searchParams.get("market") as MarketKey) || "player_points";
   const initialThreshold = searchParams.get("threshold") || "";
   const requestedTab = searchParams.get("tab");
-  const startingTab: EventTab =
+  const requested: EventTab =
     requestedTab === "log" || requestedTab === "filters" || requestedTab === "odds" || requestedTab === "read"
       ? requestedTab
       : "read";
+  const startingTab: EventTab = league === "nba" && requested === "filters" ? "log" : requested;
   const router = useRouter();
   const nbaSlip = useBetSlip();
   const wnbaSlip = useWnbaBetSlip();
@@ -182,6 +186,7 @@ export function EventDetail({ league }: { league: League }) {
   const { openWidget, setSelectedPickContext } = useAgentWidget();
 
   const [tab, setTab] = useState<EventTab>(startingTab);
+  const [filtersOpen, setFiltersOpen] = useState(false);
   const [selectedMarket, setSelectedMarket] = useState<MarketKey>(initialMarket);
   const [result, setResult] = useState<NoVigResponse | null>(null);
   const [range, setRange] = useState<LogRange>(10);
@@ -387,8 +392,9 @@ export function EventDetail({ league }: { league: League }) {
         ) ?? null
       : null;
   const position =
-    projectionQuery.data?.position?.trim() ||
-    (league === "nba" ? selectedRow?.position || null : null);
+    league === "nba"
+      ? pick?.position?.trim() || selectedRow?.position || null
+      : projectionQuery.data?.position?.trim() || null;
   const model = buildOurRead({
     player: playerName.trim(),
     marketName: getMarketDisplayName(selectedMarket),
@@ -449,20 +455,69 @@ export function EventDetail({ league }: { league: League }) {
     const ids = Array.isArray(id) ? id : [id];
     return cn(!ids.includes(tab) && "max-md:hidden");
   };
-  const barPercent = actionBarPercent(model.primary, league);
+  const nba = league === "nba";
+  const clock = eventClock(currentEvent, league);
+  const chips = eventLineupChips({
+    league,
+    awayAbbr,
+    homeAbbr,
+    status: currentEvent?.lineup_status,
+    awayLineup: awayLineupQuery.data ?? null,
+    homeLineup: homeLineupQuery.data ?? null,
+  });
+  const mobileLineup = chips
+    .filter((chip) => chip.tone === "confirmed" || chip.tone === "projected")
+    .map((chip) => `${chip.abbr} ${chip.tone}`)
+    .join(" · ");
+  const mobileWhen = [clock.mobile, mobileLineup].filter(Boolean).join(" · ");
+  const renderFilters = () => (
+    <GameFilters
+      range={range}
+      onRange={setRange}
+      lineText={activeLine == null ? null : String(activeLine)}
+      lineChanged={lineSteps !== 0}
+      lineDisabled={line == null}
+      onMinus={() => setLineSteps((steps) => steps - 1)}
+      onPlus={() => setLineSteps((steps) => steps + 1)}
+      onResetLine={() => setLineSteps(0)}
+      role={role}
+      onRole={setRole}
+      opponent={opponent}
+      opponents={sampleQuery.data?.opponents ?? []}
+      onOpponent={setOpponent}
+      teammates={eventTeammates({
+        player: playerName,
+        awayLineup: awayLineupQuery.data ?? null,
+        homeLineup: homeLineupQuery.data ?? null,
+        historyTeammates: sampleQuery.data?.teammates ?? [],
+      })}
+      selectedMates={mates}
+      onToggleMate={(name) =>
+        setMates((current) =>
+          current.includes(name) ? current.filter((item) => item !== name) : [...current, name],
+        )
+      }
+      mateMode={mateMode}
+      onMateMode={setMateMode}
+      gameCount={chartQuery.data?.n_games ?? null}
+    />
+  );
 
   return (
     <div className="mx-auto flex max-w-[1200px] flex-col gap-5 px-4 py-6 md:px-8">
       <EventHeader
-        awayName={currentEvent?.away_team ?? ""}
-        homeName={currentEvent?.home_team ?? ""}
+        league={league}
+        awayName={
+          nba && currentEvent ? teamShortName(currentEvent.away_team, league) : currentEvent?.away_team ?? ""
+        }
+        homeName={
+          nba && currentEvent ? teamShortName(currentEvent.home_team, league) : currentEvent?.home_team ?? ""
+        }
         awayAbbr={awayAbbr}
         homeAbbr={homeAbbr}
-        when={eventWhen(currentEvent?.commence_time)}
-        chips={[
-          lineupChip(awayAbbr, awayLineupQuery.data),
-          lineupChip(homeAbbr, homeLineupQuery.data),
-        ]}
+        when={clock.web}
+        mobileWhen={mobileWhen}
+        chips={chips}
         isLoading={eventsQuery.isLoading}
         isError={eventsQuery.isError || (!eventsQuery.isLoading && !currentEvent)}
         errorText={
@@ -474,10 +529,10 @@ export function EventDetail({ league }: { league: League }) {
         onRetry={() => eventsQuery.refetch()}
       />
 
-      <EventTabs value={tab} onChange={setTab} />
+      {nba ? null : <EventTabs value={tab} onChange={setTab} />}
 
       <div className="flex flex-col gap-5 md:grid md:grid-cols-[minmax(280px,360px)_minmax(0,1fr)] md:items-start">
-        {currentEvent ? (
+        {!nba && currentEvent ? (
           <details
             className={cn(
               "order-last rounded-[20px] border border-line bg-white px-4 py-3 md:order-first md:col-span-2",
@@ -502,11 +557,18 @@ export function EventDetail({ league }: { league: League }) {
 
         <aside
           className={cn(
-            "order-1 flex flex-col gap-5 rounded-[24px] border border-line bg-white p-4 md:col-start-1 md:p-5",
-            tab !== "read" && "max-md:hidden",
+            nba
+              ? "order-1 max-md:contents md:col-start-1 md:flex md:flex-col md:gap-5 md:rounded-[24px] md:border md:border-line md:bg-white md:p-5"
+              : "order-1 flex flex-col gap-5 rounded-[24px] border border-line bg-white p-4 md:col-start-1 md:p-5",
+            !nba && tab !== "read" && "max-md:hidden",
           )}
         >
-          <StatChips value={selectedMarket} onChange={setSelectedMarket} disabled={mutation.isPending} />
+          <StatChips
+            league={league}
+            value={selectedMarket}
+            onChange={setSelectedMarket}
+            disabled={mutation.isPending}
+          />
           {readsNote ? (
             <div className="flex flex-wrap items-center gap-3">
               <p className="text-sm text-ink">{readsNote}</p>
@@ -536,6 +598,7 @@ export function EventDetail({ league }: { league: League }) {
             </div>
           ) : null}
           <PlayerRail
+            league={league}
             rows={rows}
             selected={playerName}
             onSelect={(name) => setValue("player_name", name)}
@@ -546,8 +609,15 @@ export function EventDetail({ league }: { league: League }) {
           />
         </aside>
 
+        {nba ? (
+          <div className="order-1 md:hidden">
+            <EventTabs value={tab} onChange={setTab} tabs={NBA_EVENT_TABS} />
+          </div>
+        ) : null}
+
         <div className={cn("order-2 min-w-0 md:col-start-2", show("read"))}>
             <OurRead
+              league={league}
               model={shownModel}
               isLoading={Boolean(playerName) && mutation.isPending && !pick && !result}
               isError={mutation.isError}
@@ -563,6 +633,7 @@ export function EventDetail({ league }: { league: League }) {
             />
           </div>
 
+          {!nba ? (
           <div
             className={cn(
               "order-3 rounded-[24px] border border-line bg-white p-4 md:col-start-1 md:p-5",
@@ -585,9 +656,21 @@ export function EventDetail({ league }: { league: League }) {
               )}
             />
           </div>
+          ) : null}
 
-          <section className={cn("order-4 flex flex-col gap-5 rounded-[24px] border border-line bg-white p-4 md:col-start-2 md:p-7", show(["log", "filters"]))}>
+          <section className={cn("order-4 flex flex-col gap-5 rounded-[24px] border border-line bg-white p-4 md:col-start-2 md:p-7", nba ? show("log") : show(["log", "filters"]))}>
             <div className={show("log")}>
+              {nba ? (
+                <div className="mb-3 flex justify-end md:hidden">
+                  <button
+                    type="button"
+                    onClick={() => setFiltersOpen(true)}
+                    className="min-h-11 rounded-control border border-line-strong bg-white px-4 text-sm font-semibold text-ink"
+                  >
+                    Filters
+                  </button>
+                </div>
+              ) : null}
               <GameLogChart
                 model={chart}
                 note={
@@ -613,38 +696,7 @@ export function EventDetail({ league }: { league: League }) {
                 </div>
               ) : null}
             </div>
-            <div className={show("filters")}>
-              <GameFilters
-                range={range}
-                onRange={setRange}
-                lineText={activeLine == null ? null : String(activeLine)}
-                lineChanged={lineSteps !== 0}
-                lineDisabled={line == null}
-                onMinus={() => setLineSteps((steps) => steps - 1)}
-                onPlus={() => setLineSteps((steps) => steps + 1)}
-                onResetLine={() => setLineSteps(0)}
-                role={role}
-                onRole={setRole}
-                opponent={opponent}
-                opponents={sampleQuery.data?.opponents ?? []}
-                onOpponent={setOpponent}
-                teammates={eventTeammates({
-                  player: playerName,
-                  awayLineup: awayLineupQuery.data ?? null,
-                  homeLineup: homeLineupQuery.data ?? null,
-                  historyTeammates: sampleQuery.data?.teammates ?? [],
-                })}
-                selectedMates={mates}
-                onToggleMate={(name) =>
-                  setMates((current) =>
-                    current.includes(name) ? current.filter((item) => item !== name) : [...current, name],
-                  )
-                }
-                mateMode={mateMode}
-                onMateMode={setMateMode}
-                gameCount={chartQuery.data?.n_games ?? null}
-              />
-            </div>
+            <div className={nba ? "max-md:hidden" : show("filters")}>{renderFilters()}</div>
           </section>
 
           <section className={cn("order-5 rounded-[24px] border border-line bg-white p-4 md:col-start-2 md:p-7", show("odds"))}>
@@ -670,6 +722,7 @@ export function EventDetail({ league }: { league: League }) {
             </div>
           </section>
 
+          {!nba ? (
           <div className={cn("order-6 md:col-start-2", show("log"))}>
             <PlayerHistoryStats
               eventId={eventId}
@@ -688,6 +741,7 @@ export function EventDetail({ league }: { league: League }) {
               cacheNamespace={cfg.cacheNamespace}
             />
           </div>
+          ) : null}
 
           <div className={cn("order-7 md:col-start-2", show("read"))}>
             {playerName ? (
@@ -709,42 +763,25 @@ export function EventDetail({ league }: { league: League }) {
           </div>
       </div>
 
+      {nba ? (
+        <FilterSheet open={filtersOpen} onClose={() => setFiltersOpen(false)}>
+          {renderFilters()}
+        </FilterSheet>
+      ) : null}
+
       {playerName ? (
-        <div className="fixed inset-x-0 bottom-[72px] z-30 flex gap-2 border-t border-line bg-white px-3 py-2.5 md:hidden">
-          {model.primary ? (
-            <button
-              type="button"
-              onClick={() => addSeed(model.primary!)}
-              className="min-h-12 flex-1 rounded-[14px] bg-brand px-3 text-sm font-bold text-white"
-            >
-              {existing?.direction === model.primary.direction
-                ? "In slip"
-                : model.primary.direction === "under"
-                  ? "Add under"
-                  : "Add over"}
-              {barPercent ? ` ${barPercent}` : ""}
-            </button>
-          ) : null}
-          {model.other ? (
-            <button
-              type="button"
-              onClick={() => addSeed(model.other!)}
-              className="min-h-12 rounded-[14px] border border-[#D3CCDF] bg-white px-3 text-[13px] font-semibold text-ink"
-            >
-              {model.other.direction === "under" ? "Under" : "Over"}
-            </button>
-          ) : null}
-          <button
-            type="button"
-            onClick={() => {
-              if (pick) setSelectedPickContext(createAgentPickContextFromDailyPick(pick));
-              openWidget();
-            }}
-            className="min-h-12 rounded-[14px] bg-brand-tint px-3.5 text-[13px] font-bold text-brand"
-          >
-            Ask
-          </button>
-        </div>
+        <EventActionBar
+          league={league}
+          model={model}
+          primaryInSlip={existing?.direction === model.primary?.direction}
+          otherInSlip={existing?.direction === model.other?.direction}
+          onAddPrimary={() => model.primary && addSeed(model.primary)}
+          onAddOther={() => model.other && addSeed(model.other)}
+          onAsk={() => {
+            if (pick) setSelectedPickContext(createAgentPickContextFromDailyPick(pick));
+            openWidget();
+          }}
+        />
       ) : null}
     </div>
   );

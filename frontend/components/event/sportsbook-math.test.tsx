@@ -110,4 +110,47 @@ describe("sportsbook table matches the backend de-vig", () => {
     expect(screen.queryByText("0.5")).not.toBeInTheDocument();
     expect(fanduel.textContent).not.toMatch(/NaN|Infinity|undefined/);
   });
+
+  it("colors 0.06 and 0.06004 the same, because both print 6.0%", () => {
+    const base = math.results[0];
+    const sample = (bookmaker: string, vig: number) => ({ ...base, bookmaker, vig });
+    renderWithProviders(
+      <ResultsTable
+        data={{
+          ...math,
+          results: [
+            sample("at-six", 0.06),
+            sample("just-over-six", 0.06004),
+            sample("prints-six-one", 0.0605),
+            sample("at-four", 0.04),
+            sample("just-under-four", 0.03996),
+            sample("prints-three-nine", 0.0394),
+          ],
+        }}
+      />,
+    );
+    const atSix = within(screen.getByTestId("result-row-at-six")).getByText("6.0%");
+    const justOver = within(screen.getByTestId("result-row-just-over-six")).getByText("6.0%");
+    expect(formatVig(0.06)).toBe("6.0%");
+    expect(formatVig(0.06004)).toBe("6.0%");
+    expect(atSix.className).toContain("bg-yellow");
+    expect(justOver.className).toBe(atSix.className);
+    expect(atSix.className).not.toContain("bg-red");
+
+    const above = within(screen.getByTestId("result-row-prints-six-one")).getByText("6.1%");
+    expect(formatVig(0.0605)).toBe("6.1%");
+    expect(above.className).toContain("bg-red");
+
+    const atFour = within(screen.getByTestId("result-row-at-four")).getByText("4.0%");
+    const justUnder = within(screen.getByTestId("result-row-just-under-four")).getByText("4.0%");
+    expect(formatVig(0.04)).toBe("4.0%");
+    expect(formatVig(0.03996)).toBe("4.0%");
+    expect(atFour.className).toContain("bg-yellow");
+    expect(justUnder.className).toBe(atFour.className);
+    expect(atFour.className).not.toContain("bg-green-800");
+
+    const below = within(screen.getByTestId("result-row-prints-three-nine")).getByText("3.9%");
+    expect(formatVig(0.0394)).toBe("3.9%");
+    expect(below.className).toContain("bg-green-800");
+  });
 });

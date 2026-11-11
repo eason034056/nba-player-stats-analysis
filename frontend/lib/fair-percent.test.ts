@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import { fairNoValue, fairYesValue, noImpliedText, noPriceText } from "@/lib/no-vig-display";
-import { formatPercent, roundHalfAwayFromZero } from "@/lib/player-dd";
+import { formatPercent, formatTierPercent, roundHalfAwayFromZero } from "@/lib/player-dd";
 import type { BookmakerResult } from "@/lib/schemas";
 
 /**
@@ -98,5 +98,31 @@ describe("formatPercent", () => {
     expect(noPriceText(row, true)).not.toContain("-240");
     expect(noPriceText(row, true)).not.toContain("-110");
     expect(noPriceText(row, true)).not.toContain("NaN");
+  });
+});
+
+describe("formatTierPercent", () => {
+  it("rounds down at the tier cutoffs and just below each", () => {
+    expect(formatTierPercent(0.7)).toBe("70%");
+    expect(formatTierPercent(0.699)).toBe("69%");
+    expect(formatTierPercent(0.697)).toBe("69%");
+    expect(formatTierPercent(0.65)).toBe("65%");
+    expect(formatTierPercent(0.649)).toBe("64%");
+    expect(formatTierPercent(0.56)).toBe("56%");
+    expect(formatTierPercent(0.559)).toBe("55%");
+  });
+
+  it("renders an em dash for null and does not print 0%", () => {
+    expect(formatTierPercent(null)).toBe("—");
+    expect(formatTierPercent(undefined)).toBe("—");
+    expect(formatTierPercent(Number.NaN)).toBe("—");
+    expect(formatTierPercent(null)).not.toBe("0%");
+  });
+
+  it("does not match half-away rounding just under a cutoff", () => {
+    expect(formatPercent(0.699)).toBe("70%");
+    expect(formatTierPercent(0.699)).toBe("69%");
+    expect(formatPercent(0.559)).toBe("56%");
+    expect(formatTierPercent(0.559)).toBe("55%");
   });
 });

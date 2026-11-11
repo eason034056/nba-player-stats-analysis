@@ -1,0 +1,1733 @@
+{
+ "request": "https://api.balldontlie.io/v2/odds?dates%5B%5D=2026-11-11&per_page=100",
+ "status": 200,
+ "elapsed_s": 0.19,
+ "rate_headers": {
+  "x-ratelimit-limit": "5",
+  "x-ratelimit-remaining": "2",
+  "x-ratelimit-reset": "1794369576"
+ },
+ "response": {
+  "data": [
+   {
+    "id": 330435813,
+    "game_id": 21718081,
+    "vendor": "polymarket",
+    "deeplinks": null,
+    "spread_home_value": "-32.5",
+    "spread_home_odds": 102,
+    "spread_away_value": "32.5",
+    "spread_away_odds": -102,
+    "moneyline_home_odds": -153,
+    "moneyline_away_odds": 153,
+    "total_value": "226.5",
+    "total_over_odds": -106,
+    "total_under_odds": 106,
+    "updated_at": "2026-11-11T03:58:31.215Z"
+   },
+   {
+    "id": 341231562,
+    "game_id": 21718081,
+    "vendor": "kalshi",
+    "deeplinks": null,
+    "spread_home_value": "-3.5",
+    "spread_home_odds": -104,
+    "spread_away_value": "3.5",
+    "spread_away_odds": 104,
+    "moneyline_home_odds": -153,
+    "moneyline_away_odds": 153,
+    "total_value": "226.5",
+    "total_over_odds": -106,
+    "total_under_odds": 106,
+    "updated_at": "2026-11-11T03:58:21.394Z"
+   },
+   {
+    "id": 344828095,
+    "game_id": 21718081,
+    "vendor": "draftkings",
+    "deeplinks": null,
+    "spread_home_value": "-4.5",
+    "spread_home_odds": -103,
+    "spread_away_value": "4.5",
+    "spread_away_odds": -118,
+    "moneyline_home_odds": -166,
+    "moneyline_away_odds": 139,
+    "total_value": "226.5",
+    "total_over_odds": -115,
+    "total_under_odds": -105,
+    "updated_at": "2026-11-11T03:58:01.164Z"
+   },
+   {
+    "id": 344829784,
+    "game_id": 21718081,
+    "vendor": "rebet",
+    "deeplinks": null,
+    "spread_home_value": "-3.5",
+    "spread_home_odds": -116,
+    "spread_away_value": "3.5",
+    "spread_away_odds": -111,
+    "moneyline_home_odds": -166,
+    "moneyline_away_odds": 135,
+    "total_value": "226.5",
+    "total_over_odds": -119,
+    "total_under_odds": -109,
+    "updated_at": "2026-11-11T03:58:45.630Z"
+   },
+   {
+    "id": 344861491,
+    "game_id": 21718081,
+    "vendor": "caesars",
+    "deeplinks": {
+     "event": {
+      "url": null,
+      "url_template": "https://sportsbook.caesars.com/us/{state}/bet/basketball/e85fd1cb-7818-46be-9ef0-4815b7c91741/washington-wizards-at-indiana-pacers"
+     },
+     "selections": {
+      "spread_home": {
+       "url": null,
+       "url_template": "https://sportsbook.caesars.com/us/{state}/bet/betslip?selectionIds=804b2283-3dca-366b-9e40-fab69e80630e"
+      },
+      "spread_away": {
+       "url": null,
+       "url_template": "https://sportsbook.caesars.com/us/{state}/bet/betslip?selectionIds=2ea245e7-661f-3976-ac49-6b12735bddf2"
+      },
+      "moneyline_home": {
+       "url": null,
+       "url_template": "https://sportsbook.caesars.com/us/{state}/bet/betslip?selectionIds=70d9d147-7f36-3445-b5ca-85961572a068"
+      },
+      "moneyline_away": {
+       "url": null,
+       "url_template": "https://sportsbook.caesars.com/us/{state}/bet/betslip?selectionIds=fac54aab-6432-3179-bc78-cc80824c5f6e"
+      },
+      "total_over": {
+       "url": null,
+       "url_template": "https://sportsbook.caesars.com/us/{state}/bet/betslip?selectionIds=d8d6ce9c-b412-3686-908b-2a2d9df586eb"
+      },
+      "total_under": {
+       "url": null,
+       "url_template": "https://sportsbook.caesars.com/us/{state}/bet/betslip?selectionIds=b208517e-6919-3842-9104-1a44068571d5"
+      }
+     }
+    },
+    "spread_home_value": "-3.5",
+    "spread_home_odds": -115,
+    "spread_away_value": "3.5",
+    "spread_away_odds": -105,
+    "moneyline_home_odds": -165,
+    "moneyline_away_odds": 140,
+    "total_value": "227",
+    "total_over_odds": -110,
+    "total_under_odds": -110,
+    "updated_at": "2026-11-11T03:57:02.893Z"
+   },
+   {
+    "id": 344970612,
+    "game_id": 21718081,
+    "vendor": "fanduel",
+    "deeplinks": null,
+    "spread_home_value": "-4.5",
+    "spread_home_odds": -105,
+    "spread_away_value": "4.5",
+    "spread_away_odds": -115,
+    "moneyline_home_odds": -168,
+    "moneyline_away_odds": 142,
+    "total_value": "226.5",
+    "total_over_odds": -110,
+    "total_under_odds": -110,
+    "updated_at": "2026-11-11T03:58:20.582Z"
+   },
+   {
+    "id": 345022194,
+    "game_id": 21718081,
+    "vendor": "betway",
+    "deeplinks": null,
+    "spread_home_value": "-3.5",
+    "spread_home_odds": -115,
+    "spread_away_value": "3.5",
+    "spread_away_odds": -105,
+    "moneyline_home_odds": -160,
+    "moneyline_away_odds": 130,
+    "total_value": "226.5",
+    "total_over_odds": -110,
+    "total_under_odds": -105,
+    "updated_at": "2026-11-11T03:58:27.681Z"
+   },
+   {
+    "id": 345022853,
+    "game_id": 21718081,
+    "vendor": "betmgm",
+    "deeplinks": {
+     "event": {
+      "url": null,
+      "url_template": "https://sports.{state}.betmgm.com/en/sports/events/washington-wizards-at-indiana-pacers-20050393"
+     },
+     "selections": {
+      "spread_home": {
+       "url": null,
+       "url_template": "https://sports.{state}.betmgm.com/en/sports?options=20050393-1577470181-2348314371&type=Single"
+      },
+      "spread_away": {
+       "url": null,
+       "url_template": "https://sports.{state}.betmgm.com/en/sports?options=20050393-1577470181-2348314370&type=Single"
+      },
+      "moneyline_home": {
+       "url": null,
+       "url_template": "https://sports.{state}.betmgm.com/en/sports?options=20050393-1571884975-2333238660&type=Single"
+      },
+      "moneyline_away": {
+       "url": null,
+       "url_template": "https://sports.{state}.betmgm.com/en/sports?options=20050393-1571884975-2333238659&type=Single"
+      },
+      "total_over": {
+       "url": null,
+       "url_template": "https://sports.{state}.betmgm.com/en/sports?options=20050393-1577470133-2348314258&type=Single"
+      },
+      "total_under": {
+       "url": null,
+       "url_template": "https://sports.{state}.betmgm.com/en/sports?options=20050393-1577470133-2348314259&type=Single"
+      }
+     }
+    },
+    "spread_home_value": "-3.5",
+    "spread_home_odds": -115,
+    "spread_away_value": "3.5",
+    "spread_away_odds": -105,
+    "moneyline_home_odds": -170,
+    "moneyline_away_odds": 140,
+    "total_value": "226.5",
+    "total_over_odds": -115,
+    "total_under_odds": -105,
+    "updated_at": "2026-11-11T03:57:03.079Z"
+   },
+   {
+    "id": 345099900,
+    "game_id": 21718081,
+    "vendor": "fanatics",
+    "deeplinks": null,
+    "spread_home_value": "-3.5",
+    "spread_home_odds": -115,
+    "spread_away_value": "3.5",
+    "spread_away_odds": -105,
+    "moneyline_home_odds": -170,
+    "moneyline_away_odds": 140,
+    "total_value": "227",
+    "total_over_odds": -110,
+    "total_under_odds": -110,
+    "updated_at": "2026-11-11T03:57:03.208Z"
+   },
+   {
+    "id": 345159167,
+    "game_id": 21718081,
+    "vendor": "betparx",
+    "deeplinks": null,
+    "spread_home_value": "-4.5",
+    "spread_home_odds": -108,
+    "spread_away_value": "4.5",
+    "spread_away_odds": -114,
+    "moneyline_home_odds": -177,
+    "moneyline_away_odds": 143,
+    "total_value": "226.5",
+    "total_over_odds": -112,
+    "total_under_odds": -110,
+    "updated_at": "2026-11-11T03:58:35.568Z"
+   },
+   {
+    "id": 345159764,
+    "game_id": 21718081,
+    "vendor": "betrivers",
+    "deeplinks": null,
+    "spread_home_value": "-4.5",
+    "spread_home_odds": -108,
+    "spread_away_value": "4.5",
+    "spread_away_odds": -114,
+    "moneyline_home_odds": -180,
+    "moneyline_away_odds": 143,
+    "total_value": "226.5",
+    "total_over_odds": -112,
+    "total_under_odds": -110,
+    "updated_at": "2026-11-11T03:58:06.004Z"
+   },
+   {
+    "id": 345159831,
+    "game_id": 21718081,
+    "vendor": "ballybet",
+    "deeplinks": null,
+    "spread_home_value": "-4.5",
+    "spread_home_odds": -108,
+    "spread_away_value": "4.5",
+    "spread_away_odds": -114,
+    "moneyline_home_odds": -177,
+    "moneyline_away_odds": 143,
+    "total_value": "226.5",
+    "total_over_odds": -112,
+    "total_under_odds": -110,
+    "updated_at": "2026-11-11T03:58:15.586Z"
+   },
+   {
+    "id": 330435814,
+    "game_id": 21718082,
+    "vendor": "polymarket",
+    "deeplinks": null,
+    "spread_home_value": "-3.5",
+    "spread_home_odds": -102,
+    "spread_away_value": "3.5",
+    "spread_away_odds": 102,
+    "moneyline_home_odds": -153,
+    "moneyline_away_odds": 153,
+    "total_value": "221.5",
+    "total_over_odds": 102,
+    "total_under_odds": -102,
+    "updated_at": "2026-11-11T03:58:31.215Z"
+   },
+   {
+    "id": 341231561,
+    "game_id": 21718082,
+    "vendor": "kalshi",
+    "deeplinks": null,
+    "spread_home_value": "-3.5",
+    "spread_home_odds": -106,
+    "spread_away_value": "3.5",
+    "spread_away_odds": 106,
+    "moneyline_home_odds": -153,
+    "moneyline_away_odds": 153,
+    "total_value": "221.5",
+    "total_over_odds": 102,
+    "total_under_odds": -102,
+    "updated_at": "2026-11-11T03:58:21.394Z"
+   },
+   {
+    "id": 345134044,
+    "game_id": 21718082,
+    "vendor": "fanduel",
+    "deeplinks": null,
+    "spread_home_value": "-4.5",
+    "spread_home_odds": -104,
+    "spread_away_value": "4.5",
+    "spread_away_odds": -118,
+    "moneyline_home_odds": -164,
+    "moneyline_away_odds": 138,
+    "total_value": "221.5",
+    "total_over_odds": -110,
+    "total_under_odds": -110,
+    "updated_at": "2026-11-11T03:58:20.582Z"
+   },
+   {
+    "id": 345138868,
+    "game_id": 21718082,
+    "vendor": "rebet",
+    "deeplinks": null,
+    "spread_home_value": "-3.5",
+    "spread_home_odds": -119,
+    "spread_away_value": "3.5",
+    "spread_away_odds": -109,
+    "moneyline_home_odds": -170,
+    "moneyline_away_odds": 138,
+    "total_value": "221.5",
+    "total_over_odds": -109,
+    "total_under_odds": -119,
+    "updated_at": "2026-11-11T03:58:45.630Z"
+   },
+   {
+    "id": 345159434,
+    "game_id": 21718082,
+    "vendor": "draftkings",
+    "deeplinks": null,
+    "spread_home_value": "-3.5",
+    "spread_home_odds": -115,
+    "spread_away_value": "3.5",
+    "spread_away_odds": -106,
+    "moneyline_home_odds": -166,
+    "moneyline_away_odds": 140,
+    "total_value": "221.5",
+    "total_over_odds": -110,
+    "total_under_odds": -110,
+    "updated_at": "2026-11-11T03:58:01.164Z"
+   },
+   {
+    "id": 345159926,
+    "game_id": 21718082,
+    "vendor": "betway",
+    "deeplinks": null,
+    "spread_home_value": "-3.5",
+    "spread_home_odds": -115,
+    "spread_away_value": "3.5",
+    "spread_away_odds": -105,
+    "moneyline_home_odds": -165,
+    "moneyline_away_odds": 135,
+    "total_value": "221.5",
+    "total_over_odds": -110,
+    "total_under_odds": -110,
+    "updated_at": "2026-11-11T03:58:27.681Z"
+   },
+   {
+    "id": 345160567,
+    "game_id": 21718082,
+    "vendor": "caesars",
+    "deeplinks": {
+     "event": {
+      "url": null,
+      "url_template": "https://sportsbook.caesars.com/us/{state}/bet/basketball/eec5a2c7-a8b4-4f75-bc80-0bbf182e3d88/cleveland-cavaliers-at-new-york-knicks"
+     },
+     "selections": {
+      "spread_home": {
+       "url": null,
+       "url_template": "https://sportsbook.caesars.com/us/{state}/bet/betslip?selectionIds=70e53151-049e-3800-b6a5-e9b5b34bf84b"
+      },
+      "spread_away": {
+       "url": null,
+       "url_template": "https://sportsbook.caesars.com/us/{state}/bet/betslip?selectionIds=13af8376-0def-36f7-b231-ad7bb138e245"
+      },
+      "moneyline_home": {
+       "url": null,
+       "url_template": "https://sportsbook.caesars.com/us/{state}/bet/betslip?selectionIds=8c483976-ca27-3534-b032-231552a7b165"
+      },
+      "moneyline_away": {
+       "url": null,
+       "url_template": "https://sportsbook.caesars.com/us/{state}/bet/betslip?selectionIds=d43996dd-6901-3e35-84f0-a1dcda61db4b"
+      },
+      "total_over": {
+       "url": null,
+       "url_template": "https://sportsbook.caesars.com/us/{state}/bet/betslip?selectionIds=63853428-9510-3678-9466-5ab696d4195f"
+      },
+      "total_under": {
+       "url": null,
+       "url_template": "https://sportsbook.caesars.com/us/{state}/bet/betslip?selectionIds=17476fdf-963c-3604-bfbb-633637bbb793"
+      }
+     }
+    },
+    "spread_home_value": "-3.5",
+    "spread_home_odds": -115,
+    "spread_away_value": "3.5",
+    "spread_away_odds": -105,
+    "moneyline_home_odds": -165,
+    "moneyline_away_odds": 140,
+    "total_value": "221.5",
+    "total_over_odds": -110,
+    "total_under_odds": -110,
+    "updated_at": "2026-11-11T03:57:02.893Z"
+   },
+   {
+    "id": 345167188,
+    "game_id": 21718082,
+    "vendor": "fanatics",
+    "deeplinks": null,
+    "spread_home_value": "-3.5",
+    "spread_home_odds": -115,
+    "spread_away_value": "3.5",
+    "spread_away_odds": -105,
+    "moneyline_home_odds": -170,
+    "moneyline_away_odds": 140,
+    "total_value": "221.5",
+    "total_over_odds": -110,
+    "total_under_odds": -110,
+    "updated_at": "2026-11-11T03:57:03.208Z"
+   },
+   {
+    "id": 345178442,
+    "game_id": 21718082,
+    "vendor": "betmgm",
+    "deeplinks": {
+     "event": {
+      "url": null,
+      "url_template": "https://sports.{state}.betmgm.com/en/sports/events/cleveland-cavaliers-at-new-york-knicks-20050394"
+     },
+     "selections": {
+      "spread_home": {
+       "url": null,
+       "url_template": "https://sports.{state}.betmgm.com/en/sports?options=20050394-1577516612-2348431887&type=Single"
+      },
+      "spread_away": {
+       "url": null,
+       "url_template": "https://sports.{state}.betmgm.com/en/sports?options=20050394-1577516612-2348431886&type=Single"
+      },
+      "moneyline_home": {
+       "url": null,
+       "url_template": "https://sports.{state}.betmgm.com/en/sports?options=20050394-1571884978-2333238662&type=Single"
+      },
+      "moneyline_away": {
+       "url": null,
+       "url_template": "https://sports.{state}.betmgm.com/en/sports?options=20050394-1571884978-2333238661&type=Single"
+      },
+      "total_over": {
+       "url": null,
+       "url_template": "https://sports.{state}.betmgm.com/en/sports?options=20050394-1577516630-2348431928&type=Single"
+      },
+      "total_under": {
+       "url": null,
+       "url_template": "https://sports.{state}.betmgm.com/en/sports?options=20050394-1577516630-2348431929&type=Single"
+      }
+     }
+    },
+    "spread_home_value": "-3.5",
+    "spread_home_odds": -115,
+    "spread_away_value": "3.5",
+    "spread_away_odds": -105,
+    "moneyline_home_odds": -170,
+    "moneyline_away_odds": 140,
+    "total_value": "221.5",
+    "total_over_odds": -110,
+    "total_under_odds": -110,
+    "updated_at": "2026-11-11T03:57:03.079Z"
+   },
+   {
+    "id": 345215643,
+    "game_id": 21718082,
+    "vendor": "betparx",
+    "deeplinks": null,
+    "spread_home_value": "-3.5",
+    "spread_home_odds": -122,
+    "spread_away_value": "3.5",
+    "spread_away_odds": -103,
+    "moneyline_home_odds": -177,
+    "moneyline_away_odds": 140,
+    "total_value": "221.5",
+    "total_over_odds": -110,
+    "total_under_odds": -112,
+    "updated_at": "2026-11-11T03:58:35.568Z"
+   },
+   {
+    "id": 345216416,
+    "game_id": 21718082,
+    "vendor": "betrivers",
+    "deeplinks": null,
+    "spread_home_value": "-3.5",
+    "spread_home_odds": -122,
+    "spread_away_value": "3.5",
+    "spread_away_odds": -103,
+    "moneyline_home_odds": -177,
+    "moneyline_away_odds": 140,
+    "total_value": "221.5",
+    "total_over_odds": -110,
+    "total_under_odds": -112,
+    "updated_at": "2026-11-11T03:58:06.004Z"
+   },
+   {
+    "id": 345216525,
+    "game_id": 21718082,
+    "vendor": "ballybet",
+    "deeplinks": null,
+    "spread_home_value": "-3.5",
+    "spread_home_odds": -122,
+    "spread_away_value": "3.5",
+    "spread_away_odds": -103,
+    "moneyline_home_odds": -177,
+    "moneyline_away_odds": 140,
+    "total_value": "221.5",
+    "total_over_odds": -110,
+    "total_under_odds": -112,
+    "updated_at": "2026-11-11T03:58:15.586Z"
+   },
+   {
+    "id": 330435815,
+    "game_id": 21718083,
+    "vendor": "polymarket",
+    "deeplinks": null,
+    "spread_home_value": "6.5",
+    "spread_home_odds": 100,
+    "spread_away_value": "-6.5",
+    "spread_away_odds": 100,
+    "moneyline_home_odds": 208,
+    "moneyline_away_odds": -208,
+    "total_value": "209.5",
+    "total_over_odds": 108,
+    "total_under_odds": -108,
+    "updated_at": "2026-11-11T03:58:31.215Z"
+   },
+   {
+    "id": 341231560,
+    "game_id": 21718083,
+    "vendor": "kalshi",
+    "deeplinks": null,
+    "spread_home_value": "6.5",
+    "spread_home_odds": 104,
+    "spread_away_value": "-6.5",
+    "spread_away_odds": -104,
+    "moneyline_home_odds": 217,
+    "moneyline_away_odds": -217,
+    "total_value": "216.5",
+    "total_over_odds": -100,
+    "total_under_odds": -100,
+    "updated_at": "2026-11-11T03:58:21.394Z"
+   },
+   {
+    "id": 345176762,
+    "game_id": 21718083,
+    "vendor": "fanduel",
+    "deeplinks": null,
+    "spread_home_value": "6.5",
+    "spread_home_odds": -105,
+    "spread_away_value": "-6.5",
+    "spread_away_odds": -115,
+    "moneyline_home_odds": 198,
+    "moneyline_away_odds": -240,
+    "total_value": "215.5",
+    "total_over_odds": -115,
+    "total_under_odds": -105,
+    "updated_at": "2026-11-11T03:58:20.582Z"
+   },
+   {
+    "id": 345179266,
+    "game_id": 21718083,
+    "vendor": "rebet",
+    "deeplinks": null,
+    "spread_home_value": "6.5",
+    "spread_home_odds": -109,
+    "spread_away_value": "-6.5",
+    "spread_away_odds": -119,
+    "moneyline_home_odds": 195,
+    "moneyline_away_odds": -246,
+    "total_value": "216.5",
+    "total_over_odds": -111,
+    "total_under_odds": -116,
+    "updated_at": "2026-11-11T03:58:45.630Z"
+   },
+   {
+    "id": 345189473,
+    "game_id": 21718083,
+    "vendor": "fanatics",
+    "deeplinks": null,
+    "spread_home_value": "6.5",
+    "spread_home_odds": -105,
+    "spread_away_value": "-6.5",
+    "spread_away_odds": -115,
+    "moneyline_home_odds": 200,
+    "moneyline_away_odds": -245,
+    "total_value": "216.5",
+    "total_over_odds": -110,
+    "total_under_odds": -110,
+    "updated_at": "2026-11-11T03:57:03.208Z"
+   },
+   {
+    "id": 330435816,
+    "game_id": 21718084,
+    "vendor": "polymarket",
+    "deeplinks": null,
+    "spread_home_value": "-2.5",
+    "spread_home_odds": 100,
+    "spread_away_value": "2.5",
+    "spread_away_odds": 100,
+    "moneyline_home_odds": 852,
+    "moneyline_away_odds": -852,
+    "total_value": "239.5",
+    "total_over_odds": 102,
+    "total_under_odds": -102,
+    "updated_at": "2026-11-11T03:58:31.215Z"
+   },
+   {
+    "id": 339605754,
+    "game_id": 21718084,
+    "vendor": "kalshi",
+    "deeplinks": null,
+    "spread_home_value": "14.5",
+    "spread_home_odds": 108,
+    "spread_away_value": "-14.5",
+    "spread_away_odds": -108,
+    "moneyline_home_odds": 852,
+    "moneyline_away_odds": -852,
+    "total_value": "239.5",
+    "total_over_odds": -102,
+    "total_under_odds": 102,
+    "updated_at": "2026-11-11T03:58:21.394Z"
+   },
+   {
+    "id": 344826170,
+    "game_id": 21718084,
+    "vendor": "draftkings",
+    "deeplinks": null,
+    "spread_home_value": "15.5",
+    "spread_home_odds": -111,
+    "spread_away_value": "-15.5",
+    "spread_away_odds": -109,
+    "moneyline_home_odds": 750,
+    "moneyline_away_odds": -1200,
+    "total_value": "239.5",
+    "total_over_odds": -108,
+    "total_under_odds": -112,
+    "updated_at": "2026-11-11T03:58:01.164Z"
+   },
+   {
+    "id": 344827868,
+    "game_id": 21718084,
+    "vendor": "rebet",
+    "deeplinks": null,
+    "spread_home_value": "15.5",
+    "spread_home_odds": -119,
+    "spread_away_value": "-15.5",
+    "spread_away_odds": -109,
+    "moneyline_home_odds": 580,
+    "moneyline_away_odds": -952,
+    "total_value": "238.5",
+    "total_over_odds": -119,
+    "total_under_odds": -109,
+    "updated_at": "2026-11-11T03:58:45.630Z"
+   },
+   {
+    "id": 344844468,
+    "game_id": 21718084,
+    "vendor": "caesars",
+    "deeplinks": {
+     "event": {
+      "url": null,
+      "url_template": "https://sportsbook.caesars.com/us/{state}/bet/basketball/a836b038-5621-45ca-a3d7-57431179c75d/san-antonio-spurs-at-chicago-bulls"
+     },
+     "selections": {
+      "spread_home": {
+       "url": null,
+       "url_template": "https://sportsbook.caesars.com/us/{state}/bet/betslip?selectionIds=757f38a3-97eb-3f54-abdf-d44fb2b0c28d"
+      },
+      "spread_away": {
+       "url": null,
+       "url_template": "https://sportsbook.caesars.com/us/{state}/bet/betslip?selectionIds=3965088f-b1e1-32d3-87b0-eb3ac62a57f0"
+      },
+      "moneyline_home": {
+       "url": null,
+       "url_template": "https://sportsbook.caesars.com/us/{state}/bet/betslip?selectionIds=a82a2dd1-a737-3817-bab7-bee4c9481bf8"
+      },
+      "moneyline_away": {
+       "url": null,
+       "url_template": "https://sportsbook.caesars.com/us/{state}/bet/betslip?selectionIds=06536b0f-43c7-3ff9-90e7-441edfb95483"
+      },
+      "total_over": {
+       "url": null,
+       "url_template": "https://sportsbook.caesars.com/us/{state}/bet/betslip?selectionIds=4f4d6556-3b50-31b8-b9fb-7fcd505b74f7"
+      },
+      "total_under": {
+       "url": null,
+       "url_template": "https://sportsbook.caesars.com/us/{state}/bet/betslip?selectionIds=7d999070-bf5a-3980-85d5-41c8c8256848"
+      }
+     }
+    },
+    "spread_home_value": "14.5",
+    "spread_home_odds": -105,
+    "spread_away_value": "-14.5",
+    "spread_away_odds": -115,
+    "moneyline_home_odds": 700,
+    "moneyline_away_odds": -1100,
+    "total_value": "239",
+    "total_over_odds": -110,
+    "total_under_odds": -110,
+    "updated_at": "2026-11-11T03:57:02.893Z"
+   },
+   {
+    "id": 344925315,
+    "game_id": 21718084,
+    "vendor": "fanduel",
+    "deeplinks": null,
+    "spread_home_value": "14.5",
+    "spread_home_odds": -105,
+    "spread_away_value": "-14.5",
+    "spread_away_odds": -115,
+    "moneyline_home_odds": 730,
+    "moneyline_away_odds": -1150,
+    "total_value": "239.5",
+    "total_over_odds": -105,
+    "total_under_odds": -115,
+    "updated_at": "2026-11-11T03:58:20.582Z"
+   },
+   {
+    "id": 345027364,
+    "game_id": 21718084,
+    "vendor": "betmgm",
+    "deeplinks": {
+     "event": {
+      "url": null,
+      "url_template": "https://sports.{state}.betmgm.com/en/sports/events/san-antonio-spurs-at-chicago-bulls-20050396"
+     },
+     "selections": {
+      "spread_home": {
+       "url": null,
+       "url_template": "https://sports.{state}.betmgm.com/en/sports?options=20050396-1577472036-2348318890&type=Single"
+      },
+      "spread_away": {
+       "url": null,
+       "url_template": "https://sports.{state}.betmgm.com/en/sports?options=20050396-1577472036-2348318889&type=Single"
+      },
+      "moneyline_home": {
+       "url": null,
+       "url_template": "https://sports.{state}.betmgm.com/en/sports?options=20050396-1571884984-2333238666&type=Single"
+      },
+      "moneyline_away": {
+       "url": null,
+       "url_template": "https://sports.{state}.betmgm.com/en/sports?options=20050396-1571884984-2333238665&type=Single"
+      },
+      "total_over": {
+       "url": null,
+       "url_template": "https://sports.{state}.betmgm.com/en/sports?options=20050396-1577472044-2348318903&type=Single"
+      },
+      "total_under": {
+       "url": null,
+       "url_template": "https://sports.{state}.betmgm.com/en/sports?options=20050396-1577472044-2348318904&type=Single"
+      }
+     }
+    },
+    "spread_home_value": "14.5",
+    "spread_home_odds": -105,
+    "spread_away_value": "-14.5",
+    "spread_away_odds": -115,
+    "moneyline_home_odds": 725,
+    "moneyline_away_odds": -1200,
+    "total_value": "238.5",
+    "total_over_odds": -115,
+    "total_under_odds": -105,
+    "updated_at": "2026-11-11T03:57:03.079Z"
+   },
+   {
+    "id": 345099901,
+    "game_id": 21718084,
+    "vendor": "fanatics",
+    "deeplinks": null,
+    "spread_home_value": "15",
+    "spread_home_odds": -110,
+    "spread_away_value": "-15",
+    "spread_away_odds": -110,
+    "moneyline_home_odds": 750,
+    "moneyline_away_odds": -1200,
+    "total_value": "239.5",
+    "total_over_odds": -110,
+    "total_under_odds": -110,
+    "updated_at": "2026-11-11T03:57:03.208Z"
+   },
+   {
+    "id": 345164194,
+    "game_id": 21718084,
+    "vendor": "betrivers",
+    "deeplinks": null,
+    "spread_home_value": "14.5",
+    "spread_home_odds": -110,
+    "spread_away_value": "-14.5",
+    "spread_away_odds": -113,
+    "moneyline_home_odds": 600,
+    "moneyline_away_odds": -1000,
+    "total_value": "238.5",
+    "total_over_odds": -113,
+    "total_under_odds": -110,
+    "updated_at": "2026-11-11T03:58:06.004Z"
+   },
+   {
+    "id": 345164262,
+    "game_id": 21718084,
+    "vendor": "ballybet",
+    "deeplinks": null,
+    "spread_home_value": "14.5",
+    "spread_home_odds": -110,
+    "spread_away_value": "-14.5",
+    "spread_away_odds": -113,
+    "moneyline_home_odds": 600,
+    "moneyline_away_odds": -1000,
+    "total_value": "238.5",
+    "total_over_odds": -113,
+    "total_under_odds": -110,
+    "updated_at": "2026-11-11T03:58:15.586Z"
+   },
+   {
+    "id": 345164646,
+    "game_id": 21718084,
+    "vendor": "betparx",
+    "deeplinks": null,
+    "spread_home_value": "14.5",
+    "spread_home_odds": -110,
+    "spread_away_value": "-14.5",
+    "spread_away_odds": -113,
+    "moneyline_home_odds": 600,
+    "moneyline_away_odds": -1000,
+    "total_value": "238.5",
+    "total_over_odds": -113,
+    "total_under_odds": -110,
+    "updated_at": "2026-11-11T03:58:35.568Z"
+   },
+   {
+    "id": 330435817,
+    "game_id": 21718085,
+    "vendor": "polymarket",
+    "deeplinks": null,
+    "spread_home_value": "4.5",
+    "spread_home_odds": -102,
+    "spread_away_value": "-4.5",
+    "spread_away_odds": 102,
+    "moneyline_home_odds": 141,
+    "moneyline_away_odds": -141,
+    "total_value": "227.5",
+    "total_over_odds": -104,
+    "total_under_odds": 104,
+    "updated_at": "2026-11-11T03:58:31.215Z"
+   },
+   {
+    "id": 341262069,
+    "game_id": 21718085,
+    "vendor": "kalshi",
+    "deeplinks": null,
+    "spread_home_value": "3.5",
+    "spread_home_odds": -100,
+    "spread_away_value": "-3.5",
+    "spread_away_odds": -100,
+    "moneyline_home_odds": 147,
+    "moneyline_away_odds": -147,
+    "total_value": "228.5",
+    "total_over_odds": 108,
+    "total_under_odds": -108,
+    "updated_at": "2026-11-11T03:58:21.394Z"
+   },
+   {
+    "id": 344938409,
+    "game_id": 21718085,
+    "vendor": "fanduel",
+    "deeplinks": null,
+    "spread_home_value": "4.5",
+    "spread_home_odds": -118,
+    "spread_away_value": "-4.5",
+    "spread_away_odds": -104,
+    "moneyline_home_odds": 136,
+    "moneyline_away_odds": -162,
+    "total_value": "227.5",
+    "total_over_odds": -112,
+    "total_under_odds": -108,
+    "updated_at": "2026-11-11T03:58:20.582Z"
+   },
+   {
+    "id": 344939563,
+    "game_id": 21718085,
+    "vendor": "rebet",
+    "deeplinks": null,
+    "spread_home_value": "3.5",
+    "spread_home_odds": -109,
+    "spread_away_value": "-3.5",
+    "spread_away_odds": -119,
+    "moneyline_home_odds": 135,
+    "moneyline_away_odds": -166,
+    "total_value": "227.5",
+    "total_over_odds": -116,
+    "total_under_odds": -111,
+    "updated_at": "2026-11-11T03:58:45.630Z"
+   },
+   {
+    "id": 344990230,
+    "game_id": 21718085,
+    "vendor": "draftkings",
+    "deeplinks": null,
+    "spread_home_value": "4.5",
+    "spread_home_odds": -114,
+    "spread_away_value": "-4.5",
+    "spread_away_odds": -106,
+    "moneyline_home_odds": 132,
+    "moneyline_away_odds": -156,
+    "total_value": "227.5",
+    "total_over_odds": -111,
+    "total_under_odds": -109,
+    "updated_at": "2026-11-11T03:58:01.164Z"
+   },
+   {
+    "id": 344993903,
+    "game_id": 21718085,
+    "vendor": "caesars",
+    "deeplinks": {
+     "event": {
+      "url": null,
+      "url_template": "https://sportsbook.caesars.com/us/{state}/bet/basketball/012841f4-24a7-40ae-9e3e-2eb845db8357/denver-nuggets-at-memphis-grizzlies"
+     },
+     "selections": {
+      "spread_home": {
+       "url": null,
+       "url_template": "https://sportsbook.caesars.com/us/{state}/bet/betslip?selectionIds=b219c2d9-d73f-384c-a1fc-2cf7338080cb"
+      },
+      "spread_away": {
+       "url": null,
+       "url_template": "https://sportsbook.caesars.com/us/{state}/bet/betslip?selectionIds=612c5f05-8a56-3321-a514-a5c5a5dd1d23"
+      },
+      "moneyline_home": {
+       "url": null,
+       "url_template": "https://sportsbook.caesars.com/us/{state}/bet/betslip?selectionIds=3a1240ed-f92d-3ae7-83e6-c4c68e5e1c7a"
+      },
+      "moneyline_away": {
+       "url": null,
+       "url_template": "https://sportsbook.caesars.com/us/{state}/bet/betslip?selectionIds=ab05803a-44e5-398a-a2de-849fafec8677"
+      },
+      "total_over": {
+       "url": null,
+       "url_template": "https://sportsbook.caesars.com/us/{state}/bet/betslip?selectionIds=e65c07b4-f096-33dd-ab6b-e95ee76a9ba4"
+      },
+      "total_under": {
+       "url": null,
+       "url_template": "https://sportsbook.caesars.com/us/{state}/bet/betslip?selectionIds=b2c502e8-461d-33eb-a7e3-989611e00da8"
+      }
+     }
+    },
+    "spread_home_value": "3.5",
+    "spread_home_odds": -115,
+    "spread_away_value": "-3.5",
+    "spread_away_odds": -105,
+    "moneyline_home_odds": 140,
+    "moneyline_away_odds": -165,
+    "total_value": "227.5",
+    "total_over_odds": -115,
+    "total_under_odds": -105,
+    "updated_at": "2026-11-11T03:57:02.893Z"
+   },
+   {
+    "id": 345029668,
+    "game_id": 21718085,
+    "vendor": "betmgm",
+    "deeplinks": {
+     "event": {
+      "url": null,
+      "url_template": "https://sports.{state}.betmgm.com/en/sports/events/denver-nuggets-at-memphis-grizzlies-20050397"
+     },
+     "selections": {
+      "spread_home": {
+       "url": null,
+       "url_template": "https://sports.{state}.betmgm.com/en/sports?options=20050397-1577473169-2348321839&type=Single"
+      },
+      "spread_away": {
+       "url": null,
+       "url_template": "https://sports.{state}.betmgm.com/en/sports?options=20050397-1577473169-2348321838&type=Single"
+      },
+      "moneyline_home": {
+       "url": null,
+       "url_template": "https://sports.{state}.betmgm.com/en/sports?options=20050397-1571884987-2333238668&type=Single"
+      },
+      "moneyline_away": {
+       "url": null,
+       "url_template": "https://sports.{state}.betmgm.com/en/sports?options=20050397-1571884987-2333238667&type=Single"
+      },
+      "total_over": {
+       "url": null,
+       "url_template": "https://sports.{state}.betmgm.com/en/sports?options=20050397-1577473248-2348322009&type=Single"
+      },
+      "total_under": {
+       "url": null,
+       "url_template": "https://sports.{state}.betmgm.com/en/sports?options=20050397-1577473248-2348322030&type=Single"
+      }
+     }
+    },
+    "spread_home_value": "4.5",
+    "spread_home_odds": -115,
+    "spread_away_value": "-4.5",
+    "spread_away_odds": -105,
+    "moneyline_home_odds": 135,
+    "moneyline_away_odds": -165,
+    "total_value": "227.5",
+    "total_over_odds": -110,
+    "total_under_odds": -110,
+    "updated_at": "2026-11-11T03:57:03.079Z"
+   },
+   {
+    "id": 345102178,
+    "game_id": 21718085,
+    "vendor": "fanatics",
+    "deeplinks": null,
+    "spread_home_value": "4",
+    "spread_home_odds": -110,
+    "spread_away_value": "-4",
+    "spread_away_odds": -110,
+    "moneyline_home_odds": 130,
+    "moneyline_away_odds": -155,
+    "total_value": "227.5",
+    "total_over_odds": -110,
+    "total_under_odds": -110,
+    "updated_at": "2026-11-11T03:57:03.208Z"
+   },
+   {
+    "id": 345168670,
+    "game_id": 21718085,
+    "vendor": "betrivers",
+    "deeplinks": null,
+    "spread_home_value": "4.5",
+    "spread_home_odds": -115,
+    "spread_away_value": "-4.5",
+    "spread_away_odds": -107,
+    "moneyline_home_odds": 140,
+    "moneyline_away_odds": -175,
+    "total_value": "227.5",
+    "total_over_odds": -117,
+    "total_under_odds": -106,
+    "updated_at": "2026-11-11T03:58:06.004Z"
+   },
+   {
+    "id": 345168755,
+    "game_id": 21718085,
+    "vendor": "ballybet",
+    "deeplinks": null,
+    "spread_home_value": "4.5",
+    "spread_home_odds": -115,
+    "spread_away_value": "-4.5",
+    "spread_away_odds": -107,
+    "moneyline_home_odds": 140,
+    "moneyline_away_odds": -175,
+    "total_value": "227.5",
+    "total_over_odds": -117,
+    "total_under_odds": -106,
+    "updated_at": "2026-11-11T03:58:15.586Z"
+   },
+   {
+    "id": 345169077,
+    "game_id": 21718085,
+    "vendor": "betparx",
+    "deeplinks": null,
+    "spread_home_value": "4.5",
+    "spread_home_odds": -115,
+    "spread_away_value": "-4.5",
+    "spread_away_odds": -107,
+    "moneyline_home_odds": 140,
+    "moneyline_away_odds": -175,
+    "total_value": "227.5",
+    "total_over_odds": -117,
+    "total_under_odds": -106,
+    "updated_at": "2026-11-11T03:58:35.568Z"
+   },
+   {
+    "id": 330435818,
+    "game_id": 21718086,
+    "vendor": "polymarket",
+    "deeplinks": null,
+    "spread_home_value": null,
+    "spread_home_odds": null,
+    "spread_away_value": null,
+    "spread_away_odds": null,
+    "moneyline_home_odds": 669,
+    "moneyline_away_odds": -669,
+    "total_value": null,
+    "total_over_odds": null,
+    "total_under_odds": null,
+    "updated_at": "2026-11-11T03:58:31.215Z"
+   },
+   {
+    "id": 341231564,
+    "game_id": 21718086,
+    "vendor": "kalshi",
+    "deeplinks": null,
+    "spread_home_value": null,
+    "spread_home_odds": null,
+    "spread_away_value": null,
+    "spread_away_odds": null,
+    "moneyline_home_odds": 641,
+    "moneyline_away_odds": -590,
+    "total_value": null,
+    "total_over_odds": null,
+    "total_under_odds": null,
+    "updated_at": "2026-11-11T03:58:21.394Z"
+   },
+   {
+    "id": 345217543,
+    "game_id": 21718086,
+    "vendor": "fanduel",
+    "deeplinks": null,
+    "spread_home_value": "10.5",
+    "spread_home_odds": -105,
+    "spread_away_value": "-10.5",
+    "spread_away_odds": -115,
+    "moneyline_home_odds": 480,
+    "moneyline_away_odds": -650,
+    "total_value": "232.5",
+    "total_over_odds": -118,
+    "total_under_odds": -104,
+    "updated_at": "2026-11-11T03:58:20.582Z"
+   },
+   {
+    "id": 345219101,
+    "game_id": 21718086,
+    "vendor": "rebet",
+    "deeplinks": null,
+    "spread_home_value": "10.5",
+    "spread_home_odds": -109,
+    "spread_away_value": "-10.5",
+    "spread_away_odds": -119,
+    "moneyline_home_odds": 370,
+    "moneyline_away_odds": -526,
+    "total_value": null,
+    "total_over_odds": null,
+    "total_under_odds": null,
+    "updated_at": "2026-11-11T03:58:45.630Z"
+   },
+   {
+    "id": 330435819,
+    "game_id": 21718087,
+    "vendor": "polymarket",
+    "deeplinks": null,
+    "spread_home_value": "-4.5",
+    "spread_home_odds": -102,
+    "spread_away_value": "4.5",
+    "spread_away_odds": 102,
+    "moneyline_home_odds": -174,
+    "moneyline_away_odds": 174,
+    "total_value": "229.5",
+    "total_over_odds": -106,
+    "total_under_odds": 106,
+    "updated_at": "2026-11-11T03:58:31.215Z"
+   },
+   {
+    "id": 339857566,
+    "game_id": 21718087,
+    "vendor": "kalshi",
+    "deeplinks": null,
+    "spread_home_value": "-4.5",
+    "spread_home_odds": -102,
+    "spread_away_value": "4.5",
+    "spread_away_odds": 102,
+    "moneyline_home_odds": -167,
+    "moneyline_away_odds": 174,
+    "total_value": "230.5",
+    "total_over_odds": 111,
+    "total_under_odds": -111,
+    "updated_at": "2026-11-11T03:58:21.394Z"
+   },
+   {
+    "id": 344828097,
+    "game_id": 21718087,
+    "vendor": "draftkings",
+    "deeplinks": null,
+    "spread_home_value": "-4.5",
+    "spread_home_odds": -110,
+    "spread_away_value": "4.5",
+    "spread_away_odds": -110,
+    "moneyline_home_odds": -184,
+    "moneyline_away_odds": 154,
+    "total_value": "229.5",
+    "total_over_odds": -110,
+    "total_under_odds": -110,
+    "updated_at": "2026-11-11T03:58:01.164Z"
+   },
+   {
+    "id": 344828659,
+    "game_id": 21718087,
+    "vendor": "rebet",
+    "deeplinks": null,
+    "spread_home_value": "-4.5",
+    "spread_home_odds": -114,
+    "spread_away_value": "4.5",
+    "spread_away_odds": -114,
+    "moneyline_home_odds": -178,
+    "moneyline_away_odds": 144,
+    "total_value": "229.5",
+    "total_over_odds": -119,
+    "total_under_odds": -109,
+    "updated_at": "2026-11-11T03:58:45.630Z"
+   },
+   {
+    "id": 344980250,
+    "game_id": 21718087,
+    "vendor": "caesars",
+    "deeplinks": {
+     "event": {
+      "url": null,
+      "url_template": "https://sportsbook.caesars.com/us/{state}/bet/basketball/7e58f8bb-da9f-4d55-b48b-7e8fa71ed5b7/brooklyn-nets-at-new-orleans-pelicans"
+     },
+     "selections": {
+      "spread_home": {
+       "url": null,
+       "url_template": "https://sportsbook.caesars.com/us/{state}/bet/betslip?selectionIds=80401f50-613c-3149-a41d-7c25be8541e2"
+      },
+      "spread_away": {
+       "url": null,
+       "url_template": "https://sportsbook.caesars.com/us/{state}/bet/betslip?selectionIds=043e8de5-a9dd-3a87-8a1e-7848e67a2a73"
+      },
+      "moneyline_home": {
+       "url": null,
+       "url_template": "https://sportsbook.caesars.com/us/{state}/bet/betslip?selectionIds=b4a7d98a-6b81-3ae9-bccd-b40ace8d9ede"
+      },
+      "moneyline_away": {
+       "url": null,
+       "url_template": "https://sportsbook.caesars.com/us/{state}/bet/betslip?selectionIds=eeb2ec4d-90f0-3b03-a74a-ea0102866874"
+      },
+      "total_over": {
+       "url": null,
+       "url_template": "https://sportsbook.caesars.com/us/{state}/bet/betslip?selectionIds=95dee071-5be4-30e9-9d04-82ad8b09a47e"
+      },
+      "total_under": {
+       "url": null,
+       "url_template": "https://sportsbook.caesars.com/us/{state}/bet/betslip?selectionIds=74106fa2-997b-3345-90dd-4141b354c66d"
+      }
+     }
+    },
+    "spread_home_value": "-4.5",
+    "spread_home_odds": -112,
+    "spread_away_value": "4.5",
+    "spread_away_odds": -110,
+    "moneyline_home_odds": -179,
+    "moneyline_away_odds": 150,
+    "total_value": "229.5",
+    "total_over_odds": -110,
+    "total_under_odds": -112,
+    "updated_at": "2026-11-11T03:57:02.893Z"
+   },
+   {
+    "id": 344987515,
+    "game_id": 21718087,
+    "vendor": "fanduel",
+    "deeplinks": null,
+    "spread_home_value": "-4.5",
+    "spread_home_odds": -105,
+    "spread_away_value": "4.5",
+    "spread_away_odds": -115,
+    "moneyline_home_odds": -168,
+    "moneyline_away_odds": 142,
+    "total_value": "229.5",
+    "total_over_odds": -115,
+    "total_under_odds": -105,
+    "updated_at": "2026-11-11T03:58:20.582Z"
+   },
+   {
+    "id": 345022854,
+    "game_id": 21718087,
+    "vendor": "betmgm",
+    "deeplinks": {
+     "event": {
+      "url": null,
+      "url_template": "https://sports.{state}.betmgm.com/en/sports/events/brooklyn-nets-at-new-orleans-pelicans-20050399"
+     },
+     "selections": {
+      "spread_home": {
+       "url": null,
+       "url_template": "https://sports.{state}.betmgm.com/en/sports?options=20050399-1577470655-2348315534&type=Single"
+      },
+      "spread_away": {
+       "url": null,
+       "url_template": "https://sports.{state}.betmgm.com/en/sports?options=20050399-1577470655-2348315533&type=Single"
+      },
+      "moneyline_home": {
+       "url": null,
+       "url_template": "https://sports.{state}.betmgm.com/en/sports?options=20050399-1571884993-2333238672&type=Single"
+      },
+      "moneyline_away": {
+       "url": null,
+       "url_template": "https://sports.{state}.betmgm.com/en/sports?options=20050399-1571884993-2333238671&type=Single"
+      },
+      "total_over": {
+       "url": null,
+       "url_template": "https://sports.{state}.betmgm.com/en/sports?options=20050399-1577470596-2348315392&type=Single"
+      },
+      "total_under": {
+       "url": null,
+       "url_template": "https://sports.{state}.betmgm.com/en/sports?options=20050399-1577470596-2348315393&type=Single"
+      }
+     }
+    },
+    "spread_home_value": "-4.5",
+    "spread_home_odds": -110,
+    "spread_away_value": "4.5",
+    "spread_away_odds": -110,
+    "moneyline_home_odds": -185,
+    "moneyline_away_odds": 150,
+    "total_value": "229.5",
+    "total_over_odds": -110,
+    "total_under_odds": -110,
+    "updated_at": "2026-11-11T03:57:03.079Z"
+   },
+   {
+    "id": 345092246,
+    "game_id": 21718087,
+    "vendor": "betway",
+    "deeplinks": null,
+    "spread_home_value": "-4.5",
+    "spread_home_odds": -110,
+    "spread_away_value": "4.5",
+    "spread_away_odds": -110,
+    "moneyline_home_odds": -190,
+    "moneyline_away_odds": 150,
+    "total_value": "230.5",
+    "total_over_odds": -105,
+    "total_under_odds": -110,
+    "updated_at": "2026-11-11T03:58:27.681Z"
+   },
+   {
+    "id": 345102176,
+    "game_id": 21718087,
+    "vendor": "fanatics",
+    "deeplinks": null,
+    "spread_home_value": "-4.5",
+    "spread_home_odds": -110,
+    "spread_away_value": "4.5",
+    "spread_away_odds": -110,
+    "moneyline_home_odds": -190,
+    "moneyline_away_odds": 155,
+    "total_value": "230",
+    "total_over_odds": -110,
+    "total_under_odds": -110,
+    "updated_at": "2026-11-11T03:57:03.208Z"
+   },
+   {
+    "id": 345158804,
+    "game_id": 21718087,
+    "vendor": "betrivers",
+    "deeplinks": null,
+    "spread_home_value": "-4.5",
+    "spread_home_odds": -110,
+    "spread_away_value": "4.5",
+    "spread_away_odds": -112,
+    "moneyline_home_odds": -190,
+    "moneyline_away_odds": 150,
+    "total_value": "229.5",
+    "total_over_odds": -112,
+    "total_under_odds": -110,
+    "updated_at": "2026-11-11T03:58:06.004Z"
+   },
+   {
+    "id": 345158831,
+    "game_id": 21718087,
+    "vendor": "ballybet",
+    "deeplinks": null,
+    "spread_home_value": "-4.5",
+    "spread_home_odds": -110,
+    "spread_away_value": "4.5",
+    "spread_away_odds": -112,
+    "moneyline_home_odds": -190,
+    "moneyline_away_odds": 150,
+    "total_value": "229.5",
+    "total_over_odds": -112,
+    "total_under_odds": -110,
+    "updated_at": "2026-11-11T03:58:15.586Z"
+   },
+   {
+    "id": 345159168,
+    "game_id": 21718087,
+    "vendor": "betparx",
+    "deeplinks": null,
+    "spread_home_value": "-4.5",
+    "spread_home_odds": -110,
+    "spread_away_value": "4.5",
+    "spread_away_odds": -112,
+    "moneyline_home_odds": -190,
+    "moneyline_away_odds": 150,
+    "total_value": "229.5",
+    "total_over_odds": -112,
+    "total_under_odds": -110,
+    "updated_at": "2026-11-11T03:58:35.568Z"
+   },
+   {
+    "id": 330435820,
+    "game_id": 21718088,
+    "vendor": "polymarket",
+    "deeplinks": null,
+    "spread_home_value": null,
+    "spread_home_odds": null,
+    "spread_away_value": null,
+    "spread_away_odds": null,
+    "moneyline_home_odds": 160,
+    "moneyline_away_odds": -160,
+    "total_value": null,
+    "total_over_odds": null,
+    "total_under_odds": null,
+    "updated_at": "2026-11-11T03:58:31.215Z"
+   },
+   {
+    "id": 341350622,
+    "game_id": 21718088,
+    "vendor": "kalshi",
+    "deeplinks": null,
+    "spread_home_value": null,
+    "spread_home_odds": null,
+    "spread_away_value": null,
+    "spread_away_odds": null,
+    "moneyline_home_odds": 156,
+    "moneyline_away_odds": -153,
+    "total_value": null,
+    "total_over_odds": null,
+    "total_under_odds": null,
+    "updated_at": "2026-11-11T03:58:21.394Z"
+   },
+   {
+    "id": 330435821,
+    "game_id": 21718089,
+    "vendor": "polymarket",
+    "deeplinks": null,
+    "spread_home_value": "-5.5",
+    "spread_home_odds": 102,
+    "spread_away_value": "5.5",
+    "spread_away_odds": -102,
+    "moneyline_home_odds": -190,
+    "moneyline_away_odds": 190,
+    "total_value": "222.5",
+    "total_over_odds": 106,
+    "total_under_odds": -106,
+    "updated_at": "2026-11-11T03:58:31.215Z"
+   },
+   {
+    "id": 341321884,
+    "game_id": 21718089,
+    "vendor": "kalshi",
+    "deeplinks": null,
+    "spread_home_value": "-5.5",
+    "spread_home_odds": 102,
+    "spread_away_value": "5.5",
+    "spread_away_odds": -102,
+    "moneyline_home_odds": -190,
+    "moneyline_away_odds": 190,
+    "total_value": "222.5",
+    "total_over_odds": 104,
+    "total_under_odds": -104,
+    "updated_at": "2026-11-11T03:58:21.394Z"
+   },
+   {
+    "id": 344830003,
+    "game_id": 21718089,
+    "vendor": "draftkings",
+    "deeplinks": null,
+    "spread_home_value": "-5.5",
+    "spread_home_odds": -105,
+    "spread_away_value": "5.5",
+    "spread_away_odds": -115,
+    "moneyline_home_odds": -204,
+    "moneyline_away_odds": 170,
+    "total_value": "221.5",
+    "total_over_odds": -115,
+    "total_under_odds": -105,
+    "updated_at": "2026-11-11T03:58:01.164Z"
+   },
+   {
+    "id": 344831730,
+    "game_id": 21718089,
+    "vendor": "rebet",
+    "deeplinks": null,
+    "spread_home_value": "-5.5",
+    "spread_home_odds": -111,
+    "spread_away_value": "5.5",
+    "spread_away_odds": -116,
+    "moneyline_home_odds": -210,
+    "moneyline_away_odds": 169,
+    "total_value": "222.5",
+    "total_over_odds": -111,
+    "total_under_odds": -116,
+    "updated_at": "2026-11-11T03:58:45.630Z"
+   },
+   {
+    "id": 344833088,
+    "game_id": 21718089,
+    "vendor": "caesars",
+    "deeplinks": {
+     "event": {
+      "url": null,
+      "url_template": "https://sportsbook.caesars.com/us/{state}/bet/basketball/0b649fe5-f85d-4bdd-b1cb-a1ac8f467e4c/golden-state-warriors-at-houston-rockets"
+     },
+     "selections": {
+      "spread_home": {
+       "url": null,
+       "url_template": "https://sportsbook.caesars.com/us/{state}/bet/betslip?selectionIds=4516f6fe-7b51-3b69-b38b-fff182c45c80"
+      },
+      "spread_away": {
+       "url": null,
+       "url_template": "https://sportsbook.caesars.com/us/{state}/bet/betslip?selectionIds=6b2facb1-9255-3b87-b0ab-51938251b7fd"
+      },
+      "moneyline_home": {
+       "url": null,
+       "url_template": "https://sportsbook.caesars.com/us/{state}/bet/betslip?selectionIds=bc97f3f9-b8e0-389e-97f3-55254d566455"
+      },
+      "moneyline_away": {
+       "url": null,
+       "url_template": "https://sportsbook.caesars.com/us/{state}/bet/betslip?selectionIds=c194cd34-e62a-3593-b0f1-edbd8e1642e6"
+      },
+      "total_over": {
+       "url": null,
+       "url_template": "https://sportsbook.caesars.com/us/{state}/bet/betslip?selectionIds=d38448bb-801f-3c7e-848e-d8c8e1c6f3e0"
+      },
+      "total_under": {
+       "url": null,
+       "url_template": "https://sportsbook.caesars.com/us/{state}/bet/betslip?selectionIds=7a1be419-3df6-36cb-8eb8-3734b0d93fd5"
+      }
+     }
+    },
+    "spread_home_value": "-5.5",
+    "spread_home_odds": -110,
+    "spread_away_value": "5.5",
+    "spread_away_odds": -110,
+    "moneyline_home_odds": -205,
+    "moneyline_away_odds": 170,
+    "total_value": "222",
+    "total_over_odds": -110,
+    "total_under_odds": -110,
+    "updated_at": "2026-11-11T03:57:02.893Z"
+   },
+   {
+    "id": 344952271,
+    "game_id": 21718089,
+    "vendor": "fanduel",
+    "deeplinks": null,
+    "spread_home_value": "-5.5",
+    "spread_home_odds": -118,
+    "spread_away_value": "5.5",
+    "spread_away_odds": -104,
+    "moneyline_home_odds": -215,
+    "moneyline_away_odds": 180,
+    "total_value": "223.5",
+    "total_over_odds": -105,
+    "total_under_odds": -115,
+    "updated_at": "2026-11-11T03:58:20.582Z"
+   },
+   {
+    "id": 345032008,
+    "game_id": 21718089,
+    "vendor": "betmgm",
+    "deeplinks": {
+     "event": {
+      "url": null,
+      "url_template": "https://sports.{state}.betmgm.com/en/sports/events/golden-state-warriors-at-houston-rockets-20050401"
+     },
+     "selections": {
+      "spread_home": {
+       "url": null,
+       "url_template": "https://sports.{state}.betmgm.com/en/sports?options=20050401-1577473977-2348323675&type=Single"
+      },
+      "spread_away": {
+       "url": null,
+       "url_template": "https://sports.{state}.betmgm.com/en/sports?options=20050401-1577473977-2348323663&type=Single"
+      },
+      "moneyline_home": {
+       "url": null,
+       "url_template": "https://sports.{state}.betmgm.com/en/sports?options=20050401-1571884999-2333238676&type=Single"
+      },
+      "moneyline_away": {
+       "url": null,
+       "url_template": "https://sports.{state}.betmgm.com/en/sports?options=20050401-1571884999-2333238675&type=Single"
+      },
+      "total_over": {
+       "url": null,
+       "url_template": "https://sports.{state}.betmgm.com/en/sports?options=20050401-1577473952-2348323600&type=Single"
+      },
+      "total_under": {
+       "url": null,
+       "url_template": "https://sports.{state}.betmgm.com/en/sports?options=20050401-1577473952-2348323613&type=Single"
+      }
+     }
+    },
+    "spread_home_value": "-5.5",
+    "spread_home_odds": -110,
+    "spread_away_value": "5.5",
+    "spread_away_odds": -110,
+    "moneyline_home_odds": -210,
+    "moneyline_away_odds": 170,
+    "total_value": "222.5",
+    "total_over_odds": -110,
+    "total_under_odds": -110,
+    "updated_at": "2026-11-11T03:57:03.079Z"
+   },
+   {
+    "id": 345167193,
+    "game_id": 21718089,
+    "vendor": "fanatics",
+    "deeplinks": null,
+    "spread_home_value": "-5.5",
+    "spread_home_odds": -105,
+    "spread_away_value": "5.5",
+    "spread_away_odds": -115,
+    "moneyline_home_odds": -205,
+    "moneyline_away_odds": 170,
+    "total_value": "222",
+    "total_over_odds": -110,
+    "total_under_odds": -110,
+    "updated_at": "2026-11-11T03:57:03.208Z"
+   },
+   {
+    "id": 345172181,
+    "game_id": 21718089,
+    "vendor": "ballybet",
+    "deeplinks": null,
+    "spread_home_value": "-5.5",
+    "spread_home_odds": -108,
+    "spread_away_value": "5.5",
+    "spread_away_odds": -114,
+    "moneyline_home_odds": -205,
+    "moneyline_away_odds": 163,
+    "total_value": "223.5",
+    "total_over_odds": -108,
+    "total_under_odds": -115,
+    "updated_at": "2026-11-11T03:58:15.586Z"
+   },
+   {
+    "id": 345172565,
+    "game_id": 21718089,
+    "vendor": "betparx",
+    "deeplinks": null,
+    "spread_home_value": "-5.5",
+    "spread_home_odds": -108,
+    "spread_away_value": "5.5",
+    "spread_away_odds": -114,
+    "moneyline_home_odds": -205,
+    "moneyline_away_odds": 163,
+    "total_value": "223.5",
+    "total_over_odds": -108,
+    "total_under_odds": -115,
+    "updated_at": "2026-11-11T03:58:35.568Z"
+   },
+   {
+    "id": 345173208,
+    "game_id": 21718089,
+    "vendor": "betrivers",
+    "deeplinks": null,
+    "spread_home_value": "-5.5",
+    "spread_home_odds": -108,
+    "spread_away_value": "5.5",
+    "spread_away_odds": -114,
+    "moneyline_home_odds": -205,
+    "moneyline_away_odds": 163,
+    "total_value": "223.5",
+    "total_over_odds": -108,
+    "total_under_odds": -115,
+    "updated_at": "2026-11-11T03:58:06.004Z"
+   },
+   {
+    "id": 330435822,
+    "game_id": 21718090,
+    "vendor": "polymarket",
+    "deeplinks": null,
+    "spread_home_value": "1.5",
+    "spread_home_odds": 102,
+    "spread_away_value": "-1.5",
+    "spread_away_odds": -102,
+    "moneyline_home_odds": 115,
+    "moneyline_away_odds": -115,
+    "total_value": "226.5",
+    "total_over_odds": 102,
+    "total_under_odds": -102,
+    "updated_at": "2026-11-11T03:58:31.215Z"
+   },
+   {
+    "id": 341408088,
+    "game_id": 21718090,
+    "vendor": "kalshi",
+    "deeplinks": null,
+    "spread_home_value": "2.5",
+    "spread_home_odds": -102,
+    "spread_away_value": "-2.5",
+    "spread_away_odds": 102,
+    "moneyline_home_odds": 125,
+    "moneyline_away_odds": -122,
+    "total_value": "226.5",
+    "total_over_odds": 102,
+    "total_under_odds": -102,
+    "updated_at": "2026-11-11T03:58:21.394Z"
+   },
+   {
+    "id": 344825499,
+    "game_id": 21718090,
+    "vendor": "draftkings",
+    "deeplinks": null,
+    "spread_home_value": "2.5",
+    "spread_home_odds": -111,
+    "spread_away_value": "-2.5",
+    "spread_away_odds": -109,
+    "moneyline_home_odds": 111,
+    "moneyline_away_odds": -132,
+    "total_value": "225.5",
+    "total_over_odds": -107,
+    "total_under_odds": -113,
+    "updated_at": "2026-11-11T00:32:01.160Z"
+   },
+   {
+    "id": 344827869,
+    "game_id": 21718090,
+    "vendor": "rebet",
+    "deeplinks": null,
+    "spread_home_value": "2.5",
+    "spread_home_odds": -116,
+    "spread_away_value": "-2.5",
+    "spread_away_odds": -111,
+    "moneyline_home_odds": 108,
+    "moneyline_away_odds": -137,
+    "total_value": "225.5",
+    "total_over_odds": -111,
+    "total_under_odds": -116,
+    "updated_at": "2026-11-11T00:47:45.561Z"
+   }
+  ],
+  "meta": {
+   "per_page": 100
+  }
+ }
+}

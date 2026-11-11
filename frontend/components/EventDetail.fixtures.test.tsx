@@ -153,16 +153,21 @@ describe("EventDetail fixtures", () => {
     renderWithProviders(<EventDetail league="nba" />, { withAgentWidget: true });
 
     expect(
-      await screen.findByRole("heading", { name: /boston celtics @ miami heat/i }),
-    ).toBeInTheDocument();
+      (await screen.findAllByRole("heading", { name: /celtics @ heat/i })).length,
+    ).toBeGreaterThan(0);
+    expect(screen.queryByRole("heading", { name: /boston celtics @ miami heat/i })).not.toBeInTheDocument();
     expect(await screen.findByText("BOS lineup confirmed")).toBeInTheDocument();
     expect(screen.getByText("MIA lineup projected")).toBeInTheDocument();
-    expect(screen.queryByText("Strong play")).not.toBeInTheDocument();
-    expect(screen.getByText("O —")).toBeInTheDocument();
+    expect(screen.getAllByText("Strong play").length).toBeGreaterThan(0);
+    expect(screen.getByText(/O 72%/)).toBeInTheDocument();
+    expect(screen.getByText("C · MIA")).toBeInTheDocument();
     expect(screen.getByText(/Historical hit rate 72%/)).toBeInTheDocument();
+    expect(screen.getByText(/Combined probability/)).toBeInTheDocument();
     expect(screen.getAllByText("No read").length).toBeGreaterThan(0);
-    expect(screen.getByText("Tue, Nov 10 · 6:30 PM")).toBeInTheDocument();
-    expect(screen.queryByText(/supports|neutral|against/i)).not.toBeInTheDocument();
+    expect(screen.getAllByText(/7:30 PM ET/).length).toBeGreaterThan(0);
+    expect(screen.getByText(/3 of 5 signals support the over\./)).toBeInTheDocument();
+    expect(screen.getAllByText("Supports").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("Neutral").length).toBeGreaterThan(0);
     expect(screen.queryByRole("button", { name: /ask the board/i })).not.toBeInTheDocument();
     expect(apiMocks.getWNBAEvents).not.toHaveBeenCalled();
     expect(apiMocks.calculateWNBANoVig).not.toHaveBeenCalled();
@@ -265,7 +270,7 @@ describe("EventDetail fixtures", () => {
   it("adds the stored side to the slip for that league", async () => {
     const user = userEvent.setup();
     renderWithProviders(<EventDetail league="nba" />);
-    await user.click(await screen.findByRole("button", { name: "Add Over 18.5" }));
+    await user.click(await screen.findByRole("button", { name: "Add Over 18.5 to slip" }));
     await waitFor(() => {
       const picks = JSON.parse(window.localStorage.getItem("betslip_picks") ?? "[]");
       expect(picks).toEqual([
@@ -281,7 +286,7 @@ describe("EventDetail fixtures", () => {
     });
     expect(JSON.parse(window.localStorage.getItem("wnba_betslip_picks") ?? "[]")).toEqual([]);
 
-    await user.click(screen.getByRole("button", { name: "Under 18.5" }));
+    await user.click(screen.getByRole("button", { name: "Under instead (35%)" }));
     await waitFor(() => {
       const picks = JSON.parse(window.localStorage.getItem("betslip_picks") ?? "[]");
       expect(picks).toEqual([
@@ -329,22 +334,22 @@ describe("EventDetail fixtures", () => {
   it("keeps the selected stat and line when the mobile tabs change", async () => {
     const user = userEvent.setup();
     renderWithProviders(<EventDetail league="nba" />);
-    await screen.findByRole("heading", { name: /boston celtics @ miami heat/i });
+    await screen.findAllByRole("heading", { name: /celtics @ heat/i });
     await user.click(screen.getByRole("button", { name: "REB" }));
     await user.click(screen.getByRole("tab", { name: "Odds" }));
     const odds = screen.getByRole("heading", { name: "Sportsbook prices" }).closest("section");
     expect(odds?.className).not.toContain("max-md:hidden");
     expect(screen.getByTestId("our-read").parentElement?.className).toContain("max-md:hidden");
-    await user.click(screen.getByRole("tab", { name: "Filters" }));
-    const filters = screen.getByTestId("game-filters");
+    expect(screen.queryByRole("tab", { name: "Filters" })).not.toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Filters" }));
+    const filters = screen.getByRole("dialog", { name: "Filter games" });
     await user.click(within(filters).getByRole("button", { name: "Raise line" }));
     expect(within(filters).getByText("19")).toBeInTheDocument();
     await user.click(screen.getByRole("tab", { name: "Game log" }));
     await user.click(screen.getByRole("tab", { name: "Our read" }));
     expect(screen.getByRole("button", { name: "REB" })).toHaveAttribute("aria-pressed", "true");
     expect(screen.getByTestId("our-read").parentElement?.className).not.toContain("max-md:hidden");
-    await user.click(screen.getByRole("tab", { name: "Filters" }));
-    expect(within(screen.getByTestId("game-filters")).getByText("19")).toBeInTheDocument();
+    expect(within(screen.getByRole("dialog", { name: "Filter games" })).getByText("19")).toBeInTheDocument();
   });
 
   it("asks history for the same line, range, and opponent the chart shows", async () => {
@@ -411,15 +416,14 @@ describe("EventDetail fixtures", () => {
     renderWithProviders(<EventDetail league="nba" />);
     expect((await screen.findAllByText(/No posted line/)).length).toBeGreaterThan(0);
     expect(screen.getAllByText("No read").length).toBeGreaterThan(0);
+    expect(screen.getByText("No stored read for this player.")).toBeInTheDocument();
     expect(screen.getAllByText(/No-vig consensus is not on this response/).length).toBeGreaterThan(0);
-    expect(screen.getAllByText(/Last-10 hit rate needs a posted line/).length).toBeGreaterThan(0);
-    expect(screen.getAllByText(/All-game hit rate/).length).toBeGreaterThan(0);
-    expect(screen.getAllByText(/Projected value is not on this response/).length).toBeGreaterThan(0);
-    expect(screen.getAllByText(/Opponent defense rank is not on this response/).length).toBeGreaterThan(0);
+    expect(screen.queryByText(/Last-10 hit rate needs a posted line/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/3 of 5 signals/)).not.toBeInTheDocument();
     expect(screen.getAllByText(/No bookmaker line right now/).length).toBeGreaterThan(0);
     expect(screen.getAllByText(/Home and away are not on the game log/).length).toBeGreaterThan(0);
     expect(screen.getAllByText(/Names only. Games missed are not on this response/).length).toBeGreaterThan(0);
-    expect(screen.getAllByText(/BOS lineup status unavailable/).length).toBeGreaterThan(0);
+    expect(screen.getAllByText("BOS lineup confirmed").length).toBeGreaterThan(0);
     expect(screen.queryByText("Strong play")).not.toBeInTheDocument();
     expect(screen.queryByText(/supports|neutral|against|easy|tough/i)).not.toBeInTheDocument();
     expect(document.body.textContent).not.toMatch(/NaN|Infinity|undefined/);

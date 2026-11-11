@@ -81,8 +81,12 @@ function ResultRow({
   market: string;
   binary: boolean;
 }) {
-  const isHighVig = result.vig > 0.06;
-  const isLowVig = result.vig < 0.04;
+  // Color the badge from the same one-decimal percent `formatVig` prints.
+  // 0.06 and 0.06004 both read "6.0%", so both stay in the middle band.
+  const vigLabel = formatVig(result.vig);
+  const vigShown = Number(vigLabel.replace("%", ""));
+  const isHighVig = Number.isFinite(vigShown) && vigShown > 6;
+  const isLowVig = Number.isFinite(vigShown) && vigShown < 4;
   const prior = binary && usesSingleLegPrior(result);
   const yesFair = fairYesValue(result);
   const noFair = fairNoValue(result);
@@ -117,7 +121,7 @@ function ResultRow({
           isLowVig && "bg-green-800 text-white",
           !isHighVig && !isLowVig && "bg-yellow text-dark"
         )}>
-          {formatVig(result.vig)}
+          {vigLabel}
         </span>
       </td>
 
