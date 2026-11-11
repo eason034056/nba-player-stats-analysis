@@ -1,7 +1,7 @@
 variable "region" {
   type        = string
   default     = "us-east-2"
-  description = "AWS region for RDS and S3. Default us-east-2 (Ohio). Use us-east-1 only if the backend host is in Virginia."
+  description = "AWS region for RDS and S3. Default us-east-2 (Ohio). The backend runs on a home Mac, not in a Virginia host."
 
   validation {
     condition     = can(regex("^[a-z]{2}-[a-z]+-[0-9]$", var.region))
@@ -31,14 +31,17 @@ variable "tags" {
 
 variable "allowed_cidrs" {
   type        = list(string)
-  description = "IPv4 CIDRs allowed to open TCP 5432 to RDS. No default: set the box egress /32 and the backend egress /32. 0.0.0.0/0 is rejected."
+  description = "IPv4 host CIDRs (/32) allowed to open TCP 5432. No default. Use the box 184.193.214.44/32 and the Mac's current public IP/32. 0.0.0.0/0 and ::/0 are rejected."
 
   validation {
     condition = length(var.allowed_cidrs) > 0 && alltrue([
       for cidr in var.allowed_cidrs :
-      can(cidrhost(cidr, 0)) && cidr != "0.0.0.0/0" && cidr != "::/0" && !strcontains(cidr, ":")
+      cidr != "0.0.0.0/0" &&
+      cidr != "::/0" &&
+      can(cidrhost(cidr, 0)) &&
+      can(regex("/(3[2-9]|[4-9][0-9])$", cidr))
     ])
-    error_message = "allowed_cidrs must be one or more IPv4 CIDRs and must not contain 0.0.0.0/0 or ::/0."
+    error_message = "Every allowed_cidrs entry must be a valid host CIDR (/32 or narrower). 0.0.0.0/0 and ::/0 are rejected."
   }
 }
 
@@ -110,7 +113,7 @@ variable "backup_retention_period" {
 variable "pg_dump_retention_days" {
   type        = number
   default     = 90
-  description = "Days to keep current objects under pg-dumps/ before S3 expires them."
+  description = "Days to keep current daily dumps under pg-dumps/. Default 90, which is one dump per day for 90 days."
 
   validation {
     condition     = var.pg_dump_retention_days >= 1

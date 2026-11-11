@@ -10,7 +10,7 @@ State is local (`terraform.tfstate` in this directory). It is gitignored, as is 
 - Encrypted storage with the AWS-managed key `aws/rds` (`storage_encrypted` and no `kms_key_id`).
 - Automated backups kept `backup_retention_period` days (default 7), deletion protection on, final snapshot required.
 - Parameter group `${project}-pg16` (`postgres16`) with `rds.force_ssl = 1`.
-- Security group `${project}-rds`: inbound TCP 5432 from `allowed_cidrs` only. `0.0.0.0/0` is rejected before plan.
+- Security group `${project}-rds`: inbound TCP 5432 from `allowed_cidrs` only. Each entry must be a host CIDR (`/32` or narrower). `0.0.0.0/0` and `::/0` are rejected before plan.
 - S3 bucket: Block Public Access (all four), BucketOwnerEnforced, versioning, SSE-S3 (AES256), TLS-only bucket policy.
 - Lifecycle: current objects larger than 128 KB move to Standard-IA after 30 days and to Glacier Instant Retrieval (`GLACIER_IR`) after 90. Noncurrent versions expire after 30 days. Incomplete multipart uploads abort after 7 days. `pg-dumps/` current objects expire after `pg_dump_retention_days` (default 90).
 - Prefix objects: `bdl-raw/`, `bdl-archive/`, `bdl-samples/`, `pg-dumps/`.
@@ -20,9 +20,9 @@ Redis stays on the local compose stack. It is not in this module.
 
 ## Before the first apply
 
-1. Use an IAM user with MFA, not the account root. Upgrade a new account from the Free plan to the Paid plan before relying on this for data. A Free plan account can be suspended when the credit period ends.
-2. Pick the region closest to the backend host. `us-east-1` and `us-east-2` have the same list prices for this set. Default is `us-east-2`.
-3. In Billing, create a monthly cost budget of $25 with email alerts at 80% actual and 100% forecast.
+1. The AWS account already exists. Sign in as an IAM user with MFA, not the root user. In Billing, check the account's current plan and the recent bill. This is a check, not an upgrade. Then create a monthly cost budget of $25 with email alerts at 80% actual and 100% forecast.
+2. Region stays `us-east-2`. The backend runs on the home Mac. `us-east-1` and `us-east-2` have the same list prices for this set.
+3. When the home IP changes, run `../scripts/aws_update_my_ip.sh` from the repo (or `scripts/aws_update_my_ip.sh` from the repo root). It prints the public IP, rewrites the gitignored `terraform.tfvars` `# mac-home` line, keeps `184.193.214.44/32`, and prints `terraform apply`. It does not call AWS unless you pass `--apply`.
 4. Confirm the engine version:
 
 ```bash
@@ -31,7 +31,7 @@ aws rds describe-db-engine-versions --engine postgres --engine-version 16 --regi
 
 If the newest available 16.x is not `16.15`, set `engine_version` in `terraform.tfvars`.
 
-5. Copy the example variables and replace the placeholders. Use the box egress `/32` and the backend egress `/32`. Never `0.0.0.0/0`.
+5. Copy the example variables and replace the placeholders. Keep `184.193.214.44/32` and put the Mac's current public IP as the `# mac-home` `/32`. Never `0.0.0.0/0`. The Mac file `terraform.tfvars` stays uncommitted.
 
 ```bash
 cd infra/aws
@@ -76,7 +76,7 @@ Tearing the stack down is a separate decision. The provisioner policy below has 
 Use this if you would rather click than run Terraform. Names match the module.
 
 1. RDS → Parameter groups → Create. Family `postgres16`, name `sportslab-pg16`. Edit `rds.force_ssl` to `1`.
-2. EC2 → Security groups → Create `sportslab-rds` in the default VPC. Inbound: PostgreSQL 5432 from the box egress `/32` (recorded 2026-11-10 as `184.193.214.44/32`; confirm the current address) and from the backend egress `/32`. No other inbound. Do not add `0.0.0.0/0`.
+2. EC2 → Security groups → Create `sportslab-rds` in the default VPC. Inbound: PostgreSQL 5432 from `184.193.214.44/32` (the box) and from the Mac's current public `/32`. No other inbound. Do not add `0.0.0.0/0`. When the home IP changes, edit this rule; `scripts/aws_update_my_ip.sh` does the same thing for the Terraform path.
 3. RDS → Create database → Standard create → PostgreSQL → the current 16.x (16.15 unless step 4 above shows a newer minor) → Dev/Test template → Single-AZ → `db.t4g.micro` → gp3 20 GB, autoscaling max 50 → master username `sportslab_admin` → Managed in AWS Secrets Manager → Public access Yes → security group `sportslab-rds` (remove default) → parameter group `sportslab-pg16` → backups 7 days → encryption on (aws/rds) → deletion protection on → initial database name `novig_nba` → Create.
 4. S3 → Create bucket in the same region. ACLs disabled. Block all public access. Versioning enabled. Default encryption SSE-S3. Then Management → Lifecycle:
    - Objects larger than 128 KB: Standard-IA at 30 days, Glacier Instant Retrieval at 90 days.
@@ -88,7 +88,7 @@ Use this if you would rather click than run Terraform. Names match the module.
 
 ## Provisioner policy
 
-Preferred: Eason runs `terraform apply` with his admin login, and no provisioner key is created.
+Eason runs `terraform apply` himself with the keys from `aws configure` on his Mac. Do not create a provisioner user and do not send a provisioner key anywhere. The JSON below is not part of this workflow. It is the action list from the original plan, kept so a future locked-down user could be compared with it.
 
 If a separate user `sportslab-provisioner` must run Terraform, attach the policy below, replace `REGION`, `ACCOUNT`, and `BUCKET`, use the key once, then delete the key. It has no delete action for the database or the bucket. The `aws:CalledVia` condition and the exact read actions Terraform needs are unverified until the first `terraform plan`. If plan fails on one missing read action, add that action and plan again.
 

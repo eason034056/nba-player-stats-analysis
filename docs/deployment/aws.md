@@ -1,6 +1,10 @@
 # AWS deployment (RDS PostgreSQL 16 + S3)
 
-Sports Lab keeps Redis local. PostgreSQL and the raw Ball Don't Lie files move to AWS. Terraform for the resources is in `infra/aws/`. Eason runs `terraform apply`. This repository does not call AWS.
+Sports Lab keeps Redis local. PostgreSQL and the raw Ball Don't Lie files move to AWS. Terraform for the resources is in `infra/aws/`. Eason runs `terraform apply` on his Mac with his own AWS login. This repository does not call AWS, and no provisioner key is created for anyone else.
+
+The backend and Postgres both run on that Mac. Postgres is the `no-vig-nba-postgres` container (`postgres:16-alpine` in `docker-compose.yml`). The Mac is not deployed anywhere and its home IP can change. The fixed allowlist entry is the box, `184.193.214.44/32`. The other entry is the Mac's current public `/32`, updated with `scripts/aws_update_my_ip.sh`.
+
+Step-by-step for that Mac, in Traditional Chinese: [docs/deployment/aws-steps-zh-TW.md](aws-steps-zh-TW.md).
 
 Placeholders only in `env.example` and `.env.example` (same template). Never commit `.env`, `terraform.tfvars`, or `terraform.tfstate`.
 
@@ -49,35 +53,39 @@ On PostgreSQL 15+ the `public` schema does not allow `CREATE` for every role. Th
 
 ## Cutover
 
-1. Eason creates the account, the $25 budget, and the identities. Apply `infra/aws` (or the console fallback in `infra/aws/README.md`).
-2. Enter `DATABASE_URL`, the runtime AWS keys, and `AWS_REGION` through the masked secret form. From the box: `psql "$DATABASE_URL" -c 'select version()'`.
-3. Create `sportslab_app`. Point a throwaway `DATABASE_URL` at that role and start the backend once against the empty database. Confirm the six tables and the SPO-117 key (`\d odds_line_snapshots`). Stop that process before the restore.
-4. Merge the app change to `dev`, then to `master`, so production has masked logs and `DATABASE_REQUIRED`.
-5. Pick a quiet window with no scheduler job in the next 30 minutes (08:00–09:00 UTC is the example). Stop the local backend. The scheduler runs in that process; stopping it freezes writes so the counts match.
-6. Restore into an **empty** database. `scripts/db_migrate_to_rds.sh` does not pass `--clean`. If step 3 already created tables, drop and recreate `novig_nba` (or drop those tables) before the restore. Run:
+The AWS account already exists. Check its plan and billing, set a monthly $25 budget alarm, then apply. Do not treat this as creating a new account or as an upgrade to the Paid plan.
+
+1. On the Mac, `aws configure` with Eason's own keys. Those keys stay in `~/.aws`. They do not go in the repo or in chat.
+2. `cd infra/aws && cp terraform.tfvars.example terraform.tfvars`. Set the bucket name. `allowed_cidrs` is `184.193.214.44/32` plus the Mac's current public `/32`. `./scripts/aws_update_my_ip.sh` rewrites the Mac line and prints `terraform apply`; it does not call AWS unless `--apply` is passed.
+3. `terraform init`, `terraform plan`, `terraform apply`. Read `db_endpoint`, `master_user_secret_arn`, and `bucket_name`. Read the master password in Secrets Manager. Do not paste it into chat.
+4. Create `sportslab_app`. Start the backend once against the empty database and confirm the six tables and the SPO-117 key (`\d odds_line_snapshots`). Stop it before the restore. If that startup created tables, drop them or recreate `novig_nba` so the restore target is empty.
+5. Stop the local backend so the scheduler is not writing. Dump with the Postgres 16 container (the compose port is not published to the Mac):
 
 ```bash
-LOCAL_DATABASE_URL='...' RDS_DATABASE_URL='...' ./scripts/db_migrate_to_rds.sh
+LOCAL_DATABASE_URL='postgresql://novig:novig@localhost:5432/novig_nba' \
+RDS_DATABASE_URL='postgresql://sportslab_admin:REPLACE_ME@ENDPOINT:5432/novig_nba' \
+./scripts/db_migrate_to_rds.sh
 ```
 
-`pg_restore` must be major version 16. A v17 client emits `SET transaction_timeout`, which PostgreSQL 16 rejects, and the script exits before the restore. The script prints `name|metric|local|rds|status` for each public table's row count and `max(id)`, and for each sequence's `last_value`. Any mismatch exits non-zero. It does not print either URL.
+The default is `docker exec no-vig-nba-postgres`. In that container, `localhost:5432` is the database; the same URL does not work from a process on the Mac, because compose does not publish 5432. `PG_CLIENT=docker-run` uses a throwaway `postgres:16` client instead. If the RDS URL has no `sslmode`, the script adds `sslmode=require` for the restore and the RDS checks. It does not print either URL. A non-16 `pg_restore` is refused.
 
-7. Set the backend's `DATABASE_URL` to the `sportslab_app` RDS URL and `DATABASE_REQUIRED=true`. Start it. Logs show the masked RDS host, then "tables are ready". The next scheduled snapshot should write rows on RDS.
-8. Run `scripts/sync_raw_to_s3.sh` once, then daily `scripts/pg_dump_to_s3.sh` at 10:00 UTC (04:00 CT, before the 12:00 UTC analysis). The sync has no `--delete`. The dump object is `pg-dumps/<UTC date>.dump` and the bucket lifecycle expires current dumps after 90 days. Keep the local `pg-data` volume for two weeks.
+6. Put the `sportslab_app` URL in the Mac's `.env` as `DATABASE_URL`, with `sslmode=verify-full` and the RDS CA path. Set `DATABASE_REQUIRED=true` after the first clean start. Logs show the masked host, then "tables are ready".
+7. Run `scripts/sync_raw_to_s3.sh` once. Schedule `scripts/pg_dump_to_s3.sh` daily at 10:00 UTC. Each object is `pg-dumps/<UTC date>.dump`. The bucket lifecycle keeps current dumps for 90 days. Keep the local `pg-data` volume for two weeks.
 
-The box has to be in `allowed_cidrs` for steps 2, 6, and 8. The backend host's egress address has to be in that list before step 7.
+When the home IP changes, run `scripts/aws_update_my_ip.sh` and then the printed `terraform apply`. Until that apply finishes, the Mac cannot open 5432.
 
 ## Rollback
 
-- Before step 7 succeeds: nothing in production changed. Start the local backend with the old `DATABASE_URL`.
-- After cutover: set `DATABASE_URL` back to the local database and restart. Rows written to RDS after the cutover are not in the local volume unless you dump RDS and restore locally (same script, URLs swapped, and a PostgreSQL 16 `pg_restore`). Keep the local volume until RDS has run cleanly for two weeks.
+- Before the backend is pointed at RDS: leave `.env` unset for `DATABASE_URL`. `docker compose` still uses `postgresql://novig:novig@postgres:5432/novig_nba`. Start the compose backend again.
+- After cutover: remove `DATABASE_URL` from `.env` (or set it back to that compose URL) and restart the compose backend. The compose Postgres port is not published, so a host process on the Mac should not be pointed at `localhost:5432`. Rows written to RDS after cutover are not in `pg-data` unless you dump RDS and restore locally with the same script and a PostgreSQL 16 client. Keep `pg-data` until RDS has run cleanly for two weeks.
 
 ## Scripts
 
 | Script | Required environment | What it refuses to do |
 |---|---|---|
-| `scripts/db_migrate_to_rds.sh` | `LOCAL_DATABASE_URL`, `RDS_DATABASE_URL` | Print URLs or passwords. Run `pg_restore` when its major version is not 16 (override: `ALLOW_PG_RESTORE_MISMATCH=1`). Restore when the two URLs are identical. |
+| `scripts/db_migrate_to_rds.sh` | `LOCAL_DATABASE_URL`, `RDS_DATABASE_URL` | Print URLs or passwords. Run `pg_restore` when its major version is not 16 (override: `ALLOW_PG_RESTORE_MISMATCH=1`). Restore when the two URLs are identical. Default client is `docker exec no-vig-nba-postgres`. `PG_CLIENT=docker-run` uses `docker run --rm postgres:16`. Adds `sslmode=require` on the RDS URL when `sslmode` is absent. |
+| `scripts/aws_update_my_ip.sh` | none (uses curl) | Call AWS by itself. It rewrites gitignored `terraform.tfvars` and prints `terraform apply`. `--apply` is the only way it launches terraform. |
 | `scripts/sync_raw_to_s3.sh` | `S3_BUCKET`, `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_REGION` | `--delete`. Paths default to `/workspace/bdl-cache`, `/workspace/bdl-archive`, `/workspace/bdl-eval/samples` and can be overridden with `BDL_CACHE_DIR`, `BDL_ARCHIVE_DIR`, `BDL_SAMPLES_DIR`. |
-| `scripts/pg_dump_to_s3.sh` | Those AWS variables plus `RDS_DATABASE_URL` or `DATABASE_URL` | Print the database URL. `DUMP_DATE=YYYY-MM-DD` overrides the UTC date in the object key. |
+| `scripts/pg_dump_to_s3.sh` | Those AWS variables plus `RDS_DATABASE_URL` or `DATABASE_URL` | Print the database URL. `DUMP_DATE=YYYY-MM-DD` overrides the UTC date in the object key. The bucket keeps each current dump for 90 days; this script does not delete. |
 
 If a required variable is missing, the script prints help and a dry-run line and exits 2. It does not call `pg_dump`, `pg_restore`, or `aws`.

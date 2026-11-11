@@ -1,13 +1,18 @@
 # Copy to terraform.tfvars and edit. terraform.tfvars is gitignored.
-# Placeholders only. Do not commit account ids, real CIDRs, or any secret.
+# Placeholders only. Do not commit account ids, real home IPs, or any secret.
+# Region default is us-east-2. The backend is a home Mac, not a hosted box.
 
 region      = "us-east-2"
 project     = "sportslab"
 bucket_name = "sportslab-data-ACCOUNT-us-east-2"
 
-# Replace with the box egress /32 and the backend host egress /32.
-# 0.0.0.0/0 is rejected by variable validation.
-allowed_cidrs = ["203.0.113.10/32"]
+# /32 only. 0.0.0.0/0 is rejected.
+# box: fixed. mac-home: replace 203.0.113.10 with the Mac's current public IP.
+# scripts/aws_update_my_ip.sh rewrites the mac-home line and keeps the box line.
+allowed_cidrs = [
+  "184.193.214.44/32", # box
+  "203.0.113.10/32", # mac-home
+]
 
 db_instance_class       = "db.t4g.micro"
 engine_version          = "16.15"

@@ -83,6 +83,7 @@ resource "aws_s3_bucket_lifecycle_configuration" "this" {
       prefix = local.pg_dumps_prefix
     }
 
+    # Daily dumps from scripts/pg_dump_to_s3.sh. Default keeps 90 objects.
     expiration {
       days = var.pg_dump_retention_days
     }

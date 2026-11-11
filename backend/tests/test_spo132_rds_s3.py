@@ -22,6 +22,7 @@ ROOT = Path(__file__).resolve().parents[2]
 MIGRATE = ROOT / "scripts" / "db_migrate_to_rds.sh"
 SYNC = ROOT / "scripts" / "sync_raw_to_s3.sh"
 DUMP = ROOT / "scripts" / "pg_dump_to_s3.sh"
+UPDATE_IP = ROOT / "scripts" / "aws_update_my_ip.sh"
 
 SECRET = "super-secret-pw"
 LOCAL_URL = f"postgresql://mig_user:{SECRET}@local-db:5432/novig_nba"
@@ -341,6 +342,7 @@ esac
 """,
     )
     return {
+        "PG_CLIENT": "host",
         "PG_DUMP": str(bindir / "pg_dump"),
         "PG_RESTORE": str(bindir / "pg_restore"),
         "PSQL": str(bindir / "psql"),
@@ -529,3 +531,199 @@ exit 0
         assert "--delete" not in log.read_text()
         assert "s3://example-bucket/pg-dumps/2026-11-11.dump" in log.read_text()
         assert copied.read_text() == "PGDMP-FAKE"
+        help_text = _run(DUMP, {}, "--help")
+        assert help_text.returncode == 0
+        assert "90 days" in help_text.stdout
+
+
+def _fake_docker(path: Path, log: Path, sslmark: Path) -> None:
+    _write_executable(
+        path,
+        f"""#!/bin/sh
+printf '%s\\n' "$@" >> "{log}"
+echo '---' >> "{log}"
+joined="$*"
+case "$joined" in
+  *--version*)
+    echo "pg_restore (PostgreSQL) 16.4"
+    exit 0
+    ;;
+esac
+if [ "$1" = "cp" ]; then
+  if [ -f "$2" ]; then
+    exit 0
+  fi
+  printf 'PGDMP' > "$3"
+  exit 0
+fi
+case "$joined" in
+  *pg_dump*) exit 0 ;;
+  *pg_restore*) exit 0 ;;
+esac
+case "$joined" in
+  *psql*)
+    sql=""
+    prev=""
+    for arg in "$@"; do
+      if [ "$prev" = "-c" ]; then
+        sql="$arg"
+      fi
+      prev="$arg"
+    done
+    case "$PSQL_TARGET" in
+      *sslmode=require*) printf seen >> "{sslmark}" ;;
+    esac
+    case "$PSQL_TARGET" in
+      *local-db*) side=local ;;
+      *) side=rds ;;
+    esac
+    case "$sql" in
+      *last_value*) echo 9 ;;
+      *sequencename*) echo player_projections_id_seq ;;
+      *information_schema.tables*) echo player_projections ;;
+      *quote_ident*) echo '"player_projections"' ;;
+      *information_schema.columns*) echo t ;;
+      *'count(*)'*) echo 4 ;;
+      *'max(id)'*) echo 9 ;;
+      *) echo "unexpected sql" >&2; exit 1 ;;
+    esac
+    ;;
+  *) exit 0 ;;
+esac
+""",
+    )
+
+
+class TestDockerMigrate:
+    def test_docker_exec_hides_password_and_requires_ssl(self, tmp_path: Path) -> None:
+        bindir = tmp_path / "bin"
+        bindir.mkdir()
+        log = tmp_path / "docker-log"
+        sslmark = tmp_path / "sslmark"
+        _fake_docker(bindir / "docker", log, sslmark)
+        env = {
+            "PATH": f"{bindir}:/usr/bin:/bin",
+            "PG_CLIENT": "docker-exec",
+            "LOCAL_DATABASE_URL": LOCAL_URL,
+            "RDS_DATABASE_URL": RDS_URL,
+        }
+        result = _run(MIGRATE, env)
+        assert result.returncode == 0, result.stderr
+        text = log.read_text()
+        assert "no-vig-nba-postgres" in text
+        assert "pg_dump" in text
+        assert "pg_restore" in text
+        assert SECRET not in text
+        assert SECRET not in result.stdout + result.stderr
+        assert sslmark.read_text().startswith("seen")
+        assert "ok:" in result.stdout
+
+    def test_local_container_flag(self, tmp_path: Path) -> None:
+        bindir = tmp_path / "bin"
+        bindir.mkdir()
+        log = tmp_path / "docker-log"
+        sslmark = tmp_path / "sslmark"
+        _fake_docker(bindir / "docker", log, sslmark)
+        env = {
+            "PATH": f"{bindir}:/usr/bin:/bin",
+            "PG_CLIENT": "docker-exec",
+            "LOCAL_DATABASE_URL": LOCAL_URL,
+            "RDS_DATABASE_URL": RDS_URL,
+        }
+        result = _run(MIGRATE, env, "--local-container", "pg-on-the-mac")
+        assert result.returncode == 0, result.stderr
+        assert "pg-on-the-mac" in log.read_text()
+        assert SECRET not in log.read_text()
+
+    def test_docker_run_uses_postgres_16_image(self, tmp_path: Path) -> None:
+        bindir = tmp_path / "bin"
+        bindir.mkdir()
+        log = tmp_path / "docker-log"
+        sslmark = tmp_path / "sslmark"
+        _fake_docker(bindir / "docker", log, sslmark)
+        env = {
+            "PATH": f"{bindir}:/usr/bin:/bin",
+            "PG_CLIENT": "docker-run",
+            "LOCAL_DATABASE_URL": LOCAL_URL,
+            "RDS_DATABASE_URL": RDS_URL,
+        }
+        result = _run(MIGRATE, env, "--pg-client", "docker-run")
+        assert result.returncode == 0, result.stderr
+        text = log.read_text()
+        assert "postgres:16" in text
+        assert "container:no-vig-nba-postgres" in text
+        assert SECRET not in text
+        assert SECRET not in result.stdout + result.stderr
+
+
+class TestUpdateMyIp:
+    def test_rewrites_mac_home_and_does_not_apply(self, tmp_path: Path) -> None:
+        bindir = tmp_path / "bin"
+        bindir.mkdir()
+        tf_dir = tmp_path / "infra"
+        tf_dir.mkdir()
+        example = tf_dir / "terraform.tfvars.example"
+        example.write_text(
+            "\n".join(
+                [
+                    'region = "us-east-2"',
+                    "allowed_cidrs = [",
+                    '  "184.193.214.44/32", # box',
+                    '  "203.0.113.10/32", # mac-home',
+                    "]",
+                    "",
+                ]
+            )
+        )
+        curl = bindir / "curl"
+        terraform = bindir / "terraform"
+        marker = tmp_path / "terraform-called"
+        _write_executable(curl, "#!/bin/sh\necho 198.51.100.20\n")
+        _write_executable(terraform, f"#!/bin/sh\ntouch {marker}\nexit 0\n")
+        env = {
+            "PATH": f"{bindir}:/usr/bin:/bin",
+            "CURL": str(curl),
+            "TERRAFORM": str(terraform),
+            "TF_DIR": str(tf_dir),
+        }
+        result = _run(UPDATE_IP, env)
+        assert result.returncode == 0, result.stderr
+        assert "198.51.100.20" in result.stdout
+        assert "184.193.214.44/32" in result.stdout
+        assert "No AWS call was made" in result.stdout
+        assert not marker.exists()
+        written = (tf_dir / "terraform.tfvars").read_text()
+        assert '184.193.214.44/32", # box' in written
+        assert '198.51.100.20/32", # mac-home' in written
+        assert "203.0.113.10/32" not in written
+
+    def test_apply_runs_terraform_with_both_cidrs(self, tmp_path: Path) -> None:
+        bindir = tmp_path / "bin"
+        bindir.mkdir()
+        tf_dir = tmp_path / "infra"
+        tf_dir.mkdir()
+        (tf_dir / "terraform.tfvars").write_text(
+            '  "203.0.113.10/32", # mac-home\n  "184.193.214.44/32", # box\n'
+        )
+        log = tmp_path / "tf-log"
+        _write_executable(bindir / "curl", "#!/bin/sh\necho 198.51.100.21\n")
+        _write_executable(
+            bindir / "terraform",
+            f"""#!/bin/sh
+printf '%s\\n' "$@" > "{log}"
+exit 0
+""",
+        )
+        env = {
+            "PATH": f"{bindir}:/usr/bin:/bin",
+            "CURL": str(bindir / "curl"),
+            "TERRAFORM": str(bindir / "terraform"),
+            "TF_DIR": str(tf_dir),
+        }
+        result = _run(UPDATE_IP, env, "--apply")
+        assert result.returncode == 0, result.stderr
+        text = log.read_text()
+        assert "apply" in text
+        assert "184.193.214.44/32" in text
+        assert "198.51.100.21/32" in text
+        assert "203.0.113.10" not in (tf_dir / "terraform.tfvars").read_text()

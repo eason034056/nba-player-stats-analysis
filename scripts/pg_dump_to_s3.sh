@@ -10,6 +10,8 @@ Usage:
     RDS_DATABASE_URL=... ./scripts/pg_dump_to_s3.sh
 
 pg_dump -Fc the database and upload the file to pg-dumps/<date>.dump.
+The bucket lifecycle keeps each current object under pg-dumps/ for 90 days
+(pg_dump_retention_days). This script does not delete older dumps.
 RDS_DATABASE_URL is preferred. DATABASE_URL is used when RDS_DATABASE_URL
 is unset. DUMP_DATE (YYYY-MM-DD) overrides the UTC date. PG_DUMP and AWS_CLI
 override the binaries.
