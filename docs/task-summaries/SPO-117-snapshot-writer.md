@@ -20,7 +20,7 @@ WNBA daily analysis still uses the same mode function. Its date and offset are u
 | Backtest | `scripts/agents/evaluation/odds_history.py` | Open and close are the main line at the earliest and latest snapshot, per book. |
 | Schema | `backend/app/services/db.py` | `odds_line_snapshots_book_line_key` on `(snapshot_at, event_id, player_name, market, bookmaker, line)`. Idempotent `DO` block drops any unique constraint or unique index on that table that does not include `line`, then adds the named key. `SCHEMA_SQL` takes `pg_advisory_xact_lock(1170117)` for the script. |
 | Consensus | `backend/app/services/prob.py`, `backend/app/services/daily_analysis.py`, `backend/app/services/bulk_props.py` | `calculate_mode_threshold(lines, distances=None)`. `_main_line_vote` / `_group_main_votes` supply the even-money distance. `assemble_bulk_props` passes one distance per book. |
-| Tests | `backend/tests/test_spo117_snapshot_writer.py`, `test_spo114_qa_review.py`, `test_spo114_bulk_props.py`, `test_scheduler.py` | Recorded events and player-points bodies. Postgres commit and the migration. Tie cases. |
+| Tests | `backend/tests/test_spo117_snapshot_writer.py`, `test_spo117_qa_review.py`, `test_spo114_qa_review.py`, `test_spo114_bulk_props.py`, `test_scheduler.py` | Recorded events and player-points bodies. Postgres commit and the migration. Tie cases. History consensus and open/close use the main line. The two Postgres tests skip when the database is down. |
 | Docs | `docs/decisions/spo-117-snapshot-writer/decision_20261110_line-key-and-mode-tie.md` | Empty-table cause, why the key is wider, and the tie rule. |
 
 ## Why
