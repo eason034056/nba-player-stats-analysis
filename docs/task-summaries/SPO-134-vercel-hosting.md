@@ -85,7 +85,7 @@ Production branch is `master`. Preview for this repo is `dev`. There is no `main
 - `VERCEL=1` with `BACKEND_API_URL` unset — failed (exit 1) with `BACKEND_API_URL is required when VERCEL or VERCEL_ENV is set` and `will not fall back to http://localhost:8000`. The log did not contain `Received:`.
 - `VERCEL=1 BACKEND_API_URL=https://api.example.com` with `VERCEL_PROXY_SECRET` unset — failed (exit 1) with `VERCEL_PROXY_SECRET is required`.
 - `VERCEL=1 BACKEND_API_URL=http://api.example.com` — failed (exit 1) with `BACKEND_API_URL must use https on a Vercel build.`
-- `next start` echo upstream — headers listed above, including `x-real-ip`.
+- `next start` echo upstream — headers listed above, including `x-real-ip`. The same upstream saw nothing for `/api/backend//evil.example/x` or `/api/backend/\evil.example/x`. `next start` answers those with 308 to `/api/backend/evil.example/x` on the same host, before middleware. `prepareProxiedRequest` returns 400 for both and does not set the secret.
 - Integration test: SKIPPED. No new external API client.
 - A Vercel project was not created. `vercel login` and `vercel link` were not run.
 
