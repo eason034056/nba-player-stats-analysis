@@ -460,14 +460,10 @@ export function TodayBoard({ league }: { league: LeagueSegment }) {
 
   const events = eventsQuery.data?.events ?? [];
   const slateDate = eventsQuery.data?.date || selectedDate;
-  const picks = picksQuery.data?.picks ?? [];
-  const reads = picksQuery.isSuccess ? todayReads(picks, league, slateDate, 3, events) : [];
-  const games = todayGames(
-    events,
-    picksQuery.isSuccess ? picks : [],
-    league,
-    slateDate,
-  );
+  const loadedPicks = picksQuery.data?.picks ?? [];
+  const boardPicks = picksQuery.isSuccess ? loadedPicks : [];
+  const reads = picksQuery.isSuccess ? todayReads(boardPicks, league, slateDate, 3, events) : [];
+  const games = todayGames(events, boardPicks, league, slateDate, loadedPicks);
   const picksHref = league === "wnba" ? "/wnba/picks" : "/picks";
   const picksCount = picksQuery.isSuccess ? picksShownCount(picksQuery.data) : null;
   const picksLabel = picksQuery.isLoading

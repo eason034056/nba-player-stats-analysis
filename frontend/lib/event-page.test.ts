@@ -387,7 +387,8 @@ describe("our read", () => {
     expect(model.other).toBeNull();
     expect(model.bar).toBeNull();
     expect(model.tier).toBeNull();
-    expect(model.caption).toBe("Combined probability —.");
+    expect(model.caption).toBe("Listed Out. No model read.");
+    expect(model.listedOut).toBe(true);
     expect(model.caption).not.toMatch(/%/);
   });
 
