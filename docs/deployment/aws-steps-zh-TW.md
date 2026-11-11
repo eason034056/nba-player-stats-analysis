@@ -124,7 +124,7 @@ vpc_id = "vpc-0123456789abcdef0"
 
 再跑一次 `terraform plan`。不要 commit `terraform.tfvars`。帳號有 default VPC 時，不要寫 `vpc_id`。空字串不是「沒設定」，驗證會拒絕 `""`。
 
-EC2 會放在 `sort(public_subnet_ids)[0]`。這份清單是空的時候，plan 會停在：`public_subnet_ids is empty. Set vpc_id to a VPC whose subnets have MapPublicIpOnLaunch=true.` 另外，RDS subnet group 的子網至少要跨兩個可用區，否則 lifecycle precondition 會擋下來。這個 precondition 不會替換已經存在的 subnet group。
+EC2 會放在 `try(sort(public_subnet_ids)[0], null)`。空清單直接取 `[0]` 會先丟 `Invalid index`，precondition 的訊息出不來。`try` 在清單是空的時候回 null，plan 才會停在：`public_subnet_ids is empty. Set vpc_id to a VPC whose subnets have MapPublicIpOnLaunch=true.` 另外，RDS subnet group 的子網至少要跨兩個可用區，否則 lifecycle precondition 會擋下來。這個 precondition 不會替換已經存在的 subnet group。
 
 `check` 區塊接不到「沒有 default VPC」這件事。`data.aws_vpc.selected` 會先讓 plan 失敗，錯誤就是 `no matching EC2 VPC found`，check 還不會跑。不要為了這個去改資料來源的查法。在 `terraform.tfvars` 設定 `vpc_id`。
 

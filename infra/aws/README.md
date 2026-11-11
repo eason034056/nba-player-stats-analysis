@@ -19,7 +19,7 @@ State is local (`terraform.tfstate` in this directory). It is gitignored, as is 
 
 Redis stays on the EC2 compose stack (`deploy/docker-compose.prod.yml`). It is not an AWS service in this module.
 
-The same apply also creates the backend host: one `t4g.small` (change `instance_type`) in `sort(public_subnet_ids)[0]`, Amazon Linux 2023 arm64 from the public SSM AMI parameter, a 30 GB encrypted gp3 root, IMDSv2, an Elastic IP, and the instance role. There are no static access keys. Port 22 stays closed unless `enable_ssh` is true. CloudWatch recovers the instance on a failed system status check, and alarms at 80% disk. `alarm_email` empty means no SNS topic. `enable_github_deploy_role` defaults to false. The host bootstrap and the first deploy are in [docs/deployment/aws.md](../../docs/deployment/aws.md). Eason runs `terraform apply` himself. An account with no default VPC sets `vpc_id` first. The chosen VPC needs subnets with `MapPublicIpOnLaunch` true, in at least two availability zones.
+The same apply also creates the backend host: one `t4g.small` (change `instance_type`) in `try(sort(public_subnet_ids)[0], null)`, Amazon Linux 2023 arm64 from the public SSM AMI parameter, a 30 GB encrypted gp3 root, IMDSv2, an Elastic IP, and the instance role. There are no static access keys. Port 22 stays closed unless `enable_ssh` is true. CloudWatch recovers the instance on a failed system status check, and alarms at 80% disk. `alarm_email` empty means no SNS topic. `enable_github_deploy_role` defaults to false. The host bootstrap and the first deploy are in [docs/deployment/aws.md](../../docs/deployment/aws.md). Eason runs `terraform apply` himself. An account with no default VPC sets `vpc_id` first. The chosen VPC needs subnets with `MapPublicIpOnLaunch` true, in at least two availability zones.
 
 ## Before the first apply
 
@@ -119,9 +119,9 @@ Add the id to the gitignored `terraform.tfvars` (this line is commented in the e
 vpc_id = "vpc-0123456789abcdef0"
 ```
 
-Run `terraform plan` again. The security groups and the DB subnet group use that VPC. `public_subnet_ids` is the subset with `MapPublicIpOnLaunch` true. The instance uses `sort(public_subnet_ids)[0]`. The subnet group still takes every subnet in the VPC, and those subnets must span at least two availability zones. Leave `vpc_id` unset to keep using the default VPC. An empty string is rejected. It does not mean "use the default".
+Run `terraform plan` again. The security groups and the DB subnet group use that VPC. `public_subnet_ids` is the subset with `MapPublicIpOnLaunch` true. The instance uses `try(sort(public_subnet_ids)[0], null)`. A bare index raises `Invalid index` before the precondition can run. The subnet group still takes every subnet in the VPC, and those subnets must span at least two availability zones. Leave `vpc_id` unset to keep using the default VPC. An empty string is rejected. It does not mean "use the default".
 
-If `public_subnet_ids` is empty, plan stops with `public_subnet_ids is empty. Set vpc_id to a VPC whose subnets have MapPublicIpOnLaunch=true.` A `check` block cannot replace the `no matching EC2 VPC found` error: `data.aws_vpc.selected` fails the plan before a check runs. Set `vpc_id` in `terraform.tfvars`.
+If `public_subnet_ids` is empty, `try` returns null and plan stops with `public_subnet_ids is empty. Set vpc_id to a VPC whose subnets have MapPublicIpOnLaunch=true.` A `check` block cannot replace the `no matching EC2 VPC found` error: `data.aws_vpc.selected` fails the plan before a check runs. Set `vpc_id` in `terraform.tfvars`.
 
 ## Console fallback
 

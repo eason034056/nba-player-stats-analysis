@@ -54,9 +54,13 @@ resource "aws_db_subnet_group" "this" {
   }
 }
 
-# sportslab-app when project is sportslab. No ingress yet. SPO-133 attaches
-# the backend EC2 instance to this group. Ingress for 80/443 is a separate
-# aws_security_group_rule, so this description stays as first applied.
+# sportslab-app when project is sportslab. The description stays as first
+# applied. Egress stays inline, so Terraform keeps managing that one outbound
+# rule. Ingress is not declared inline. It lives only in aws_security_group_rule
+# (TCP 80, 443, and optional 22 in ec2.tf). Because this block has no ingress,
+# the provider leaves those rules alone. Do not add an inline ingress block
+# here. That would make this resource authoritative for ingress and remove the
+# separate rules on the next apply.
 resource "aws_security_group" "app" {
   name        = "${local.name_prefix}-app"
   description = "Future EC2 backend. No ingress. SPO-133 attaches the instance."

@@ -725,7 +725,9 @@ class TestPublicSubnets:
     def test_instance_uses_the_first_sorted_public_subnet(self) -> None:
         ec2 = (REPO / "infra" / "aws" / "ec2.tf").read_text(encoding="utf-8")
         network = (REPO / "infra" / "aws" / "network.tf").read_text(encoding="utf-8")
-        assert "app_subnet_id = sort(local.public_subnet_ids)[0]" in ec2
+        indexed = "sort(local.public_subnet_ids)[0]"
+        assert f"app_subnet_id = try({indexed}, null)" in ec2
+        assert ec2.count(indexed) == 1
         assert "data.aws_subnets" not in ec2
         assert "data.aws_vpc" not in ec2
         assert 'data "aws_subnet" "selected"' in network

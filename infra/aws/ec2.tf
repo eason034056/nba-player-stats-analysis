@@ -4,7 +4,10 @@ data "aws_ssm_parameter" "al2023_arm64" {
 
 locals {
   # sort() keeps the choice stable. These ids already have MapPublicIpOnLaunch.
-  app_subnet_id = sort(local.public_subnet_ids)[0]
+  # try() returns null when the list is empty. A bare [0] raises "Invalid index"
+  # while the value is being evaluated, so the aws_instance precondition below
+  # never gets to print its error.
+  app_subnet_id = try(sort(local.public_subnet_ids)[0], null)
   # aws_eip.app is allocated on its own (domain = "vpc"), so public_ip exists
   # before the instance. user_data reads it. aws_eip_association attaches the
   # address afterwards. The EIP resource does not reference the instance, so
