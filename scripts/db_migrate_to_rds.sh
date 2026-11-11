@@ -8,16 +8,23 @@ usage() {
 Usage:
   LOCAL_DATABASE_URL=... RDS_DATABASE_URL=... ./scripts/db_migrate_to_rds.sh
   ./scripts/db_migrate_to_rds.sh --pg-client docker-exec --local-container no-vig-nba-postgres
+  ./scripts/db_migrate_to_rds.sh --verify-only
 
 Dumps the local database with pg_dump -Fc --no-owner --no-privileges and
 restores it with pg_restore --no-owner --no-privileges --exit-on-error.
-The RDS database should be empty. This script does not pass --clean.
+The RDS database should be empty before a restore. This script does not
+pass --clean.
 If RDS_DATABASE_URL has no sslmode, restore and the RDS checks use
 sslmode=require. An existing sslmode (including verify-full) is kept.
 
 Then, for every table in schema public, compares row count and max(id)
 (when an id column exists). For every sequence in schema public, compares
 last_value. Prints name|metric|local|rds|status and exits 1 on any mismatch.
+
+--verify-only skips pg_dump and pg_restore (and the pg_restore 16 gate).
+It still checks the URLs, sslmode, and client mode, then runs only the
+comparison. The target does not need to be empty. If verify failed after
+a restore, re-run with --verify-only.
 
 pg_restore must be major version 16. A v17 client emits SET transaction_timeout,
 which PostgreSQL 16 rejects. Set ALLOW_PG_RESTORE_MISMATCH=1 to warn and
@@ -178,12 +185,17 @@ with_sslmode_require() {
 LOCAL_PG_CONTAINER="${LOCAL_PG_CONTAINER:-no-vig-nba-postgres}"
 PG_DOCKER_IMAGE="${PG_DOCKER_IMAGE:-postgres:16}"
 PG_CLIENT="${PG_CLIENT:-docker-exec}"
+VERIFY_ONLY=0
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
     -h|--help)
       usage
       exit 0
+      ;;
+    --verify-only)
+      VERIFY_ONLY=1
+      shift
       ;;
     --local-container)
       if [[ $# -lt 2 ]]; then
@@ -233,33 +245,43 @@ PG_DUMP="${PG_DUMP:-pg_dump}"
 PG_RESTORE="${PG_RESTORE:-pg_restore}"
 PSQL="${PSQL:-psql}"
 
-if [[ "$PG_CLIENT" == "host" ]]; then
-  if [[ ! -x "$PG_RESTORE" ]] && ! command -v "$PG_RESTORE" >/dev/null 2>&1; then
-    echo "error: pg_restore not found ($PG_RESTORE)." >&2
+if [[ "$VERIFY_ONLY" -eq 0 ]]; then
+  if [[ "$PG_CLIENT" == "host" ]]; then
+    if [[ ! -x "$PG_RESTORE" ]] && ! command -v "$PG_RESTORE" >/dev/null 2>&1; then
+      echo "error: pg_restore not found ($PG_RESTORE)." >&2
+      exit 127
+    fi
+  elif ! command -v docker >/dev/null 2>&1; then
+    echo "error: docker not found. Install Docker, or set PG_CLIENT=host." >&2
+    exit 127
+  fi
+
+  client_version_line() {
+    case "$PG_CLIENT" in
+      host) "$PG_RESTORE" --version 2>&1 || true ;;
+      docker-exec) docker exec "$LOCAL_PG_CONTAINER" pg_restore --version 2>&1 || true ;;
+      docker-run) docker run --rm "$PG_DOCKER_IMAGE" pg_restore --version 2>&1 || true ;;
+    esac
+  }
+
+  version_line="$(client_version_line)"
+  major="$(printf '%s\n' "$version_line" | sed -n 's/.* \([0-9]\{1,\}\)\.[0-9].*/\1/p' | head -n 1)"
+  if [[ "$major" != "16" ]]; then
+    echo "warning: pg_restore major version is ${major:-unknown}, not 16. PostgreSQL 17 emits SET transaction_timeout, which PostgreSQL 16 rejects." >&2
+    if [[ "${ALLOW_PG_RESTORE_MISMATCH:-}" != "1" ]]; then
+      echo "error: refusing to restore. Use the Postgres 16 container (docker-exec or docker-run), or set ALLOW_PG_RESTORE_MISMATCH=1 to continue anyway." >&2
+      exit 3
+    fi
+    echo "warning: ALLOW_PG_RESTORE_MISMATCH=1 set; continuing with pg_restore ${major:-unknown}." >&2
+  fi
+elif [[ "$PG_CLIENT" == "host" ]]; then
+  if [[ ! -x "$PSQL" ]] && ! command -v "$PSQL" >/dev/null 2>&1; then
+    echo "error: psql not found ($PSQL)." >&2
     exit 127
   fi
 elif ! command -v docker >/dev/null 2>&1; then
   echo "error: docker not found. Install Docker, or set PG_CLIENT=host." >&2
   exit 127
-fi
-
-client_version_line() {
-  case "$PG_CLIENT" in
-    host) "$PG_RESTORE" --version 2>&1 || true ;;
-    docker-exec) docker exec "$LOCAL_PG_CONTAINER" pg_restore --version 2>&1 || true ;;
-    docker-run) docker run --rm "$PG_DOCKER_IMAGE" pg_restore --version 2>&1 || true ;;
-  esac
-}
-
-version_line="$(client_version_line)"
-major="$(printf '%s\n' "$version_line" | sed -n 's/.* \([0-9]\{1,\}\)\.[0-9].*/\1/p' | head -n 1)"
-if [[ "$major" != "16" ]]; then
-  echo "warning: pg_restore major version is ${major:-unknown}, not 16. PostgreSQL 17 emits SET transaction_timeout, which PostgreSQL 16 rejects." >&2
-  if [[ "${ALLOW_PG_RESTORE_MISMATCH:-}" != "1" ]]; then
-    echo "error: refusing to restore. Use the Postgres 16 container (docker-exec or docker-run), or set ALLOW_PG_RESTORE_MISMATCH=1 to continue anyway." >&2
-    exit 3
-  fi
-  echo "warning: ALLOW_PG_RESTORE_MISMATCH=1 set; continuing with pg_restore ${major:-unknown}." >&2
 fi
 
 export PSQLRC=/dev/null
@@ -321,81 +343,93 @@ run_psql() {
   printf '%s\n' "$out"
 }
 
-if [[ -n "${DUMP_PATH:-}" ]]; then
-  dump_file="$DUMP_PATH"
-else
-  # BSD mktemp (macOS) only substitutes X characters at the end of the template.
-  dump_file="$(mktemp "${TMPDIR:-/tmp}/sportslab-migrate.XXXXXX")"
-fi
+# psql substitutes :'name' and :"name" only when the query is read from
+# stdin or -f. A -c string is sent literally, so quote_ident(:'tbl')
+# becomes a syntax error. Keep the value in -v and the SQL on stdin.
+run_psql_stdin() {
+  local url="$1"
+  local sql="$2"
+  shift 2
+  printf '%s\n' "$sql" | run_psql "$url" "$@"
+}
 
-dump_err="$(mktemp)"
-tmp_files+=("$dump_err")
-dump_base="$(basename "$dump_file")"
-dump_dir="$(dirname "$dump_file")"
-container_dump="/tmp/sportslab-migrate.dump"
+if [[ "$VERIFY_ONLY" -eq 0 ]]; then
+  if [[ -n "${DUMP_PATH:-}" ]]; then
+    dump_file="$DUMP_PATH"
+  else
+    # BSD mktemp (macOS) only substitutes X characters at the end of the template.
+    dump_file="$(mktemp "${TMPDIR:-/tmp}/sportslab-migrate.XXXXXX")"
+  fi
 
-dump_ok=0
-case "$PG_CLIENT" in
-  host)
-    export_libpq "$local_url"
-    if "$PG_DUMP" -Fc --no-owner --no-privileges --file "$dump_file" 2>"$dump_err"; then
-      dump_ok=1
-    fi
-    ;;
-  docker-exec)
-    if docker exec -e LOCAL_DATABASE_URL "$LOCAL_PG_CONTAINER" \
-      sh -c 'pg_dump -Fc --no-owner --no-privileges --dbname "$LOCAL_DATABASE_URL" --file /tmp/sportslab-migrate.dump' \
-      2>"$dump_err" \
-      && docker cp "${LOCAL_PG_CONTAINER}:${container_dump}" "$dump_file" 2>>"$dump_err"; then
-      docker exec "$LOCAL_PG_CONTAINER" rm -f "$container_dump" 2>>"$dump_err" || true
-      dump_ok=1
-    fi
-    ;;
-  docker-run)
-    if docker run --rm --network "container:${LOCAL_PG_CONTAINER}" -e LOCAL_DATABASE_URL \
-      -v "${dump_dir}:/dump" "$PG_DOCKER_IMAGE" \
-      sh -c "pg_dump -Fc --no-owner --no-privileges --dbname \"\$LOCAL_DATABASE_URL\" --file /dump/${dump_base}" \
-      2>"$dump_err"; then
-      dump_ok=1
-    fi
-    ;;
-esac
-if [[ "$dump_ok" -ne 1 ]]; then
-  redact_file "$dump_err" >&2
-  echo "error: pg_dump failed. The connection string was not printed." >&2
-  exit 1
-fi
+  dump_err="$(mktemp)"
+  tmp_files+=("$dump_err")
+  dump_base="$(basename "$dump_file")"
+  dump_dir="$(dirname "$dump_file")"
+  container_dump="/tmp/sportslab-migrate.dump"
 
-export RDS_RESTORE_URL="$rds_url"
-restore_ok=0
-case "$PG_CLIENT" in
-  host)
-    export_libpq "$rds_url"
-    if "$PG_RESTORE" --no-owner --no-privileges --exit-on-error "$dump_file" 2>"$dump_err"; then
-      restore_ok=1
-    fi
-    ;;
-  docker-exec)
-    if docker cp "$dump_file" "${LOCAL_PG_CONTAINER}:${container_dump}" 2>"$dump_err" \
-      && docker exec -e RDS_RESTORE_URL "$LOCAL_PG_CONTAINER" \
-        sh -c 'pg_restore --no-owner --no-privileges --exit-on-error --dbname "$RDS_RESTORE_URL" /tmp/sportslab-migrate.dump' \
-        2>>"$dump_err"; then
-      docker exec "$LOCAL_PG_CONTAINER" rm -f "$container_dump" 2>>"$dump_err" || true
-      restore_ok=1
-    fi
-    ;;
-  docker-run)
-    if docker run --rm -e RDS_RESTORE_URL -v "${dump_dir}:/dump:ro" "$PG_DOCKER_IMAGE" \
-      sh -c "pg_restore --no-owner --no-privileges --exit-on-error --dbname \"\$RDS_RESTORE_URL\" /dump/${dump_base}" \
-      2>"$dump_err"; then
-      restore_ok=1
-    fi
-    ;;
-esac
-if [[ "$restore_ok" -ne 1 ]]; then
-  redact_file "$dump_err" >&2
-  echo "error: pg_restore failed. The connection string was not printed." >&2
-  exit 1
+  dump_ok=0
+  case "$PG_CLIENT" in
+    host)
+      export_libpq "$local_url"
+      if "$PG_DUMP" -Fc --no-owner --no-privileges --file "$dump_file" 2>"$dump_err"; then
+        dump_ok=1
+      fi
+      ;;
+    docker-exec)
+      if docker exec -e LOCAL_DATABASE_URL "$LOCAL_PG_CONTAINER" \
+        sh -c 'pg_dump -Fc --no-owner --no-privileges --dbname "$LOCAL_DATABASE_URL" --file /tmp/sportslab-migrate.dump' \
+        2>"$dump_err" \
+        && docker cp "${LOCAL_PG_CONTAINER}:${container_dump}" "$dump_file" 2>>"$dump_err"; then
+        docker exec "$LOCAL_PG_CONTAINER" rm -f "$container_dump" 2>>"$dump_err" || true
+        dump_ok=1
+      fi
+      ;;
+    docker-run)
+      if docker run --rm --network "container:${LOCAL_PG_CONTAINER}" -e LOCAL_DATABASE_URL \
+        -v "${dump_dir}:/dump" "$PG_DOCKER_IMAGE" \
+        sh -c "pg_dump -Fc --no-owner --no-privileges --dbname \"\$LOCAL_DATABASE_URL\" --file /dump/${dump_base}" \
+        2>"$dump_err"; then
+        dump_ok=1
+      fi
+      ;;
+  esac
+  if [[ "$dump_ok" -ne 1 ]]; then
+    redact_file "$dump_err" >&2
+    echo "error: pg_dump failed. The connection string was not printed." >&2
+    exit 1
+  fi
+
+  export RDS_RESTORE_URL="$rds_url"
+  restore_ok=0
+  case "$PG_CLIENT" in
+    host)
+      export_libpq "$rds_url"
+      if "$PG_RESTORE" --no-owner --no-privileges --exit-on-error "$dump_file" 2>"$dump_err"; then
+        restore_ok=1
+      fi
+      ;;
+    docker-exec)
+      if docker cp "$dump_file" "${LOCAL_PG_CONTAINER}:${container_dump}" 2>"$dump_err" \
+        && docker exec -e RDS_RESTORE_URL "$LOCAL_PG_CONTAINER" \
+          sh -c 'pg_restore --no-owner --no-privileges --exit-on-error --dbname "$RDS_RESTORE_URL" /tmp/sportslab-migrate.dump' \
+          2>>"$dump_err"; then
+        docker exec "$LOCAL_PG_CONTAINER" rm -f "$container_dump" 2>>"$dump_err" || true
+        restore_ok=1
+      fi
+      ;;
+    docker-run)
+      if docker run --rm -e RDS_RESTORE_URL -v "${dump_dir}:/dump:ro" "$PG_DOCKER_IMAGE" \
+        sh -c "pg_restore --no-owner --no-privileges --exit-on-error --dbname \"\$RDS_RESTORE_URL\" /dump/${dump_base}" \
+        2>"$dump_err"; then
+        restore_ok=1
+      fi
+      ;;
+  esac
+  if [[ "$restore_ok" -ne 1 ]]; then
+    redact_file "$dump_err" >&2
+    echo "error: pg_restore failed. The connection string was not printed." >&2
+    exit 1
+  fi
 fi
 
 list_tables() {
@@ -441,11 +475,11 @@ while IFS= read -r table; do
   local_ident=""
   rds_ident=""
   if contains_line "$local_tables" "$table"; then
-    local_ident="$(run_psql "$local_url" -v ON_ERROR_STOP=1 -v tbl="$table" -A -t -c "SELECT quote_ident(:'tbl')")"
+    local_ident="$(run_psql_stdin "$local_url" "SELECT quote_ident(:'tbl')" -v ON_ERROR_STOP=1 -v tbl="$table" -A -t)"
     local_count="$(run_psql "$local_url" -v ON_ERROR_STOP=1 -A -t -c "SELECT count(*) FROM public.${local_ident}")"
   fi
   if contains_line "$rds_tables" "$table"; then
-    rds_ident="$(run_psql "$rds_url" -v ON_ERROR_STOP=1 -v tbl="$table" -A -t -c "SELECT quote_ident(:'tbl')")"
+    rds_ident="$(run_psql_stdin "$rds_url" "SELECT quote_ident(:'tbl')" -v ON_ERROR_STOP=1 -v tbl="$table" -A -t)"
     rds_count="$(run_psql "$rds_url" -v ON_ERROR_STOP=1 -A -t -c "SELECT count(*) FROM public.${rds_ident}")"
   fi
   report "$table" "count" "$local_count" "$rds_count"
@@ -455,8 +489,8 @@ while IFS= read -r table; do
     continue
   fi
 
-  local_has="$(run_psql "$local_url" -v ON_ERROR_STOP=1 -v tbl="$table" -A -t -c "SELECT CASE WHEN EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema = 'public' AND table_name = :'tbl' AND column_name = 'id') THEN 't' ELSE 'f' END")"
-  rds_has="$(run_psql "$rds_url" -v ON_ERROR_STOP=1 -v tbl="$table" -A -t -c "SELECT CASE WHEN EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema = 'public' AND table_name = :'tbl' AND column_name = 'id') THEN 't' ELSE 'f' END")"
+  local_has="$(run_psql_stdin "$local_url" "SELECT CASE WHEN EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema = 'public' AND table_name = :'tbl' AND column_name = 'id') THEN 't' ELSE 'f' END" -v ON_ERROR_STOP=1 -v tbl="$table" -A -t)"
+  rds_has="$(run_psql_stdin "$rds_url" "SELECT CASE WHEN EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema = 'public' AND table_name = :'tbl' AND column_name = 'id') THEN 't' ELSE 'f' END" -v ON_ERROR_STOP=1 -v tbl="$table" -A -t)"
   if [[ "$local_has" != "t" && "$rds_has" != "t" ]]; then
     continue
   fi
@@ -482,10 +516,10 @@ while IFS= read -r seq; do
   local_value="MISSING"
   rds_value="MISSING"
   if contains_line "$local_seqs" "$seq"; then
-    local_value="$(run_psql "$local_url" -v ON_ERROR_STOP=1 -v seq="$seq" -A -t -c "SELECT COALESCE(last_value::text, '') FROM pg_sequences WHERE schemaname = 'public' AND sequencename = :'seq'")"
+    local_value="$(run_psql_stdin "$local_url" "SELECT COALESCE(last_value::text, '') FROM pg_sequences WHERE schemaname = 'public' AND sequencename = :'seq'" -v ON_ERROR_STOP=1 -v seq="$seq" -A -t)"
   fi
   if contains_line "$rds_seqs" "$seq"; then
-    rds_value="$(run_psql "$rds_url" -v ON_ERROR_STOP=1 -v seq="$seq" -A -t -c "SELECT COALESCE(last_value::text, '') FROM pg_sequences WHERE schemaname = 'public' AND sequencename = :'seq'")"
+    rds_value="$(run_psql_stdin "$rds_url" "SELECT COALESCE(last_value::text, '') FROM pg_sequences WHERE schemaname = 'public' AND sequencename = :'seq'" -v ON_ERROR_STOP=1 -v seq="$seq" -A -t)"
   fi
   report "$seq" "last_value" "$local_value" "$rds_value"
 done <<EOF

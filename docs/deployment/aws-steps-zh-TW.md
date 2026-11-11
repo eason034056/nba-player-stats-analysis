@@ -204,6 +204,8 @@ set +a
 ./scripts/db_migrate_to_rds.sh
 ```
 
+若 restore 之後的檢查失敗，用 `--verify-only` 再跑一次。它不會再 dump 或 restore，只比較資料表筆數、`max(id)` 和 sequence 的 `last_value`。
+
 或兩條都用 `read -s` 輸入，不要把網址寫在指令上：
 
 ```bash

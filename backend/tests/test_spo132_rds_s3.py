@@ -354,6 +354,9 @@ for arg in "$@"; do
   fi
   prev="$arg"
 done
+if [ -z "$sql" ]; then
+  sql=$(cat)
+fi
 case "$url" in
   *local-db*) side=local ;;
   *) side=rds ;;
@@ -396,6 +399,25 @@ class TestMigrateScript:
         assert result.returncode == 0
         assert "LOCAL_DATABASE_URL" in result.stdout
         assert "transaction_timeout" in result.stdout
+        assert "--verify-only" in result.stdout
+
+    def test_bound_queries_are_not_passed_with_dash_c(self) -> None:
+        for line in MIGRATE.read_text().splitlines():
+            code = line.split("#", 1)[0]
+            if "-c" in code and (":'" in code or ':"' in code):
+                raise AssertionError(code)
+
+    def test_verify_only_skips_dump_and_the_version_gate(self, tmp_path: Path) -> None:
+        env = _client_bin(tmp_path, restore_version="17.11")
+        bindir = Path(env.pop("_BIN"))
+        result = _run(MIGRATE, env, "--verify-only")
+        assert result.returncode == 0, result.stderr
+        assert not (bindir / "dump-called").exists()
+        assert "refusing to restore" not in result.stderr
+        assert "ok:" in result.stdout
+        assert "MISMATCH" not in result.stdout
+        assert SECRET not in result.stdout + result.stderr
+        assert "postgresql://" not in result.stdout + result.stderr
 
     def test_missing_env_is_a_dry_run(self) -> None:
         result = _run(MIGRATE, {})
@@ -713,6 +735,14 @@ case "$joined" in
       fi
       prev="$arg"
     done
+    # sh -c is also a -c argument and is not the query. Stdin carries the
+    # query when psql is not given its own -c.
+    if ! printf '%s' "$sql" | grep -q 'SELECT'; then
+      incoming=$(cat)
+      if [ -n "$incoming" ]; then
+        sql="$incoming"
+      fi
+    fi
     case "$PSQL_TARGET" in
       *sslmode=require*) printf seen >> "{sslmark}" ;;
     esac
