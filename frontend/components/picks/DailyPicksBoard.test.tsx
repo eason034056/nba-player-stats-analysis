@@ -185,4 +185,40 @@ describe("DailyPicksBoard", () => {
     expect(screen.getByText("Tyrese Haliburton")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "All" })).toHaveAttribute("aria-pressed", "true");
   });
+
+  it("renders no projection, edge, minutes, injury, or lineup when those fields are null", () => {
+    const blank = {
+      ...picks.picks[0],
+      tier: "Strong play" as const,
+      combined_probability: 0.72,
+      has_projection: false,
+      projected_value: null,
+      projected_minutes: null,
+      edge: null,
+      injury_status: null,
+      lineup_confirmed: null,
+    };
+    renderBoard({ picks: [blank], teams: ["MIA"], showLineup: false });
+    const card = screen.getByRole("article");
+    expect(card).toHaveTextContent("Bam Adebayo");
+    expect(card).toHaveTextContent("72%");
+    expect(card.textContent ?? "").not.toMatch(/Proj|Edge|\bmin\b|NaN|—|Questionable|Lineup|Projection|Injury/);
+  });
+
+  it("renders injury status and lineup confirmation when they are present", () => {
+    const marked = {
+      ...picks.picks[0],
+      tier: "Strong play" as const,
+      combined_probability: 0.72,
+      has_projection: false,
+      projected_value: null,
+      projected_minutes: null,
+      edge: null,
+      injury_status: "Questionable",
+      lineup_confirmed: true,
+    };
+    renderBoard({ picks: [marked], teams: ["MIA"], showLineup: false });
+    expect(screen.getByText("Questionable")).toBeInTheDocument();
+    expect(screen.getByText("Lineup confirmed")).toBeInTheDocument();
+  });
 });

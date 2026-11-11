@@ -18,7 +18,6 @@ import {
   readTier,
   type ReadTier,
 } from "./today-board";
-import { marketToProjectionCard, projectionCardValue } from "./projection-metric";
 import { METRIC_TO_MARKET, type MetricKey } from "./metric-to-market";
 import type { LeagueSegment } from "./event-detail-link";
 import { teamAbbr } from "./team-abbr";
@@ -29,7 +28,6 @@ import type {
   GameLog,
   NBAEvent,
   PlayerHistoryResponse,
-  PlayerProjection,
   PropRead,
   TeamLineup,
 } from "./schemas";
@@ -291,7 +289,6 @@ export interface ReadSignal {
 
 export interface SignalInput {
   binary: boolean;
-  supportsProjection: boolean;
   line: number | null;
   consensus: {
     p_over_fair?: number | null;
@@ -301,7 +298,6 @@ export interface SignalInput {
   } | null;
   last10: GameLog[];
   history: Pick<PlayerHistoryResponse, "p_over" | "p_under" | "n_games" | "season_mean"> | null;
-  projection: PlayerProjection | null;
   pick: DailyPick | null;
   market: string;
 }
@@ -406,11 +402,6 @@ function historySignal(input: SignalInput): Omit<ReadSignal, "verdict"> {
 }
 
 function projectedNumber(input: SignalInput): number | null {
-  const card = marketToProjectionCard(input.market);
-  if (input.projection && card) {
-    const fromCard = projectionCardValue(input.projection, card);
-    if (finite(fromCard)) return fromCard;
-  }
   if (input.pick && input.pick.metric === marketToMetric(input.market) && finite(input.pick.projected_value)) {
     return input.pick.projected_value;
   }
@@ -423,9 +414,7 @@ function projectionSignal(input: SignalInput): Omit<ReadSignal, "verdict"> {
     return {
       key: "projection",
       label: "Projection",
-      detail: input.supportsProjection
-        ? "Projected value is not on this response."
-        : "Projection is not available for WNBA.",
+      detail: "Projection is not available for WNBA.",
       value: null,
       meter: null,
     };
@@ -444,11 +433,8 @@ function projectionSignal(input: SignalInput): Omit<ReadSignal, "verdict"> {
 }
 
 function defenseSignal(input: SignalInput): Omit<ReadSignal, "verdict"> {
-  const position = firstNumber(
-    input.projection?.opponent_position_rank,
-    input.pick?.opponent_position_rank,
-  );
-  const overall = firstNumber(input.projection?.opponent_rank, input.pick?.opponent_rank);
+  const position = firstNumber(input.pick?.opponent_position_rank);
+  const overall = firstNumber(input.pick?.opponent_rank);
   if (position != null) {
     return {
       key: "defense",
@@ -1193,7 +1179,6 @@ export function buildOurRead(args: {
   marketName: string;
   market: string;
   binary: boolean;
-  supportsProjection: boolean;
   eventId: string;
   homeTeam: string;
   awayTeam: string;
@@ -1205,7 +1190,6 @@ export function buildOurRead(args: {
   consensus: SignalInput["consensus"];
   last10: GameLog[];
   history: PlayerHistoryResponse | null;
-  projection: PlayerProjection | null;
   /** NBA uses stored signals and the backend tier. WNBA keeps the previous read. */
   league?: LeagueSegment;
   read?: PropRead | null;
@@ -1213,12 +1197,10 @@ export function buildOurRead(args: {
   if (args.league === "nba") return buildNbaRead(args);
   const signals = buildReadSignals({
     binary: args.binary,
-    supportsProjection: args.supportsProjection,
     line: args.line,
     consensus: args.consensus,
     last10: args.last10,
     history: args.history,
-    projection: args.projection,
     pick: args.pick,
     market: args.market,
   });

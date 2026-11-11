@@ -11,7 +11,6 @@ import {
   noVigResponseSchema,
   playerDDHistoryResponseSchema,
   playerHistoryResponseSchema,
-  playerProjectionSchema,
   playerSuggestResponseSchema,
   teamLineupSchema,
 } from "@/lib/schemas";
@@ -23,7 +22,6 @@ import nbaHistoryFixture from "@/test/fixtures/event/nba-history-bam.json";
 import nbaLineupFixture from "@/test/fixtures/event/nba-lineup-mixed.json";
 import nbaBosLineupFixture from "@/test/fixtures/event/nba-lineup-bos.json";
 import nbaNoVigFixture from "@/test/fixtures/event/nba-no-vig-bam.json";
-import nbaProjectionFixture from "@/test/fixtures/event/nba-projection-bam.json";
 import wnbaEventsFixture from "@/test/fixtures/event/wnba-events.json";
 import wnbaPicksFixture from "@/test/fixtures/event/wnba-daily-picks.json";
 import wnbaSuggestFixture from "@/test/fixtures/event/wnba-suggest.json";
@@ -40,7 +38,6 @@ import emptyPicksFixture from "@/test/fixtures/event/nba-daily-picks-empty.json"
 import emptySuggestFixture from "@/test/fixtures/event/nba-suggest-empty.json";
 import emptyHistoryFixture from "@/test/fixtures/event/nba-history-empty.json";
 import emptyNoVigFixture from "@/test/fixtures/event/nba-no-vig-empty.json";
-import nullProjectionFixture from "@/test/fixtures/event/nba-projection-nulls.json";
 
 const nbaEvents = eventsResponseSchema.parse(nbaEventsFixture);
 const nbaPicks = dailyPicksResponseSchema.parse(nbaPicksFixture);
@@ -49,7 +46,6 @@ const nbaHistory = playerHistoryResponseSchema.parse(nbaHistoryFixture);
 const nbaLineup = teamLineupSchema.parse(nbaLineupFixture);
 const nbaBosLineup = teamLineupSchema.parse(nbaBosLineupFixture);
 const nbaNoVig = noVigResponseSchema.parse(nbaNoVigFixture);
-const nbaProjection = playerProjectionSchema.parse(nbaProjectionFixture);
 const wnbaEvents = eventsResponseSchema.parse(wnbaEventsFixture);
 const wnbaPicks = dailyPicksResponseSchema.parse(wnbaPicksFixture);
 const wnbaSuggest = playerSuggestResponseSchema.parse(wnbaSuggestFixture);
@@ -66,7 +62,6 @@ const emptyPicks = dailyPicksResponseSchema.parse(emptyPicksFixture);
 const emptySuggest = playerSuggestResponseSchema.parse(emptySuggestFixture);
 const emptyHistory = playerHistoryResponseSchema.parse(emptyHistoryFixture);
 const emptyNoVig = noVigResponseSchema.parse(emptyNoVigFixture);
-const nullProjection = playerProjectionSchema.parse(nullProjectionFixture);
 
 const nav = vi.hoisted(() => ({
   eventId: "evt-mia-bos",
@@ -83,7 +78,6 @@ const apiMocks = vi.hoisted(() => ({
   getWNBAPlayerSuggestions: vi.fn(),
   getTeamLineup: vi.fn(),
   getWNBATeamLineup: vi.fn(),
-  getPlayerProjection: vi.fn(),
   calculateNoVig: vi.fn(),
   calculateWNBANoVig: vi.fn(),
   getPlayerHistory: vi.fn(),
@@ -135,7 +129,6 @@ describe("EventDetail fixtures", () => {
     apiMocks.getWNBATeamLineup.mockImplementation(async (team: string) =>
       team === "NYL" ? wnbaNylLineup : wnbaLvaLineup,
     );
-    apiMocks.getPlayerProjection.mockResolvedValue(nbaProjection);
     apiMocks.calculateNoVig.mockResolvedValue(nbaNoVig);
     apiMocks.calculateWNBANoVig.mockResolvedValue(wnbaNoVig);
     apiMocks.getPlayerHistory.mockResolvedValue(nbaHistory);
@@ -253,7 +246,6 @@ describe("EventDetail fixtures", () => {
     expect(apiMocks.getWNBAPlayerHistory).toHaveBeenCalled();
     expect(apiMocks.getWNBATeamLineup).toHaveBeenCalledWith("NYL", "2026-11-10");
     expect(apiMocks.getWNBATeamLineup).toHaveBeenCalledWith("LVA", "2026-11-10");
-    expect(apiMocks.getPlayerProjection).not.toHaveBeenCalled();
     expect(apiMocks.getEvents).not.toHaveBeenCalled();
     expect(apiMocks.getDailyPicks).not.toHaveBeenCalled();
     expect(apiMocks.getPlayerSuggestions).not.toHaveBeenCalled();
@@ -411,7 +403,6 @@ describe("EventDetail fixtures", () => {
     apiMocks.getPlayerSuggestions.mockResolvedValue(emptySuggest);
     apiMocks.getPlayerHistory.mockResolvedValue(emptyHistory);
     apiMocks.calculateNoVig.mockResolvedValue(emptyNoVig);
-    apiMocks.getPlayerProjection.mockResolvedValue(nullProjection);
     apiMocks.getTeamLineup.mockResolvedValue(null);
     renderWithProviders(<EventDetail league="nba" />);
     expect((await screen.findAllByText(/No posted line/)).length).toBeGreaterThan(0);

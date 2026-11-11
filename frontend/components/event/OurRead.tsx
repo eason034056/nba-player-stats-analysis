@@ -36,6 +36,11 @@ const TIER_CLASS = {
   pass: "bg-[#E2E2E2] text-[#4A4458]",
 } as const;
 
+function visibleSignals(signals: ReadSignal[], nba: boolean): ReadSignal[] {
+  if (!nba) return signals;
+  return signals.filter((signal) => signal.key !== "projection" || Boolean(signal.value?.trim()));
+}
+
 function SignalRow({ signal, showVerdict }: { signal: ReadSignal; showVerdict: boolean }) {
   const verdict = showVerdict ? signal.verdict : null;
   const dot = verdict ? VERDICT_DOT[verdict] : signal.value ? "bg-brand" : "bg-tone-neutral";
@@ -128,6 +133,7 @@ export function OurRead({
   league?: LeagueSegment;
 }) {
   const nba = league === "nba";
+  const signals = visibleSignals(model.signals, nba);
   return (
     <section
       data-testid="our-read"
@@ -222,7 +228,7 @@ export function OurRead({
           </>
         )}
       </div>
-      {!isLoading && model.signals.length > 0 ? (
+      {!isLoading && signals.length > 0 ? (
         <div
           className={cn(
             nba
@@ -230,7 +236,7 @@ export function OurRead({
               : "border-t border-divider",
           )}
         >
-          {model.signals.map((signal) => (
+          {signals.map((signal) => (
             <SignalRow key={signal.key} signal={signal} showVerdict={nba} />
           ))}
         </div>

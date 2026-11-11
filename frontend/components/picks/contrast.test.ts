@@ -73,13 +73,6 @@ const pairs: Array<{ where: string; foreground: string; background: string; mini
   { where: "about/page.tsx:53 code comment", foreground: "#8F86A3", background: INK, minimum: 4.5 },
   { where: "about/page.tsx:58 vig formula", foreground: ACCENT, background: INK, minimum: 4.5 },
   { where: "about/page.tsx:90 planned note", foreground: YELLOW_INK, background: "#F6F2D2", minimum: 4.5 },
-  { where: "PlayerProjectionPanel.tsx:80 Easy, 20px bold", foreground: "#15803D", background: "#F0FDF4", minimum: 4.5 },
-  { where: "PlayerProjectionPanel.tsx:83 Avg, 20px bold", foreground: "#A16207", background: "#FEFCE8", minimum: 4.5 },
-  { where: "PlayerProjectionPanel.tsx:85 Hard, 20px bold on red/5", foreground: "#8E2C50", background: "#F9F4F6", minimum: 4.5 },
-  { where: "PlayerProjectionPanel.tsx:427 Matchup caption on Easy", foreground: MUTED, background: "#F0FDF4", minimum: 4.5 },
-  { where: "PlayerProjectionPanel.tsx:427 Matchup caption on Avg", foreground: MUTED, background: "#FEFCE8", minimum: 4.5 },
-  { where: "PlayerProjectionPanel.tsx:427 Matchup caption on Hard", foreground: MUTED, background: "#F9F4F6", minimum: 4.5 },
-  { where: "PlayerProjectionPanel.tsx:77 missing rank", foreground: MUTED, background: "#EFEFF1", minimum: 4.5 },
 ];
 
 describe("picks, slip, and agent contrast", () => {
