@@ -3,8 +3,9 @@ nba.py - NBA related API endpoints
 
 Includes:
 1. Game List API (GET /api/nba/events)
-2. No-Vig Probability Calculation API (POST /api/nba/props/no-vig)
-3. Player Suggestions API (GET /api/nba/players/suggest)
+2. One game from that list (GET /api/nba/events/{event_id})
+3. No-Vig Probability Calculation API (POST /api/nba/props/no-vig)
+4. Player Suggestions API (GET /api/nba/players/suggest)
 
 This is the core functional module of the application.
 """
@@ -414,10 +415,11 @@ async def get_events(
             ]
         }
     """
-    # Handle date param: defaults to today
+    # Handle date param: defaults to today UTC. The detail route computes
+    # its own local date before calling here. This default stays UTC.
     if date is None:
         date = datetime.now(timezone.utc).strftime("%Y-%m-%d")
-    
+
     # Omitted tz_offset uses 480 (UTC+8), the same default as
     # GET /api/nba/daily-picks. top_read is loaded with
     # daily_picks:nba:{date}:tz{offset}, so a different default would miss
@@ -426,7 +428,16 @@ async def get_events(
     # JavaScript's getTimezoneOffset() returns "UTC - Local" minutes
     # (UTC+8 is -480). Callers should send the normal offset (UTC+8 is 480).
     offset_minutes = tz_offset if tz_offset is not None else 480
-    
+
+    # A string that matches YYYY-MM-DD can still be impossible (month 13).
+    # Reject it here, before the cache read and before the broad
+    # ``except Exception`` below, so the client gets a plain 422 and the
+    # parser message is not copied into the body.
+    try:
+        date_obj = datetime.strptime(date, "%Y-%m-%d")
+    except ValueError:
+        raise HTTPException(status_code=422, detail="Invalid date")
+
     # 1. Check cache (include timezone offset to distinguish different local time requests)
     cache_key = f"{CacheService.build_events_key(date, regions)}:tz{offset_minutes}"
     cached_data = await cache_service.get(cache_key)
@@ -448,8 +459,9 @@ async def get_events(
         # Example: If user is UTC-6 and selects "2026-01-17"
         # Local 2026-01-17 00:00:00 = UTC 2026-01-17 06:00:00
         # Local 2026-01-17 23:59:59 = UTC 2026-01-18 05:59:59
-        date_obj = datetime.strptime(date, "%Y-%m-%d")
-        
+        # date_obj was parsed above. One calendar day, then the existing
+        # ±1h window. No second day and no extra provider call.
+
         # Local 00:00:00 to UTC
         local_start = datetime.combine(date_obj.date(), datetime.min.time())
         utc_start = local_start - timedelta(minutes=offset_minutes)
@@ -526,6 +538,114 @@ async def get_events(
             status_code=500,
             detail=f"Internal error: {str(e)}"
         )
+
+
+@router.get(
+    "/events/{event_id}",
+    response_model=NBAEvent,
+    summary="Get one NBA game",
+    description="""
+    One game from the same list as GET /api/nba/events.
+
+    The handler calls that list. A Redis hit for the same date, regions,
+    and tz_offset returns the stored list. A miss uses the same events
+    request the list uses, then stores that list. This route does not
+    call the per-event odds endpoint or the odds gateway.
+
+    Pass the date and tz_offset you loaded this event with. Those two
+    values are what the list stored under, so the cache key matches.
+    If date is omitted, the default is the caller's local date: UTC now
+    plus tz_offset minutes. Omitted tz_offset is 480. regions defaults
+    to us. The list route still treats an omitted date as today UTC.
+
+    A malformed event_id is HTTP 404 and the list is not read. The id
+    rule is the same as GET /api/nba/events/{event_id}/props: 1–128
+    characters from [A-Za-z0-9_-], starting with a letter or digit. A
+    well-formed id that is not on that date's list is HTTP 404.
+
+    The body is one NBAEvent, the same model WNBA's event list uses,
+    with the fields GET /api/nba/events already adds for an NBA event
+    (commence_time_et, display_tz, lineup_status, top_read).
+    """,
+)
+@limiter.limit(settings.rate_limit_props)
+async def get_event(
+    request: Request,
+    event_id: str,
+    date: Optional[str] = Query(
+        default=None,
+        description=(
+            "Local date (YYYY-MM-DD). Pass the date and tz_offset you "
+            "loaded this event with. Omitted date is the caller's local "
+            "date from tz_offset."
+        ),
+        pattern=r"^\d{4}-\d{2}-\d{2}$",
+    ),
+    regions: str = Query(
+        default="us",
+        description="Region code (us, uk, eu, au). Same as GET /api/nba/events.",
+    ),
+    tz_offset: Optional[int] = Query(
+        default=None,
+        description=(
+            "Timezone offset in minutes. Omitted values use 480, the same "
+            "default as GET /api/nba/events."
+        ),
+    ),
+) -> NBAEvent:
+    """One NBA event from the events list.
+
+    ``get_event`` is the HTTP handler. The name is the singular of
+    ``get_events``: one game, not the day's list. Call it as
+    ``GET /api/nba/events/{event_id}``. Pass the same ``date``,
+    ``regions``, and ``tz_offset`` the event was loaded with, so both
+    share one cache key. When ``date`` is omitted, the default is the
+    caller's local date from ``tz_offset`` (UTC now plus that many
+    minutes; omitted offset is 480). The list route's omitted date
+    stays today UTC.
+
+    The handler checks the id with ``event_id_is_well_formed``, then
+    calls ``get_events`` once. That function reads Redis and, on a miss,
+    ``odds_provider.get_events`` for that one local day. It does not
+    call ``odds_gateway``, and it does not try the next day.
+
+    Args:
+        request: Incoming request. The slowapi limiter reads it. Same
+            limit as ``GET /api/nba/events/{event_id}/props``
+            (``settings.rate_limit_props``).
+        event_id: Path id. Malformed ids and ids missing from that
+            date's list are 404.
+        date: Local date YYYY-MM-DD. Pass the date you loaded this
+            event with. Omitted value is the caller's local date from
+            tz_offset.
+        regions: Region code. Default ``us``.
+        tz_offset: Minutes east of UTC. Pass the offset you loaded this
+            event with. Omitted uses 480.
+
+    Returns:
+        The ``NBAEvent`` for this id on that date's list.
+
+    Raises:
+        HTTPException: 404 when the id is malformed or not on the list.
+            422 ``Invalid date`` when the calendar date is impossible.
+            Odds API errors from the list path pass through.
+    """
+    if not event_id_is_well_formed(event_id):
+        raise HTTPException(status_code=404, detail="Malformed event_id")
+
+    # Detail-only. get_events still treats an omitted date as today UTC.
+    # One local date, then one list read. No next-day fallback.
+    if date is None:
+        offset_minutes = tz_offset if tz_offset is not None else 480
+        date = (
+            datetime.now(timezone.utc) + timedelta(minutes=offset_minutes)
+        ).strftime("%Y-%m-%d")
+
+    listing = await get_events(date=date, regions=regions, tz_offset=tz_offset)
+    for event in listing.events:
+        if event.event_id == event_id:
+            return event
+    raise HTTPException(status_code=404, detail="Event not found")
 
 
 @router.get(
@@ -1119,6 +1239,18 @@ async def get_player_history(
             "p_over, and p_under stay the all-games sample."
         ),
     ),
+    home_team: Optional[str] = Query(
+        default=None,
+        description="Event home club. With away_team, teammates are limited to a club in this game.",
+    ),
+    away_team: Optional[str] = Query(
+        default=None,
+        description="Event away club. With home_team, teammates are limited to a club in this game.",
+    ),
+    as_of: Optional[str] = Query(
+        default=None,
+        description="Event commence time. Selects the log club on that US game date.",
+    ),
 ) -> PlayerHistoryResponse:
     """
     Get player historical statistical summary
@@ -1208,6 +1340,9 @@ async def get_player_history(
             include_playoffs=include_playoffs,
             include_play_in=include_play_in,
             season=season,
+            home_team=home_team,
+            away_team=away_team,
+            as_of=as_of,
         )
         
         # Convert histogram to Pydantic model

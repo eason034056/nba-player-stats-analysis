@@ -1,143 +1,173 @@
-# Sports Lab Progress
+# Sports Lab
 
-> Engineers update the row for their ticket in the pull request that changes that ticket. This file is a snapshot of ticket state, not a heartbeat log. Last updated: **2026-11-10** (Nov 10 merge batch on `dev` at `6688384`: #35, #39–#48; SPO-96, SPO-102, SPO-103, SPO-104, and SPO-107 moved to Shipped; SPO-10 and SPO-11 Done). Facts below were checked against `docs/task-summaries/`, `git log` on `dev`, and `gh pr list --base dev`. Titles that were not in those sources are left blank.
+NBA 球員 props 的投注參考工具。WNBA 暫停；舊程式留著，路由沒拆。
 
-## Shipped
+細項在 `docs/task-summaries/` 和 PR。這份只給現況。
 
-### Nov 10 merge batch
+## 系統架構
 
-Shipped on `dev` at `6688384`. Notes for #35 and #39–#48 are those pull requests' progress notes, with open-branch status replaced by the merge. SPO-107, SPO-104, SPO-102, SPO-96, and SPO-103 moved here from In flight after `git log origin/dev`.
+```mermaid
+flowchart LR
+  odds["The Odds API"]
+  sched["Scheduler"]
+  daily["daily_analysis"]
+  snap["Postgres snapshots"]
+  redis["Redis"]
+  bulk["bulk_props"]
+  agent["LangGraph"]
+  api["FastAPI"]
+  ui["Next.js"]
 
-| Ticket | Note |
-|---|---|
-| SPO-118 | Merged into `dev` in #47. Review follow-ups from #43, #45, and #46. Direct `latest_position`, six rank fields plus a fully invalidated row, events cache hit and a failed top-read join, logged lineup-peek failure, shared main-line vote, spliced rung drops the first row's vig, and the rate limiter falls back when Redis is down. Summary: `docs/task-summaries/SPO-118-merge-batch-nits.md`. |
-| #48 | Merged into `dev` in #48. League daily-analysis unit tests and the FanDuel player-points regression load recorded NBA Odds API captures through `tests.fixtures.odds_api`. Each case rewrites player, line, event id, teams, and tip time. Prices stay the prices the recording posted. This removes the hand-typed Odds API bodies in `test_daily_analysis_league.py` and the untagged FanDuel Curry body in `test_spo16_market_expansion.py`. |
-| SPO-106 | Merged into `dev` in #35. Recorded NBA Odds API fixtures for unit tests. `player_points`, the NBA events list, and `odds_api_event_odds__nba_expanded_markets.json` (Celtics at 76ers, 2026-11-10) load through `tests.fixtures.odds_api`. Rebounds Under-only and double-double Yes use that file. FTM, FGM, and double-double No stay inline because the recording did not post those sides. WNBA fixture work is deferred while WNBA work is paused. Summary: `docs/task-summaries/SPO-106-recorded-odds-fixtures.md`. |
-| SPO-112 | Merged into `dev` in #44. NBA Daily Picks carry five side-relative signals and a calibrated `combined_probability`. WNBA leaves both null. Backtest Analyst verdict INSUFFICIENT REAL-LINE DATA (2026-11-10): `probability` stays the headline until a separate real-line check. Summary: `docs/task-summaries/SPO-112-signal-verdicts.md`. Decision: `docs/decisions/SPO-112/decision_20261110_signal-verdicts-combined-probability.md`. |
-| SPO-113 | Merged into `dev` in #45. NBA field enrichment for the No-Vig redesign. Position ranks are 1–30 inside each position. Each rank has its own source. A vendor rank outside 1–30 becomes null with `sportsdata_invalid` and is not CSV-filled. Summary: `docs/task-summaries/SPO-113-field-enrichment.md`. Decision: `docs/decisions/spo-113-field-enrichment/decision_20261110_field-enrichment.md`. |
-| SPO-114 | Merged into `dev` in #46. Snapshot-only bulk props, `GET /api/nba/events/{event_id}/props`. NBA only. Reads `odds_line_snapshots`. Does not call the Odds API. The one-vote line mirrors SPO-115 (de-vig, two-sided beats one-sided, posted-mode fallback). League column and the writer's last-pair / no-line unique key are deferred. Summary: `docs/task-summaries/SPO-114-bulk-props.md`. |
-| SPO-111 | Merged into `dev` in #42. NBA read data for the No-Vig redesign. `top_read` on `GET /api/nba/events`. `DailyPick.tier`, `p_over`, and `p_under`. Candidates stored down to the Lean floor; the default daily-picks query stays 0.65 / 10 games. WNBA routes are unchanged. Summary: `docs/task-summaries/SPO-111-read-data.md`. |
-| SPO-115 | Merged into `dev` in #43. `bookmakers_count` counted Over and Under (and every alt rung). One main line per bookmaker. Summary: `docs/task-summaries/SPO-115-bookmakers-count.md`. |
-| SPO-110c | Merged into `dev` in #41. NBA only; WNBA paused, routes unchanged. Daily Picks, Bet Slip, Method, and the Ask agent panel. Summary: `docs/task-summaries/SPO-110c-picks-slip-method.md`. |
-| SPO-110b | Merged into `dev` in #40. NBA and WNBA game page restyle. Summary: `docs/task-summaries/SPO-110b-game-page.md`. |
-| SPO-110a | Merged into `dev` in #39. Design tokens, app shell, and the Today page (NBA and WNBA). Summary: `docs/task-summaries/SPO-110a-design-system-shell-today.md`. Picks, Bet Slip, and Method were not restyled in this pull request. |
-| SPO-107 | Merged into `dev` in #38 (`23b4443`). Harness game types match production regular season. `_active_games` uses `CSVPlayerHistoryService._allowed_game_types()` (regular season; a missing game type counts as regular). Headline metrics are regular-season targets scored with that history. Playoffs and the play-in are scored with the same history and reported in their own section, not in the headlines. The CI guard compares 25 daily L10 rates per league (seed 7) with `get_player_stats` and fails on any mismatch. `oracle.py` and `backtest_report.md` are the full run on the post-SPO-97 CSVs. Decision: `docs/decisions/SPO-107/decision_20261110_regular-season-harness.md`. Summary: `docs/task-summaries/SPO-107-harness-gametype-parity.md`. |
-| SPO-104 | Merged into `dev` in #37 (`a14370d`). One-sided DD quotes (`under_odds` / `p_under_imp` null, including a JSON null No price; `line_is_synthetic`, `market_kind`, `uses_prior`), league-scoped team codes, and the SPO-97 schedule-index follow-ups. Summary: `docs/task-summaries/SPO-104-dd-one-sided-and-followups.md`. |
-| SPO-102 | Merged into `dev` in #33 (`e64621b`). `PlayerDDTile` loads double-double history and yes/no odds. Summary: `docs/task-summaries/SPO-102-player-dd-tile-wiring.md`. |
-| SPO-96 | Merged into `dev` in #27 (`adbbc69`). Process docs rewritten for the current team workflow. Summary: `docs/task-summaries/SPO-96-claude-md-workflow-rewrite.md`. |
-| SPO-103 | SPO-10 phase 5 final review. Done with SPO-10 and SPO-11. Verified on `dev` at `6688384` (backend 1041 passed, 23 skipped, 6 xfailed, 0 failed, CI 6/6). WNBA live coverage is deferred because WNBA work is paused. Frontend fixes from this review shipped as SPO-105 in #36 (`4267d88`). |
+  sched --> daily
+  sched --> snap
+  odds --> daily
+  odds --> snap
+  daily --> redis
+  snap --> bulk
+  bulk --> redis
+  daily --> api
+  bulk --> api
+  agent --> api
+  api --> ui
+```
 
-### SPO-105 — frontend review fixes
+`daily_analysis` 自己打 Odds API，不讀快照表。快照給 `bulk_props`。LangGraph 是問答，不在每日精選的計算鏈上。
 
-Shipped on `dev` in #36. The in-flight row that came in with the merge still said the branch was open. `under_odds` is nullable in the frontend schema. This PR lands with that change.
-
-### SPO-101 — event-page integration tests
-
-Shipped on `dev` in #34. The progress row that came in with the merge still said the pull request was awaiting squash-merge.
-
-Live tests for the 12-tile `/event` surface and the double-double round-trip. Skipped unless `RUN_INTEGRATION=1`. One batched odds call. Not run in this environment (`ODDS_API_KEY` unset).
-
-### SPO-99 — walk-forward backtest
-
-Shipped on `dev` in #32. The progress section that came in with the merge still said the pull request was open and not merged.
-
-Replaces the in-sample five-player `scripts/agents/evaluation/backtest.py` with a walk-forward harness. Each player-game uses only games dated strictly before it. Daily Picks goes through `choose_daily_pick_side`. The agent path calls `compute_scorecard` on a prior-only cache.
-
-Proxy lines are MED20 by default; L10 is also supported. ROI assumes -110. Closing-line value is not measured. The CLV hook stays inactive unless an odds-history file is passed.
-
-CI job `walk-forward-guard` sits between `frontend-test` and `docker-build` on the workflow from #29. It runs the harness tests, including a 40-player sample (seed 7) that fails if MED20 Brier exceeds 0.30 or the calibration gap exceeds 0.15.
-
-### SPO-97 — Game-log season labels and game types
-
-Shipped on `dev` in #30. Task summary: `docs/task-summaries/SPO-97-csv-season-hygiene.md`.
-
-Cup finals are `cup_championship` and stay out of the default regular-season sample. The progress row that came in with the merge still said the branch was in review and the summary was not on `dev`.
-
-### SPO-98 — Player team attribution and exact name matching
-
-Shipped on `dev` in #28 (`fad723a`). Task summary: `docs/task-summaries/SPO-98-team-attribution-exact-names.md`.
-
-US game date, exact `player_name_key`, league-aware roster. Daily-picks wiring loads recorded Odds API `player_points` (`backend/tests/fixtures/`). The progress row that came in with the merge still said `in_review` on `feature/SPO-98-team-attribution-exact-names`; the squash-merge is on `dev`.
-
-### SPO-100 — junk-file pass (2026-11-09)
-
-Shipped on `dev` in #31 (`f267e06`).
-
-Untrack `nba_lineup_rag/RAG_evaluation.html`, `RAG_evaluation.pdf`, and `outputs/notebook_results_*.json`. `frontend/tsconfig.tsbuildinfo` was already gitignored and untracked. `data/*.jsonl` stays in git; `.dockerignore` keeps it out of the backend image. The progress note that landed with that merge listed the branch as `feature/SPO-100-junk-pass` and the status as PR open against `dev`.
-
-### SPO-95 — CI branch triggers (2026-11-09)
-
-Shipped on `dev` in #29 (`546dc5d`). QA owned the CI fix.
-
-`ci.yml` and `deploy-staging.yml` filtered on `main`. This repo has no `main` ref; `origin/HEAD` is `master`, and integrated work lands on `dev`. CI now runs on push to `master` and `dev`, and on pull requests that target either branch. Staging deploy runs on push to `master` (the branch the workflow called `main`). Production deploy stays on `v*` tags (that file never named `main`). Neither deploy workflow runs on pull requests.
-
-### SPO-29 — WNBA rollout
-
-Shipped. Phases 0–6 are on `dev`:
-
-| Phase | Ticket | PR |
+| 盒子 | 做什麼 | 路徑 |
 |---|---|---|
-| 0 — Odds API verification | SPO-31 | #10 |
-| 1 — CSV + read-only stats page | SPO-32 | #11 |
-| 2 — odds + no-vig | SPO-33 | #12 |
-| 3 — daily picks | SPO-35 | #14 |
-| 4 — lineup ingestion | SPO-34 | #13 |
-| 5 — LangGraph league-awareness | SPO-48, SPO-52, SPO-58 | #15, #16, #17 |
-| 6 — betslip + navbar/about | SPO-37 | #18 |
+| The Odds API | 賽事與盤口 | `backend/app/services/odds_gateway.py` |
+| Scheduler | APScheduler。每日分析、三次快照、先發、CSV | `backend/app/services/scheduler.py` |
+| daily_analysis | 一本書一條主線，算出今日精選，寫進 Redis 15 分鐘 | `backend/app/services/daily_analysis.py` |
+| Postgres snapshots | `odds_line_snapshots`。一天三次 | `backend/app/services/odds_snapshot_service.py` |
+| Redis | 精選、盤口、先發。bulk props 組好的 JSON 快取 60 秒 | `backend/app/services/cache.py` |
+| bulk_props | 只讀最新快照。不打 Odds API | `backend/app/services/bulk_props.py` |
+| lineup | 先發共識。Redis，沒中再讀 Postgres | `backend/app/services/lineup_service.py` |
+| LangGraph | 問答。見下圖 | `scripts/agents/graph.py` |
+| FastAPI | 啟動 scheduler，掛上各路由 | `backend/app/main.py` |
+| Next.js | No-Vig 介面 | `frontend/app/layout.tsx` |
 
-Later WNBA follow-ups also on `dev`: SPO-60 metadata title (#19), SPO-64 README + `dev-doc.md` (#20), SPO-83 event-detail parity (#25, phase 0 of SPO-82).
+`nba_lineup_rag/` 給問答的傷兵工具用（`scripts/agents/tools/historical.py`）。每日精選不讀它。
 
-### SPO-10 — event-page stat expansion
+```mermaid
+flowchart LR
+  planner --> historical_agent
+  planner --> projection_agent
+  planner --> market_agent
+  historical_agent --> scoring
+  projection_agent --> scoring
+  market_agent --> scoring
+  scoring --> critic
+  critic --> synthesizer
+  synthesizer -->|retry| planner
+  synthesizer -->|done| stopNode["END"]
+```
 
-SPO-10 and SPO-11 are Done. Verified on `dev` at `6688384` (backend 1041 passed, 23 skipped, 6 xfailed, 0 failed, CI 6/6). WNBA live coverage is deferred because WNBA work is paused.
+| 節點 | 做什麼 | 路徑 |
+|---|---|---|
+| planner | 拆問題 | `scripts/agents/agents.py` `planner_node` |
+| historical_agent | 歷史 | 同檔 `historical_agent_node` |
+| projection_agent | 程式標成 stub，回傳 `all_unavailable` | 同檔 `projection_agent_node` |
+| market_agent | 盤口 | 同檔 `market_agent_node` |
+| scoring | 三路收斂後的確定性評分 | `scripts/agents/agents.py` `scoring_node`（呼叫 `scripts/agents/scoring.py` `compute_scorecard`） |
+| critic | 檢查 | `scripts/agents/agents.py` `critic_node` |
+| synthesizer | 答案。缺必要資料就回到 planner，最多重試 2 次（synthesizer 最多跑 3 次） | `scripts/agents/agents.py` `synthesizer_node` |
 
-| Phase | Evidence on `dev` |
+## 一張精選怎麼算出來
+
+| 步驟 | 規則 | 程式 |
+|---|---|---|
+| 主線 | 一本書一票。雙邊、最接近五五波（去水後）。距離相同留較低的點。不把兩個不同的點平均 | `backend/app/services/daily_analysis.py` `_main_book_line` |
+| 共識線 | 那些主線的眾數 | `backend/app/services/prob.py` `calculate_mode_threshold` |
+| 標題機率 | 該線的歷史命中率。這就是 `probability` | `DailyPick.probability` |
+| 去水 | modal line 的 no-vig。這是 market 輸入，不是標題 | `backend/app/services/pick_signals.py` `resolve_market_probability` |
+| 五個 signals | market、last 10、history、projection、defense。缺資料是 null，不是中性 | `backend/app/services/pick_signals.py` |
+| combined | `sigmoid(logit(market) + Platt(四項調整之和))`。市場係數是 1。Platt 只乘調整項 | `pick_signals.combined_probability` |
+| 空值 | 沒有盤口價，或傷兵 Out / Doubtful，`combined_probability` 是 null。WNBA 兩個欄位都是 null | `backend/app/models/schemas.py` |
+| tier | 分桶的是 `probability`，不是 combined。後端 `READ_TIER_CUTOFFS`，前端 `readTier` | `backend/app/services/daily_analysis.py`、`frontend/lib/today-board.ts` |
+
+調整項各自先截斷 ±0.15，加總再截斷 ±0.35，然後 `PLATT_A + PLATT_B * total`（`0.28036258`、`2.15982400`）。常數在 `backend/app/services/pick_signal_constants.py`。
+
+| 機率 | 後端 `tier` | 前端 `readTier` |
+|---|---|---|
+| ≥ 0.70 | Strong play | strong / Strong play |
+| ≥ 0.65 | Playable | playable / Playable |
+| ≥ 0.56 | Lean | lean / Lean only |
+| < 0.56 | null | pass / Pass |
+
+預設看板仍是 0.65、至少 10 場。NBA 會把 Lean（0.56）和 5 場的列存進 Redis，預設查詢不拿出它們。
+
+畫面上的大數字是 `probability`。`frontend/` 沒有讀 `combined_probability`。精選頁寫明沒有 blended probability。真實盤口的校正還沒過（SPO-112），所以 combined 是補充，不能當標題。
+
+## 現況
+
+### 完成
+
+分組依主題，不依合併日。SPO-106、SPO-107 也在 2026-11-10 合併，放在資料與回測。
+
+| 組 | 票號 |
 |---|---|
-| 0–1 research | `docs/research/event-page-stat-expansion/research_odds_api_markets.md` and `docs/task-summaries/SPO-12-odds-api-9-markets-research.md`, landed in `be2bfb3` |
-| 2 backend services | SPO-16 / SPO-17 / SPO-18, PR #1 (`35a25dd`) |
-| 3 frontend | SPO-20, PR #3 (`e36cb57`) |
-| 3.5 API route gap | SPO-26, PR #4 (`490b9be`) |
-| 4 integration tests | SPO-101, shipped on `dev` in #34. Gated with `RUN_INTEGRATION=1`. |
-| 5 final review | Done with SPO-10 and SPO-11. Verified on `dev` at `6688384` (backend 1041 passed, 23 skipped, 6 xfailed, 0 failed, CI 6/6). WNBA live coverage is deferred because WNBA work is paused. |
+| WNBA 舊版 | SPO-31、32、33、34、35、37、48、52、58、60、64、83 |
+| 事件頁 | SPO-10、11、15、16、17、18、20、26、101、102、103、104、105 |
+| 測試與流程 | SPO-22、23、24、25、70、76、95、96、100 |
+| 資料與回測 | SPO-97、98、99、106、107 |
+| 介面與後端欄位 | SPO-110a、110b、110c、111、112、113、114、115、118 |
 
-## Abandoned
+SPO-10 與 SPO-11 在 `dev` `6688384` 驗證：backend 1041 passed、23 skipped、6 xfailed、CI 6/6。WNBA live coverage 延後，因為 WNBA 工作暫停。
 
-Process tickets from the retired setup. No task summary of their own on `dev`.
+### 進行中
 
-| Ticket | What the repo shows |
+| 項目 | 狀態 |
 |---|---|
-| SPO-59 | Cited in `docs/task-summaries/SPO-60-wnba-metadata-title.md` as a review of SPO-37. |
-| SPO-62 | Cited in the same file as a browser smoke of WNBA page titles. The title fix landed as SPO-60 (#19). |
-| SPO-63 | Cited in `docs/task-summaries/SPO-64-docs-wnba-readme.md` as the docs audit that flagged the README. The README fix landed as SPO-64 (#20). |
-| SPO-75 | Parent of SPO-76 (`docs/task-summaries/SPO-76-graph-tests.md`). SPO-76 merged as #24. |
-| SPO-81 | Parent of SPO-82 (`docs/decisions/SPO-82/decision_20260531_wnba-parity-approach.md`). SPO-83 (phase 0 of SPO-82) merged as #25. |
+| 功能票 | 無 |
 
-## Dropped
+### 已關閉、未合併
 
-Stale pull requests the owner is closing. Not merged.
-
-| Ticket | PR | Branch | Subject on the branch |
-|---|---|---|---|
-| SPO-67 | #21 | `feature/SPO-67-date-utils-tests` | unit tests for `date_utils.py` |
-| SPO-73 | #23 | `feature/SPO-73-scoring-tests` | unit tests for `scoring.py` numeric guards |
-| SPO-94 | #26 | `feature/SPO-94-market-tools-tests` | unit tests for `tools/market.py` deterministic helpers |
-
-## In flight (cleanup)
-
-None in this snapshot.
-
-## Backlog
-
-| Ticket | Note |
+| 票 | PR |
 |---|---|
-| SPO-117 | Snapshot writer stores 0 rows, and alt lines overwrite the main line. Waiting for Eason's approval. `calculate_mode_threshold` already applies the tie rule. `assemble_bulk_props` takes the player `line` from that function. The per-book main line does not: `bulk_props._main_book_line` calls `daily_analysis._main_book_line` (equal distance keeps the lower posted point; with no usable price, `_posted_point`). That path should follow the same tie rule. `OddsSnapshotService.rows_from_bookmakers` stores the last Over and the last Under and does not pick a mode. |
-| #47 QA | Follow-ups from the #47 QA review. Move `_main_book_line`, `_even_money_distance` and `_posted_point` out of `daily_analysis` into a shared public module. Comment in `rate_limit.py` that the in-memory fallback counts per process and `swallow_errors` lets any limiter error through. Assert `opponent_position_rank_source` in `test_spo113_qa_review.py`. Fix the "Odds API shape" docstring in `test_spo113_field_enrichment.py` (it's our cache). Stop patching slowapi private attributes in the Redis-down test. Reject NaN/inf in `bulk_props._as_float`. Add QA's SPO-118 tests. |
-| Limiter | Before running more than one worker process, re-evaluate the limiter's in-memory fallback (limits become per process). |
+| SPO-67 | #21 |
+| SPO-73 | #23 |
+| SPO-94 | #26 |
 
-## Not classified
+### 未歸類
 
-`research/SPO-65-parlay-correlation` is on the remote (`268fd28`) and is not merged to `dev`. No pull request for it showed up in `gh pr list --base dev`. Status is not recorded here.
+`research/SPO-65-parlay-correlation`（`268fd28`）在 remote，沒有合併進 `dev`，也沒有進 `dev` 的 PR。
 
-## How this file is maintained
+### 卡住
 
-The engineer who changes a ticket's state updates that ticket's row in the same pull request. Keep a row terse when the title or status is not in the repo.
+| 項目 | 狀態 |
+|---|---|
+| SPO-117 | 快照寫入 0 列、替代盤口蓋掉主線。等 Eason 核准 |
+| WNBA | 暫停。舊程式留著 |
+| 標題機率 | 真實盤口校正未過。標題維持 `probability` |
+
+## 已知問題與風險
+
+| 項目 | 現況 |
+|---|---|
+| 快照 0 列 | SPO-117。等 Eason 核准。寫入器在 `odds_snapshot_service.rows_from_bookmakers` |
+| Odds API 額度 | 2026-05-13 實測月配額 500，當時剩餘 331（SPO-31）。程式沒把 500 寫進設定。快照一天三次，規劃約 225 credits/天，約 6,750/月，遠高於 500。要先確認現在的方案。225 是規劃，不是帳單（`docs/decisions/spo-114-bulk-props/decision_20261110_snapshot-only.md`） |
+| limiter | Redis 掛了改用行程內計數。`swallow_errors` 讓 limiter 出錯仍放行。多個 worker 之前要重看。`backend/app/middleware/rate_limit.py` |
+
+## 待辦
+
+- SPO-117：快照 0 列；替代盤口蓋掉主線。等核准。
+- SPO-117 平手：待確認。同一本書裡不平均是 SPO-115 的刻意設計。`bulk_props._main_book_line` 呼叫 `daily_analysis._main_book_line`，沒有走 `calculate_mode_threshold`。球員的 `line` 有走。先確認這條路徑，不是已決定的修法。
+- #47 QA：把 `_main_book_line`、`_even_money_distance`、`_posted_point` 抽成共用的公開模組。
+- #47 QA：`rate_limit.py` 註明行程內計數，以及 `swallow_errors` 會放行 limiter 錯誤。
+- #47 QA：`test_spo113_qa_review.py` 斷言 `opponent_position_rank_source`。
+- #47 QA：`test_spo113_field_enrichment.py` 的 Odds API shape 註解改成我們的 cache。
+- #47 QA：Redis 掛掉的測試不要 patch slowapi 的私有屬性。
+- #47 QA：`bulk_props._as_float` 拒絕 NaN / inf。
+- #47 QA：補上 QA 的 SPO-118 測試。
+- 下一步：開第二個 worker 之前，重看 limiter 的 in-memory fallback。
+
+## 開發流程
+
+| 誰 | 做什麼 |
+|---|---|
+| 工程師 | 從 `origin/dev` 開分支，一個 PR 進 `dev` |
+| QA | 測、審 |
+| Eason | squash-merge。只有 Eason 合併 |
+| 功能 PR | 不改 `docs/progress.md`。progress note 放在 PR body 的 `## Progress notes (for the docs PR)`。`docs/decisions/` 仍可改 |
+| 文件 PR | 每批合併後，一位工程師開一個小 docs PR 更新 `docs/progress.md` |
+| git | commit 不附工具或模型署名。不直接 push `dev` 或 `master` |

@@ -19,7 +19,7 @@
  * rather than "| No-Vig NBA".
  *
  * Scope is deliberately narrow — title + description only. The root
- * layout still owns fonts, providers, navbar, footer, icons, manifest,
+ * layout still owns fonts, providers, navbar, icons, manifest,
  * keywords, and viewport (none of which differ between leagues).
  */
 

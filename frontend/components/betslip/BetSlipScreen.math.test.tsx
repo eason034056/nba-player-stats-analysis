@@ -66,29 +66,29 @@ describe("BetSlipScreen stored-rate math", () => {
 
     renderWithProviders(<BetSlipScreen />);
 
-    expect(await screen.findByText("49.0%")).toBeInTheDocument();
-    expect(screen.getByText("70.1%")).toBeInTheDocument();
+    expect(await screen.findByText("49%")).toBeInTheDocument();
+    expect(screen.getByText("70%")).toBeInTheDocument();
     expect(screen.getByText("2")).toBeInTheDocument();
 
     await user.click(screen.getByRole("button", { name: "Remove Tyrese Haliburton" }));
 
-    expect(screen.queryByText("49.0%")).not.toBeInTheDocument();
+    expect(screen.queryByText("49%")).not.toBeInTheDocument();
     expect(screen.queryByText("Tyrese Haliburton")).not.toBeInTheDocument();
-    expect(screen.getAllByText("72.0%").length).toBeGreaterThan(0);
-    expect(screen.queryByText("70.1%")).not.toBeInTheDocument();
+    expect(screen.getAllByText("72%").length).toBeGreaterThan(0);
+    expect(screen.queryByText("70%")).not.toBeInTheDocument();
     const summary = screen.getByText("avg. probability").parentElement;
     expect(summary).not.toBeNull();
     if (!summary) return;
     expect(within(summary.parentElement as HTMLElement).getByText("1")).toBeInTheDocument();
   });
 
-  it("shows 67.6% for a stored 0.6755 rate", async () => {
+  it("shows 68% for a stored 0.6755 rate", async () => {
     seedBetSlip([slipPick(picks[0], 0.6755)]);
 
     renderWithProviders(<BetSlipScreen />);
 
-    expect((await screen.findAllByText("67.6%")).length).toBeGreaterThan(0);
-    expect(screen.queryByText("67.5%")).not.toBeInTheDocument();
+    expect((await screen.findAllByText("68%")).length).toBeGreaterThan(0);
+    expect(screen.queryByText("67%")).not.toBeInTheDocument();
     expect(screen.queryByText(/NaN|Infinity/)).not.toBeInTheDocument();
   });
 
@@ -97,11 +97,11 @@ describe("BetSlipScreen stored-rate math", () => {
     seedBetSlip([slipPick(picks[0])]);
     renderWithProviders(<BetSlipScreen />);
 
-    expect((await screen.findAllByText("72.0%")).length).toBeGreaterThan(0);
+    expect((await screen.findAllByText("72%")).length).toBeGreaterThan(0);
     await user.click(screen.getByRole("button", { name: "Remove Bam Adebayo" }));
 
     expect(screen.getByRole("heading", { name: /nothing saved yet/i })).toBeInTheDocument();
-    expect(screen.queryByText("72.0%")).not.toBeInTheDocument();
+    expect(screen.queryByText("72%")).not.toBeInTheDocument();
     expect(screen.queryByText("all hit")).not.toBeInTheDocument();
   });
 });

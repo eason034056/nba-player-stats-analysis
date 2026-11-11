@@ -53,6 +53,7 @@ import {
   type NoVigResponse,
 } from "@/lib/schemas";
 import { cn } from "@/lib/utils";
+import { formatPercent } from "@/lib/player-dd";
 import { PlayerDDTile } from "@/components/PlayerDDTile";
 
 /**
@@ -220,6 +221,10 @@ interface PlayerHistoryStatsProps {
     request: PlayerDDHistoryRequest,
   ) => Promise<PlayerDDHistoryResponse>;
   cacheNamespace?: string;
+  /** Event clubs. When both are set, the teammate list drops a club that is not playing. */
+  eventHome?: string;
+  eventAway?: string;
+  eventAsOf?: string;
 }
 
 /**
@@ -237,6 +242,9 @@ export function PlayerHistoryStats({
   calculateNoVigFn,
   getPlayerDDHistoryFn,
   cacheNamespace = "nba",
+  eventHome = "",
+  eventAway = "",
+  eventAsOf = "",
 }: PlayerHistoryStatsProps) {
   // A missing client follows the league. Passing the NBA function into a
   // WNBA panel would post the binary market to /api/nba/props/no-vig.
@@ -297,7 +305,7 @@ export function PlayerHistoryStats({
     isError: isHistoryError,
     error: historyError,
   } = useQuery({
-    queryKey: ["playerHistory", cacheNamespace, selectedPlayer, metric, threshold, recentN, selectedOpponent, starterFilter, teammateFilter, teammatePlayedFilter],
+    queryKey: ["playerHistory", cacheNamespace, selectedPlayer, metric, threshold, recentN, selectedOpponent, starterFilter, teammateFilter, teammatePlayedFilter, eventHome, eventAway, eventAsOf],
     queryFn: () =>
       getPlayerHistoryFn({
         player: selectedPlayer,
@@ -310,6 +318,9 @@ export function PlayerHistoryStats({
         is_starter: starterFilter === "all" ? undefined : starterFilter === "starter",
         teammate_filter: teammateFilter.length > 0 ? teammateFilter : undefined,
         teammate_played: teammatePlayedFilter === "all" ? undefined : teammatePlayedFilter === "with",
+        home_team: eventHome || undefined,
+        away_team: eventAway || undefined,
+        as_of: eventAsOf || undefined,
       }),
     // DD is binary. /player-history answers Over/Under only and returns 400
     // for metric=dd, with a pointer to /player-dd-history. PlayerDDTile
@@ -801,9 +812,7 @@ export function PlayerHistoryStats({
                 <span className="text-sm font-bold">Over Probability</span>
               </div>
               <p className="text-2xl font-bold text-green-800">
-                {historyData.p_over !== null && historyData.p_over !== undefined
-                  ? `${(historyData.p_over * 100).toFixed(1)}%`
-                  : "N/A"}
+                {formatPercent(historyData.p_over)}
               </p>
               <p className="text-xs text-gray mt-1">
                 &gt; {threshold}
@@ -817,9 +826,7 @@ export function PlayerHistoryStats({
                 <span className="text-sm font-bold">Under Probability</span>
               </div>
               <p className="text-2xl font-bold text-red">
-                {historyData.p_under !== null && historyData.p_under !== undefined
-                  ? `${(historyData.p_under * 100).toFixed(1)}%`
-                  : "N/A"}
+                {formatPercent(historyData.p_under)}
               </p>
               <p className="text-xs text-gray mt-1">
                 &lt; {threshold}

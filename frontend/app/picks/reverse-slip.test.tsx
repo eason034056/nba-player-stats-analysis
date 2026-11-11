@@ -121,7 +121,7 @@ describe("reverse slip and league storage keys", () => {
     await user.click(within(card).getByRole("button", { name: "Add Under" }));
 
     const shown = formatPercent(1 - bam.probability);
-    expect(shown).toBe("28.0%");
+    expect(shown).toBe("28%");
     expect((await screen.findAllByText("Under 18.5 points")).length).toBeGreaterThan(0);
     expect(screen.getAllByText(shown).length).toBeGreaterThan(0);
     expect(screen.getByText("Pass")).toBeInTheDocument();

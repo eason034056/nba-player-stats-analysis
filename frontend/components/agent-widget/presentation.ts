@@ -5,6 +5,7 @@ import type {
   AgentQuickAction,
   AgentThreadMessage,
 } from "@/lib/agent-chat";
+import { formatPercent, roundHalfAwayFromZero } from "@/lib/player-dd";
 
 interface CatalogAction extends AgentQuickAction {
   requiresPick?: boolean;
@@ -200,18 +201,14 @@ export const getSuggestionSets = ({
 };
 
 export const formatPct = (value: number | null | undefined) => {
-  if (value == null || Number.isNaN(value)) {
-    return "N/A";
-  }
-
-  return `${(value * 100).toFixed(1)}%`;
+  if (typeof value !== "number" || !Number.isFinite(value)) return "N/A";
+  return formatPercent(value);
 };
 
+/** Signed edge (EV, market delta). One decimal, not a whole probability. */
 export const formatSignedPct = (value: number | null | undefined) => {
-  if (value == null || Number.isNaN(value)) {
-    return "N/A";
-  }
-
-  const sign = value > 0 ? "+" : "";
-  return `${sign}${(value * 100).toFixed(1)}%`;
+  if (typeof value !== "number" || !Number.isFinite(value)) return "N/A";
+  const rounded = roundHalfAwayFromZero(value * 100, 1);
+  const text = `${rounded.toFixed(1)}%`;
+  return rounded > 0 ? `+${text}` : text;
 };
