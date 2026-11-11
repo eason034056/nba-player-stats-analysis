@@ -85,6 +85,8 @@ set +a
 ./scripts/db_migrate_to_rds.sh
 ```
 
+If verify failed after the restore, re-run with `--verify-only`. That skips the dump and the restore and compares row counts, `max(id)`, and sequence `last_value` again.
+
 ```bash
 read -s -p "Local URL: " LOCAL_DATABASE_URL
 echo
@@ -150,7 +152,7 @@ Run `terraform plan` again. Leave the variable unset to keep the default VPC. An
 
 | Script | Required environment | What it refuses to do |
 |---|---|---|
-| `scripts/db_migrate_to_rds.sh` | `LOCAL_DATABASE_URL`, `RDS_DATABASE_URL` | Print URLs or passwords. Run `pg_restore` when its major version is not 16 (override: `ALLOW_PG_RESTORE_MISMATCH=1`). Restore when the two URLs are identical. Default client is `docker exec no-vig-nba-postgres`. `PG_CLIENT=docker-run` uses `docker run --rm postgres:16`. Adds `sslmode=require` on the RDS URL when `sslmode` is absent. |
+| `scripts/db_migrate_to_rds.sh` | `LOCAL_DATABASE_URL`, `RDS_DATABASE_URL` | Print URLs or passwords. Run `pg_restore` when its major version is not 16 (override: `ALLOW_PG_RESTORE_MISMATCH=1`). Restore when the two URLs are identical. Default client is `docker exec no-vig-nba-postgres`. `PG_CLIENT=docker-run` uses `docker run --rm postgres:16`. Adds `sslmode=require` on the RDS URL when `sslmode` is absent. `--verify-only` skips the dump, the restore, and that version gate, and only compares row counts, `max(id)`, and sequence `last_value`. If verify failed after a restore, re-run with `--verify-only`. |
 | `scripts/aws_update_my_ip.sh` | none (uses curl) | Call AWS by itself. It rewrites gitignored `terraform.tfvars` and prints `terraform apply`. `--apply` is the only way it launches terraform. |
 | `scripts/sync_raw_to_s3.sh` | `S3_BUCKET`, `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_REGION` | `--delete`. Paths default to `/workspace/bdl-cache`, `/workspace/bdl-archive`, `/workspace/bdl-eval/samples` and can be overridden with `BDL_CACHE_DIR`, `BDL_ARCHIVE_DIR`, `BDL_SAMPLES_DIR`. |
 | `scripts/pg_dump_to_s3.sh` | Those AWS variables plus `RDS_DATABASE_URL` or `DATABASE_URL` | Print the database URL. `DUMP_DATE=YYYY-MM-DD` overrides the UTC date in the object key. The bucket keeps each current dump for 90 days; this script does not delete. |
