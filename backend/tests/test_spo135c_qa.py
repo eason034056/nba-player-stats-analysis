@@ -78,7 +78,8 @@ def test_picks_reads_and_nba_agent_tools_do_not_construct_bdl_client(
         market_probability=0.58,
         injury_status=None,
     )
-    # /reads still pass injury_status=None, so an Out player keeps a blend.
+    # The helper blends when the caller passes no injury word. /reads
+    # now passes the cache word; a missing snapshot is what leaves it None.
     assert combined is not None
     assert 0.0 < combined < 1.0
     assert [signal.key for signal in signals] == [
@@ -101,11 +102,13 @@ def test_picks_reads_and_nba_agent_tools_do_not_construct_bdl_client(
     assert report["details"]["injuries"]
 
 
-def test_suffix_stripped_name_attaches_a_unique_jr_row() -> None:
-    """player_name_key drops Jr/III. A unique cache row then matches the stem.
+def test_suffix_is_kept_so_a_unique_jr_row_does_not_attach_to_the_stem() -> None:
+    """A unique 'Gary Trent Jr.' row does not attach to 'Gary Trent'.
 
-    Two BDL ids that share that stem stay unmatched. Picks do not pass a
-    bdl_player_id, so a unique 'X Jr.' Out can attach to pick name 'X'.
+    The applied QA check recorded the old player_name_key fallback,
+    which dropped Jr/III and then matched the stem. That fallback is
+    gone. Two different full names are not ambiguous. The id still
+    wins when the caller has one. Picks do not pass a bdl_player_id.
     """
     junior = {
         "player": "Gary Trent Jr.",
@@ -120,8 +123,9 @@ def test_suffix_stripped_name_attaches_a_unique_jr_row() -> None:
         "bdl_player_id": 1,
     }
     assert match_injury_entry([junior], "Gary Trent Jr.") is junior
-    assert match_injury_entry([junior], "Gary Trent") is junior
-    assert match_injury_entry([junior, senior], "Gary Trent Jr.") is None
+    assert match_injury_entry([junior], "Gary Trent") is None
+    assert match_injury_entry([junior, senior], "Gary Trent Jr.") is junior
+    assert match_injury_entry([junior, senior], "Gary Trent") is senior
     assert match_injury_entry([junior], "Gary Trent Jr.", 999) is junior
     assert match_injury_entry([junior, senior], "other", 999) is junior
 
@@ -237,8 +241,13 @@ def test_omitting_the_projection_slot_does_not_change_combined_probability() -> 
     assert injury_blocks_combined("Questionable", "Questionable") is False
 
 
-def test_reads_still_give_a_blend_when_the_player_is_out() -> None:
-    """event_reads passes injury_status=None and no raw_status."""
+def test_signal_helper_blends_when_no_injury_word_is_passed() -> None:
+    """build_nba_signals blends when the caller passes no injury word.
+
+    /reads used to do that. It now passes the cache status. A missing
+    snapshot is what still leaves the word unset. Out and a raw Out
+    still block when the caller passes them.
+    """
     _signals, combined, _total = build_nba_signals(
         side="over",
         line=24.5,
