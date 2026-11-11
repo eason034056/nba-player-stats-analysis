@@ -2,8 +2,7 @@
 
 - Ticket: SPO-132e
 - Branch: `feature/SPO-132e-verify-fail-closed` (from `origin/feature/SPO-132d-verify-loop-stdin` at `4dbf02f`)
-- Base: `dev`
-- Stacks on #70. After #70 squash-merges, update this branch with `git merge origin/dev`.
+- Stacks on #70. The pull request base is `feature/SPO-132d-verify-loop-stdin`, so the diff is only this ticket. After #70 squash-merges, update this branch with `git merge origin/dev` and retarget the pull request to `dev`.
 
 ## Summary
 
