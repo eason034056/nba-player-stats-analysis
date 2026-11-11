@@ -80,14 +80,14 @@ TOOL_EXPLANATIONS = {
     },
     "auto_teammate_impact": {
         "name": "隊友影響 (Teammate Impact)",
-        "desc": "明星隊友在/不在場時，該球員的表現差異。結合傷兵報告判斷今日情境。",
-        "source": "csv + star_players.json + ESPN/CBS 傷兵報告",
+        "desc": "明星隊友在/不在場時，該球員的表現差異。NBA 有 BALLDONTLIE_API_KEY 時用後端傷兵快取；沒有 key，以及 WNBA，仍用 ESPN/CBS。快取缺失或超過 6 小時不把隊友標成健康。",
+        "source": "csv + star_players.json + BALLDONTLIE injury cache (NBA). WNBA and a missing API key stay on ESPN/CBS.",
         "fields": ["teammate_chemistry", "today_scenario"],
     },
     "get_official_injury_report": {
         "name": "官方傷兵報告 (Injury Report)",
-        "desc": "對手球隊的傷兵名單（ESPN + CBS 爬取）。影響對手防守強度與輪替。",
-        "source": "nba_lineup_rag (ESPN/CBS injury pages)",
+        "desc": "球隊傷兵名單。NBA 有 BALLDONTLIE_API_KEY 時只讀後端快取 injuries:nba:latest；沒有 key 時爬 ESPN + CBS。快取缺失或超過 6 小時回 caution（injury data unavailable），不把名單空白當成全員健康。WNBA 仍爬 ESPN + CBS。",
+        "source": "BALLDONTLIE cache injuries:nba:latest (ESPN/CBS when the API key is unset; WNBA unchanged)",
         "fields": ["team", "injuries"],
     },
     "get_own_team_projected_lineup": {

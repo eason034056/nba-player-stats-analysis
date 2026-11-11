@@ -1,0 +1,604 @@
+{
+ "data": [
+  {
+   "team": {
+    "id": 1,
+    "conference": "East",
+    "division": "Southeast",
+    "city": "Atlanta",
+    "name": "Hawks",
+    "full_name": "Atlanta Hawks",
+    "abbreviation": "ATL"
+   },
+   "conference_record": "7-1  ",
+   "conference_rank": 5,
+   "division_record": "4-1",
+   "division_rank": 1,
+   "wins": 7,
+   "losses": 5,
+   "home_record": "3-3",
+   "road_record": "4-2",
+   "season": 2026
+  },
+  {
+   "team": {
+    "id": 7,
+    "conference": "West",
+    "division": "Southwest",
+    "city": "Dallas",
+    "name": "Mavericks",
+    "full_name": "Dallas Mavericks",
+    "abbreviation": "DAL"
+   },
+   "conference_record": "3-4  ",
+   "conference_rank": 9,
+   "division_record": "1-3",
+   "division_rank": 4,
+   "wins": 7,
+   "losses": 4,
+   "home_record": "5-2",
+   "road_record": "2-2",
+   "season": 2026
+  },
+  {
+   "team": {
+    "id": 8,
+    "conference": "West",
+    "division": "Northwest",
+    "city": "Denver",
+    "name": "Nuggets",
+    "full_name": "Denver Nuggets",
+    "abbreviation": "DEN"
+   },
+   "conference_record": "3-4  ",
+   "conference_rank": 10,
+   "division_record": "0-2",
+   "division_rank": 4,
+   "wins": 5,
+   "losses": 4,
+   "home_record": "2-2",
+   "road_record": "2-2",
+   "season": 2026
+  },
+  {
+   "team": {
+    "id": 2,
+    "conference": "East",
+    "division": "Atlantic",
+    "city": "Boston",
+    "name": "Celtics",
+    "full_name": "Boston Celtics",
+    "abbreviation": "BOS"
+   },
+   "conference_record": "8-1  ",
+   "conference_rank": 2,
+   "division_record": "2-0",
+   "division_rank": 2,
+   "wins": 8,
+   "losses": 2,
+   "home_record": "5-0",
+   "road_record": "3-2",
+   "season": 2026
+  },
+  {
+   "team": {
+    "id": 10,
+    "conference": "West",
+    "division": "Pacific",
+    "city": "Golden State",
+    "name": "Warriors",
+    "full_name": "Golden State Warriors",
+    "abbreviation": "GSW"
+   },
+   "conference_record": "6-3  ",
+   "conference_rank": 4,
+   "division_record": "3-2",
+   "division_rank": 2,
+   "wins": 8,
+   "losses": 3,
+   "home_record": "6-1",
+   "road_record": "2-2",
+   "season": 2026
+  },
+  {
+   "team": {
+    "id": 5,
+    "conference": "East",
+    "division": "Central",
+    "city": "Chicago",
+    "name": "Bulls",
+    "full_name": "Chicago Bulls",
+    "abbreviation": "CHI"
+   },
+   "conference_record": "1-8  ",
+   "conference_rank": 14,
+   "division_record": "1-0",
+   "division_rank": 4,
+   "wins": 1,
+   "losses": 8,
+   "home_record": "0-3",
+   "road_record": "1-5",
+   "season": 2026
+  },
+  {
+   "team": {
+    "id": 3,
+    "conference": "East",
+    "division": "Atlantic",
+    "city": "Brooklyn",
+    "name": "Nets",
+    "full_name": "Brooklyn Nets",
+    "abbreviation": "BKN"
+   },
+   "conference_record": "2-7  ",
+   "conference_rank": 13,
+   "division_record": "0-2",
+   "division_rank": 5,
+   "wins": 2,
+   "losses": 8,
+   "home_record": "1-3",
+   "road_record": "1-5",
+   "season": 2026
+  },
+  {
+   "team": {
+    "id": 11,
+    "conference": "West",
+    "division": "Southwest",
+    "city": "Houston",
+    "name": "Rockets",
+    "full_name": "Houston Rockets",
+    "abbreviation": "HOU"
+   },
+   "conference_record": "4-3  ",
+   "conference_rank": 6,
+   "division_record": "2-1",
+   "division_rank": 2,
+   "wins": 8,
+   "losses": 3,
+   "home_record": "5-1",
+   "road_record": "3-2",
+   "season": 2026
+  },
+  {
+   "team": {
+    "id": 14,
+    "conference": "West",
+    "division": "Pacific",
+    "city": "Los Angeles",
+    "name": "Lakers",
+    "full_name": "Los Angeles Lakers",
+    "abbreviation": "LAL"
+   },
+   "conference_record": "6-2  ",
+   "conference_rank": 1,
+   "division_record": "4-1",
+   "division_rank": 1,
+   "wins": 10,
+   "losses": 2,
+   "home_record": "5-1",
+   "road_record": "5-1",
+   "season": 2026
+  },
+  {
+   "team": {
+    "id": 4,
+    "conference": "East",
+    "division": "Southeast",
+    "city": "Charlotte",
+    "name": "Hornets",
+    "full_name": "Charlotte Hornets",
+    "abbreviation": "CHA"
+   },
+   "conference_record": "4-7  ",
+   "conference_rank": 9,
+   "division_record": "2-2",
+   "division_rank": 3,
+   "wins": 4,
+   "losses": 7,
+   "home_record": "3-4",
+   "road_record": "1-3",
+   "season": 2026
+  },
+  {
+   "team": {
+    "id": 13,
+    "conference": "West",
+    "division": "Pacific",
+    "city": "LA",
+    "name": "Clippers",
+    "full_name": "LA Clippers",
+    "abbreviation": "LAC"
+   },
+   "conference_record": "2-5  ",
+   "conference_rank": 13,
+   "division_record": "1-3",
+   "division_rank": 4,
+   "wins": 2,
+   "losses": 7,
+   "home_record": "2-3",
+   "road_record": "0-4",
+   "season": 2026
+  },
+  {
+   "team": {
+    "id": 6,
+    "conference": "East",
+    "division": "Central",
+    "city": "Cleveland",
+    "name": "Cavaliers",
+    "full_name": "Cleveland Cavaliers",
+    "abbreviation": "CLE"
+   },
+   "conference_record": "4-4  ",
+   "conference_rank": 7,
+   "division_record": "1-0",
+   "division_rank": 2,
+   "wins": 5,
+   "losses": 6,
+   "home_record": "4-2",
+   "road_record": "1-4",
+   "season": 2026
+  },
+  {
+   "team": {
+    "id": 9,
+    "conference": "East",
+    "division": "Central",
+    "city": "Detroit",
+    "name": "Pistons",
+    "full_name": "Detroit Pistons",
+    "abbreviation": "DET"
+   },
+   "conference_record": "7-2  ",
+   "conference_rank": 3,
+   "division_record": "0-0",
+   "division_rank": 1,
+   "wins": 7,
+   "losses": 3,
+   "home_record": "3-2",
+   "road_record": "4-1",
+   "season": 2026
+  },
+  {
+   "team": {
+    "id": 15,
+    "conference": "West",
+    "division": "Southwest",
+    "city": "Memphis",
+    "name": "Grizzlies",
+    "full_name": "Memphis Grizzlies",
+    "abbreviation": "MEM"
+   },
+   "conference_record": "6-2  ",
+   "conference_rank": 7,
+   "division_record": "0-1",
+   "division_rank": 3,
+   "wins": 7,
+   "losses": 3,
+   "home_record": "2-3",
+   "road_record": "5-0",
+   "season": 2026
+  },
+  {
+   "team": {
+    "id": 30,
+    "conference": "East",
+    "division": "Southeast",
+    "city": "Washington",
+    "name": "Wizards",
+    "full_name": "Washington Wizards",
+    "abbreviation": "WAS"
+   },
+   "conference_record": "4-6  ",
+   "conference_rank": 10,
+   "division_record": "2-3",
+   "division_rank": 4,
+   "wins": 4,
+   "losses": 7,
+   "home_record": "2-2",
+   "road_record": "2-5",
+   "season": 2026
+  },
+  {
+   "team": {
+    "id": 27,
+    "conference": "West",
+    "division": "Southwest",
+    "city": "San Antonio",
+    "name": "Spurs",
+    "full_name": "San Antonio Spurs",
+    "abbreviation": "SAS"
+   },
+   "conference_record": "9-2  ",
+   "conference_rank": 2,
+   "division_record": "2-1",
+   "division_rank": 1,
+   "wins": 9,
+   "losses": 2,
+   "home_record": "4-2",
+   "road_record": "5-0",
+   "season": 2026
+  },
+  {
+   "team": {
+    "id": 22,
+    "conference": "East",
+    "division": "Southeast",
+    "city": "Orlando",
+    "name": "Magic",
+    "full_name": "Orlando Magic",
+    "abbreviation": "ORL"
+   },
+   "conference_record": "2-4  ",
+   "conference_rank": 12,
+   "division_record": "0-2",
+   "division_rank": 5,
+   "wins": 2,
+   "losses": 7,
+   "home_record": "0-4",
+   "road_record": "2-3",
+   "season": 2026
+  },
+  {
+   "team": {
+    "id": 20,
+    "conference": "East",
+    "division": "Atlantic",
+    "city": "New York",
+    "name": "Knicks",
+    "full_name": "New York Knicks",
+    "abbreviation": "NYK"
+   },
+   "conference_record": "6-4  ",
+   "conference_rank": 4,
+   "division_record": "1-3",
+   "division_rank": 3,
+   "wins": 6,
+   "losses": 4,
+   "home_record": "4-2",
+   "road_record": "2-2",
+   "season": 2026
+  },
+  {
+   "team": {
+    "id": 18,
+    "conference": "West",
+    "division": "Northwest",
+    "city": "Minnesota",
+    "name": "Timberwolves",
+    "full_name": "Minnesota Timberwolves",
+    "abbreviation": "MIN"
+   },
+   "conference_record": "4-2  ",
+   "conference_rank": 5,
+   "division_record": "1-0",
+   "division_rank": 2,
+   "wins": 8,
+   "losses": 3,
+   "home_record": "4-1",
+   "road_record": "4-2",
+   "season": 2026
+  },
+  {
+   "team": {
+    "id": 16,
+    "conference": "East",
+    "division": "Southeast",
+    "city": "Miami",
+    "name": "Heat",
+    "full_name": "Miami Heat",
+    "abbreviation": "MIA"
+   },
+   "conference_record": "2-2  ",
+   "conference_rank": 8,
+   "division_record": "1-1",
+   "division_rank": 2,
+   "wins": 4,
+   "losses": 6,
+   "home_record": "1-3",
+   "road_record": "3-3",
+   "season": 2026
+  },
+  {
+   "team": {
+    "id": 19,
+    "conference": "West",
+    "division": "Southwest",
+    "city": "New Orleans",
+    "name": "Pelicans",
+    "full_name": "New Orleans Pelicans",
+    "abbreviation": "NOP"
+   },
+   "conference_record": "3-6  ",
+   "conference_rank": 11,
+   "division_record": "1-0",
+   "division_rank": 5,
+   "wins": 4,
+   "losses": 7,
+   "home_record": "3-3",
+   "road_record": "1-4",
+   "season": 2026
+  },
+  {
+   "team": {
+    "id": 12,
+    "conference": "East",
+    "division": "Central",
+    "city": "Indiana",
+    "name": "Pacers",
+    "full_name": "Indiana Pacers",
+    "abbreviation": "IND"
+   },
+   "conference_record": "1-5  ",
+   "conference_rank": 11,
+   "division_record": "0-1",
+   "division_rank": 3,
+   "wins": 3,
+   "losses": 8,
+   "home_record": "0-4",
+   "road_record": "3-3",
+   "season": 2026
+  },
+  {
+   "team": {
+    "id": 24,
+    "conference": "West",
+    "division": "Pacific",
+    "city": "Phoenix",
+    "name": "Suns",
+    "full_name": "Phoenix Suns",
+    "abbreviation": "PHX"
+   },
+   "conference_record": "2-6  ",
+   "conference_rank": 12,
+   "division_record": "1-1",
+   "division_rank": 3,
+   "wins": 3,
+   "losses": 6,
+   "home_record": "3-3",
+   "road_record": "0-3",
+   "season": 2026
+  },
+  {
+   "team": {
+    "id": 17,
+    "conference": "East",
+    "division": "Central",
+    "city": "Milwaukee",
+    "name": "Bucks",
+    "full_name": "Milwaukee Bucks",
+    "abbreviation": "MIL"
+   },
+   "conference_record": "1-8  ",
+   "conference_rank": 15,
+   "division_record": "1-2",
+   "division_rank": 5,
+   "wins": 1,
+   "losses": 10,
+   "home_record": "1-5",
+   "road_record": "0-5",
+   "season": 2026
+  },
+  {
+   "team": {
+    "id": 29,
+    "conference": "West",
+    "division": "Northwest",
+    "city": "Utah",
+    "name": "Jazz",
+    "full_name": "Utah Jazz",
+    "abbreviation": "UTA"
+   },
+   "conference_record": "1-9  ",
+   "conference_rank": 15,
+   "division_record": "0-2",
+   "division_rank": 5,
+   "wins": 1,
+   "losses": 9,
+   "home_record": "1-4",
+   "road_record": "0-5",
+   "season": 2026
+  },
+  {
+   "team": {
+    "id": 26,
+    "conference": "West",
+    "division": "Pacific",
+    "city": "Sacramento",
+    "name": "Kings",
+    "full_name": "Sacramento Kings",
+    "abbreviation": "SAC"
+   },
+   "conference_record": "1-8  ",
+   "conference_rank": 14,
+   "division_record": "0-2",
+   "division_rank": 5,
+   "wins": 1,
+   "losses": 9,
+   "home_record": "0-5",
+   "road_record": "1-4",
+   "season": 2026
+  },
+  {
+   "team": {
+    "id": 23,
+    "conference": "East",
+    "division": "Atlantic",
+    "city": "Philadelphia",
+    "name": "76ers",
+    "full_name": "Philadelphia 76ers",
+    "abbreviation": "PHI"
+   },
+   "conference_record": "9-2  ",
+   "conference_rank": 1,
+   "division_record": "2-0",
+   "division_rank": 1,
+   "wins": 9,
+   "losses": 2,
+   "home_record": "4-1",
+   "road_record": "5-1",
+   "season": 2026
+  },
+  {
+   "team": {
+    "id": 25,
+    "conference": "West",
+    "division": "Northwest",
+    "city": "Portland",
+    "name": "Trail Blazers",
+    "full_name": "Portland Trail Blazers",
+    "abbreviation": "POR"
+   },
+   "conference_record": "6-3  ",
+   "conference_rank": 8,
+   "division_record": "2-0",
+   "division_rank": 3,
+   "wins": 6,
+   "losses": 3,
+   "home_record": "1-2",
+   "road_record": "5-1",
+   "season": 2026
+  },
+  {
+   "team": {
+    "id": 21,
+    "conference": "West",
+    "division": "Northwest",
+    "city": "Oklahoma City",
+    "name": "Thunder",
+    "full_name": "Oklahoma City Thunder",
+    "abbreviation": "OKC"
+   },
+   "conference_record": "5-2  ",
+   "conference_rank": 3,
+   "division_record": "1-0",
+   "division_rank": 1,
+   "wins": 8,
+   "losses": 2,
+   "home_record": "5-0",
+   "road_record": "3-2",
+   "season": 2026
+  },
+  {
+   "team": {
+    "id": 28,
+    "conference": "East",
+    "division": "Atlantic",
+    "city": "Toronto",
+    "name": "Raptors",
+    "full_name": "Toronto Raptors",
+    "abbreviation": "TOR"
+   },
+   "conference_record": "4-1  ",
+   "conference_rank": 6,
+   "division_record": "0-0",
+   "division_rank": 4,
+   "wins": 5,
+   "losses": 5,
+   "home_record": "2-2",
+   "road_record": "3-3",
+   "season": 2026
+  }
+ ]
+}

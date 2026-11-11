@@ -68,6 +68,13 @@ class Settings(BaseSettings):
     bot_api_keys_premium: str = ""  # Premium-tier bot API keys
     bot_picks_free_delay_minutes: int = 60  # Delay for free-tier picks (minutes)
     rate_limit_bot_picks: str = "12/minute"  # Rate limit for bot picks endpoint
+
+    # BALLDONTLIE. Read from BALLDONTLIE_API_KEY in the environment.
+    # Empty keeps the ESPN/CBS NBA injury scrape for local dev.
+    balldontlie_api_key: str = ""
+    # Interval for the future nba_injuries_refresh job. Not registered
+    # until the SPO-130a client exists. Default 15 minutes.
+    nba_injuries_refresh_minutes: int = 15
     
     @property
     def allowed_origins_list(self) -> List[str]:

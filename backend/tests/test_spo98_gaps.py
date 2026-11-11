@@ -406,7 +406,7 @@ class TestHistoricalTeamCallSites:
 
     def test_auto_teammate_latest_team_without_a_date(self, monkeypatch):
         historical = _historical()
-        monkeypatch.setattr(historical, "_fetch_injury_report_for_team", lambda _code: [])
+        monkeypatch.setattr(historical, "_fetch_injury_report_for_team", lambda _code, league="nba": [])
         result = historical.auto_teammate_impact(
             "Buddy Hield", "points", 15.5, league="nba"
         )
@@ -422,7 +422,7 @@ class TestHistoricalTeamCallSites:
 
     def test_resolved_player_is_not_his_own_star(self, monkeypatch):
         historical = _historical()
-        monkeypatch.setattr(historical, "_fetch_injury_report_for_team", lambda _code: [])
+        monkeypatch.setattr(historical, "_fetch_injury_report_for_team", lambda _code, league="nba": [])
         impact = historical.auto_teammate_impact(
             "Jaren Jackson Jr", "points", 12.5, league="nba"
         )
@@ -564,7 +564,7 @@ class TestReReviewEdges:
 
     def test_star_list_matches_suffix_and_comma_variants(self, monkeypatch):
         historical = _historical()
-        monkeypatch.setattr(historical, "_fetch_injury_report_for_team", lambda _code: [])
+        monkeypatch.setattr(historical, "_fetch_injury_report_for_team", lambda _code, league="nba": [])
         queries = (
             "Jaren Jackson Jr",
             "Jaren Jackson Jr.",
@@ -589,7 +589,7 @@ class TestReReviewEdges:
     def test_injury_row_matches_suffix_and_comma_spelling(self, monkeypatch):
         historical = _historical()
 
-        def _injuries(_code):
+        def _injuries(_code, league="nba"):
             return [
                 {
                     "player": "Jaren Jackson, Jr.",

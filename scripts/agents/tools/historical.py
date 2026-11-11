@@ -3,7 +3,10 @@ historical.py – Structured tools for Dimensions 1-5.
 
 Data sources used (Phase 1 stack):
   - Existing CSV  (nba_player_game_logs.csv via csv_player_service)
-  - Official Injury Report (ESPN + CBS via nba_lineup_rag scraper)
+  - NBA injury report: BALLDONTLIE cache when BALLDONTLIE_API_KEY is set
+    (backend/app/services/nba_injuries.py). The request path only reads
+    Redis. With no key, NBA still uses the ESPN + CBS scraper.
+  - WNBA injury report: ESPN + CBS via nba_lineup_rag, unchanged.
 
 Every public tool returns a dict conforming to the signal contract:
   { signal, effect_size, sample_size, reliability, window, source, as_of, details }
@@ -11,12 +14,19 @@ Every public tool returns a dict conforming to the signal contract:
 
 import asyncio
 import json
+import logging
 import math
 import os
 import statistics
 import sys
 from datetime import datetime, timezone, timedelta
 from typing import Any, Dict, List, Optional, Tuple
+
+logger = logging.getLogger(__name__)
+
+# Shown when the NBA cache is required but missing or older than 6 hours.
+# An empty report must not be read as "everyone is healthy".
+_INJURY_DATA_UNAVAILABLE = "injury data unavailable"
 
 # ---------------------------------------------------------------------------
 # Path bootstrap – allow imports from both the backend and nba_lineup_rag
@@ -383,8 +393,33 @@ def get_teammate_impact(player: str, metric: str, threshold: float, teammate: st
 # DIMENSION 1b – Injury + Teammate Chemistry
 # ===================================================================
 
-def _fetch_injury_report_for_team(team_code: str) -> List[Dict[str, Any]]:
-    """Scrape ESPN + CBS injury pages, return entries for *team_code*."""
+def _balldontlie_configured() -> bool:
+    """True when ``BALLDONTLIE_API_KEY`` is present.
+
+    The value is read from the environment. ``Settings`` loads the same
+    variable, including a ``.env`` entry. A key exported after process
+    start is visible on ``os.environ``. Blank strings count as unset so
+    a dev machine without a key keeps the ESPN/CBS scrape. The key
+    itself is never logged and never sent by this module.
+    """
+    env_value = os.environ.get("BALLDONTLIE_API_KEY", "")
+    if isinstance(env_value, str) and env_value.strip():
+        return True
+    try:
+        from app.settings import settings
+    except ImportError:
+        return False
+    configured = settings.balldontlie_api_key or ""
+    return bool(str(configured).strip())
+
+
+def _fetch_espn_cbs_injury_report(team_code: str) -> List[Dict[str, Any]]:
+    """Scrape ESPN + CBS injury pages, return entries for *team_code*.
+
+    This is the pre-SPO-131 body. WNBA always uses it. NBA uses it only
+    when ``BALLDONTLIE_API_KEY`` is unset. The RAG scraper module stays
+    in place for the lineup ingestion scripts.
+    """
     try:
         from src.sources.injuries_pages import InjuriesPageFetcher
         from src.config import normalize_team_name
@@ -405,6 +440,78 @@ def _fetch_injury_report_for_team(team_code: str) -> List[Dict[str, Any]]:
                     "source": _src,
                 })
     return result
+
+
+def _report_is_unavailable(entries: List[Dict[str, Any]]) -> bool:
+    """True when the list is the cache-miss marker, not player rows."""
+    return bool(entries) and isinstance(entries[0], dict) and bool(entries[0].get("unavailable"))
+
+
+def _unavailable_marker(fetched_at: Any) -> Dict[str, Any]:
+    """One row that tells callers not to default players to Healthy."""
+    return {
+        "player": "",
+        "position": "",
+        "status": "",
+        "injury": "",
+        "source": "balldontlie",
+        "unavailable": True,
+        "reason": _INJURY_DATA_UNAVAILABLE,
+        "fetched_at": fetched_at,
+        "stale": True,
+    }
+
+
+def _read_cached_injury_snapshot(team_code: str) -> Dict[str, Any]:
+    """Read ``get_cached_nba_injuries`` from a worker thread.
+
+    Does not call BALLDONTLIE. Opens a short-lived Redis client so the
+    server loop's shared client is not reused on this thread.
+    """
+    from app.services.nba_injuries import get_cached_nba_injuries, open_injury_cache
+
+    async def _read() -> Dict[str, Any]:
+        local = open_injury_cache()
+        try:
+            return await get_cached_nba_injuries(team_code, cache=local)
+        finally:
+            close = getattr(local, "close", None)
+            if close is not None:
+                await close()
+
+    try:
+        return asyncio.run(_read())
+    except Exception as exc:
+        logger.warning(
+            "NBA injury cache read failed (%s); treating the report as unavailable",
+            type(exc).__name__,
+        )
+        return {"entries": [], "fetched_at": None, "stale": True}
+
+
+def _fetch_injury_report_for_team(team_code: str, league: str = "nba") -> List[Dict[str, Any]]:
+    """Return injury rows for one club.
+
+    NBA with ``BALLDONTLIE_API_KEY`` set reads the backend cache only.
+    A missing or stale cache returns a single marker row
+    (``reason`` ``injury data unavailable``) so the report is caution,
+    not a silent healthy list.
+
+    WNBA, any other league, and NBA without the key use the ESPN/CBS
+    scraper. That path's row shape is unchanged:
+    ``{player, position, status, injury, source}``.
+
+    Cache rows keep that shape and add ``bdl_player_id``, ``team``,
+    ``raw_status``, ``return_date``, and ``fetched_at``.
+    """
+    league_key = (league or "nba").strip().lower()
+    if league_key != "nba" or not _balldontlie_configured():
+        return _fetch_espn_cbs_injury_report(team_code)
+
+    snapshot = _read_cached_injury_snapshot(team_code)
+    if snapshot.get("stale"):
+        return [_unavailable_marker(snapshot.get("fetched_at"))]
+    return list(snapshot.get("entries") or [])
 
 
 def _team_code_from_name(team_name: str, league: str = "nba") -> str:
@@ -521,7 +628,25 @@ async def get_official_injury_report(team: str, date: str = "", player: str = ""
             effective_team = team or "unknown"  # 保持原值以便 details 顯示
 
     code = _team_code_from_name(effective_team, league=league)
-    entries = await asyncio.to_thread(_fetch_injury_report_for_team, code)
+    entries = await asyncio.to_thread(_fetch_injury_report_for_team, code, league)
+    if _report_is_unavailable(entries):
+        marker = entries[0]
+        return _signal_payload(
+            "caution",
+            0.0,
+            0,
+            0.0,
+            "today",
+            "official_injury_report",
+            {
+                "team": effective_team,
+                "team_code": code,
+                "injuries": [],
+                "reason": marker.get("reason") or _INJURY_DATA_UNAVAILABLE,
+                "fetched_at": marker.get("fetched_at"),
+                "stale": True,
+            },
+        )
     return _signal_payload(
         "caution" if entries else "neutral",
         0.0,
@@ -666,7 +791,23 @@ def get_availability_context(player: str, date: str = "", league: str = "nba") -
         return _signal_payload("unavailable", 0, 0, 0, "last_10", "csv", {"error": "no games"})
     team = _team_for(player, date, league=league)
     code = _team_code_from_name(team, league=league)
-    injuries = _fetch_injury_report_for_team(code)
+    injuries = _fetch_injury_report_for_team(code, league=league)
+    if _report_is_unavailable(injuries):
+        return _signal_payload(
+            "caution",
+            0.0,
+            0,
+            0.0,
+            "today",
+            "official_injury_report",
+            {
+                "player": player,
+                "status": None,
+                "reason": _INJURY_DATA_UNAVAILABLE,
+                "detail": None,
+                "stale": True,
+            },
+        )
     player_entry = next(
         (e for e in injuries if _is_same_player(e.get("player") or "", player)),
         None,
@@ -700,7 +841,28 @@ def auto_teammate_impact(player: str, metric: str, threshold: float, league: str
         return _signal_payload("neutral", 0, 0, 0.3, "season", "csv", {"note": "no star teammates registered"})
 
     code = _team_code_from_name(team, league=league)
-    injuries = _fetch_injury_report_for_team(code)
+    injuries = _fetch_injury_report_for_team(code, league=league)
+    if _report_is_unavailable(injuries):
+        # Do not label stars Healthy when the cache cannot be trusted.
+        # Chemistry deltas stay off this payload; scoring treats a missing
+        # injury_status as Healthy, so an empty list is the safe shape.
+        return _signal_payload(
+            "caution",
+            0.0,
+            0,
+            0.0,
+            "season",
+            "csv+official_injury_report",
+            {
+                "team": team,
+                "team_code": code,
+                "player_position": player_pos,
+                "teammate_chemistry": [],
+                "today_scenario": _INJURY_DATA_UNAVAILABLE,
+                "reason": _INJURY_DATA_UNAVAILABLE,
+                "stale": True,
+            },
+        )
     injury_map = {}
     for e in injuries:
         key = player_name_key(e.get("player") or "")
