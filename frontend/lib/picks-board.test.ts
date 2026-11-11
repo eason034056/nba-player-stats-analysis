@@ -169,7 +169,7 @@ describe("picks board sort, filter, and market grouping", () => {
     expect(text).not.toMatch(/Proj|Edge|min|NaN|—|Lineup|Questionable|Out/);
   });
 
-  it("quotes injury status and lineup confirmation when they are present", () => {
+  it("tags Out and Questionable, maps Doubtful to Questionable, and skips the rest", () => {
     const marked = {
       ...board[0],
       has_projection: false,
@@ -179,9 +179,25 @@ describe("picks board sort, filter, and market grouping", () => {
       injury_status: "Questionable",
       lineup_confirmed: true as const,
     };
-    expect(pickTags(marked).map((tag) => tag.text)).toEqual(
-      expect.arrayContaining(["Questionable", "Lineup confirmed"]),
-    );
+    const texts = (status: string | null) =>
+      pickTags({ ...marked, injury_status: status }).map((tag) => tag.text);
+
+    expect(texts("Out")).toContain("Out");
+    expect(texts("out")).toContain("Out");
+    expect(texts("Questionable")).toContain("Questionable");
+    expect(texts("Doubtful")).toContain("Questionable");
+    expect(texts("Doubtful")).not.toContain("Doubtful");
+    expect(texts("  doubtful  ")).toContain("Questionable");
+    for (const status of ["Probable", "Day-To-Day", "Active", null, "Unknown"]) {
+      const tags = texts(status);
+      expect(tags).not.toContain("Probable");
+      expect(tags).not.toContain("Day-To-Day");
+      expect(tags).not.toContain("Active");
+      expect(tags).not.toContain("Unknown");
+      expect(tags).not.toContain("Out");
+      expect(tags).not.toContain("Questionable");
+    }
+    expect(texts("Questionable")).not.toContain("Lineup confirmed");
     expect(pickTags({ ...marked, lineup_confirmed: false }).map((tag) => tag.text)).toContain(
       "Lineup unconfirmed",
     );

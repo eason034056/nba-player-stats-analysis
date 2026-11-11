@@ -108,7 +108,7 @@ describe("TodayBoard", () => {
     expect(bam.className).toContain("bg-white/[0.08]");
     expect(bam.className).toContain("border-white/[0.16]");
     expect(bam.className).toContain("hover:bg-white/[0.14]");
-    expect(within(web).getByText(/built from market prices, recent form, projection and matchup/i)).toBeInTheDocument();
+    expect(within(web).getByText(/built from market prices, recent form, matchup and defense rank, and rest/i)).toBeInTheDocument();
     expect(within(web).getByText("Tap a game to check any player prop")).toBeInTheDocument();
     expect(within(web).queryByText(/open a game to check any player prop/i)).not.toBeInTheDocument();
     expect(bam).not.toHaveTextContent("1:00 AM");

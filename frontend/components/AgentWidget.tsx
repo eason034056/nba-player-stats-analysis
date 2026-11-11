@@ -329,7 +329,7 @@ export const AgentWidget = () => {
         <div className="flex items-center justify-between gap-3 bg-brand px-[18px] py-4 text-white">
           <div className="min-w-0">
             <div className="text-[17px] font-bold">Betting agent</div>
-            <div className="text-xs text-on-dark-muted">Checks market, form, projection and matchup</div>
+            <div className="text-xs text-on-dark-muted">Checks market, form, matchup and defense rank, and rest</div>
           </div>
           <div className="flex shrink-0 items-center gap-2">
             <button
