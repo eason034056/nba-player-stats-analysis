@@ -207,7 +207,9 @@ describe("SPO-122 player-history query", () => {
 
   function sentParams(fetchMock: ReturnType<typeof stubFetch>): URLSearchParams {
     const url = String((fetchMock.mock.calls[0] as unknown[])[0]);
-    return new URL(url).searchParams;
+    // The client calls a same-origin path (`/api/backend/...`), which is
+    // not an absolute URL. The dummy base only lets URL parse the query.
+    return new URL(url, "http://127.0.0.1").searchParams;
   }
 
   it("sends both event clubs and the tip on the NBA route", async () => {
@@ -254,7 +256,7 @@ describe("SPO-122 player-history query", () => {
     });
     const url = String((fetchMock.mock.calls[0] as unknown[])[0]);
     expect(url).toContain("/api/wnba/player-history?");
-    const params = new URL(url).searchParams;
+    const params = new URL(url, "http://127.0.0.1").searchParams;
     expect(params.get("home_team")).toBe("Minnesota Lynx");
     expect(params.get("away_team")).toBe("Chicago Sky");
     expect(params.has("as_of")).toBe(false);

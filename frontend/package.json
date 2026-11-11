@@ -3,6 +3,9 @@
   "version": "1.0.0",
   "description": "NBA 球員得分 Props 去水機率計算前端",
   "private": true,
+  "engines": {
+    "node": "22.x"
+  },
   "scripts": {
     "dev": "WATCHPACK_POLLING=true next dev",
     "build": "next build",
