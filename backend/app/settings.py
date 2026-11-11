@@ -37,6 +37,9 @@ class Settings(BaseSettings):
     
     # PostgreSQL 設定
     database_url: str = "postgresql://novig:novig@localhost:5432/novig_nba"  # PostgreSQL 連線 URL
+    # False locally so tests and dev without Postgres still boot.
+    # Set DATABASE_REQUIRED=true in production so a bad URL fails startup.
+    database_required: bool = False
     
     # Redis 設定
     redis_url: str = "redis://localhost:6379"  # Redis 連線 URL
