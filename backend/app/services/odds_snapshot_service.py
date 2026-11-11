@@ -32,6 +32,7 @@ Usage:
 import time
 from datetime import datetime, timezone, timedelta
 from typing import List, Dict, Any, Optional, Tuple
+from zoneinfo import ZoneInfo
 
 from app.services.odds_gateway import odds_gateway
 from app.services.odds_theoddsapi import odds_provider
@@ -113,9 +114,58 @@ BINARY_MARKET_KEYS = frozenset({
     "player_double_double",
 })
 
-# UPSERT SQL: Insert new data or update if exists
-# ON CONFLICT uses unique constraint (snapshot_at, event_id, player_name, market, bookmaker)
-# Ensures the same bookmaker/player/market isn't written twice in the same snapshot
+# US slate clock. The odds_line_snapshots.date column is the Eastern game
+# date. Taipei (UTC+8) is a different calendar day for a 7pm Eastern tip.
+NBA_SLATE_TZ = ZoneInfo("America/New_York")
+
+
+def nba_slate_date(now: datetime | None = None) -> tuple[str, int]:
+    """US game date and the Eastern UTC offset in minutes at ``now``.
+
+    ``now`` defaults to the current UTC time. A naive datetime is read as
+    UTC. The returned date is the calendar date in America/New_York. The
+    offset is minutes east of UTC, so Eastern Standard Time is -300 and
+    Eastern Daylight Time is -240. ``take_snapshot`` uses both so the
+    events query covers that Eastern day.
+
+    Args:
+        now: Instant to convert. None means the current time.
+
+    Returns:
+        ``(YYYY-MM-DD, offset_minutes)``.
+    """
+    moment = now if now is not None else datetime.now(timezone.utc)
+    if moment.tzinfo is None:
+        moment = moment.replace(tzinfo=timezone.utc)
+    eastern = moment.astimezone(NBA_SLATE_TZ)
+    offset = eastern.utcoffset()
+    if offset is None:
+        raise RuntimeError("America/New_York did not provide a UTC offset")
+    return eastern.date().isoformat(), int(offset.total_seconds() // 60)
+
+
+def offset_for_us_game_date(date: str) -> int:
+    """Eastern offset in minutes at noon on a US game date.
+
+    Noon is after the 02:00 DST transition, which is when NBA games are
+    played. A date string is not itself a timezone. This picks the offset
+    that ``_get_events`` needs to turn that Eastern date into a UTC window.
+
+    Args:
+        date: ``YYYY-MM-DD`` US game date.
+
+    Returns:
+        Minutes east of UTC. -300 in January, -240 in July.
+    """
+    day = datetime.strptime(date, "%Y-%m-%d").date()
+    noon = datetime(day.year, day.month, day.day, 12, tzinfo=NBA_SLATE_TZ)
+    _slate_date, offset = nba_slate_date(noon)
+    return offset
+
+
+# UPSERT SQL: insert a posted total, or refresh that same total.
+# The conflict target matches odds_line_snapshots_book_line_key, which
+# includes the line. A different total is a new row, not an update.
 UPSERT_LINE_SQL = """
 INSERT INTO odds_line_snapshots (
     snapshot_at, date, event_id, home_team, away_team,
@@ -128,9 +178,8 @@ INSERT INTO odds_line_snapshots (
     $9, $10, $11,
     $12, $13, $14
 )
-ON CONFLICT (snapshot_at, event_id, player_name, market, bookmaker)
+ON CONFLICT (snapshot_at, event_id, player_name, market, bookmaker, line)
 DO UPDATE SET
-    line = EXCLUDED.line,
     over_odds = EXCLUDED.over_odds,
     under_odds = EXCLUDED.under_odds,
     vig = EXCLUDED.vig,
@@ -162,25 +211,32 @@ class OddsSnapshotService:
     async def take_snapshot(
         self,
         date: Optional[str] = None,
-        tz_offset_minutes: int = 480
+        tz_offset_minutes: Optional[int] = None,
     ) -> Dict[str, Any]:
         """
         Execute a complete odds snapshot
 
         Main flow:
-        1. Get all NBA events on the given date
-        2. Retrieve odds for all markets for each event (4 markets in 1 call)
-        3. Calculate no-vig for each bookmaker/player/market
+        1. Get all NBA events on the given US game date
+        2. Retrieve odds for all markets for each event (markets batched)
+        3. Calculate no-vig for each bookmaker/player/market/line
         4. Bulk write to PostgreSQL
         5. Log the snapshot
 
         Called "take_snapshot" because it's like a camera "taking a snapshot" —
         capturing the state of all odds at one moment.
 
+        The date is an America/New_York game date. When ``date`` is omitted,
+        that is today's date in New York, not the UTC date. When
+        ``tz_offset_minutes`` is omitted, it is the Eastern offset for that
+        date. Passing the UTC calendar date with the old default of 480
+        (UTC+8) selected no NBA games: a tip at 2026-11-10T00:10:00Z is
+        19:10 on 2026-11-09 in New York and 08:10 on 2026-11-10 in Taipei.
+
         Args:
-            date: event date (YYYY-MM-DD). If None, use today's UTC date
-            tz_offset_minutes: timezone offset in minutes for correct local date events.
-                               Default 480 (UTC+8, Taipei time)
+            date: US game date (YYYY-MM-DD). None means today in New York.
+            tz_offset_minutes: Minutes east of UTC used to turn ``date`` into
+                a UTC window. None means the Eastern offset for ``date``.
 
         Returns:
             dict containing:
@@ -192,7 +248,11 @@ class OddsSnapshotService:
         start_time = time.time()
 
         if date is None:
-            date = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+            date, eastern_offset = nba_slate_date()
+        else:
+            eastern_offset = offset_for_us_game_date(date)
+        if tz_offset_minutes is None:
+            tz_offset_minutes = eastern_offset
 
         snapshot_at = datetime.now(timezone.utc)
         total_lines = 0
@@ -246,14 +306,14 @@ class OddsSnapshotService:
             # 3. Bulk write to PostgreSQL
             total_lines = len(all_rows)
             if all_rows and db_service.is_connected:
-                try:
-                    await db_service.executemany(UPSERT_LINE_SQL, all_rows)
-                    print(
-                        f"✅ [OddsSnapshot] Wrote {total_lines} odds lines "
-                        f"({event_count} events)"
-                    )
-                except Exception as e:
-                    print(f"❌ [OddsSnapshot] PostgreSQL write failed: {e}")
+                # A write error is not swallowed. The handler below logs
+                # status "error" and re-raises, so a failed insert is not
+                # recorded as a successful capture with these rows.
+                await db_service.executemany(UPSERT_LINE_SQL, all_rows)
+                print(
+                    f"✅ [OddsSnapshot] Wrote {total_lines} odds lines "
+                    f"({event_count} events)"
+                )
             elif not db_service.is_connected:
                 print("⚠️ [OddsSnapshot] PostgreSQL not connected, skipping write")
 
@@ -397,10 +457,11 @@ class OddsSnapshotService:
         This is the pure parser ``_process_event`` uses after the gateway
         returns. It does not call the Odds API, Redis, or Postgres. Tests
         build ``odds_line_snapshots`` rows by calling it with recorded
-        fixtures. One bookmaker that posts several totals still becomes one
-        row: the last Over and the last Under in the payload are the pair
-        that is stored. Read-side ``_main_book_line`` is what collapses
-        extra stored rows for the same book.
+        fixtures. Each two-sided total is its own row. Over and Under are
+        paired only when they share a point, so an alternate ladder is
+        stored beside the main total. A later quote at the same point
+        replaces that side. Read-side ``_main_book_line`` still collapses
+        those rows to one vote per book.
 
         Args:
             bookmakers_data: Odds API ``bookmakers`` array, already fetched.
@@ -462,37 +523,50 @@ class OddsSnapshotService:
                 #   name = "Over" or "Under"
                 #   point = 24.5 (line)
                 #   price = -110 (American odds)
-                player_outcomes: Dict[str, Dict[str, Any]] = {}
+                #
+                # Pair by (player, point). The last Over and the last Under
+                # in file order are not a pair when they sit on different
+                # totals. A rung with only one side is skipped, same as a
+                # player who has no Under at all.
+                rungs: Dict[Tuple[str, float], Dict[str, Any]] = {}
+                rung_order: List[Tuple[str, float]] = []
 
                 for outcome in market.get("outcomes", []):
                     player_name = outcome.get("description", "")
                     direction = outcome.get("name", "").lower()
+                    raw_point = outcome.get("point")
 
                     if not player_name or direction not in ("over", "under"):
                         continue
+                    if raw_point is None:
+                        continue
+                    try:
+                        point = round(float(raw_point), 1)
+                    except (TypeError, ValueError):
+                        continue
 
-                    if player_name not in player_outcomes:
-                        player_outcomes[player_name] = {}
+                    slot = (player_name, point)
+                    if slot not in rungs:
+                        rungs[slot] = {}
+                        rung_order.append(slot)
+                    rungs[slot][direction] = outcome
 
-                    player_outcomes[player_name][direction] = outcome
-
-                # For each player with both Over & Under, calculate no-vig
-                for player_name, directions in player_outcomes.items():
+                for player_name, point in rung_order:
+                    directions = rungs[(player_name, point)]
                     over_out = directions.get("over")
                     under_out = directions.get("under")
 
                     if not over_out or not under_out:
                         continue
 
-                    line = over_out.get("point")
                     over_price = over_out.get("price", 0)
                     under_price = under_out.get("price", 0)
 
-                    if line is None or over_price == 0 or under_price == 0:
+                    if over_price == 0 or under_price == 0:
                         continue
 
                     try:
-                        # Calculate no-vig
+                        # Calculate no-vig for this total only.
                         p_over_imp = american_to_prob(over_price)
                         p_under_imp = american_to_prob(under_price)
                         vig = calculate_vig(p_over_imp, p_under_imp)
@@ -507,7 +581,7 @@ class OddsSnapshotService:
                             player_name,             # $6  player_name
                             market_key,              # $7  market
                             bookmaker_key,           # $8  bookmaker
-                            float(line),             # $9  line
+                            float(point),            # $9  line
                             int(over_price),         # $10 over_odds
                             int(under_price),        # $11 under_odds
                             round(vig, 6),           # $12 vig

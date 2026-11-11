@@ -358,6 +358,29 @@ def _main_book_line(rows: list[dict[str, Any]]) -> dict[str, Any]:
     return _row_for_rung(rung)
 
 
+def _consensus_distance(book: BulkPropBook) -> float:
+    """Even-money distance of the prices this book votes with.
+
+    Over/Under markets use ``over_odds`` and ``under_odds``. Binary
+    markets store Yes and No on ``yes_odds`` and ``no_odds``. A missing
+    side is left out. The number is the same distance
+    ``daily_analysis._even_money_distance`` uses, so a tied mode can
+    prefer the book closer to a coin flip.
+
+    Args:
+        book: One bookmaker's chosen row, already mapped to the response.
+
+    Returns:
+        Absolute distance from 0.5. ``1.0`` when neither side has a price.
+    """
+    over = book.over_odds if book.over_odds is not None else book.yes_odds
+    under = book.under_odds if book.under_odds is not None else book.no_odds
+    return _even_money_distance(
+        None if over is None else float(over),
+        None if under is None else float(under),
+    )
+
+
 def _age_seconds(snapshot_at: datetime, now: datetime) -> int:
     """Whole seconds from ``snapshot_at`` to ``now``, never negative."""
     stamp = _as_datetime(snapshot_at)
@@ -430,10 +453,13 @@ def assemble_bulk_props(
     snapshot was taken. No rows at all means ``snapshot_at`` and
     ``data_age_seconds`` are null and ``markets`` is empty.
 
-    Each bookmaker votes once (``_main_book_line``). The player's ``line``
-    is ``calculate_mode_threshold`` of those votes, the same modal rule
-    daily picks use. ``bookmakers_count`` is the number of distinct books
-    after that collapse, which is also ``len(books)``.
+    Each bookmaker votes once (``_main_book_line``). Alternate rungs on
+    that book do not get a vote. The player's ``line`` is
+    ``calculate_mode_threshold`` of those main lines. A tie prefers the
+    line whose books are closest to even money, then the lower line.
+    It is not the average of the tied lines. ``bookmakers_count`` is the
+    number of distinct books after that collapse, which is also
+    ``len(books)``.
 
     Args:
         event_id: Event id echoed on the response.
@@ -496,7 +522,8 @@ def assemble_bulk_props(
         for player_name in sorted(by_market[market], key=str.casefold):
             books = sorted(by_market[market][player_name], key=lambda item: item.bookmaker.casefold())
             voted_lines = [item.line for item in books]
-            mode = calculate_mode_threshold(voted_lines)
+            voted_distances = [_consensus_distance(item) for item in books]
+            mode = calculate_mode_threshold(voted_lines, voted_distances)
             if mode is None:
                 continue
             players.append(
