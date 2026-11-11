@@ -32,6 +32,8 @@ from app.services import nba_injuries  # noqa: E402
 from app.services.nba_injuries import (  # noqa: E402
     NBA_INJURIES_CACHE_KEY,
     NBA_INJURIES_CACHE_TTL_SECONDS,
+    NBA_INJURIES_MAX_PAGES,
+    NBA_INJURIES_STALE_AFTER_SECONDS,
     get_cached_nba_injuries,
     normalize_bdl_injuries,
     refresh_nba_injuries,
@@ -331,7 +333,9 @@ async def test_refresh_reads_fixture_then_stops(terminal_meta: dict) -> None:
     stored = await service.get(NBA_INJURIES_CACHE_KEY)
     assert stored == payload
     refresh_writes = [call for call in fake.set_calls if call["key"] == NBA_INJURIES_CACHE_KEY]
-    assert refresh_writes[-1]["ex"] == NBA_INJURIES_CACHE_TTL_SECONDS == 6 * 60 * 60
+    assert refresh_writes[-1]["ex"] == NBA_INJURIES_CACHE_TTL_SECONDS == 24 * 60 * 60
+    assert NBA_INJURIES_STALE_AFTER_SECONDS == 6 * 60 * 60
+    assert NBA_INJURIES_CACHE_TTL_SECONDS > NBA_INJURIES_STALE_AFTER_SECONDS
 
 
 @pytest.mark.asyncio
@@ -373,11 +377,93 @@ async def test_cache_write_failure_keeps_the_previous_body() -> None:
 
 def test_stale_boundary_is_older_than_six_hours() -> None:
     now = datetime(2026, 11, 11, 12, 0, tzinfo=timezone.utc)
-    exactly = (now - timedelta(seconds=NBA_INJURIES_CACHE_TTL_SECONDS)).isoformat()
-    older = (now - timedelta(seconds=NBA_INJURIES_CACHE_TTL_SECONDS, microseconds=1)).isoformat()
+    exactly = (now - timedelta(seconds=NBA_INJURIES_STALE_AFTER_SECONDS)).isoformat()
+    older = (now - timedelta(seconds=NBA_INJURIES_STALE_AFTER_SECONDS, microseconds=1)).isoformat()
     assert nba_injuries._is_stale(exactly, now=now) is False
     assert nba_injuries._is_stale(older, now=now) is True
     assert nba_injuries._is_stale(None, now=now) is True
+
+
+class _RepeatingCursorClient:
+    """Every page advertises the same next_cursor. No player rows."""
+
+    def __init__(self) -> None:
+        self.calls: list[dict] = []
+
+    async def list_player_injuries(self, *, cursor: int | None = None, per_page: int = 100) -> dict:
+        self.calls.append({"cursor": cursor, "per_page": per_page})
+        return {"data": [], "meta": {"next_cursor": 7, "per_page": per_page}}
+
+
+class _EndlessCursorClient:
+    """Each page names a new next_cursor. No player rows."""
+
+    def __init__(self) -> None:
+        self.calls: list[dict] = []
+
+    async def list_player_injuries(self, *, cursor: int | None = None, per_page: int = 100) -> dict:
+        self.calls.append({"cursor": cursor, "per_page": per_page})
+        nxt = 0 if cursor is None else int(cursor) + 1
+        return {"data": [], "meta": {"next_cursor": nxt, "per_page": per_page}}
+
+
+@pytest.mark.asyncio
+async def test_repeated_next_cursor_stops_without_looping() -> None:
+    service, _fake = _cache()
+    client = _RepeatingCursorClient()
+    payload = await refresh_nba_injuries(client, service, {})
+    assert payload is not None
+    assert len(client.calls) == 2
+    assert len(client.calls) < NBA_INJURIES_MAX_PAGES
+    assert client.calls[1]["cursor"] == 7
+
+
+@pytest.mark.asyncio
+async def test_refresh_stops_at_the_page_cap(caplog: pytest.LogCaptureFixture) -> None:
+    service, _fake = _cache()
+    client = _EndlessCursorClient()
+    with caplog.at_level(logging.WARNING):
+        payload = await refresh_nba_injuries(client, service, {})
+    assert payload is not None
+    assert len(client.calls) == NBA_INJURIES_MAX_PAGES == 20
+    assert "page cap" in caplog.text
+
+
+@pytest.mark.asyncio
+async def test_malformed_page_logs_a_warning_and_keeps_the_cache(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    service, _fake = _cache()
+    previous = _old_snapshot()
+    await service.set(NBA_INJURIES_CACHE_KEY, previous, ttl=NBA_INJURIES_CACHE_TTL_SECONDS)
+
+    class _BadPage:
+        async def list_player_injuries(self, *, cursor: int | None = None, per_page: int = 100) -> dict:
+            return {"meta": {"next_cursor": None, "per_page": per_page}}
+
+    with caplog.at_level(logging.WARNING):
+        result = await refresh_nba_injuries(_BadPage(), service, {})
+    assert result is None
+    assert await service.get(NBA_INJURIES_CACHE_KEY) == previous
+    warnings = [record for record in caplog.records if record.levelno == logging.WARNING]
+    assert warnings
+    assert all(record.exc_info in (None, (None, None, None)) for record in warnings)
+
+
+@pytest.mark.asyncio
+async def test_unexpected_error_logs_the_traceback_and_keeps_the_cache(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    service, _fake = _cache()
+    previous = _old_snapshot()
+    await service.set(NBA_INJURIES_CACHE_KEY, previous, ttl=NBA_INJURIES_CACHE_TTL_SECONDS)
+    client = PageClient([INJURY_PAGE], fail_at=0)
+    with caplog.at_level(logging.ERROR):
+        result = await refresh_nba_injuries(client, service, {})
+    assert result is None
+    assert await service.get(NBA_INJURIES_CACHE_KEY) == previous
+    traced = [record for record in caplog.records if record.exc_info and record.exc_info[0] is RuntimeError]
+    assert traced
 
 
 @pytest.mark.asyncio
@@ -548,6 +634,40 @@ def test_stale_cache_is_caution_not_healthy(monkeypatch: pytest.MonkeyPatch) -> 
     assert report["details"]["reason"] == "injury data unavailable"
     assert report["details"]["injuries"] == []
     assert report["details"]["fetched_at"] == "2026-11-01T00:00:00+00:00"
+
+
+def test_body_inside_ttl_and_past_six_hours_is_stale_not_missing(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Seven hours is inside the 24h Redis TTL and past the 6h stale window."""
+    historical = _historical()
+    service, _fake = _cache()
+    fetched_at = (datetime.now(timezone.utc) - timedelta(hours=7)).isoformat()
+    assert timedelta(hours=7).total_seconds() > NBA_INJURIES_STALE_AFTER_SECONDS
+    assert timedelta(hours=7).total_seconds() < NBA_INJURIES_CACHE_TTL_SECONDS
+    entries = [{"player": "Still Stored", "team": "PHI", "status": "Out", "source": "balldontlie"}]
+    asyncio.run(
+        service.set(
+            NBA_INJURIES_CACHE_KEY,
+            {"fetched_at": fetched_at, "entries": entries},
+            ttl=NBA_INJURIES_CACHE_TTL_SECONDS,
+        )
+    )
+    snapshot = asyncio.run(get_cached_nba_injuries("PHI", cache=service))
+    assert snapshot["stale"] is True
+    assert snapshot["fetched_at"] == fetched_at
+    assert snapshot["entries"] == entries
+
+    _set_dummy_key(monkeypatch)
+    _set_injury_source(monkeypatch, "bdl")
+    _use_cache(monkeypatch, service)
+    _forbid_scraper(monkeypatch)
+    _guard_network(monkeypatch)
+    report = asyncio.run(historical.get_official_injury_report("PHI", league="nba"))
+    assert report["signal"] == "caution"
+    assert report["details"]["reason"] == "injury data unavailable"
+    assert report["details"]["injuries"] == []
+    assert report["details"]["fetched_at"] == fetched_at
 
 
 def _expect_espn_cbs(monkeypatch: pytest.MonkeyPatch) -> None:

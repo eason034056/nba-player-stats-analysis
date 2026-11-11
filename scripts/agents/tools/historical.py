@@ -523,9 +523,7 @@ def _read_cached_injury_snapshot(team_code: str) -> Dict[str, Any]:
         try:
             return await get_cached_nba_injuries(team_code, cache=local)
         finally:
-            close = getattr(local, "close", None)
-            if close is not None:
-                await close()
+            await local.close()
 
     try:
         return asyncio.run(_read())

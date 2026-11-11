@@ -24,11 +24,14 @@ from app.services.cache import CacheService
 
 logger = logging.getLogger(__name__)
 
-# Redis key and freshness window. The TTL and the stale check are the
-# same six hours: a failed refresh leaves the previous body in place,
-# and readers stop trusting it once it is older than this window.
+# Redis keeps the last good body for a day. Readers stop trusting it
+# after six hours, while the key is still there, so a stale snapshot
+# is visible instead of looking like a missing key.
 NBA_INJURIES_CACHE_KEY = "injuries:nba:latest"
-NBA_INJURIES_CACHE_TTL_SECONDS = 6 * 60 * 60
+NBA_INJURIES_CACHE_TTL_SECONDS = 24 * 60 * 60
+NBA_INJURIES_STALE_AFTER_SECONDS = 6 * 60 * 60
+# per_page is 100, so 20 pages is about 2000 rows.
+NBA_INJURIES_MAX_PAGES = 20
 
 BALLDONTLIE_SOURCE = "balldontlie"
 
@@ -216,7 +219,7 @@ def _is_stale(fetched_at: str | None, *, now: datetime | None = None) -> bool:
     if current.tzinfo is None:
         current = current.replace(tzinfo=timezone.utc)
     age = current.astimezone(timezone.utc) - parsed
-    return age > timedelta(seconds=NBA_INJURIES_CACHE_TTL_SECONDS)
+    return age > timedelta(seconds=NBA_INJURIES_STALE_AFTER_SECONDS)
 
 
 def _snapshot_from_payload(
@@ -280,13 +283,15 @@ async def refresh_nba_injuries(
     cache: Any,
     team_id_to_code: Mapping[Any, str],
 ) -> dict[str, Any] | None:
-    """Fetch every injury page, normalize, and store the snapshot.
+    """Fetch injury pages, normalize, and store the snapshot.
 
-    Follows ``meta.next_cursor`` until it is null or the field is
-    absent. Rate limits and 429 retries belong to ``client``. When the
-    client gives up it raises. Any exception, including a failed cache
-    write, leaves the previous ``injuries:nba:latest`` value untouched.
-    A failure does not store an empty list over a good snapshot.
+    Follows ``meta.next_cursor`` until it is missing, null, or equal to
+    the cursor just requested. Stops after
+    :data:`NBA_INJURIES_MAX_PAGES` pages and logs a warning when that
+    cap is what stopped the walk. Rate limits and 429 retries belong
+    to ``client``. A ``ValueError`` (a page without a ``data`` list)
+    logs a warning. Any other exception logs the traceback. Both leave
+    the previous ``injuries:nba:latest`` value untouched.
 
     Args:
         client: SPO-130a client. Only ``list_player_injuries`` is used.
@@ -301,16 +306,25 @@ async def refresh_nba_injuries(
     rows: list[dict] = []
     cursor: int | None = None
     try:
-        while True:
-            page = await client.list_player_injuries(cursor=cursor, per_page=100)
+        hit_page_cap = True
+        for _page_number in range(NBA_INJURIES_MAX_PAGES):
+            requested = cursor
+            page = await client.list_player_injuries(cursor=requested, per_page=100)
             if not isinstance(page, dict) or not isinstance(page.get("data"), list):
                 raise ValueError("player_injuries page is missing a data list")
             rows.extend(page["data"])
             meta = page.get("meta")
-            # None and a missing field both mean this page is the last.
-            if not isinstance(meta, dict) or meta.get("next_cursor") is None:
+            next_cursor = meta.get("next_cursor") if isinstance(meta, dict) else None
+            # Missing, null, or a repeat of the cursor we just sent.
+            if next_cursor is None or next_cursor == requested:
+                hit_page_cap = False
                 break
-            cursor = meta["next_cursor"]
+            cursor = next_cursor
+        if hit_page_cap:
+            logger.warning(
+                "NBA injury refresh stopped at the %s page cap",
+                NBA_INJURIES_MAX_PAGES,
+            )
         fetched_at = datetime.now(timezone.utc).isoformat()
         entries = normalize_bdl_injuries(
             rows,
@@ -326,10 +340,14 @@ async def refresh_nba_injuries(
         if stored is False:
             return None
         return payload
-    except Exception as exc:
-        # TODO(SPO-130a): narrow this catch to BdlError once bdl_client.py lands.
+    except ValueError:
         logger.warning(
-            "NBA injury refresh failed (%s); previous cache left in place",
-            type(exc).__name__,
+            "NBA injury refresh rejected a page; previous cache left in place"
+        )
+        return None
+    except Exception:
+        # TODO(SPO-130a): narrow this catch to BdlError once bdl_client.py lands.
+        logger.exception(
+            "NBA injury refresh failed; previous cache left in place"
         )
         return None
