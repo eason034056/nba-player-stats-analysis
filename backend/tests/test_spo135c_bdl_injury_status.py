@@ -576,6 +576,7 @@ def test_job_is_registered_on_the_half_hour_marks(monkeypatch) -> None:
     assert found["max_instances"] == 1
     assert found["coalesce"] is True
     assert startup is not None
+    assert startup["name"] == "NBA Injury Snapshot Startup Refill"
     assert startup["misfire_grace_time"] == 60
 
 

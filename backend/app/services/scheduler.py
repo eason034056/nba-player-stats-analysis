@@ -368,7 +368,9 @@ class SchedulerService:
                     run_date=datetime.now(timezone.utc) + timedelta(seconds=1)
                 ),
                 id='nba_injuries_startup_fill',
-                name='NBA Injury Snapshot Fill If Missing',
+                # The job fills a missing key, and a stale key inside
+                # the slate window. The id stays the same job.
+                name='NBA Injury Snapshot Startup Refill',
                 replace_existing=True,
                 misfire_grace_time=60,
                 max_instances=1,
