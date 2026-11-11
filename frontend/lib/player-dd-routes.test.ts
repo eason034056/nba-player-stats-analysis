@@ -9,7 +9,7 @@ import {
 import wilsonHistory from "@/test/fixtures/player-dd-history/wilson.json";
 import recordedNoVig from "@/test/fixtures/props-no-vig/player-double-double.json";
 
-const API_ORIGIN = "http://localhost:8000";
+const API_ORIGIN = "/api/backend";
 
 function jsonResponse(body: unknown): Response {
   return Response.json(body);

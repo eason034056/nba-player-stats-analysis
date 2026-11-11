@@ -1,15 +1,13 @@
 /**
  * next.config.js - Next.js 配置檔
- * 
- * 定義 Next.js 應用的各種設定
- * 包括：
- * - 環境變數
- * - API 代理
- * - 圖片優化設定
- * - 等等
+ *
+ * dev 與 production build 使用不同的 distDir。
+ * 瀏覽器打同源的 /api/backend/:path*，rewrite 轉到 BACKEND_API_URL。
+ * 後端 origin 不放進 env:，避免被寫進 client bundle。
  */
 
 const { PHASE_DEVELOPMENT_SERVER } = require("next/constants");
+const { buildBackendRewrite } = require("./lib/backend-origin");
 
 const getDistDir = (phase) =>
   phase === PHASE_DEVELOPMENT_SERVER ? ".next-dev" : ".next";
@@ -22,19 +20,16 @@ const createNextConfig = (phase) => ({
   // reactStrictMode: 啟用 React 嚴格模式
   // 有助於發現潛在問題（如副作用）
   reactStrictMode: true,
-  
-  // 環境變數
-  // 這些變數會在建置時被替換
-  // NEXT_PUBLIC_ 前綴的變數可以在瀏覽器端使用
-  env: {
-    // 後端 API 的 URL
-    // 開發時指向本地，生產環境會被覆蓋
-    NEXT_PUBLIC_API_URL: process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000",
+
+  async rewrites() {
+    // :path* 是 /api/backend/ 後面的整段，含 /api/nba 與 /api/wnba。
+    // 查詢字串由 Next.js 轉送，不必寫進 destination。
+    return [buildBackendRewrite(process.env)];
   },
-  
+
   // 圖片優化設定
   images: {
-    // 允許的外部圖片來源
+    // 允許的外部圖片來源。球隊 logo 來自 ESPN，不是後端 origin。
     remotePatterns: [
       {
         protocol: "https",
@@ -44,11 +39,11 @@ const createNextConfig = (phase) => ({
       },
     ],
   },
-  
-  // 實驗性功能
+
   experimental: {
-    // 啟用 Server Actions（用於伺服器端操作）
-    // 這是 Next.js 13.4+ 的功能
+    // 毫秒。未設定時，next dev / next start 的 rewrite 代理 30 秒就中斷。
+    // Vercel 不讀這個值，平台對外部 rewrite 的上限是 120 秒。
+    proxyTimeout: 120_000,
   },
 });
 
