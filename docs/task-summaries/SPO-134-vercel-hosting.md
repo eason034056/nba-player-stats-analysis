@@ -15,8 +15,8 @@ Do not send production traffic until the backend (SPO-133) checks `x-sportslab-p
 | File | Change |
 |---|---|
 | `frontend/lib/browser-api-prefix.js` | Same-origin prefix `/api/backend`. No environment read. |
-| `frontend/lib/backend-origin.js` | Resolves `BACKEND_API_URL`. Local default is localhost. A Vercel build without the variable throws. Invalid values are not echoed. A Vercel build rejects `http`. |
-| `frontend/lib/proxy-request.js` | Builds the proxy headers. Replaces any browser `x-sportslab-proxy-secret` and `x-real-ip`. |
+| `frontend/lib/backend-origin.js` | Resolves `BACKEND_API_URL`. Local default is localhost. A Vercel build without the variable throws. Invalid values are not echoed. A Vercel build rejects `http`. `buildBackendRewrite` is gone; nothing outside the old origin tests called it. |
+| `frontend/lib/proxy-request.js` | Builds the proxy headers. Replaces any browser `x-sportslab-proxy-secret` and `x-real-ip`. Refuses a path that would leave the backend origin (`//` or a backslash) before the secret is set. |
 | `frontend/middleware.ts` | The only proxy. Rewrites `/api/backend/:path*` and returns 500 when a Vercel runtime has no secret. |
 | `frontend/lib/api.ts` | `fetchApi` uses the prefix. It no longer reads `NEXT_PUBLIC_API_URL`. |
 | `frontend/next.config.js` | Removes the `env:` localhost bake and the `rewrites()` entry. A production build asserts the origin and the secret. Local `proxyTimeout` stays 120s. |
@@ -77,7 +77,7 @@ Production branch is `master`. Preview for this repo is `dev`. There is no `main
 
 ## Tests / Verification
 
-- `npx vitest run` — 60 files, 444 tests, passed. `frontend/lib/backend-origin.qa.test.ts` is the 14 origin cases. `frontend/middleware.qa.test.ts` is 25 cases, including paths that must not leave the backend origin.
+- `npx vitest run` — 66 files, 517 tests, passed. `frontend/middleware.qa.test.ts` is the 25 review cases (5 of them are the `//` and backslash paths). The suite is larger than 60/444 because this branch now includes `dev` at `b9ba3aa`.
 - `npx tsc --noEmit` — passed.
 - `npm run lint` — passed, 0 warnings.
 - `next build` with `VERCEL`, `VERCEL_ENV`, `BACKEND_API_URL`, and `VERCEL_PROXY_SECRET` unset — passed (exit 0). Static pages 10/10, WNBA routes included.

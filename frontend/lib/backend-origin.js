@@ -10,8 +10,6 @@
  * sets one of those variables and must fail instead of using localhost.
  */
 
-const { BROWSER_API_PREFIX } = require("./browser-api-prefix");
-
 const LOCAL_BACKEND_ORIGIN = "http://localhost:8000";
 
 function isVercelBuild(env) {
@@ -87,18 +85,8 @@ function normalizeBackendOrigin(value) {
   return `${url.protocol}//${url.host}`;
 }
 
-// The live proxy is middleware.ts. This shape is what the origin tests assert.
-function buildBackendRewrite(env = process.env) {
-  const origin = resolveBackendOrigin(env);
-  return {
-    source: `${BROWSER_API_PREFIX}/:path*`,
-    destination: `${origin}/:path*`,
-  };
-}
-
 module.exports = {
   LOCAL_BACKEND_ORIGIN,
   isVercelBuild,
   resolveBackendOrigin,
-  buildBackendRewrite,
 };

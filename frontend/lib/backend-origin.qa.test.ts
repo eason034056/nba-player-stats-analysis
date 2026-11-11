@@ -4,7 +4,7 @@ import path from "node:path";
 import { describe, expect, it } from "vitest";
 
 const require = createRequire(import.meta.url);
-const { resolveBackendOrigin, buildBackendRewrite, LOCAL_BACKEND_ORIGIN } = require("./backend-origin");
+const { resolveBackendOrigin, LOCAL_BACKEND_ORIGIN } = require("./backend-origin");
 
 const local = {} as Record<string, string | undefined>;
 const vercelProd = { VERCEL: "1", VERCEL_ENV: "production" };
@@ -48,12 +48,6 @@ describe("QA: BACKEND_API_URL normalization", () => {
     expect(resolveBackendOrigin(local)).toBe("http://localhost:8000");
   });
 
-  it("forwards every path under the prefix to the same path on the origin", () => {
-    expect(buildBackendRewrite({ ...vercelProd, BACKEND_API_URL: "https://api.example.com" })).toEqual({
-      source: "/api/backend/:path*",
-      destination: "https://api.example.com/:path*",
-    });
-  });
 });
 
 describe("QA: build errors do not print the configured value", () => {
