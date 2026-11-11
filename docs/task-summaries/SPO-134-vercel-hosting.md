@@ -77,7 +77,7 @@ Production branch is `master`. Preview for this repo is `dev`. There is no `main
 
 ## Tests / Verification
 
-- `npx vitest run` — 59 files, 412 tests, passed.
+- `npx vitest run` — 59 files, 419 tests, passed. The review patch in `frontend/lib/backend-origin.qa.test.ts` is 14 of those. The other new files cover the proxy secret and `x-real-ip`.
 - `npx tsc --noEmit` — passed.
 - `npm run lint` — passed, 0 warnings.
 - `next build` with `VERCEL`, `VERCEL_ENV`, `BACKEND_API_URL`, and `VERCEL_PROXY_SECRET` unset — passed (exit 0). Static pages 10/10, WNBA routes included.
