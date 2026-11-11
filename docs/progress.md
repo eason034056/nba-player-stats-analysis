@@ -14,6 +14,7 @@ flowchart LR
   snap["Postgres snapshots"]
   redis["Redis"]
   bulk["bulk_props"]
+  reads["/reads"]
   agent["LangGraph"]
   api["FastAPI"]
   ui["Next.js"]
@@ -24,9 +25,12 @@ flowchart LR
   odds --> snap
   daily --> redis
   snap --> bulk
+  snap --> reads
   bulk --> redis
+  reads --> redis
   daily --> api
   bulk --> api
+  reads --> api
   agent --> api
   api --> ui
 ```
@@ -80,7 +84,7 @@ flowchart LR
 |---|---|---|
 | 主線 | 一本書一票。雙邊、最接近五五波（去水後）。距離相同留較低的點。不把兩個不同的點平均 | `backend/app/services/daily_analysis.py` `_main_book_line` |
 | 共識線 | 每本書先投自己的主線，再取眾數。平手留最接近五五波的點，再留較低的點。不把兩個點平均 | `backend/app/services/prob.py` `calculate_mode_threshold` |
-| 標題機率 | 該線的歷史命中率。這就是 `probability` | `DailyPick.probability` |
+| 標題機率 | `probability` 仍是該線的歷史命中率。NBA 畫面上旁邊的數字是 `combined_probability`，見下段 | `DailyPick.probability` |
 | 去水 | modal line 的 no-vig。這是 market 輸入，不是標題 | `backend/app/services/pick_signals.py` `resolve_market_probability` |
 | 五個 signals | market、last 10、history、projection、defense。缺資料是 null，不是中性 | `backend/app/services/pick_signals.py` |
 | combined | `sigmoid(logit(market) + Platt(四項調整之和))`。市場係數是 1。Platt 只乘調整項 | `pick_signals.combined_probability` |
@@ -99,13 +103,13 @@ flowchart LR
 
 預設看板仍是 0.65、至少 10 場。NBA 這道 0.65 看 `combined_probability`。低於歷史 0.56 的列仍不進儲存。NBA 仍把歷史 Lean 和 5 場的列存進 Redis。預設查詢要 blend 過 0.65 且至少 10 場，所以歷史 Lean 可以上看板。
 
-NBA 畫面上，tier 用後端送來的字串。旁邊的百分比是 `combined_probability`，用 `formatTierPercent` 無條件捨去；blend 是 null 才退回 `probability`。WNBA 仍用 `readTier`，精選頁仍寫沒有 blended probability。About 仍把 blend 標成 planned。真實盤口的校正還沒過（SPO-112）。
+NBA 畫面上，tier 用後端送來的字串。Today、Picks、比賽頁、Bet Slip（含總計）的卡片百分比都用 `formatTierPercent` 無條件捨去，例如 `0.697` 印 `69%`。blend 是 null 才退回 `probability`。有 blend、沒有 tier 時，`nbaTierFace` 仍走 `formatPercent`（`0.697` 印 `70%`），Bet Slip 的 `slipFace` 則是 `69%`。vig 維持一位小數。EV 的格式仍等 Eason 決定。WNBA 仍用 `readTier`，精選頁仍寫沒有 blended probability。About 仍把 blend 標成 planned。真實盤口的校正還沒過（SPO-112）。
 
 ## 現況
 
 ### 完成
 
-分組依主題，不依合併日。SPO-106、SPO-107 也在 2026-11-10 合併，放在資料與回測。2026-11-11 這批在下面，一行一票。
+分組依主題，不依合併日。SPO-106、SPO-107 也在 2026-11-10 合併，放在資料與回測。2026-11-10 這批在下面，一行一票。
 
 | 組 | 票號 |
 |---|---|
@@ -121,7 +125,7 @@ NBA 畫面上，tier 用後端送來的字串。旁邊的百分比是 `combined_
 | SPO-117 | #56 | 快照改用 America/New_York，晚場有列。唯一鍵含 `line`，替代盤不蓋主線。平手留最接近五五波的點，再留較低的點。 |
 | SPO-120a | #51 | No-Vig token、全寬 header、Today。機率印成整數。Today 印後端 `tier`，時鐘用 `commence_time_et`。 |
 | SPO-121 | #52 | `GET /api/nba/events/{event_id}/reads` 給每位已開盤球員一則 read。NBA 的 tier 和精選看板改看 `combined_probability`。錄製的 player_points 看板由 4 變成 6。`team_code` 走 `team_on_event`。 |
-| SPO-121b | #57 | NBA 用後端送來的 tier 字串。旁邊的百分比是 combined，缺值才退回歷史率，並無條件捨去。WNBA 的 `readTier` 沒變。 |
+| SPO-121b | #57 | NBA 用後端送來的 tier 字串。有 tier 時，Today、Picks、比賽頁、Bet Slip（含總計）的卡片百分比都無條件捨去（`0.697` 印 `69%`）。vig 一位小數。EV 仍等 Eason 決定。WNBA 的 `readTier` 沒變。 |
 | SPO-122 | #53 | 不在這場的 CSV 球隊不再當標籤。Simons 在 Celtics at 76ers 不再是 CHI。精選的空白球隊畫破折號。 |
 | SPO-123 | #54 | `GET /api/nba/events/{event_id}` 從清單快取回一場。命中不打 Odds API。省略日期用呼叫端的本地日。 |
 
@@ -131,7 +135,7 @@ SPO-10 與 SPO-11 在 `dev` `6688384` 驗證：backend 1041 passed、23 skipped�
 
 | 項目 | 狀態 |
 |---|---|
-| SPO-120b | #55 仍開著。賽事頁的設計對齊 |
+| SPO-120b | #55 仍開著。賽事頁的設計對齊。要在 #57 之後合（#57 已在 `dev`） |
 
 ### 已關閉、未合併
 
@@ -164,12 +168,13 @@ SPO-10 與 SPO-11 在 `dev` `6688384` 驗證：backend 1041 passed、23 skipped�
 ## 待辦
 
 - SPO-124：暫停，等 Eason 選資料來源。提案是 balldontlie（ALL-STAR 一個月 $9.99；GOAT 一個月 $39.99，含先發和位置）。Last-10 要混賽季，被交易球員在舊東家的場次仍算。`lineup_source_support.py` 的 roster cache（310–313 行）仍用沒有這場比賽的 `team_from_game_logs`，歸這張票。CSV 仍停在 2026-05-11。
-- 回測的 tier：十二月到一月偏弱。一月是用十一月到十二月去配，combined 比 historical 差（SPO-112）。Platt 配的是哪一群還沒定。現在的係數是常規賽 proxy，市場項固定 0.5，列到 2026-03-17。SPO-117 已在寫美國賽程，要在存下來的真實盤口上重驗。
+- 回測的 tier：一月是用十一月到十二月去配，combined 比 historical 差（SPO-112）。Platt 配的是哪一群還沒定。現在的係數是常規賽 proxy，市場項固定 0.5，列到 2026-03-17。SPO-117 已在寫美國賽程，要在存下來的真實盤口上重驗。
+- #57 / #55：`nbaTierFace` 在有 blend、沒有 tier 時仍四捨五入。#55 合入 #57 後改用 `formatTierPercent`，讓各頁一致。
 - #56 不阻擋：滾動部署時舊行程的寫入會短暫失敗。沒有價格的平手留較低的點。`run_daily_analysis` 仍預設 UTC+8，那是觀眾的今天，不是快照表。
 - `/reads` 和每日精選還會差一點。見上面。Bovada 的那條雙邊替代盤，等之後對齊。
 - #52 的可選測試還沒套。QA 的 patch 有 8 個案例：交易日、缺球隊、對上舊東家、快取退回。
 - #54：清單路由省略 `date` 仍是今天 UTC。省略 `tz_offset` 仍是 480。單場路由省略日期則用呼叫端的本地日。前端賽事頁仍自己載整份清單。
-- #52：升級前的快取沒有 `roster_event` 時，最多 60 秒會退回最新一列的球隊。`top_read` 和 `GET /api/picks/today` 仍用歷史率。儲存仍丟掉歷史低於 0.56 的人。`season_mean` 常常是 null。`attach_roster_fields` 仍在 event loop 上查名字。錄製的位移是一場、一個 market。
+- #52：升級前的快取沒有 `roster_event` 時，最多 60 秒會退回最新一列的球隊。`_event_day_text` 若收到 `datetime`，用的是 `value.date()`（該時區的日曆日），沒有走 America/Los_Angeles；正式路徑的 snapshot `date` 是 slate 日，所以沒問題。`test_position_and_team_code_come_from_the_latest_log` 現在測的是沒傳 home/away 時的 fallback，名稱可以之後改。`top_read` 和 `GET /api/picks/today` 仍用歷史率。儲存仍丟掉歷史低於 0.56 的人。`season_mean` 常常是 null。`attach_roster_fields` 仍在 event loop 上查名字。錄製的位移是一場、一個 market。
 - #53：轉隊到這場兩邊的人，歷史隊友和今晚陣容可能混在一起。只出現在今晚陣容的隊友，共同出賽可以是 0 場，畫面沒說明。WNBA projection 代碼 `LV`、`NY`、`PHO`、`LA`、`GS`、`WSH` 還沒對上。
 - #47 QA：把 `_main_book_line`、`_even_money_distance`、`_posted_point` 抽成共用的公開模組。
 - #47 QA：`rate_limit.py` 註明行程內計數，以及 `swallow_errors` 會放行 limiter 錯誤。
