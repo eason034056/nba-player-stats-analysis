@@ -59,7 +59,8 @@ fi
 
 raw="$("$CURL_BIN" -fsS https://checkip.amazonaws.com || true)"
 ip="$(printf '%s' "$raw" | tr -d '[:space:]')"
-if [[ ! "$ip" =~ ^[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}$ || "$ip" == "0.0.0.0" ]]; then
+octet='(25[0-5]|2[0-4][0-9]|1[0-9][0-9]|[1-9]?[0-9])'
+if [[ ! "$ip" =~ ^${octet}\.${octet}\.${octet}\.${octet}$ || "$ip" == "0.0.0.0" ]]; then
   echo "error: could not read a public IPv4 address. No file was changed and terraform was not started." >&2
   usage >&2
   exit 1

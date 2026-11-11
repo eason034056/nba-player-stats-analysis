@@ -10,12 +10,12 @@ State is local (`terraform.tfstate` in this directory). It is gitignored, as is 
 - Encrypted storage with the AWS-managed key `aws/rds` (`storage_encrypted` and no `kms_key_id`).
 - Automated backups kept `backup_retention_period` days (default 7), deletion protection on, final snapshot required.
 - Parameter group `${project}-pg16` (`postgres16`) with `rds.force_ssl = 1`.
-- Security group `${project}-app` (output `app_security_group_id`): egress is open. Ingress is TCP 80 and 443 from the internet, plus TCP 22 only when `enable_ssh` is true and only from `allowed_cidrs`. The EC2 instance is attached to this group. RDS already allows TCP 5432 from it.
-- Security group `${project}-rds`: inbound TCP 5432 from `${project}-app` and from each id in `rds_allowed_security_group_ids` (default empty), by security group id. Inbound TCP 5432 from `allowed_cidrs` only while that list is non-empty. `allowed_cidrs = []` removes the CIDR rules. Each set entry must be a host CIDR (`/32` or narrower). `0.0.0.0/0` and `::/0` are rejected. An empty list is allowed.
+- Security group `${project}-app` (output `app_security_group_id`): no ingress on the group itself. Egress is open. SPO-133 attaches the backend EC2 instance and adds TCP 80 and 443, plus TCP 22 only when `enable_ssh` is true and only from `allowed_cidrs`.
+- Security group `${project}-rds`: inbound TCP 5432 from `${project}-app` and from each id in `rds_allowed_security_group_ids` (default empty), by security group id. Inbound TCP 5432 from `allowed_cidrs` only while that list is non-empty. `allowed_cidrs = []` removes the CIDR rules. Each set entry must be an IPv4 `/32`. `0.0.0.0/0`, `0.0.0.0/32`, duplicates, and every IPv6 CIDR are rejected. An empty list is allowed.
 - S3 bucket: Block Public Access (all four), BucketOwnerEnforced, versioning, SSE-S3 (AES256), TLS-only bucket policy.
 - Lifecycle: current objects larger than 128 KB move to Standard-IA after 30 days and to Glacier Instant Retrieval (`GLACIER_IR`) after 90. Noncurrent versions expire after 30 days. Incomplete multipart uploads abort after 7 days. `pg-dumps/` current objects expire after `pg_dump_retention_days` (default 90).
 - Prefix objects: `bdl-raw/`, `bdl-archive/`, `bdl-samples/`, `pg-dumps/`.
-- IAM user `${project}-runtime` with GetObject, PutObject, and ListBucket on those prefixes only. No `s3:DeleteObject`. No access key.
+- IAM user `${project}-runtime` with GetObject, PutObject, and ListBucket on those prefixes only. An empty `s3:prefix` is not allowed, so listing the bucket root is denied. No `s3:DeleteObject`. No access key.
 
 Redis stays on the EC2 compose stack (`deploy/docker-compose.prod.yml`). It is not an AWS service in this module.
 
@@ -54,6 +54,8 @@ terraform apply tfplan
 ```
 
 `terraform plan` and `terraform apply` talk to AWS. Review the plan before apply. `tfplan` is gitignored.
+
+Optional, not part of CI: [tflint](https://github.com/terraform-linters/tflint) with the AWS ruleset. A local `.tflint.hcl` can enable `plugin "aws"`. This repository does not run tflint in GitHub Actions.
 
 Read these outputs (no secret values):
 

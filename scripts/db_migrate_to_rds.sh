@@ -56,6 +56,110 @@ redact_file() {
     "$1"
 }
 
+# Percent-decode without putting the value on another program's argv.
+urldecode() {
+  local raw="$1" out="" hex char
+  while [[ "$raw" == *%* ]]; do
+    out="${out}${raw%%\%*}"
+    raw="${raw#*%}"
+    hex="${raw:0:2}"
+    raw="${raw:2}"
+    if [[ ! "$hex" =~ ^[0-9A-Fa-f][0-9A-Fa-f]$ ]]; then
+      printf '%s' "${out}%${hex}${raw}"
+      return 0
+    fi
+    printf -v char '%b' "\\x${hex}"
+    out="${out}${char}"
+  done
+  printf '%s' "${out}${raw}"
+}
+
+# Copy a libpq URL into PGHOST/PGUSER/PGPASSWORD/PGDATABASE/PGSSLMODE.
+# Callers then run pg_dump, pg_restore, or psql with no URL argument, so the
+# password is not on the process command line. Do not prefix the command with
+# PGPASSWORD=...; that prefix is also visible in the process list.
+export_libpq() {
+  local url="$1"
+  local rest userinfo user pass after host port hostport pathquery db query
+  local pair key value sslmode="" sslrootcert=""
+  rest="${url#*://}"
+  userinfo="${rest%%@*}"
+  after="${rest#*@}"
+  if [[ "$userinfo" == *:* ]]; then
+    user="${userinfo%%:*}"
+    pass="${userinfo#*:}"
+  else
+    user="$userinfo"
+    pass=""
+  fi
+  if [[ "$after" == \[* ]]; then
+    host="${after#\[}"
+    host="${host%%\]*}"
+    local after_bracket="${after#*\]}"
+    if [[ "$after_bracket" == :*/* || "$after_bracket" == :* ]]; then
+      port="${after_bracket#:}"
+      port="${port%%/*}"
+    else
+      port="5432"
+    fi
+    if [[ "$after" == */* ]]; then
+      pathquery="${after#*/}"
+    else
+      pathquery=""
+    fi
+  else
+    if [[ "$after" == */* ]]; then
+      hostport="${after%%/*}"
+      pathquery="${after#*/}"
+    else
+      hostport="$after"
+      pathquery=""
+    fi
+    if [[ "$hostport" == *:* ]]; then
+      host="${hostport%%:*}"
+      port="${hostport##*:}"
+    else
+      host="$hostport"
+      port="5432"
+    fi
+  fi
+  db="${pathquery%%\?*}"
+  if [[ "$pathquery" == *\?* ]]; then
+    query="${pathquery#*\?}"
+  else
+    query=""
+  fi
+  if [[ -n "$query" ]]; then
+    local IFS='&'
+    # shellcheck disable=SC2086
+    set -- $query
+    IFS=' '
+    for pair in "$@"; do
+      key="${pair%%=*}"
+      value="${pair#*=}"
+      case "$key" in
+        sslmode) sslmode="$(urldecode "$value")" ;;
+        sslrootcert) sslrootcert="$(urldecode "$value")" ;;
+      esac
+    done
+  fi
+  export PGHOST="$host"
+  export PGPORT="$port"
+  export PGUSER="$(urldecode "$user")"
+  export PGPASSWORD="$(urldecode "$pass")"
+  export PGDATABASE="$db"
+  if [[ -n "$sslmode" ]]; then
+    export PGSSLMODE="$sslmode"
+  else
+    unset PGSSLMODE
+  fi
+  if [[ -n "$sslrootcert" ]]; then
+    export PGSSLROOTCERT="$(urldecode "$sslrootcert")"
+  else
+    unset PGSSLROOTCERT
+  fi
+}
+
 # Add sslmode=require when the URL has none. Never print the result.
 with_sslmode_require() {
   local url="$1"
@@ -164,6 +268,8 @@ rds_url="$(with_sslmode_require "$RDS_DATABASE_URL")"
 
 tmp_files=()
 dump_file=""
+# Invoked by the EXIT trap. shellcheck does not see that call.
+# shellcheck disable=SC2317
 cleanup() {
   local f
   for f in ${tmp_files[@]+"${tmp_files[@]}"}; do
@@ -185,7 +291,8 @@ run_psql() {
   set +e
   case "$PG_CLIENT" in
     host)
-      out="$("$PSQL" "$url" "$@" 2>"$err")"
+      export_libpq "$url"
+      out="$("$PSQL" "$@" 2>"$err")"
       status=$?
       ;;
     docker-exec)
@@ -227,7 +334,8 @@ container_dump="/tmp/sportslab-migrate.dump"
 dump_ok=0
 case "$PG_CLIENT" in
   host)
-    if "$PG_DUMP" -Fc --no-owner --no-privileges --dbname "$local_url" --file "$dump_file" 2>"$dump_err"; then
+    export_libpq "$local_url"
+    if "$PG_DUMP" -Fc --no-owner --no-privileges --file "$dump_file" 2>"$dump_err"; then
       dump_ok=1
     fi
     ;;
@@ -259,7 +367,8 @@ export RDS_RESTORE_URL="$rds_url"
 restore_ok=0
 case "$PG_CLIENT" in
   host)
-    if "$PG_RESTORE" --no-owner --no-privileges --exit-on-error --dbname "$rds_url" "$dump_file" 2>"$dump_err"; then
+    export_libpq "$rds_url"
+    if "$PG_RESTORE" --no-owner --no-privileges --exit-on-error "$dump_file" 2>"$dump_err"; then
       restore_ok=1
     fi
     ;;

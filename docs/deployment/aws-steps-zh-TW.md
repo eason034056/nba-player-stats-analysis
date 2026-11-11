@@ -9,8 +9,8 @@
 ## 1. 用 Homebrew 安裝工具
 
 ```bash
-brew install terraform awscli
-brew install --cask docker
+brew install terraform awscli jq
+brew install --cask docker-desktop
 ```
 
 安裝完打開 Docker Desktop，等它顯示正在執行。`terraform version`、`aws --version`、`docker version` 都要有輸出。
@@ -38,10 +38,12 @@ aws sts get-caller-identity
 
 ## 3. 先看方案與帳單，再設警報
 
-帳號已經存在。這一步是檢查，不是把帳號升級成 Paid。
+帳號已經存在。這一步是看帳單並設警報，不是改方案。AWS 沒有一個叫做 Paid plan 的升級按鈕。
 
-1. 打開 AWS Console → Billing。看目前的方案，以及最近幾個月的帳單。
-2. 再建一個每月 25 美元的預算。實際花費到 80% 寄信，預測花費到 100% 也寄信。收件人用你自己的信箱。
+1. 打開主控台，搜尋 **Billing and Cost Management**，看目前的帳單。
+2. 搜尋 **AWS Budgets**，或打開 **Billing and Cost Management → Budgets**。建立每月成本預算 25 美元。實際花費到 80% 寄信，預測花費到 100% 也寄信。收件人用你自己的信箱。
+
+25 美元是預算上限，不是估價，也不是這個月的固定帳單。`db.t4g.micro` 的運算大約每小時 0.016 美元（一個月大約 12 美元）。除此之外還要算：gp3 儲存、超過免費額度的備份儲存、資料傳出，以及 T4g unlimited 的 CPU credit。
 
 ## 4. terraform init、plan、apply
 
@@ -111,12 +113,35 @@ terraform output -raw master_user_secret_arn
 aws secretsmanager get-secret-value \
   --secret-id "$(terraform output -raw master_user_secret_arn)" \
   --query SecretString --output text \
-  --region us-east-2
+  --region us-east-2 | jq -r .password
 ```
 
-密碼只留在這台 Mac 的終端機記憶裡。不要貼到聊天、不要寫進 git。Terraform 不會把這組密碼寫進輸出。
+`--query SecretString` 印出來的是 JSON，裡面有 `username` 和 `password`。上面的 `jq -r .password` 只取出密碼。不要把整段 JSON 貼進 `RDS_DATABASE_URL`。終端機會留下這段輸出。不要貼到聊天，也不要寫進 git。Terraform 不會把這組密碼寫進輸出。
 
-接著用 SQL 建立應用程式角色 `sportslab_app`（Terraform 不建立這個角色）。後端用這個角色，不用 master。
+遷移腳本和每日 dump 腳本不會自己去 Secrets Manager。它們只讀你已經組好的 `RDS_DATABASE_URL`。密碼若含 `@`、`:`、`/`、`%`，寫進網址前要做百分比編碼（`/` 寫成 `%2F`）。
+
+接著用 master 帳號、加上 SSL，建立應用程式角色 `sportslab_app`（Terraform 不建立這個角色）。後端用這個角色，不用 master。把連線資訊放在權限 `600` 的檔案裡再載入，不要把密碼寫在同一行指令上：
+
+```bash
+touch ~/.sportslab-psql.env
+chmod 600 ~/.sportslab-psql.env
+# 檔案內容一行：
+# MASTER_URL=postgresql://sportslab_admin:ENCODED@ENDPOINT:5432/novig_nba?sslmode=require
+set -a
+source ~/.sportslab-psql.env
+set +a
+psql "$MASTER_URL"
+```
+
+連上之後執行（密碼只留在這台 Mac，不要 commit）：
+
+```sql
+CREATE ROLE sportslab_app LOGIN PASSWORD 'REPLACE_ME';
+GRANT CONNECT ON DATABASE novig_nba TO sportslab_app;
+GRANT USAGE, CREATE ON SCHEMA public TO sportslab_app;
+```
+
+PostgreSQL 15 以後，`public` schema 不會讓每個角色都能 `CREATE`。上面的 `GRANT` 讓 `sportslab_app` 能建立那六張表，並成為擁有者。
 
 ## 7. 用 docker exec 把本機資料庫搬到 RDS
 
@@ -124,11 +149,26 @@ aws secretsmanager get-secret-value \
 
 `5432` 沒有發佈到 Mac，所以不要在 Mac 上直接跑 `pg_dump` 去連 `localhost:5432`。預設路徑是進到容器裡執行 `pg_dump`。在容器裡面，`localhost:5432` 就是這顆 Postgres。
 
-在 repo 根目錄（把密碼和端點換成上一步的值；指令列會含有密碼，不要把這行貼出去）：
+在 repo 根目錄。不要把 DSN 打在指令列上，否則密碼會進 shell history。兩條網址放在權限 `600`、且不在 repo 裡的檔案，或用 `read -s` 輸入（不回顯、也不會變成一條指令）。腳本不會呼叫 Secrets Manager。
 
 ```bash
-LOCAL_DATABASE_URL='postgresql://novig:novig@localhost:5432/novig_nba' \
-RDS_DATABASE_URL='postgresql://sportslab_admin:PASSWORD@ENDPOINT:5432/novig_nba' \
+touch ~/.sportslab-migrate.env
+chmod 600 ~/.sportslab-migrate.env
+# LOCAL_DATABASE_URL=postgresql://novig:novig@localhost:5432/novig_nba
+# RDS_DATABASE_URL=postgresql://sportslab_admin:ENCODED@ENDPOINT:5432/novig_nba
+set -a
+source ~/.sportslab-migrate.env
+set +a
+./scripts/db_migrate_to_rds.sh
+```
+
+或只輸入 RDS 網址：
+
+```bash
+read -s -p "RDS URL: " RDS_DATABASE_URL
+echo
+export RDS_DATABASE_URL
+export LOCAL_DATABASE_URL='postgresql://novig:novig@localhost:5432/novig_nba'
 ./scripts/db_migrate_to_rds.sh
 ```
 
@@ -152,16 +192,22 @@ RDS 網址若沒有 `sslmode`，腳本會在 restore 與 RDS 端的筆數檢查�
 
 ## 8. 把 DATABASE_URL 寫進這台 Mac 的 .env
 
-`.env` 已被 gitignore。下載 RDS CA（`global-bundle.pem`），路徑要是後端行程讀得到的路徑。
+`.env` 已被 gitignore。範本是 repo 根目錄的 `env.example`（`cp env.example .env`）。下載 RDS CA，路徑要是後端行程讀得到的路徑：
 
 ```bash
-DATABASE_URL=postgresql://sportslab_app:APP_PASSWORD@ENDPOINT:5432/novig_nba?sslmode=verify-full&sslrootcert=/絕對路徑/global-bundle.pem
-DATABASE_REQUIRED=true
+curl -fsSL -o "$HOME/global-bundle.pem" https://truststore.pki.rds.amazonaws.com/global/global-bundle.pem
 ```
 
-第一次確認成功之後再把 `DATABASE_REQUIRED` 設成 `true`。設成 `true` 時，資料庫連不上，後端會停止，而不是繼續提供沒有資料庫的 API。
+第一次先把 `DATABASE_REQUIRED` 留成 `false`，確認日誌之後再改成 `true`。密碼含 `@`、`:`、`/`、`%` 時要先百分比編碼。
 
-若後端是用 `docker compose` 啟動，`DATABASE_URL` 會覆寫 compose 裡的本機預設值 `postgresql://novig:novig@postgres:5432/novig_nba`。CA 檔要掛進後端容器，或把 `sslrootcert` 指到容器內看得到的路徑。
+```bash
+DATABASE_URL=postgresql://sportslab_app:ENCODED@ENDPOINT:5432/novig_nba?sslmode=verify-full&sslrootcert=/絕對路徑/global-bundle.pem
+DATABASE_REQUIRED=false
+```
+
+確認成功之後再把 `DATABASE_REQUIRED` 改成 `true`。設成 `true` 時，資料庫連不上，後端會停止，而不是繼續提供沒有資料庫的 API。
+
+若後端是用 `docker compose` 啟動，`DATABASE_URL` 會覆寫 compose 裡的本機預設值 `postgresql://novig:novig@postgres:5432/novig_nba`。把 `global-bundle.pem` 掛進後端容器，並把 `sslrootcert` 指到容器內看得到的路徑。
 
 ## 9. 驗證
 

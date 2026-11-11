@@ -41,7 +41,14 @@ resource "aws_db_instance" "postgres" {
   auto_minor_version_upgrade = true
   deletion_protection        = true
   skip_final_snapshot        = false
-  final_snapshot_identifier  = "${local.name_prefix}-postgres-final"
+  # The suffix is taken once, at create. ignore_changes keeps later plans
+  # stable. A replacement gets a new suffix, so the next destroy does not
+  # reuse the previous final snapshot name.
+  final_snapshot_identifier = "${local.name_prefix}-postgres-final-${formatdate("YYYYMMDDhhmmss", timestamp())}"
 
   apply_immediately = false
+
+  lifecycle {
+    ignore_changes = [final_snapshot_identifier]
+  }
 }

@@ -6,7 +6,13 @@ import re
 from urllib.parse import quote, urlsplit, urlunsplit
 
 _URL_IN_TEXT = re.compile(r"[A-Za-z][A-Za-z0-9+.-]*://[^\s'\"<>]+")
-_KEYWORD_PASSWORD = re.compile(r"(?i)(\bpassword=)(\S+)")
+# Stop at &, #, or whitespace so `password=secret&sslmode=require` keeps sslmode.
+_KEYWORD_PASSWORD = re.compile(r"(?i)(\bpassword=)([^&\s#]+)")
+# urlsplit treats an unencoded `/` in the password as the start of the path.
+# This still masks `scheme://user:p/ss@host` when parts.password is None.
+_USERINFO_PASSWORD = re.compile(
+    r"([A-Za-z][A-Za-z0-9+.-]*://[^/\s:@]+:)[^@\s]+@"
+)
 
 
 def mask_database_url(url: str | None) -> str:
@@ -15,6 +21,11 @@ def mask_database_url(url: str | None) -> str:
     The scheme, username, host, port, path, and query stay in place, so an
     ``sslmode=verify-full&sslrootcert=...`` query is unchanged. A URL with no
     password is returned unchanged. ``None`` and ``""`` return ``""``.
+
+    A password that contains an unencoded ``/`` is still masked. A ``password=``
+    value in the query is masked too, and the rest of the query is kept.
+    Percent-encode ``@``, ``:``, ``/``, and ``%`` before putting a password in
+    a DSN.
 
     Args:
         url: A libpq or Redis URL, for example
@@ -26,19 +37,24 @@ def mask_database_url(url: str | None) -> str:
     if not url:
         return ""
     parts = urlsplit(url)
-    if not parts.scheme or parts.password is None:
-        return _KEYWORD_PASSWORD.sub(r"\1***", url)
-
-    hostname = parts.hostname or ""
-    if ":" in hostname and not hostname.startswith("["):
-        hostname = f"[{hostname}]"
-    username = quote(parts.username or "", safe="")
-    netloc = f"{username}:***"
-    if hostname:
-        netloc = f"{netloc}@{hostname}"
-    if parts.port is not None:
-        netloc = f"{netloc}:{parts.port}"
-    return urlunsplit((parts.scheme, netloc, parts.path, parts.query, parts.fragment))
+    if parts.scheme and parts.password is not None:
+        hostname = parts.hostname or ""
+        if ":" in hostname and not hostname.startswith("["):
+            hostname = f"[{hostname}]"
+        username = quote(parts.username or "", safe="")
+        netloc = f"{username}:***"
+        if hostname:
+            netloc = f"{netloc}@{hostname}"
+        if parts.port is not None:
+            netloc = f"{netloc}:{parts.port}"
+        masked = urlunsplit(
+            (parts.scheme, netloc, parts.path, parts.query, parts.fragment)
+        )
+    elif parts.scheme:
+        masked = _USERINFO_PASSWORD.sub(r"\1***@", url, count=1)
+    else:
+        masked = url
+    return _KEYWORD_PASSWORD.sub(r"\1***", masked)
 
 
 def redact_secrets(text: str | None, secrets: tuple[str, ...] = ()) -> str:
