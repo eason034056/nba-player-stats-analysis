@@ -114,6 +114,18 @@ nba_lineup_rag/outputs/notebook_results_*.json
 !.env.example
 !.env.*.example
 
+# ==================== Terraform ====================
+# Local state, plans, and variable files. Commit only *.tfvars.example.
+.terraform/
+**/.terraform/
+*.tfstate
+*.tfstate.*
+crash.log
+crash.*.log
+*.tfplan
+*.tfvars
+!*.tfvars.example
+
 # Notebook and tool caches.
 .ipynb_checkpoints/
 .venv/

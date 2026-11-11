@@ -1,0 +1,15 @@
+# Local Terraform state and plan files. Never commit these.
+.terraform/
+*.tfstate
+*.tfstate.*
+crash.log
+crash.*.log
+*.tfplan
+override.tf
+override.tf.json
+*_override.tf
+*_override.tf.json
+
+# Variable files can hold account ids and allowlisted IPs. Commit the example only.
+*.tfvars
+!*.tfvars.example

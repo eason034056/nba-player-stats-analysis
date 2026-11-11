@@ -1,0 +1,22 @@
+# Copy to terraform.tfvars and edit. terraform.tfvars is gitignored.
+# Placeholders only. Do not commit account ids, real CIDRs, or any secret.
+
+region      = "us-east-2"
+project     = "sportslab"
+bucket_name = "sportslab-data-ACCOUNT-us-east-2"
+
+# Replace with the box egress /32 and the backend host egress /32.
+# 0.0.0.0/0 is rejected by variable validation.
+allowed_cidrs = ["203.0.113.10/32"]
+
+db_instance_class       = "db.t4g.micro"
+engine_version          = "16.15"
+allocated_storage       = 20
+max_allocated_storage   = 50
+backup_retention_period = 7
+pg_dump_retention_days  = 90
+
+tags = {
+  Project   = "sportslab"
+  ManagedBy = "terraform"
+}

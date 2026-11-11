@@ -63,8 +63,10 @@ services:
       - SPORTSDATA_API_KEY=${SPORTSDATA_API_KEY:-}
       - SPORTSDATA_BASE_URL=${SPORTSDATA_BASE_URL:-https://api.sportsdata.io}
       
-      # PostgreSQL 設定
-      - DATABASE_URL=postgresql://novig:novig@postgres:5432/novig_nba
+      # PostgreSQL 設定。未設定時仍連本機 compose 的 postgres。
+      # 正式環境把 DATABASE_URL 指到 RDS，並設 DATABASE_REQUIRED=true。
+      - DATABASE_URL=${DATABASE_URL:-postgresql://novig:novig@postgres:5432/novig_nba}
+      - DATABASE_REQUIRED=${DATABASE_REQUIRED:-false}
       
       # 投影資料快取 TTL
       - CACHE_TTL_PROJECTIONS=${CACHE_TTL_PROJECTIONS:-7200}
