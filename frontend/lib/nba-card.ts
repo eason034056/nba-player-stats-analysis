@@ -77,20 +77,24 @@ export function nbaTierFace(pick: {
 }
 
 /**
- * Bet slip face. An older saved leg has no blend and no tier, so it
- * keeps the one-decimal historical percent and no tier label.
+ * Bet slip face. Every percent on the NBA slip floors, with or without
+ * a tier. An older saved leg has no blend, so the pill uses the stored
+ * probability. No tier and an explicit missing blend is an em dash.
  */
 export function slipFace(pick: {
   probability: number;
   combined_probability?: number | null;
   tier?: string | null;
 }): CardFace {
-  if (pick.tier == null && pick.combined_probability === undefined) {
-    return { probabilityText: formatPercent(pick.probability), tier: null };
+  const tier = tierFromBackend(pick.tier);
+  if (tier) {
+    return { probabilityText: formatTierPercent(tierProbability(pick)), tier };
   }
-  return nbaTierFace({
-    probability: pick.probability,
-    combined_probability: pick.combined_probability ?? null,
-    tier: pick.tier,
-  });
+  if (pick.combined_probability === undefined) {
+    return { probabilityText: formatTierPercent(pick.probability), tier: null };
+  }
+  if (!finiteRate(pick.combined_probability)) {
+    return { probabilityText: "—", tier: null };
+  }
+  return { probabilityText: formatTierPercent(pick.combined_probability), tier: null };
 }

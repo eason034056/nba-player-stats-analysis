@@ -10,7 +10,7 @@ import type { BetSlipPick } from "@/contexts/BetSlipContext";
 import { buildEventDetailHref, type LeagueSegment } from "./event-detail-link";
 import { metricToMarket } from "./metric-to-market";
 import { slipFace } from "./nba-card";
-import { formatPercent, formatTierPercent } from "./player-dd";
+import { formatTierPercent } from "./player-dd";
 import { teamAbbr } from "./team-abbr";
 import { boardClock } from "./today-board";
 import { propPhrase } from "./picks-board";
@@ -96,7 +96,7 @@ export function complementHitRateLabel(
   if (pick.rate_basis !== "complement" || !Number.isFinite(pick.probability)) return null;
   const side = pick.direction === "under" ? "Under" : pick.direction === "over" ? "Over" : pick.direction;
   const other = pick.direction === "under" ? "Over" : pick.direction === "over" ? "Under" : "other side";
-  return `${side} hit rate ${formatPercent(pick.probability)} (1 − ${other} ${formatPercent(1 - pick.probability)})`;
+  return `${side} hit rate ${formatTierPercent(pick.probability)} (1 − ${other} ${formatTierPercent(1 - pick.probability)})`;
 }
 
 export function slipMatchup(pick: BetSlipPick, league: LeagueSegment): string {
