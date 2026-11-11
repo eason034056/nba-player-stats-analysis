@@ -482,11 +482,13 @@ async def test_malformed_page_logs_a_warning_and_keeps_the_cache(
     assert await service.get(NBA_INJURIES_CACHE_KEY) == previous
     warnings = [record for record in caplog.records if record.levelno == logging.WARNING]
     assert warnings
+    assert any("rejected a page" in record.message for record in warnings)
+    assert "empty team map" not in caplog.text
     assert all(record.exc_info in (None, (None, None, None)) for record in warnings)
 
 
 @pytest.mark.asyncio
-async def test_unexpected_error_logs_the_type_and_keeps_the_cache(
+async def test_unexpected_error_logs_only_the_exception_type(
     caplog: pytest.LogCaptureFixture,
 ) -> None:
     service, _fake = _cache()

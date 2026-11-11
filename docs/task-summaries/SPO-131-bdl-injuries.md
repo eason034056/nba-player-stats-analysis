@@ -19,12 +19,13 @@ NBA product agents read the BALLDONTLIE injury cache only when `NBA_INJURY_SOURC
 | `backend/tests/fixtures/bdl/standings_2026.json` | Recorded `GET /v1/standings?season=2026`, copied unchanged. Source of the team-id map in tests. |
 | `backend/tests/test_spo131_bdl_injuries.py` | Normalizer, 30-team code check, pagination from copies of the recorded page, failed page, stale and missing cache, one-team tool output, no network on the agent path, and the `NBA_INJURY_SOURCE` switch (default, `espn_cbs`, `bdl`, `BDL`, unknown, blank, settings read failure, no key, WNBA). |
 | `backend/tests/test_spo131_qa.py` | QA cache edge cases. Every BDL body is the recorded page or a copy of it. The three strict xfails (malformed `entries`, empty team map, unrecognized status) are removed because those cases now pass. |
+| `backend/tests/test_spo131_qa2.py` | QA round 2: ESPN and CBS duplicates stay Out, ambiguous BDL names are not guessed, and the 20-page cap does not replace the previous snapshot. The three strict xfails are removed. |
 | `backend/tests/test_spo98_gaps.py` | Injury-fetch stubs accept the new optional `league` argument. |
 | `docs/decisions/SPO-131/decision_20261111_bdl-injury-cache.md` | Why the cache exists, why Doubtful maps to Questionable, why the team map is not hand-typed. |
 
 ## Why
 
-The shared BALLDONTLIE key allows 5 requests per minute. Injury lookups happen inside a user request and can run more than once per question, so the agent must not be the caller. The injury payload has no timestamp and no history; `fetched_at` on the cache body is the clock, and entries keep `bdl_player_id`, `raw_status`, and `fetched_at` for a later history table. `Doubtful` becomes `Questionable` so the scorer's existing unresolved bucket applies. Eason chose that mapping in the Sports Lab Lead chat on 2026-11-10 (~10:34 PM CT). `raw_status` keeps the original word. `Available` is dropped. The standings fixture's abbreviations already equal `NBA_TEAMS` and `TEAM_ALIASES`, so the id-to-code map is read from that file rather than typed. `NBA_INJURY_SOURCE` defaults to `espn_cbs` because the key is already deployed and the refresh job is not. The flag moves to `bdl` only after `nba_injuries_refresh` lands with SPO-130a. See `docs/decisions/SPO-131/decision_20261111_bdl-injury-cache.md`.
+The shared BALLDONTLIE key allows 5 requests per minute. Injury lookups happen inside a user request and can run more than once per question, so the agent must not be the caller. The injury payload has no timestamp and no history; `fetched_at` on the cache body is the clock, and entries keep `bdl_player_id`, `raw_status`, and `fetched_at` for a later history table. Eason decided Doubtful maps to Questionable in the Sports Lab Lead chat on 2026-11-10, around 10:34 PM CT, with `raw_status` kept. That is the scorer's unresolved bucket. `Available` is dropped. The standings fixture's abbreviations already equal `NBA_TEAMS` and `TEAM_ALIASES`, so the id-to-code map is read from that file rather than typed. `NBA_INJURY_SOURCE` defaults to `espn_cbs` because the key is already deployed and the refresh job is not. The flag moves to `bdl` only after `nba_injuries_refresh` lands with SPO-130a. See `docs/decisions/SPO-131/decision_20261111_bdl-injury-cache.md`.
 
 ## Tests
 
@@ -51,11 +52,11 @@ Recorded fixtures only. No live BALLDONTLIE call.
 - WNBA uses the ESPN/CBS fetcher for the default, `espn_cbs`, `bdl`, and an unknown flag.
 
 ```
-cd backend && python -m pytest tests/test_spo131_bdl_injuries.py tests/test_spo131_qa.py -q --tb=short
-# 78 passed
+cd backend && python -m pytest tests/test_spo131_bdl_injuries.py tests/test_spo131_qa.py tests/test_spo131_qa2.py -q --tb=short
+# 89 passed
 
 cd backend && python -m pytest --tb=line -q
-# 1275 passed, 26 skipped, 6 xfailed
+# 1286 passed, 26 skipped, 6 xfailed
 
 cd scripts/agents && python -m pytest tests --tb=line -q
 # 114 passed

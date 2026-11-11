@@ -2,8 +2,7 @@
 
 BDL bodies are the recorded page or a copy of it. The scrape stub is the
 same in-process ``InjuriesPageFetcher`` stand-in the SPO-131 tests use;
-it returns parsed rows, not an HTTP body. ``xfail(strict=True)`` marks
-behaviour the review asks to change.
+it returns parsed rows, not an HTTP body.
 """
 
 from __future__ import annotations
@@ -60,7 +59,6 @@ def test_scrape_rows_reach_the_tool_unchanged(monkeypatch):
     assert [(r["player"], r["source"]) for r in rows] == [("Joel Embiid", "espn"), ("Joel Embiid", "cbs")]
 
 
-@pytest.mark.xfail(strict=True, reason="must-fix: a player on both ESPN and CBS no longer matches and reads as Healthy")
 def test_player_on_both_scrape_sources_is_still_out_on_the_default_path(monkeypatch):
     historical = _scrape_path(monkeypatch)
     availability = historical.get_availability_context("Joel Embiid", league="nba")
@@ -68,7 +66,6 @@ def test_player_on_both_scrape_sources_is_still_out_on_the_default_path(monkeypa
     assert availability["signal"] == "caution"
 
 
-@pytest.mark.xfail(strict=True, reason="must-fix: same regression with an unknown flag value (falls back to the scrape)")
 def test_player_on_both_scrape_sources_with_unknown_flag(monkeypatch):
     historical = _scrape_path(monkeypatch, "foo")
     availability = historical.get_availability_context("Joel Embiid", league="nba")
@@ -108,7 +105,6 @@ class _EndlessRecordedPages:
         return page
 
 
-@pytest.mark.xfail(strict=True, reason="should-fix: a walk cut by the page cap is stored as a complete snapshot")
 def test_page_cap_does_not_replace_the_previous_snapshot():
     service, _fake = base._cache()
     previous = base._old_snapshot()
