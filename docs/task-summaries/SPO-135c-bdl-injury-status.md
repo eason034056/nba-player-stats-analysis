@@ -42,7 +42,8 @@ After SPO-135, `injury_status` was always null, so `injury_blocks_combined` neve
 
 Recorded fixtures only. No live BALLDONTLIE or Odds API call.
 
-- `cd backend && python3 -m pytest tests -q --tb=line` → 1345 passed, 28 skipped, 6 xfailed, 0 failed.
+- `cd backend && python3 -m pytest tests -q --tb=line` → 1347 passed, 28 skipped, 6 xfailed, 0 failed.
+- NBA pick signals and event reads omit the projection key. Market, last-10, history, and defense still serialize as null when those inputs fail. WNBA picks still have `signals` null and `combined_probability` null. The blend is unchanged because a missing projection already added zero.
 - A recorded 429 (`lineups_18447393_2026-01-15_agents_429.json`) is retried once, waits for `x-ratelimit-reset`, then leaves the previous snapshot in place and logs one `BdlRateLimitError` warning. A later 429 in the same refresh does not wait again.
 - `cd scripts/agents && python3 -m pytest tests -q --tb=line` → 114 passed.
 - Redis on localhost, snapshot seeded by `refresh_nba_injuries_from_bdl` with a mocked transport over `tests/fixtures/bdl/player_injuries__page1.json` and a terminal copy. Odds gateway served the recorded `player_points` body with one description relabeled to Jimmy Butler (Out on that page). `GET /api/health` 200. `GET /api/nba/daily-picks?date=2026-11-10&tz_offset=480&min_probability=0.5&min_games=5` 200, 12 picks. Jimmy Butler `injury_status` `Out`, `combined_probability` null, `lineup_confirmed` null. Dyson Daniels `injury_status` null, `combined_probability` 0.743.
@@ -53,4 +54,5 @@ Recorded fixtures only. No live BALLDONTLIE or Odds API call.
 - [ ] The filtered board drops a cache Doubtful (status Questionable, blend null) because the filter does not see `raw_status`.
 - [ ] SPO-130d: a production team-id map. This PR reads the recorded standings fixture.
 - [ ] Paired frontend PR: `injury_status` is non-null again for a matched NBA player. `lineup_confirmed` stays null.
+- [ ] ML integration must re-add the projection slot on NBA picks and event reads.
 - [ ] Close PR #60 after this merges. Merge #69 first, then this PR. After #69 squash-merges, `git merge origin/dev` on this branch.

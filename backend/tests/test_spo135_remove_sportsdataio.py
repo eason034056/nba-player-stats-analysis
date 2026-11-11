@@ -166,11 +166,10 @@ def test_nba_daily_picks_keep_null_projection_fields(monkeypatch):
     scored = [pick for pick in body["picks"] if pick["combined_probability"] is not None]
     assert scored
     assert all(pick["signals"] for pick in scored)
-    projection = next(
-        signal for signal in scored[0]["signals"] if signal["key"] == "projection"
-    )
-    assert projection["value"] is None
-    assert projection["verdict"] is None
+    for pick in scored:
+        keys = [signal["key"] for signal in pick["signals"]]
+        assert "projection" not in keys
+        assert keys == ["market", "last10", "history", "defense"]
 
 
 def test_event_reads_from_the_recorded_snapshot_omit_a_projection(monkeypatch):
@@ -208,6 +207,11 @@ def test_event_reads_from_the_recorded_snapshot_omit_a_projection(monkeypatch):
     for item in body["reads"]:
         if not item["signals"]:
             continue
-        projection = next(signal for signal in item["signals"] if signal["key"] == "projection")
-        assert projection["value"] is None
+        assert all(signal["key"] != "projection" for signal in item["signals"])
+        assert [signal["key"] for signal in item["signals"]] == [
+            "market",
+            "last10",
+            "history",
+            "defense",
+        ]
         assert item["combined_probability"] is not None

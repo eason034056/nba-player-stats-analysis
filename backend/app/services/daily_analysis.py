@@ -1527,7 +1527,10 @@ def _with_nba_signal_verdicts(
     game_logs: List[Dict[str, Any]],
     injury_raw_status: str | None = None,
 ) -> DailyPick:
-    """Attach the five signals on an NBA pick. WNBA is returned unchanged.
+    """Attach the NBA signals on a pick. WNBA is returned unchanged.
+
+    The projection slot is omitted. A market, last-10, history, or
+    defense input that fails still serializes as null.
 
     Both new fields stay None for WNBA. The bookmaker list is the snapshot
     already fetched for this market; this does not request odds again and

@@ -571,7 +571,13 @@ class PickSignal(BaseModel):
     missing, which is not the same as neutral.
     """
 
-    key: str = Field(..., description="Stable key: market, last10, history, projection, defense")
+    key: str = Field(
+        ...,
+        description=(
+            "Stable key: market, last10, history, or defense. "
+            "The projection key is omitted until a model writes one."
+        ),
+    )
     label: str = Field(..., description="Display label")
     value: str | None = Field(
         default=None,
@@ -727,10 +733,14 @@ class DailyPick(BaseModel):
 
     # --- SPO-112 signal verdicts (self-contained; leave this block intact) ---
     # Separate from `probability` and from `tier`, `p_over`, and `p_under`.
-    # NBA picks carry five signals. WNBA leaves both fields null.
+    # NBA picks carry four signals. The projection slot is omitted.
+    # WNBA leaves both fields null.
     signals: list[PickSignal] | None = Field(
         default=None,
-        description="Five NBA signal verdicts in a fixed order. None for WNBA",
+        description=(
+            "NBA signal verdicts in a fixed order. The projection slot is "
+            "omitted until a model writes one. None for WNBA"
+        ),
     )
     combined_probability: float | None = Field(
         default=None,
@@ -991,7 +1001,10 @@ class PropRead(BaseModel):
     )
     signals: Optional[List[PickSignal]] = Field(
         default=None,
-        description="Five signals for side. Null when side is null",
+        description=(
+            "Signals for side. The projection slot is omitted. "
+            "Null when side is null"
+        ),
     )
 
 

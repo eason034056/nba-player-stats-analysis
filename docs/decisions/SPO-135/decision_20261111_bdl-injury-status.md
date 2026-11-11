@@ -36,6 +36,8 @@ Policy (Eason, 2026-11-11): all NBA data comes from BALLDONTLIE. No new non-BALL
 
 10. The team-id map is read from the recorded standings fixture (`tests/fixtures/bdl/standings_2026.json`). An unreadable file returns an empty map, and the refresh refuses to write. That is the production map until SPO-130d owns one.
 
+11. NBA pick signals and NBA event reads omit the projection slot. There is no projection source until the ML model ships, so the response does not serialize `{value: null, verdict: null}` for it. Market, last-10, history, and defense still serialize as null when their inputs fail at runtime. WNBA does not call this builder. `combined_probability` still adds zero for a missing projection. The model integration puts the slot back.
+
 ## Alternatives
 
 1. *Leave `NBA_INJURY_SOURCE` and flip the default to `bdl`.* Rejected. The scrape path would still be a live NBA source. Deleting the flag is a clean subtraction because WNBA keeps the scraper.

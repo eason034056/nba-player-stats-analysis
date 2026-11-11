@@ -528,9 +528,9 @@ class TestEventReads:
                 "market",
                 "last10",
                 "history",
-                "projection",
                 "defense",
             ]
+            assert all(signal.key != "projection" for signal in item.signals)
             assert item.tier == read_tier(item.combined_probability)
 
     def test_binary_market_is_present_with_a_null_read(self):
@@ -561,7 +561,7 @@ class TestEventReads:
         )
         row = next(item for item in payload.reads if item.player == name)
         assert row.signals is not None
-        assert row.signals[3].value is None
+        assert all(signal.key != "projection" for signal in row.signals)
         assert row.combined_probability is not None
 
     def test_route_does_not_call_the_odds_api(self, monkeypatch):

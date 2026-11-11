@@ -4,6 +4,8 @@
 - **Date:** 2026-11-11
 - **Status:** Accepted
 
+> Superseded in part by SPO-135c (2026-11-11): NBA picks and event reads omit the projection signal. The slot returns when the ML model ships.
+
 ## Context
 
 The SportsDataIO projection feed was not a real model. It must not feed picks, the UI, or RDS. NBA rows in RDS come from BALLDONTLIE. That API has no projection endpoint. A CSV average is not a projection, and the betting line is not a stand-in. WNBA already ran without a projection client and stays that way.

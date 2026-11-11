@@ -1,18 +1,20 @@
 """Per-prop signal verdicts and the combined probability for one Daily Pick.
 
-NBA picks always receive five signals, in a fixed order. A missing input
-sets that signal's ``value`` and ``verdict`` to None. It is not neutral,
-and it adds nothing to the log-odds blend.
+NBA picks receive four signals, in a fixed order. A missing input for
+one of those signals sets ``value`` and ``verdict`` to None. It is not
+neutral, and it adds nothing to the log-odds blend.
+
+There is no projection source until the ML model ships, so the
+projection slot is omitted. It is not serialized as null. A market,
+last-10, history, or defense input that exists and fails at runtime
+still serializes as null. ``combined_probability`` already treats a
+missing projection as zero, and dropping the slot does not change it.
 
 Every rule is relative to the pick's side (over or under).
 
 * ``market`` — no-vig consensus of books posted at the pick's line.
 * ``last10`` — strict hits in the last 10 non-DNP games, shown as ``k/10``.
 * ``history`` — the published historical ``probability`` for the side.
-* ``projection`` — ``projected_value``. The slot stays in the list.
-  It is missing until a model writes a value. The verdict uses the
-  edge in the side's direction. The flat ±0.5 threshold does not scale
-  with the metric's spread; that scaling is left for later.
 * ``defense`` — ``opponent_position_rank``, then ``opponent_rank``.
   Rank 1 is the weakest defense. The game log fills that number.
 
@@ -64,9 +66,10 @@ SIGNAL_SPECS: tuple[tuple[str, str], ...] = (
     ("market", "Market price"),
     ("last10", "Last 10 games"),
     ("history", "All-game hit rate"),
-    ("projection", "Projection"),
     ("defense", "Opponent defense"),
 )
+# Kept for the model that will put this slot back on the list.
+PROJECTION_SIGNAL_SPEC: tuple[str, str] = ("projection", "Projection")
 
 _INJURY_BLOCK = frozenset({"out", "doubtful"})
 
@@ -370,7 +373,7 @@ def projection_signal(
     The ±0.5 cut is the same number of points for every metric. It should
     eventually be scaled by that metric's spread.
     """
-    key, label = SIGNAL_SPECS[3]
+    key, label = PROJECTION_SIGNAL_SPEC
     projected = _finite(projected_value)
     edge = _finite(edge_for_side)
     if projected is None or edge is None:
@@ -389,7 +392,7 @@ def projection_signal(
 
 def defense_signal(rank: float | None, side: str) -> PickSignal:
     """``#rank`` using position rank first. None when neither rank was loaded."""
-    key, label = SIGNAL_SPECS[4]
+    key, label = SIGNAL_SPECS[3]
     if rank is None:
         return _signal(key, label, None, None)
     return _signal(key, label, format_rank(rank), defense_verdict(rank, side))
@@ -527,11 +530,15 @@ def build_nba_signals(
     injury_status: str | None = None,
     raw_status: str | None = None,
 ) -> tuple[list[PickSignal], float | None, float | None]:
-    """Build the five signals, the calibrated probability, and the pre-Platt total.
+    """Build the four emitted signals, the calibrated probability, and the pre-Platt total.
 
-    The third value is the clipped adjustment total before Platt. Walk-forward
-    stores it so Platt can be refit without another pass over the features.
-    It is None when the side is not over or under.
+    The projection slot is not in the list. ``projected_value`` still
+    feeds ``projection_adjustment`` when a caller passes one, which is
+    what keeps ``combined_probability`` on the same formula. Production
+    passes None, and that term is zero. The third value is the clipped
+    adjustment total before Platt. Walk-forward stores it so Platt can
+    be refit without another pass over the features. It is None when
+    the side is not over or under.
 
     Args:
         side: ``over`` or ``under``.
@@ -547,14 +554,14 @@ def build_nba_signals(
         opponent_rank: Overall defense rank. Used only when the position rank is missing.
         opponent_position_rank: Defense rank versus the player's position. Preferred.
         injury_status: Out or Doubtful forces the combined probability to None.
-            The five signals are still returned.
+            The four emitted signals are still returned.
         raw_status: Source word from the injury cache. Doubtful is normalized
             to Questionable on ``injury_status`` and still blocks when this
             argument is Doubtful.
 
     Returns:
         ``(signals, combined_probability, adjustment_total)``. ``signals``
-        always has the five keys in ``SIGNAL_SPECS`` order.
+        has the keys in ``SIGNAL_SPECS`` order. ``projection`` is absent.
     """
     threshold = _finite(line)
     market = resolve_market_probability(
@@ -584,7 +591,6 @@ def build_nba_signals(
         market_signal(market),
         last10_signal(hits),
         history_signal(history_rate),
-        projection_signal(projected_value, edge),
         defense_signal(rank, side),
     ]
     if side not in ("over", "under"):
