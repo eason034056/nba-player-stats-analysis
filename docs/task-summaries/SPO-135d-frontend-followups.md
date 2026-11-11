@@ -7,17 +7,24 @@
 
 ## Summary
 
-The picks board shows an injury tag only for `Out` and `Questionable`. A literal `Doubtful` is shown as `Questionable`. `Probable`, `Day-To-Day`, `Active`, null, and any other value show no injury tag. The `Lineup confirmed` tag is gone. `LineupStatusBadge` still covers the lineups route. An Out pick whose `combined_probability` is null still renders: the board, the event read, and the slip print `—` for the blend. They do not print `NaN` or `0%`. Today board and agent copy no longer say the probability is built from a projection.
+The picks board shows an injury tag only for `Out` and `Questionable`. A literal `Doubtful` is shown as `Questionable`. `Probable`, `Day-To-Day`, `Active`, null, and any other value show no injury tag. The `Lineup confirmed` tag is gone. `LineupStatusBadge` still covers the lineups route. Today board and agent copy no longer say the probability is built from a projection.
+
+An Out pick is not a model read. `isOutPick` is the one check: `injury_status`, trimmed and lowercased, is `out`. Doubtful is not Out. On the picks board the card stays, dimmed, and sorts last, with only the Out tag. It has no percent, no bar, no tier, and no slip, reverse, or ask action. The name still opens the event page. The event read does not offer an add button. Out is left out of the picks count, the strong count, the Today count, tonight's top read, the player-rail lean, and the review-board suggestion list. If the top read is Out, the next eligible pick is used, or the existing empty state. A null blend that is not Out still falls back to the historical rate. Questionable is tag-only and otherwise unchanged.
+
+Hiding the card would drop a player someone is looking for. Keeping it dimmed at the end tells the bettor the player is out, without a percent that looks like a recommendation.
 
 ## Changes
 
 | Area | File | Change |
 |---|---|---|
-| Tags | `frontend/lib/picks-board.ts` | Injury tag allow-list. Removed the `Lineup confirmed` tag. `Lineup unconfirmed` stays. |
+| Tags | `frontend/lib/picks-board.ts` | Injury tag allow-list. Removed the `Lineup confirmed` tag. `Lineup unconfirmed` stays. `isOutPick` is the shared Out check. |
+| Out | `frontend/lib/picks-board.ts`, `frontend/components/picks/DailyPicksBoard.tsx`, `frontend/app/picks/page.tsx` | Out sorts last, is dimmed, and is not counted, barred, or addable. |
+| Today | `frontend/lib/today-board.ts`, `frontend/components/TodayBoard.tsx` | Out is skipped for tonight's reads, the game top read, and the picks count. |
+| Event | `frontend/lib/event-page.ts` | An Out player is not a rail lean and has no slip seed. |
 | Copy | `frontend/components/TodayBoard.tsx`, `frontend/components/AgentWidget.tsx`, `frontend/components/agent-widget/AgentWidgetTranscript.tsx` | Today board names market prices, recent form, all-game history, and matchup. The agent header and transcript keep rest. |
 | Comments | `frontend/lib/api.ts` | Dropped `projections` from the two WNBA-vs-NBA comments. |
 | Indent | `frontend/components/EventDetail.tsx` | Indented the WNBA unavailable panel. Copy is unchanged. |
-| Tests | `frontend/lib/picks-board.test.ts`, `frontend/components/picks/DailyPicksBoard.test.tsx`, `frontend/lib/out-pick-render.test.tsx` | Allow-list, no lineup-confirmed tag, Out plus a null blend. |
+| Tests | `frontend/lib/picks-board.test.ts`, `frontend/components/picks/DailyPicksBoard.test.tsx`, `frontend/lib/today-board.test.ts`, `frontend/components/TodayBoard.test.tsx`, `frontend/lib/event-page.test.ts`, `frontend/lib/out-pick-render.test.tsx` | Allow-list, and Out excluded from strong, the bar, the top read, and slip suggestions. Questionable stays. |
 | QA | `frontend/components/picks/spo135-contract.qa.test.tsx`, `frontend/test/fixtures/picks/nba-daily-picks-spo135.json` | #71 QA patch, kept as its own commit. |
 
 ## Why
@@ -40,20 +47,30 @@ Agent empty transcript, after: `I check any prop against market price, recent fo
 
 ## Tests
 
-- `npx vitest run` from `frontend/`: 66 files, 520 tests, passed. The QA file is 12 of those.
+- `npx vitest run` from `frontend/`: 66 files, 524 tests, passed. The QA file is 12 of those.
 - `npx tsc --noEmit`: passed.
 - `npm run lint`: passed, 0 warnings.
 - `npm run build`: passed. `/wnba`, `/wnba/event/[eventId]`, `/wnba/picks`, `/wnba/betslip`, and `/wnba/player/[name]` are in the route table.
 
 ## Screenshots
 
-`next start` against a local mock with one Out pick (Jimmy Butler, `combined_probability` null) and one Questionable pick (Bam Adebayo, blend 0.74). No dev overlay and no React Query icon. The Out card shows `—`, the tag `Out`, and `Def #9`. The Questionable card shows `74%`, `Playable`, and the tag `Questionable`. Neither card shows `NaN`, `0%`, or `Lineup confirmed`.
+`next start` against a local mock. Jimmy Butler is Out, blend null, historical rate 0.91. Bam Adebayo is Questionable, blend 0.74. No dev overlay.
 
-Those two statuses already printed as tags before this change, and `lineup_confirmed` is null, so this mock does not change the board. No before/after pair.
+Before, the Out card is first because the bar falls back to that 0.91 rate. It shows `—`, a filled bar, `Out`, `Def #9`, and the slip actions. The header counts both cards, including Out as strong.
+
+After, Bam is first at `74%` with the Questionable tag. Jimmy is last, dimmed, with only the Out tag. No bar, no percent, no slip. The header counts 1 pick and 1 strong.
+
+![Picks board before, 1440](assets/SPO-135d/picks-before-1440.png)
+
+![Picks board before, 390](assets/SPO-135d/picks-before-390.png)
+
+![Picks board after, 1440](assets/SPO-135d/picks-after-1440.png)
+
+![Picks board after, 390](assets/SPO-135d/picks-after-390.png)
 
 ## Follow-ups
 
 - `Lineup unconfirmed` still appears when `lineup_confirmed` is false. The badge from the lineups route was left alone.
-- A null blend prints `—`. The bar and the strong count still use `boardRate`, which falls back to the historical probability when the blend is missing. Jimmy Butler's card is a dash and still counts toward strong because his stored rate is 0.72.
+- A null blend that is not Out still prints `—` and can still fill the bar from the historical rate.
 - The picks-board footer still says projection, edge, and minutes appear only when the response includes them. That sentence is still true.
 - WNBA copy, including the unavailable projection panel, is unchanged.

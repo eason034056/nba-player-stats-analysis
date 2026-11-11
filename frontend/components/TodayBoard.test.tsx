@@ -245,6 +245,32 @@ describe("TodayBoard", () => {
     expect(dailyPicksResponseSchema.safeParse(nbaPicksPartialFixture).success).toBe(false);
   });
 
+  it("drops an Out pick from the count and from tonight's top read", async () => {
+    const [bam, ...rest] = nbaPicks.picks;
+    apiMocks.getEvents.mockResolvedValue(nbaEvents);
+    apiMocks.getDailyPicks.mockResolvedValue({
+      ...nbaPicks,
+      picks: [
+        {
+          ...bam,
+          injury_status: "Out",
+          tier: null,
+          combined_probability: null,
+          probability: 0.91,
+        },
+        ...rest,
+      ],
+    });
+
+    renderWithProviders(<TodayBoard league="nba" />);
+
+    const web = await screen.findByTestId("today-web");
+    expect(within(web).getByRole("link", { name: /all 2 picks/i })).toHaveAttribute("href", "/picks");
+    expect(within(web).queryByRole("link", { name: /bam adebayo/i })).not.toBeInTheDocument();
+    expect(within(web).getByRole("link", { name: /joel embiid/i })).toBeInTheDocument();
+    expect(within(web).queryByText("Adebayo Over 10.5 REB")).not.toBeInTheDocument();
+  });
+
   it("omits the count when total_picks is missing and still prints zero", async () => {
     apiMocks.getEvents.mockResolvedValue(nbaEventsEmpty);
     apiMocks.getDailyPicks.mockResolvedValue(

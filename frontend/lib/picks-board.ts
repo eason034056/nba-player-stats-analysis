@@ -64,6 +64,8 @@ export interface PickRowModel {
   tierName: ReadTierName | null;
   tags: PickTag[];
   href: string;
+  /** Out has no model read. The card stays, dimmed, without a percent or bar. */
+  dimmed: boolean;
 }
 
 export function picksEyebrow(date: string, analyzedAt: string | null | undefined): string {
@@ -114,9 +116,17 @@ const INJURY_TAG_TEXT: Record<string, string> = {
   doubtful: "Questionable",
 };
 
+function injuryKey(status: string | null | undefined): string {
+  return status?.trim().toLowerCase() ?? "";
+}
+
+/** True when the stored status is Out. Matching ignores case and surrounding space. */
+export function isOutPick(pick: { injury_status?: string | null }): boolean {
+  return injuryKey(pick.injury_status) === "out";
+}
+
 function injuryTagText(status: string | null | undefined): string | null {
-  const key = status?.trim().toLowerCase() ?? "";
-  return INJURY_TAG_TEXT[key] ?? null;
+  return INJURY_TAG_TEXT[injuryKey(status)] ?? null;
 }
 
 /**
@@ -168,6 +178,9 @@ export function pickMatchup(pick: DailyPick, league: LeagueSegment): string {
 
 export function sortPicks(picks: DailyPick[], league: LeagueSegment): DailyPick[] {
   return [...picks].sort((left, right) => {
+    const leftOut = isOutPick(left);
+    const rightOut = isOutPick(right);
+    if (leftOut !== rightOut) return leftOut ? 1 : -1;
     const leftRate = boardRate(left, league);
     const rightRate = boardRate(right, league);
     const leftRank = Number.isFinite(leftRate) ? leftRate : -1;
@@ -178,6 +191,7 @@ export function sortPicks(picks: DailyPick[], league: LeagueSegment): DailyPick[
 
 export function countStrong(picks: DailyPick[], league: LeagueSegment): number {
   return picks.filter((pick) => {
+    if (isOutPick(pick)) return false;
     const rate = boardRate(pick, league);
     return Number.isFinite(rate) && rate >= 0.7;
   }).length;
@@ -189,10 +203,18 @@ export function buildPickRows(
   date: string,
 ): PickRowModel[] {
   return sortPicks(picks, league).map((pick, index) => {
+    const out = isOutPick(pick);
     const face = league === "nba" ? nbaTierFace(pick) : null;
-    const tier = face ? face.tier : readTier(pick.probability);
-    const probabilityText = face ? face.probabilityText : formatPercent(pick.probability);
-    const barRate = boardRate(pick, league);
+    let tier = face ? face.tier : readTier(pick.probability);
+    let probabilityText = face ? face.probabilityText : formatPercent(pick.probability);
+    let barRate = boardRate(pick, league);
+    let tags = pickTags(pick);
+    if (out) {
+      tier = null;
+      probabilityText = "";
+      barRate = Number.NaN;
+      tags = tags.filter((tag) => tag.text === "Out");
+    }
     const bar = Number.isFinite(barRate) ? Math.max(0, Math.min(100, barRate * 100)) : 0;
     return {
       key: `${pick.event_id}-${pick.player_name}-${pick.metric}-${pick.direction}`,
@@ -205,7 +227,8 @@ export function buildPickRows(
       barPercent: bar,
       tierShort: tier ? (league === "nba" ? tier.label : TIER_SHORT[tier.name]) : null,
       tierName: tier?.name ?? null,
-      tags: pickTags(pick),
+      tags,
+      dimmed: out,
       href: buildEventDetailHref({
         eventId: pick.event_id,
         date,

@@ -10,6 +10,7 @@ import { format, parseISO } from "date-fns";
 import { enUS } from "date-fns/locale";
 
 import { nbaTierFace, tierFromBackend, tierProbability } from "./nba-card";
+import { isOutPick } from "./picks-board";
 import { formatPercent, formatTierPercent } from "./player-dd";
 import {
   etWallClock,
@@ -679,8 +680,10 @@ export function eventPlayerRows(args: {
             : selected && args.postedLine != null
               ? args.postedLine
               : null;
-    const nba =
-      sourcePick != null
+    const out = sourcePick != null && isOutPick(sourcePick);
+    const nba = out
+      ? { text: "Out", rate: null }
+      : sourcePick != null
         ? nbaLeanFromPick(sourcePick)
         : sourceRead != null
           ? nbaLeanFromRead(sourceRead)
@@ -689,8 +692,9 @@ export function eventPlayerRows(args: {
             : args.league === "nba" && readsStatus === "error"
               ? { text: "Unavailable", rate: null }
               : null;
-    const tier =
-      args.league === "nba" && sourcePick
+    const tier = out
+      ? null
+      : args.league === "nba" && sourcePick
         ? tierFromBackend(sourcePick.tier)
         : args.league === "nba" && sourceRead
           ? tierFromBackend(sourceRead.tier)
@@ -701,13 +705,15 @@ export function eventPlayerRows(args: {
       position: pick?.position?.trim() || bulk?.position?.trim() || null,
       tier,
       lineText: line == null ? "—" : formatThreshold(line),
-      leanText: nba
-        ? nba.text
-        : pick
-          ? `${pick.direction === "under" ? "U" : "O"} ${formatPercent(pick.probability)}`
-          : "No read",
-      hasLean: nba != null || pick != null,
-      probability: nba?.rate ?? pick?.probability ?? null,
+      leanText: out
+        ? "Out"
+        : nba
+          ? nba.text
+          : pick
+            ? `${pick.direction === "under" ? "U" : "O"} ${formatPercent(pick.probability)}`
+            : "No read",
+      hasLean: out ? false : nba != null || pick != null,
+      probability: out ? null : nba?.rate ?? pick?.probability ?? null,
     };
   });
 
@@ -1103,6 +1109,21 @@ function buildNbaRead(args: {
     };
   }
   const direction = pick.direction === "under" ? "under" : "over";
+  if (isOutPick(pick)) {
+    return {
+      player: args.player,
+      meta,
+      headlineLead: `${direction === "under" ? "Under" : "Over"} ${formatThreshold(pick.threshold)}`,
+      headlineMarket,
+      caption: "Combined probability —.",
+      tier: null,
+      bar: null,
+      signals: [],
+      primary: null,
+      other: null,
+      leanProbability: null,
+    };
+  }
   const otherDirection = direction === "over" ? "under" : "over";
   const tier = tierFromBackend(pick.tier);
   const signals = signalsFromPick(pick, args.homeTeam, args.awayTeam, "nba");

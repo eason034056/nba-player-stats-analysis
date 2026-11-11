@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import {
   buildPickRows,
   countStrong,
+  isOutPick,
   marketChipList,
   matchesConfidence,
   pickTags,
@@ -202,5 +203,50 @@ describe("picks board sort, filter, and market grouping", () => {
       "Lineup unconfirmed",
     );
     expect(pickTags({ ...marked, injury_status: "   " }).map((tag) => tag.text)).not.toContain("   ");
+  });
+
+  it("keeps an Out pick off the strong count, the bar, and the front of the board", () => {
+    const base = board[0];
+    const out = {
+      ...base,
+      player_name: "Jimmy Butler",
+      injury_status: " OUT ",
+      tier: "Strong play" as const,
+      combined_probability: null,
+      probability: 0.95,
+    };
+    const questionable = {
+      ...base,
+      player_name: "Bam Adebayo",
+      injury_status: "Questionable",
+      tier: "Playable" as const,
+      combined_probability: 0.74,
+      probability: 0.66,
+    };
+    expect(isOutPick(out)).toBe(true);
+    expect(isOutPick({ injury_status: "out" })).toBe(true);
+    expect(isOutPick(questionable)).toBe(false);
+    expect(isOutPick({ injury_status: "Doubtful" })).toBe(false);
+    expect(isOutPick({ injury_status: null })).toBe(false);
+
+    expect(countStrong([out, questionable], "nba")).toBe(1);
+    expect(sortPicks([out, questionable], "nba").map((pick) => pick.player_name)).toEqual([
+      "Bam Adebayo",
+      "Jimmy Butler",
+    ]);
+
+    const rows = buildPickRows([out, questionable], "nba", "2026-11-10");
+    expect(rows.map((row) => row.player)).toEqual(["Bam Adebayo", "Jimmy Butler"]);
+    const [kept, dropped] = rows;
+    expect(kept.dimmed).toBe(false);
+    expect(kept.probabilityText).toBe("74%");
+    expect(kept.tags.map((tag) => tag.text)).toContain("Questionable");
+    expect(dropped.dimmed).toBe(true);
+    expect(dropped.probabilityText).toBe("");
+    expect(dropped.barPercent).toBe(0);
+    expect(dropped.tierShort).toBeNull();
+    expect(dropped.tierName).toBeNull();
+    expect(dropped.tags.map((tag) => tag.text)).toEqual(["Out"]);
+    expect(dropped.href).toContain("/event/");
   });
 });
