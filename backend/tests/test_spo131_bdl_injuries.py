@@ -178,6 +178,20 @@ def _clear_key(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(settings, "balldontlie_api_key", "")
 
 
+def _set_injury_source(monkeypatch: pytest.MonkeyPatch, value: str) -> None:
+    monkeypatch.setenv("NBA_INJURY_SOURCE", value)
+    monkeypatch.setattr(settings, "nba_injury_source", value)
+
+
+def _use_default_injury_source(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.delenv("NBA_INJURY_SOURCE", raising=False)
+    monkeypatch.setattr(
+        settings,
+        "nba_injury_source",
+        Settings.model_fields["nba_injury_source"].default,
+    )
+
+
 def _install_injuries_module(monkeypatch: pytest.MonkeyPatch, fetcher_cls: type) -> None:
     """Register a fetcher without importing the RAG package.
 
@@ -412,6 +426,7 @@ async def test_get_cached_missing_and_stale_and_team_filter() -> None:
 def test_settings_expose_the_refresh_interval_and_key() -> None:
     assert Settings.model_fields["balldontlie_api_key"].default == ""
     assert Settings.model_fields["nba_injuries_refresh_minutes"].default == 15
+    assert Settings.model_fields["nba_injury_source"].default == "espn_cbs"
 
 
 # ---------------------------------------------------------------------------
@@ -434,6 +449,7 @@ def test_official_report_for_one_team_reads_the_cache_only(monkeypatch: pytest.M
     assert payload is not None
 
     _set_dummy_key(monkeypatch)
+    _set_injury_source(monkeypatch, "bdl")
     _use_cache(monkeypatch, service)
     _forbid_scraper(monkeypatch)
     _forbid_refresh(monkeypatch)
@@ -471,6 +487,7 @@ def test_fresh_team_with_no_rows_is_not_reported_unavailable(monkeypatch: pytest
         if team["team"]["id"] not in present_ids
     )
     _set_dummy_key(monkeypatch)
+    _set_injury_source(monkeypatch, "bdl")
     _use_cache(monkeypatch, service)
     _forbid_scraper(monkeypatch)
     _guard_network(monkeypatch)
@@ -485,6 +502,7 @@ def test_missing_cache_is_caution_not_healthy(monkeypatch: pytest.MonkeyPatch) -
     historical = _historical()
     service, _fake = _cache()
     _set_dummy_key(monkeypatch)
+    _set_injury_source(monkeypatch, "bdl")
     _use_cache(monkeypatch, service)
     _forbid_scraper(monkeypatch)
     _guard_network(monkeypatch)
@@ -520,6 +538,7 @@ def test_stale_cache_is_caution_not_healthy(monkeypatch: pytest.MonkeyPatch) -> 
         )
     )
     _set_dummy_key(monkeypatch)
+    _set_injury_source(monkeypatch, "bdl")
     _use_cache(monkeypatch, service)
     _forbid_scraper(monkeypatch)
     _guard_network(monkeypatch)
@@ -531,16 +550,22 @@ def test_stale_cache_is_caution_not_healthy(monkeypatch: pytest.MonkeyPatch) -> 
     assert report["details"]["fetched_at"] == "2026-11-01T00:00:00+00:00"
 
 
-def test_without_key_nba_keeps_the_espn_cbs_scraper(monkeypatch: pytest.MonkeyPatch) -> None:
-    historical = _historical()
-    _clear_key(monkeypatch)
+def _expect_espn_cbs(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Scraper is allowed. Opening the BDL cache fails the test."""
     _patch_scraper(monkeypatch)
 
     def _no_cache():
-        raise AssertionError("NBA cache opened while the API key is unset")
+        raise AssertionError("NBA injury cache opened on the ESPN/CBS path")
 
     monkeypatch.setattr(nba_injuries, "open_injury_cache", _no_cache)
     _guard_network(monkeypatch)
+
+
+def test_without_key_nba_keeps_the_espn_cbs_scraper(monkeypatch: pytest.MonkeyPatch) -> None:
+    historical = _historical()
+    _clear_key(monkeypatch)
+    _use_default_injury_source(monkeypatch)
+    _expect_espn_cbs(monkeypatch)
 
     result = asyncio.run(historical.get_official_injury_report("76ers", league="nba"))
     assert _ScrapingFetcher.calls == 1
@@ -557,17 +582,60 @@ def test_without_key_nba_keeps_the_espn_cbs_scraper(monkeypatch: pytest.MonkeyPa
     assert "reason" not in result["details"]
 
 
-def test_wnba_stays_on_the_scraper_when_the_key_is_set(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_key_present_and_flag_unset_uses_espn_cbs(monkeypatch: pytest.MonkeyPatch) -> None:
     historical = _historical()
     _set_dummy_key(monkeypatch)
-    _patch_scraper(monkeypatch)
+    _use_default_injury_source(monkeypatch)
+    _expect_espn_cbs(monkeypatch)
 
-    def _no_cache():
-        raise AssertionError("NBA injury cache opened for WNBA")
+    result = asyncio.run(historical.get_official_injury_report("76ers", league="nba"))
+    assert _ScrapingFetcher.calls == 1
+    assert result["details"]["injuries"][0]["source"] == "espn"
+    assert "reason" not in result["details"]
 
-    monkeypatch.setattr(nba_injuries, "open_injury_cache", _no_cache)
+
+def test_key_present_and_explicit_espn_cbs_uses_the_scraper(monkeypatch: pytest.MonkeyPatch) -> None:
+    historical = _historical()
+    _set_dummy_key(monkeypatch)
+    _set_injury_source(monkeypatch, "espn_cbs")
+    _expect_espn_cbs(monkeypatch)
+
+    result = asyncio.run(historical.get_official_injury_report("76ers", league="nba"))
+    assert _ScrapingFetcher.calls == 1
+    assert result["details"]["injuries"][0]["source"] == "espn"
+    assert "reason" not in result["details"]
+
+
+def test_unknown_injury_source_falls_back_to_espn_cbs(
+    monkeypatch: pytest.MonkeyPatch,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    historical = _historical()
+    _set_dummy_key(monkeypatch)
+    _set_injury_source(monkeypatch, "rotowire")
+    _expect_espn_cbs(monkeypatch)
+
+    with caplog.at_level(logging.WARNING):
+        result = asyncio.run(historical.get_official_injury_report("76ers", league="nba"))
+    assert _ScrapingFetcher.calls == 1
+    assert result["details"]["injuries"][0]["source"] == "espn"
+    assert "rotowire" in caplog.text
+    assert "espn_cbs" in caplog.text
+
+
+@pytest.mark.parametrize("source", [None, "espn_cbs", "bdl", "rotowire"])
+def test_wnba_stays_on_the_scraper_for_every_flag(
+    monkeypatch: pytest.MonkeyPatch,
+    source: str | None,
+) -> None:
+    historical = _historical()
+    _set_dummy_key(monkeypatch)
+    if source is None:
+        _use_default_injury_source(monkeypatch)
+    else:
+        _set_injury_source(monkeypatch, source)
+    _expect_espn_cbs(monkeypatch)
     _forbid_refresh(monkeypatch)
-    _guard_network(monkeypatch)
 
     result = asyncio.run(historical.get_official_injury_report("Liberty", league="wnba"))
     assert _ScrapingFetcher.calls == 1

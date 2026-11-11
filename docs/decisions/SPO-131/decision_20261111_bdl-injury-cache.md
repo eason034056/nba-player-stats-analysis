@@ -16,7 +16,7 @@ The BALLDONTLIE key is shared and allows 5 requests per minute. One user questio
 
 A backend refresh fetches every page, following `meta.next_cursor` until it is null or absent, and writes `{fetched_at, entries}` to Redis key `injuries:nba:latest` with a 6 hour TTL. `fetched_at` is the UTC time we stored the pages. BDL does not send one, and the endpoint has no history, so this clock is the only freshness we have. Each entry also carries `fetched_at`, `bdl_player_id`, and `raw_status` so a later Postgres history table can store this shape without a second migration of the payload.
 
-Product agents never call BALLDONTLIE. When `BALLDONTLIE_API_KEY` is set they only read the cache. A missing snapshot, or one older than 6 hours, is signal `caution` with reason `injury data unavailable`. An empty list is not treated as a healthy team. When the key is unset, NBA keeps the ESPN/CBS scrape so a dev environment without the key behaves as it does today. WNBA is unchanged and stays on that scrape.
+Product agents never call BALLDONTLIE. They read the cache only when `NBA_INJURY_SOURCE` is `bdl`. The default is `espn_cbs`. An unknown value is logged and treated as `espn_cbs`. The API key is not the switch. The key already exists in real environments, and until `nba_injuries_refresh` is registered the cache is empty. Switching on the key would make every NBA injury report `injury data unavailable`. The flag is flipped to `bdl` only after that job lands with SPO-130a. When the flag is `bdl`, a missing snapshot, or one older than 6 hours, is signal `caution` with reason `injury data unavailable`. An empty list is not treated as a healthy team. WNBA is unchanged and stays on the scrape for every flag value.
 
 `Available` is dropped. It is not an injury. `Doubtful` is stored as `Questionable` because that is the unresolved status the scorer already understands (`Questionable` and `Day-To-Day`). Eason chose that mapping. `raw_status` keeps `Doubtful`. `Out`, `Questionable`, `Day-To-Day`, and `Probable` pass through.
 
@@ -24,14 +24,15 @@ The team code is not on the injury row. `normalize_bdl_injuries` takes a `team_i
 
 If any page fails, or the cache write fails, the previous snapshot stays. A failure must not replace a good list with an empty one. Rate limiting and 429 retries live in the client. After its retries the client raises `BdlRateLimitError` or `BdlApiError` (both `BdlError`) from `bdl_client.py`. That module arrives with SPO-130a. Until then the refresh catches any exception and leaves the cache alone.
 
-The scheduler is not registered in this change. When the client exists, the job id is `nba_injuries_refresh`, the interval is `NBA_INJURIES_REFRESH_MINUTES` (default 15), and the job runs only when `BALLDONTLIE_API_KEY` is set. The setting is declared now. The client and the job are a later commit.
+The scheduler is not registered in this change. When the client exists, the job id is `nba_injuries_refresh`, the interval is `NBA_INJURIES_REFRESH_MINUTES` (default 15), and the job runs only when `BALLDONTLIE_API_KEY` is set. `NBA_INJURY_SOURCE` stays `espn_cbs` until that job is registered. The client, the job, and the flag flip are a later commit.
 
 ## Alternatives
 
 1. *Call `/v1/player_injuries` inside the product agent.* Rejected. The shared key is 5 requests per minute, and one question already performs several injury reads. A user request must not be the thing that spends the quota.
-2. *Keep scraping ESPN/CBS for NBA whenever the cache is empty.* Rejected when the key is set. A scrape that returns nothing looks like a healthy team. The report has to say the injury data is unavailable.
-3. *Add a `Doubtful` branch to the scorer.* Rejected. The scorer's unresolved bucket is already `Questionable` / `Day-To-Day`. Mapping at the normalizer keeps that vocabulary, and `raw_status` preserves the source word.
-4. *Hand-write the 30 team ids.* Rejected. The standings fixture already has `id` and `abbreviation`, and those abbreviations match the codes we use.
+2. *Keep scraping ESPN/CBS for NBA whenever the cache is empty and the flag is `bdl`.* Rejected. A scrape that returns nothing looks like a healthy team. Once the flag is `bdl`, the report has to say the injury data is unavailable.
+3. *Switch to the cache whenever `BALLDONTLIE_API_KEY` is set.* Rejected. The key is already present in real environments, and the refresh job is not registered yet, so the cache would be empty and every NBA report would be `injury data unavailable`.
+4. *Add a `Doubtful` branch to the scorer.* Rejected. The scorer's unresolved bucket is already `Questionable` / `Day-To-Day`. Mapping at the normalizer keeps that vocabulary, and `raw_status` preserves the source word.
+5. *Hand-write the 30 team ids.* Rejected. The standings fixture already has `id` and `abbreviation`, and those abbreviations match the codes we use.
 
 ## Tradeoff
 

@@ -3,9 +3,10 @@ historical.py – Structured tools for Dimensions 1-5.
 
 Data sources used (Phase 1 stack):
   - Existing CSV  (nba_player_game_logs.csv via csv_player_service)
-  - NBA injury report: BALLDONTLIE cache when BALLDONTLIE_API_KEY is set
+  - NBA injury report: BALLDONTLIE cache only when NBA_INJURY_SOURCE=bdl
     (backend/app/services/nba_injuries.py). The request path only reads
-    Redis. With no key, NBA still uses the ESPN + CBS scraper.
+    Redis. The default espn_cbs, and any unknown value, keep ESPN + CBS.
+    The API key does not select the feed.
   - WNBA injury report: ESPN + CBS via nba_lineup_rag, unchanged.
 
 Every public tool returns a dict conforming to the signal contract:
@@ -393,14 +394,18 @@ def get_teammate_impact(player: str, metric: str, threshold: float, teammate: st
 # DIMENSION 1b – Injury + Teammate Chemistry
 # ===================================================================
 
-def _balldontlie_configured() -> bool:
-    """True when ``BALLDONTLIE_API_KEY`` is present.
+_NBA_INJURY_SOURCE_ESPN = "espn_cbs"
+_NBA_INJURY_SOURCE_BDL = "bdl"
+_NBA_INJURY_SOURCES = frozenset({_NBA_INJURY_SOURCE_ESPN, _NBA_INJURY_SOURCE_BDL})
+_logged_unknown_injury_sources: set[str] = set()
+_logged_bdl_without_key = False
 
-    The value is read from the environment. ``Settings`` loads the same
-    variable, including a ``.env`` entry. A key exported after process
-    start is visible on ``os.environ``. Blank strings count as unset so
-    a dev machine without a key keeps the ESPN/CBS scrape. The key
-    itself is never logged and never sent by this module.
+
+def _balldontlie_key_present() -> bool:
+    """True when ``BALLDONTLIE_API_KEY`` is non-blank.
+
+    Used only to warn that a ``bdl`` source has no key for the refresh
+    job. It is not the feed switch, and the value is never logged.
     """
     env_value = os.environ.get("BALLDONTLIE_API_KEY", "")
     if isinstance(env_value, str) and env_value.strip():
@@ -413,12 +418,55 @@ def _balldontlie_configured() -> bool:
     return bool(str(configured).strip())
 
 
+def _nba_injury_source() -> str:
+    """Return ``espn_cbs`` or ``bdl``.
+
+    ``NBA_INJURY_SOURCE`` in the environment wins over the settings
+    object so a value exported after startup is visible. Blank and
+    unknown values are ``espn_cbs``. An unknown value is logged once.
+    """
+    if "NBA_INJURY_SOURCE" in os.environ:
+        raw = os.environ.get("NBA_INJURY_SOURCE") or ""
+    else:
+        try:
+            from app.settings import settings
+        except ImportError:
+            return _NBA_INJURY_SOURCE_ESPN
+        raw = settings.nba_injury_source or ""
+    normalized = str(raw).strip().lower()
+    if normalized in _NBA_INJURY_SOURCES:
+        return normalized
+    token = str(raw)
+    if token not in _logged_unknown_injury_sources:
+        logger.warning("NBA_INJURY_SOURCE=%r is unknown; using espn_cbs", token)
+        _logged_unknown_injury_sources.add(token)
+    return _NBA_INJURY_SOURCE_ESPN
+
+
+def _nba_uses_bdl_injury_cache(league_key: str) -> bool:
+    """True only for NBA when the injury source flag is ``bdl``.
+
+    A missing API key logs once and still reads the cache. This path
+    never calls BALLDONTLIE.
+    """
+    global _logged_bdl_without_key
+    if league_key != "nba" or _nba_injury_source() != _NBA_INJURY_SOURCE_BDL:
+        return False
+    if not _balldontlie_key_present() and not _logged_bdl_without_key:
+        logger.warning(
+            "NBA_INJURY_SOURCE is bdl and BALLDONTLIE_API_KEY is unset; "
+            "reading the injury cache only"
+        )
+        _logged_bdl_without_key = True
+    return True
+
+
 def _fetch_espn_cbs_injury_report(team_code: str) -> List[Dict[str, Any]]:
     """Scrape ESPN + CBS injury pages, return entries for *team_code*.
 
-    This is the pre-SPO-131 body. WNBA always uses it. NBA uses it only
-    when ``BALLDONTLIE_API_KEY`` is unset. The RAG scraper module stays
-    in place for the lineup ingestion scripts.
+    This is the pre-SPO-131 body. WNBA always uses it. NBA uses it
+    unless ``NBA_INJURY_SOURCE`` is ``bdl``. The RAG scraper module
+    stays in place for the lineup ingestion scripts.
     """
     try:
         from src.sources.injuries_pages import InjuriesPageFetcher
@@ -492,20 +540,21 @@ def _read_cached_injury_snapshot(team_code: str) -> Dict[str, Any]:
 def _fetch_injury_report_for_team(team_code: str, league: str = "nba") -> List[Dict[str, Any]]:
     """Return injury rows for one club.
 
-    NBA with ``BALLDONTLIE_API_KEY`` set reads the backend cache only.
-    A missing or stale cache returns a single marker row
+    NBA reads the backend cache only when ``NBA_INJURY_SOURCE`` is
+    ``bdl``. A missing or stale cache returns a single marker row
     (``reason`` ``injury data unavailable``) so the report is caution,
-    not a silent healthy list.
+    not a silent healthy list. The API key does not select this path,
+    and this function does not call BALLDONTLIE.
 
-    WNBA, any other league, and NBA without the key use the ESPN/CBS
-    scraper. That path's row shape is unchanged:
+    WNBA, any other league, the default ``espn_cbs``, and an unknown
+    flag use the ESPN/CBS scraper. That path's row shape is unchanged:
     ``{player, position, status, injury, source}``.
 
     Cache rows keep that shape and add ``bdl_player_id``, ``team``,
     ``raw_status``, ``return_date``, and ``fetched_at``.
     """
     league_key = (league or "nba").strip().lower()
-    if league_key != "nba" or not _balldontlie_configured():
+    if not _nba_uses_bdl_injury_cache(league_key):
         return _fetch_espn_cbs_injury_report(team_code)
 
     snapshot = _read_cached_injury_snapshot(team_code)

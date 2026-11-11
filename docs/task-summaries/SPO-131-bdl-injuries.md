@@ -5,25 +5,25 @@
 
 ## Summary
 
-NBA product agents no longer scrape ESPN and CBS on each request when `BALLDONTLIE_API_KEY` is set. A backend refresh reads `/v1/player_injuries` through a client protocol, normalizes the rows, and stores them in Redis at `injuries:nba:latest` for 6 hours. The request path only reads that key. A missing or stale snapshot is `caution` / `injury data unavailable`, not a healthy team. With no key, NBA stays on the ESPN/CBS scrape. WNBA is unchanged. The HTTP client and the scheduler job wait on SPO-130a.
+NBA product agents read the BALLDONTLIE injury cache only when `NBA_INJURY_SOURCE` is `bdl`. The default is `espn_cbs`, and an unknown value stays on `espn_cbs`. The API key does not select the feed: it is already set in real environments, and the refresh job is not registered, so an empty cache would mark every NBA report `injury data unavailable`. The flag is flipped to `bdl` only after `nba_injuries_refresh` lands with SPO-130a. When the flag is `bdl`, the request path only reads Redis. A missing or stale snapshot is `caution` / `injury data unavailable`. WNBA stays on the ESPN/CBS scrape for every flag value.
 
 ## Changes
 
 | 檔案 | 變更 |
 |---|---|
 | `backend/app/services/nba_injuries.py` | Normalize BDL rows, page through `next_cursor`, write and read `injuries:nba:latest`. `BdlInjuryClient` is the protocol SPO-130a will implement. Any refresh failure leaves the previous cache. |
-| `backend/app/settings.py` | `BALLDONTLIE_API_KEY` (`balldontlie_api_key`) and `NBA_INJURIES_REFRESH_MINUTES` (default 15). The job is not registered. |
-| `scripts/agents/tools/historical.py` | NBA with a key reads the cache only. NBA without a key, and every WNBA call, still use `InjuriesPageFetcher`. Stale or missing NBA cache does not default players to Healthy. |
-| `scripts/agents/data_logger.py` | Source labels name the BALLDONTLIE cache, and still name ESPN/CBS for the fallback and for WNBA. |
+| `backend/app/settings.py` | `NBA_INJURY_SOURCE` (default `espn_cbs`; `bdl` is the other allowed value), `BALLDONTLIE_API_KEY`, and `NBA_INJURIES_REFRESH_MINUTES` (default 15). The job is not registered. |
+| `scripts/agents/tools/historical.py` | NBA reads the cache only when `NBA_INJURY_SOURCE` is `bdl`. The default, an explicit `espn_cbs`, and an unknown value keep `InjuriesPageFetcher`. WNBA always keeps it. A stale or missing cache on the `bdl` path does not default players to Healthy. |
+| `scripts/agents/data_logger.py` | Source labels name the BALLDONTLIE cache for `NBA_INJURY_SOURCE=bdl`, and ESPN/CBS for the default and for WNBA. |
 | `backend/tests/fixtures/bdl/player_injuries__page1.json` | Recorded `GET /v1/player_injuries?per_page=100` page, copied unchanged. |
 | `backend/tests/fixtures/bdl/standings_2026.json` | Recorded `GET /v1/standings?season=2026`, copied unchanged. Source of the team-id map in tests. |
-| `backend/tests/test_spo131_bdl_injuries.py` | Normalizer, 30-team code check, pagination, failed page, stale and missing cache, one-team tool output, no network on the agent path, key-unset scrape, WNBA scrape. |
+| `backend/tests/test_spo131_bdl_injuries.py` | Normalizer, 30-team code check, pagination, failed page, stale and missing cache, one-team tool output, no network on the agent path, and the `NBA_INJURY_SOURCE` switch (default, `espn_cbs`, `bdl`, unknown, WNBA). |
 | `backend/tests/test_spo98_gaps.py` | Injury-fetch stubs accept the new optional `league` argument. |
 | `docs/decisions/SPO-131/decision_20261111_bdl-injury-cache.md` | Why the cache exists, why Doubtful maps to Questionable, why the team map is not hand-typed. |
 
 ## Why
 
-The shared BALLDONTLIE key allows 5 requests per minute. Injury lookups happen inside a user request and can run more than once per question, so the agent must not be the caller. The injury payload has no timestamp and no history; `fetched_at` on the cache body is the clock, and entries keep `bdl_player_id`, `raw_status`, and `fetched_at` for a later history table. `Doubtful` becomes `Questionable` so the scorer's existing unresolved bucket applies, and `raw_status` keeps the original word. `Available` is dropped. The standings fixture's abbreviations already equal `NBA_TEAMS` and `TEAM_ALIASES`, so the id-to-code map is read from that file rather than typed. See `docs/decisions/SPO-131/decision_20261111_bdl-injury-cache.md`.
+The shared BALLDONTLIE key allows 5 requests per minute. Injury lookups happen inside a user request and can run more than once per question, so the agent must not be the caller. The injury payload has no timestamp and no history; `fetched_at` on the cache body is the clock, and entries keep `bdl_player_id`, `raw_status`, and `fetched_at` for a later history table. `Doubtful` becomes `Questionable` so the scorer's existing unresolved bucket applies, and `raw_status` keeps the original word. `Available` is dropped. The standings fixture's abbreviations already equal `NBA_TEAMS` and `TEAM_ALIASES`, so the id-to-code map is read from that file rather than typed. `NBA_INJURY_SOURCE` defaults to `espn_cbs` because the key is already deployed and the refresh job is not. The flag moves to `bdl` only after `nba_injuries_refresh` lands with SPO-130a. See `docs/decisions/SPO-131/decision_20261111_bdl-injury-cache.md`.
 
 ## Tests
 
@@ -35,14 +35,17 @@ Recorded fixtures only. No live BALLDONTLIE call.
 - Missing cache and a snapshot older than 6 hours are `stale`. Exactly 6 hours is not.
 - `get_official_injury_report` for one club in the fixture matches the normalized rows. The call does not open a socket, does not scrape, and does not refresh.
 - A club with no rows in a fresh snapshot stays `neutral`. A missing or stale snapshot is `caution` with `injury data unavailable`, and teammate impact does not label stars Healthy.
-- With the key cleared, NBA still uses the ESPN/CBS fetcher. With a dummy key set, WNBA still uses that fetcher.
+- A dummy key with the flag unset, and a dummy key with `espn_cbs`, still use the ESPN/CBS fetcher and do not open the cache.
+- `bdl` plus a fresh cache returns that team's rows. `bdl` plus a missing or stale cache is `caution` / `injury data unavailable`.
+- An unknown flag value is logged and uses the ESPN/CBS fetcher.
+- WNBA uses the ESPN/CBS fetcher for the default, `espn_cbs`, `bdl`, and an unknown flag.
 
 ```
 cd backend && python -m pytest tests/test_spo131_bdl_injuries.py -q --tb=short
-# 18 passed
+# 24 passed
 
 cd backend && python -m pytest --tb=line -q
-# 1215 passed, 26 skipped, 6 xfailed
+# 1221 passed, 26 skipped, 6 xfailed
 
 cd scripts/agents && python -m pytest tests --tb=line -q
 # 114 passed
@@ -52,6 +55,6 @@ No live BALLDONTLIE call. Integration test not run (`RUN_INTEGRATION` unset). Th
 
 ## Follow-ups
 
-- SPO-130a: `bdl_client.py` implements `BdlInjuryClient`, including 429 retries and `BdlError`. Narrow the refresh `except` to `BdlError`. Register scheduler job `nba_injuries_refresh` at `NBA_INJURIES_REFRESH_MINUTES` (default 15), only when `BALLDONTLIE_API_KEY` is set.
+- SPO-130a: `bdl_client.py` implements `BdlInjuryClient`, including 429 retries and `BdlError`. Narrow the refresh `except` to `BdlError`. Register scheduler job `nba_injuries_refresh` at `NBA_INJURIES_REFRESH_MINUTES` (default 15), only when `BALLDONTLIE_API_KEY` is set. Flip `NBA_INJURY_SOURCE` to `bdl` in the same change, after the job is filling `injuries:nba:latest`.
 - SPO-130d: production `team_id` to abbreviation map. Tests keep building it from the standings fixture.
 - Backend follow-up, not this PR: Postgres history of these entries. The normalized shape is already what that table should store.
