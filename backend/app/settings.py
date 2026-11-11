@@ -75,6 +75,18 @@ class Settings(BaseSettings):
     bot_api_keys_premium: str = ""  # Premium-tier bot API keys
     bot_picks_free_delay_minutes: int = 60  # Delay for free-tier picks (minutes)
     rate_limit_bot_picks: str = "12/minute"  # Rate limit for bot picks endpoint
+
+    # BALLDONTLIE. Read from BALLDONTLIE_API_KEY in the environment.
+    # The key does not select the injury feed. NBA_INJURY_SOURCE does.
+    # SecretStr keeps the value out of Settings repr and model dumps.
+    balldontlie_api_key: SecretStr = SecretStr("")
+    # NBA injury feed for product agents. espn_cbs is the default until
+    # the nba_injuries_refresh job is registered (SPO-130a). bdl reads
+    # the Redis cache only. Any other value is treated as espn_cbs.
+    nba_injury_source: str = "espn_cbs"
+    # Interval for the future nba_injuries_refresh job. Not registered
+    # until the SPO-130a client exists. Default 15 minutes.
+    nba_injuries_refresh_minutes: int = 15
     
     @property
     def allowed_origins_list(self) -> List[str]:

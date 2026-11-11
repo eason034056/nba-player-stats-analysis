@@ -1,0 +1,2008 @@
+{
+ "data": [
+  {
+   "player": {
+    "id": 38017730,
+    "first_name": "Dominick",
+    "last_name": "Barlow",
+    "position": "F",
+    "height": "6-9",
+    "weight": "224",
+    "jersey_number": "25",
+    "college": "Overtime Elite",
+    "country": "USA",
+    "draft_year": null,
+    "draft_round": null,
+    "draft_number": null,
+    "team_id": 23
+   },
+   "return_date": "2026-11-18",
+   "description": "Head coach Nick Nurse said Wednesday that Barlow (back) likely needs another 10-12 days before he's cleared to return to the court, Derek Bodner of AllPHLY.com reports. Nurse added that the team is \"pretty positive\" that Barlow's back is getting better, though he's still going to have to wait some more time before being cleared. The big man has yet to make his season debut due to a lumbar spine bone stress response, and he isn't expected to return until mid-November at the earliest.",
+   "status": "Out"
+  },
+  {
+   "player": {
+    "id": 1091477603,
+    "first_name": "Henri",
+    "last_name": "Veesaar",
+    "position": "C",
+    "height": "6-11",
+    "weight": "225",
+    "jersey_number": "13",
+    "college": "North Carolina",
+    "country": "Estonia",
+    "draft_year": 2026,
+    "draft_round": 2,
+    "draft_number": 52,
+    "team_id": 1
+   },
+   "return_date": "2027-07-01",
+   "description": "Veesaar was diagnosed with a torn right ACL and is expected to miss the 2026-27 season, the Hawks announced Monday. Veesaar suffered the injury during a workout on Sept. 15, and an MRI confirmed the diagnosis. The No. 52 overall pick in the 2026 NBA Draft, Veesaar was expected to spend a lot of time with Atlanta's G League affiliate this season. Reported out for season.",
+   "status": "Out"
+  },
+  {
+   "player": {
+    "id": 56677806,
+    "first_name": "Mouhamed",
+    "last_name": "Gueye",
+    "position": "F",
+    "height": "6-11",
+    "weight": "210",
+    "jersey_number": "18",
+    "college": "Washington State",
+    "country": "Senegal",
+    "draft_year": 2023,
+    "draft_round": 2,
+    "draft_number": 39,
+    "team_id": 1
+   },
+   "return_date": "2026-11-20",
+   "description": "Gueye underwent surgery Tuesday to repair a fractured left foot that he suffered during a workout last week, Brad Rowland of the Locked On Podcast Network reports. Gueye will be re-evaluated by medical staff in 3-to-4 months, which means he'll miss all of training camp and preseason and likely the start of the 2026-27 regular season. It's a brutal blow for the fourth-year big man, given that the Hawks used the No. 23 overall pick of the 2026 NBA Draft to select St. John's product Zuby Ejiofor. Gueye's absence means Ejiofor will have more opportunities in the preseason, and the rookie could establish a key role off the bench behind Onyeka Okongwu and projected backup center Jock Landale (ankle).",
+   "status": "Out"
+  },
+  {
+   "player": {
+    "id": 1057263194,
+    "first_name": "Kon",
+    "last_name": "Knueppel",
+    "position": "G-F",
+    "height": "6-6",
+    "weight": "230",
+    "jersey_number": "7",
+    "college": "Duke",
+    "country": "USA",
+    "draft_year": 2025,
+    "draft_round": 1,
+    "draft_number": 4,
+    "team_id": 4
+   },
+   "return_date": "2026-12-12",
+   "description": "Knueppel (hamstring) was diagnosed with a left hamstring strain Sunday and will be re-evaluated in four weeks. Knueppel missed the first eight games of the 2026-27 campaign. He returned for the 114-104 loss to Brooklyn on Wednesday, though he exited the contest after just six minutes of work and didn't return. With Knueppel out of commission for at least a month, Grayson Allen and Sion James are candidates to replace him in the starting lineup, especially with Dennis Schroder (hamstring) sidelined for a minimum of two weeks.",
+   "status": "Out"
+  },
+  {
+   "player": {
+    "id": 666965,
+    "first_name": "Grant",
+    "last_name": "Williams",
+    "position": "F",
+    "height": "6-7",
+    "weight": "236",
+    "jersey_number": "2",
+    "college": "Tennessee",
+    "country": "USA",
+    "draft_year": 2019,
+    "draft_round": 1,
+    "draft_number": 22,
+    "team_id": 4
+   },
+   "return_date": "2026-11-12",
+   "description": "Williams (hamstring) is out for Monday's game against the Cavaliers. Williams has yet to appear in a game this season due to a right hamstring strain. His next opportunity to suit up comes Thursday against the Suns.",
+   "status": "Out"
+  },
+  {
+   "player": {
+    "id": 56677840,
+    "first_name": "Dereck",
+    "last_name": "Lively II",
+    "position": "C",
+    "height": "7-1",
+    "weight": "230",
+    "jersey_number": "2",
+    "college": "Duke",
+    "country": "USA",
+    "draft_year": 2023,
+    "draft_round": 1,
+    "draft_number": 12,
+    "team_id": 7
+   },
+   "return_date": "2026-11-12",
+   "description": "Lively (foot) is listed as out for Monday's game against the Kings. Although there haven't been any negative reports regarding Lively's rehab progress, it doesn't appear he will be back in the lineup anytime soon. For now, the 22-year-old should be considered week-to-week. While Lively remains on the shelf, Daniel Gafford and Moussa Cisse should continue to handle most of the work at the five. Santi Aldama (knee) might also get involved in that area once he's cleared to return.",
+   "status": "Out"
+  },
+  {
+   "player": {
+    "id": 378,
+    "first_name": "Kristaps",
+    "last_name": "Porzingis",
+    "position": "F-C",
+    "height": "7-2",
+    "weight": "240",
+    "jersey_number": "7",
+    "college": "Cajasol Sevilla",
+    "country": "Latvia",
+    "draft_year": 2015,
+    "draft_round": 1,
+    "draft_number": 4,
+    "team_id": 10
+   },
+   "return_date": "2027-01-02",
+   "description": "Not With Team (2026-11-11, GSW@HOU). Prior reporting (2026-11-06): Porzingis announced on his social media that he's stepping away from basketball. Porzingis said he was looking forward to joining the Warriors, but his body didn't respond the way he wanted it too during his ramp-up process before the season. Additionally, he said he will work with the Warriors on a solution that \"makes sense.\" Porzingis is making this decision to prioritize his health and will hopefully turn a corner soon on that front.",
+   "status": "Out"
+  },
+  {
+   "player": {
+    "id": 79,
+    "first_name": "Jimmy",
+    "last_name": "Butler",
+    "position": "G-F",
+    "height": "6-6",
+    "weight": "230",
+    "jersey_number": "10",
+    "college": "Marquette",
+    "country": "USA",
+    "draft_year": 2011,
+    "draft_round": 1,
+    "draft_number": 30,
+    "team_id": 10
+   },
+   "return_date": "2027-01-02",
+   "description": "Injury/Illness - Right ACL Repair / Surgery (2026-11-11, GSW@HOU). Prior reporting (2026-10-16): Butler (knee) could return sometime between January and February as he continues recovering from a torn right ACL, Anthony Slater of ESPN reports. Butler, who underwent surgery after suffering the injury Jan. 19, has progressed to individual court work but still has several rehabilitation milestones to clear. His next step involves landing comfortably after a game-speed jump. Coach Steve Kerr is hopeful Butler can rejoin Golden State for the latter portion of the season, though no official return date has been announced. The 37-year-old forward remains a significant part of the Warriors' plans and could provide a substantial boost during the second half of the campaign.",
+   "status": "Out"
+  },
+  {
+   "player": {
+    "id": 17553992,
+    "first_name": "Moses",
+    "last_name": "Moody",
+    "position": "G",
+    "height": "6-5",
+    "weight": "215",
+    "jersey_number": "4",
+    "college": "Arkansas",
+    "country": "USA",
+    "draft_year": 2021,
+    "draft_round": 1,
+    "draft_number": 14,
+    "team_id": 10
+   },
+   "return_date": "2026-12-01",
+   "description": "Injury/Illness - Left Patellar Tendon Repair / Surgery (2026-11-11, GSW@HOU). Prior reporting (2026-10-16): Moody (knee) is progressing toward a potential return between December and January after rupturing his left patellar tendon in March, Anthony Slater of ESPN reports. Moody has been limited to individual court work, but team sources indicate he's ahead of Jimmy Butler (knee) in the rehabilitation process and is expected to return before the veteran forward. The 24-year-old still has several recovery checkpoints to complete, and Golden State has not established an official timetable. His eventual return would help replenish a Warriors wing rotation that will open the season without both Moody and Butler.",
+   "status": "Out"
+  },
+  {
+   "player": {
+    "id": 1028035897,
+    "first_name": "Johnny",
+    "last_name": "Furphy",
+    "position": "G",
+    "height": "6-8",
+    "weight": "200",
+    "jersey_number": "12",
+    "college": "Kansas",
+    "country": "Australia",
+    "draft_year": 2024,
+    "draft_round": 2,
+    "draft_number": 35,
+    "team_id": 12
+   },
+   "return_date": "2027-01-02",
+   "description": "Injury/Illness - Right ACL Repair / Surgery (2026-11-11, WAS@IND). Prior reporting (2026-10-30): Furphy (knee) is practicing with the G League's Noblesville Boom, per Alex Golden of SI.com. The Pacers have been pretty quiet regarding Furphy's ACL recovery since the offseason, but it's encouraging to hear some form of progress as the forward begins to ramp up his activity. Although Furphy still lacks a firm timetable for a return and is likely to be brought back slowly, it appears a season debut before the start of the new calendar year is in the cards.",
+   "status": "Out"
+  },
+  {
+   "player": {
+    "id": 37,
+    "first_name": "Bradley",
+    "last_name": "Beal",
+    "position": "G",
+    "height": "6-4",
+    "weight": "207",
+    "jersey_number": "0",
+    "college": "Florida",
+    "country": "USA",
+    "draft_year": 2012,
+    "draft_round": 1,
+    "draft_number": 3,
+    "team_id": 13
+   },
+   "return_date": "2026-11-29",
+   "description": "Injury/Illness - Right Knee Injury Management (2026-11-10, LAC@PHX). Prior reporting (2026-10-15): Beal (knee) will not be ready for the start of the regular season, NBA writer Justin Russo reports. Beal is dealing with knee inflammation that will keep him sidelined for Opening Night. While it's unclear how long the Clippers will be without the veteran guard, Darius Garland, Keaton Wagler and Kris Dunn should dominate the backcourt minutes in his absence. Beal's 2025-26 campaign was cut short by a hip injury after he averaged 8.2 points and 1.7 assists in 20.6 minutes across just six regular-season appearances.",
+   "status": "Out"
+  },
+  {
+   "player": {
+    "id": 1057279105,
+    "first_name": "Yanic Konan",
+    "last_name": "Niederhauser",
+    "position": "C",
+    "height": "6-11",
+    "weight": "242",
+    "jersey_number": "14",
+    "college": "Penn State",
+    "country": "Switzerland",
+    "draft_year": 2025,
+    "draft_round": 1,
+    "draft_number": 30,
+    "team_id": 13
+   },
+   "return_date": "2026-11-17",
+   "description": "Injury/Illness - Right Lisfranc Surgery (2026-11-10, LAC@PHX). Prior reporting (2026-11-10): Niederhauser (foot) is out for Tuesday's game against Phoenix, Ohm Youngmisuk of ESPN.com reports. Niederhauser has yet to make an appearance this season for the Clippers while rehabbing from foot surgery. It's unclear at this time when he'll be available to take the court, and he can be considered week-to-week until further notice.",
+   "status": "Out"
+  },
+  {
+   "player": {
+    "id": 227,
+    "first_name": "Brandon",
+    "last_name": "Ingram",
+    "position": "F",
+    "height": "6-8",
+    "weight": "190",
+    "jersey_number": "3",
+    "college": "Duke",
+    "country": "USA",
+    "draft_year": 2016,
+    "draft_round": 1,
+    "draft_number": 2,
+    "team_id": 13
+   },
+   "return_date": "2026-11-13",
+   "description": "Injury/Illness - Right Heel Surgery (2026-11-10, LAC@PHX). Prior reporting (2026-11-10): Ingram (Achilles) has been ruled out for Tuesday's game at Phoenix, Ohm Youngmisuk of ESPN.com reports. Ingram is nearing a return to action, though he won't make his season debut Tuesday. The veteran swingman's next opportunity to suit up will come Friday against Oklahoma City.",
+   "status": "Out"
+  },
+  {
+   "player": {
+    "id": 56677856,
+    "first_name": "Jordan",
+    "last_name": "Miller",
+    "position": "G",
+    "height": "6-5",
+    "weight": "194",
+    "jersey_number": "22",
+    "college": "Miami",
+    "country": "USA",
+    "draft_year": 2023,
+    "draft_round": 2,
+    "draft_number": 48,
+    "team_id": 13
+   },
+   "return_date": "2027-03-02",
+   "description": "Injury/Illness - Left Rotator Cuff Surgery (2026-11-10, LAC@PHX). Prior reporting (2026-08-26): Miller underwent surgery Wednesday to repair a torn left rotator cuff and will be re-evaluated in six months, per Law Murray of The Athletic. It's a tough break for Miller, who had an opportunity to battle for a reserve role during training camp in the fall. The timeline for a return is likely to keep him on the shelf until after the All-Star break. Miller's extended stay on the sidelines gives Kobe Sanders a chance to crack the Clippers' rotation.",
+   "status": "Out"
+  },
+  {
+   "player": {
+    "id": 131,
+    "first_name": "Donte",
+    "last_name": "DiVincenzo",
+    "position": "G",
+    "height": "6-4",
+    "weight": "203",
+    "jersey_number": "0",
+    "college": "Villanova",
+    "country": "USA",
+    "draft_year": 2018,
+    "draft_round": 1,
+    "draft_number": 17,
+    "team_id": 18
+   },
+   "return_date": "2027-04-02",
+   "description": "DiVincenzo (Achilles) remains confident that he'll return during the 2026-27 season, Jon Krawczynski of The Athletic reports. DiVincenzo is approaching six months since tearing his right Achilles during the first round of the playoffs and has been rehabbing with the expectation that he'll play at some point this season. The veteran guard has sought advice from Jayson Tatum, Tyrese Haliburton and Damian Lillard during his recovery, though Minnesota has yet to establish a timetable for his return.",
+   "status": "Out"
+  },
+  {
+   "player": {
+    "id": 229,
+    "first_name": "Jonathan",
+    "last_name": "Isaac",
+    "position": "F",
+    "height": "6-10",
+    "weight": "240",
+    "jersey_number": "1",
+    "college": "Florida State",
+    "country": "USA",
+    "draft_year": 2017,
+    "draft_round": 1,
+    "draft_number": 6,
+    "team_id": 22
+   },
+   "return_date": "2026-11-16",
+   "description": "Injury/Illness - Left Knee Injury Management (2026-11-10, ORL@SAC). Prior reporting (2026-11-09): Isaac (knee) is out for Tuesday's game against Sacramento. Isaac has yet to make his 2026-27 debut while continuing his rehab from a left knee injury. His next opportunity to take the court will arrive Wednesday in Utah.",
+   "status": "Out"
+  },
+  {
+   "player": {
+    "id": 1091465870,
+    "first_name": "Izaiyah",
+    "last_name": "Nelson",
+    "position": "F",
+    "height": "6-10",
+    "weight": "218",
+    "jersey_number": "25",
+    "college": "South Florida",
+    "country": "USA",
+    "draft_year": 2026,
+    "draft_round": 2,
+    "draft_number": 51,
+    "team_id": 22
+   },
+   "return_date": "2026-11-18",
+   "description": "Injury/Illness - Left Ankle Injury recovery (2026-11-10, ORL@SAC). Prior reporting (2026-09-28): Team president Jeff Weltman said Monday that Nelson (ankle) remains about a month away from returning to the court after offseason surgery, per Philip Rossman-Reich of OrlandoMagicDaily.com. With Nelson still in recovery mode from the left ankle surgery he underwent this summer, his path back to game action remains delayed for the early part of the season. The rookie big man is on a two-way contract with the Magic, so his short-term absence mainly affects his developmental timeline rather than Orlando's regular rotation.",
+   "status": "Out"
+  },
+  {
+   "player": {
+    "id": 1028046422,
+    "first_name": "Ariel",
+    "last_name": "Hukporti",
+    "position": "C",
+    "height": "7-0",
+    "weight": "246",
+    "jersey_number": "55",
+    "college": "Riesen Ludwigsburg",
+    "country": "Germany",
+    "draft_year": 2024,
+    "draft_round": 2,
+    "draft_number": 58,
+    "team_id": 23
+   },
+   "return_date": "2027-10-01",
+   "description": "Hukporti has sustained a season-ending ruptured right Achilles tendon, per Shams Charania of ESPN. Hukporti went down with an Achilles injury in Monday's preseason opener against the Knicks, and an MRI has since revealed a rupture. He signed a one-year deal with the 76ers over the summer, so Hukporti will be an unrestricted free agent come season's end. With Hukporti's year already finished, Adem Bona (foot) should assume the backup center role behind Joel Embiid once healthy. Reported out for season.",
+   "status": "Out"
+  },
+  {
+   "player": {
+    "id": 38017698,
+    "first_name": "Mark",
+    "last_name": "Williams",
+    "position": "C",
+    "height": "7-1",
+    "weight": "240",
+    "jersey_number": "15",
+    "college": "Duke",
+    "country": "USA",
+    "draft_year": 2022,
+    "draft_round": 1,
+    "draft_number": 15,
+    "team_id": 24
+   },
+   "return_date": "2027-02-03",
+   "description": "Injury/Illness - Left Shoulder Surgery (2026-11-10, LAC@PHX). Prior reporting (2026-09-11): Williams underwent surgery Thursday to repair a torn labrum in his left shoulder and will miss an extended period of time, Shams Charania of ESPN reports. This is a tough blow for the center with training camp right around the corner. With his status for Opening Night in jeopardy, this will put a lot of eyes on Oso Ighodaro and Khaman Maluach, with the latter already drawing buzz during the Summer League. More clarity on Williams' timeline should be known in the coming weeks.",
+   "status": "Out"
+  },
+  {
+   "player": {
+    "id": 38017690,
+    "first_name": "Shaedon",
+    "last_name": "Sharpe",
+    "position": "G",
+    "height": "6-5",
+    "weight": "210",
+    "jersey_number": "17",
+    "college": "Kentucky",
+    "country": "Canada",
+    "draft_year": 2022,
+    "draft_round": 1,
+    "draft_number": 7,
+    "team_id": 25
+   },
+   "return_date": "2027-03-02",
+   "description": "Injury/Illness - Right Meniscus Surgery (2026-11-10, OKC@POR). Prior reporting (2026-08-24): Sharpe suffered a torn meniscus in his knee and is expected to miss six months, per Shams Charania of ESPN. It's a tough blow to the Trail Blazers' depth on the wing ahead of training camp. Sharpe, who is now likely to be sidelined until after the All-Star break, had been ticketed for a reserve role behind Toumani Camara following an injury-plagued 2025-26 campaign, which saw average a career-high 20.8 points, 1.4 steals and 2.1 three-pointers per game over 50 regular-season appearances. The door is now open for Vit Krejci and Jeremy Sochan to compete for bench minutes during camp.",
+   "status": "Out"
+  },
+  {
+   "player": {
+    "id": 1091352835,
+    "first_name": "Jayden",
+    "last_name": "Quaintance",
+    "position": "F",
+    "height": "6-9",
+    "weight": "255",
+    "jersey_number": "22",
+    "college": "Kentucky",
+    "country": "USA",
+    "draft_year": 2026,
+    "draft_round": 1,
+    "draft_number": 20,
+    "team_id": 27
+   },
+   "return_date": "2026-12-03",
+   "description": "Injury/Illness - Right Knee Surgery (2026-11-11, SAS@CHI). Prior reporting (2026-10-05): Quaintance has been around the team but has not yet been cleared for basketball activities, Matt Guzman of SI.com reports. The Spurs are expected to exercise extreme caution with the big man, as Quaintance suffered a torn ACL and meniscus with Arizona State in February 2025 before appearing in only four games with Kentucky last season due to severe complications and persistent swelling. The 19-year-old underwent a cleanup procedure on his meniscus in mid-July, and the Spurs will likely want him at 100 percent before ramping him up to basketball activities.",
+   "status": "Out"
+  },
+  {
+   "player": {
+    "id": 200,
+    "first_name": "Tobias",
+    "last_name": "Harris",
+    "position": "F",
+    "height": "6-8",
+    "weight": "226",
+    "jersey_number": "12",
+    "college": "Tennessee",
+    "country": "USA",
+    "draft_year": 2011,
+    "draft_round": 1,
+    "draft_number": 19,
+    "team_id": 27
+   },
+   "return_date": "2026-11-19",
+   "description": "Injury/Illness - Left Calf Strain (2026-11-11, SAS@CHI). Prior reporting (2026-11-10): Harris (calf) is out for Wednesday's game against Chicago, Jared Weiss of The Athletic reports. With Harris still sidelined, San Antonio will rely more on Julian Champagnie. Harris has yet to make his Spurs debut this season, so his absence continues to leave minutes available on the wing until he is cleared to return.",
+   "status": "Out"
+  },
+  {
+   "player": {
+    "id": 349,
+    "first_name": "Jusuf",
+    "last_name": "Nurkic",
+    "position": "C",
+    "height": "7-0",
+    "weight": "290",
+    "jersey_number": "30",
+    "college": "Cedevita",
+    "country": "Bosnia and Herzegovina",
+    "draft_year": 2014,
+    "draft_round": 1,
+    "draft_number": 16,
+    "team_id": 29
+   },
+   "return_date": "2026-11-20",
+   "description": "Injury/Illness - Right 2nd Plantar Plate Tear (2026-11-10, MIA@UTA). Prior reporting (2026-11-06): Nurkic (toe) has begun participating in on-court activities as he continues recovering from a right foot injury sustained during an Oct. 4 preseason game against Denver. He will be re-evaluated in two weeks, the Jazz announced Friday. Nurkic is progressing in his recovery, but the two-week re-evaluation timeline indicates he remains some distance from returning to game action. His absence should continue to create opportunities in Utah's frontcourt, with Jaxson Hayes and Mo Bamba among the players positioned to benefit from additional playing time. Nurkic's next evaluation will provide a clearer picture of his potential return date.",
+   "status": "Out"
+  },
+  {
+   "player": {
+    "id": 1016384149,
+    "first_name": "Tristan",
+    "last_name": "Vukcevic",
+    "position": "F",
+    "height": "7-0",
+    "weight": "220",
+    "jersey_number": "00",
+    "college": "Real Madrid",
+    "country": "Italy",
+    "draft_year": 2023,
+    "draft_round": 2,
+    "draft_number": 42,
+    "team_id": 30
+   },
+   "return_date": "2026-11-16",
+   "description": "Injury/Illness - Left Hip Impingement (2026-11-11, WAS@IND). Prior reporting (2026-11-08): Vukcevic (hip) has been ruled out for Monday's game against Detroit. Vukcevic has yet to make his season debut due to a left hip impingement. The big man can be viewed as week-to-week until the Wizards provide an update on his progress.",
+   "status": "Out"
+  },
+  {
+   "player": {
+    "id": 1057391756,
+    "first_name": "Jamir",
+    "last_name": "Watkins",
+    "position": "F",
+    "height": "6-5",
+    "weight": "210",
+    "jersey_number": "5",
+    "college": "Florida State",
+    "country": "USA",
+    "draft_year": 2025,
+    "draft_round": 2,
+    "draft_number": 43,
+    "team_id": 30
+   },
+   "return_date": "2027-04-02",
+   "description": "Injury/Illness - Left ACL Repair / Surgery (2026-11-11, WAS@IND). Prior reporting (2026-07-30): The Wizards announced Thursday that Watkins has undergone surgery for a torn ACL. Watkins, a two-way player for the Wizards, suffered the injury during the Summer League. Although Washington has yet to offer a timetable for a return, a typical recovery time for the procedure is approximately 9-to-12 months. That leaves Watkins in serious jeopardy of missing most, if not all, of the 2026-27 season, and it remains to be seen if the team will continue keeping him around on a two-way roster spot while he's injured.",
+   "status": "Out"
+  },
+  {
+   "player": {
+    "id": 1057390745,
+    "first_name": "Maxime",
+    "last_name": "Raynaud",
+    "position": "C",
+    "height": "7-1",
+    "weight": "268",
+    "jersey_number": "42",
+    "college": "Stanford",
+    "country": "France",
+    "draft_year": 2025,
+    "draft_round": 2,
+    "draft_number": 42,
+    "team_id": 26
+   },
+   "return_date": "2026-11-15",
+   "description": "Injury/Illness - Right Patella Subluxation (2026-11-10, ORL@SAC). Prior reporting (2026-11-10): Raynaud (knee) has been ruled out for Tuesday's game against Orlando. Raynaud is expected to be re-evaluated soon, though he can be considered week-to-week until the Kings offer an update on his status. Dylan Cardwell and Precious Achiuwa will likely continue seeing increased burn in Raynaud's absence.",
+   "status": "Out"
+  },
+  {
+   "player": {
+    "id": 56677776,
+    "first_name": "Julian",
+    "last_name": "Strawther",
+    "position": "G",
+    "height": "6-6",
+    "weight": "205",
+    "jersey_number": "3",
+    "college": "Gonzaga",
+    "country": "USA",
+    "draft_year": 2023,
+    "draft_round": 1,
+    "draft_number": 29,
+    "team_id": 8
+   },
+   "return_date": "2026-11-29",
+   "description": "Injury/Illness - Left Knee Sprain (2026-11-11, DEN@MEM). Prior reporting (2026-10-17): Strawther (knee) was diagnosed with a left knee sprain Friday and will be re-evaluated in six weeks, Vinny Benedetto of The Denver Gazette reports. Strawther suffered the injury in Wednesday's preseason game against the Clippers. The 24-year-old has appeared in 172 regular-season games for the Nuggets since entering the league in 2023, averaging 7.1 points, 2.0 rebounds and 1.1 assists over 16.2 minutes per contest. He was in line to compete for an expanded role during the 2026-27 campaign. While that may be the case once Strawther is cleared to suit up, Tyus Jones and potentially Ryan Nembhard are candidates to receive more minutes in the interim.",
+   "status": "Out"
+  },
+  {
+   "player": {
+    "id": 1092199635,
+    "first_name": "Tarik",
+    "last_name": "Biberovic",
+    "position": "F",
+    "height": "6-6",
+    "weight": "218",
+    "jersey_number": "13",
+    "college": "                                   ",
+    "country": "Bosnia and Herzegovina",
+    "draft_year": 2023,
+    "draft_round": 2,
+    "draft_number": 56,
+    "team_id": 7
+   },
+   "return_date": "2026-11-12",
+   "description": "Biberovic (heel) is listed as out for Monday's game against Sacramento. Biberovic has been battling inflammation in his right heel, preventing him from making his NBA debut. While the rookie should be considered week-to-week, he likely has a way to go before earning a meaningful role in Dallas even when he's cleared to suit up.",
+   "status": "Out"
+  },
+  {
+   "player": {
+    "id": 1057385481,
+    "first_name": "Noah",
+    "last_name": "Penda",
+    "position": "G-F",
+    "height": "6-7",
+    "weight": "242",
+    "jersey_number": "93",
+    "college": "Le Mans Sarthe",
+    "country": "France",
+    "draft_year": 2025,
+    "draft_round": 2,
+    "draft_number": 32,
+    "team_id": 22
+   },
+   "return_date": "2026-11-18",
+   "description": "Injury/Illness - Right Partially Torn Hamstring (2026-11-10, ORL@SAC). Prior reporting (2026-10-17): Penda was diagnosed with a partially torn right hamstring Saturday, Jason Beede of the Orlando Sentinel reports. Penda suffered the hamstring tear in Friday's 136-115 preseason win over the Heat. It's unknown how long the injury will keep the 21-year-old off the floor. However, since it's a different injury than the one he suffered in the same hamstring during training camp, the team may take a cautious approach regarding his return. Penda, the No. 32 overall pick in the 2025 NBA Draft, averaged 3.8 points, 3.2 rebounds and 1.2 assists over 12.8 minutes per outing in 59 regular-season games in 2025-26. While he's not expected to be a mainstay in the rotation throughout the 2026-27 campaign, his absence could open up a few minutes for Tristan Da Silva.",
+   "status": "Out"
+  },
+  {
+   "player": {
+    "id": 1092199652,
+    "first_name": "Nate",
+    "last_name": "Bittle",
+    "position": "C",
+    "height": "7-0",
+    "weight": "215",
+    "jersey_number": "12",
+    "college": "Oregon",
+    "country": "USA",
+    "draft_year": null,
+    "draft_round": null,
+    "draft_number": null,
+    "team_id": 28
+   },
+   "return_date": "2026-11-15",
+   "description": "Injury/Illness - Right Avulsion Fracture (2026-11-11, BOS@TOR). Prior reporting (2026-11-08): Bittle (foot) is listed as out for Monday's game against Memphis. Bittle has been battling a foot injury for a couple of months. It's unknown when the rookie will be cleared to suit up for the Raptors, so he should be considered week-to-week for now.",
+   "status": "Out"
+  },
+  {
+   "player": {
+    "id": 417,
+    "first_name": "Ben",
+    "last_name": "Simmons",
+    "position": "G-F",
+    "height": "6-9",
+    "weight": "245",
+    "jersey_number": "25",
+    "college": "Louisiana State",
+    "country": "Australia",
+    "draft_year": 2016,
+    "draft_round": 1,
+    "draft_number": 1,
+    "team_id": 26
+   },
+   "return_date": "2027-10-01",
+   "description": "Injury/Illness - Right Achilles Tendon Repair / Surgery (2026-11-10, ORL@SAC). Prior reporting (2026-10-21): Simmons underwent successful surgery Tuesday to repair a torn right Achilles tendon, James Ham of ESPN 1320 Sacramento reports. Simmons had a quality preseason, averaging 10.5 points, 4.0 rebounds and 4.0 assists over 17.4 minutes per contest (two games). The 30-year-old was on track to suit up for the Kings on opening night, though those plans were halted after he suffered a torn Achilles tendon during practice. Now, Simmons will focus on rehab. However, it's unknown what the future holds regarding his career in the NBA. Previously reported out for season.",
+   "status": "Out"
+  },
+  {
+   "player": {
+    "id": 56677861,
+    "first_name": "Ben",
+    "last_name": "Sheppard",
+    "position": "G",
+    "height": "6-6",
+    "weight": "190",
+    "jersey_number": "26",
+    "college": "Belmont",
+    "country": "USA",
+    "draft_year": 2023,
+    "draft_round": 1,
+    "draft_number": 26,
+    "team_id": 12
+   },
+   "return_date": "2027-01-02",
+   "description": "Injury/Illness - Left Meniscus Surgery (2026-11-11, WAS@IND). Prior reporting (2026-10-28): Head coach Rick Carlise confirmed Sheppard will miss \"months\" after undergoing surgery to repair a torn meniscus in his left knee, Tony East of Forbes.com reports. Sheppard required a full repair and is without a definitive timetable for a return to action. With Tyrese Haliburton (hamstring) expected to miss at least two weeks, Quenton Jackson figures to see a significant uptick in playing time. Two-way player Braden Smith could also see increased action with the parent club.",
+   "status": "Out"
+  },
+  {
+   "player": {
+    "id": 38017683,
+    "first_name": "Paolo",
+    "last_name": "Banchero",
+    "position": "F",
+    "height": "6-10",
+    "weight": "250",
+    "jersey_number": "5",
+    "college": "Duke",
+    "country": "USA",
+    "draft_year": 2022,
+    "draft_round": 1,
+    "draft_number": 1,
+    "team_id": 22
+   },
+   "return_date": "2026-11-22",
+   "description": "Injury/Illness - Right High Ankle Sprain (2026-11-10, ORL@SAC). Prior reporting (2026-10-24): Banchero is expected to be sidelined for the next four-to-six weeks due to a right high-ankle sprain, Shams Charania of ESPN reports. Banchero left during Friday's loss against the Timberwolves due to an ankle injury, and follow-up tests have confirmed a high-ankle sprain for the fifth-year forward. With an extended absence expected, the Magic will have to rely more heavily on Franz Wagner and Desmond Bane offensively, and Tristan da Silva figures to be the top candidate to enter the Magic's starting lineup for as long as Banchero is sidelined.",
+   "status": "Out"
+  },
+  {
+   "player": {
+    "id": 38017694,
+    "first_name": "Jalen",
+    "last_name": "Duren",
+    "position": "C",
+    "height": "6-10",
+    "weight": "250",
+    "jersey_number": "0",
+    "college": "Memphis",
+    "country": "USA",
+    "draft_year": 2022,
+    "draft_round": 1,
+    "draft_number": 13,
+    "team_id": 9
+   },
+   "return_date": "2026-11-24",
+   "description": "Duren (hamstring) has begun on-court activity and will be re-evaluated in two weeks, Hunter Patterson of The Athletic reports. Duren is progressing in his rehab after suffering a right hamstring strain Oct. 23, though he'll remain on the inactive list for at least the next two weeks while ramping up toward a return to game action. Paul Reed should continue to play a sizable role in Duren's stead.",
+   "status": "Out"
+  },
+  {
+   "player": {
+    "id": 1028027567,
+    "first_name": "Yves",
+    "last_name": "Missi",
+    "position": "C",
+    "height": "6-11",
+    "weight": "236",
+    "jersey_number": "21",
+    "college": "Baylor",
+    "country": "Cameroon",
+    "draft_year": 2024,
+    "draft_round": 1,
+    "draft_number": 21,
+    "team_id": 19
+   },
+   "return_date": "2026-11-16",
+   "description": "Injury/Illness - Left Knee Contusion / Bone Bruise (2026-11-11, BKN@NOP). Prior reporting (2026-11-05): Missi (knee) is out for Friday's game against Minnesota. Missi has been sidelined since picking up his injury Oct. 23. He remains without a timetable to return.",
+   "status": "Out"
+  },
+  {
+   "player": {
+    "id": 3,
+    "first_name": "Steven",
+    "last_name": "Adams",
+    "position": "C",
+    "height": "6-11",
+    "weight": "279",
+    "jersey_number": "12",
+    "college": "Pittsburgh",
+    "country": "New Zealand",
+    "draft_year": 2013,
+    "draft_round": 1,
+    "draft_number": 12,
+    "team_id": 11
+   },
+   "return_date": "2026-11-15",
+   "description": "Injury/Illness - Right Soleus Strain (2026-11-11, GSW@HOU). Prior reporting (2026-11-09): Head coach Ime Udoka said Monday that Adams could return as soon as Sunday's game at Washington, Lachard Binkley of SI.com reports. The veteran center is still recovering from a right soleus strain and hasn't played since Oct. 23. With Adams and Clint Capela (ankle) both sidelined, Tari Eason and Jabari Smith figure to see increased burn at center.",
+   "status": "Out"
+  },
+  {
+   "player": {
+    "id": 274,
+    "first_name": "Kawhi",
+    "last_name": "Leonard",
+    "position": "F",
+    "height": "6-7",
+    "weight": "225",
+    "jersey_number": "2",
+    "college": "San Diego State",
+    "country": "USA",
+    "draft_year": 2011,
+    "draft_round": 1,
+    "draft_number": 15,
+    "team_id": 28
+   },
+   "return_date": "2026-11-23",
+   "description": "Injury/Illness - Left Knee Injury Management (2026-11-11, BOS@TOR). Prior reporting (2026-11-10): Leonard (knee) is continuing the reconditioning process, and another update will be provided in one week, Blake Murphy of Sportsnet.ca reports. With Leonard still in the rehab phase of his recovery from left knee swelling, there remains no indication of an imminent return to game action. The one-week update timeline suggests Toronto is continuing to monitor his progress before advancing to the next step, keeping his near-term availability uncertain.",
+   "status": "Out"
+  },
+  {
+   "player": {
+    "id": 56677833,
+    "first_name": "Cason",
+    "last_name": "Wallace",
+    "position": "G",
+    "height": "6-3",
+    "weight": "195",
+    "jersey_number": "22",
+    "college": "Kentucky",
+    "country": "USA",
+    "draft_year": 2023,
+    "draft_round": 1,
+    "draft_number": 10,
+    "team_id": 21
+   },
+   "return_date": "2027-03-02",
+   "description": "Injury/Illness - Left Shoulder Surgery (2026-11-10, OKC@POR). Prior reporting (2026-10-31): Wallace underwent surgery Friday to repair a torn labrum in his left shoulder and will be re-evaluated before the end of the regular season, Clemente Almanza of USA Today reports. Wallace is expected to miss most, if not all, of the season. However, there's still a chance he will return late in the campaign after sustaining the shoulder injury in Sunday's win over the Clippers. With Jalen Williams (leg) also set to be re-evaluated before the end of the regular season, Alex Caruso (ankle) should see significant playing time once cleared to return. In the meantime, Jared McCain, Bennett Stirtz and Josh Dix are expected to see increased burn.",
+   "status": "Out"
+  },
+  {
+   "player": {
+    "id": 38017703,
+    "first_name": "Jalen",
+    "last_name": "Williams",
+    "position": "G-F",
+    "height": "6-5",
+    "weight": "211",
+    "jersey_number": "8",
+    "college": "Santa Clara",
+    "country": "USA",
+    "draft_year": 2022,
+    "draft_round": 1,
+    "draft_number": 12,
+    "team_id": 21
+   },
+   "return_date": "2027-03-02",
+   "description": "Injury/Illness - Left Ankle Surgery (2026-11-10, OKC@POR). Prior reporting (2026-10-28): Williams (leg) underwent successful surgery Wednesday to \"address a fractured left fibula and reconstruction of ankle ligaments following a fracture and dislocation.\" He will be re-evaluated before the end of the regular season, Tim MacMahon of ESPN.com reports. Williams suffered the injury during Sunday's meeting with the Clippers and was taken off the court on a stretcher. It's unknown when the 25-year-old will be cleared to return, though the Thunder will presumably be overly cautious moving forward. Williams, who signed a five-year extension in July of 2025, has had a productive career, averaging 17.9 points, 4.6 rebounds, 4.4 assists and 1.3 steals over 30.9 minutes per contest. However, after playing at least 69 regular-season games in his first three years in the league, he has appeared in just 36 in the last two seasons combined. With the Thunder having one of the deepest rosters in the NBA, the team may look for more minutes from Jared McCain, Jaylin Williams, and Kenrich Williams for the remainder of the 2026-27 campaign.",
+   "status": "Out"
+  },
+  {
+   "player": {
+    "id": 17896073,
+    "first_name": "Jalen",
+    "last_name": "Suggs",
+    "position": "G",
+    "height": "6-5",
+    "weight": "207",
+    "jersey_number": "4",
+    "college": "Gonzaga",
+    "country": "USA",
+    "draft_year": 2021,
+    "draft_round": 1,
+    "draft_number": 5,
+    "team_id": 22
+   },
+   "return_date": "2026-11-16",
+   "description": "Injury/Illness - Right Knee Contusion / Bone Bruise (2026-11-10, ORL@SAC). Prior reporting (2026-11-09): Suggs (knee) has been ruled out for Tuesday's game against the Kings. The 25-year-old floor general hasn't played since Oct. 25 due to a right knee bone bruise, though he's \"progressing positively\" and has returned to on-court activity, according to Jason Beede of the Orlando Sentinel. The Magic said that Suggs' return will depend on how his knee responds to increased on-court activities, so he can be considered week-to-week until the Magic provide another update on his progress.",
+   "status": "Out"
+  },
+  {
+   "player": {
+    "id": 3547272,
+    "first_name": "Isaiah",
+    "last_name": "Joe",
+    "position": "G",
+    "height": "6-4",
+    "weight": "165",
+    "jersey_number": "11",
+    "college": "Arkansas",
+    "country": "USA",
+    "draft_year": 2020,
+    "draft_round": 2,
+    "draft_number": 49,
+    "team_id": 9
+   },
+   "return_date": "2026-11-17",
+   "description": "Joe (hip) is out for Monday against the Wizards. Joe is missing a seventh consecutive contest with a bruised hip. His next chance to play comes Thursday in a road rematch with Washington.",
+   "status": "Out"
+  },
+  {
+   "player": {
+    "id": 38017685,
+    "first_name": "Chet",
+    "last_name": "Holmgren",
+    "position": "C-F",
+    "height": "7-1",
+    "weight": "208",
+    "jersey_number": "7",
+    "college": "Gonzaga",
+    "country": "USA",
+    "draft_year": 2022,
+    "draft_round": 1,
+    "draft_number": 2,
+    "team_id": 21
+   },
+   "return_date": "2027-01-02",
+   "description": "Injury/Illness - Right Knee/ Injury Recovery (2026-11-10, OKC@POR). Prior reporting (2026-10-31): Holmgren underwent a biological treatment Friday to address a small patellar tendon tear and will miss at least 8-10 weeks, Nick Crain of Slam reports. This is another massive blow to an Oklahoma City squad that's already set to be without Jalen Williams (leg) and Cason Wallace (shoulder) for most, if not all, of the season. With Holmgren sidelined, Kenrich Williams, Jaylin Williams and Aday Mara are all candidates to see increased playing time. Two-way player Brooks Barnhizer could also see more minutes.",
+   "status": "Out"
+  },
+  {
+   "player": {
+    "id": 1057274983,
+    "first_name": "Thomas",
+    "last_name": "Sorber",
+    "position": "C",
+    "height": "6-9",
+    "weight": "250",
+    "jersey_number": "12",
+    "college": "Georgetown",
+    "country": "USA",
+    "draft_year": 2025,
+    "draft_round": 1,
+    "draft_number": 15,
+    "team_id": 21
+   },
+   "return_date": "2026-11-13",
+   "description": "Injury/Illness - Right Knee surgery (2026-11-10, OKC@POR). Prior reporting (2026-11-03): Sorber (knee) is out for Wednesday's game against the Cavaliers. Sorber remains in recovery mode due to knee surgery. Until the Thunder update his timetable for a return, Sorber can be deemed week-to-week.",
+   "status": "Out"
+  },
+  {
+   "player": {
+    "id": 17896039,
+    "first_name": "Justin",
+    "last_name": "Champagnie",
+    "position": "F",
+    "height": "6-6",
+    "weight": "206",
+    "jersey_number": "9",
+    "college": "Pittsburgh",
+    "country": "USA",
+    "draft_year": null,
+    "draft_round": null,
+    "draft_number": null,
+    "team_id": 30
+   },
+   "return_date": "2027-02-25",
+   "description": "Injury/Illness - Right Foot Surgery (2026-11-11, WAS@IND). Prior reporting (2026-10-28): Champagnie (foot) is expected to miss several months, per Josh Robbins of The Athletic. The forward underwent surgery Wednesday to address a fractured foot, and the Wizards hope Champagnie will be ready to return at some time around the All-Star break in February. The likes of Bilal Coulibaly, Tre Johnson and Bub Carrington will all be asked to help pick up the slack for the foreseeable future.",
+   "status": "Out"
+  },
+  {
+   "player": {
+    "id": 1091350193,
+    "first_name": "Sergio",
+    "last_name": "De Larrea",
+    "position": "G",
+    "height": "6-6",
+    "weight": "175",
+    "jersey_number": "55",
+    "college": "Valencia, Spain",
+    "country": "Spain",
+    "draft_year": 2026,
+    "draft_round": 1,
+    "draft_number": 25,
+    "team_id": 7
+   },
+   "return_date": "2026-11-12",
+   "description": "De Larrea (knee) is out for Friday's game against Utah. De Larrea continues to miss time with a right knee strain, and it's not clear at this time where he's at in his rehab. He can be considered week-to-week until further notice.",
+   "status": "Out"
+  },
+  {
+   "player": {
+    "id": 231,
+    "first_name": "Jaren",
+    "last_name": "Jackson Jr.",
+    "position": "F-C",
+    "height": "6-10",
+    "weight": "242",
+    "jersey_number": "20",
+    "college": "Michigan State",
+    "country": "USA",
+    "draft_year": 2018,
+    "draft_round": 1,
+    "draft_number": 4,
+    "team_id": 29
+   },
+   "return_date": "2026-12-14",
+   "description": "Injury/Illness - Right MCL Tear (2026-11-10, MIA@UTA). Prior reporting (2026-10-27): Jackson has been diagnosed with a torn MCL in his right knee and will be sidelined for 6-to-8 weeks, per Shams Charania of ESPN. Jackson sustained the injury early in Monday's loss to Memphis, and he's now expected to miss at least a month and a half of action. The star big man's absence creates a major void in the Utah lineup, one that is likely to be filled by a timeshare of Jaxson Hayes (shoulder), Kyle Filipowski and Mo Bamba. The Jazz could also shift Lauri Markkanen (wrist), when healthy, to the center spot at times, perhaps allowing Ace Bailey to spend more time at power forward.",
+   "status": "Out"
+  },
+  {
+   "player": {
+    "id": 3547245,
+    "first_name": "Tyrese",
+    "last_name": "Haliburton",
+    "position": "G",
+    "height": "6-5",
+    "weight": "185",
+    "jersey_number": "0",
+    "college": "Iowa State",
+    "country": "USA",
+    "draft_year": 2020,
+    "draft_round": 1,
+    "draft_number": 12,
+    "team_id": 12
+   },
+   "return_date": "2026-11-13",
+   "description": "Injury/Illness - Left Hamstring Strain (2026-11-11, WAS@IND). Prior reporting (2026-11-07): Haliburton (hamstring) is progressing well but does not have a timetable to return, Dustin Dopirak of The Indianapolis Star reports. Haliburton continues to recover from a left hamstring strain he picked up after Indiana's 110-102 loss to Milwaukee on Oct. 26. The Pacers star has missed the last five games, and his timetable to return is \"uncertain\", per head coach Rick Carlisle. Andrew Nembhard has been solid as the starting point guard with Haliburton sidelined, while Braden Smith and Quenton Jackson have provided extra depth in the backcourt. Indiana will get some reinforcements Saturday, however, as T.J. McConnell (hamstring) is expected to make his season debut in the NBA's Mexico City Game against the Nuggets.",
+   "status": "Out"
+  },
+  {
+   "player": {
+    "id": 3547238,
+    "first_name": "Anthony",
+    "last_name": "Edwards",
+    "position": "G",
+    "height": "6-4",
+    "weight": "225",
+    "jersey_number": "5",
+    "college": "Georgia",
+    "country": "USA",
+    "draft_year": 2020,
+    "draft_round": 1,
+    "draft_number": 1,
+    "team_id": 18
+   },
+   "return_date": "2026-12-21",
+   "description": "Edwards underwent a successful arthroscopic procedure on his right knee Thursday, the Timberwolves announced. Edwards underwent debridement surgery in Minnesota, though the team did not provide a timetable for his return. The star guard is expected to make a full recovery, with additional updates coming as he progresses through rehabilitation. Based on previous reporting from ESPN's Shams Charania, Edwards could miss up to two months. Edwards was off to a scorching start this season, averaging 33.3 points, 4.8 rebounds, 3.5 assists and 2.0 steals across four appearances.",
+   "status": "Out"
+  },
+  {
+   "player": {
+    "id": 1057266813,
+    "first_name": "Egor",
+    "last_name": "Demin",
+    "position": "G",
+    "height": "6-9",
+    "weight": "212",
+    "jersey_number": "8",
+    "college": "Brigham Young",
+    "country": "Russia",
+    "draft_year": 2025,
+    "draft_round": 1,
+    "draft_number": 8,
+    "team_id": 3
+   },
+   "return_date": "2026-11-11",
+   "description": "Injury/Illness - Right Bone Bruise (2026-11-11, BKN@NOP). Prior reporting (2026-11-10): Demin (leg) is probable for Wednesday's game against the Pelicans, Erik Slater of ClutchPoints.com reports. Brian Lewis of the New York Post reported earlier Tuesday that Demin practiced as well. With Demin previously sidelined by a right leg bone bruise, this designation suggests he is trending toward returning to Brooklyn's backcourt Wednesday. If he is cleared to play, the guard would be in position to reclaim the top spot at point guard.",
+   "status": "Probable"
+  },
+  {
+   "player": {
+    "id": 666786,
+    "first_name": "Ja",
+    "last_name": "Morant",
+    "position": "G",
+    "height": "6-2",
+    "weight": "174",
+    "jersey_number": "12",
+    "college": "Murray State",
+    "country": "USA",
+    "draft_year": 2019,
+    "draft_round": 1,
+    "draft_number": 2,
+    "team_id": 25
+   },
+   "return_date": "2026-12-01",
+   "description": "Injury/Illness - Left Hamstring Strain (2026-11-10, OKC@POR). Prior reporting (2026-11-08): Head coach Micah Nori said Morant met with a doctor in Los Angeles, who gave him a positive outlook on his recovery from the hamstring injury. While Nori declined to update Morant's timetable, he added Morant \"may not be out for as long as we thought,\" Trail Blazers Insider Sean Highkin reports. Morant was initially given a four-week timetable after he suffered a Grade 2 left hamstring strain on Oct. 30. It sounds like he's making solid progress, though it would be surprising to see him beat that timetable given the tricky nature of hamstring injuries. Scoot Henderson will continue to start in his absence and there will be more minutes available for Jrue Holiday.",
+   "status": "Out"
+  },
+  {
+   "player": {
+    "id": 1028028993,
+    "first_name": "Jaylon",
+    "last_name": "Tyson",
+    "position": "G-F",
+    "height": "6-6",
+    "weight": "224",
+    "jersey_number": "20",
+    "college": "California",
+    "country": "USA",
+    "draft_year": 2024,
+    "draft_round": 1,
+    "draft_number": 20,
+    "team_id": 6
+   },
+   "return_date": "2026-11-11",
+   "description": "Injury/Illness - Right Ankle Sprain (2026-11-11, CLE@NYK). Prior reporting (2026-11-10): Tyson (ankle) is questionable to face the Knicks on Wednesday. Tyson has been out since spraining his right ankle on Oct. 30, but it looks like there's a chance he could return Wednesday. If he can get back out there, Meleek Thomas' minutes would likely dip.",
+   "status": "Questionable"
+  },
+  {
+   "player": {
+    "id": 38017656,
+    "first_name": "Scotty",
+    "last_name": "Pippen Jr.",
+    "position": "G",
+    "height": "6-1",
+    "weight": "170",
+    "jersey_number": "1",
+    "college": "Vanderbilt",
+    "country": "USA",
+    "draft_year": null,
+    "draft_round": null,
+    "draft_number": null,
+    "team_id": 15
+   },
+   "return_date": "2026-11-21",
+   "description": "Injury/Illness - Lumbar Disc Herniation (2026-11-11, DEN@MEM). Prior reporting (2026-11-10): Pippen (back) remains out for Wednesday's game against Denver, Michael Wallace of the Grizzlies' official site reports. With Pippen set to miss another game, Memphis will continue to operate without one of its backcourt reserves. He has now been sidelined for six straight contests due to the back issue and can be considered week-to-week until Memphis offers an update on his recovery. Cam Spencer remains worth streaming in most fantasy leagues.",
+   "status": "Out"
+  },
+  {
+   "player": {
+    "id": 83,
+    "first_name": "Clint",
+    "last_name": "Capela",
+    "position": "C",
+    "height": "6-10",
+    "weight": "256",
+    "jersey_number": "30",
+    "college": "Elan Chalon",
+    "country": "Switzerland",
+    "draft_year": 2014,
+    "draft_round": 1,
+    "draft_number": 25,
+    "team_id": 11
+   },
+   "return_date": "2026-11-15",
+   "description": "Injury/Illness - Right Ankle Sprain (2026-11-11, GSW@HOU). Prior reporting (2026-11-09): Head coach Ime Udoka stated Monday that Capela (ankle) could be cleared to return either Nov. 15 in Washington or Nov. 16 in Miami, Lachard Binkley of SI.com reports. Capela is missing a fourth straight game Monday against Denver due to a right ankle sprain, but he appears to be trending in the right direction. He'll presumably need to log 5-on-5 work before gaining clearance to play, though the Rockets haven't disclosed how far along the big man is in his rehab.",
+   "status": "Out"
+  },
+  {
+   "player": {
+    "id": 1028203324,
+    "first_name": "Reece",
+    "last_name": "Beekman",
+    "position": "G",
+    "height": "6-1",
+    "weight": "190",
+    "jersey_number": "4",
+    "college": "Virginia",
+    "country": "USA",
+    "draft_year": null,
+    "draft_round": null,
+    "draft_number": null,
+    "team_id": 30
+   },
+   "return_date": "2026-12-03",
+   "description": "Injury/Illness - Right AC Joint Injury (2026-11-11, WAS@IND). Prior reporting (2026-11-02): The Wizards announced Monday that Beekman sustained a right acromioclavicular joint injury and will be re-evaluated in approximately three weeks. Beekman is set for an extended absence, with his re-evaluation timeline suggesting he could remain sidelined beyond the initial three-week window. The injury further limits Washington's backcourt depth, though Beekman's absence is unlikely to have a significant impact on standard fantasy leagues.",
+   "status": "Out"
+  },
+  {
+   "player": {
+    "id": 202,
+    "first_name": "Josh",
+    "last_name": "Hart",
+    "position": "G",
+    "height": "6-5",
+    "weight": "215",
+    "jersey_number": "3",
+    "college": "Villanova",
+    "country": "USA",
+    "draft_year": 2017,
+    "draft_round": 1,
+    "draft_number": 30,
+    "team_id": 20
+   },
+   "return_date": "2026-11-11",
+   "description": "Hart (illness) won't play Tuesday against the Bucks, Kristian Winfield of the New York Daily News reports. Hart is sick in addition to dealing with a sore right ankle, so he'll skip Tuesday's game, which will be the first of a back-to-back set. Landry Shamet should continue to start in Hart's absence, and Jordan Clarkson will have the chance for some extra minutes.",
+   "status": "Out"
+  },
+  {
+   "player": {
+    "id": 38017706,
+    "first_name": "Jaylin",
+    "last_name": "Williams",
+    "position": "F",
+    "height": "6-9",
+    "weight": "240",
+    "jersey_number": "6",
+    "college": "Arkansas",
+    "country": "USA",
+    "draft_year": 2022,
+    "draft_round": 2,
+    "draft_number": 34,
+    "team_id": 21
+   },
+   "return_date": "2026-11-11",
+   "description": "Injury/Illness - Low Back Spasms (2026-11-10, OKC@POR). Prior reporting (2026-11-10): Williams (back) has been ruled out for Tuesday's game against the Trail Blazers. Williams will miss a fourth consecutive contest due to lower-back spasms. Aday Mara and Kenrich Williams will likely continue to start for OKC, while Micah Peavy and Bennett Stirtz will keep earning increased playing time off the bench.",
+   "status": "Out"
+  },
+  {
+   "player": {
+    "id": 1057279093,
+    "first_name": "Asa",
+    "last_name": "Newell",
+    "position": "F",
+    "height": "6-9",
+    "weight": "220",
+    "jersey_number": "14",
+    "college": "Georgia",
+    "country": "USA",
+    "draft_year": 2025,
+    "draft_round": 1,
+    "draft_number": 23,
+    "team_id": 1
+   },
+   "return_date": "2026-11-13",
+   "description": "Newell (toe) has been ruled out for Monday's game against the Lakers. Newell will miss a third consecutive contest due to a left great toe hyperextension. The second-year forward's absence will leave additional playing time for Luguentz Dort and Aaron Wiggins.",
+   "status": "Out"
+  },
+  {
+   "player": {
+    "id": 1028034846,
+    "first_name": "Adem",
+    "last_name": "Bona",
+    "position": "F",
+    "height": "6-10",
+    "weight": "235",
+    "jersey_number": "30",
+    "college": "UCLA",
+    "country": "Nigeria",
+    "draft_year": 2024,
+    "draft_round": 2,
+    "draft_number": 41,
+    "team_id": 23
+   },
+   "return_date": "2026-11-12",
+   "description": "Bona (back) is out for Tuesday's game against the Celtics. Bona will miss his third consecutive matchup while nursing a cervical spine sprain. Jabari Walker should once again receive extra looks behind Joel Embiid with Bona and Dominick Barlow (back) sidelined.",
+   "status": "Out"
+  },
+  {
+   "player": {
+    "id": 102,
+    "first_name": "Zach",
+    "last_name": "Collins",
+    "position": "F-C",
+    "height": "6-9",
+    "weight": "240",
+    "jersey_number": "12",
+    "college": "Gonzaga",
+    "country": "USA",
+    "draft_year": 2017,
+    "draft_round": 1,
+    "draft_number": 10,
+    "team_id": 5
+   },
+   "return_date": "2026-11-11",
+   "description": "Injury/Illness - Respiratory Illness (2026-11-11, SAS@CHI). Prior reporting (2026-11-10): Collins (illness) is questionable for Wednesday's game against the Spurs. Collins is in danger of missing his second straight game due to an illness. If he's out again, Jalen Smith and Leonard Miller would likely split Collins' minutes.",
+   "status": "Questionable"
+  },
+  {
+   "player": {
+    "id": 3547267,
+    "first_name": "Isaiah",
+    "last_name": "Stewart",
+    "position": "F-C",
+    "height": "6-8",
+    "weight": "250",
+    "jersey_number": "28",
+    "college": "Washington",
+    "country": "USA",
+    "draft_year": 2020,
+    "draft_round": 1,
+    "draft_number": 16,
+    "team_id": 15
+   },
+   "return_date": "2026-11-11",
+   "description": "Injury/Illness - Right Knee Bone Bruise (2026-11-11, DEN@MEM). Prior reporting (2026-11-10): Stewart (knee) is listed as questionable for Wednesday's game versus the Nuggets. Stewart has played well in his first season in Memphis, averaging a career-high 11.9 points while shooting 57.1 percent from downtown. He has missed the last two games due to a bone bruise in his right knee. If Stewart remains sidelined Wednesday, GG Jackson and Taylor Hendricks are candidates for more minutes.",
+   "status": "Questionable"
+  },
+  {
+   "player": {
+    "id": 4197387,
+    "first_name": "Vit",
+    "last_name": "Krejci",
+    "position": "G",
+    "height": "6-8",
+    "weight": "195",
+    "jersey_number": "27",
+    "college": "Zaragoza",
+    "country": "Czech Republic",
+    "draft_year": 2020,
+    "draft_round": 2,
+    "draft_number": 37,
+    "team_id": 25
+   },
+   "return_date": "2027-01-02",
+   "description": "Injury/Illness - Left Ankle Fracture (2026-11-10, OKC@POR). Prior reporting (2026-11-05): Head coach Micah Nori said that Krejci suffered a left leg fracture during Wednesday's 132-119 win over the Suns, Brett Siegel of ClutchPoints.com reports. Nori did not provide a timetable for Krejci, but it's safe to say that he won't be back soon. His minutes figure to be divvied up amongst Chris Youngblood and Sidy Cissoko.",
+   "status": "Out"
+  },
+  {
+   "player": {
+    "id": 38017725,
+    "first_name": "Moussa",
+    "last_name": "Diabate",
+    "position": "F",
+    "height": "6-10",
+    "weight": "230",
+    "jersey_number": "14",
+    "college": "Michigan",
+    "country": "France",
+    "draft_year": 2022,
+    "draft_round": 2,
+    "draft_number": 43,
+    "team_id": 4
+   },
+   "return_date": "2026-11-12",
+   "description": "Diabate (quadriceps) has been downgraded to out for Monday's game against Cleveland. The Hornets initially appeared optimistic about the big man's status for Monday, as he was added to the injury report as questionable Sunday. However, he was downgraded to doubtful earlier in the day Monday and has since been ruled out. The Michigan product will miss his second straight matchup due to right quadriceps tendinopathy.",
+   "status": "Day-To-Day"
+  },
+  {
+   "player": {
+    "id": 409,
+    "first_name": "Dennis",
+    "last_name": "Schroder",
+    "position": "G",
+    "height": "6-1",
+    "weight": "175",
+    "jersey_number": "8",
+    "college": "Braunschweig",
+    "country": "Germany",
+    "draft_year": 2013,
+    "draft_round": 1,
+    "draft_number": 17,
+    "team_id": 4
+   },
+   "return_date": "2026-11-25",
+   "description": "Schroder has been diagnosed with a left hamstring strain and will be reevaluated in two weeks, Michael Scotto of HoopsHype.com reports. Schroder, who missed Friday's game due to what was described as a left thigh injury, has been diagnosed with a hamstring strain. He is set to be reevaluated in two weeks, suggesting he will miss at least the next five games. Christian Anderson and Sion James could see extra minutes with Schroder sidelined.",
+   "status": "Out"
+  },
+  {
+   "player": {
+    "id": 1057846172,
+    "first_name": "Keshon",
+    "last_name": "Gilbert",
+    "position": "G",
+    "height": "6-3",
+    "weight": "200",
+    "jersey_number": "00",
+    "college": "Iowa State",
+    "country": "USA",
+    "draft_year": null,
+    "draft_round": null,
+    "draft_number": null,
+    "team_id": 1
+   },
+   "return_date": "2026-11-13",
+   "description": "Gilbert (knee) has been ruled out for Monday's game against the Lakers. Gilbert will miss a third straight game due to left knee inflammation. However, his absence shouldn't affect the rotation.",
+   "status": "Out"
+  },
+  {
+   "player": {
+    "id": 17896055,
+    "first_name": "Scottie",
+    "last_name": "Barnes",
+    "position": "G-F",
+    "height": "6-8",
+    "weight": "237",
+    "jersey_number": "4",
+    "college": "Florida State",
+    "country": "USA",
+    "draft_year": 2021,
+    "draft_round": 1,
+    "draft_number": 4,
+    "team_id": 28
+   },
+   "return_date": "2026-11-12",
+   "description": "Injury/Illness - Left Groin Strain (2026-11-11, BOS@TOR). Prior reporting (2026-11-10): Barnes (groin) is out for Wednesday's game against Boston. The star forward is missing a third straight game with a groin strain. Ja'Kobe Walter should continue to handle additional playmaking duties in Barnes' stead.",
+   "status": "Out"
+  },
+  {
+   "player": {
+    "id": 3547269,
+    "first_name": "Immanuel",
+    "last_name": "Quickley",
+    "position": "G",
+    "height": "6-3",
+    "weight": "190",
+    "jersey_number": "5",
+    "college": "Kentucky",
+    "country": "USA",
+    "draft_year": 2020,
+    "draft_round": 1,
+    "draft_number": 25,
+    "team_id": 28
+   },
+   "return_date": "2026-11-11",
+   "description": "Injury/Illness - Right Hamstring Injury Management (2026-11-11, BOS@TOR). Prior reporting (2026-11-10): Quickley (hamstring) is questionable for Wednesday's game against Boston. Quickley has a chance Wednesday to end a two-game absence with a hamstring injury. Jamal Shead would have the most to lose from a fantasy perspective if Quickley is able to return.",
+   "status": "Questionable"
+  },
+  {
+   "player": {
+    "id": 56677823,
+    "first_name": "Brandon",
+    "last_name": "Miller",
+    "position": "F",
+    "height": "6-7",
+    "weight": "210",
+    "jersey_number": "24",
+    "college": "Alabama",
+    "country": "USA",
+    "draft_year": 2023,
+    "draft_round": 1,
+    "draft_number": 2,
+    "team_id": 4
+   },
+   "return_date": "2026-11-12",
+   "description": "Miller (groin) is listed as out for Monday's game against Cleveland. Miller suffered a groin injury in Friday's 119-80 loss to the Celtics and didn't return. More information on his condition is expected to be released by Monday. For now, Tidjane Salaun and Sion James are candidates to replace Miller in the starting lineup versus the Cavaliers.",
+   "status": "Day-To-Day"
+  },
+  {
+   "player": {
+    "id": 3547299,
+    "first_name": "Sam",
+    "last_name": "Merrill",
+    "position": "G",
+    "height": "6-4",
+    "weight": "195",
+    "jersey_number": "5",
+    "college": "Utah State",
+    "country": "USA",
+    "draft_year": 2020,
+    "draft_round": 2,
+    "draft_number": 60,
+    "team_id": 6
+   },
+   "return_date": "2026-11-16",
+   "description": "Injury/Illness - Right Elbow Injury Management (2026-11-11, CLE@NYK). Prior reporting (2026-11-10): Merrill (elbow) is listed as out for Wednesday's game against the Knicks. Merrill has battled a lingering elbow issue since the preseason. He will now miss a third consecutive contest, with his next opportunity to suit up coming Friday in Miami. While Merrill is sidelined, Craig Porter, Meleek Thomas and Tyrese Proctor should see more minutes.",
+   "status": "Out"
+  },
+  {
+   "player": {
+    "id": 297,
+    "first_name": "Lauri",
+    "last_name": "Markkanen",
+    "position": "F",
+    "height": "7-1",
+    "weight": "240",
+    "jersey_number": "23",
+    "college": "Arizona",
+    "country": "Finland",
+    "draft_year": 2017,
+    "draft_round": 1,
+    "draft_number": 7,
+    "team_id": 29
+   },
+   "return_date": "2026-11-11",
+   "description": "Injury/Illness - Right Wrist Sprain (2026-11-10, MIA@UTA). Prior reporting (2026-11-10): Markkanen is out for Tuesday's game versus the Heat with a right wrist sprain. The star forward is missing a second consecutive contest, and he faces a short turnaround to return ahead of Wednesday's tilt against the Magic. Josh Green figures to draw a second straight start, while Brice Sensabaugh and Josh Okogie should see a bump in playing time.",
+   "status": "Out"
+  },
+  {
+   "player": {
+    "id": 380,
+    "first_name": "Norman",
+    "last_name": "Powell",
+    "position": "F-G",
+    "height": "6-4",
+    "weight": "215",
+    "jersey_number": "24",
+    "college": "UCLA",
+    "country": "USA",
+    "draft_year": 2015,
+    "draft_round": 2,
+    "draft_number": 46,
+    "team_id": 5
+   },
+   "return_date": "2026-11-11",
+   "description": "Injury/Illness - Low Back Spasms (2026-11-11, SAS@CHI). Prior reporting (2026-11-10): Powell (shoulder) is listed as questionable for Wednesday's game versus the Spurs. Powell didn't suit up for Sunday's 127-121 loss to Philadelphia, marking his first absence of the 2026-27 campaign. Isaac Okoro took his place in the starting lineup, and that will likely remain the case if Powell misses a second consecutive game Wednesday.",
+   "status": "Questionable"
+  },
+  {
+   "player": {
+    "id": 56677834,
+    "first_name": "Keyonte",
+    "last_name": "George",
+    "position": "G",
+    "height": "6-5",
+    "weight": "185",
+    "jersey_number": "3",
+    "college": "Baylor",
+    "country": "USA",
+    "draft_year": 2023,
+    "draft_round": 1,
+    "draft_number": 16,
+    "team_id": 29
+   },
+   "return_date": "2026-11-11",
+   "description": "Injury/Illness - Right Ankle Sprain (2026-11-10, MIA@UTA). Prior reporting (2026-11-10): George (ankle) has been ruled out for Tuesday's game against the Heat. George sustained a right ankle sprain in Sunday's loss to Minnesota and will be sidelined for the front end of this back-to-back set. His next opportunity to play will come Wednesday against Orlando, and the 23-year-old's absence should open up additional minutes for guys like Isaiah Collier and Svi Mykhailiuk. Moreover, Darryn Peterson figures to take on additional on-ball duties.",
+   "status": "Out"
+  },
+  {
+   "player": {
+    "id": 1059875475,
+    "first_name": "Grant",
+    "last_name": "Nelson",
+    "position": "F",
+    "height": "6-10",
+    "weight": "240",
+    "jersey_number": "16",
+    "college": "Alabama",
+    "country": "USA",
+    "draft_year": null,
+    "draft_round": null,
+    "draft_number": null,
+    "team_id": 3
+   },
+   "return_date": "2026-11-10",
+   "description": "G League - Two-Way (2026-11-11, BKN@NOP). Prior reporting (2026-11-08): Nelson signed a two-way contract with the Nets on Friday, Michael Scotto of HoopsHype.com reports. Nelson appeared in four regular-season games for the Nets during the 2025-26 campaign and will link up with the franchise again. He's expected to spend the bulk of his time with their G League affiliate to open the season.",
+   "status": "Out"
+  },
+  {
+   "player": {
+    "id": 406,
+    "first_name": "Domantas",
+    "last_name": "Sabonis",
+    "position": "F",
+    "height": "6-10",
+    "weight": "240",
+    "jersey_number": "11",
+    "college": "Gonzaga",
+    "country": "Lithuania",
+    "draft_year": 2016,
+    "draft_round": 1,
+    "draft_number": 11,
+    "team_id": 26
+   },
+   "return_date": null,
+   "description": "- (2026-11-10, ORL@SAC).",
+   "status": "Available"
+  },
+  {
+   "player": {
+    "id": 1091466594,
+    "first_name": "Richie",
+    "last_name": "Saunders",
+    "position": "G",
+    "height": "6-5",
+    "weight": "200",
+    "jersey_number": "5",
+    "college": "Brigham Young",
+    "country": "USA",
+    "draft_year": 2026,
+    "draft_round": 2,
+    "draft_number": 32,
+    "team_id": 15
+   },
+   "return_date": "2026-12-01",
+   "description": "Injury/Illness - Right Knee Surgery (2026-11-11, DEN@MEM). Prior reporting (2026-11-07): Saunders signed a two-way contract with the Grizzlies on Saturday, Shams Charania of ESPN reports. Saunders is still on the mend from a torn right ACL that he suffered during his final year at BYU. However, he has been cleared for on-court activities and will be allowed to practice with the Grizzlies now that he's officially signed with the team.",
+   "status": "Out"
+  },
+  {
+   "player": {
+    "id": 3547246,
+    "first_name": "Devin",
+    "last_name": "Vassell",
+    "position": "G-F",
+    "height": "6-5",
+    "weight": "200",
+    "jersey_number": "24",
+    "college": "Florida State",
+    "country": "USA",
+    "draft_year": 2020,
+    "draft_round": 1,
+    "draft_number": 11,
+    "team_id": 27
+   },
+   "return_date": "2026-11-11",
+   "description": "Injury/Illness - Left Adductor Tightness (2026-11-11, SAS@CHI). Prior reporting (2026-11-10): Vassell (groin) is listed as questionable for Wednesday's game versus the Bulls, NBA reporter Matthew Tynan reports. Vassell missed his first game of the season in Monday's 122-96 victory over the Suns. As a result, Julian Champagnie entered the starting lineup. If Vassell remains sidelined against the Bulls, Champagnie is expected to stay with the first five.",
+   "status": "Questionable"
+  },
+  {
+   "player": {
+    "id": 1057395872,
+    "first_name": "Will",
+    "last_name": "Richard",
+    "position": "G",
+    "height": "6-3",
+    "weight": "210",
+    "jersey_number": "3",
+    "college": "Florida",
+    "country": "USA",
+    "draft_year": 2025,
+    "draft_round": 2,
+    "draft_number": 56,
+    "team_id": 10
+   },
+   "return_date": "2026-11-11",
+   "description": "Injury/Illness - Left Thumb UCL Tear (2026-11-11, GSW@HOU). Prior reporting (2026-11-10): Richard (thumb) is questionable for Wednesday's game against Houston. Richard has a chance to keep his absence to a one-game minimum with a left thumb UCL tear. It sounds like the guard is opting against surgery and will play with a splint once healthy enough to suit up.",
+   "status": "Questionable"
+  },
+  {
+   "player": {
+    "id": 17895858,
+    "first_name": "Quentin",
+    "last_name": "Grimes",
+    "position": "G",
+    "height": "6-4",
+    "weight": "207",
+    "jersey_number": "5",
+    "college": "Houston",
+    "country": "USA",
+    "draft_year": 2021,
+    "draft_round": 1,
+    "draft_number": 25,
+    "team_id": 14
+   },
+   "return_date": "2026-11-11",
+   "description": "Injury/Illness - Right Finger Sprain (2026-11-11, LAL@MIL). Prior reporting (2026-11-10): Grimes (finger) is listed as questionable for Wednesday's game in Milwaukee. Grimes injured his finger in Sunday's game against Detroit and didn't suit up for the 124-114 win over Atlanta on Monday. With Luka Doncic and Austin Reaves (illness) both available, Grimes is expected to head back to the bench. However, another absence could mean more minutes for Sandro Mamukelashvili, Ziaire Williams and Collin Sexton.",
+   "status": "Questionable"
+  },
+  {
+   "player": {
+    "id": 1057268940,
+    "first_name": "Collin",
+    "last_name": "Murray-Boyles",
+    "position": "F",
+    "height": "6-7",
+    "weight": "245",
+    "jersey_number": "30",
+    "college": "South Carolina",
+    "country": "USA",
+    "draft_year": 2025,
+    "draft_round": 1,
+    "draft_number": 9,
+    "team_id": 28
+   },
+   "return_date": "2026-11-11",
+   "description": "Injury/Illness - Illness (2026-11-11, BOS@TOR). Prior reporting (2026-11-10): Murray-Boyles (illness) is questionable for Wednesday's game against the Celtics. The Raptors are likely to check back in with Murray-Boyles closer to Wednesday's tipoff. Jamison Battle would handle an expanded role in the frontcourt if Murray-Boyles ends up sitting out.",
+   "status": "Questionable"
+  },
+  {
+   "player": {
+    "id": 1091341156,
+    "first_name": "Morez",
+    "last_name": "Johnson",
+    "position": "F",
+    "height": "6-10",
+    "weight": "250",
+    "jersey_number": "14",
+    "college": "Michigan",
+    "country": "USA",
+    "draft_year": 2026,
+    "draft_round": 1,
+    "draft_number": 9,
+    "team_id": 7
+   },
+   "return_date": "2026-11-12",
+   "description": "Johnson (leg) has been ruled out for Monday's game against the Pacers. Johnson will miss his first game of the 2026-27 campaign after tallying four points, nine rebounds and one assist in 19 minutes in the first half of a back-to-back set Sunday against Brooklyn. His absence could open up more minutes for Santi Aldama and Moussa Cisse behind starting center Daniel Gafford.",
+   "status": "Day-To-Day"
+  },
+  {
+   "player": {
+    "id": 2189,
+    "first_name": "Gary",
+    "last_name": "Payton II",
+    "position": "G",
+    "height": "6-2",
+    "weight": "192",
+    "jersey_number": "0",
+    "college": "Oregon State",
+    "country": "USA",
+    "draft_year": null,
+    "draft_round": null,
+    "draft_number": null,
+    "team_id": 10
+   },
+   "return_date": "2026-11-13",
+   "description": "Injury/Illness - Left Knee Inflammation (2026-11-11, GSW@HOU). Prior reporting (2026-11-10): Payton (knee) is out for Wednesday's game against Houston. Payton is sidelined for a second consecutive contest with knee inflammation. Will Richard (thumb) could slot into Payton's spot in the backcourt rotation Wednesday.",
+   "status": "Out"
+  },
+  {
+   "player": {
+    "id": 18677986,
+    "first_name": "Trey",
+    "last_name": "Murphy III",
+    "position": "F",
+    "height": "6-9",
+    "weight": "220",
+    "jersey_number": "25",
+    "college": "Virginia",
+    "country": "USA",
+    "draft_year": 2021,
+    "draft_round": 1,
+    "draft_number": 17,
+    "team_id": 19
+   },
+   "return_date": "2026-11-11",
+   "description": "Injury/Illness - Bilateral Patellar Tendinopathy (2026-11-11, BKN@NOP). Prior reporting (2026-11-10): Murphy (knee) is probable for Wednesday's game against the Nets. The star forward sat out the second leg of the Pelicans' latest back-to-back set due to bilateral patellar tendinopathy, but he's set to return to action Wednesday. Saddiq Bey is likely to shift back to bench but should maintain a significant role.",
+   "status": "Probable"
+  },
+  {
+   "player": {
+    "id": 17896058,
+    "first_name": "Trendon",
+    "last_name": "Watford",
+    "position": "F",
+    "height": "6-9",
+    "weight": "244",
+    "jersey_number": "12",
+    "college": "Louisiana State",
+    "country": "USA",
+    "draft_year": null,
+    "draft_round": null,
+    "draft_number": null,
+    "team_id": 19
+   },
+   "return_date": "2026-11-13",
+   "description": "Injury/Illness - Right Ankle Sprain (2026-11-11, BKN@NOP). Prior reporting (2026-11-10): Watford (ankle) is out for Wednesday's game against the Nets. Watford continues to nurse a right ankle sprain. The forward lacks a concrete timetable for a return to the floor.",
+   "status": "Out"
+  },
+  {
+   "player": {
+    "id": 666633,
+    "first_name": "Tyler",
+    "last_name": "Herro",
+    "position": "G",
+    "height": "6-5",
+    "weight": "195",
+    "jersey_number": "11",
+    "college": "Kentucky",
+    "country": "USA",
+    "draft_year": 2019,
+    "draft_round": 1,
+    "draft_number": 13,
+    "team_id": 17
+   },
+   "return_date": "2026-11-11",
+   "description": "Herro (knee) is listed as out for Tuesday's game against New York. Herro was listed as questionable ahead of this contest. However, he has been downgraded to out, meaning his next opportunity to suit up will come Wednesday versus the Lakers. With Herro sidelined, Ryan Rollins could enter the starting lineup for the first time since the 136-111 loss to Cleveland on Oct. 31.",
+   "status": "Out"
+  },
+  {
+   "player": {
+    "id": 15,
+    "first_name": "Giannis",
+    "last_name": "Antetokounmpo",
+    "position": "F",
+    "height": "6-11",
+    "weight": "250",
+    "jersey_number": "7",
+    "college": "Filathlitikos",
+    "country": "Greece",
+    "draft_year": 2013,
+    "draft_round": 1,
+    "draft_number": 15,
+    "team_id": 16
+   },
+   "return_date": null,
+   "description": "Injury/Illness - Right Wrist Sprain (2026-11-10, MIA@UTA).",
+   "status": "Available"
+  },
+  {
+   "player": {
+    "id": 1028035215,
+    "first_name": "Cam",
+    "last_name": "Christie",
+    "position": "G",
+    "height": "6-5",
+    "weight": "190",
+    "jersey_number": "24",
+    "college": "Minnesota",
+    "country": "USA",
+    "draft_year": 2024,
+    "draft_round": 2,
+    "draft_number": 46,
+    "team_id": 13
+   },
+   "return_date": "2026-11-13",
+   "description": "Injury/Illness - Right Ankle Sprain (2026-11-10, LAC@PHX). Prior reporting (2026-11-11): Christie (ankle) is listed as out for Tuesday's game against Phoenix. Christie will miss his fifth game of the 2026-27 campaign. The 21-year-old rookie has averaged only 6.0 minutes per contest in his five regular-season appearances, so his absence won't have much of an effect on the rotation.",
+   "status": "Out"
+  },
+  {
+   "player": {
+    "id": 1091475805,
+    "first_name": "Nick",
+    "last_name": "Martinelli",
+    "position": "F",
+    "height": "6-7",
+    "weight": "220",
+    "jersey_number": "12",
+    "college": "Northwestern",
+    "country": "USA",
+    "draft_year": 2026,
+    "draft_round": 2,
+    "draft_number": 55,
+    "team_id": 13
+   },
+   "return_date": null,
+   "description": "G League - Two-Way (2026-11-10, LAC@PHX).",
+   "status": "Out"
+  },
+  {
+   "player": {
+    "id": 1028203085,
+    "first_name": "Trey",
+    "last_name": "Alexander",
+    "position": "G",
+    "height": "6-5",
+    "weight": "185",
+    "jersey_number": "23",
+    "college": "Creighton",
+    "country": "USA",
+    "draft_year": null,
+    "draft_round": null,
+    "draft_number": null,
+    "team_id": 29
+   },
+   "return_date": null,
+   "description": "G League - Two-Way (2026-11-10, MIA@UTA).",
+   "status": "Out"
+  },
+  {
+   "player": {
+    "id": 56677838,
+    "first_name": "Kobe",
+    "last_name": "Bufkin",
+    "position": "G",
+    "height": "6-5",
+    "weight": "195",
+    "jersey_number": "44",
+    "college": "Michigan",
+    "country": "USA",
+    "draft_year": 2023,
+    "draft_round": 1,
+    "draft_number": 15,
+    "team_id": 29
+   },
+   "return_date": null,
+   "description": "G League - Two-Way (2026-11-10, MIA@UTA).",
+   "status": "Available"
+  },
+  {
+   "player": {
+    "id": 1028046464,
+    "first_name": "Harrison",
+    "last_name": "Ingram",
+    "position": "F",
+    "height": "6-5",
+    "weight": "230",
+    "jersey_number": "55",
+    "college": "North Carolina",
+    "country": "USA",
+    "draft_year": 2024,
+    "draft_round": 2,
+    "draft_number": 48,
+    "team_id": 29
+   },
+   "return_date": null,
+   "description": "G League - Two-Way (2026-11-10, MIA@UTA).",
+   "status": "Available"
+  },
+  {
+   "player": {
+    "id": 1028037494,
+    "first_name": "Jonathan",
+    "last_name": "Mogbo",
+    "position": "F",
+    "height": "6-7",
+    "weight": "225",
+    "jersey_number": "2",
+    "college": "San Francisco",
+    "country": "USA",
+    "draft_year": 2024,
+    "draft_round": 2,
+    "draft_number": 31,
+    "team_id": 26
+   },
+   "return_date": null,
+   "description": "G League - Two-Way (2026-11-10, ORL@SAC).",
+   "status": "Out"
+  },
+  {
+   "player": {
+    "id": 38017688,
+    "first_name": "Keegan",
+    "last_name": "Murray",
+    "position": "F",
+    "height": "6-8",
+    "weight": "225",
+    "jersey_number": "13",
+    "college": "Iowa",
+    "country": "USA",
+    "draft_year": 2022,
+    "draft_round": 1,
+    "draft_number": 4,
+    "team_id": 26
+   },
+   "return_date": null,
+   "description": "- (2026-11-10, ORL@SAC).",
+   "status": "Available"
+  },
+  {
+   "player": {
+    "id": 1058921044,
+    "first_name": "Sean",
+    "last_name": "Pedulla",
+    "position": "G",
+    "height": "6-1",
+    "weight": "197",
+    "jersey_number": "0",
+    "college": "Mississippi",
+    "country": "USA",
+    "draft_year": null,
+    "draft_round": null,
+    "draft_number": null,
+    "team_id": 26
+   },
+   "return_date": null,
+   "description": "G League - Two-Way (2026-11-10, ORL@SAC).",
+   "status": "Out"
+  },
+  {
+   "player": {
+    "id": 1028028932,
+    "first_name": "Nikola",
+    "last_name": "Topic",
+    "position": "G",
+    "height": "6-6",
+    "weight": "200",
+    "jersey_number": "44",
+    "college": "Crvena zvezda",
+    "country": "Serbia",
+    "draft_year": 2024,
+    "draft_round": 1,
+    "draft_number": 12,
+    "team_id": 21
+   },
+   "return_date": null,
+   "description": "G League - On Assignment (2026-11-10, OKC@POR).",
+   "status": "Out"
+  },
+  {
+   "player": {
+    "id": 1057396603,
+    "first_name": "John",
+    "last_name": "Tonje",
+    "position": "G",
+    "height": "6-4",
+    "weight": "218",
+    "jersey_number": "8",
+    "college": "Wisconsin",
+    "country": "USA",
+    "draft_year": 2025,
+    "draft_round": 2,
+    "draft_number": 53,
+    "team_id": 25
+   },
+   "return_date": null,
+   "description": "G League - Two-Way (2026-11-10, OKC@POR).",
+   "status": "Out"
+  },
+  {
+   "player": {
+    "id": 1028047928,
+    "first_name": "Quinten",
+    "last_name": "Post",
+    "position": "C",
+    "height": "7-0",
+    "weight": "238",
+    "jersey_number": "21",
+    "college": "Boston College",
+    "country": "Netherlands",
+    "draft_year": 2024,
+    "draft_round": 2,
+    "draft_number": 52,
+    "team_id": 15
+   },
+   "return_date": "2026-11-13",
+   "description": "Injury/Illness - Concussion Protocol (2026-11-11, DEN@MEM). Prior reporting (2026-11-10): Post (concussion) has been ruled out for Wednesday's game against the Nuggets. Post suffered a concussion during Monday's 118-102 win over the Raptors, and now he will have to clear a series of steps before he's allowed to return to the court. Taylor Hendricks will help pick up the slack while Post is sidelined.",
+   "status": "Out"
+  },
+  {
+   "player": {
+    "id": 24489167,
+    "first_name": "Brandon",
+    "last_name": "Williams",
+    "position": "G",
+    "height": "6-1",
+    "weight": "185",
+    "jersey_number": "10",
+    "college": "Arizona",
+    "country": "USA",
+    "draft_year": null,
+    "draft_round": null,
+    "draft_number": null,
+    "team_id": 10
+   },
+   "return_date": "2026-11-22",
+   "description": "Injury/Illness - Left Hamstring Strain (2026-11-11, GSW@HOU). Prior reporting (2026-11-10): Williams (hamstring) will miss at least one week, per Anthony Slater of ESPN.com. Williams has been diagnosed with a hamstring strain in the aftermath of Monday's game against the Pelicans, and his status for Golden State's upcoming five-game road trip is in serious doubt. With Williams facing an extended absence, the Warriors are likely to lean more on De'Anthony Melton in the backourt.",
+   "status": "Out"
+  },
+  {
+   "player": {
+    "id": 1028025497,
+    "first_name": "Tristan",
+    "last_name": "Da Silva",
+    "position": "F",
+    "height": "6-8",
+    "weight": "217",
+    "jersey_number": "23",
+    "college": "Colorado",
+    "country": "Germany",
+    "draft_year": 2024,
+    "draft_round": 1,
+    "draft_number": 18,
+    "team_id": 22
+   },
+   "return_date": "2026-11-11",
+   "description": "Injury/Illness - Left Calf Strain (2026-11-10, ORL@SAC). Prior reporting (2026-11-11): Da Silva (calf) has been ruled out for Tuesday's game against the Kings, Jason Beede of the Orlando Sentinel reports. Da Silva was questionable to suit up due to a left calf strain, and he will indeed miss his first contest of the 2026-27 campaign with the ailment. Tuesday is the first night of a back-to-back set for Orlando, so the hope is that he'll be able to return for the road tilt against Utah. Jase Richardson, Jamal Cain and Jevon Carter should all see an uptick in minutes, but we'll have to wait for confirmation on who's replacing da Silva in the starting lineup.",
+   "status": "Out"
+  },
+  {
+   "player": {
+    "id": 1094002723,
+    "first_name": "Malik",
+    "last_name": "Dia",
+    "position": "F",
+    "height": "6-9",
+    "weight": "256",
+    "jersey_number": "8",
+    "college": "Mississippi",
+    "country": "USA",
+    "draft_year": null,
+    "draft_round": null,
+    "draft_number": null,
+    "team_id": 19
+   },
+   "return_date": null,
+   "description": "G League - Two-Way (2026-11-11, BKN@NOP).",
+   "status": "Doubtful"
+  },
+  {
+   "player": {
+    "id": 1091481720,
+    "first_name": "Jaron",
+    "last_name": "Pierre Jr.",
+    "position": "G",
+    "height": "6-6",
+    "weight": "206",
+    "jersey_number": "10",
+    "college": "Southern Methodist",
+    "country": "USA",
+    "draft_year": 2026,
+    "draft_round": 2,
+    "draft_number": 58,
+    "team_id": 19
+   },
+   "return_date": null,
+   "description": "G League - Two-Way (2026-11-11, BKN@NOP).",
+   "status": "Doubtful"
+  },
+  {
+   "player": {
+    "id": 1076658911,
+    "first_name": "Jayson",
+    "last_name": "Kent",
+    "position": "F",
+    "height": "6-8",
+    "weight": "215",
+    "jersey_number": "29",
+    "college": "Texas",
+    "country": "USA",
+    "draft_year": null,
+    "draft_round": null,
+    "draft_number": null,
+    "team_id": 25
+   },
+   "return_date": null,
+   "description": "G League - Two-Way (2026-11-10, OKC@POR).",
+   "status": "Out"
+  }
+ ],
+ "meta": {
+  "next_cursor": 15504814,
+  "per_page": 100
+ }
+}

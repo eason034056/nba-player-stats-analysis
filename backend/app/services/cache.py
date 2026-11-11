@@ -24,14 +24,26 @@ class CacheService:
     - build_key: construct cache key
     """
 
-    def __init__(self):
+    def __init__(
+        self,
+        *,
+        socket_timeout: Optional[float] = None,
+        socket_connect_timeout: Optional[float] = None,
+    ):
         """
         Initialize the cache service.
 
         Note: The actual Redis connection is established lazily
         and will only be set on the first usage.
+
+        Args:
+            socket_timeout: Seconds a Redis command may block. None
+                leaves the client default. The injury reader sets this.
+            socket_connect_timeout: Seconds the TCP connect may block.
         """
         self._client: Optional[redis.Redis] = None
+        self._socket_timeout = socket_timeout
+        self._socket_connect_timeout = socket_connect_timeout
 
     async def get_client(self) -> redis.Redis:
         """
@@ -47,10 +59,12 @@ class CacheService:
             Redis client instance
         """
         if self._client is None:
-            self._client = redis.from_url(
-                settings.redis_url,
-                decode_responses=True  # Auto-decode to string
-            )
+            kwargs: dict[str, Any] = {"decode_responses": True}
+            if self._socket_timeout is not None:
+                kwargs["socket_timeout"] = self._socket_timeout
+            if self._socket_connect_timeout is not None:
+                kwargs["socket_connect_timeout"] = self._socket_connect_timeout
+            self._client = redis.from_url(settings.redis_url, **kwargs)
         return self._client
 
     async def get(self, key: str) -> Optional[Any]:
