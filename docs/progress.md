@@ -84,7 +84,7 @@ flowchart LR
 |---|---|---|
 | 主線 | 一本書一票。雙邊、最接近五五波（去水後）。距離相同留較低的點。不把兩個不同的點平均 | `backend/app/services/daily_analysis.py` `_main_book_line` |
 | 共識線 | 每本書先投自己的主線，再取眾數。平手留最接近五五波的點，再留較低的點。不把兩個點平均 | `backend/app/services/prob.py` `calculate_mode_threshold` |
-| 標題機率 | `probability` 仍是該線的歷史命中率。NBA 畫面上旁邊的數字是 `combined_probability`，見下段 | `DailyPick.probability` |
+| 標題機率 | `probability` 仍是該線的歷史命中率。NBA 畫面上旁邊的數字改為 `combined_probability`，見下段 | `DailyPick.probability` |
 | 去水 | modal line 的 no-vig。這是 market 輸入，不是標題 | `backend/app/services/pick_signals.py` `resolve_market_probability` |
 | 五個 signals | market、last 10、history、projection、defense。缺資料是 null，不是中性 | `backend/app/services/pick_signals.py` |
 | combined | `sigmoid(logit(market) + Platt(四項調整之和))`。市場係數是 1。Platt 只乘調整項 | `pick_signals.combined_probability` |
@@ -103,7 +103,7 @@ flowchart LR
 
 預設看板仍是 0.65、至少 10 場。NBA 這道 0.65 看 `combined_probability`。低於歷史 0.56 的列仍不進儲存。NBA 仍把歷史 Lean 和 5 場的列存進 Redis。預設查詢要 blend 過 0.65 且至少 10 場，所以歷史 Lean 可以上看板。
 
-NBA 畫面上，tier 用後端送來的字串。Today、Picks、比賽頁、Bet Slip（含總計）的卡片百分比都用 `formatTierPercent` 無條件捨去，例如 `0.697` 印 `69%`。blend 是 null 才退回 `probability`。有 blend、沒有 tier 時，`nbaTierFace` 仍走 `formatPercent`（`0.697` 印 `70%`），Bet Slip 的 `slipFace` 則是 `69%`。vig 維持一位小數。EV 的格式仍等 Eason 決定。WNBA 仍用 `readTier`，精選頁仍寫沒有 blended probability。About 仍把 blend 標成 planned。真實盤口的校正還沒過（SPO-112）。
+NBA 畫面上，tier 用後端送來的字串。Today、Picks、比賽頁、Bet Slip（含總計）的卡片百分比都用 `formatTierPercent` 無條件捨去，例如 `0.697` 印 `69%`。blend 是 null 才退回 `probability`。有 blend、沒有 tier 時還沒統一，見進行中：`nbaTierFace` 仍走 `formatPercent`（Today、Picks、比賽頁把 `0.697` 印成 `70%`），Bet Slip 的 `slipFace` 則是 `69%`。vig 維持一位小數。EV 的格式仍等 Eason 決定。WNBA 仍用 `readTier`，精選頁仍寫沒有 blended probability。About 仍把 blend 標成 planned。真實盤口的校正還沒過（SPO-112）。
 
 ## 現況
 
@@ -136,6 +136,7 @@ SPO-10 與 SPO-11 在 `dev` `6688384` 驗證：backend 1041 passed、23 skipped�
 | 項目 | 狀態 |
 |---|---|
 | SPO-120b | #55 仍開著。賽事頁的設計對齊。要在 #57 之後合（#57 已在 `dev`） |
+| #57 / #55 | `nbaTierFace` 在有 blend、沒有 tier 時仍四捨五入。#55 合入 #57 後改用 `formatTierPercent`，讓各頁一致 |
 
 ### 已關閉、未合併
 
