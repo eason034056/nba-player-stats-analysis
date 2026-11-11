@@ -55,9 +55,10 @@ import {
 } from "./agent-chat";
 import { BROWSER_API_PREFIX } from "./browser-api-prefix";
 
-// 瀏覽器只打這個同源路徑。後端 origin 在 next.config.js 的 rewrite
-// （BACKEND_API_URL），不進 client bundle。本機沒設變數時，rewrite
-// 指向 http://localhost:8000。Vercel build 缺變數會失敗，不會偷偷指回本機。
+// 瀏覽器只打這個同源路徑。middleware.ts 把請求轉到 BACKEND_API_URL，
+// 並加上伺服器才看得到的 proxy secret。本機沒設變數時轉到
+// http://localhost:8000，而且不帶 secret。Vercel build 缺 origin 或
+// secret 會失敗，不會偷偷指回本機。
 const API_BASE_URL = BROWSER_API_PREFIX;
 
 /**

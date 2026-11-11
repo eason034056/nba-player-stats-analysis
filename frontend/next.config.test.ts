@@ -17,13 +17,14 @@ const resolveConfig = (phase: string) =>
     ? nextConfigModule(phase, { defaultConfig: {} })
     : nextConfigModule;
 
-const ENV_KEYS = ["VERCEL", "VERCEL_ENV", "BACKEND_API_URL"] as const;
+const ENV_KEYS = ["VERCEL", "VERCEL_ENV", "BACKEND_API_URL", "VERCEL_PROXY_SECRET"] as const;
 
 function snapshotEnv(): Record<(typeof ENV_KEYS)[number], string | undefined> {
   return {
     VERCEL: process.env.VERCEL,
     VERCEL_ENV: process.env.VERCEL_ENV,
     BACKEND_API_URL: process.env.BACKEND_API_URL,
+    VERCEL_PROXY_SECRET: process.env.VERCEL_PROXY_SECRET,
   };
 }
 
@@ -57,98 +58,126 @@ async function withEnv<T>(
   }
 }
 
-async function rewritesFor(phase: string) {
-  const config = resolveConfig(phase);
-  return config.rewrites();
-}
+const localPatch = {
+  VERCEL: undefined,
+  VERCEL_ENV: undefined,
+  BACKEND_API_URL: undefined,
+  VERCEL_PROXY_SECRET: undefined,
+};
 
 describe("next.config", () => {
-  it("isolates development output from production output", () => {
-    const developmentConfig = resolveConfig(PHASE_DEVELOPMENT_SERVER);
-    const productionBuildConfig = resolveConfig(PHASE_PRODUCTION_BUILD);
+  it("isolates development output from production output", async () => {
+    await withEnv(localPatch, async () => {
+      const developmentConfig = resolveConfig(PHASE_DEVELOPMENT_SERVER);
+      const productionBuildConfig = resolveConfig(PHASE_PRODUCTION_BUILD);
 
-    expect(developmentConfig.distDir).toBe(".next-dev");
-    expect(productionBuildConfig.distDir).toBe(".next");
+      expect(developmentConfig.distDir).toBe(".next-dev");
+      expect(productionBuildConfig.distDir).toBe(".next");
+    });
   });
 
-  it("does not bake a public API URL into the client bundle", () => {
-    const config = resolveConfig(PHASE_PRODUCTION_BUILD);
-    expect(config.env).toBeUndefined();
-    expect(BROWSER_API_PREFIX).toBe("/api/backend");
+  it("does not bake a public API URL into the client bundle", async () => {
+    await withEnv(localPatch, async () => {
+      const config = resolveConfig(PHASE_PRODUCTION_BUILD);
+      expect(config.env).toBeUndefined();
+      expect(BROWSER_API_PREFIX).toBe("/api/backend");
+    });
   });
 
-  it("raises the local rewrite proxy timeout to the Vercel 120s cap", () => {
-    const config = resolveConfig(PHASE_DEVELOPMENT_SERVER);
-    expect(config.experimental.proxyTimeout).toBe(120_000);
+  it("raises the local rewrite proxy timeout to the Vercel 120s cap", async () => {
+    await withEnv(localPatch, async () => {
+      const config = resolveConfig(PHASE_DEVELOPMENT_SERVER);
+      expect(config.experimental.proxyTimeout).toBe(120_000);
+    });
   });
 
-  it("defaults the rewrite to localhost when no Vercel env is set", async () => {
+  it("loads a local config with no rewrite table and no public API URL", async () => {
     await withEnv(
-      { VERCEL: undefined, VERCEL_ENV: undefined, BACKEND_API_URL: undefined },
+      {
+        VERCEL: undefined,
+        VERCEL_ENV: undefined,
+        BACKEND_API_URL: undefined,
+        VERCEL_PROXY_SECRET: undefined,
+      },
       async () => {
-        const development = await rewritesFor(PHASE_DEVELOPMENT_SERVER);
-        const production = await rewritesFor(PHASE_PRODUCTION_BUILD);
-        const expected = [
-          {
-            source: "/api/backend/:path*",
-            destination: `${LOCAL_BACKEND_ORIGIN}/:path*`,
-          },
-        ];
-        expect(development).toEqual(expected);
-        expect(production).toEqual(expected);
+        const config = resolveConfig(PHASE_PRODUCTION_BUILD);
+        expect(config.rewrites).toBeUndefined();
+        expect(config.env).toBeUndefined();
+        expect(LOCAL_BACKEND_ORIGIN).toBe("http://localhost:8000");
       },
     );
   });
 
-  it("builds the rewrite destination from BACKEND_API_URL", async () => {
+  it("loads a Vercel config when the origin is https and the proxy secret is set", async () => {
     await withEnv(
       {
         VERCEL: "1",
         VERCEL_ENV: "production",
         BACKEND_API_URL: "https://api.example.com/",
+        VERCEL_PROXY_SECRET: "build-time-secret",
       },
       async () => {
-        const rewrites = await rewritesFor(PHASE_PRODUCTION_BUILD);
-        expect(rewrites).toEqual([
-          {
-            source: `${BROWSER_API_PREFIX}/:path*`,
-            destination: "https://api.example.com/:path*",
-          },
-        ]);
+        const config = resolveConfig(PHASE_PRODUCTION_BUILD);
+        expect(config.rewrites).toBeUndefined();
       },
     );
   });
 
   it("throws on a Vercel build when BACKEND_API_URL is missing", async () => {
     const cases = [
-      { VERCEL: "1", VERCEL_ENV: undefined, BACKEND_API_URL: undefined },
-      { VERCEL: undefined, VERCEL_ENV: "preview", BACKEND_API_URL: undefined },
-      { VERCEL: "1", VERCEL_ENV: "production", BACKEND_API_URL: "   " },
+      { VERCEL: "1", VERCEL_ENV: undefined, BACKEND_API_URL: undefined, VERCEL_PROXY_SECRET: "build-time-secret" },
+      { VERCEL: undefined, VERCEL_ENV: "preview", BACKEND_API_URL: undefined, VERCEL_PROXY_SECRET: "build-time-secret" },
+      { VERCEL: "1", VERCEL_ENV: "production", BACKEND_API_URL: "   ", VERCEL_PROXY_SECRET: "build-time-secret" },
     ];
 
     for (const patch of cases) {
       await withEnv(patch, async () => {
-        await expect(rewritesFor(PHASE_PRODUCTION_BUILD)).rejects.toThrow(
-          /BACKEND_API_URL is required/,
-        );
-        await expect(rewritesFor(PHASE_PRODUCTION_BUILD)).rejects.toThrow(
+        expect(() => resolveConfig(PHASE_PRODUCTION_BUILD)).toThrow(/BACKEND_API_URL is required/);
+        expect(() => resolveConfig(PHASE_PRODUCTION_BUILD)).toThrow(
           /will not fall back to http:\/\/localhost:8000/,
         );
       });
     }
   });
 
-  it("rejects a backend URL that is not an origin", async () => {
+  it("rejects http and a path on a Vercel build without echoing the value", async () => {
+    await withEnv(
+      {
+        VERCEL: "1",
+        VERCEL_ENV: "preview",
+        BACKEND_API_URL: "http://api.example.com",
+        VERCEL_PROXY_SECRET: "build-time-secret",
+      },
+      async () => {
+        expect(() => resolveConfig(PHASE_PRODUCTION_BUILD)).toThrow(
+          "BACKEND_API_URL must use https on a Vercel build.",
+        );
+      },
+    );
+
     await withEnv(
       {
         VERCEL: "1",
         VERCEL_ENV: "preview",
         BACKEND_API_URL: "https://api.example.com/api",
+        VERCEL_PROXY_SECRET: "build-time-secret",
       },
       async () => {
-        await expect(rewritesFor(PHASE_PRODUCTION_BUILD)).rejects.toThrow(
-          /origin with no path/,
-        );
+        expect(() => resolveConfig(PHASE_PRODUCTION_BUILD)).toThrow(/origin with no path/);
+      },
+    );
+  });
+
+  it("throws on a Vercel build when VERCEL_PROXY_SECRET is missing", async () => {
+    await withEnv(
+      {
+        VERCEL: "1",
+        VERCEL_ENV: "production",
+        BACKEND_API_URL: "https://api.example.com",
+        VERCEL_PROXY_SECRET: undefined,
+      },
+      async () => {
+        expect(() => resolveConfig(PHASE_PRODUCTION_BUILD)).toThrow(/VERCEL_PROXY_SECRET is required/);
       },
     );
   });

@@ -1,9 +1,9 @@
 /**
  * backend-origin.js
  *
- * Resolves the backend origin for the Next.js rewrite. next.config.js
- * is the only application importer. Client code must not import this
- * file: BACKEND_API_URL is server-only.
+ * Resolves the backend origin for the /api/backend proxy.
+ * proxy-request.js is the application importer. Client code must not
+ * import this file: BACKEND_API_URL is server-only.
  *
  * Local `next dev` and `next build` (VERCEL and VERCEL_ENV unset) use
  * http://localhost:8000 when BACKEND_API_URL is empty. A Vercel build
@@ -35,7 +35,11 @@ function resolveBackendOrigin(env = process.env) {
   }
 
   if (raw) {
-    return normalizeBackendOrigin(raw);
+    const origin = normalizeBackendOrigin(raw);
+    if (isVercelBuild(env) && !origin.startsWith("https://")) {
+      throw new Error("BACKEND_API_URL must use https on a Vercel build.");
+    }
+    return origin;
   }
 
   if (isVercelBuild(env)) {
@@ -56,7 +60,7 @@ function normalizeBackendOrigin(value) {
     url = new URL(value);
   } catch {
     throw new Error(
-      `BACKEND_API_URL must be an absolute http(s) origin. Received: ${value}`,
+      "BACKEND_API_URL must be an absolute http(s) origin, for example https://api.example.com.",
     );
   }
 
@@ -93,6 +97,7 @@ function buildBackendRewrite(env = process.env) {
 
 module.exports = {
   LOCAL_BACKEND_ORIGIN,
+  isVercelBuild,
   resolveBackendOrigin,
   buildBackendRewrite,
 };
