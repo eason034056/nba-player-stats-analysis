@@ -18,6 +18,16 @@ output "app_security_group_id" {
   value       = aws_security_group.app.id
 }
 
+output "vpc_id" {
+  description = "VPC of the security groups and the RDS subnet group. The default VPC when var.vpc_id is null."
+  value       = local.vpc_id
+}
+
+output "public_subnet_ids" {
+  description = "Subnet ids in that VPC with MapPublicIpOnLaunch true. SPO-133 places the backend EC2 instance in one of these."
+  value       = local.public_subnet_ids
+}
+
 output "runtime_s3_policy_json" {
   description = "Runtime IAM policy (Get/Put/List on the four prefixes, no delete). Access keys are not created here."
   value       = data.aws_iam_policy_document.runtime.json

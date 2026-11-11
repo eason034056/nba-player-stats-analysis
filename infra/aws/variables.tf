@@ -9,6 +9,17 @@ variable "region" {
   }
 }
 
+variable "vpc_id" {
+  type        = string
+  default     = null
+  description = "VPC for the security groups and the RDS subnet group. Null uses the region's default VPC. Set this when the account has no default VPC. An empty string is rejected; omit the variable to keep the default."
+
+  validation {
+    condition     = var.vpc_id == null || can(regex("^vpc-[0-9a-f]{8,17}$", var.vpc_id))
+    error_message = "vpc_id must be null, or a VPC id matching vpc- plus 8 to 17 lowercase hex digits (for example vpc-0123456789abcdef0). Leave it unset to use the default VPC. An empty string is not null and is rejected."
+  }
+}
+
 variable "project" {
   type        = string
   default     = "sportslab"
