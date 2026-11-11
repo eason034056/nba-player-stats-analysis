@@ -35,6 +35,10 @@ export function BookmakerSelect({
 }: BookmakerSelectProps) {
   const isAllSelected = value.length === 0;
   const [showOthers, setShowOthers] = useState(false);
+  const [mobileOpen, setMobileOpen] = useState(false);
+  const mobileSummary = isAllSelected
+    ? `All ${BOOKMAKERS.length} bookmakers`
+    : `${value.length} of ${BOOKMAKERS.length} bookmakers`;
 
   const toggleSelectAll = () => {
     if (isAllSelected) {
@@ -65,6 +69,17 @@ export function BookmakerSelect({
 
   return (
     <div className={cn(disabled && "opacity-50 pointer-events-none")}>
+      <button
+        type="button"
+        data-testid="bookmaker-mobile-toggle"
+        aria-expanded={mobileOpen}
+        onClick={() => setMobileOpen((open) => !open)}
+        className="flex min-h-11 w-full items-center justify-between gap-3 rounded-full border border-line bg-white px-4 text-left text-sm font-semibold text-ink md:hidden"
+      >
+        <span className="min-w-0 truncate">Bookmakers · {mobileSummary}</span>
+        <ChevronDown className={cn("h-4 w-4 shrink-0", mobileOpen && "rotate-180")} />
+      </button>
+      <div data-testid="bookmaker-picker" className={cn(!mobileOpen && "max-md:hidden")}>
       {/* Label */}
       <label className="control-label mb-3">
         <Building2 className="h-4 w-4 text-red" />
@@ -165,9 +180,10 @@ export function BookmakerSelect({
         {isAllSelected ? (
           <>Will query all {BOOKMAKERS.length} bookmakers</>
         ) : (
-          <>Selected <span className="text-dark font-bold">{value.length}</span> / {BOOKMAKERS.length}</>
+          <>Selected <span className="text-dark font-bold">{value.length}</span> / {BOOKMAKERS.length}        </>
         )}
       </p>
+      </div>
     </div>
   );
 }

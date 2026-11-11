@@ -163,6 +163,18 @@ describe("DailyPicksBoard", () => {
     const card = screen.getByRole("link", { name: "Bam Adebayo" }).closest("article");
     expect(card?.className).toContain("flex-col");
     expect(card?.className).toContain("md:flex-row");
+    const prop = card?.querySelector("[data-testid='pick-prop']");
+    const player = card?.querySelector("[data-testid='pick-player']");
+    const rate = card?.querySelector("[data-testid='pick-rate']");
+    expect(prop?.className).toContain("md:basis-[220px]");
+    expect(prop?.className).toContain("md:flex-1");
+    expect(prop?.className).not.toMatch(/(?:^|\s)basis-\[220px\](?:\s|$)/);
+    expect(prop?.className).not.toMatch(/(?:^|\s)flex-1(?:\s|$)/);
+    expect(player?.className).toContain("md:basis-[240px]");
+    expect(player?.className).toContain("md:flex-1");
+    expect(player?.className).not.toMatch(/(?:^|\s)flex-1(?:\s|$)/);
+    expect(rate?.className).toContain("md:flex-[0_1_150px]");
+    expect(rate?.className).not.toMatch(/(?:^|\s)flex-\[0_1_150px\](?:\s|$)/);
     const confidence = screen.getByRole("group", { name: "Confidence" });
     expect(confidence.className).toContain("overflow-x-auto");
     expect(confidence.className).toContain("md:flex-wrap");
