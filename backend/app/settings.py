@@ -72,9 +72,9 @@ class Settings(BaseSettings):
     # Shared with the Vercel rewrite. Empty means x-real-ip and
     # x-forwarded-for are never trusted. Loaded on EC2 from SSM.
     vercel_proxy_secret: SecretStr = SecretStr("")
-    # False locally and in tests. deploy/docker-compose.prod.yml sets true,
-    # which wins over the env file. When true, every route except the health
-    # checks requires x-sportslab-proxy-secret.
+    # False locally, in tests, and in deploy/docker-compose.prod.yml. That
+    # compose value wins over the env file. When true, every route except the
+    # health checks requires x-sportslab-proxy-secret.
     proxy_secret_required: bool = False
 
     # Whole agent-chat request, including a slip or board of several graphs.

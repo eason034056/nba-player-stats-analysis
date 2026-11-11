@@ -46,7 +46,7 @@ services:
       DATABASE_REQUIRED: "true"
       # Pinned false so an SSM value cannot turn the check on. The frontend
       # in this repo still calls the API from the browser. Flip this to
-      # "true" only after Vercel serves Frontend #63 (7c034de).
+      # "true" only after Vercel serves Frontend #63 (88f1c66).
       PROXY_SECRET_REQUIRED: "false"
     # uvicorn 0.30 matches --forwarded-allow-ips as an exact peer address, not a
     # CIDR. 172.30.133.10 is Caddy. The subnet below is pinned so that address
