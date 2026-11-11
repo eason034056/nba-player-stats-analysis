@@ -137,7 +137,7 @@ describe("QA: caption, rail, and action bar keep the two sources apart", () => {
       </>,
     );
     expect(screen.getByTestId("player-row-Bam Adebayo")).not.toHaveTextContent("History");
-    const other = screen.getByRole("button", { name: "Under 33%" });
+    const other = screen.getByRole("button", { name: "Under 32%" });
     expect(other).not.toHaveTextContent("History");
     expect(other).not.toHaveTextContent("41%");
     expect(other).not.toHaveTextContent("67%");

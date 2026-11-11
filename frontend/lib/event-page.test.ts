@@ -576,7 +576,7 @@ describe("NBA read uses the backend tier", () => {
     expect(model.other?.tier).toBeNull();
     expect(model.bar?.sourceLabel).toBe("Model");
     expect(model.bar?.overText).toBe("67%");
-    expect(model.bar?.underText).toBe("33%");
+    expect(model.bar?.underText).toBe("32%");
   });
 
   it("uses 1 - combined for an under pick before p_over or history", () => {

@@ -1073,8 +1073,8 @@ function modelSplit(combined: number, side: "over" | "under", binary: boolean): 
     sourceLabel: "Model",
     overLabel: binary ? "Yes" : "Over",
     underLabel: binary ? "No" : "Under",
-    overText: side === "over" ? formatTierPercent(over) : formatPercent(over),
-    underText: side === "under" ? formatTierPercent(under) : formatPercent(under),
+    overText: formatTierPercent(over),
+    underText: formatTierPercent(under),
     overWidth: over * 100,
   };
 }
@@ -1169,8 +1169,8 @@ function buildNbaRead(args: {
   // bar draws. The tier stays null. When the blend is missing, fall back to
   // the pick's opposite field (p_under / p_over), then the /history rate for
   // that side and line. That fallback leaves combined_probability null and
-  // the mobile button says History. The printed percent is half-away
-  // formatPercent. This does not choose a tier.
+  // the button says History. The printed percent is formatTierPercent, the
+  // same floor the slip card uses. This does not choose a tier.
   let other: SlipSeed | null = null;
   const oppositeField = otherDirection === "over" ? pick.p_over : pick.p_under;
   const decided = nbaOtherSideProbability(pick.combined_probability, oppositeField);
@@ -1362,8 +1362,8 @@ export function webOtherCopy(seed: SlipSeed, inSlip: boolean, league: LeagueSegm
   const line = formatThreshold(seed.threshold);
   if (league === "nba") {
     // seed.probability is 1 − combined_probability when the blend exists,
-    // otherwise the historical fallback. Whole percent, half-away.
-    return inSlip ? `✓ ${side} in slip` : `${side} instead (${formatPercent(seed.probability)})`;
+    // otherwise the historical fallback. Whole percent, floored, matching the slip card.
+    return inSlip ? `✓ ${side} in slip` : `${side} instead (${formatTierPercent(seed.probability)})`;
   }
   return inSlip ? "Other side in slip" : `${side} ${line}`;
 }
@@ -1386,7 +1386,7 @@ export function mobilePrimaryCopy(
 
 export function mobileOtherCopy(seed: SlipSeed): string {
   const side = seed.direction === "under" ? "Under" : "Over";
-  return `${side} ${formatPercent(seed.probability)}`;
+  return `${side} ${formatTierPercent(seed.probability)}`;
 }
 
 /** Percent on the NBA action bar, beside the tier. WNBA keeps its short label. */

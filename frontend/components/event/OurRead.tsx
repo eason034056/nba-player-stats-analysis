@@ -195,7 +195,12 @@ export function OurRead({
             {isError ? <p className="text-sm font-semibold text-red">{errorText ?? "The odds request failed."}</p> : null}
             {model.bar ? <SplitBar bar={model.bar} showSource /> : null}
             <div className="hidden flex-wrap gap-2.5 md:flex">
-              {nba && (model.primary || model.other) ? (
+              {nba &&
+              model.other != null &&
+              !(
+                typeof model.other.combined_probability === "number" &&
+                Number.isFinite(model.other.combined_probability)
+              ) ? (
                 <div className="w-full text-xs font-semibold uppercase tracking-[0.08em] text-muted">History</div>
               ) : null}
               {model.primary ? (

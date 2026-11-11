@@ -40,15 +40,15 @@ Item 71. The seven-column table is wider than a 375px page. `.table-container` a
 
 Item 56. `text-eyebrow` is both a color (`#7B4FC4`) and a font size (12px, line-height 1.2, tracking 0.12em). On the `#3E0F8D` hero the color utility won, so the date line computed to `rgb(123, 79, 196)`. `accent` is already `#E4DA72`, the same value as `yellow`. The hero eyebrow now uses `text-accent` and writes the 12px metrics out, so it does not pick up the purple color. Computed color after the change is `rgb(228, 218, 114)`. The mobile Today eyebrow stays `text-eyebrow` because that line sits on the light canvas.
 
-Item 11. The model bar draws the non-lean side with `formatPercent(1 − combined_probability)` (half-away). The opposite button was still printing the historical `p_over` / `p_under` (`Over instead (22%)` next to a bar that says `Over 33%`). `nbaOtherSideProbability(combined, historical)` returns `{ probability: clamp01(1 − combined), source: "model" }` when `combined` is finite. The other `SlipSeed` copies the primary seed, sets `direction` to the opposite side, sets both `probability` and `combined_probability` to that complement, and sets `tier` to null. The slip therefore saves the same number the bar draws. `webOtherCopy` and `mobileOtherCopy` print `formatPercent` of `seed.probability`, so `0.67` shows `33%` on the web button (`Over instead (33%)`) and on the mobile bar (`Over 33%`). The mobile History eyebrow is shown only when `combined_probability` on that seed is not a finite number.
+Item 11. The opposite button was printing the historical `p_over` / `p_under` (`Over instead (22%)` next to a bar that says `Over 33%`). `nbaOtherSideProbability(combined, historical)` returns `{ probability: clamp01(1 − combined), source: "model" }` when `combined` is finite. The other `SlipSeed` copies the primary seed, sets `direction` to the opposite side, sets both `probability` and `combined_probability` to that complement, and sets `tier` to null. `webOtherCopy`, `mobileOtherCopy`, and both sides of `modelSplit` print that number with `formatTierPercent` (`Math.floor(p * 100 + 1e-9)`), the same floor `slipFace` uses on the slip card. `0.67` still shows `33%` on the bar, the web button (`Over instead (33%)`), the mobile bar (`Over 33%`), and the slip card. `0.675` complements to `0.325` and shows `32%` in all four places. `0.673` complements to `0.327` and shows `32%` in all four places. The two labels on the bar can add to 99 because each side floors on its own. The bar width is still the raw share.
 
-When `combined_probability` is null, NaN, or not finite, the helper returns the historical opposite field (`p_under` or `p_over`), clamped, with `source: "history"`, and the seed leaves `combined_probability` null. If that field is also missing, `buildNbaRead` still uses the `/history` rate at the same line and side. The button then keeps the History label and the previous percent. `0.675` complements to `0.325`, which `formatPercent` rounds half-away to `33%` (`formatTierPercent` would floor it to `32%`). The button uses the half-away figure. The slip face still floors a stored blend through the existing `formatTierPercent` in `slipFace`, so a complement of `0.327` can read `33%` on the button and `32%` on the slip pill. That slip rounding is unchanged. This path does not choose a tier. The primary seed still stores `pick.probability` and `pick.tier`.
+When `combined_probability` is null, NaN, or not finite, the helper returns the historical opposite field (`p_under` or `p_over`), clamped, with `source: "history"`, and the seed leaves `combined_probability` null. If that field is also missing, `buildNbaRead` still uses the `/history` rate at the same line and side. The button then keeps the History label. The printed fallback percent also uses `formatTierPercent`. This path does not choose a tier. The primary seed still stores `pick.probability` and `pick.tier`.
 
-The web Our read section heading "History" above the buttons is item 10 and is left in place.
+The desktop Our read heading "History" is drawn only when `model.other.combined_probability` is not a finite number. A model complement has no History heading above the buttons. The mobile History eyebrow follows the same rule.
 
 ## Tests / Verification
 
-- Frontend `npx vitest run`: 69 files, 525 tests, passed.
+- Frontend `npx vitest run`: 69 files, 527 tests, passed.
 - `npx tsc --noEmit`: passed.
 - `npm run lint`: passed, no warnings or errors.
 - `npm run build`: passed. Next.js 14.2.35 compiled and generated 10 static pages. `/wnba`, `/wnba/betslip`, `/wnba/event/[eventId]`, `/wnba/picks`, and `/wnba/player/[name]` are still in the route list.
@@ -60,7 +60,9 @@ The web Our read section heading "History" above the buttons is item 10 and is l
 | `1 − combined` wins over `p_over` / `p_under` and over `/history` | `nbaOtherSideProbability` in `lib/other-side-probability.test.tsx`, `stores 1 - combined on the other side when the model disagrees with history` |
 | Clamp outside `[0, 1]` | `clamps a complement outside [0, 1]` |
 | Null, NaN, Infinity fall back to the historical field | `falls back to the historical field when combined is null or not finite` |
-| Half-away `33%` for a `0.675` complement (`0.325`), not the floored `32%` | `prints the complement as a whole percent, half away from zero` |
+| Floored `32%` for a `0.675` or `0.673` complement on the button, the bar, and the slip card | `prints the complement with the same floor on the button, the bar, and the slip card` |
+| Every `k/1000` complement matches `floor((1000 − k) / 10)` | `matches the exact-decimal floor for every combined value 0.000-1.000` |
+| Desktop History heading is absent when the other side is the model complement | `the web buttons carry no History heading when the other side is 1 - combined` |
 | Null blend keeps the History label and the history percent | `keeps the history rate and the History label when combined is null`, Bam fixture `Under instead (35%)` |
 | `tier` on the other seed stays null | `lib/event-page-nba.qa.test.ts` |
 | Mobile button drops History when the complement is stored | `lib/event-page-nba.qa2.test.tsx`, `tier-percent.test.tsx` |
@@ -109,6 +111,5 @@ Measured on that mock:
 
 - [ ] SPO-120c: restyle the odds table. This slice only stops the page from growing and collapses the bookmaker picker on mobile. Under Probability is reached by scrolling the table.
 - [ ] SPO-120d: the compact ~95px pick card. This slice removes the empty flex gap. The card is still taller than that design because of the tags, the rate, and the action row.
-- [ ] Item 10: the web Our read section still has a History heading above the slip buttons. The button percent is the model complement when the blend exists.
-- [ ] The slip pill still floors a stored blend with `formatTierPercent`. A complement of `0.327` can show `33%` on the button and `32%` on the pill.
+- [ ] A historical other-side leg stores `combined_probability: null` and `tier: null`. `slipFace` prints an em dash for that explicit missing blend, while the button prints the floored historical rate. That slip-face rule is unchanged.
 - [ ] Other design-vs-dev items are out of this ticket.
