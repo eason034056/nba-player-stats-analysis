@@ -1047,8 +1047,9 @@ class BulkPropPlayer(BaseModel):
     team_code: Optional[str] = Field(
         default=None,
         description=(
-            "Canonical NBA team code from that same most recent game log "
-            "(for example GSW). Null when the log has no team."
+            "Canonical NBA team code from team_on_event for this event's "
+            "home and away clubs (for example GSW). Null when that club "
+            "is not playing, the log has no team, or the name is missing."
         ),
     )
     line: float = Field(..., description="Modal consensus of one line per bookmaker")

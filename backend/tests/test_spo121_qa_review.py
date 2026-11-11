@@ -253,9 +253,10 @@ class TestRecordedCapture:
             assert read.line == pick.threshold
             assert read.side == pick.direction
             assert read.tier == pick.tier
-            # Snapshot rows keep one pair per book. Daily analysis blends
-            # every rung at the modal line. On this capture the gap stays
-            # inside 0.01, and line, side, and tier still match.
+            # Snapshots keep one Over/Under pair per book. Bovada can post
+            # a two-sided alternate at the consensus line that daily
+            # analysis counts and /reads does not. On this capture the
+            # gap stays inside 0.01, and line, side, and tier still match.
             assert read.combined_probability == pytest.approx(
                 pick.combined_probability, abs=0.01
             )

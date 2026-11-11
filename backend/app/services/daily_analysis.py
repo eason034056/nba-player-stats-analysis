@@ -377,7 +377,9 @@ def select_daily_picks(
     ``league="wnba"`` and is filtered on the historical rate instead.
 
     Args:
-        picks: Stored picks, highest historical probability first.
+        picks: Stored picks. An NBA list is ordered by combined
+            probability (``board_score``). A WNBA list is ordered by the
+            historical rate.
         min_probability: Inclusive floor on ``board_score``.
         min_games: Inclusive sample floor.
         league: ``nba`` (combined probability) or ``wnba`` (historical).

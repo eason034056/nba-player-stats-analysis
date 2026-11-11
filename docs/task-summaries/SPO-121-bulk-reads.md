@@ -6,7 +6,7 @@
 
 ## Summary
 
-Every posted player on an NBA event now has a read: side, combined probability, tier, and signals. The read is a new route, `GET /api/nba/events/{event_id}/reads`, not a field on the bulk-props player. NBA `DailyPick.tier` and the daily-picks board use `combined_probability` with the existing 0.70 / 0.65 / 0.56 cutoffs. Storage still uses the historical rate. `season_mean` is on player history and on `DailyPick`. Bulk props players carry `position` and `team_code` from the newest game log.
+Every posted player on an NBA event now has a read: side, combined probability, tier, and signals. The read is a new route, `GET /api/nba/events/{event_id}/reads`, not a field on the bulk-props player. NBA `DailyPick.tier` and the daily-picks board use `combined_probability` with the existing 0.70 / 0.65 / 0.56 cutoffs. Storage still uses the historical rate. `season_mean` is on player history and on `DailyPick`. Bulk props players carry `position` from the newest game log and `team_code` from `team_on_event` for the snapshot's home and away clubs.
 
 WNBA routes, the WNBA filter, and the WNBA tier are unchanged. The signal model's math is unchanged.
 
@@ -20,7 +20,7 @@ WNBA routes, the WNBA filter, and the WNBA tier are unchanged. The signal model'
 | Board | `backend/app/services/daily_analysis.py` | NBA tier and `select_daily_picks` use `combined_probability`. WNBA still uses `probability`. Storage unchanged. |
 | Query text | `backend/app/api/daily_picks.py` | The NBA floor is described as `combined_probability`. The query name and the 0.65 default stay. |
 | History | `backend/app/services/csv_player_history.py` | `season_mean` on the season sample. `latest_team` beside `latest_position`. |
-| Props | `backend/app/services/bulk_props.py` | Roster fields filled on the way out, including a cache hit. Not stored in the cached JSON. |
+| Props | `backend/app/services/bulk_props.py` | `position` from the latest log. `team_code` from `team_on_event` using the snapshot's home club, away club, and slate date. Filled on the way out, including a cache hit. |
 | Shift | `backend/app/services/board_shift.py`, `scripts/measure_spo121_board_shift.py` | Counts who enters, leaves, and changes tier. |
 | Tests | `backend/tests/test_spo121_bulk_reads.py` and the SPO-111 / daily-analysis / SPO-113 cases the new board touches | Route, schema, tier boundaries, filter, roster, recorded shift. |
 | Docs | `docs/decisions/spo-121-bulk-reads/decision_20261110_bulk-reads-and-combined-tier.md` | Route choice and the tier input. |
@@ -96,6 +96,5 @@ Entered: Dyson Daniels over (0.6316 → 0.6862), Nickeil Alexander-Walker over (
 - Storage still drops anyone below historical 0.56, so a high blend cannot add them.
 - The recorded shift is one event and one market, with projections omitted.
 - Default `season_mean` is often null: the shipped log is mostly 2025-2026, and the season label for 2026-11-10 is 2026-2027.
-- `/reads` and the daily pick can differ by up to 0.01 on `combined_probability` because the snapshot stores one pair per book. On the recorded capture the max gap is 0.0069. Line, side, and tier match.
-- `team_code` can be wrong for a traded player until SPO-122 (#53) merges.
+- `/reads` and the daily pick can differ by up to 0.01 on `combined_probability`. Snapshots keep one Over/Under pair per book, so a two-sided Bovada alternate at the consensus line counts on the daily pick and not on `/reads`. On the recorded capture the max gap is 0.0069. Line, side, and tier match.
 - `attach_roster_fields` still does the name lookup on the event loop.
