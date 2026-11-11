@@ -54,9 +54,12 @@ _PATH_PROJECTED_LINEUPS = "/nba/v1/projected_lineups"
 
 _MAX_ATTEMPTS = 3
 _FALLBACK_BACKOFF_SECONDS = 60.0
+_MAX_WAIT_SECONDS = 65.0
 _WINDOW_TTL_SECONDS = 120
+_OBSERVED_LIMIT_TTL_SECONDS = 86400
 _MAX_PLAYER_IDS_PER_CALL = 100
 _OBSERVED_LIMIT_KEY = "bdl:ratelimit:v1:observed_limit"
+_PAUSE_UNTIL_KEY = "bdl:ratelimit:v1:pause_until"
 _ACQUIRE_ATTEMPTS = 8
 
 SleepFn = Callable[[float], Awaitable[None]]
@@ -145,14 +148,17 @@ class BdlClient:
     ``redis``, ``sleep``, and ``clock`` so no network call and no real
     wait happens.
 
-    The shared budget is a Redis counter keyed by the current minute.
-    ``BDL_RATE_LIMIT_PER_MIN`` (default 5) is the limit until a response
-    includes ``x-ratelimit-limit``. After that, every process using the
-    same Redis uses the observed value, so a trial key (5/min) and a GOAT
-    key (600/min) share one code path. Before a call, a spent budget waits
-    until that minute ends. A response with ``x-ratelimit-remaining: 0``
-    waits until ``x-ratelimit-reset`` so a key shared with other programs
-    is not poked again inside the same server window.
+        The shared budget is a Redis counter keyed by the current minute.
+        ``BDL_RATE_LIMIT_PER_MIN`` (default 5) is the limit until a response
+        includes ``x-ratelimit-limit``. That value is stored for one day
+        (``bdl:ratelimit:v1:observed_limit``, TTL 86400). A day with no
+        response falls back to ``BDL_RATE_LIMIT_PER_MIN``. Before a call, a
+        spent budget waits until that minute ends. A response with
+        ``x-ratelimit-remaining: 0``, or an HTTP 429, writes
+        ``bdl:ratelimit:v1:pause_until`` so every process waits out the
+        server window. The server reset is not aligned to the clock minute.
+        Any wait derived from ``x-ratelimit-reset`` is capped at 65 seconds
+        so a clock that is behind the server cannot sleep for an hour.
 
     Usage:
         client = BdlClient()
@@ -186,6 +192,9 @@ class BdlClient:
         self._last_limit: int | None = None
         self._last_remaining: int | None = None
         self._last_reset: int | None = None
+        # Reset epoch we already waited for. Stops a capped 65s wait from
+        # repeating while the stored reset is still in the future.
+        self._pause_observed: int | None = None
 
         if redis is None:
             self._redis = redis_async.from_url(settings.redis_url, decode_responses=True)
@@ -208,6 +217,13 @@ class BdlClient:
         await self._http.aclose()
         if self._owns_redis:
             await self._redis.close()
+
+    def __repr__(self) -> str:
+        """Identify the client without the API key."""
+        return (
+            f"BdlClient(base_url={self._http.base_url!s}, "
+            f"rate_limit_per_min={self._configured_limit})"
+        )
 
     def rate_status(self) -> dict[str, int | None]:
         """Return the last ``limit``, ``remaining``, and ``reset`` header values.
@@ -237,8 +253,12 @@ class BdlClient:
 
         Returns the raw JSON object (``data`` plus ``meta``). Pass
         ``cursor`` from ``meta.next_cursor`` to read the next page, or
-        use ``iter_pages``.
+        use ``iter_pages``. An empty ``dates`` list raises ``BdlError``
+        before a budget slot is taken: the API would otherwise return an
+        unfiltered page.
         """
+        if not dates:
+            raise BdlError("list_games requires at least one date")
         params = [("dates[]", date) for date in dates]
         return await self._get(_PATH_GAMES, _with_page(params, per_page=per_page, cursor=cursor))
 
@@ -257,8 +277,12 @@ class BdlClient:
         A longer list raises ``BdlError`` before a request is sent, so
         the caller splits the batch instead of silently dropping ids.
 
-        Returns the raw JSON object.
+        Returns the raw JSON object. An empty ``player_ids`` list raises
+        ``BdlError`` before a budget slot is taken, because the API then
+        returns the first page of every player.
         """
+        if not player_ids:
+            raise BdlError("list_players requires at least one player_id")
         if len(player_ids) > _MAX_PLAYER_IDS_PER_CALL:
             raise BdlError("list_players accepts at most 100 player_ids per call")
         params = [("player_ids[]", str(player_id)) for player_id in player_ids]
@@ -312,8 +336,11 @@ class BdlClient:
         repeated ``dates[]``. ``meta.next_cursor`` is how later pages are
         addressed when a date has more than ``per_page`` rows.
 
-        Returns the raw JSON object.
+        Returns the raw JSON object. An empty ``dates`` list raises
+        ``BdlError`` before a budget slot is taken.
         """
+        if not dates:
+            raise BdlError("list_odds requires at least one date")
         params = [("dates[]", date) for date in dates]
         return await self._get(_PATH_ODDS, _with_page(params, per_page=per_page, cursor=cursor))
 
@@ -325,8 +352,11 @@ class BdlClient:
         ``game_ids[]``. The recorded request does not send ``per_page``
         or ``cursor``, so this method does not either.
 
-        Returns the raw JSON object.
+        Returns the raw JSON object. An empty ``game_ids`` list raises
+        ``BdlError`` before a budget slot is taken.
         """
+        if not game_ids:
+            raise BdlError("list_projected_lineups requires at least one game_id")
         params = [("game_ids[]", str(game_id)) for game_id in game_ids]
         return await self._get(_PATH_PROJECTED_LINEUPS, params)
 
@@ -335,9 +365,17 @@ class BdlClient:
 
         Three HTTP responses are the maximum. A 429 sleeps until
         ``x-ratelimit-reset`` (or 60 seconds when that header is missing
-        or already past) and then tries again. A 5xx uses that same wait.
-        Any other non-2xx raises ``BdlApiError`` immediately. The wait is
-        ``self._sleep``, so a test clock can skip the real delay.
+        or already past) and then tries again. That wait, and the
+        ``remaining == 0`` pause, never exceed 65 seconds. A 5xx uses
+        that same wait. Any other non-2xx raises ``BdlApiError``
+        immediately. A transport error waits 60 seconds and tries again.
+        The wait is ``self._sleep``, so a test clock can skip the real delay.
+
+        Upper bound for a scheduler timeout: each of the 3 attempts may
+        wait up to 8 times for a budget slot, and a failed attempt waits
+        once more before the next try (2 such waits). Every one of those
+        waits is at most 65 seconds, so one call can take about 1690
+        seconds when every slot is refused.
         """
         last_status: int | None = None
         for attempt in range(_MAX_ATTEMPTS):
@@ -371,6 +409,7 @@ class BdlClient:
                 )
             if attempt == _MAX_ATTEMPTS - 1:
                 break
+            self._mark_waited_for(_parse_header_int(response.headers.get("x-ratelimit-reset")))
             await self._sleep_for(self._backoff_seconds(response))
 
         if last_status == 429:
@@ -412,9 +451,9 @@ class BdlClient:
         """How long to wait before another try of this response.
 
         A future ``x-ratelimit-reset`` is the server's window end, so the
-        wait ends there. A missing header, or a reset that is not still in
-        the future, waits 60 seconds. Zero is never returned: a tight retry
-        loop would burn the shared key.
+        wait ends there, but never later than 65 seconds. A missing header,
+        or a reset that is not still in the future, waits 60 seconds. Zero
+        is never returned: a tight retry loop would burn the shared key.
         """
         reset = _parse_header_int(response.headers.get("x-ratelimit-reset"))
         if reset is None:
@@ -422,7 +461,29 @@ class BdlClient:
         delay = float(reset) - self._clock()
         if delay <= 0:
             return _FALLBACK_BACKOFF_SECONDS
+        return self._clamp_wait(delay)
+
+    def _clamp_wait(self, delay: float) -> float:
+        """Cap a server-window wait at 65 seconds.
+
+        A clock that is behind the API would otherwise sleep until a reset
+        that is hours away. The warning records the two durations only.
+        """
+        if delay > _MAX_WAIT_SECONDS:
+            logger.warning(
+                "bdl_rate_limit_clock_skew delay_s=%.0f clamped_s=%.0f",
+                delay,
+                _MAX_WAIT_SECONDS,
+            )
+            return _MAX_WAIT_SECONDS
         return delay
+
+    def _mark_waited_for(self, reset: int | None) -> None:
+        """Remember a reset we are about to sleep for, so acquire does not sleep again."""
+        if reset is None:
+            return
+        if self._clock() < reset:
+            self._pause_observed = reset
 
     async def _sleep_for(self, seconds: float) -> None:
         """Sleep for ``seconds``, or 60 when that delay is not positive.
@@ -440,17 +501,17 @@ class BdlClient:
     async def _acquire_budget(self) -> None:
         """Take one slot in the current minute, waiting when the minute is full.
 
-        Also waits out a server window whose last response said
-        ``remaining`` is 0. The wait ends at ``x-ratelimit-reset``.
+        Also waits out a server window stored in Redis (or remembered on
+        this client) when the last response said ``remaining`` is 0 or
+        was HTTP 429. That wait is capped at 65 seconds and happens once
+        per reset value.
         """
         for _ in range(_ACQUIRE_ATTEMPTS):
             now = self._clock()
-            if (
-                self._last_remaining == 0
-                and self._last_reset is not None
-                and now < self._last_reset
-            ):
-                await self._sleep_for(self._last_reset - now)
+            pause_until = await self._pause_target(now)
+            if pause_until is not None and self._pause_observed != pause_until:
+                self._pause_observed = pause_until
+                await self._sleep_for(self._clamp_wait(pause_until - now))
                 continue
 
             window_start = int(now) // 60 * 60
@@ -461,6 +522,27 @@ class BdlClient:
             await self._sleep_for(window_end - self._clock())
 
         raise BdlRateLimitError("shared per-minute budget was still exhausted after waiting")
+
+    async def _pause_target(self, now: float) -> int | None:
+        """Epoch second every process should wait for, or ``None`` when the window is open."""
+        candidates: list[int] = []
+        try:
+            raw = await self._redis.get(_PAUSE_UNTIL_KEY)
+        except redis_async.RedisError:
+            logger.warning("bdl_rate_limit_redis_error op=get_pause")
+            raise BdlError("BALLDONTLIE rate limiter could not reach Redis") from None
+        parsed = _parse_header_int(str(raw)) if raw is not None else None
+        if parsed is not None and now < parsed:
+            candidates.append(parsed)
+        if (
+            self._last_remaining == 0
+            and self._last_reset is not None
+            and now < self._last_reset
+        ):
+            candidates.append(self._last_reset)
+        if not candidates:
+            return None
+        return max(candidates)
 
     async def _effective_limit(self) -> int:
         """Observed ``x-ratelimit-limit`` when Redis has one, else the configured limit."""
@@ -485,9 +567,13 @@ class BdlClient:
         """
         key = _window_key(window_start)
         try:
-            count = int(await self._redis.incr(key))
-            if count == 1:
-                await self._redis.expire(key, _WINDOW_TTL_SECONDS)
+            # INCR and EXPIRE in one transaction so a crash between them
+            # cannot leave a window key with no TTL.
+            pipe = self._redis.pipeline(transaction=True)
+            pipe.incr(key)
+            pipe.expire(key, _WINDOW_TTL_SECONDS)
+            count, _expired = await pipe.execute()
+            count = int(count)
             if count > limit:
                 await self._redis.decr(key)
                 return False
@@ -500,7 +586,10 @@ class BdlClient:
         """Remember the three rate-limit headers and publish the observed limit.
 
         Publishing to Redis is what lets another process on the same key
-        pick up 5/min or 600/min without a restart.
+        pick up 5/min or 600/min without a restart. The observed limit
+        lives for one day; after that the configured
+        ``BDL_RATE_LIMIT_PER_MIN`` is used again. A failed publish does
+        not discard a response the server already accepted.
         """
         limit = _parse_header_int(response.headers.get("x-ratelimit-limit"))
         remaining = _parse_header_int(response.headers.get("x-ratelimit-remaining"))
@@ -511,13 +600,35 @@ class BdlClient:
             self._last_remaining = remaining
         if reset is not None:
             self._last_reset = reset
+        if response.status_code == 429 or remaining == 0:
+            await self._publish_pause(reset)
         if limit is None:
             return
         try:
-            await self._redis.set(_OBSERVED_LIMIT_KEY, str(limit))
+            await self._redis.set(
+                _OBSERVED_LIMIT_KEY,
+                str(limit),
+                ex=_OBSERVED_LIMIT_TTL_SECONDS,
+            )
         except redis_async.RedisError:
             logger.warning("bdl_rate_limit_redis_error op=set_limit")
-            raise BdlError("BALLDONTLIE rate limiter could not reach Redis") from None
+
+    async def _publish_pause(self, reset: int | None) -> None:
+        """Share the server reset with other processes. Best effort.
+
+        The TTL is the seconds until reset, capped at 65, so a skewed
+        clock cannot pin the pause for the rest of the day.
+        """
+        if reset is None:
+            return
+        delay = reset - self._clock()
+        if delay <= 0:
+            return
+        ttl = max(1, int(min(delay, _MAX_WAIT_SECONDS)))
+        try:
+            await self._redis.set(_PAUSE_UNTIL_KEY, str(reset), ex=ttl)
+        except redis_async.RedisError:
+            logger.warning("bdl_rate_limit_redis_error op=set_pause")
 
 
 async def iter_pages(

@@ -135,16 +135,19 @@ def test_fixtures_match_recorded_paths_and_contain_no_key():
         "projected_lineups_21718080.json": "/nba/v1/projected_lineups",
         "lineups_18447393_2026-01-15_agents_429.json": "/nba/v1/lineups",
     }
-    found = sorted(path.name for path in FIXTURE_DIR.glob("*.json"))
-    assert found == sorted(expected)
+    found = {path.name for path in FIXTURE_DIR.glob("*.json")}
+    # Other tickets may add captures in this directory. This set only has
+    # to contain the SPO-130a files.
+    assert set(expected) <= found
     api_key = os.environ.get("BALLDONTLIE_API_KEY", "")
-    for name, path in expected.items():
-        text = (FIXTURE_DIR / name).read_text()
+    for path in FIXTURE_DIR.glob("*.json"):
+        text = path.read_text()
         if "Authorization" in text or "Bearer " in text:
-            raise AssertionError(f"{name} contains an auth header")
+            raise AssertionError(f"{path.name} contains an auth header")
         if api_key and api_key in text:
-            raise AssertionError(f"{name} contains BALLDONTLIE_API_KEY")
-        capture = json.loads(text)
+            raise AssertionError(f"{path.name} contains BALLDONTLIE_API_KEY")
+    for name, path in expected.items():
+        capture = json.loads((FIXTURE_DIR / name).read_text())
         assert set(capture) == {"request", "status", "elapsed_s", "rate_headers", "response"}
         assert urlparse(capture["request"]).path == path
         for header in ("x-ratelimit-limit", "x-ratelimit-remaining", "x-ratelimit-reset"):
