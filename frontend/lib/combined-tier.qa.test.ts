@@ -113,10 +113,11 @@ describe("QA: WNBA regression", () => {
     const withBlend = { ...wnba, combined_probability: 0.9, tier: "Strong play" as const };
     expect(boardRate(withBlend, "wnba")).toBe(0.697);
     const [row] = buildPickRows([withBlend], "wnba", "2026-11-10");
-    expect(row.probabilityText).toBe("69.7%");
+    expect(row.probabilityText).toBe(formatPercent(0.697));
     expect(row.tierName).toBe("playable");
     const [read] = todayReads([withBlend], "wnba", "2026-11-10");
-    expect(read.probabilityText).toBe("69.7%");
+    expect(read.probabilityText).toBe(formatTierPercent(0.697));
+    expect(read.tier?.label).toBe("Strong play");
     expect(actionBarPercent(withBlend, "wnba")).toBeNull();
     expect(sortPicks([withBlend], "wnba")).toHaveLength(1);
   });

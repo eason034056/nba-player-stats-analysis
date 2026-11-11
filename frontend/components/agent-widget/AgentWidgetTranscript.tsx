@@ -75,7 +75,7 @@ const VerdictSummaryCard = ({
         </div>
         <div className="rounded-[16px] border border-white/10 bg-white/5 px-3 py-2">
           <p className="text-[10px] uppercase tracking-[0.2em] text-on-dark-muted">EV</p>
-          <p className="mt-1 font-semibold text-on-dark">{formatPct(message.verdict.expected_value_pct)}</p>
+          <p className="mt-1 font-semibold text-on-dark">{formatSignedPct(message.verdict.expected_value_pct)}</p>
         </div>
         <div className="rounded-[16px] border border-white/10 bg-white/5 px-3 py-2">
           <p className="text-[10px] uppercase tracking-[0.2em] text-on-dark-muted">Market delta</p>

@@ -254,6 +254,22 @@ describe("AppShell", () => {
     }
   });
 
+  it("spans the web header and leaves the research disclaimer on Method only", () => {
+    renderWithProviders(
+      <AppShell>
+        <p>Board</p>
+      </AppShell>,
+    );
+
+    const bar = screen.getByTestId("web-header");
+    expect(bar.className).toContain("w-full");
+    expect(bar.className).toContain("px-8");
+    expect(bar.className).not.toContain("max-w-");
+    expect(screen.queryByRole("contentinfo")).not.toBeInTheDocument();
+    expect(screen.queryByText(/not betting advice/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/for research/i)).not.toBeInTheDocument();
+  });
+
   it("keeps Bet Slip when the league switch flips", () => {
     navigationMocks.usePathname.mockReturnValue("/betslip");
     renderWithProviders(

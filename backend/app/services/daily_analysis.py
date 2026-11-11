@@ -32,7 +32,7 @@ from app.services.odds_theoddsapi import odds_provider
 from app.services.odds_provider import OddsAPIError
 from app.services.csv_player_history import (
     csv_player_service,
-    team_from_game_logs,
+    team_on_event,
     wnba_csv_player_service,
 )
 from app.services.prob import (
@@ -377,7 +377,9 @@ def select_daily_picks(
     ``league="wnba"`` and is filtered on the historical rate instead.
 
     Args:
-        picks: Stored picks, highest historical probability first.
+        picks: Stored picks. An NBA list is ordered by combined
+            probability (``board_score``). A WNBA list is ordered by the
+            historical rate.
         min_probability: Inclusive floor on ``board_score``.
         min_games: Inclusive sample floor.
         league: ``nba`` (combined probability) or ``wnba`` (historical).
@@ -1193,19 +1195,25 @@ class DailyAnalysisService:
                     proj = projections.get(player_name, {})
                     has_projection = bool(proj)
 
-                    # Prefer fetching player team from projections
-                    # SportsDataIO's team field updates for in-season trades and is more accurate than CSV
-                    # Projections API returns abbreviations (like "GS", "MIL"), CSV gives short names ("Warriors", "Bucks")
-                    player_team = ""
+                    # A projection abbreviation is kept only when that club
+                    # is home or away. The CSV fallback is the log club on
+                    # the US game date, and only when that club is in the
+                    # game. A last-season club that is not playing (Bulls
+                    # on Celtics at 76ers) is left blank rather than tagged
+                    # onto the player. Chart logs are oldest-first;
+                    # ``team_on_event`` dates them and ignores list order.
+                    game_logs = history_stats.get("game_logs", [])
+                    projected_team = ""
                     if proj and proj.get("team"):
-                        player_team = proj.get("team")
-                    else:
-                        # Chart logs are oldest-first. ``commence_time`` is
-                        # UTC; ``team_from_game_logs`` converts it to the US
-                        # game date, then uses that day's club or the latest
-                        # club on or before it (a gap day keeps the prior club).
-                        game_logs = history_stats.get("game_logs", [])
-                        player_team = team_from_game_logs(game_logs, commence_time)
+                        projected_team = str(proj.get("team") or "")
+                    player_team = team_on_event(
+                        game_logs,
+                        commence_time,
+                        home_team,
+                        away_team,
+                        candidate=projected_team,
+                        league=league,
+                    )
                     player_team_code = canonical_team_code(player_team, league=league)
                     position = None
                     if league.lower() == "nba":

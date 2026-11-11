@@ -41,12 +41,44 @@ export type HealthResponse = z.infer<typeof healthResponseSchema>;
  * 
  * 每場比賽的基本資訊
  */
+/**
+ * Per-team lineup confirmation. `confirmed` or `projected`.
+ * Null when that club has no lineup for the date. WNBA leaves the object null.
+ */
+export const eventLineupStatusSchema = z.object({
+  home: z.enum(["confirmed", "projected"]).nullable().optional(),
+  away: z.enum(["confirmed", "projected"]).nullable().optional(),
+});
+
+export type EventLineupStatus = z.infer<typeof eventLineupStatusSchema>;
+
+/**
+ * Best stored daily pick for one event, joined by the events route.
+ * `market` is an Odds API key (`player_points`), not the CSV metric (`points`).
+ * A broken object becomes null so one bad row does not drop the slate.
+ */
+export const topReadSchema = z.object({
+  player: z.string().min(1),
+  market: z.string().min(1),
+  side: z.enum(["over", "under"]),
+  line: z.number().finite(),
+  probability: z.number().finite().min(0).max(1),
+});
+
+export type TopRead = z.infer<typeof topReadSchema>;
+
 export const nbaEventSchema = z.object({
   event_id: z.string(),      // 賽事唯一 ID，用於後續查詢
   sport_key: z.string(),     // 運動類型，NBA 為 "basketball_nba"
   home_team: z.string(),     // 主場球隊名稱
   away_team: z.string(),     // 客場球隊名稱
-  commence_time: z.string(), // 比賽開始時間（ISO 8601 格式）
+  commence_time: z.string(), // 比賽開始時間（UTC ISO 8601）
+  // Same tip in America/New_York, with the offset. Absent on older payloads and on WNBA.
+  commence_time_et: z.string().nullable().optional(),
+  // Label for commence_time_et. "ET" on NBA events.
+  display_tz: z.string().nullable().optional(),
+  lineup_status: eventLineupStatusSchema.nullable().optional().catch(null),
+  top_read: topReadSchema.nullable().optional().catch(null),
 });
 
 export type NBAEvent = z.infer<typeof nbaEventSchema>;
@@ -382,6 +414,9 @@ export interface PlayerHistoryRequest {
   is_starter?: boolean;        // 先發狀態篩選（True=僅先發、False=僅替補、undefined=全部）
   teammate_filter?: string[];  // 星級隊友名稱列表（可多選）
   teammate_played?: boolean;   // true=隊友皆有上場, false=隊友皆未上場
+  home_team?: string;          // 本場主隊。和 away_team 一起用時，隊友只留本場球隊
+  away_team?: string;          // 本場客隊
+  as_of?: string;              // 開賽時間，用來選這天的紀錄球隊
 }
 
 /**

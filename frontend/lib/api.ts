@@ -365,6 +365,15 @@ export async function getPlayerHistory(
   if (request.teammate_played !== undefined) {
     params.set("teammate_played", request.teammate_played.toString());
   }
+  if (request.home_team) {
+    params.set("home_team", request.home_team);
+  }
+  if (request.away_team) {
+    params.set("away_team", request.away_team);
+  }
+  if (request.as_of) {
+    params.set("as_of", request.as_of);
+  }
   
   const data = await fetchApi<PlayerHistoryResponse>(
     `/api/nba/player-history?${params}`
@@ -471,6 +480,15 @@ export async function getWNBAPlayerHistory(
   }
   if (request.teammate_played !== undefined) {
     params.set("teammate_played", request.teammate_played.toString());
+  }
+  if (request.home_team) {
+    params.set("home_team", request.home_team);
+  }
+  if (request.away_team) {
+    params.set("away_team", request.away_team);
+  }
+  if (request.as_of) {
+    params.set("as_of", request.as_of);
   }
 
   const data = await fetchApi<PlayerHistoryResponse>(

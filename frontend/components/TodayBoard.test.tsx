@@ -23,6 +23,7 @@ import nbaPicksMissingDirectionFixture from "@/test/fixtures/today/nba-daily-pic
 import wnbaEventsFixture from "@/test/fixtures/today/wnba-events.json";
 import wnbaPicksFixture from "@/test/fixtures/today/wnba-daily-picks.json";
 import recordedNoVig from "@/test/fixtures/props-no-vig/player-double-double.json";
+import { giannisTopRead } from "@/test/fixtures/today/top-read";
 
 const nbaEvents = eventsResponseSchema.parse(nbaEventsFixture);
 const nbaPicks = dailyPicksResponseSchema.parse(nbaPicksFixture);
@@ -100,20 +101,25 @@ describe("TodayBoard", () => {
     expect(within(web).getByRole("link", { name: /all 3 picks/i })).toHaveAttribute("href", "/picks");
 
     const bam = within(web).getByRole("link", { name: /bam adebayo/i });
-    expect(bam).toHaveTextContent("—");
-    expect(bam).not.toHaveTextContent(formatPercent(nbaPicks.picks[0].probability));
-    expect(bam).not.toHaveTextContent("Strong play");
+    expect(bam).toHaveTextContent("72%");
+    expect(bam).toHaveTextContent("Strong play");
     expect(bam).toHaveTextContent("Over 10.5 REB");
     expect(bam).toHaveTextContent("MIA @ MIL · 7:00 PM");
+    expect(bam.className).toContain("bg-white/[0.08]");
+    expect(bam.className).toContain("border-white/[0.16]");
+    expect(bam.className).toContain("hover:bg-white/[0.14]");
+    expect(within(web).getByText(/built from market prices, recent form, projection and matchup/i)).toBeInTheDocument();
+    expect(within(web).getByText("Tap a game to check any player prop")).toBeInTheDocument();
+    expect(within(web).queryByText(/open a game to check any player prop/i)).not.toBeInTheDocument();
     expect(bam).not.toHaveTextContent("1:00 AM");
     expect(bam.getAttribute("href")).toContain("/event/heat-bucks");
     expect(bam.getAttribute("href")).toContain("player=Bam");
     expect(bam.getAttribute("href")).toContain("market=player_rebounds");
     expect(bam.getAttribute("href")).toContain("threshold=10.5");
 
-    expect(within(web).getByRole("link", { name: /joel embiid/i })).toHaveTextContent("—");
+    expect(within(web).getByRole("link", { name: /joel embiid/i })).toHaveTextContent("70%");
     expect(within(web).getByRole("link", { name: /joel embiid/i })).not.toHaveTextContent("70.2%");
-    expect(within(web).getByRole("link", { name: /tyrese haliburton/i })).not.toHaveTextContent("Playable");
+    expect(within(web).getByRole("link", { name: /tyrese haliburton/i })).toHaveTextContent("Playable");
     expect(within(web).getByText("Adebayo Over 10.5 REB")).toBeInTheDocument();
     expect(within(web).getByText("Embiid Over 29.5 PTS")).toBeInTheDocument();
     expect(within(web).getByText("No read on this game")).toBeInTheDocument();
@@ -123,7 +129,11 @@ describe("TodayBoard", () => {
     expect(chevron.className).not.toContain("B9B3C4");
     expect(within(web).queryByText("81%")).not.toBeInTheDocument();
     expect(within(web).queryByText(/chet holmgren/i)).not.toBeInTheDocument();
+    const shownPickPercents = new Set(
+      nbaPicks.picks.map((pick) => formatPercent(pick.probability)),
+    );
     for (const oddsPercent of impliedPercents(recordedNoVig)) {
+      if (oddsPercent === "—" || shownPickPercents.has(oddsPercent)) continue;
       expect(within(web).queryByText(oddsPercent)).not.toBeInTheDocument();
     }
     expect(web).not.toHaveTextContent("NaN");
@@ -131,8 +141,13 @@ describe("TodayBoard", () => {
     expect(web).not.toHaveTextContent("null");
 
     expect(within(mobile).getByRole("link", { name: /see all 3 picks/i })).toHaveAttribute("href", "/picks");
-    expect(within(mobile).getByRole("link", { name: /bam adebayo/i })).toHaveTextContent("—");
-    expect(within(mobile).getByRole("link", { name: /bam adebayo/i })).not.toHaveTextContent("72.4%");
+    const mobileBam = within(mobile).getByRole("link", { name: /bam adebayo/i });
+    expect(mobileBam).toHaveTextContent("72%");
+    expect(mobileBam).not.toHaveTextContent("72.4%");
+    expect(mobileBam.className).toContain("bg-brand");
+    expect(mobileBam.className).not.toContain("bg-white");
+    expect(mobileBam.className).not.toContain("border");
+    expect(within(mobile).queryByText(/built from market prices/i)).not.toBeInTheDocument();
 
     expect(apiMocks.getEvents).toHaveBeenCalledWith("2026-11-10");
     expect(apiMocks.getDailyPicks).toHaveBeenCalledWith({ date: "2026-11-10" });
@@ -161,7 +176,7 @@ describe("TodayBoard", () => {
 
     expect(screen.getByTestId("today-loading")).toHaveTextContent("Loading tonight's board");
     expect(screen.queryByText("Bam Adebayo")).not.toBeInTheDocument();
-    expect(screen.queryByText("72.4%")).not.toBeInTheDocument();
+    expect(screen.queryByText("72%")).not.toBeInTheDocument();
   });
 
   it("shows an error and retries the games request", async () => {
@@ -204,7 +219,7 @@ describe("TodayBoard", () => {
     expect(within(web).getByText(/reads unavailable/i)).toHaveTextContent("picks down");
     expect(within(web).getAllByText("Top read unavailable").length).toBeGreaterThan(0);
     expect(within(web).getByText("Heat")).toBeInTheDocument();
-    expect(within(web).queryByText("72.4%")).not.toBeInTheDocument();
+    expect(within(web).queryByText("72%")).not.toBeInTheDocument();
     expect(within(web).queryByText("0.0%")).not.toBeInTheDocument();
     expect(within(web).getByRole("link", { name: /all picks/i })).toBeInTheDocument();
   });
@@ -277,15 +292,17 @@ describe("TodayBoard", () => {
 
     const web = await screen.findByTestId("today-web");
     const wilson = within(web).getByRole("link", { name: /a'ja wilson/i });
-    expect(wilson).toHaveTextContent("71.0%");
+    expect(wilson).toHaveTextContent("71%");
     expect(wilson).toHaveTextContent("LVA @ NYL");
     expect(wilson).not.toHaveTextContent("LAL");
     expect(wilson).not.toHaveTextContent("NYK");
     expect(wilson.getAttribute("href")).toContain("/wnba/event/aces-liberty");
 
     const stewart = within(web).getByRole("link", { name: /breanna stewart/i });
-    expect(stewart).toHaveTextContent("67.6%");
-    expect(stewart).not.toHaveTextContent("67.5%");
+    expect(stewart).toHaveTextContent("Playable");
+    expect(stewart).toHaveTextContent("67%");
+    expect(stewart).not.toHaveTextContent("68%");
+    expect(stewart).not.toHaveTextContent("67.6%");
     expect(stewart).toHaveTextContent("SEA @ MIN");
     expect(stewart).not.toHaveTextContent("GSW");
     expect(within(web).getByText("Lynx")).toBeInTheDocument();
@@ -294,7 +311,7 @@ describe("TodayBoard", () => {
     const fanduelImplied = recordedNoVig.results.find(
       (row) => row.bookmaker === "fanduel",
     )?.p_over_imp;
-    expect(formatPercent(fanduelImplied)).toBe("70.6%");
+    expect(formatPercent(fanduelImplied)).toBe("71%");
     expect(within(web).queryByText("70.6%")).not.toBeInTheDocument();
     expect(within(web).queryByText("71.4%")).not.toBeInTheDocument();
 
@@ -302,5 +319,60 @@ describe("TodayBoard", () => {
     expect(apiMocks.getDailyPicks).not.toHaveBeenCalled();
     expect(apiMocks.getWNBAEvents).toHaveBeenCalledWith("2026-11-10");
     expect(apiMocks.getWnbaDailyPicks).toHaveBeenCalledWith({ date: "2026-11-10" });
+  });
+
+  it("uses top_read and the ET wall clock from the events payload", async () => {
+    const withRead = eventsResponseSchema.parse({
+      ...nbaEventsFixture,
+      events: nbaEventsFixture.events.map((event, index) =>
+        index === 0
+          ? {
+              ...event,
+              commence_time_et: "2026-11-10T20:00:00-05:00",
+              display_tz: "ET",
+              lineup_status: { home: "confirmed", away: "projected" },
+              top_read: giannisTopRead,
+            }
+          : event,
+      ),
+    });
+    apiMocks.getEvents.mockResolvedValue(withRead);
+    apiMocks.getDailyPicks.mockResolvedValue(nbaPicks);
+
+    renderWithProviders(<TodayBoard league="nba" />);
+
+    const web = await screen.findByTestId("today-web");
+    expect(within(web).getByRole("link", { name: /bam adebayo/i })).toHaveTextContent("MIA @ MIL · 8:00 PM");
+    expect(within(web).getByRole("link", { name: /bam adebayo/i })).toHaveTextContent("72%");
+    expect(within(web).getByText("Adebayo Over 10.5 REB")).toBeInTheDocument();
+    expect(within(web).queryByText("Antetokounmpo Under 31.5 PTS")).not.toBeInTheDocument();
+    expect(within(web).queryByText("81%")).not.toBeInTheDocument();
+    expect(within(web).getByText("Embiid Over 29.5 PTS")).toBeInTheDocument();
+    expect(within(web).queryByText(/lineup confirmed/i)).not.toBeInTheDocument();
+  });
+
+  it("keeps top_read on the game card when daily picks fail", async () => {
+    const withRead = eventsResponseSchema.parse({
+      ...nbaEventsFixture,
+      events: nbaEventsFixture.events.map((event, index) =>
+        index === 0
+          ? {
+              ...event,
+              top_read: giannisTopRead,
+            }
+          : event,
+      ),
+    });
+    apiMocks.getEvents.mockResolvedValue(withRead);
+    apiMocks.getDailyPicks.mockRejectedValue(new Error("picks down"));
+
+    renderWithProviders(<TodayBoard league="nba" />);
+
+    const web = await screen.findByTestId("today-web");
+    expect(within(web).getByText("Antetokounmpo Under 31.5 PTS")).toBeInTheDocument();
+    expect(within(web).queryByText("81%")).not.toBeInTheDocument();
+    expect(within(web).getAllByText("Top read unavailable")).toHaveLength(2);
+    expect(within(web).getByText(/reads unavailable/i)).toHaveTextContent("picks down");
+    expect(within(web).queryByText("72%")).not.toBeInTheDocument();
   });
 });

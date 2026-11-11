@@ -397,8 +397,41 @@ export interface EventPlayerRow {
   probability: number | null;
 }
 
+/** Fold a name so CSV and lineup spellings compare as the same person. */
+function nameKey(name: string): string {
+  const folded = name
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/-/g, " ")
+    .replace(/[.'’`]/g, "")
+    .replace(/\s+/g, " ")
+    .trim()
+    .toLowerCase();
+  return joinInitials(folded);
+}
+
+function joinInitials(folded: string): string {
+  const out: string[] = [];
+  let initials = "";
+  for (const part of folded.split(" ")) {
+    if (part.length === 1) {
+      initials += part;
+      continue;
+    }
+    if (initials) {
+      out.push(initials);
+      initials = "";
+    }
+    if (part) out.push(part);
+  }
+  if (initials) out.push(initials);
+  return out.join(" ");
+}
+
 function namesMatch(a: string, b: string): boolean {
-  return a.trim().toLowerCase() === b.trim().toLowerCase();
+  const left = nameKey(a);
+  const right = nameKey(b);
+  return left.length > 0 && left === right;
 }
 
 function onRoster(name: string, lineup: TeamLineup | null | undefined): boolean {
@@ -512,11 +545,16 @@ export function eventPlayerRows(args: {
       : pick
         ? teamAbbr(pick.player_team, args.league) || null
         : null;
-    const team =
-      teamFromPick ||
-      bulk?.team_code?.trim() ||
-      (onRoster(name, args.awayLineup) ? args.awayAbbr : null) ||
-      (onRoster(name, args.homeLineup) ? args.homeAbbr : null);
+    const onAway = onRoster(name, args.awayLineup);
+    const onHome = onRoster(name, args.homeLineup);
+    const lineupTeam =
+      onAway && !onHome ? args.awayAbbr : onHome && !onAway ? args.homeAbbr : null;
+    const inGame = (code: string | null | undefined) =>
+      code && (code === args.awayAbbr || code === args.homeAbbr) ? code : null;
+    // Tonight's lineup beats a CSV or projection club. A code that is
+    // neither home nor away (CHI on BOS@PHI) is not shown. The snapshot
+    // team_code is held to the same rule.
+    const team = lineupTeam || inGame(teamFromPick) || inGame(bulk?.team_code?.trim());
     const selected = namesMatch(name, args.selectedName);
     const readsStatus = args.league === "nba" ? args.readsStatus ?? "ready" : "ready";
     const sourcePick = args.league === "nba" ? pick : null;
@@ -563,6 +601,47 @@ export function eventPlayerRows(args: {
     }
     return a.name.localeCompare(b.name);
   });
+}
+
+function rosterNames(lineup: TeamLineup | null | undefined): string[] {
+  if (!lineup) return [];
+  return [...(lineup.starters ?? []), ...(lineup.bench_candidates ?? [])];
+}
+
+/**
+ * Teammates for the event filter.
+ *
+ * ``historyTeammates`` is already limited to a club in this game. A
+ * teammate who is out tonight is absent from the lineup and still belongs
+ * in the filter. When the player is on exactly one side, that side's
+ * starters and bench are appended. Names already in the history list stay
+ * in that order. The lineup list is used alone only when history is empty.
+ * The player himself is left out.
+ */
+export function eventTeammates(args: {
+  player: string;
+  awayLineup: TeamLineup | null;
+  homeLineup: TeamLineup | null;
+  historyTeammates: string[];
+}): string[] {
+  const history = args.historyTeammates.filter((name) => name.trim() && !namesMatch(name, args.player));
+  const onAway = onRoster(args.player, args.awayLineup);
+  const onHome = onRoster(args.player, args.homeLineup);
+  const side = onAway && !onHome ? args.awayLineup : onHome && !onAway ? args.homeLineup : null;
+  if (!side) return history;
+  const lineup = rosterNames(side).filter((name) => name.trim() && !namesMatch(name, args.player));
+  if (history.length === 0) return uniqueNames(lineup);
+  return uniqueNames([...history, ...lineup]);
+}
+
+function uniqueNames(names: string[]): string[] {
+  const out: string[] = [];
+  for (const name of names) {
+    const trimmed = name.trim();
+    if (!trimmed || out.some((existing) => namesMatch(existing, trimmed))) continue;
+    out.push(trimmed);
+  }
+  return out;
 }
 
 export interface PostedLineRow {

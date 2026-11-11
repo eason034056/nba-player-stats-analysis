@@ -79,6 +79,7 @@ describe("DailyPicksBoard", () => {
     expect(screen.getByText("Joel Embiid")).toBeInTheDocument();
     expect(screen.getByText("Tyrese Haliburton")).toBeInTheDocument();
     expect(screen.getAllByText("—").length).toBeGreaterThan(0);
+    expect(screen.queryByText("72%")).not.toBeInTheDocument();
     expect(screen.queryByText("72.0%")).not.toBeInTheDocument();
     expect(screen.getByText("Proj 20.4")).toBeInTheDocument();
     expect(screen.getByText("Def #9")).toBeInTheDocument();
@@ -87,6 +88,21 @@ describe("DailyPicksBoard", () => {
     expect(screen.queryByText("Chet Holmgren")).not.toBeInTheDocument();
     expect(screen.queryByText(/L10/)).not.toBeInTheDocument();
     expect(document.body.innerHTML).not.toContain("text-yellow-600");
+  });
+
+  it("shows an em dash when the player team is empty", () => {
+    const blank = {
+      ...picks.picks[0],
+      player_name: "Anfernee Simons",
+      player_team: "",
+      player_team_code: "",
+      home_team: "Philadelphia 76ers",
+      away_team: "Boston Celtics",
+    };
+    renderBoard({ picks: [blank], teams: [] });
+    expect(screen.getByText("Anfernee Simons")).toBeInTheDocument();
+    expect(screen.getAllByText("—").length).toBeGreaterThanOrEqual(2);
+    expect(screen.queryByText(/^PHI$/)).not.toBeInTheDocument();
   });
 
   it("hides players that miss the confidence or market chip", async () => {

@@ -159,7 +159,7 @@ describe("EventDetail fixtures", () => {
     expect(screen.getByText("MIA lineup projected")).toBeInTheDocument();
     expect(screen.queryByText("Strong play")).not.toBeInTheDocument();
     expect(screen.getByText("O —")).toBeInTheDocument();
-    expect(screen.getByText(/Historical hit rate 72.0%/)).toBeInTheDocument();
+    expect(screen.getByText(/Historical hit rate 72%/)).toBeInTheDocument();
     expect(screen.getAllByText("No read").length).toBeGreaterThan(0);
     expect(screen.getByText("Tue, Nov 10 · 6:30 PM")).toBeInTheDocument();
     expect(screen.queryByText(/supports|neutral|against/i)).not.toBeInTheDocument();

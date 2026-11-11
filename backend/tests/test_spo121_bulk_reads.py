@@ -30,7 +30,11 @@ from app.models.schemas import (
     PlayerHistoryResponse,
 )
 from app.services.board_shift import measure_board_shift
-from app.services.bulk_props import attach_roster_fields, roster_fields
+from app.services.bulk_props import (
+    _snapshot_event,
+    attach_roster_fields,
+    roster_fields,
+)
 from app.services.csv_player_history import CSVPlayerHistoryService
 from app.services.daily_analysis import (
     HIGH_PROBABILITY_THRESHOLD,
@@ -46,7 +50,7 @@ from app.services.event_reads import (
     get_event_reads,
 )
 from app.services.odds_snapshot_service import OddsSnapshotService
-from tests.fixtures.odds_api import load_odds_fixture
+from tests.fixtures.odds_api import NBA_EXPANDED_MARKETS, load_odds_fixture
 
 _FIXTURES = Path(__file__).resolve().parent / "fixtures"
 _SNAPSHOT_AT = datetime(2026, 11, 9, 21, 34, tzinfo=timezone.utc)
@@ -398,6 +402,102 @@ class TestRosterOnBulkProps:
         assert enriched.markets[0].players[0].position == "SG"
         assert enriched.markets[0].players[0].team_code == "GSW"
         assert enriched.markets[0].players[0].line == 24.5
+
+    def test_team_code_follows_team_on_event_for_the_recorded_clubs(self, monkeypatch):
+        excerpt = (
+            Path(__file__).resolve().parents[1]
+            / "tests"
+            / "fixtures"
+            / "csv"
+            / "spo122_anfernee_simons_excerpt.csv"
+        )
+        monkeypatch.setattr(
+            "app.services.csv_player_history.CSV_PATH",
+            str(excerpt),
+        )
+        service = CSVPlayerHistoryService(league="nba")
+        service.load_csv()
+        event = load_odds_fixture(NBA_EXPANDED_MARKETS)
+        snapshot_at = datetime(2026, 11, 10, 18, 0, tzinfo=timezone.utc)
+        raw_rows = OddsSnapshotService().rows_from_bookmakers(
+            event["bookmakers"],
+            event_id=event["id"],
+            home_team=event["home_team"],
+            away_team=event["away_team"],
+            date=event["commence_time"][:10],
+            snapshot_at=snapshot_at,
+        )
+        keys = (
+            "snapshot_at",
+            "date",
+            "event_id",
+            "home_team",
+            "away_team",
+            "player_name",
+            "market",
+            "bookmaker",
+            "line",
+            "over_odds",
+            "under_odds",
+            "vig",
+            "over_fair_prob",
+            "under_fair_prob",
+        )
+        home, away, event_day = _snapshot_event(
+            [dict(zip(keys, row)) for row in raw_rows]
+        )
+        assert home == "Philadelphia 76ers"
+        assert away == "Boston Celtics"
+        simons_pos, simons_code = roster_fields(
+            "Anfernee Simons",
+            service,
+            home_team=home,
+            away_team=away,
+            event_day=event["commence_time"],
+        )
+        assert simons_pos == service.latest_position("Anfernee Simons")
+        assert simons_code is None
+        white_pos, white_code = roster_fields(
+            "Derrick White",
+            service,
+            home_team=home,
+            away_team=away,
+            event_day=event_day,
+        )
+        assert white_pos == service.latest_position("Derrick White")
+        assert white_code == "BOS"
+
+        posted_line = float(raw_rows[0][8])
+
+        def player(name: str) -> BulkPropPlayer:
+            return BulkPropPlayer(
+                player=name,
+                line=posted_line,
+                bookmakers_count=1,
+                books=[BulkPropBook(bookmaker=str(raw_rows[0][7]), line=posted_line)],
+            )
+
+        enriched = attach_roster_fields(
+            BulkPropsResponse(
+                event_id=event["id"],
+                source="snapshot",
+                markets=[
+                    BulkPropMarket(
+                        market="player_points",
+                        players=[player("Anfernee Simons"), player("Derrick White")],
+                    )
+                ],
+            ),
+            service,
+            home_team=home,
+            away_team=away,
+            event_day=event["commence_time"],
+        )
+        by_name = {item.player: item for item in enriched.markets[0].players}
+        assert by_name["Anfernee Simons"].team_code is None
+        assert by_name["Anfernee Simons"].position == simons_pos
+        assert by_name["Derrick White"].team_code == "BOS"
+        assert by_name["Derrick White"].position == white_pos
 
 
 class TestEventReads:

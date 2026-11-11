@@ -383,7 +383,7 @@ export function DailyPicksBoard({
                       {row.rank}
                     </div>
                     <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-line font-mono text-[11px] font-bold text-brand">
-                      {row.team}
+                      {row.team || "—"}
                     </div>
                     <div className="min-w-0 flex-1">
                       <Link href={row.href} className="block font-bold hover:text-brand">

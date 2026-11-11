@@ -140,7 +140,7 @@ export function pickTags(pick: DailyPick): PickTag[] {
 export function pickTeamCode(pick: DailyPick, league: LeagueSegment): string {
   const code = pick.player_team_code?.trim();
   if (code && code.length <= 4) return code.toUpperCase();
-  return teamAbbr(pick.player_team || pick.home_team, league);
+  return teamAbbr(pick.player_team, league);
 }
 
 export function pickMatchup(pick: DailyPick, league: LeagueSegment): string {

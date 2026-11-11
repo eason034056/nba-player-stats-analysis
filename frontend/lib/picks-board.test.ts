@@ -6,6 +6,7 @@ import {
   marketChipList,
   matchesConfidence,
   pickTags,
+  pickTeamCode,
   sortPicks,
 } from "@/lib/picks-board";
 import { dailyPicksResponseSchema } from "@/lib/schemas";
@@ -47,6 +48,25 @@ describe("picks board view model", () => {
     expect(rows[2].tierShort).toBeNull();
     expect(rows[0].href).toContain("/event/evt-mia-bos?");
     expect(rows[0].href).toContain("player=Bam+Adebayo");
+  });
+
+  it("does not borrow the home club when the player team is empty", () => {
+    const blank = {
+      ...picks[0],
+      player_name: "Anfernee Simons",
+      player_team: "",
+      player_team_code: "",
+      home_team: "Philadelphia 76ers",
+      away_team: "Boston Celtics",
+    };
+    expect(pickTeamCode(blank, "nba")).toBe("");
+    expect(buildPickRows([blank], "nba", "2026-11-10")[0]?.team).toBe("");
+    expect(
+      pickTeamCode(
+        { ...blank, player_team: "Bulls", player_team_code: "" },
+        "nba",
+      ),
+    ).toBe("CHI");
   });
 });
 

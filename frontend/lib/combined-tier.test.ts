@@ -38,7 +38,7 @@ describe("formatTierPercent", () => {
       expect(formatTierPercent(row.input)).toBe(row.text);
     }
     expect(formatTierPercent(Number.NaN)).toBe("—");
-    expect(formatPercent(0.697)).toBe("69.7%");
+    expect(formatPercent(0.697)).toBe("70%");
   });
 });
 
@@ -181,7 +181,7 @@ describe("NBA combined tier", () => {
 
   it("keeps a saved slip that has no blend on the one-decimal historical percent", () => {
     expect(slipFace({ probability: 0.72 })).toEqual({
-      probabilityText: "72.0%",
+      probabilityText: "72%",
       tier: null,
     });
   });

@@ -25,8 +25,8 @@ import { cn } from "@/lib/utils";
 const TIER_CLASS = {
   strong: "bg-accent text-brand-ink",
   playable: "bg-brand text-white",
-  lean: "bg-[#E3DAF3] text-brand",
-  pass: "bg-[#E2E2E2] text-[#4A4458]",
+  lean: "bg-lean text-brand",
+  pass: "bg-pass text-ink-2",
 } as const;
 
 function errorText(error: unknown): string {
@@ -34,18 +34,29 @@ function errorText(error: unknown): string {
   return "The request failed.";
 }
 
-function ReadFace({ read }: { read: TodayReadCard }) {
+function ReadFace({
+  read,
+  tone,
+}: {
+  read: TodayReadCard;
+  tone: "overlay" | "flat";
+}) {
   return (
     <Link
       href={read.href}
-      className="flex flex-col gap-3.5 rounded-[20px] border border-white/15 bg-white/10 p-[18px] text-white hover:bg-white/[0.16]"
+      className={cn(
+        "flex flex-col gap-3.5 rounded-card text-white",
+        tone === "overlay"
+          ? "border border-white/[0.16] bg-white/[0.08] p-[18px] hover:bg-white/[0.14]"
+          : "bg-brand p-4",
+      )}
     >
       <div className="flex items-center justify-between gap-2.5">
         <span className="font-mono text-[11px] font-bold text-accent">#{read.rank}</span>
         {read.tier ? (
           <span
             className={cn(
-              "rounded-full px-2 py-1 text-[11px] font-bold",
+              "rounded-full px-[9px] py-1 text-[11px] font-bold",
               TIER_CLASS[read.tier.name],
             )}
           >
@@ -55,11 +66,13 @@ function ReadFace({ read }: { read: TodayReadCard }) {
       </div>
       <div>
         <div className="text-[17px] font-bold tracking-[-0.01em]">{read.player}</div>
-        <div className="mt-0.5 text-[13px] text-[#D9CEF0]">{read.matchup}</div>
+        <div className={cn("mt-0.5 text-gray-light", tone === "flat" ? "text-xs" : "text-[13px]")}>
+          {read.matchup}
+        </div>
       </div>
       <div className="flex items-end justify-between gap-2.5">
         <div className="text-[15px] font-semibold">{read.propText}</div>
-        <div className="font-mono text-[30px] font-bold leading-none text-accent">
+        <div className="font-mono text-prob font-bold text-accent">
           {read.probabilityText}
         </div>
       </div>
@@ -81,8 +94,8 @@ function GameTopRead({ game }: { game: TodayGameCard }) {
       {game.showProbability && game.topProbabilityText ? (
         <div
           className={cn(
-            "shrink-0 rounded-[10px] px-2.5 py-1.5 font-mono text-sm font-bold",
-            game.tier ? TIER_CLASS[game.tier.name] : "bg-[#E2E2E2] text-[#4A4458]",
+            "shrink-0 rounded-mark px-2.5 py-1.5 font-mono text-sm font-bold",
+            game.tier ? TIER_CLASS[game.tier.name] : "bg-pass text-ink-2",
           )}
         >
           {game.topProbabilityText}
@@ -114,17 +127,17 @@ function WebBoard({
   const countText =
     picksCount == null ? "All picks →" : `All ${picksCount} picks →`;
   return (
-    <div data-testid="today-web" className="hidden flex-col gap-8 md:flex">
-      <section className="flex flex-col gap-7 rounded-[28px] bg-brand px-8 py-10 text-white lg:px-11">
+    <div data-testid="today-web" className="hidden flex-col gap-[clamp(20px,3cqi,32px)] md:flex">
+      <section className="flex flex-col gap-7 rounded-hero bg-brand p-[clamp(22px,4cqi,44px)] text-white">
         <div className="flex flex-wrap items-end justify-between gap-5">
           <div className="flex max-w-[620px] flex-col gap-3">
-            <div className="font-mono text-xs font-semibold tracking-[0.12em] text-accent">
+            <div className="font-mono text-eyebrow font-semibold uppercase text-accent">
               {eyebrow}
             </div>
-            <h1 className="text-5xl font-bold leading-none tracking-[-0.035em] text-white lg:text-6xl">
+            <h1 className="font-bold text-hero text-white">
               Tonight&apos;s best reads
             </h1>
-            <p className="text-[17px] leading-[1.55] text-[#E6DDF6]">
+            <p className="text-[17px] leading-[1.55] text-brand-mist">
               {blurb}
             </p>
           </div>
@@ -145,23 +158,23 @@ function WebBoard({
           </div>
         </div>
         {picksLabel && (
-          <p className="text-sm text-[#E6DDF6]">{picksLabel}</p>
+          <p className="text-sm text-brand-mist">{picksLabel}</p>
         )}
         {reads.length > 0 ? (
           <div className="grid grid-cols-[repeat(auto-fill,minmax(min(100%,260px),1fr))] gap-3">
             {reads.map((read) => (
-              <ReadFace key={read.key} read={read} />
+              <ReadFace key={read.key} read={read} tone="overlay" />
             ))}
           </div>
         ) : (
           !picksLabel && (
-            <p className="rounded-[20px] border border-white/15 bg-white/10 px-5 py-6 text-sm text-[#E6DDF6]">
+            <p className="rounded-card border border-white/[0.16] bg-white/[0.08] px-5 py-6 text-sm text-brand-mist">
               No reads on tonight&apos;s board.
             </p>
           )
         )}
       </section>
-      <GamesBlock games={games} hint="Open a game to check any player prop" />
+      <GamesBlock games={games} hint="Tap a game to check any player prop" />
     </div>
   );
 }
@@ -187,22 +200,18 @@ function MobileBoard({
     <div data-testid="today-mobile" className="flex flex-col gap-6 md:hidden">
       <section className="flex flex-col gap-3.5">
         <div className="flex flex-col gap-1.5">
-          <div className="font-mono text-[11px] font-semibold tracking-[0.12em] text-[#7B4FC4]">
+          <div className="font-mono text-eyebrow-mobile font-semibold uppercase text-eyebrow">
             {eyebrow}
           </div>
-          <h1 className="text-[30px] font-bold leading-[1.05] tracking-[-0.03em] text-ink">
+          <h1 className="font-bold text-hero-mobile text-ink">
             Tonight&apos;s best reads
           </h1>
         </div>
         {picksLabel && <p className="text-sm text-muted">{picksLabel}</p>}
         {reads.length > 0 ? (
-          <div className="-mx-4 flex gap-2.5 overflow-x-auto px-4 pb-1">
+          <div className="today-snap">
             {reads.map((read) => (
-              <div key={read.key} className="w-[82%] shrink-0">
-                <div className="rounded-[20px] bg-brand">
-                  <ReadFace read={read} />
-                </div>
-              </div>
+              <ReadFace key={read.key} read={read} tone="flat" />
             ))}
           </div>
         ) : (
@@ -214,7 +223,7 @@ function MobileBoard({
         )}
         <Link
           href={picksHref}
-          className="inline-flex min-h-12 items-center justify-center rounded-[14px] border border-[#D3CCDF] bg-white text-sm font-bold text-brand"
+          className="inline-flex min-h-12 items-center justify-center rounded-md border border-line-strong bg-white text-sm font-bold text-brand"
         >
           {countText}
         </Link>
@@ -246,12 +255,12 @@ function GamesBlock({
           No games on this date.
         </p>
       ) : stacked ? (
-        <div className="overflow-hidden rounded-[20px] border border-line bg-[#E6E2EC]">
+        <div className="overflow-hidden rounded-card border border-line bg-list-gap">
           {games.map((game) => (
             <Link
               key={game.eventId}
               href={game.href}
-              className="flex items-center gap-3 border-b border-[#E6E2EC] bg-white px-4 py-3.5 last:border-b-0"
+              className="flex min-h-16 items-center gap-3 border-b border-list-gap bg-white py-3.5 pl-4 pr-3.5 last:border-b-0"
             >
               <div className="min-w-0 flex-1">
                 <div className="flex items-center gap-2">
@@ -273,8 +282,8 @@ function GamesBlock({
                 {game.showProbability && game.topProbabilityText ? (
                   <div
                     className={cn(
-                      "rounded-[9px] px-2 py-1 font-mono text-[13px] font-bold",
-                      game.tier ? TIER_CLASS[game.tier.name] : "bg-[#E2E2E2] text-[#4A4458]",
+                      "rounded-mark-sm px-2 py-1 font-mono text-[13px] font-bold",
+                      game.tier ? TIER_CLASS[game.tier.name] : "bg-pass text-ink-2",
                     )}
                   >
                     {game.topProbabilityText}
@@ -293,18 +302,18 @@ function GamesBlock({
             <Link
               key={game.eventId}
               href={game.href}
-              className="flex flex-col gap-[18px] rounded-[22px] border border-line bg-white p-5 hover:border-brand-soft"
+              className="flex flex-col gap-[18px] rounded-game border border-line bg-white p-5 hover:border-brand-soft"
             >
               <div className="flex items-center justify-between gap-3">
                 <TeamSide abbr={game.awayAbbr} name={game.awayName} role="Away" />
                 {game.time && (
-                  <div className="rounded-full bg-[#F3F1F6] px-2.5 py-1.5 font-mono text-xs font-semibold text-muted">
+                  <div className="rounded-full bg-seg px-2.5 py-1.5 font-mono text-xs font-semibold text-muted">
                     {game.time}
                   </div>
                 )}
                 <TeamSide abbr={game.homeAbbr} name={game.homeName} role="Home" align="end" />
               </div>
-              <div className="flex items-center justify-between gap-3 border-t border-[#EEEBF2] pt-3.5">
+              <div className="flex items-center justify-between gap-3 border-t border-divider pt-3.5">
                 <GameTopRead game={game} />
               </div>
             </Link>
@@ -407,36 +416,33 @@ export function TodayBoard({ league }: { league: LeagueSegment }) {
 
   if (eventsQuery.isLoading) {
     return (
-      <div
-        data-testid="today-loading"
-        aria-busy="true"
-        className="mx-auto flex w-full max-w-[1200px] flex-col gap-4 px-4 py-8 md:px-8"
-      >
-        <div className="skeleton h-8 w-40" />
-        <div className="skeleton h-48 w-full rounded-[28px]" />
-        <p className="text-sm text-muted">Loading tonight&apos;s board</p>
+      <div data-testid="today-loading" aria-busy="true" className="page-frame">
+        <div className="page-wrap flex flex-col gap-4">
+          <div className="skeleton h-8 w-40" />
+          <div className="skeleton h-48 w-full rounded-hero" />
+          <p className="text-sm text-muted">Loading tonight&apos;s board</p>
+        </div>
       </div>
     );
   }
 
   if (eventsQuery.isError) {
     return (
-      <div
-        role="alert"
-        className="mx-auto w-full max-w-[1200px] px-4 py-8 md:px-8"
-      >
-        <h1 className="text-3xl font-bold tracking-[-0.03em] text-ink">
-          Tonight&apos;s best reads
-        </h1>
-        <p className="mt-3 text-base text-ink">Could not load games.</p>
-        <p className="mt-1 text-sm text-muted">{errorText(eventsQuery.error)}</p>
-        <button
-          type="button"
-          onClick={() => eventsQuery.refetch()}
-          className="mt-4 inline-flex min-h-11 items-center rounded-full bg-brand px-5 text-sm font-bold text-white"
-        >
-          Retry
-        </button>
+      <div role="alert" className="page-frame">
+        <div className="page-wrap">
+          <h1 className="text-3xl font-bold tracking-[-0.03em] text-ink">
+            Tonight&apos;s best reads
+          </h1>
+          <p className="mt-3 text-base text-ink">Could not load games.</p>
+          <p className="mt-1 text-sm text-muted">{errorText(eventsQuery.error)}</p>
+          <button
+            type="button"
+            onClick={() => eventsQuery.refetch()}
+            className="mt-4 inline-flex min-h-11 items-center rounded-full bg-brand px-5 text-sm font-bold text-white"
+          >
+            Retry
+          </button>
+        </div>
       </div>
     );
   }
@@ -444,7 +450,7 @@ export function TodayBoard({ league }: { league: LeagueSegment }) {
   const events = eventsQuery.data?.events ?? [];
   const slateDate = eventsQuery.data?.date || selectedDate;
   const picks = picksQuery.data?.picks ?? [];
-  const reads = picksQuery.isSuccess ? todayReads(picks, league, slateDate) : [];
+  const reads = picksQuery.isSuccess ? todayReads(picks, league, slateDate, 3, events) : [];
   const games = todayGames(
     events,
     picksQuery.isSuccess ? picks : [],
@@ -462,33 +468,38 @@ export function TodayBoard({ league }: { league: LeagueSegment }) {
   const boardProps = {
     eyebrow: slateEyebrow(slateDate, events.length),
     reads,
-    games: games.map((game) =>
-      picksQuery.isLoading
-        ? { ...game, topText: "Loading the top read", topProbabilityText: null, showProbability: false, tier: null }
-        : picksQuery.isError
-          ? { ...game, topText: "Top read unavailable", topProbabilityText: null, showProbability: false, tier: null }
-          : game,
-    ),
+    games: games.map((game) => {
+      if (game.topSource === "event") return game;
+      if (picksQuery.isLoading) {
+        return { ...game, topText: "Loading the top read", topProbabilityText: null, showProbability: false, tier: null };
+      }
+      if (picksQuery.isError) {
+        return { ...game, topText: "Top read unavailable", topProbabilityText: null, showProbability: false, tier: null };
+      }
+      return game;
+    }),
     picksHref,
     picksCount,
     picksLabel,
     blurb:
       league === "nba"
-        ? "Each card is the combined probability and the tier from tonight's board."
+        ? "Each prop gets one probability, built from market prices, recent form, projection and matchup. Start with the strongest calls, or open any game."
         : "Each card is a historical hit rate from tonight's board. Start with the strongest calls, or open any game.",
   };
 
   return (
-    <div className="mx-auto flex w-full max-w-[1200px] flex-col px-4 py-6 md:px-8 md:py-10">
-      <WebBoard {...boardProps} onAsk={openWidget} />
-      <MobileBoard
-        eyebrow={boardProps.eyebrow}
-        reads={boardProps.reads}
-        games={boardProps.games}
-        picksHref={boardProps.picksHref}
-        picksCount={boardProps.picksCount}
-        picksLabel={boardProps.picksLabel}
-      />
+    <div className="page-frame">
+      <div className="page-wrap flex flex-col">
+        <WebBoard {...boardProps} onAsk={openWidget} />
+        <MobileBoard
+          eyebrow={boardProps.eyebrow}
+          reads={boardProps.reads}
+          games={boardProps.games}
+          picksHref={boardProps.picksHref}
+          picksCount={boardProps.picksCount}
+          picksLabel={boardProps.picksLabel}
+        />
+      </div>
     </div>
   );
 }
