@@ -11,13 +11,14 @@ NBA product agents read the BALLDONTLIE injury cache only when `NBA_INJURY_SOURC
 
 | 檔案 | 變更 |
 |---|---|
-| `backend/app/services/nba_injuries.py` | Normalize BDL rows, page through `next_cursor` (stop on a missing, null, or repeated cursor, and at 20 pages), write `injuries:nba:latest` with a 24h TTL, and treat `fetched_at` older than 6h as stale. `BdlInjuryClient` is the protocol SPO-130a will implement. A `ValueError` logs a warning; any other refresh failure logs the traceback. Both leave the previous cache. |
-| `backend/app/settings.py` | `NBA_INJURY_SOURCE` (default `espn_cbs`; `bdl` is the other allowed value), `BALLDONTLIE_API_KEY`, and `NBA_INJURIES_REFRESH_MINUTES` (default 15). The job is not registered. |
-| `scripts/agents/tools/historical.py` | NBA reads the cache only when `NBA_INJURY_SOURCE` is `bdl`. The default, an explicit `espn_cbs`, and an unknown value keep `InjuriesPageFetcher`. WNBA always keeps it. A stale or missing cache on the `bdl` path does not default players to Healthy. The request-path cache client is closed with `await local.close()`. |
+| `backend/app/services/nba_injuries.py` | Normalize BDL rows, page through `next_cursor` (stop on a missing, null, or repeated cursor, and at 20 pages), write `injuries:nba:latest` with a 24h TTL, and treat `fetched_at` older than 6h as stale. `entries` that is not a list is stale. An empty team map, or rows that normalize to nothing, does not write. A first page with `data: []` and a usable map stores an empty list. Unknown statuses containing `Out` become `Out`; every other unknown status becomes `Questionable`. `BdlInjuryClient` is the protocol SPO-130a will implement. A `ValueError` logs a warning. Any other refresh failure logs the exception type and not the message. Both leave the previous cache. The request-path Redis client uses a 2 second socket timeout. |
+| `backend/app/settings.py` | `NBA_INJURY_SOURCE` (default `espn_cbs`; `bdl` is the other allowed value; comparison is case-insensitive), `BALLDONTLIE_API_KEY` as `SecretStr`, and `NBA_INJURIES_REFRESH_MINUTES` (default 15). The job is not registered. |
+| `scripts/agents/tools/historical.py` | NBA reads the cache only when `NBA_INJURY_SOURCE` is `bdl`. `BDL` folds to `bdl`. A blank value, an unknown value, and a failure reading the setting keep `InjuriesPageFetcher` and log a warning. WNBA always keeps it. A stale, missing, or malformed cache on the `bdl` path does not default players to Healthy, including when the key is unset. Player matching prefers `bdl_player_id`, then one name on the CSV team, then one name in the whole snapshot. The caution payload includes `fetched_at`. The request-path cache client is closed with `await local.close()`. |
 | `scripts/agents/data_logger.py` | Source labels name the BALLDONTLIE cache for `NBA_INJURY_SOURCE=bdl`, and ESPN/CBS for the default and for WNBA. |
 | `backend/tests/fixtures/bdl/player_injuries__page1.json` | Recorded `GET /v1/player_injuries?per_page=100` page, copied unchanged. |
 | `backend/tests/fixtures/bdl/standings_2026.json` | Recorded `GET /v1/standings?season=2026`, copied unchanged. Source of the team-id map in tests. |
-| `backend/tests/test_spo131_bdl_injuries.py` | Normalizer, 30-team code check, pagination, failed page, stale and missing cache, one-team tool output, no network on the agent path, and the `NBA_INJURY_SOURCE` switch (default, `espn_cbs`, `bdl`, unknown, WNBA). |
+| `backend/tests/test_spo131_bdl_injuries.py` | Normalizer, 30-team code check, pagination from copies of the recorded page, failed page, stale and missing cache, one-team tool output, no network on the agent path, and the `NBA_INJURY_SOURCE` switch (default, `espn_cbs`, `bdl`, `BDL`, unknown, blank, settings read failure, no key, WNBA). |
+| `backend/tests/test_spo131_qa.py` | QA cache edge cases. Every BDL body is the recorded page or a copy of it. The three strict xfails (malformed `entries`, empty team map, unrecognized status) are removed because those cases now pass. |
 | `backend/tests/test_spo98_gaps.py` | Injury-fetch stubs accept the new optional `league` argument. |
 | `docs/decisions/SPO-131/decision_20261111_bdl-injury-cache.md` | Why the cache exists, why Doubtful maps to Questionable, why the team map is not hand-typed. |
 
@@ -39,15 +40,22 @@ Recorded fixtures only. No live BALLDONTLIE call.
 - A club with no rows in a fresh snapshot stays `neutral`. A missing or stale snapshot is `caution` with `injury data unavailable`, and teammate impact does not label stars Healthy.
 - A dummy key with the flag unset, and a dummy key with `espn_cbs`, still use the ESPN/CBS fetcher and do not open the cache.
 - `bdl` plus a fresh cache returns that team's rows. `bdl` plus a missing or stale cache is `caution` / `injury data unavailable`.
-- An unknown flag value is logged and uses the ESPN/CBS fetcher.
+- An unknown flag value, a blank value, and a failure reading the setting are logged and use the ESPN/CBS fetcher.
+- `BDL` is the same as `bdl` after strip and lowercase. It does not log an unknown-value warning.
+- `bdl` with no key and a fresh cache returns that team's rows. `bdl` with no key and a missing or stale cache is `caution` / `injury data unavailable`, and the scraper is not called.
+- An empty `SecretStr` is not a configured key.
+- A fresh body whose `entries` is missing, null, a string, or an object is `caution` / `injury data unavailable`. A fresh `entries: []` is `neutral`.
+- An empty team map, and a page of rows that all drop, leave the previous snapshot. A copied page with `data` cleared and a usable team map stores an empty list.
+- `Out For Season` is stored as `Out` with `raw_status` kept. The caution payload includes `fetched_at`.
+- A player id match wins when two rows share a name. A row on a team other than the CSV team is still found by a unique name.
 - WNBA uses the ESPN/CBS fetcher for the default, `espn_cbs`, `bdl`, and an unknown flag.
 
 ```
-cd backend && python -m pytest tests/test_spo131_bdl_injuries.py -q --tb=short
-# 29 passed
+cd backend && python -m pytest tests/test_spo131_bdl_injuries.py tests/test_spo131_qa.py -q --tb=short
+# 71 passed
 
 cd backend && python -m pytest --tb=line -q
-# 1226 passed, 26 skipped, 6 xfailed
+# 1268 passed, 26 skipped, 6 xfailed
 
 cd scripts/agents && python -m pytest tests --tb=line -q
 # 114 passed
