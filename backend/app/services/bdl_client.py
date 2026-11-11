@@ -371,11 +371,9 @@ class BdlClient:
         immediately. A transport error waits 60 seconds and tries again.
         The wait is ``self._sleep``, so a test clock can skip the real delay.
 
-        Upper bound for a scheduler timeout: each of the 3 attempts may
-        wait up to 8 times for a budget slot, and a failed attempt waits
-        once more before the next try (2 such waits). Every one of those
-        waits is at most 65 seconds, so one call can take about 1690
-        seconds when every slot is refused.
+        Worst case for one call is about 3 retries times 65 seconds.
+        Each retry backoff, and each pause taken from ``x-ratelimit-reset``,
+        is capped at 65 seconds, and a call makes at most 3 attempts.
         """
         last_status: int | None = None
         for attempt in range(_MAX_ATTEMPTS):

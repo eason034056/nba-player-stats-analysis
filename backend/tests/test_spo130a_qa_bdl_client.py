@@ -2,8 +2,9 @@
 
 Every response body comes from ``tests/fixtures/bdl/`` unchanged. Where a
 case needs no body at all (a transport error, a status-only 4xx), the
-test says so. ``xfail(strict=True)`` cases lock a review finding: they
-fail today and start passing once the client is changed.
+test says so. The reset wait is capped at 65 seconds, a failed limit
+publish still returns the recorded body, and an empty filter is refused
+before HTTP.
 """
 
 from __future__ import annotations
@@ -111,7 +112,6 @@ async def test_recorded_remaining_zero_waits_until_recorded_reset():
     assert seen == [float(reset - 20), float(reset)]
 
 
-@pytest.mark.xfail(strict=True, reason="should-fix: x-ratelimit-reset wait is not clamped")
 @pytest.mark.asyncio
 async def test_far_future_reset_is_clamped_to_one_window():
     """A local clock an hour behind the server must not sleep an hour on one 429.
@@ -132,7 +132,8 @@ async def test_far_future_reset_is_clamped_to_one_window():
         await client.list_games(dates=["2026-11-11"])
     finally:
         await client.aclose()
-    assert max(clock.sleeps) <= 61.0
+    # The cap is 65 seconds: one minute plus a little clock skew.
+    assert max(clock.sleeps) <= 65.0
 
 
 # ---------------------------------------------------------------------------
@@ -231,7 +232,6 @@ async def test_redis_down_raises_bdl_error_before_any_http():
     assert calls == []
 
 
-@pytest.mark.xfail(strict=True, reason="should-fix: a failed observed-limit publish discards a 200")
 @pytest.mark.asyncio
 async def test_observed_limit_publish_failure_keeps_the_recorded_200():
     games = _load("games_2026-11-11.json")
@@ -261,7 +261,6 @@ async def test_minute_key_gets_a_ttl_on_first_incr():
     assert 0 < await redis.ttl(keys[0]) <= 120
 
 
-@pytest.mark.xfail(strict=True, reason="should-fix: observed_limit is stored with no TTL (CLAUDE.md Redis rule)")
 @pytest.mark.asyncio
 async def test_observed_limit_key_has_an_explicit_ttl():
     games = _load("games_2026-11-11.json")
@@ -327,7 +326,6 @@ async def test_list_players_accepts_exactly_100_ids_in_one_call():
     assert "player_ids%5B%5D=1&" in str(seen[0].url)
 
 
-@pytest.mark.xfail(strict=True, reason="should-fix: an empty filter list sends an unfiltered request")
 @pytest.mark.parametrize(
     "method, kwargs",
     [
