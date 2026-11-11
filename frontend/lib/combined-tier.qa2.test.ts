@@ -61,7 +61,7 @@ describe("QA: slip totals use the side-correct blend on under legs", () => {
     expect(mixed.basis).toBe("history");
     expect(mixed.averageLabel).toBe("History");
     expect(mixed.allHitLabel).toBe("History");
-    expect(mixed.summary.averageText).toBe(formatPercent((0.55 + 0.4) / 2));
+    expect(mixed.summary.averageText).toBe(formatTierPercent((0.55 + 0.4) / 2));
     expect(mixed.summary.averageText).not.toBe(formatPercent((0.71 + 0.4) / 2));
   });
 });

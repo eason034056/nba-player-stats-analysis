@@ -82,13 +82,15 @@ describe("BetSlipScreen stored-rate math", () => {
     expect(within(summary.parentElement as HTMLElement).getByText("1")).toBeInTheDocument();
   });
 
-  it("shows 68% for a stored 0.6755 rate", async () => {
+  it("floors a stored 0.6755 total to 67%", async () => {
     seedBetSlip([slipPick(picks[0], 0.6755)]);
 
     renderWithProviders(<BetSlipScreen />);
 
-    expect((await screen.findAllByText("68%")).length).toBeGreaterThan(0);
-    expect(screen.queryByText("67%")).not.toBeInTheDocument();
+    const summary = (await screen.findByText("avg. probability")).parentElement?.parentElement;
+    expect(summary).not.toBeNull();
+    expect(within(summary as HTMLElement).getAllByText("67%")).toHaveLength(2);
+    expect(within(summary as HTMLElement).queryByText("68%")).not.toBeInTheDocument();
     expect(screen.queryByText(/NaN|Infinity/)).not.toBeInTheDocument();
   });
 

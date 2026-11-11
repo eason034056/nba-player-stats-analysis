@@ -10,7 +10,7 @@ import type { BetSlipPick } from "@/contexts/BetSlipContext";
 import { buildEventDetailHref, type LeagueSegment } from "./event-detail-link";
 import { metricToMarket } from "./metric-to-market";
 import { slipFace } from "./nba-card";
-import { formatPercent } from "./player-dd";
+import { formatPercent, formatTierPercent } from "./player-dd";
 import { teamAbbr } from "./team-abbr";
 import { boardClock } from "./today-board";
 import { propPhrase } from "./picks-board";
@@ -77,8 +77,8 @@ export function slipSummary(probabilities: number[]): SlipSummary {
   const allHit = probabilities.reduce((product, value) => product * value, 1);
   return {
     count,
-    averageText: formatPercent(average),
-    allHitText: formatPercent(allHit),
+    averageText: formatTierPercent(average),
+    allHitText: formatTierPercent(allHit),
   };
 }
 

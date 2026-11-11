@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import { slipTotals } from "@/lib/bet-slip-board";
 import { buildOurRead, eventPlayerRows, nbaReadsStatus, nbaRequestNote } from "@/lib/event-page";
-import { formatPercent } from "@/lib/player-dd";
+import { formatTierPercent } from "@/lib/player-dd";
 import {
   dailyPickSchema,
   playerHistoryResponseSchema,
@@ -129,8 +129,8 @@ describe("review: slip totals", () => {
     const blended = slipTotals([blend, other]);
     expect(blended.basis).toBe("blend");
     expect(blended.averageLabel).toBe("avg. blend");
-    expect(blended.summary.averageText).toBe(formatPercent((0.66 + 0.5) / 2));
-    expect(blended.summary.allHitText).toBe(formatPercent(0.66 * 0.5));
+    expect(blended.summary.averageText).toBe(formatTierPercent((0.66 + 0.5) / 2));
+    expect(blended.summary.allHitText).toBe(formatTierPercent(0.66 * 0.5));
 
     const plain = createBetSlipPick({
       id: "plain-points",
@@ -142,7 +142,7 @@ describe("review: slip totals", () => {
     expect(mixed.basis).toBe("history");
     expect(mixed.averageLabel).toBe("History");
     expect(mixed.allHitLabel).toBe("History");
-    expect(mixed.summary.averageText).toBe(formatPercent((0.59 + 0.4) / 2));
+    expect(mixed.summary.averageText).toBe(formatTierPercent((0.59 + 0.4) / 2));
     expect(slipTotals([plain]).averageLabel).toBe("avg. probability");
   });
 });
