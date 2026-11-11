@@ -91,7 +91,7 @@ function GameTopRead({ game }: { game: TodayGameCard }) {
           {game.topText ?? "No read on this game"}
         </div>
       </div>
-      {game.topProbabilityText ? (
+      {game.showProbability && game.topProbabilityText ? (
         <div
           className={cn(
             "shrink-0 rounded-mark px-2.5 py-1.5 font-mono text-sm font-bold",
@@ -112,6 +112,7 @@ function WebBoard({
   picksHref,
   picksCount,
   picksLabel,
+  blurb,
   onAsk,
 }: {
   eyebrow: string;
@@ -120,6 +121,7 @@ function WebBoard({
   picksHref: string;
   picksCount: number | null | undefined;
   picksLabel: string | null;
+  blurb: string;
   onAsk: () => void;
 }) {
   const countText =
@@ -136,8 +138,7 @@ function WebBoard({
               Tonight&apos;s best reads
             </h1>
             <p className="text-[17px] leading-[1.55] text-brand-mist">
-              Each prop gets one probability, built from market prices, recent form,
-              projection and matchup. Start with the strongest calls, or open any game.
+              {blurb}
             </p>
           </div>
           <div className="flex flex-wrap gap-2.5">
@@ -278,7 +279,7 @@ function GamesBlock({
                 {game.time && (
                   <div className="font-mono text-xs font-semibold text-muted">{game.time}</div>
                 )}
-                {game.topProbabilityText ? (
+                {game.showProbability && game.topProbabilityText ? (
                   <div
                     className={cn(
                       "rounded-mark-sm px-2 py-1 font-mono text-[13px] font-bold",
@@ -470,23 +471,34 @@ export function TodayBoard({ league }: { league: LeagueSegment }) {
     games: games.map((game) => {
       if (game.topSource === "event") return game;
       if (picksQuery.isLoading) {
-        return { ...game, topText: "Loading the top read", topProbabilityText: null, tier: null };
+        return { ...game, topText: "Loading the top read", topProbabilityText: null, showProbability: false, tier: null };
       }
       if (picksQuery.isError) {
-        return { ...game, topText: "Top read unavailable", topProbabilityText: null, tier: null };
+        return { ...game, topText: "Top read unavailable", topProbabilityText: null, showProbability: false, tier: null };
       }
       return game;
     }),
     picksHref,
     picksCount,
     picksLabel,
+    blurb:
+      league === "nba"
+        ? "Each prop gets one probability, built from market prices, recent form, projection and matchup. Start with the strongest calls, or open any game."
+        : "Each card is a historical hit rate from tonight's board. Start with the strongest calls, or open any game.",
   };
 
   return (
     <div className="page-frame">
       <div className="page-wrap flex flex-col">
         <WebBoard {...boardProps} onAsk={openWidget} />
-        <MobileBoard {...boardProps} />
+        <MobileBoard
+          eyebrow={boardProps.eyebrow}
+          reads={boardProps.reads}
+          games={boardProps.games}
+          picksHref={boardProps.picksHref}
+          picksCount={boardProps.picksCount}
+          picksLabel={boardProps.picksLabel}
+        />
       </div>
     </div>
   );

@@ -11,6 +11,7 @@ import { enUS } from "date-fns/locale";
 
 import { buildEventDetailHref, type LeagueSegment } from "./event-detail-link";
 import { METRIC_TO_MARKET, type MetricKey } from "./metric-to-market";
+import { boardRate, nbaTierFace, tierFromBackend } from "./nba-card";
 import { formatPercent, formatTierPercent } from "./player-dd";
 import {
   DIRECTION_DISPLAY_NAMES,
@@ -28,10 +29,7 @@ export interface ReadTier {
 }
 
 /**
- * Display bucket for a probability the API already computed.
- * 70% and 65% match the picks page (high versus medium) and the
- * prototype's Strong / Playable labels. Below that, the daily-picks
- * service does not return a row.
+ * WNBA display bucket. NBA cards do not call this. They use DailyPick.tier.
  */
 export function readTier(probability: number | null | undefined): ReadTier | null {
   if (probability == null || !Number.isFinite(probability)) return null;
@@ -189,13 +187,25 @@ function readHref(pick: DailyPick, league: LeagueSegment, date: string): string 
   });
 }
 
-export function rankReads(picks: DailyPick[]): DailyPick[] {
+export function rankReads(picks: DailyPick[], league: LeagueSegment): DailyPick[] {
   return [...picks].sort((a, b) => {
-    if (b.probability !== a.probability) return b.probability - a.probability;
+    const left = boardRate(a, league);
+    const right = boardRate(b, league);
+    if (right !== left) return right - left;
     const byName = a.player_name.localeCompare(b.player_name);
     if (byName !== 0) return byName;
     return a.metric.localeCompare(b.metric);
   });
+}
+
+function cardTier(pick: DailyPick, league: LeagueSegment): ReadTier | null {
+  if (league === "nba") return tierFromBackend(pick.tier);
+  return readTier(pick.probability);
+}
+
+function cardProbability(pick: DailyPick, league: LeagueSegment): string {
+  if (league === "nba") return nbaTierFace(pick).probabilityText;
+  return formatPercent(pick.probability);
 }
 
 export interface TodayReadCard {
@@ -217,11 +227,18 @@ export function todayReads(
   events: NBAEvent[] = [],
 ): TodayReadCard[] {
   const tipByEvent = new Map(events.map((event) => [event.event_id, eventTipClock(event)]));
-  return rankReads(picks)
+  return rankReads(picks, league)
     .slice(0, limit)
     .map((pick, index) => {
       const time = tipByEvent.get(pick.event_id) ?? boardClock(pick.commence_time);
-      const tier = tierFromApi(pick.tier);
+      const storedTier = tierFromBackend(pick.tier);
+      const tier = league === "nba" ? cardTier(pick, league) : storedTier;
+      const probabilityText =
+        league === "nba"
+          ? cardProbability(pick, league)
+          : storedTier
+            ? formatTierPercent(pick.probability)
+            : formatPercent(pick.probability);
       return {
         key: `${pick.event_id}-${pick.player_name}-${pick.metric}-${pick.direction}`,
         rank: index + 1,
@@ -232,7 +249,7 @@ export function todayReads(
           time,
         ),
         propText: propText(pick),
-        probabilityText: tier ? formatTierPercent(pick.probability) : formatPercent(pick.probability),
+        probabilityText,
         tier,
         href: readHref(pick, league, date),
       };
@@ -250,6 +267,7 @@ export interface TodayGameCard {
   time: string | null;
   topText: string | null;
   topProbabilityText: string | null;
+  showProbability: boolean;
   tier: ReadTier | null;
   /** `event` means `NBAEvent.top_read`. `picks` is the client fallback. */
   topSource: TodayTopSource;
@@ -265,13 +283,6 @@ function topReadText(read: TopRead): string {
  * `null` stays `null`. This does not look at the probability, so a high
  * rate with no tier does not become "Strong play".
  */
-export function tierFromApi(tier: string | null | undefined): ReadTier | null {
-  if (tier === "Strong play") return { name: "strong", label: "Strong play" };
-  if (tier === "Playable") return { name: "playable", label: "Playable" };
-  if (tier === "Lean") return { name: "lean", label: "Lean" };
-  return null;
-}
-
 function tierForTopRead(read: TopRead, eventId: string, picks: DailyPick[]): ReadTier | null {
   const match = picks.find(
     (pick) =>
@@ -281,7 +292,7 @@ function tierForTopRead(read: TopRead, eventId: string, picks: DailyPick[]): Rea
       pick.threshold === read.line &&
       knownMarket(pick.metric) === read.market,
   );
-  return match ? tierFromApi(match.tier) : null;
+  return match ? tierFromBackend(match.tier) : null;
 }
 
 export function todayGames(
@@ -290,36 +301,53 @@ export function todayGames(
   league: LeagueSegment,
   date: string,
 ): TodayGameCard[] {
-  const ranked = rankReads(picks);
+  const ranked = rankReads(picks, league);
   return events.map((event) => {
+    // NBA: the top published pick by blend. top_read is ranked on the
+    // historical rate and carries no blend, so it only fills text when no
+    // published pick exists, without a percent or tier.
     const apiRead = event.top_read ?? null;
-    const best = apiRead
-      ? null
-      : ranked.find((pick) => pick.event_id === event.event_id) ?? null;
-    const tier = apiRead
-      ? tierForTopRead(apiRead, event.event_id, picks)
-      : best
-        ? tierFromApi(best.tier)
+    const best = ranked.find((pick) => pick.event_id === event.event_id) ?? null;
+    const useApi = league === "nba" ? best == null && apiRead != null : apiRead != null;
+    const pick = useApi ? null : best;
+    const tier = useApi
+      ? league === "nba"
+        ? null
+        : tierForTopRead(apiRead!, event.event_id, picks)
+      : pick
+        ? cardTier(pick, league)
         : null;
-    const probability = apiRead ? apiRead.probability : best ? best.probability : null;
-    const href = apiRead
+    const href = useApi
       ? buildEventDetailHref({
           eventId: event.event_id,
           date,
-          player: apiRead.player,
-          market: apiRead.market,
-          threshold: apiRead.line,
+          player: apiRead!.player,
+          market: apiRead!.market,
+          threshold: apiRead!.line,
           commenceTime: event.commence_time,
           league,
         })
-      : best
-        ? readHref(best, league, date)
+      : pick
+        ? readHref(pick, league, date)
         : buildEventDetailHref({
             eventId: event.event_id,
             date,
             commenceTime: event.commence_time,
             league,
           });
+    let topProbabilityText: string | null = null;
+    if (useApi && league !== "nba") {
+      topProbabilityText = tier
+        ? formatTierPercent(apiRead!.probability)
+        : formatPercent(apiRead!.probability);
+    } else if (pick) {
+      topProbabilityText =
+        league === "nba"
+          ? cardProbability(pick, league)
+          : tier
+            ? formatTierPercent(pick.probability)
+            : formatPercent(pick.probability);
+    }
     return {
       eventId: event.event_id,
       awayAbbr: teamAbbr(event.away_team, league),
@@ -327,18 +355,15 @@ export function todayGames(
       awayName: teamShortName(event.away_team, league),
       homeName: teamShortName(event.home_team, league),
       time: eventTipClock(event),
-      topText: apiRead
-        ? topReadText(apiRead)
-        : best
-          ? `${playerLastName(best.player_name)} ${propText(best)}`
+      topText: useApi
+        ? topReadText(apiRead!)
+        : pick
+          ? `${playerLastName(pick.player_name)} ${propText(pick)}`
           : null,
-      topProbabilityText: apiRead || best
-        ? tier
-          ? formatTierPercent(probability)
-          : formatPercent(probability)
-        : null,
+      topProbabilityText,
+      showProbability: topProbabilityText != null,
       tier,
-      topSource: apiRead ? "event" : best ? "picks" : "none",
+      topSource: useApi ? "event" : pick ? "picks" : "none",
       href,
     };
   });

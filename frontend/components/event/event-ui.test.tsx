@@ -107,6 +107,7 @@ describe("PlayerRail", () => {
     {
       name: "Bam Adebayo",
       team: "MIA",
+      position: null,
       lineText: "18.5",
       leanText: "O 72.0%",
       hasLean: true,
@@ -115,6 +116,7 @@ describe("PlayerRail", () => {
     {
       name: "Tyler Herro",
       team: "MIA",
+      position: null,
       lineText: "—",
       leanText: "No read",
       hasLean: false,
@@ -182,6 +184,7 @@ describe("OurRead", () => {
     last10: [],
     history: null,
     projection: null,
+    league: "wnba",
   });
 
   it("renders a WNBA read with the projection gap and no verdict", () => {

@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import { slipSummary } from "@/lib/bet-slip-board";
-import { formatPercent } from "@/lib/player-dd";
+import { formatPercent, formatTierPercent } from "@/lib/player-dd";
 import { dailyPicksResponseSchema } from "@/lib/schemas";
 import nbaPicksFixture from "@/test/fixtures/picks/nba-daily-picks.json";
 
@@ -55,7 +55,7 @@ describe("slipSummary", () => {
     expect(afterRemove).toEqual({
       count: 2,
       averageText: "71%",
-      allHitText: "51%",
+      allHitText: "50%",
     });
     expect(slipSummary([bam])).toEqual({
       count: 1,
@@ -64,7 +64,7 @@ describe("slipSummary", () => {
     });
   });
 
-  it("rounds 0, 1, and 0.6755 the same way formatPercent does", () => {
+  it("floors 0, 1, and 0.6755 the same way formatTierPercent does", () => {
     expect(slipSummary([0])).toEqual({
       count: 1,
       averageText: "0%",
@@ -75,9 +75,9 @@ describe("slipSummary", () => {
       averageText: "100%",
       allHitText: "100%",
     });
-    expect(slipSummary([0.6755]).allHitText).toBe("68%");
-    expect(slipSummary([0.6755]).allHitText).toBe(formatPercent(0.6755));
-    expect(slipSummary([0.6755]).allHitText).not.toBe("67%");
+    expect(slipSummary([0.6755]).allHitText).toBe("67%");
+    expect(slipSummary([0.6755]).allHitText).toBe(formatTierPercent(0.6755));
+    expect(slipSummary([0.6755]).allHitText).not.toBe(formatPercent(0.6755));
   });
 
   it("does not de-vig stored rates or print American odds", () => {

@@ -356,6 +356,7 @@ export const playerHistoryResponseSchema = z.object({
   equal_count: z.number().optional().default(0),   // 等於閾值的場次數
   mean: z.number().nullable().optional(),          // 平均值
   std: z.number().nullable().optional(),           // 標準差
+  season_mean: z.number().nullable().optional().catch(null),
   histogram: z.array(histogramBinSchema),          // 直方圖資料（保留兼容性）
   game_logs: z.array(gameLogSchema).optional().default([]),  // 每場比賽詳細資料
   opponents: z.array(z.string()).optional().default([]),      // 對手列表
@@ -497,6 +498,15 @@ export const RECENT_GAMES_OPTIONS = recentGamesOptions("nba");
  * - bookmakers_count: 有開出這名球員這個盤口的博彩公司家數（同一家的 Over/Under 與替代盤只算一次）
  * - all_lines: 每家博彩公司的主盤，一家一條
  */
+export const pickSignalSchema = z.object({
+  key: z.string(),
+  label: z.string(),
+  value: z.string().nullable().optional(),
+  verdict: z.enum(["supports", "neutral", "against"]).nullable().optional().catch(null),
+});
+
+export type PickSignal = z.infer<typeof pickSignalSchema>;
+
 export const dailyPickSchema = z.object({
   player_name: z.string(),
   player_team: z.string().optional().default(""),  // 球員所屬球隊（簡短名稱）
@@ -509,9 +519,6 @@ export const dailyPickSchema = z.object({
   threshold: z.number(),
   direction: z.string(),
   probability: z.number(),
-  // Backend bucket for `probability`. Today prints this string and does not
-  // recompute a tier from the percent. Absent on older payloads.
-  tier: z.enum(["Strong play", "Playable", "Lean"]).nullable().optional(),
   n_games: z.number(),
   bookmakers_count: z.number(),
   all_lines: z.array(z.number()).optional().default([]),
@@ -525,6 +532,13 @@ export const dailyPickSchema = z.object({
   opponent_position_rank: z.number().nullable().optional(),// 對手對該位置防守排名。同一契約：1 = 最弱
   injury_status: z.string().nullable().optional(),         // 傷病狀態（Free Trial 為 null）
   lineup_confirmed: z.boolean().nullable().optional(),     // 先發是否已確認
+  position: z.string().nullable().optional().catch(null),
+  tier: z.enum(["Strong play", "Playable", "Lean"]).nullable().optional().catch(null),
+  p_over: z.number().min(0).max(1).nullable().optional().catch(null),
+  p_under: z.number().min(0).max(1).nullable().optional().catch(null),
+  season_mean: z.number().nullable().optional().catch(null),
+  signals: z.array(pickSignalSchema).nullable().optional().catch(null),
+  combined_probability: z.number().min(0).max(1).nullable().optional().catch(null),
 });
 
 export type DailyPick = z.infer<typeof dailyPickSchema>;
@@ -733,3 +747,62 @@ export const projectionRefreshResponseSchema = z.object({
 });
 
 export type ProjectionRefreshResponse = z.infer<typeof projectionRefreshResponseSchema>;
+
+const unitProbability = z.number().min(0).max(1);
+
+export const propReadSchema = z.object({
+  player: z.string(),
+  market: z.string(),
+  line: z.number(),
+  side: z.enum(["over", "under"]).nullable().optional().catch(null),
+  combined_probability: unitProbability.nullable().optional().catch(null),
+  tier: z.enum(["Strong play", "Playable", "Lean"]).nullable().optional().catch(null),
+  signals: z.array(pickSignalSchema).nullable().optional().catch(null),
+});
+
+export type PropRead = z.infer<typeof propReadSchema>;
+
+export const eventReadsResponseSchema = z.object({
+  event_id: z.string(),
+  market: z.string().nullable().optional(),
+  snapshot_at: z.string().nullable().optional(),
+  source: z.literal("snapshot"),
+  reads: z.array(propReadSchema),
+});
+
+export type EventReadsResponse = z.infer<typeof eventReadsResponseSchema>;
+
+export const bulkPropBookSchema = z.object({
+  bookmaker: z.string(),
+  line: z.number(),
+  over_odds: z.number().nullable().optional(),
+  under_odds: z.number().nullable().optional(),
+  yes_odds: z.number().nullable().optional(),
+  no_odds: z.number().nullable().optional(),
+});
+
+export const bulkPropPlayerSchema = z.object({
+  player: z.string(),
+  position: z.string().nullable().optional().catch(null),
+  team_code: z.string().nullable().optional().catch(null),
+  line: z.number(),
+  bookmakers_count: z.number(),
+  books: z.array(bulkPropBookSchema).optional().default([]),
+});
+
+export type BulkPropPlayer = z.infer<typeof bulkPropPlayerSchema>;
+
+export const bulkPropsResponseSchema = z.object({
+  event_id: z.string(),
+  snapshot_at: z.string().nullable().optional(),
+  data_age_seconds: z.number().int().nullable().optional(),
+  source: z.literal("snapshot"),
+  markets: z.array(
+    z.object({
+      market: z.string(),
+      players: z.array(bulkPropPlayerSchema),
+    }),
+  ),
+});
+
+export type BulkPropsResponse = z.infer<typeof bulkPropsResponseSchema>;

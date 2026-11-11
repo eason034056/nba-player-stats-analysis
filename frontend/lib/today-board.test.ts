@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 
+import { tierFromBackend } from "@/lib/nba-card";
 import { formatPercent, formatTierPercent } from "@/lib/player-dd";
 import {
   dailyPicksResponseSchema,
@@ -15,7 +16,6 @@ import {
   propText,
   readTier,
   slateEyebrow,
-  tierFromApi,
   todayGames,
   todayReads,
 } from "@/lib/today-board";
@@ -48,19 +48,29 @@ describe("today board dates", () => {
 });
 
 describe("today board numbers", () => {
-  it("shows the stored probability, not a second vig pass", () => {
+  it("shows an em dash when the NBA pick has no blend and no tier", () => {
+    const [stored] = nbaPicks.picks;
+    const [card] = todayReads(
+      [{ ...stored, tier: null, combined_probability: null }],
+      "nba",
+      nbaPicks.date,
+    );
+    expect(card.probabilityText).toBe("—");
+    expect(card.tier).toBeNull();
+    expect(card.probabilityText).not.toBe(formatPercent(0.724));
+  });
+
+  it("uses the backend tier and the blend, and does not recompute a tier", () => {
     const [bam] = todayReads(nbaPicks.picks, "nba", nbaPicks.date);
-    expect(bam.probabilityText).toBe(formatPercent(0.724));
+    expect(bam.probabilityText).toBe(formatTierPercent(0.724));
     expect(bam.probabilityText).toBe("72%");
     expect(bam.probabilityText).not.toBe("72.4%");
     expect(bam.probabilityText).not.toBe("7240%");
-    expect(bam.tier).toEqual(tierFromApi("Strong play"));
-  });
+    expect(bam.tier).toEqual(tierFromBackend("Strong play"));
 
-  it("uses the backend tier and does not recompute one from the probability", () => {
     const [stored] = nbaPicks.picks;
     const highButPlayable = todayReads(
-      [{ ...stored, probability: 0.91, tier: "Playable" }],
+      [{ ...stored, probability: 0.91, combined_probability: 0.91, tier: "Playable" }],
       "nba",
       nbaPicks.date,
     );
@@ -69,15 +79,15 @@ describe("today board numbers", () => {
     expect(highButPlayable[0].tier?.name).not.toBe("strong");
 
     const highWithoutTier = todayReads(
-      [{ ...stored, probability: 0.91, tier: null }],
+      [{ ...stored, probability: 0.91, combined_probability: null, tier: null }],
       "nba",
       nbaPicks.date,
     );
     expect(highWithoutTier[0].tier).toBeNull();
-    expect(highWithoutTier[0].probabilityText).toBe(formatPercent(0.91));
+    expect(highWithoutTier[0].probabilityText).toBe("—");
 
     const justUnderStrong = todayReads(
-      [{ ...stored, probability: 0.697, tier: "Playable" }],
+      [{ ...stored, probability: 0.697, combined_probability: 0.697, tier: "Playable" }],
       "nba",
       nbaPicks.date,
     );
@@ -87,19 +97,19 @@ describe("today board numbers", () => {
     expect(justUnderStrong[0].probabilityText).not.toBe(formatPercent(0.697));
 
     const sameRateWithoutTier = todayReads(
-      [{ ...stored, probability: 0.697, tier: null }],
+      [{ ...stored, probability: 0.697, combined_probability: null, tier: null }],
       "nba",
       nbaPicks.date,
     );
     expect(sameRateWithoutTier[0].tier).toBeNull();
-    expect(sameRateWithoutTier[0].probabilityText).toBe("70%");
+    expect(sameRateWithoutTier[0].probabilityText).toBe("—");
 
-    expect(tierFromApi(null)).toBeNull();
-    expect(tierFromApi(undefined)).toBeNull();
-    expect(tierFromApi("Pass")).toBeNull();
+    expect(tierFromBackend(null)).toBeNull();
+    expect(tierFromBackend(undefined)).toBeNull();
+    expect(tierFromBackend("Pass")).toBeNull();
   });
 
-  it("buckets the display tiers on the stored probability", () => {
+  it("buckets WNBA display tiers on the stored probability", () => {
     expect(readTier(0.7)?.name).toBe("strong");
     expect(readTier(0.699)?.name).toBe("playable");
     expect(readTier(0.65)?.name).toBe("playable");
@@ -229,7 +239,7 @@ describe("today board event fields", () => {
     expect(bam.probabilityText).toBe("72%");
   });
 
-  it("prefers top_read over the client pick and prints a whole percent", () => {
+  it("keeps a published NBA pick ahead of top_read, and prints top_read with no percent when no pick exists", () => {
     expect(marketShort("player_points")).toBe("PTS");
     expect(marketShort("player_rebounds")).toBe("REB");
     expect(marketShort("player_threes")).toBe("3PM");
@@ -247,18 +257,34 @@ describe("today board event fields", () => {
       ),
     });
     const games = todayGames(events.events, nbaPicks.picks, "nba", events.date);
-    expect(games[0].topSource).toBe("event");
-    expect(games[0].topText).toBe("Antetokounmpo Under 31.5 PTS");
-    expect(games[0].topProbabilityText).toBe(formatPercent(0.81));
-    expect(games[0].topProbabilityText).toBe("81%");
-    expect(games[0].tier).toBeNull();
-    expect(games[0].topProbabilityText).not.toBe("81.0%");
+    expect(games[0].topSource).toBe("picks");
+    expect(games[0].topText).toBe("Adebayo Over 10.5 REB");
+    expect(games[0].topProbabilityText).toBe("72%");
+    expect(games[0].tier).toEqual({ name: "strong", label: "Strong play" });
     expect(games[0].time).toBe("8:00 PM");
-    expect(games[0].href).toContain("player=Giannis");
-    expect(games[0].href).toContain("market=player_points");
-    expect(games[0].href).toContain("threshold=31.5");
+    expect(games[0].href).toContain("player=Bam");
     expect(games[1].topSource).toBe("picks");
     expect(games[1].topText).toBe("Embiid Over 29.5 PTS");
+
+    const onlyRead = todayGames(
+      [
+        {
+          ...events.events[0],
+          event_id: "no-pick",
+          top_read: giannisTopRead,
+        },
+      ],
+      [],
+      "nba",
+      events.date,
+    );
+    expect(onlyRead[0].topSource).toBe("event");
+    expect(onlyRead[0].topText).toBe("Antetokounmpo Under 31.5 PTS");
+    expect(onlyRead[0].topProbabilityText).toBeNull();
+    expect(onlyRead[0].tier).toBeNull();
+    expect(onlyRead[0].href).toContain("player=Giannis");
+    expect(onlyRead[0].href).toContain("market=player_points");
+    expect(onlyRead[0].href).toContain("threshold=31.5");
   });
 
   it("drops a top_read that does not match the contract and uses the client pick", () => {

@@ -132,7 +132,7 @@ describe("player rows and lines", () => {
     });
     const bam = rows.find((row) => row.name === "Bam Adebayo");
     const herro = rows.find((row) => row.name === "Tyler Herro");
-    expect(bam?.leanText).toBe("O 72%");
+    expect(bam?.leanText).toBe("O —");
     expect(bam?.lineText).toBe("18.5");
     expect(herro?.leanText).toBe("No read");
     expect(herro?.lineText).toBe("16.5");
@@ -330,9 +330,11 @@ describe("our read", () => {
       last10: [],
       history: null,
       projection: null,
+      league: "nba",
     });
-    expect(model.tier?.label).toBe("Strong play");
+    expect(model.tier).toBeNull();
     expect(model.headlineLead).toBe("Over 18.5");
+    expect(model.caption).toMatch(/Combined probability —/);
     expect(model.caption).toMatch(/Historical hit rate 72%/);
     expect(model.primary?.probability).toBe(0.72);
     expect(model.other).toBeNull();
@@ -359,6 +361,7 @@ describe("our read", () => {
       last10: [],
       history: bamHistory,
       projection: null,
+      league: "nba",
     });
     expect(model.other?.direction).toBe("under");
     expect(model.other?.probability).toBe(0.35);
@@ -385,6 +388,7 @@ describe("our read", () => {
       last10: [],
       history: null,
       projection: null,
+      league: "nba",
     });
     expect(model.tier).toBeNull();
     expect(model.headlineLead).toBe("No posted line");

@@ -9,15 +9,63 @@
 import type { BetSlipPick } from "@/contexts/BetSlipContext";
 import { buildEventDetailHref, type LeagueSegment } from "./event-detail-link";
 import { metricToMarket } from "./metric-to-market";
-import { formatPercent } from "./player-dd";
+import { slipFace } from "./nba-card";
+import { formatTierPercent } from "./player-dd";
 import { teamAbbr } from "./team-abbr";
-import { boardClock, readTier } from "./today-board";
+import { boardClock } from "./today-board";
 import { propPhrase } from "./picks-board";
 
 export interface SlipSummary {
   count: number;
   averageText: string;
   allHitText: string;
+}
+
+function legHasBlend(pick: BetSlipPick): boolean {
+  return typeof pick.combined_probability === "number" && Number.isFinite(pick.combined_probability);
+}
+
+export interface SlipTotals {
+  summary: SlipSummary;
+  averageLabel: string;
+  allHitLabel: string;
+  basis: "blend" | "history" | "stored";
+}
+
+/**
+ * Same-side legs with a blend contribute that blend.
+ * A slip that also has a leg with no blend is labelled History and uses
+ * the historical rate on every leg, so the totals are not a mixed number.
+ */
+export function slipTotals(picks: BetSlipPick[]): SlipTotals {
+  const summaryOf = (values: number[], basis: SlipTotals["basis"], averageLabel: string, allHitLabel: string): SlipTotals => ({
+    summary: slipSummary(values),
+    averageLabel,
+    allHitLabel,
+    basis,
+  });
+  if (picks.length > 0 && picks.every(legHasBlend)) {
+    return summaryOf(
+      picks.map((pick) => pick.combined_probability as number),
+      "blend",
+      "avg. blend",
+      "all hit",
+    );
+  }
+  if (picks.some(legHasBlend)) {
+    return summaryOf(
+      picks.map((pick) => pick.probability),
+      "history",
+      "History",
+      "History",
+    );
+  }
+  return summaryOf(
+    picks.map((pick) => pick.probability),
+    "stored",
+    "avg. probability",
+    "all hit",
+  );
 }
 
 export function slipSummary(probabilities: number[]): SlipSummary {
@@ -29,8 +77,8 @@ export function slipSummary(probabilities: number[]): SlipSummary {
   const allHit = probabilities.reduce((product, value) => product * value, 1);
   return {
     count,
-    averageText: formatPercent(average),
-    allHitText: formatPercent(allHit),
+    averageText: formatTierPercent(average),
+    allHitText: formatTierPercent(allHit),
   };
 }
 
@@ -48,7 +96,7 @@ export function complementHitRateLabel(
   if (pick.rate_basis !== "complement" || !Number.isFinite(pick.probability)) return null;
   const side = pick.direction === "under" ? "Under" : pick.direction === "over" ? "Over" : pick.direction;
   const other = pick.direction === "under" ? "Over" : pick.direction === "over" ? "Under" : "other side";
-  return `${side} hit rate ${formatPercent(pick.probability)} (1 − ${other} ${formatPercent(1 - pick.probability)})`;
+  return `${side} hit rate ${formatTierPercent(pick.probability)} (1 − ${other} ${formatTierPercent(1 - pick.probability)})`;
 }
 
 export function slipMatchup(pick: BetSlipPick, league: LeagueSegment): string {
@@ -63,8 +111,19 @@ export function slipTeamCode(pick: BetSlipPick, league: LeagueSegment): string {
   return teamAbbr(pick.player_team, league) || pick.player_team.slice(0, 3).toUpperCase();
 }
 
-export function slipTierLabel(probability: number): string | null {
-  return readTier(probability)?.label ?? null;
+export function slipCardFace(pick: BetSlipPick) {
+  return slipFace(pick);
+}
+
+export function sameSideSlipRead(
+  pick: { direction: string; tier?: string | null; combined_probability?: number | null },
+  direction: string,
+): { tier?: string | null; combined_probability?: number | null } {
+  if (direction !== pick.direction) return {};
+  return {
+    tier: pick.tier ?? null,
+    combined_probability: pick.combined_probability ?? null,
+  };
 }
 
 export function slipDetailHref(pick: BetSlipPick, league: LeagueSegment): string {

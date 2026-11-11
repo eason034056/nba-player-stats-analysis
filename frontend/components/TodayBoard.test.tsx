@@ -101,7 +101,6 @@ describe("TodayBoard", () => {
     expect(within(web).getByRole("link", { name: /all 3 picks/i })).toHaveAttribute("href", "/picks");
 
     const bam = within(web).getByRole("link", { name: /bam adebayo/i });
-    expect(bam).toHaveTextContent(formatPercent(nbaPicks.picks[0].probability));
     expect(bam).toHaveTextContent("72%");
     expect(bam).toHaveTextContent("Strong play");
     expect(bam).toHaveTextContent("Over 10.5 REB");
@@ -119,6 +118,7 @@ describe("TodayBoard", () => {
     expect(bam.getAttribute("href")).toContain("threshold=10.5");
 
     expect(within(web).getByRole("link", { name: /joel embiid/i })).toHaveTextContent("70%");
+    expect(within(web).getByRole("link", { name: /joel embiid/i })).not.toHaveTextContent("70.2%");
     expect(within(web).getByRole("link", { name: /tyrese haliburton/i })).toHaveTextContent("Playable");
     expect(within(web).getByText("Adebayo Over 10.5 REB")).toBeInTheDocument();
     expect(within(web).getByText("Embiid Over 29.5 PTS")).toBeInTheDocument();
@@ -143,6 +143,7 @@ describe("TodayBoard", () => {
     expect(within(mobile).getByRole("link", { name: /see all 3 picks/i })).toHaveAttribute("href", "/picks");
     const mobileBam = within(mobile).getByRole("link", { name: /bam adebayo/i });
     expect(mobileBam).toHaveTextContent("72%");
+    expect(mobileBam).not.toHaveTextContent("72.4%");
     expect(mobileBam.className).toContain("bg-brand");
     expect(mobileBam.className).not.toContain("bg-white");
     expect(mobileBam.className).not.toContain("border");
@@ -343,12 +344,9 @@ describe("TodayBoard", () => {
     const web = await screen.findByTestId("today-web");
     expect(within(web).getByRole("link", { name: /bam adebayo/i })).toHaveTextContent("MIA @ MIL · 8:00 PM");
     expect(within(web).getByRole("link", { name: /bam adebayo/i })).toHaveTextContent("72%");
-    const giannis = within(web).getByRole("link", { name: /antetokounmpo/i });
-    expect(giannis).toHaveTextContent("Antetokounmpo Under 31.5 PTS");
-    expect(giannis).toHaveTextContent("81%");
-    expect(giannis.getAttribute("href")).toContain("market=player_points");
-    expect(giannis.getAttribute("href")).toContain("threshold=31.5");
-    expect(within(web).queryByText("Adebayo Over 10.5 REB")).not.toBeInTheDocument();
+    expect(within(web).getByText("Adebayo Over 10.5 REB")).toBeInTheDocument();
+    expect(within(web).queryByText("Antetokounmpo Under 31.5 PTS")).not.toBeInTheDocument();
+    expect(within(web).queryByText("81%")).not.toBeInTheDocument();
     expect(within(web).getByText("Embiid Over 29.5 PTS")).toBeInTheDocument();
     expect(within(web).queryByText(/lineup confirmed/i)).not.toBeInTheDocument();
   });
@@ -372,7 +370,7 @@ describe("TodayBoard", () => {
 
     const web = await screen.findByTestId("today-web");
     expect(within(web).getByText("Antetokounmpo Under 31.5 PTS")).toBeInTheDocument();
-    expect(within(web).getByText("81%")).toBeInTheDocument();
+    expect(within(web).queryByText("81%")).not.toBeInTheDocument();
     expect(within(web).getAllByText("Top read unavailable")).toHaveLength(2);
     expect(within(web).getByText(/reads unavailable/i)).toHaveTextContent("picks down");
     expect(within(web).queryByText("72%")).not.toBeInTheDocument();
