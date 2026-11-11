@@ -131,9 +131,10 @@ describe("QA: NBA model bar", () => {
     expect(bar?.overWidth).toBeCloseTo(30.3, 6);
   });
 
-  it("rounds half-away when there is no tier", () => {
+  it("floors the lean side when there is no tier, like nbaTierFace", () => {
     const bar = nbaRead(pick({ tier: null, combined_probability: 0.6951 })).bar;
-    expect(bar?.overText).toBe("70%");
+    expect(bar?.overText).toBe("69%");
+    expect(bar?.underText).toBe("30%");
   });
 
   it("draws no bar when combined is null", () => {
