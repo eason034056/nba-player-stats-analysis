@@ -28,7 +28,7 @@ AWS provider 5.100.0 的 `aws_vpc` data source 把 `id` 和 `default` 都標成 
 
 資料來源改名不會改 managed resource 的位址。`network.tf` 裡的 resource 仍是 `aws_db_subnet_group.this`、`aws_security_group.app`、`aws_security_group.rds`。安全群組的 `vpc_id` 和 `name`、`description` 在 provider 5.100.0 是 ForceNew；這次沒改 `name` 和安全群組的 `description`。`vpc_id` 在沒設變數時仍是同一種查詢（`isDefault=true`），default VPC 帳號算出來的 id 字串不變，所以不會因為改名而被替換。subnet group 的 ForceNew 只有 `name` 和 `name_prefix`，這兩個沒改。`subnet_ids` 不是 ForceNew；沒設 `vpc_id` 時清單仍是同一個 VPC 的全部子網。description 從「Default VPC subnets ...」改成「Subnets for ...」，這個欄位可以就地更新。VPC 與子網的 data source 改名成 `selected`，並多了 public 子網清單。這三個是 data source，不是 managed resource。這次沒有跑 `terraform plan`，所以上面是依 provider schema 和表達式，不是依一份 plan diff。
 
-`public_subnet_ids` 由 SPO-133 的 EC2 使用 `sort(...)[0]`。多這個 data source 不會改 RDS 的 name 或 subnet_ids。
+`public_subnet_ids` 由 SPO-133 的 EC2 使用 `try(sort(...)[0], null)`。空清單不會丟 Invalid index。多這個 data source 不會改 RDS 的 name 或 subnet_ids。
 
 範例和文件裡的 `vpc-0123456789abcdef0` 是佔位，不是帳號裡的 VPC。
 
