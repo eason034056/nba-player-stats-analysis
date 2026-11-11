@@ -87,6 +87,7 @@ function normalizeBackendOrigin(value) {
   return `${url.protocol}//${url.host}`;
 }
 
+// The live proxy is middleware.ts. This shape is what the origin tests assert.
 function buildBackendRewrite(env = process.env) {
   const origin = resolveBackendOrigin(env);
   return {

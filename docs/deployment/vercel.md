@@ -14,7 +14,7 @@
 - 前端每一個後端呼叫都在 `frontend/lib/api.ts` 的 `fetchApi`，而且都是等整份 JSON（`response.json()`）。Agent Widget 的 `sendAgentChat` 也是一次 POST、一次 JSON。後端 `POST /api/nba/agent/chat` 回的是一整個回應物件，不是串流。
 - 沒有 `EventSource`、沒有 `text/event-stream` 的呼叫端、沒有 Next.js route handler、沒有 server component 在伺服器上打後端。球隊 logo 來自 `a.espncdn.com`，不是後端網址。
 - 同源路徑不需要瀏覽器 CORS，後端網址也不出現在 client bundle。
-- 實測（`next dev` 與 `next start`，代理指到本機的測試伺服器）：`GET /api/health`、帶 query 的 `/api/nba/events`、`/api/wnba/events`、以及 `POST /api/nba/agent/chat` 的 JSON body，都會到達後端，而且路徑上的 `/api/backend` 前綴已被拿掉。分段的 `text/event-stream` 在後端回應帶 `Cache-Control: no-cache, no-transform` 時會一段一段轉送；沒有這個 header 時，Next 會把整段收齊再一次送出。現在的畫面沒有這種串流呼叫，所以不影響目前功能。之後若要加 SSE，回應必須同時送 `Cache-Control: no-cache, no-transform` 和 `X-Accel-Buffering: no`（EC2 前面的 nginx 也會緩衝），而且至少每 120 秒送一次 heartbeat，否則第一個 byte 之後連線仍會被掐掉。
+- 實測（`next dev` 與 `next start`，代理指到本機的測試伺服器）：`GET /api/health`、帶 query 的 `/api/nba/events`、`/api/wnba/events`、以及 `POST /api/nba/agent/chat` 的 JSON body，都會到達後端，而且路徑上的 `/api/backend` 前綴已被拿掉。分段的 `text/event-stream` 在後端回應帶 `Cache-Control: no-cache, no-transform` 時會一段一段轉送。沒有 `no-transform` 時，若瀏覽器有送 `Accept-Encoding`，本機 `next start` 會用 gzip 把整段收齊再一次送出；不送 `Accept-Encoding` 則不會。`no-transform` 讓這層壓縮跳過，所以能逐段送。Vercel 上是否一樣，要部署之後再量一次。現在的畫面沒有這種串流呼叫，所以不影響目前功能。之後若要加 SSE，回應必須同時送 `Cache-Control: no-cache, no-transform` 和 `X-Accel-Buffering: no`（EC2 前面的 nginx 也會緩衝），而且至少每 120 秒送一次 heartbeat，否則第一個 byte 之後連線仍會被掐掉。
 
 代價：Vercel 對「轉送到外部網址」的 120 秒是第一個 byte 的等待時間（time to first byte）。後端開始回資料之後，只要至少每 120 秒有資料送出，連線可以超過兩分鐘。超過第一個 byte 的等待會回 `ROUTER_EXTERNAL_TARGET_ERROR`。本機的 `next dev` / `next start` 預設 30 秒就切斷，`next.config.js` 的 `proxyTimeout: 120000` 只影響這兩個本機指令。Vercel 不讀那個設定。
 

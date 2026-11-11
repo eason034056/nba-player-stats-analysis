@@ -74,7 +74,13 @@ function prepareProxiedRequest({ pathname, search = "", headers, env = process.e
   }
 
   const rest = pathname.slice(BROWSER_API_PREFIX.length) || "/";
+  if (rest.startsWith("//") || rest.includes("\\")) {
+    return { ok: false, status: 400, message: PROXY_NOT_CONFIGURED };
+  }
   const destination = new URL(`${rest}${search}`, origin);
+  if (destination.origin !== new URL(origin).origin) {
+    return { ok: false, status: 400, message: PROXY_NOT_CONFIGURED };
+  }
   const ip = clientIpFromHeaders(headers);
   const nextHeaders = new Headers(headers);
   nextHeaders.delete(PROXY_SECRET_HEADER);
