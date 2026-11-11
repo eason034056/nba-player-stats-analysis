@@ -6,7 +6,7 @@ import { X } from "lucide-react";
 import type { AgentPageContext, AgentPickContext, AgentThreadMessage } from "@/lib/agent-chat";
 
 import { AgentVerdictBreakdown } from "./AgentVerdictBreakdown";
-import { formatPct } from "./presentation";
+import { formatPct, formatSignedPct } from "./presentation";
 
 interface AgentWidgetAnalysisPanelProps {
   pageContext: AgentPageContext;
@@ -63,7 +63,7 @@ const AnalysisContent = ({
             <div className="rounded-[16px] border border-white/10 bg-white/5 px-3 py-2">
               <p className="text-[10px] uppercase tracking-[0.18em] text-on-dark-muted">EV</p>
               <p className="mt-1 font-semibold text-on-dark">
-                {formatPct(verdict.expected_value_pct)}
+                {formatSignedPct(verdict.expected_value_pct)}
               </p>
             </div>
             <div className="rounded-[16px] border border-white/10 bg-white/5 px-3 py-2">

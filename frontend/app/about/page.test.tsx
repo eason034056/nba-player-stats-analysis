@@ -28,6 +28,8 @@ describe("AboutPage", () => {
     expect(screen.getByText("p_fair = p / (p_over + p_under)")).toBeInTheDocument();
     expect(screen.getByText(/fair price: 50% \/ 50%/i)).toBeInTheDocument();
     expect(screen.getByText(/planned: one blended probability/i)).toBeInTheDocument();
+    expect(screen.getByText(/for informational and research purposes only/i)).toBeInTheDocument();
+    expect(screen.getByText(/this is not betting advice/i)).toBeInTheDocument();
     expect(screen.queryByRole("heading", { name: /blend five signals/i })).not.toBeInTheDocument();
     const hrefs = screen.getAllByRole("link").map((link) => link.getAttribute("href"));
     expect(hrefs).toEqual(

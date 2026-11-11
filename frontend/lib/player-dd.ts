@@ -164,10 +164,20 @@ export function roundHalfAwayFromZero(value: number, digits: number): number {
 }
 
 export function formatPercent(probability: number | null | undefined): string {
-  // `null * 100` is 0, so a missing probability used to print "0.0%".
-  // `NaN` and infinities used to print "NaN%" / "Infinity%".
-  if (probability == null || !Number.isFinite(probability)) return "—";
-  return `${roundHalfAwayFromZero(probability * 100, 1).toFixed(1)}%`;
+  // `null * 100` is 0, so a missing probability must not print "0%".
+  // NaN and infinities must not print "NaN%" or "Infinity%".
+  if (typeof probability !== "number" || !Number.isFinite(probability)) return "—";
+  return `${roundHalfAwayFromZero(probability * 100, 0)}%`;
+}
+
+/**
+ * Whole percent rounded down, for a card that also shows a backend tier.
+ * Half-away rounding can print 70% next to Playable (the Strong cutoff is 0.70).
+ * The 1e-9 nudge keeps 0.29 * 100 (28.999999999999996) at 29, not 28.
+ */
+export function formatTierPercent(probability: number | null | undefined): string {
+  if (typeof probability !== "number" || !Number.isFinite(probability)) return "—";
+  return `${Math.floor(probability * 100 + 1e-9)}%`;
 }
 
 export function staleLineWarning(meta: DDSnapshotMeta): string | null {

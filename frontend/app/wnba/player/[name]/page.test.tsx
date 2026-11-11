@@ -58,7 +58,7 @@ describe("WNBA player page double-double tile", () => {
   it("renders double-double history without an event and shows the odds empty state", async () => {
     renderWithProviders(<WNBAPlayerPage />);
 
-    expect(await screen.findByText("47.3%")).toBeInTheDocument();
+    expect(await screen.findByText("47%")).toBeInTheDocument();
     expect(screen.getByText("26 of 55 games")).toBeInTheDocument();
     expect(
       screen.getByText(

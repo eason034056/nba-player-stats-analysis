@@ -78,7 +78,7 @@ describe("DailyPicksBoard", () => {
     expect(screen.getByRole("link", { name: "Bam Adebayo" })).toBeInTheDocument();
     expect(screen.getByText("Joel Embiid")).toBeInTheDocument();
     expect(screen.getByText("Tyrese Haliburton")).toBeInTheDocument();
-    expect(screen.getByText("72.0%")).toBeInTheDocument();
+    expect(screen.getByText("72%")).toBeInTheDocument();
     expect(screen.getByText("Proj 20.4")).toBeInTheDocument();
     expect(screen.getByText("Def #9")).toBeInTheDocument();
     expect(screen.getByText(/lineup aligned/i)).toBeInTheDocument();

@@ -43,7 +43,7 @@ describe("picks board view model", () => {
       "Joel Embiid",
       "Tyrese Haliburton",
     ]);
-    expect(rows[0].probabilityText).toBe("72.0%");
+    expect(rows[0].probabilityText).toBe("72%");
     expect(rows[2].tierShort).toBe("Playable");
     expect(rows[0].href).toContain("/event/evt-mia-bos?");
     expect(rows[0].href).toContain("player=Bam+Adebayo");

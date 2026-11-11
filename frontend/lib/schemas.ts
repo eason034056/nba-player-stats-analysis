@@ -41,12 +41,44 @@ export type HealthResponse = z.infer<typeof healthResponseSchema>;
  * 
  * 每場比賽的基本資訊
  */
+/**
+ * Per-team lineup confirmation. `confirmed` or `projected`.
+ * Null when that club has no lineup for the date. WNBA leaves the object null.
+ */
+export const eventLineupStatusSchema = z.object({
+  home: z.enum(["confirmed", "projected"]).nullable().optional(),
+  away: z.enum(["confirmed", "projected"]).nullable().optional(),
+});
+
+export type EventLineupStatus = z.infer<typeof eventLineupStatusSchema>;
+
+/**
+ * Best stored daily pick for one event, joined by the events route.
+ * `market` is an Odds API key (`player_points`), not the CSV metric (`points`).
+ * A broken object becomes null so one bad row does not drop the slate.
+ */
+export const topReadSchema = z.object({
+  player: z.string().min(1),
+  market: z.string().min(1),
+  side: z.enum(["over", "under"]),
+  line: z.number().finite(),
+  probability: z.number().finite().min(0).max(1),
+});
+
+export type TopRead = z.infer<typeof topReadSchema>;
+
 export const nbaEventSchema = z.object({
   event_id: z.string(),      // 賽事唯一 ID，用於後續查詢
   sport_key: z.string(),     // 運動類型，NBA 為 "basketball_nba"
   home_team: z.string(),     // 主場球隊名稱
   away_team: z.string(),     // 客場球隊名稱
-  commence_time: z.string(), // 比賽開始時間（ISO 8601 格式）
+  commence_time: z.string(), // 比賽開始時間（UTC ISO 8601）
+  // Same tip in America/New_York, with the offset. Absent on older payloads and on WNBA.
+  commence_time_et: z.string().nullable().optional(),
+  // Label for commence_time_et. "ET" on NBA events.
+  display_tz: z.string().nullable().optional(),
+  lineup_status: eventLineupStatusSchema.nullable().optional().catch(null),
+  top_read: topReadSchema.nullable().optional().catch(null),
 });
 
 export type NBAEvent = z.infer<typeof nbaEventSchema>;
@@ -474,6 +506,9 @@ export const dailyPickSchema = z.object({
   threshold: z.number(),
   direction: z.string(),
   probability: z.number(),
+  // Backend bucket for `probability`. Today prints this string and does not
+  // recompute a tier from the percent. Absent on older payloads.
+  tier: z.enum(["Strong play", "Playable", "Lean"]).nullable().optional(),
   n_games: z.number(),
   bookmakers_count: z.number(),
   all_lines: z.array(z.number()).optional().default([]),

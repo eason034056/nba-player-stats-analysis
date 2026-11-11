@@ -7,8 +7,8 @@ import type { BookmakerResult } from "@/lib/schemas";
 /**
  * Shared half-away rounding. ResultsTable fair cells and the DD tile both
  * call formatPercent, so these cases are the agreement oracle.
- * Number#toFixed(1) on 0.6755 * 100 is "67.5" because the product is
- * 67.549999999999997. Half-away must print 67.6%.
+ * A probability prints as a whole percent. 0.6755 is 67.55, which rounds
+ * away from zero to 68%, not 67%.
  */
 describe("roundHalfAwayFromZero", () => {
   it.each([
@@ -33,29 +33,43 @@ describe("roundHalfAwayFromZero", () => {
 
 describe("formatPercent", () => {
   it.each([
-    [0.6755, "67.6%"],
-    [0.6745, "67.5%"],
-    [0.1005, "10.1%"],
-    [0.1004, "10.0%"],
-    [0.1006, "10.1%"],
-    [0.1245, "12.5%"],
-    [0.1255, "12.6%"],
-    [0.005, "0.5%"],
-    [0.0055, "0.6%"],
-    [0.0145, "1.5%"],
-    [0.015, "1.5%"],
-    [0.3245, "32.5%"],
-    [0.3255, "32.6%"],
-    [0.995, "99.5%"],
-    [0.9995, "100.0%"],
-    [0, "0.0%"],
-    [1, "100.0%"],
-    [1.005, "100.5%"],
-    [-0.6755, "-67.6%"],
-    [-0.6745, "-67.5%"],
-    [-1.005, "-100.5%"],
+    [0.6755, "68%"],
+    [0.6745, "67%"],
+    [0.63, "63%"],
+    [0.1005, "10%"],
+    [0.1004, "10%"],
+    [0.1006, "10%"],
+    [0.1245, "12%"],
+    [0.1255, "13%"],
+    [0.005, "1%"],
+    [0.0055, "1%"],
+    [0.0145, "1%"],
+    [0.015, "2%"],
+    [0.3245, "32%"],
+    [0.3255, "33%"],
+    [0.995, "100%"],
+    [0.9995, "100%"],
+    [0, "0%"],
+    [1, "100%"],
+    [1.005, "101%"],
+    [-0.6755, "-68%"],
+    [-0.6745, "-67%"],
+    [-1.005, "-101%"],
   ])("formats %s as %s", (probability, expected) => {
     expect(formatPercent(probability)).toBe(expected);
+  });
+
+  it("renders an em dash for null, undefined, and non-finite values, never 0%", () => {
+    expect(formatPercent(null)).toBe("—");
+    expect(formatPercent(undefined)).toBe("—");
+    expect(formatPercent(Number.NaN)).toBe("—");
+    expect(formatPercent(Number.POSITIVE_INFINITY)).toBe("—");
+    expect(formatPercent(Number.NEGATIVE_INFINITY)).toBe("—");
+    for (const missing of [null, undefined, Number.NaN, Number.POSITIVE_INFINITY, Number.NEGATIVE_INFINITY]) {
+      expect(formatPercent(missing)).not.toBe("0%");
+      expect(formatPercent(missing)).not.toBe("0.0%");
+    }
+    expect(formatPercent(0)).toBe("0%");
   });
 
   it("leaves a null fair value to the caller instead of printing a percent", () => {

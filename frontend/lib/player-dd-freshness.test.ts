@@ -13,29 +13,33 @@ function parseOdds(overrides: Partial<NoVigResponse> = {}): NoVigResponse {
 }
 
 describe("formatPercent", () => {
-  it("rounds half away from zero, including the recorded 0.6755 fair probability", () => {
-    expect(formatPercent(0)).toBe("0.0%");
-    expect(formatPercent(1)).toBe("100.0%");
-    expect(formatPercent(0.99995)).toBe("100.0%");
-    expect(formatPercent(0.6755)).toBe("67.6%");
-    expect(formatPercent(0.6745)).toBe("67.5%");
-    expect(formatPercent(0.6744)).toBe("67.4%");
-    expect(formatPercent(-0.6755)).toBe("-67.6%");
-    expect(formatPercent(-0)).toBe("0.0%");
+  it("rounds half away from zero to a whole percent", () => {
+    expect(formatPercent(0)).toBe("0%");
+    expect(formatPercent(1)).toBe("100%");
+    expect(formatPercent(0.99995)).toBe("100%");
+    expect(formatPercent(0.6755)).toBe("68%");
+    expect(formatPercent(0.6745)).toBe("67%");
+    expect(formatPercent(0.6744)).toBe("67%");
+    expect(formatPercent(-0.6755)).toBe("-68%");
+    expect(formatPercent(-0)).toBe("0%");
+    expect(formatPercent(0.63)).toBe("63%");
   });
 
-  it("returns an em dash for null instead of 0.0%", () => {
+  it("returns an em dash for null instead of 0%", () => {
     expect(formatPercent(null)).toBe("—");
     expect(formatPercent(undefined)).toBe("—");
+    expect(formatPercent(null)).not.toBe("0%");
     expect(formatPercent(null)).not.toBe("0.0%");
-    expect(formatPercent(0)).toBe("0.0%");
+    expect(formatPercent(0)).toBe("0%");
   });
 
-  it("formats a stored fraction once and rounds a half up at the third decimal", () => {
-    expect(formatPercent(0.724)).toBe("72.4%");
-    expect(formatPercent(0.724)).not.toBe("7240.0%");
-    expect(formatPercent(0.0005)).toBe("0.1%");
-    expect(formatPercent(0.0004)).toBe("0.0%");
+  it("formats a stored fraction once as a whole percent", () => {
+    expect(formatPercent(0.724)).toBe("72%");
+    expect(formatPercent(0.724)).not.toBe("7240%");
+    expect(formatPercent(0.724)).not.toBe("72.4%");
+    expect(formatPercent(0.0005)).toBe("0%");
+    expect(formatPercent(0.0004)).toBe("0%");
+    expect(formatPercent(0.0005)).not.toBe("—");
   });
 
   it("renders an em dash for NaN and other non-finite values", () => {
@@ -43,7 +47,8 @@ describe("formatPercent", () => {
     expect(formatPercent(Number.NaN)).not.toBe("NaN%");
     expect(formatPercent(Number.POSITIVE_INFINITY)).toBe("—");
     expect(formatPercent(Number.NEGATIVE_INFINITY)).toBe("—");
-    expect(formatPercent(Number.NaN)).not.toBe("0.0%");
+    expect(formatPercent(Number.NaN)).not.toBe("0%");
+    expect(formatPercent(Number.POSITIVE_INFINITY)).not.toBe("0%");
   });
 });
 

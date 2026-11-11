@@ -25,7 +25,7 @@ describe("PlayerHistoryStats double-double wiring", () => {
       />,
     );
 
-    expect(await screen.findByText("47.3%")).toBeInTheDocument();
+    expect(await screen.findByText("47%")).toBeInTheDocument();
     expect(screen.getByText("26 of 55 games")).toBeInTheDocument();
     expect(screen.getByText("-250")).toBeInTheDocument();
     expect(screen.getByText("+200")).toBeInTheDocument();
@@ -68,7 +68,7 @@ describe("PlayerHistoryStats double-double wiring", () => {
         />,
       );
 
-      expect(await screen.findByText("47.3%")).toBeInTheDocument();
+      expect(await screen.findByText("47%")).toBeInTheDocument();
       const urls = fetchMock.mock.calls.map((call) => String(call[0]));
       expect(urls.some((url) => url.includes("/api/wnba/player-dd-history"))).toBe(true);
       expect(urls.some((url) => url.includes("/api/wnba/props/no-vig"))).toBe(true);

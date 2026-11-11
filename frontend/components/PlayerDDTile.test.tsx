@@ -105,21 +105,25 @@ describe("PlayerDDTile", () => {
       calculateNoVigFn: oddsFn,
     });
 
-    expect(await screen.findByText("81.3%")).toBeInTheDocument();
+    expect(await screen.findByText("81%")).toBeInTheDocument();
     expect(screen.getByText("61 of 75 games")).toBeInTheDocument();
     expect(screen.getByText("DraftKings")).toBeInTheDocument();
     expect(screen.getByText("-250")).toBeInTheDocument();
     expect(screen.getByText("+200")).toBeInTheDocument();
-    expect(screen.getByText("71.4%")).toBeInTheDocument();
-    expect(screen.getByText("33.3%")).toBeInTheDocument();
-    expect(screen.getByText("68.2%")).toBeInTheDocument();
-    expect(screen.getByText("31.8%")).toBeInTheDocument();
+    const draftkings = screen.getByRole("article", { name: /draftkings/i });
+    expect(within(draftkings).getByText("71%")).toBeInTheDocument();
+    expect(within(draftkings).getByText("33%")).toBeInTheDocument();
+    expect(within(draftkings).getByText("68%")).toBeInTheDocument();
+    expect(within(draftkings).getByText("32%")).toBeInTheDocument();
     expect(screen.getByText("FanDuel")).toBeInTheDocument();
     expect(screen.getByText("-240")).toBeInTheDocument();
     expect(screen.getByText("No leg not posted")).toBeInTheDocument();
-    expect(screen.getByText("67.6%")).toBeInTheDocument();
-    expect(screen.getByText("67.9%")).toBeInTheDocument();
-    expect(screen.getByText("32.1%")).toBeInTheDocument();
+    const fanduel = screen.getByRole("article", { name: /fanduel/i });
+    expect(within(fanduel).getByText("68%")).toBeInTheDocument();
+    const consensus = screen.getByText("Consensus fair probability").closest("div");
+    expect(consensus).not.toBeNull();
+    expect(within(consensus as HTMLElement).getByText("68%")).toBeInTheDocument();
+    expect(within(consensus as HTMLElement).getByText("32%")).toBeInTheDocument();
     expect(screen.getByText("+13.5 pts")).toBeInTheDocument();
     expect(screen.getByText(/ML projection is not available/)).toBeInTheDocument();
     expect(screen.queryByText(/pending/i)).not.toBeInTheDocument();
@@ -144,13 +148,16 @@ describe("PlayerDDTile", () => {
       calculateNoVigFn: vi.fn().mockResolvedValue(recordedNoVig),
     });
 
-    const yesFair = await screen.findByText("67.9%");
-    const noFair = screen.getByText("32.1%");
+    const consensus = (await screen.findByText("Consensus fair probability")).closest("div");
+    expect(consensus).not.toBeNull();
+    const yesFair = within(consensus as HTMLElement).getAllByText("68%")[0];
+    const noFair = within(consensus as HTMLElement).getByText("32%");
     expect(yesFair).toHaveClass("text-green-800");
     expect(noFair).toHaveClass("text-green-800");
     expect(yesFair).not.toHaveClass("text-dark");
     expect(noFair).not.toHaveClass("text-dark");
-    expect(screen.getByText("68.2%")).toHaveClass("text-dark");
+    const draftkings = screen.getByRole("article", { name: /draftkings/i });
+    expect(within(draftkings).getByText("68%")).toHaveClass("text-dark");
   });
 
   it("does not backfill null yes/no fields from over/under stand-ins", async () => {
@@ -162,7 +169,7 @@ describe("PlayerDDTile", () => {
     expect(
       await screen.findByText(/Over\/Under numbers are not shown in their place/),
     ).toBeInTheDocument();
-    expect(screen.getByText("81.3%")).toBeInTheDocument();
+    expect(screen.getByText("81%")).toBeInTheDocument();
     expect(screen.queryByText("-777")).not.toBeInTheDocument();
     expect(screen.queryByText("+333")).not.toBeInTheDocument();
     expect(screen.queryByText("42.4%")).not.toBeInTheDocument();
@@ -199,7 +206,7 @@ describe("PlayerDDTile", () => {
     expect(
       screen.getByText("No props data for this player at the selected bookmakers"),
     ).toBeInTheDocument();
-    expect(screen.queryByText("0.0%")).not.toBeInTheDocument();
+    expect(screen.queryByText("0%")).not.toBeInTheDocument();
     expect(screen.queryByText(/0 of 0/)).not.toBeInTheDocument();
     expect(screen.queryByText("-777")).not.toBeInTheDocument();
   });
@@ -221,7 +228,7 @@ describe("PlayerDDTile", () => {
       "Double-double history unavailable",
     );
     expect(await screen.findByText("-250")).toBeInTheDocument();
-    expect(screen.queryByText("81.3%")).not.toBeInTheDocument();
+    expect(screen.queryByText("81%")).not.toBeInTheDocument();
     expect(screen.queryByText("61 of 75 games")).not.toBeInTheDocument();
   });
 
@@ -233,7 +240,7 @@ describe("PlayerDDTile", () => {
 
     expect(await screen.findByText("No-vig request failed")).toBeInTheDocument();
     expect(screen.getByText("Double-double odds unavailable")).toBeInTheDocument();
-    expect(screen.getByText("81.3%")).toBeInTheDocument();
+    expect(screen.getByText("81%")).toBeInTheDocument();
     expect(screen.queryByText("-250")).not.toBeInTheDocument();
     expect(screen.queryByText("+13.5 pts")).not.toBeInTheDocument();
   });
@@ -261,12 +268,12 @@ describe("PlayerDDTile", () => {
 
     expect(await screen.findByText("Loading double-double history")).toBeInTheDocument();
     expect(screen.getByText("Loading double-double odds")).toBeInTheDocument();
-    expect(screen.queryByText("81.3%")).not.toBeInTheDocument();
+    expect(screen.queryByText("81%")).not.toBeInTheDocument();
 
     resolveHistory(jokicHistory);
     resolveOdds(recordedNoVig);
 
-    expect(await screen.findByText("81.3%")).toBeInTheDocument();
+    expect(await screen.findByText("81%")).toBeInTheDocument();
     expect(screen.queryByText("Loading double-double history")).not.toBeInTheDocument();
     expect(screen.queryByText("Loading double-double odds")).not.toBeInTheDocument();
   });
@@ -279,7 +286,7 @@ describe("PlayerDDTile", () => {
       calculateNoVigFn: oddsFn,
     });
 
-    expect(await screen.findByText("81.3%")).toBeInTheDocument();
+    expect(await screen.findByText("81%")).toBeInTheDocument();
     expect(screen.getByText(/Live Yes\/No prices need a game/)).toBeInTheDocument();
     expect(oddsFn).not.toHaveBeenCalled();
     expect(screen.queryByText("-250")).not.toBeInTheDocument();
@@ -291,7 +298,7 @@ describe("PlayerDDTile", () => {
 
     renderTile({ league: "wnba", eventId: "wnba-evt" });
 
-    expect(await screen.findByText("81.3%")).toBeInTheDocument();
+    expect(await screen.findByText("81%")).toBeInTheDocument();
     expect(getWNBAPlayerDDHistory).toHaveBeenCalledWith({ player: "Nikola Jokic" });
     expect(calculateWNBANoVig).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -314,8 +321,8 @@ describe("PlayerDDTile", () => {
     expect(getWNBAPlayerDDHistory).not.toHaveBeenCalled();
     expect(calculateNoVig).not.toHaveBeenCalled();
     expect(calculateWNBANoVig).not.toHaveBeenCalled();
-    expect(screen.queryByText("81.3%")).not.toBeInTheDocument();
-    expect(screen.queryByText("0.0%")).not.toBeInTheDocument();
+    expect(screen.queryByText("81%")).not.toBeInTheDocument();
+    expect(screen.queryByText("0%")).not.toBeInTheDocument();
   });
 
   it("renders the recorded Jokic rate and the route's yes/no prices", async () => {
@@ -324,23 +331,26 @@ describe("PlayerDDTile", () => {
       calculateNoVigFn: vi.fn().mockResolvedValue(recordedNoVig),
     });
 
-    expect(await screen.findByText("81.3%")).toBeInTheDocument();
+    expect(await screen.findByText("81%")).toBeInTheDocument();
     expect(screen.getByText("61 of 75 games")).toBeInTheDocument();
     expect(screen.getByText("-250")).toBeInTheDocument();
     expect(screen.getByText("+200")).toBeInTheDocument();
-    expect(screen.getByText("71.4%")).toBeInTheDocument();
-    expect(screen.getByText("33.3%")).toBeInTheDocument();
-    expect(screen.getByText("68.2%")).toBeInTheDocument();
-    expect(screen.getByText("31.8%")).toBeInTheDocument();
+    const draftkings = screen.getByRole("article", { name: /draftkings/i });
+    expect(within(draftkings).getByText("71%")).toBeInTheDocument();
+    expect(within(draftkings).getByText("33%")).toBeInTheDocument();
+    expect(within(draftkings).getByText("68%")).toBeInTheDocument();
+    expect(within(draftkings).getByText("32%")).toBeInTheDocument();
     expect(screen.getByText("-240")).toBeInTheDocument();
     expect(screen.getByText("No leg not posted")).toBeInTheDocument();
-    expect(screen.getByText("70.6%")).toBeInTheDocument();
-    expect(screen.getByText("32.5%")).toBeInTheDocument();
-    expect(screen.getByText("67.9%")).toBeInTheDocument();
-    expect(screen.getByText("32.1%")).toBeInTheDocument();
+    const fanduel = screen.getByRole("article", { name: /fanduel/i });
+    expect(within(fanduel).getByText("71%")).toBeInTheDocument();
+    expect(within(fanduel).getByText("32%")).toBeInTheDocument();
+    const consensus = screen.getByText("Consensus fair probability").closest("div");
+    expect(within(consensus as HTMLElement).getByText("68%")).toBeInTheDocument();
+    expect(within(consensus as HTMLElement).getByText("32%")).toBeInTheDocument();
     expect(screen.getByText("+13.5 pts")).toBeInTheDocument();
     expect(screen.queryByText("0.5")).not.toBeInTheDocument();
-    expect(screen.queryByText("0.0%")).not.toBeInTheDocument();
+    expect(screen.queryByText("0%")).not.toBeInTheDocument();
   });
 
   it("shows an explicit empty state for a real zero-game season", async () => {
@@ -359,7 +369,7 @@ describe("PlayerDDTile", () => {
         "No qualifying games for Nikola Jokic in season 1999-00",
       ),
     ).toBeInTheDocument();
-    expect(screen.queryByText("0.0%")).not.toBeInTheDocument();
+    expect(screen.queryByText("0%")).not.toBeInTheDocument();
     expect(screen.queryByText("0 of 0 games")).not.toBeInTheDocument();
     expect(screen.queryByText("-250")).not.toBeInTheDocument();
   });
@@ -377,7 +387,7 @@ describe("PlayerDDTile", () => {
     expect(
       await screen.findByText("No double-double games are in the sample."),
     ).toBeInTheDocument();
-    expect(screen.queryByText("81.3%")).not.toBeInTheDocument();
+    expect(screen.queryByText("81%")).not.toBeInTheDocument();
     expect(screen.queryByText("61 of 75 games")).not.toBeInTheDocument();
     expect(await screen.findByText("-250")).toBeInTheDocument();
   });
@@ -441,21 +451,21 @@ describe("PlayerDDTile", () => {
       }),
     });
 
-    expect(await screen.findByText("81.3%")).toBeInTheDocument();
-    expect(screen.getAllByText("70.0%").length).toBeGreaterThanOrEqual(4);
-    expect(screen.queryByText("50.0%")).not.toBeInTheDocument();
+    expect(await screen.findByText("81%")).toBeInTheDocument();
+    expect(screen.getAllByText("70%").length).toBeGreaterThanOrEqual(4);
+    expect(screen.queryByText("50%")).not.toBeInTheDocument();
   });
 
   it(
-    "rounds a published 0.6755 fair probability half-up to 67.6%",
+    "rounds a published 0.6755 fair probability to 68%",
     async () => {
       renderTile({
         getPlayerDDHistoryFn: vi.fn().mockResolvedValue(jokicHistory),
         calculateNoVigFn: vi.fn().mockResolvedValue(recordedNoVig),
       });
 
-      expect(await screen.findByText("81.3%")).toBeInTheDocument();
-      expect(screen.getByText("67.6%")).toBeInTheDocument();
+      expect(await screen.findByText("81%")).toBeInTheDocument();
+      expect(within(screen.getByRole("article", { name: /fanduel/i })).getByText("68%")).toBeInTheDocument();
     },
   );
 
@@ -506,7 +516,7 @@ describe("PlayerDDTile", () => {
 
     expect(await screen.findByText("-250")).toBeInTheDocument();
     expect(screen.getByText("+200")).toBeInTheDocument();
-    expect(screen.getByText("81.3%")).toBeInTheDocument();
+    expect(screen.getByText("81%")).toBeInTheDocument();
     expect(screen.queryByText(/stale line/i)).not.toBeInTheDocument();
   });
 
@@ -540,7 +550,7 @@ describe("PlayerDDTile", () => {
         }),
       });
 
-      expect(await screen.findByText("81.3%")).toBeInTheDocument();
+      expect(await screen.findByText("81%")).toBeInTheDocument();
       expect(screen.getByText(/stale/i)).toBeInTheDocument();
       expect(screen.getByText(/90/)).toBeInTheDocument();
     },
@@ -553,11 +563,11 @@ describe("PlayerDDTile", () => {
       calculateNoVigFn: vi.fn().mockResolvedValue(legacy),
     });
 
-    expect(await screen.findByText("81.3%")).toBeInTheDocument();
+    expect(await screen.findByText("81%")).toBeInTheDocument();
     const legacyFanduel = screen.getByRole("article", { name: /fanduel/i });
     expect(within(legacyFanduel).getAllByText(SINGLE_LEG_PRIOR_LABEL).length).toBeGreaterThan(0);
-    expect(within(legacyFanduel).getByText("67.6%")).toBeInTheDocument();
-    expect(within(legacyFanduel).getByText("32.5%")).toBeInTheDocument();
+    expect(within(legacyFanduel).getByText("68%")).toBeInTheDocument();
+    expect(within(legacyFanduel).getByText("32%")).toBeInTheDocument();
     const legacyDraftkings = screen.getByRole("article", { name: /draftkings/i });
     expect(within(legacyDraftkings).queryByText(SINGLE_LEG_PRIOR_LABEL)).not.toBeInTheDocument();
     unmount();
@@ -577,8 +587,8 @@ describe("PlayerDDTile", () => {
 
     const fanduel = await screen.findByRole("article", { name: /fanduel/i });
     expect(within(fanduel).getAllByText(SINGLE_LEG_PRIOR_LABEL).length).toBeGreaterThan(0);
-    expect(within(fanduel).getByText("67.6%")).toBeInTheDocument();
-    expect(within(fanduel).getByText("32.5%")).toBeInTheDocument();
+    expect(within(fanduel).getByText("68%")).toBeInTheDocument();
+    expect(within(fanduel).getByText("32%")).toBeInTheDocument();
     expect(screen.getAllByTestId("dd-consensus-prior").map((node) => node.textContent)).toEqual([
       "includes 1 book on the 4.5% single-leg prior",
       "includes 1 book on the 4.5% single-leg prior",
