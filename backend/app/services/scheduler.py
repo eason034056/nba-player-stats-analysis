@@ -55,7 +55,11 @@ logger = logging.getLogger(__name__)
 # 12:00 through 01:59 America/New_York.
 # Minutes are :07 and :37 so the job does not land on :00, :05, :15,
 # :30, :35, or :45, which the other jobs already use. Two ticks an hour
-# is one refresh every 30 minutes, which is the cap.
+# is one refresh every 30 minutes, which is the cap. Those marks stay.
+# A daily snapshot on another machine uses the same key, cannot see this
+# Redis limiter, and runs once between 4:45 and 5:30 PM CT. It makes at
+# most 5 calls, 20 seconds apart, and can land on :07. The injury client
+# answers that 429 with one bounded retry. See BdlClient rate_limit_policy.
 NBA_INJURY_REFRESH_TZ = ZoneInfo("America/Chicago")
 NBA_INJURY_REFRESH_HOURS = frozenset(
     {0, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23}
@@ -421,6 +425,12 @@ class SchedulerService:
         A snapshot younger than ``nba_injuries_refresh_minutes`` (30)
         is left in place so two ticks cannot land inside that gap.
         No API key means no call. Failures log the exception type only.
+        The client uses the injury rate-limit policy: one 429 is retried
+        after Retry-After, a future reset, or 30 to 59 seconds, and that
+        wait is at most 60 seconds. A second 429 raises, the refresh
+        writes nothing, and the previous snapshot stays. There is no
+        second retry loop around the client, so this job cannot sleep
+        through the next 30-minute tick.
 
         Args:
             now: Clock for the window check. None is the current time.
@@ -452,7 +462,10 @@ class SchedulerService:
             if _snapshot_is_younger_than(current, settings.nba_injuries_refresh_minutes):
                 logger.info("nba_injuries_refresh skipped; snapshot is inside the interval")
                 return None
-        client = BdlClient(api_key=key)
+        # rate_limit_policy="injury": one 429 retry, wait at most 60s.
+        # The other machine's daily snapshot cannot see this Redis limiter
+        # and can land on :07. A second 429 keeps the previous snapshot.
+        client = BdlClient(api_key=key, rate_limit_policy="injury")
         try:
             return await refresh_nba_injuries_from_bdl(client, cache_service)
         except Exception as exc:

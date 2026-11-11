@@ -339,6 +339,189 @@ async def test_every_injury_page_takes_a_limiter_slot() -> None:
     assert clock.sleeps == [15.0]
 
 
+def _recorded_429_response() -> httpx.Response:
+    """The recorded 429. Body and rate-limit headers are copied unchanged."""
+    capture = json.loads(
+        (_FIXTURE_DIR / "lineups_18447393_2026-01-15_agents_429.json").read_text()
+    )
+    raw = capture["response"]["_raw"]
+    return httpx.Response(429, content=raw.encode(), headers=dict(capture["rate_headers"]))
+
+
+@pytest.mark.asyncio
+async def test_recorded_429_keeps_the_previous_snapshot_and_warns_once(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """One recorded 429 is retried once. The second 429 does not replace the cache.
+
+    The fixture's ``x-ratelimit-reset`` is 40 seconds ahead of the clock,
+    so the single wait is that header. There is no third HTTP call. The
+    warning names ``BdlRateLimitError`` and nothing from the response.
+    An empty cache stays empty, which is what leaves ``injury_status`` null.
+    """
+    capture = json.loads(
+        (_FIXTURE_DIR / "lineups_18447393_2026-01-15_agents_429.json").read_text()
+    )
+    reset = int(capture["rate_headers"]["x-ratelimit-reset"])
+    previous = {
+        "fetched_at": "2026-11-11T18:00:00+00:00",
+        "entries": [{"player": "Kept Player", "status": "Out", "raw_status": "Out"}],
+    }
+
+    async def _run(seed: dict | None) -> tuple[object, list[float], int, object]:
+        clock = _Clock()
+        clock.now = float(reset - 40)
+        calls = {"n": 0}
+
+        def handler(_request: httpx.Request) -> httpx.Response:
+            calls["n"] += 1
+            return _recorded_429_response()
+
+        client = BdlClient(
+            api_key="unit-test-bdl-key",
+            redis=fakeredis.aioredis.FakeRedis(decode_responses=True),
+            transport=httpx.MockTransport(handler),
+            sleep=clock.sleep,
+            clock=clock.time,
+            rate_limit_per_min=5,
+            rate_limit_policy="injury",
+        )
+        service, _fake = _cache()
+        if seed is not None:
+            await service.set(NBA_INJURIES_CACHE_KEY, seed, NBA_INJURIES_CACHE_TTL_SECONDS)
+        try:
+            stored = await refresh_nba_injuries_from_bdl(
+                client,
+                service,
+                team_id_to_code=load_recorded_team_id_map(),
+                sleep=clock.sleep,
+                clock=clock.time,
+            )
+        finally:
+            await client.aclose()
+        left = await service.get(NBA_INJURIES_CACHE_KEY)
+        return stored, clock.sleeps, calls["n"], left
+
+    with caplog.at_level(logging.WARNING):
+        stored, sleeps, calls, left = await _run(previous)
+    warnings = [record for record in caplog.records if record.levelno >= logging.WARNING]
+    assert stored is None
+    assert left == previous
+    assert calls == 2
+    assert sleeps == [40.0]
+    assert len(warnings) == 1
+    message = warnings[0].getMessage()
+    assert message == (
+        "NBA injury refresh failed (BdlRateLimitError); previous cache left in place"
+    )
+    lowered = message.lower()
+    assert "unit-test-bdl-key" not in message
+    assert "http" not in lowered
+    assert "balldontlie" not in lowered
+    assert "too many requests" not in lowered
+    assert "player_injuries" not in lowered
+
+    caplog.clear()
+    with caplog.at_level(logging.WARNING):
+        stored, sleeps, calls, left = await _run(None)
+    warnings = [record for record in caplog.records if record.levelno >= logging.WARNING]
+    assert stored is None
+    assert left is None
+    assert calls == 2
+    assert sleeps == [40.0]
+    assert len(warnings) == 1
+    assert warnings[0].getMessage() == message
+
+
+@pytest.mark.asyncio
+async def test_a_later_429_does_not_take_a_second_wait(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """The one retry is for the whole refresh. The next 429 does not sleep again.
+
+    Page one is the recorded 429, then the recorded injury page. Page two
+    is the recorded 429 again. A per-page retry would sleep another 40
+    seconds and send a fourth request. This refresh stops instead.
+    """
+    capture = json.loads(
+        (_FIXTURE_DIR / "lineups_18447393_2026-01-15_agents_429.json").read_text()
+    )
+    reset = int(capture["rate_headers"]["x-ratelimit-reset"])
+    previous = {
+        "fetched_at": "2026-11-11T18:00:00+00:00",
+        "entries": [{"player": "Kept Player", "status": "Out"}],
+    }
+    clock = _Clock()
+    clock.now = float(reset - 40)
+    calls = {"n": 0}
+    pages = [None, INJURY_PAGE]
+
+    def handler(_request: httpx.Request) -> httpx.Response:
+        index = calls["n"]
+        calls["n"] += 1
+        if index < len(pages) and pages[index] is not None:
+            return httpx.Response(200, json=pages[index], headers=dict(_RATE_HEADERS))
+        return _recorded_429_response()
+
+    client = BdlClient(
+        api_key="unit-test-bdl-key",
+        redis=fakeredis.aioredis.FakeRedis(decode_responses=True),
+        transport=httpx.MockTransport(handler),
+        sleep=clock.sleep,
+        clock=clock.time,
+        rate_limit_per_min=5,
+        rate_limit_policy="injury",
+    )
+    service, _fake = _cache()
+    await service.set(NBA_INJURIES_CACHE_KEY, previous, NBA_INJURIES_CACHE_TTL_SECONDS)
+    with caplog.at_level(logging.WARNING):
+        try:
+            stored = await refresh_nba_injuries_from_bdl(
+                client,
+                service,
+                team_id_to_code=load_recorded_team_id_map(),
+                sleep=clock.sleep,
+                clock=clock.time,
+            )
+        finally:
+            await client.aclose()
+    warnings = [record for record in caplog.records if record.levelno >= logging.WARNING]
+    assert stored is None
+    assert await service.get(NBA_INJURIES_CACHE_KEY) == previous
+    assert calls["n"] == 3
+    # The 40 second retry already covers the 15 second page gap, so the
+    # pace adds no second wait. A per-page retry would sleep 40 again.
+    assert clock.sleeps == [40.0]
+    assert len(warnings) == 1
+
+
+def test_job_builds_the_injury_rate_limit_client(monkeypatch) -> None:
+    """The :07 tick uses the one-retry policy. The schedule itself stays :07 and :37."""
+    seen: dict = {}
+
+    class _Client:
+        def __init__(self, **kwargs):
+            seen.update(kwargs)
+
+        async def aclose(self):
+            return None
+
+    async def _refresh(_client, _cache):
+        return None
+
+    async def _empty(_key):
+        return None
+
+    monkeypatch.setattr("app.services.bdl_client.BdlClient", _Client)
+    monkeypatch.setattr("app.services.scheduler.refresh_nba_injuries_from_bdl", _refresh)
+    monkeypatch.setattr("app.services.cache.cache_service.get", _empty)
+    monkeypatch.setattr(settings, "balldontlie_api_key", SecretStr("unit-test-bdl-key"))
+    inside = datetime(2026, 11, 11, 17, 7, tzinfo=_CHICAGO)
+    asyncio.run(SchedulerService()._run_nba_injuries_refresh_job(now=inside))
+    assert seen.get("rate_limit_policy") == "injury"
+    assert NBA_INJURY_REFRESH_CRON_MINUTE == "7,37"
+
+
 # ---------------------------------------------------------------------------
 # Schedule
 # ---------------------------------------------------------------------------

@@ -11,6 +11,8 @@ NBA `DailyPick.injury_status` is the normalized status from Redis key `injuries:
 
 `nba_injuries_refresh` runs at :07 and :37 America/Chicago during the lineup slate window (11:00 through 00:59). Pages go through `BdlClient` and a 15-second pace, so this job uses at most 4 of the shared 5 requests per minute. A startup fill runs once, and only when the key is absent.
 
+The injury client retries one HTTP 429. The wait is `Retry-After`, or a future `x-ratelimit-reset`, or 30 to 59 seconds, and it is at most 60 seconds. A second 429 leaves the previous snapshot in place and logs the exception type once. The default client still retries three times for every other caller. The other machine's snapshot (4:45 to 5:30 PM CT, at most 5 calls, 20 seconds apart) can land on :07 and cannot see this Redis limiter. The schedule does not move.
+
 ## Why
 
 After SPO-135, `injury_status` was always null, so `injury_blocks_combined` never fired and Out players still received a blend. Policy is that NBA data comes from BALLDONTLIE. The cache and the normalizer already exist on SPO-131. This change registers the job and copies the snapshot onto the pick. #69, this PR, and a paired frontend PR merge together so Out players are not published in between.
@@ -40,7 +42,8 @@ After SPO-135, `injury_status` was always null, so `injury_blocks_combined` neve
 
 Recorded fixtures only. No live BALLDONTLIE or Odds API call.
 
-- `cd backend && python3 -m pytest tests -q --tb=line` → 1342 passed, 28 skipped, 6 xfailed, 0 failed.
+- `cd backend && python3 -m pytest tests -q --tb=line` → 1345 passed, 28 skipped, 6 xfailed, 0 failed.
+- A recorded 429 (`lineups_18447393_2026-01-15_agents_429.json`) is retried once, waits for `x-ratelimit-reset`, then leaves the previous snapshot in place and logs one `BdlRateLimitError` warning. A later 429 in the same refresh does not wait again.
 - `cd scripts/agents && python3 -m pytest tests -q --tb=line` → 114 passed.
 - Redis on localhost, snapshot seeded by `refresh_nba_injuries_from_bdl` with a mocked transport over `tests/fixtures/bdl/player_injuries__page1.json` and a terminal copy. Odds gateway served the recorded `player_points` body with one description relabeled to Jimmy Butler (Out on that page). `GET /api/health` 200. `GET /api/nba/daily-picks?date=2026-11-10&tz_offset=480&min_probability=0.5&min_games=5` 200, 12 picks. Jimmy Butler `injury_status` `Out`, `combined_probability` null, `lineup_confirmed` null. Dyson Daniels `injury_status` null, `combined_probability` 0.743.
 
