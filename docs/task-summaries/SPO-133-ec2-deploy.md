@@ -1,9 +1,9 @@
 # SPO-133 — EC2 backend host
 
 - Ticket: SPO-133
-- Branch: `feature/SPO-133-ec2-deploy` (from `feature/SPO-132-aws-rds-s3`, then current `origin/dev`)
+- Branch: `feature/SPO-133-ec2-deploy`
 - Base: `dev`
-- Stack: PR #62 (SPO-132). Merge that first. Until it merges, this diff also contains its commits.
+- #62, #63, and #65 are already on `dev` (`8ff3db9`). This PR merges straight into `dev`. No stack parent.
 
 ## Summary
 
@@ -47,7 +47,7 @@ CORS `*` is rejected because a credentialed wildcard is not a configuration we w
 
 ## Follow-ups
 
-- [ ] Eason applies `infra/aws` after SPO-132, stores the SecureStrings, deploys the host, and sets Vercel Production and Preview `BACKEND_API_URL` to `terraform output -raw backend_api_url`.
+- [ ] Eason applies `infra/aws` on `dev`, stores the SecureStrings, deploys the host, and sets Vercel Production and Preview `BACKEND_API_URL` to `terraform output -raw backend_api_url`. If the account has no default VPC, set `vpc_id` to a VPC whose subnets have `MapPublicIpOnLaunch` true and span two AZs.
 - [ ] After the host is the database client, a separate apply sets `allowed_cidrs = []` and `publicly_accessible = false`. Mac and box access then use SSM port forwarding.
 - [ ] Set `DEPLOY_ENABLED`, `AWS_DEPLOY_ROLE_ARN`, `AWS_REGION`, and `EC2_INSTANCE_ID`, and apply `enable_github_deploy_role` before the workflow can deploy. Make the GHCR package public, or store a pull token in SSM.
 - [ ] Add `push: branches: [master]` later if deploys should follow the default branch. Do not use `main`.

@@ -14,8 +14,18 @@ output "bucket_name" {
 }
 
 output "app_security_group_id" {
-  description = "Id of the app security group. The EC2 instance is attached to it. Ingress is TCP 80 and 443, plus TCP 22 only when enable_ssh is true. RDS allows TCP 5432 from this id."
+  description = "Id of the app security group. SPO-133 attaches the backend EC2 instance to it. Separate rules open TCP 80 and 443. RDS allows TCP 5432 from this id."
   value       = aws_security_group.app.id
+}
+
+output "vpc_id" {
+  description = "VPC of the security groups and the RDS subnet group. The default VPC when var.vpc_id is null."
+  value       = local.vpc_id
+}
+
+output "public_subnet_ids" {
+  description = "Subnet ids in that VPC with MapPublicIpOnLaunch true. The backend instance uses the first of these after sort."
+  value       = local.public_subnet_ids
 }
 
 output "instance_id" {

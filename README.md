@@ -140,11 +140,7 @@ npm install
 npm run dev
 ```
 
-If you need to explicitly specify the API endpoint for frontend requests, create `frontend/.env.local`:
-
-```bash
-NEXT_PUBLIC_API_URL=http://localhost:8000
-```
+Local `npm run dev` does not need an API URL. The app calls `/api/backend/...` on the same origin, and the dev server proxies that to `http://localhost:8000`. To point the proxy at another origin, set `BACKEND_API_URL` in `frontend/.env.local` (leave it unset for the localhost default). See `docs/deployment/vercel.md` for the Vercel Production and Preview variables.
 
 ## 2. How to Obtain Required Data
 

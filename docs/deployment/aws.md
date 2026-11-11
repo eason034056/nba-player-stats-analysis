@@ -2,7 +2,7 @@
 
 Sports Lab keeps Redis local. PostgreSQL and the raw Ball Don't Lie files move to AWS. Terraform for the resources is in `infra/aws/`. Eason runs `terraform apply` on his Mac with his own AWS login. This repository does not call AWS, and no provisioner key is created for anyone else.
 
-Until the EC2 cutover below, the backend and Postgres both run on that Mac. Postgres is the `no-vig-nba-postgres` container (`postgres:16-alpine` in `docker-compose.yml`). The Mac is not deployed anywhere and its home IP can change. The allowlist is the real box `/32`, written only in the gitignored `terraform.tfvars`, plus the Mac's current public `/32`. The tracked example uses `198.51.100.10/32` for the box line. `scripts/aws_update_my_ip.sh` rewrites only the Mac line. The EC2 section is the host that replaces the Mac process. Do not point production traffic at it until the RDS migration in this document has finished.
+The backend and Postgres both run on that Mac until the EC2 host below is serving. Postgres is the `no-vig-nba-postgres` container (`postgres:16-alpine` in `docker-compose.yml`). The Mac is not deployed anywhere and its home IP can change. The allowlist is the real box `/32`, written only in the gitignored `terraform.tfvars`, plus the Mac's current public `/32`. The tracked example uses `198.51.100.10/32` for the box line. `scripts/aws_update_my_ip.sh` rewrites only the Mac line.
 
 Step-by-step for that Mac, in Traditional Chinese: [docs/deployment/aws-steps-zh-TW.md](aws-steps-zh-TW.md).
 
@@ -59,7 +59,7 @@ The AWS account already exists. Check its plan and billing, set a monthly $25 bu
 
 1. On the Mac, `aws configure` with Eason's own keys. Those keys stay in `~/.aws`. They do not go in the repo or in chat.
 2. `cd infra/aws && cp terraform.tfvars.example terraform.tfvars`. Set the bucket name. Replace the example box line `198.51.100.10/32` with the real box `/32` in that gitignored file, and set the `# mac-home` line to the Mac's current public `/32`. `./scripts/aws_update_my_ip.sh` rewrites the Mac line and prints `terraform apply`; it does not call AWS unless `--apply` is passed.
-3. `terraform init`, `terraform plan`, `terraform apply`. Read `db_endpoint`, `master_user_secret_arn`, `bucket_name`, and `app_security_group_id`. The migration and dump scripts do not call Secrets Manager. They read `RDS_DATABASE_URL`, which you build. `SecretString` is JSON. Take only the password field:
+3. `terraform init`, `terraform plan`, `terraform apply`. If plan reports `no matching EC2 VPC found`, the account has no default VPC. Follow [If your account has no default VPC](#if-your-account-has-no-default-vpc), then plan again. Read `db_endpoint`, `master_user_secret_arn`, `bucket_name`, `app_security_group_id`, `vpc_id`, and `public_subnet_ids`. The migration and dump scripts do not call Secrets Manager. They read `RDS_DATABASE_URL`, which you build. `SecretString` is JSON. Take only the password field:
 
 ```bash
 aws secretsmanager get-secret-value \
@@ -101,7 +101,49 @@ The default is `docker exec no-vig-nba-postgres`. In that container, `localhost:
 
 When the home IP changes, run `scripts/aws_update_my_ip.sh` and then the printed `terraform apply`. Until that apply finishes, the Mac cannot open 5432.
 
-Apply also creates security group `sportslab-app` (output `app_security_group_id`) and attaches the EC2 instance to it. Ingress on that group is TCP 80 and 443, plus TCP 22 only when `enable_ssh` is true. RDS already allows TCP 5432 from that group, by security group id, and from any id in `rds_allowed_security_group_ids` (default empty). The private-RDS step is separate and comes after the EC2 host is serving. It is described in the EC2 section. Do not run `scripts/aws_update_my_ip.sh --apply` after `allowed_cidrs` is emptied, because `--apply` passes the Mac and box CIDRs back in. `0.0.0.0/0` and `::/0` stay rejected.
+Apply also creates security group `sportslab-app` (output `app_security_group_id`) and attaches the EC2 instance to it. The group resource itself still has no inline ingress, so its description stays as first applied. Separate rules open TCP 80 and 443, plus TCP 22 only when `enable_ssh` is true. RDS already allows TCP 5432 from that group, by security group id, and from any id in `rds_allowed_security_group_ids` (default empty). Once the host is serving, set `allowed_cidrs = []` in the gitignored `terraform.tfvars` and apply again. That removes the Mac and box CIDR rules. Do not run `scripts/aws_update_my_ip.sh --apply` after that, because `--apply` passes those two CIDRs back in. `0.0.0.0/0` and `::/0` stay rejected.
+
+## If your account has no default VPC
+
+`terraform plan` looks up the region's default VPC when `vpc_id` is unset. An account with no default VPC stops there:
+
+```text
+Error: no matching EC2 VPC found
+```
+
+List the VPCs. Do not commit the ids this prints.
+
+```bash
+aws ec2 describe-vpcs --query 'Vpcs[].{id:VpcId,cidr:CidrBlock,default:IsDefault,name:Tags[?Key==`Name`]|[0].Value}' --output table
+```
+
+Pick the VPC whose main route table sends `0.0.0.0/0` to an `igw-` gateway, and whose subnets have `MapPublicIpOnLaunch` true. `vpc-0123456789abcdef0` below is a placeholder. Replace it with the id from the table.
+
+```bash
+aws ec2 describe-route-tables \
+  --filters Name=vpc-id,Values=vpc-0123456789abcdef0 \
+  --query 'RouteTables[?Associations[?Main]].{id:RouteTableId,defaultRoute:Routes[?DestinationCidrBlock==`0.0.0.0/0`].GatewayId}' \
+  --output table
+```
+
+```bash
+aws ec2 describe-subnets \
+  --filters Name=vpc-id,Values=vpc-0123456789abcdef0 \
+  --query 'Subnets[].{id:SubnetId,az:AvailabilityZone,public:MapPublicIpOnLaunch,cidr:CidrBlock}' \
+  --output table
+```
+
+Add the id to the gitignored `terraform.tfvars`:
+
+```hcl
+vpc_id = "vpc-0123456789abcdef0"
+```
+
+Run `terraform plan` again. Leave the variable unset to keep the default VPC. An empty string is rejected. It does not mean "use the default".
+
+The instance is placed in `sort(public_subnet_ids)[0]`. That list is empty when the VPC has no subnet with `MapPublicIpOnLaunch` true, and plan then stops with: `public_subnet_ids is empty. Set vpc_id to a VPC whose subnets have MapPublicIpOnLaunch=true.` The DB subnet group also requires those subnets to cover at least two availability zones. A lifecycle precondition reports that. It does not replace the group.
+
+A `check` block cannot point this case at `vpc_id`. `data.aws_vpc.selected` fails the plan with `no matching EC2 VPC found` before any check runs. Changing that data source so the lookup is optional would change the flow this stack already applies. Set `vpc_id` in `terraform.tfvars` instead.
 
 ## Rollback
 
@@ -127,7 +169,7 @@ Terraform adds, on top of the RDS and S3 stack:
 
 - `instance_type` default `t4g.small`. The AMI is the SSM public parameter `/aws/service/ami-amazon-linux-latest/al2023-ami-kernel-default-arm64`.
 - A 30 GB encrypted gp3 root (`root_volume_gb`). IMDSv2 is required. Hop limit is 2 so the container can use the instance role.
-- An Elastic IP (`terraform output eip`) and the instance id (`terraform output instance_id`).
+- An Elastic IP (`terraform output eip`) and the instance id (`terraform output instance_id`). The instance subnet is `sort(local.public_subnet_ids)[0]`, the first public subnet in the VPC from `vpc_id` (or the default VPC when that variable is unset). See [If your account has no default VPC](#if-your-account-has-no-default-vpc).
 - The existing `sportslab-app` security group. TCP 80 and 443 are open to the internet. TCP 22 is closed unless `enable_ssh = true`, and then only from `allowed_cidrs`. 8000 and 6379 are not published.
 - An instance role (`terraform output instance_role_arn`). Managed policies are `AmazonSSMManagedInstanceCore` and `CloudWatchAgentServerPolicy`. S3 is the same prefix policy as the runtime user (list, get, put; no delete). SSM `GetParameter`, `GetParameters`, and `GetParametersByPath` are limited to `/sportslab/prod` and `/sportslab/prod/*`. `kms:Decrypt` is only via `ssm.<region>.amazonaws.com` and only when the encryption context parameter ARN is under `/sportslab/prod/`. No access keys are created.
 - A system-status alarm that recovers the instance, a CloudWatch agent config for disk and memory, and a disk alarm at 80%. `alarm_email` empty skips the SNS topic. A non-empty value creates an email subscription that stays pending until the inbox confirms it.
@@ -154,9 +196,9 @@ openssl rand -hex 32 | aws ssm put-parameter \
 
 `PROXY_SECRET_REQUIRED` defaults to false. `deploy/docker-compose.prod.yml` pins it to `false`, and that compose value wins over `/etc/sportslab/backend.env`, so an SSM parameter cannot turn the check on by itself. When the flag is true and `VERCEL_PROXY_SECRET` is set, every request except the health routes requires a matching `x-sportslab-proxy-secret`. A missing, blank, or wrong header is HTTP 403. That includes `OPTIONS` and any SSE route, because the check runs before the route. The process refuses to start when the flag is true and the secret is empty. `GET /api/health` and `GET /health` stay open. The compose healthcheck and `deploy/remote-up.sh` call `http://127.0.0.1:8000/api/health` inside the backend container, so they do not hit Caddy. A public request to `http://<hostname>/health` is redirected to HTTPS. There is no separate readiness route.
 
-The flag stays off on this host. `frontend/lib/api.ts` in this repository still builds every browser call as `process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000"` plus the path, and `frontend/next.config.js` exposes `NEXT_PUBLIC_API_URL` to the browser. There is no `EventSource`. Those calls do not go through the Vercel server proxy, so requiring the header now would reject the current UI. That is an accepted risk until Vercel serves Frontend #63 at `88f1c66`. That revision replaces the client base URL with the same-origin `/api/backend` prefix. `frontend/middleware.ts` there matches `/api/backend/:path*` and forwards to `BACKEND_API_URL` with the secret. `BACKEND_API_URL` has no `NEXT_PUBLIC_` prefix. After that frontend is what Vercel serves, change the compose line to `"true"` and redeploy the backend. A CORS preflight from the #63 browser, if one is sent, is for the Next.js origin. This backend still answers a direct `OPTIONS` with 403 when the flag is on.
+The flag stays off in compose until the Vercel deployment is the frontend from #63 (`88f1c66`). That code is in this repo now: `frontend/lib/api.ts` calls the same-origin `/api/backend` prefix, and `frontend/middleware.ts` forwards it to `BACKEND_API_URL` with the secret. There is no `EventSource`. After that build is what Vercel serves, change the compose line to `"true"` and redeploy the backend. A browser preflight stays on the Next.js origin. This backend still answers a direct `OPTIONS` with 403 when the flag is on.
 
-The paths the current browser client calls, all through `fetchApi` in `frontend/lib/api.ts`:
+The paths `fetchApi` calls, all under `/api/backend` in the browser:
 
 - `GET /api/nba/events`, `POST /api/nba/props/no-vig`, `GET /api/nba/players/suggest`, `GET /api/health`
 - `GET /api/nba/csv/players`, `GET /api/nba/player-history`, `GET /api/nba/player-dd-history`
@@ -236,7 +278,7 @@ If issuance fails, Caddy's automatic HTTPS docs say it retries once, tries the n
 
 ### Cutover order
 
-1. Apply the SPO-132 stack (RDS and S3), then this EC2 change in the same `infra/aws` directory.
+1. Apply `infra/aws` once. That apply creates RDS, S3, and this EC2 host together. #62 and #65 are already on `dev`.
 2. Run the RDS migration in the section above. The Mac and the box can still open 5432.
 3. Deploy the EC2 host and point Vercel `BACKEND_API_URL` at `terraform output -raw backend_api_url`. Confirm `curl -I https://<hostname>/health` and a real read against RDS.
 4. As a separate later apply, make RDS private: `allowed_cidrs = []` and `publicly_accessible = false`. RDS still allows the app security group, so the instance keeps its connection. Do not do this before the host is the only client that must reach the database.

@@ -3,8 +3,8 @@ data "aws_ssm_parameter" "al2023_arm64" {
 }
 
 locals {
-  # sort() keeps the subnet stable across plans. Default-VPC subnets are public.
-  app_subnet_id = sort(data.aws_subnets.default.ids)[0]
+  # sort() keeps the choice stable. These ids already have MapPublicIpOnLaunch.
+  app_subnet_id = sort(local.public_subnet_ids)[0]
   # aws_eip.app is allocated on its own (domain = "vpc"), so public_ip exists
   # before the instance. user_data reads it. aws_eip_association attaches the
   # address afterwards. The EIP resource does not reference the instance, so
@@ -75,8 +75,13 @@ resource "aws_instance" "app" {
   })
 
   # A later AMI in the SSM parameter must not replace the host on its own.
+  # The precondition does not change subnet_id, so it does not replace the host.
   lifecycle {
     ignore_changes = [ami]
+    precondition {
+      condition     = length(local.public_subnet_ids) > 0
+      error_message = "public_subnet_ids is empty. Set vpc_id to a VPC whose subnets have MapPublicIpOnLaunch=true."
+    }
   }
 
   tags = {

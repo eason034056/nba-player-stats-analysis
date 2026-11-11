@@ -4,6 +4,13 @@
 
 region      = "us-east-2"
 project     = "sportslab"
+
+# Leave vpc_id unset to use the default VPC. Set it when the account has no
+# default VPC. Find it with:
+#   aws ec2 describe-vpcs --query 'Vpcs[].{id:VpcId,cidr:CidrBlock,default:IsDefault,name:Tags[?Key==`Name`]|[0].Value}' --output table
+# Pick the VPC whose main route table has 0.0.0.0/0 pointing to an igw and
+# whose subnets have MapPublicIpOnLaunch=true.
+# vpc_id = "vpc-0123456789abcdef0"
 bucket_name = "sportslab-data-ACCOUNT-us-east-2"
 
 # /32 only. 0.0.0.0/0 is rejected. An empty list is allowed and removes the

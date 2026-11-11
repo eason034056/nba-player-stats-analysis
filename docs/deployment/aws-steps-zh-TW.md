@@ -74,13 +74,59 @@ terraform plan
 terraform apply
 ```
 
-`plan` 裡不該出現 `0.0.0.0/0`。apply 結束後記下 `db_endpoint`、`master_user_secret_arn`、`bucket_name`，以及 `app_security_group_id`。
+`plan` 裡不該出現 `0.0.0.0/0`。如果 plan 停在 `no matching EC2 VPC found`，先看下一節，改完再 plan。apply 結束後記下 `db_endpoint`、`master_user_secret_arn`、`bucket_name`、`app_security_group_id`、`vpc_id`，以及 `public_subnet_ids`。
 
-`app_security_group_id` 是 `sportslab-app` 這個安全群組。它現在沒有任何進站規則，是留給之後的 EC2 後端（SPO-133）掛上去用的。RDS 已經用安全群組 id 放行這個群組的 TCP 5432，也放行 `rds_allowed_security_group_ids` 裡的每一個 id（預設是空清單）。
+`app_security_group_id` 是 `sportslab-app`。這個資源本身沒有內嵌的進站規則，description 維持第一次建立的文字。另外的規則開放 TCP 80 和 443。RDS 已經用安全群組 id 放行這個群組的 TCP 5432，也放行 `rds_allowed_security_group_ids` 裡的每一個 id（預設是空清單）。
 
 EC2 後端上線、而且實例已經掛在 `sportslab-app` 之後，把 gitignore 的 `terraform.tfvars` 改成 `allowed_cidrs = []` 再 `terraform apply`。這樣 Mac 和 box 的 IP 規則會消失。RDS 仍然允許 `sportslab-app`。之後不要再跑 `./scripts/aws_update_my_ip.sh --apply`，因為 `--apply` 會把那兩個 `/32` 再傳回去。`0.0.0.0/0` 和 `::/0` 仍然會被拒絕。空清單是允許的。
 
 `infra/aws/README.md` 裡的 provisioner IAM JSON 是舊計畫的對照清單。不要照它去建立另一把金鑰。
+
+## If your account has no default VPC
+
+帳號沒有 default VPC 時，`vpc_id` 沒寫，`terraform plan` 會停在這個錯誤：
+
+```text
+Error: no matching EC2 VPC found
+```
+
+這表示 Terraform 在這個 region 找不到 default VPC。先列出 VPC。指令印出的 id 不要 commit。
+
+```bash
+aws ec2 describe-vpcs --query 'Vpcs[].{id:VpcId,cidr:CidrBlock,default:IsDefault,name:Tags[?Key==`Name`]|[0].Value}' --output table
+```
+
+選一個 VPC，確認兩件事。下面的 `vpc-0123456789abcdef0` 只是佔位，換成上一行印出的 id。
+
+主路由表要有一條 `0.0.0.0/0`，目標是 `igw-` 開頭的網際網路閘道：
+
+```bash
+aws ec2 describe-route-tables \
+  --filters Name=vpc-id,Values=vpc-0123456789abcdef0 \
+  --query 'RouteTables[?Associations[?Main]].{id:RouteTableId,defaultRoute:Routes[?DestinationCidrBlock==`0.0.0.0/0`].GatewayId}' \
+  --output table
+```
+
+子網的 `MapPublicIpOnLaunch` 要是 true。RDS 的 subnet group 仍使用該 VPC 的全部子網。`public_subnet_ids` 是其中會自動配發公開 IPv4 的子網，SPO-133 會用來放 EC2。
+
+```bash
+aws ec2 describe-subnets \
+  --filters Name=vpc-id,Values=vpc-0123456789abcdef0 \
+  --query 'Subnets[].{id:SubnetId,az:AvailabilityZone,public:MapPublicIpOnLaunch,cidr:CidrBlock}' \
+  --output table
+```
+
+在 gitignore 的 `terraform.tfvars` 加上（換成你的 id）：
+
+```hcl
+vpc_id = "vpc-0123456789abcdef0"
+```
+
+再跑一次 `terraform plan`。不要 commit `terraform.tfvars`。帳號有 default VPC 時，不要寫 `vpc_id`。空字串不是「沒設定」，驗證會拒絕 `""`。
+
+EC2 會放在 `sort(public_subnet_ids)[0]`。這份清單是空的時候，plan 會停在：`public_subnet_ids is empty. Set vpc_id to a VPC whose subnets have MapPublicIpOnLaunch=true.` 另外，RDS subnet group 的子網至少要跨兩個可用區，否則 lifecycle precondition 會擋下來。這個 precondition 不會替換已經存在的 subnet group。
+
+`check` 區塊接不到「沒有 default VPC」這件事。`data.aws_vpc.selected` 會先讓 plan 失敗，錯誤就是 `no matching EC2 VPC found`，check 還不會跑。不要為了這個去改資料來源的查法。在 `terraform.tfvars` 設定 `vpc_id`。
 
 ## 5. 家裡 IP 變了就更新允許清單
 
@@ -233,10 +279,9 @@ DATABASE_REQUIRED=false
 
 順序要照下面。EC2 活著之後，才做最後一步把 RDS 收成私有。
 
-1. 先 apply SPO-132 的 RDS 和 S3（上面第 4 到第 8 節），遷移完成。
-2. 同一份 `infra/aws` 再 apply 這次的 EC2。
-3. 把密鑰放進 SSM，第一次把程式拉上主機，Vercel 的 `BACKEND_API_URL` 指到 `terraform output -raw backend_api_url`。
-4. 確認健康檢查和一筆真實讀取都打到 RDS 之後，另一次 apply 才把 RDS 改成私有。
+1. 同一份 `infra/aws` apply 一次，RDS、S3 和這台 EC2 一起建立。#62 和 #65 已經在 `dev`。帳號沒有 default VPC 時，先在 `terraform.tfvars` 設 `vpc_id`，而且該 VPC 要有 `MapPublicIpOnLaunch` 為 true 的子網，並至少跨兩個可用區。
+2. 把密鑰放進 SSM，第一次把程式拉上主機，Vercel 的 `BACKEND_API_URL` 指到 `terraform output -raw backend_api_url`。
+3. 確認健康檢查和一筆真實讀取都打到 RDS 之後，另一次 apply 才把 RDS 改成私有。
 
 ### 變數
 
@@ -287,7 +332,7 @@ openssl rand -hex 32 | aws ssm put-parameter \
 
 `PROXY_SECRET_REQUIRED` 預設是 false。`deploy/docker-compose.prod.yml` 把它釘成 `false`，這個值蓋過 env file，所以 SSM 不能自己把它打開。旗標若是 true 而且密鑰有值，除了 `GET /api/health` 和 `GET /health`，每個請求（含 `OPTIONS` 和 SSE）都要帶對的 `x-sportslab-proxy-secret`，否則回 403。旗標是 true 但密鑰是空的，行程拒絕啟動。健康檢查留著。compose 的 healthcheck 和 `deploy/remote-up.sh` 打的是容器裡面的 `http://127.0.0.1:8000/api/health`，不經過 Caddy。外面用 `http://` 打 `/health` 會被轉到 HTTPS。沒有另外的 readiness 路由。
 
-現在不要打開。這個 repo 的 `frontend/lib/api.ts` 仍用 `NEXT_PUBLIC_API_URL`（沒有就用 `http://localhost:8000`）在瀏覽器直接打後端，`frontend/next.config.js` 也把那個變數暴露給瀏覽器。沒有 `EventSource`。這些請求不經過 Vercel 的伺服器代理，現在打開檢查會把目前的畫面全部擋下來。這是先接受的風險。Frontend #63 的 `88f1c66` 才改成同源 `/api/backend`，由 `frontend/middleware.ts` 轉到 `BACKEND_API_URL` 並帶密鑰。等 Vercel 跑的是那一版，再把 compose 那一行改成 `"true"` 然後重新部署後端。#63 的瀏覽器若發 CORS preflight，對象是 Next.js，不是 EC2。後端在旗標打開時仍會對直接來的 `OPTIONS` 回 403。
+現在 compose 仍釘成 false，等 Vercel 上的是 #63（`88f1c66`）再打開。這份 repo 的 `frontend/lib/api.ts` 已經改打同源 `/api/backend`，由 `frontend/middleware.ts` 轉到 `BACKEND_API_URL` 並帶密鑰。沒有 `EventSource`。等 Vercel 跑的是那一版，再把 compose 那一行改成 `"true"` 然後重新部署後端。瀏覽器的 CORS preflight 留在 Next.js。後端在旗標打開時仍會對直接來的 `OPTIONS` 回 403。
 
 目前瀏覽器會打的路徑都在 `frontend/lib/api.ts` 的 `fetchApi`：`/api/health`、`/api/nba/events`、`/api/nba/props/no-vig`、`/api/nba/players/suggest`、`/api/nba/csv/players`、`/api/nba/player-history`、`/api/nba/player-dd-history`、`/api/nba/daily-picks`、`/api/nba/daily-picks/trigger`、`/api/nba/agent/chat`、`/api/nba/lineups`、`/api/nba/lineups/{team}`、`/api/nba/lineups/refresh`、`/api/nba/projections`、`/api/nba/projections/refresh`、`/api/nba/projections/{player}`、`/api/nba/events/{id}/reads`、`/api/nba/events/{id}/props`，以及 WNBA 的 events、props/no-vig、players/suggest、csv/players、player-history、player-dd-history、daily-picks、daily-picks/trigger、lineups/{team}。
 
