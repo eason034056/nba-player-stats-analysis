@@ -34,6 +34,7 @@ from app.models.schemas import (
     GameLog,
     TeammateContext,
     BulkPropsResponse,
+    EventReadsResponse,
 )
 from app.services.bulk_props import (
     BulkPropsQueryFailed,
@@ -43,6 +44,7 @@ from app.services.bulk_props import (
     get_event_bulk_props,
     parse_market_filter,
 )
+from app.services.event_reads import get_event_reads
 from app.services.daily_analysis import attach_top_reads, load_stored_top_reads
 from app.services.odds_theoddsapi import odds_provider
 from app.services.odds_provider import OddsAPIError
@@ -736,6 +738,87 @@ async def get_event_props(
         raise HTTPException(status_code=500, detail=str(exc)) from exc
 
 
+@router.get(
+    "/events/{event_id}/reads",
+    response_model=EventReadsResponse,
+    summary="A read for every posted player on one NBA event",
+    description="""
+    One read per player posted in the latest `odds_line_snapshots`
+    capture for this event. Each read has `side`, `combined_probability`,
+    `tier`, and `signals`.
+
+    The line is the same modal consensus bulk props uses. Prices come
+    from that capture. History comes from the NBA game log.
+    `combined_probability` is the existing signal model. This route does
+    not call The Odds API, including when no capture is stored.
+
+    `market` limits the work to one snapshot market key (the game page
+    tab). Omit it to score every stored market. An unknown key is HTTP
+    400. A well-formed event id with no snapshot is HTTP 200 and
+    `reads` is empty. A malformed event id is HTTP 404.
+
+    A binary market is included with `side`, `combined_probability`,
+    `tier`, and `signals` all null. A player with no two-sided price
+    and no game log is included the same way.
+    """,
+)
+@limiter.limit(settings.rate_limit_props)
+async def get_event_reads_route(
+    request: Request,
+    event_id: str,
+    market: Optional[str] = Query(
+        default=None,
+        description=(
+            "One snapshot market key, for example player_points. "
+            "Omit to score every market in the latest capture"
+        ),
+    ),
+) -> EventReadsResponse:
+    """Reads for every posted player on one NBA event.
+
+    ``get_event_reads_route`` is the HTTP handler. Call it as
+    ``GET /api/nba/events/{event_id}/reads``. Optional query ``market``
+    is one key. The handler checks the id and the market, then calls
+    ``get_event_reads``. That function reads Postgres (and a 60s Redis
+    copy of the JSON) and the local game log. It does not call the
+    Odds API.
+
+    Args:
+        request: Incoming request. The slowapi limiter reads it. Same
+            limit as ``GET /api/nba/events/{event_id}/props``.
+        event_id: Path id. Malformed ids are 404.
+        market: One market key, or omitted.
+
+    Returns:
+        EventReadsResponse. Empty reads and a null snapshot time when
+        nothing is stored.
+
+    Raises:
+        HTTPException: 404 malformed id, 400 unknown market, 503 database
+            disconnected, 500 snapshot query failed.
+    """
+    if not event_id_is_well_formed(event_id):
+        raise HTTPException(status_code=404, detail="Malformed event_id")
+    try:
+        parsed = parse_market_filter(market)
+    except UnknownMarkets as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    chosen: Optional[str] = None
+    if parsed is not None:
+        if len(parsed) != 1:
+            raise HTTPException(
+                status_code=400,
+                detail="market takes one key. Repeat the request per market.",
+            )
+        chosen = next(iter(parsed))
+    try:
+        return await get_event_reads(event_id, market=chosen)
+    except BulkPropsStoreUnavailable as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+    except BulkPropsQueryFailed as exc:
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
+
+
 @router.post(
     "/props/no-vig",
     response_model=NoVigResponse,
@@ -1312,6 +1395,7 @@ async def get_player_history(
             season_n_games=stats.get("season_n_games"),
             season_p_over=stats.get("season_p_over"),
             season_p_under=stats.get("season_p_under"),
+            season_mean=stats.get("season_mean"),
             opponent_filter=stats.get("opponent_filter"),
             teammate_filter=stats.get("teammate_filter"),
             teammate_played=stats.get("teammate_played"),

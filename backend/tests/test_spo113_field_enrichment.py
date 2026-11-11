@@ -28,7 +28,11 @@ from app.services.defense_ranks import (
 )
 from app.services.espn_schedule import compact_event
 from app.services.event_fields import commence_time_et, enrich_nba_event
-from app.services.daily_analysis import DailyAnalysisService, daily_picks_cache_key
+from app.services.daily_analysis import (
+    DailyAnalysisService,
+    daily_picks_cache_key,
+    read_tier,
+)
 from app.services.lineup_service import confirmation_status
 from app.services.nba_season import (
     normalize_nba_season_label,
@@ -408,6 +412,7 @@ class TestHistoryFields:
         assert stats["season_n_games"] == 1
         assert stats["season_p_over"] == 1.0
         assert stats["season_p_under"] == 0.0
+        assert stats["season_mean"] == 40.0
 
         older = service.get_player_stats(
             "Venue Player", "points", 15.0, season="2025-26"
@@ -417,6 +422,7 @@ class TestHistoryFields:
         # 22 over, 10 under.
         assert older["season_p_over"] == 0.5
         assert older["season_p_under"] == 0.5
+        assert older["season_mean"] == 16.0
         # The all-games numbers do not shrink when season is set.
         assert older["n_games"] == 3
 
@@ -498,6 +504,7 @@ class TestHistoryFields:
         )
         assert response.season == "2025-2026"
         assert response.season_n_games == 2
+        assert response.season_mean == 16.0
         assert response.n_games == 3
         assert response.game_logs[0].home_or_away in {"home", "away", None}
         assert any(log.home_or_away == "home" for log in response.game_logs)
@@ -512,6 +519,7 @@ class TestHistoryFields:
         service = _service(path, league="wnba")
         stats = service.get_player_stats("A'ja Wilson", "points", 20.0)
         assert "season" not in stats
+        assert "season_mean" not in stats
         assert "teammate_context" not in stats
         assert "home_or_away" not in stats["game_logs"][0]
         assert stats["n_games"] == 1
@@ -961,7 +969,7 @@ async def test_daily_pick_keeps_position_rank_and_read_tier(monkeypatch, tmp_pat
     assert points.opponent_position_rank_source == "sportsdata"
     assert points.opponent_position_rank_season is None
     assert points.opponent_position_rank_note is None
-    assert points.tier == "Strong play"
+    assert points.tier == read_tier(points.combined_probability)
     assert points.p_over == pytest.approx(1.0)
     assert points.direction == "over"
 

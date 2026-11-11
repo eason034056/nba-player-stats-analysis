@@ -459,6 +459,14 @@ class PlayerHistoryResponse(BaseModel):
         default=None,
         description="Share of season games strictly below the threshold",
     )
+    season_mean: Optional[float] = Field(
+        default=None,
+        description=(
+            "Mean of the metric on the same season games as season_n_games. "
+            "Ignores the threshold and the n window. Null when that season "
+            "has no games. Null on WNBA."
+        ),
+    )
     message: Optional[str] = Field(default=None, description="Additional message")
 
 
@@ -833,9 +841,12 @@ class DailyPick(BaseModel):
     tier: Optional[Literal["Strong play", "Playable", "Lean"]] = Field(
         default=None,
         description=(
-            "Read tier of probability. Strong play >= 0.70, "
-            "Playable >= 0.65 and below 0.70, Lean >= 0.56 and below 0.65. "
-            "Null when probability is below Lean or missing."
+            "Read tier. NBA uses combined_probability. "
+            "Strong play >= 0.70, Playable >= 0.65 and below 0.70, "
+            "Lean >= 0.56 and below 0.65. "
+            "Null when that probability is below 0.56, missing, or not finite. "
+            "WNBA has no combined_probability, so WNBA tier still uses "
+            "the historical probability and the same cutoffs."
         ),
     )
     p_over: Optional[float] = Field(
@@ -845,6 +856,14 @@ class DailyPick(BaseModel):
     p_under: Optional[float] = Field(
         default=None,
         description="Share of prior games strictly below the line. Null when unknown.",
+    )
+    season_mean: Optional[float] = Field(
+        default=None,
+        description=(
+            "Mean of this metric in the current NBA season. Same games as "
+            "player-history season_n_games. Ignores the line. Null when that "
+            "season has no games, and null on WNBA."
+        ),
     )
 
     # --- SPO-112 signal verdicts (self-contained; leave this block intact) ---
@@ -1018,6 +1037,21 @@ class BulkPropPlayer(BaseModel):
     books after that collapse and equals ``len(books)``.
     """
     player: str = Field(..., description="Player name as stored on the snapshot")
+    position: Optional[str] = Field(
+        default=None,
+        description=(
+            "Pos on the player's most recent NBA game log. Null when the "
+            "name is not in the log or Pos is blank."
+        ),
+    )
+    team_code: Optional[str] = Field(
+        default=None,
+        description=(
+            "Canonical NBA team code from team_on_event for this event's "
+            "home and away clubs (for example GSW). Null when that club "
+            "is not playing, the log has no team, or the name is missing."
+        ),
+    )
     line: float = Field(..., description="Modal consensus of one line per bookmaker")
     bookmakers_count: int = Field(..., description="Distinct bookmakers. Equals the length of books")
     books: List[BulkPropBook] = Field(default_factory=list, description="One entry per bookmaker")
@@ -1055,4 +1089,72 @@ class BulkPropsResponse(BaseModel):
     markets: List[BulkPropMarket] = Field(
         default_factory=list,
         description="Markets in the newest snapshot, in SNAPSHOT_MARKETS order. Empty when nothing is stored or nothing matches the filter",
+    )
+
+
+class PropRead(BaseModel):
+    """One posted player in one market, with the side we would publish.
+
+    ``side`` is the historical side when the game log has a rate, including
+    rates below the Lean floor. It is the no-vig favorite when the log has
+    no rate. It is null for a binary market and when neither source can
+    choose. ``tier`` is ``read_tier(combined_probability)``. A null
+    ``combined_probability`` (no two-sided price at the modal line, or Out
+    or Doubtful) has a null tier. The player is still present.
+    """
+
+    player: str = Field(..., description="Player name as stored on the snapshot")
+    market: str = Field(..., description="Market key, for example player_points")
+    line: float = Field(..., description="Modal consensus of one line per bookmaker. Same rule as bulk props")
+    side: Optional[Literal["over", "under"]] = Field(
+        default=None,
+        description="Chosen side. Null for a binary market and when no side can be chosen",
+    )
+    combined_probability: Optional[float] = Field(
+        default=None,
+        ge=0.0,
+        le=1.0,
+        description=(
+            "Calibrated probability of side, from the existing signal model. "
+            "Null when the market price is missing or the player is Out or Doubtful"
+        ),
+    )
+    tier: Optional[Literal["Strong play", "Playable", "Lean"]] = Field(
+        default=None,
+        description=(
+            "read_tier(combined_probability). Null below 0.56, and null when "
+            "combined_probability is missing or not finite"
+        ),
+    )
+    signals: Optional[List[PickSignal]] = Field(
+        default=None,
+        description="Five signals for side. Null when side is null",
+    )
+
+
+class EventReadsResponse(BaseModel):
+    """``GET /api/nba/events/{event_id}/reads``.
+
+    One row per posted player in the latest snapshot, for the requested
+    market or for every stored market. ``source`` is always ``"snapshot"``.
+    A well-formed event with no capture is HTTP 200, ``reads`` empty, and
+    ``snapshot_at`` null. This route does not call The Odds API.
+    """
+
+    event_id: str = Field(..., description="Event id from the path")
+    market: Optional[str] = Field(
+        default=None,
+        description="The market query when the client sent one. Null when every stored market is included",
+    )
+    snapshot_at: Optional[datetime] = Field(
+        default=None,
+        description="When the newest stored capture was written. Null when no snapshot exists",
+    )
+    source: Literal["snapshot"] = Field(
+        default="snapshot",
+        description="Always snapshot. This route does not call the Odds API",
+    )
+    reads: List[PropRead] = Field(
+        default_factory=list,
+        description="One read per posted player. Empty when nothing is stored or the market has no rows",
     )

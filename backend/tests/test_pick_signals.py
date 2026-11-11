@@ -542,8 +542,8 @@ class TestLeagueWiring:
         assert pick.signals[2].value == "72.0%"
         assert pick.signals[2].verdict == "supports"
         assert pick.signals[4].value == "#8"
-        assert pick.combined_probability is not None
-        assert pick.tier == "Strong play"
+        assert pick.combined_probability == pytest.approx(0.6334)
+        assert pick.tier == "Lean"
         assert pick.p_over == 0.72
         assert pick.p_under == 0.21
         assert pick.position == "PG"

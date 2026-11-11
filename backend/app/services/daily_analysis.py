@@ -225,10 +225,14 @@ STORED_MIN_SAMPLE_GAMES = 5
 
 
 def read_tier(probability: float | None) -> str | None:
-    """Map a pick probability onto a read tier.
+    """Map a probability onto a read tier.
+
+    NBA passes ``combined_probability``. WNBA passes the historical
+    rate, because a WNBA pick has no combined probability. The cutoffs
+    are the same either way.
 
     Args:
-        probability: Chosen-side historical rate, or None.
+        probability: The probability the tier is based on, or None.
 
     Returns:
         ``"Strong play"`` when probability >= 0.70, ``"Playable"`` when
@@ -298,21 +302,87 @@ def daily_picks_cache_key(league: str, date: str, tz_offset_minutes: int) -> str
     return f"{DAILY_PICKS_CACHE_KEY}:{league.lower()}:{date}:tz{tz_offset_minutes}"
 
 
+def _optional_stat(value: Any) -> float | None:
+    """A finite stat, or None. Used for fields a test double may omit."""
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        return None
+    number = float(value)
+    if not math.isfinite(number):
+        return None
+    return number
+
+
+def board_score(pick: DailyPick, league: str = "nba") -> float | None:
+    """Probability the daily-picks floor is applied to.
+
+    NBA uses ``combined_probability``. A missing or non-finite combined
+    score does not fall back to the historical rate, so that row leaves
+    the board. WNBA has no combined probability and keeps the historical
+    rate.
+
+    Args:
+        pick: One stored pick.
+        league: ``nba`` or ``wnba``. Anything else uses the NBA score.
+
+    Returns:
+        A finite probability, or None when the score cannot be used.
+    """
+    raw = pick.probability if league.lower() == "wnba" else pick.combined_probability
+    if raw is None or isinstance(raw, bool) or not isinstance(raw, (int, float)):
+        return None
+    number = float(raw)
+    if not math.isfinite(number):
+        return None
+    return number
+
+
+def sort_stored_picks(picks: List[DailyPick], league: str = "nba") -> None:
+    """Order a stored list by the score that board uses.
+
+    NBA orders by ``combined_probability``. WNBA orders by the historical
+    rate. A missing or non-finite score sorts last, so a row that cannot
+    reach the board does not sit above one that can. Equal scores keep
+    the order analysis produced them in.
+
+    ``best_top_reads`` still picks the highest historical probability.
+    On a tie it keeps the earlier row of this list, so an NBA tie keeps
+    the higher blend.
+
+    Args:
+        picks: Stored candidates. Sorted in place.
+        league: ``nba`` or ``wnba``. Passed to ``board_score``.
+    """
+
+    def key(pick: DailyPick) -> tuple[bool, float]:
+        score = board_score(pick, league)
+        if score is None:
+            return (False, 0.0)
+        return (True, score)
+
+    picks.sort(key=key, reverse=True)
+
+
 def select_daily_picks(
     picks: List[DailyPick],
     min_probability: float = HIGH_PROBABILITY_THRESHOLD,
     min_games: int = MIN_SAMPLE_GAMES,
+    *,
+    league: str = "nba",
 ) -> List[DailyPick]:
     """Keep picks that clear the query floors.
 
     The stored list can include Lean rows and short NBA samples. This is
-    the filter the daily-picks route applies. Defaults are the published
-    board: probability 0.65 and 10 games.
+    the filter the NBA daily-picks route applies. Defaults are the
+    published board: combined probability 0.65 and 10 games. WNBA passes
+    ``league="wnba"`` and is filtered on the historical rate instead.
 
     Args:
-        picks: Stored picks, highest probability first.
-        min_probability: Inclusive probability floor.
+        picks: Stored picks. An NBA list is ordered by combined
+            probability (``board_score``). A WNBA list is ordered by the
+            historical rate.
+        min_probability: Inclusive floor on ``board_score``.
         min_games: Inclusive sample floor.
+        league: ``nba`` (combined probability) or ``wnba`` (historical).
 
     Returns:
         Picks that meet both floors, in the original order.
@@ -320,7 +390,9 @@ def select_daily_picks(
     return [
         pick
         for pick in picks
-        if pick.probability >= min_probability and pick.n_games >= min_games
+        if (score := board_score(pick, league)) is not None
+        and score >= min_probability
+        and pick.n_games >= min_games
     ]
 
 
@@ -328,23 +400,28 @@ def present_daily_picks(
     result: DailyPicksResponse,
     min_probability: float = HIGH_PROBABILITY_THRESHOLD,
     min_games: int = MIN_SAMPLE_GAMES,
+    *,
+    league: str = "nba",
 ) -> DailyPicksResponse:
     """Return a copy of ``result`` whose picks match the query floors.
 
     ``stats.high_prob_count`` stays the published-board count written at
     analysis time. ``total_picks`` becomes the filtered length. The stored
     object is not mutated, so a later lower ``min_probability`` still sees
-    the Lean rows that were cached.
+    the rows that were cached. NBA compares ``combined_probability``.
 
     Args:
         result: Stored analysis, including candidates below the board.
-        min_probability: Inclusive probability floor.
+        min_probability: Inclusive floor on ``board_score``.
         min_games: Inclusive sample floor.
+        league: Passed through to ``select_daily_picks``.
 
     Returns:
         Response the route can send.
     """
-    filtered = select_daily_picks(result.picks, min_probability, min_games)
+    filtered = select_daily_picks(
+        result.picks, min_probability, min_games, league=league
+    )
     return result.model_copy(update={"picks": filtered, "total_picks": len(filtered)})
 
 TEAM_CODE_ALIASES: Dict[str, str] = {
@@ -872,15 +949,20 @@ class DailyAnalysisService:
                 print(f"⚠️ Failed to analyze event {event_id}: {e}")
                 continue
 
-        # 4. Sort picks by probability (descending)
-        all_picks.sort(key=lambda x: x.probability, reverse=True)
+        # 4. Order the stored list by the score the board uses.
+        # NBA: combined_probability. WNBA: the historical rate. A missing
+        # score sorts last. Equal scores keep analysis order.
+        sort_stored_picks(all_picks, league_normalized)
 
         # 5. Calculate statistics. high_prob_count stays the published
         # board (0.65 and 10 games) even when NBA storage also kept Lean
-        # rows and shorter samples. The default query then reports the
-        # same total_picks as this count.
+        # rows and shorter samples. NBA scores that board on
+        # combined_probability. WNBA scores it on the historical rate.
+        # The default query then reports the same total_picks as this count.
         duration = time.time() - start_time
-        published_count = len(select_daily_picks(all_picks))
+        published_count = len(
+            select_daily_picks(all_picks, league=league_normalized)
+        )
         stats = AnalysisStats(
             total_events=len(events),
             total_players=total_players,
@@ -1194,9 +1276,19 @@ class DailyAnalysisService:
                         opponent_position_rank_note=opponent_position_rank_note,
                         injury_status=injury_status,
                         lineup_confirmed=lineup_confirmed,
-                        tier=read_tier(side_probability),
+                        # NBA tier is filled after the signal step. Starting
+                        # at None means a raised signal call cannot leave
+                        # the historical label on a row whose blend is null.
+                        # WNBA never runs that step, so it keeps the
+                        # historical label here.
+                        tier=(
+                            None
+                            if league.lower() == "nba"
+                            else read_tier(side_probability)
+                        ),
                         p_over=round(p_over, 4) if p_over is not None else None,
                         p_under=round(p_under, 4) if p_under is not None else None,
+                        season_mean=_optional_stat(history_stats.get("season_mean")),
                     )
                     picks.append(pick)
                     pick = _with_nba_signal_verdicts(
@@ -1384,6 +1476,10 @@ def _with_nba_signal_verdicts(
     # would leave the list holding the pre-signal object.
     pick.signals = signals
     pick.combined_probability = combined
+    # NBA tier follows the calibrated probability. The historical label
+    # set on the constructor is what WNBA keeps, because this function
+    # returns before this assignment when the league is not NBA.
+    pick.tier = read_tier(combined)
     return pick
 
 
@@ -1391,8 +1487,9 @@ def best_top_reads(cached: Any) -> Dict[str, TopRead]:
     """Pick the highest-probability stored pick for each event.
 
     The cache payload is the JSON written by ``run_daily_analysis``.
-    Equal probabilities keep the earlier row. Analysis sorts by
-    probability descending, so a tie keeps the row that was stored first.
+    Equal historical probabilities keep the earlier row. The stored
+    list is ordered by ``sort_stored_picks`` (the blend for NBA, the
+    historical rate for WNBA), so an NBA tie keeps the higher blend.
 
     Args:
         cached: Daily-picks cache document, or anything that is not one.
