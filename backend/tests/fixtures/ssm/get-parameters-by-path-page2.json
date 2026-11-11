@@ -1,1 +1,8 @@
-{"Parameters":[{"Name":"/sportslab/prod/OPENAI_API_KEY","Value":"sk-test-value"}]}
+{
+  "Parameters": [
+    {
+      "Name": "/sportslab/prod/OPENAI_API_KEY",
+      "Value": "sk-test-value"
+    }
+  ]
+}

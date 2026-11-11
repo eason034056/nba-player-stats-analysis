@@ -33,9 +33,9 @@ from app.settings import Settings, settings
 
 REPO = Path(__file__).resolve().parents[2]
 PULL_SCRIPT = REPO / "deploy" / "pull-ssm-env.sh"
-SSM_FIXTURES = Path(__file__).resolve().parent / "fixtures" / "ssm"
-SSM_PAGE_1 = SSM_FIXTURES / "get-parameters-by-path-page1.json"
-SSM_PAGE_2 = SSM_FIXTURES / "get-parameters-by-path-page2.json"
+SSM_FIXTURES = REPO / "backend" / "tests" / "fixtures" / "ssm"
+SSM_PAGE1 = (SSM_FIXTURES / "get-parameters-by-path-page1.json").read_text(encoding="utf-8")
+SSM_PAGE2 = (SSM_FIXTURES / "get-parameters-by-path-page2.json").read_text(encoding="utf-8")
 PEER = "198.51.100.9"
 SECRET = "correct-secret-value"
 PREVIEW_REGEX = (
@@ -269,6 +269,74 @@ class TestProxyRateLimitKey:
         )
         assert client_address_key(request) == PEER
 
+    def test_empty_header_with_a_configured_secret_uses_the_peer(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        _use_secret(monkeypatch, SECRET)
+        request = _request(
+            **{
+                PROXY_SECRET_HEADER: "",
+                "x-real-ip": "203.0.113.8",
+                "x-forwarded-for": "203.0.113.8",
+            }
+        )
+        assert client_address_key(request) == PEER
+
+    def test_whitespace_only_header_uses_the_peer(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        _use_secret(monkeypatch, SECRET)
+        request = _request(
+            **{
+                PROXY_SECRET_HEADER: "   ",
+                "x-real-ip": "203.0.113.8",
+            }
+        )
+        assert client_address_key(request) == PEER
+
+    def test_different_length_secret_uses_the_peer(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        _use_secret(monkeypatch, SECRET)
+        request = _request(
+            **{
+                PROXY_SECRET_HEADER: "short",
+                "x-real-ip": "203.0.113.8",
+            }
+        )
+        assert client_address_key(request) == PEER
+
+    def test_valid_secret_accepts_ipv6_real_ip(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        _use_secret(monkeypatch, SECRET)
+        request = _request(
+            **{
+                PROXY_SECRET_HEADER: SECRET,
+                "x-real-ip": "2001:db8::1",
+            }
+        )
+        assert client_address_key(request) == "2001:db8::1"
+        bracketed = _request(
+            **{
+                PROXY_SECRET_HEADER: SECRET,
+                "x-real-ip": "[2001:db8::2]",
+            }
+        )
+        assert client_address_key(bracketed) == "2001:db8::2"
+
+    def test_valid_secret_accepts_ipv6_xff(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        _use_secret(monkeypatch, SECRET)
+        request = _request(
+            **{
+                PROXY_SECRET_HEADER: SECRET,
+                "x-forwarded-for": " 2001:db8::8 , 198.51.100.20",
+            }
+        )
+        assert client_address_key(request) == "2001:db8::8"
+
     def test_two_real_ips_do_not_share_a_bucket(self, monkeypatch: pytest.MonkeyPatch) -> None:
         _use_secret(monkeypatch, SECRET)
         mini = FastAPI()
@@ -313,7 +381,7 @@ class TestProxyRateLimitKey:
         request = _request(**{PROXY_SECRET_HEADER: "   ", "x-real-ip": "203.0.113.8"})
         assert client_address_key(request) == PEER
 
-    def test_different_length_secret_uses_the_peer(self, monkeypatch: pytest.MonkeyPatch) -> None:
+    def test_longer_secret_uses_the_peer(self, monkeypatch: pytest.MonkeyPatch) -> None:
         _use_secret(monkeypatch, SECRET)
         request = _request(
             **{
@@ -443,22 +511,29 @@ class TestPullSsmEnv:
         return path
 
     def test_writes_env_file_without_printing_values(self, tmp_path: Path) -> None:
-        page1 = json.loads(SSM_PAGE_1.read_text(encoding="utf-8"))
-        page2 = json.loads(SSM_PAGE_2.read_text(encoding="utf-8"))
+        secret = "db-password-value"
+        token = "ghcr-token-value"
+        page1 = json.loads(SSM_PAGE1)
+        page2 = json.loads(SSM_PAGE2)
+        assert page1["Parameters"][0]["Value"] == secret
+        assert page1["Parameters"][2]["Value"] == token
+        assert page2["Parameters"][0]["Value"] == "sk-test-value"
         values = {
             item["Name"].rsplit("/", 1)[-1]: item["Value"]
             for item in [*page1["Parameters"], *page2["Parameters"]]
         }
-        secret = values["DATABASE_URL"]
-        token = values["GHCR_PULL_TOKEN"]
+        page1_path = tmp_path / "page1.json"
+        page2_path = tmp_path / "page2.json"
+        page1_path.write_text(SSM_PAGE1, encoding="utf-8")
+        page2_path.write_text(SSM_PAGE2, encoding="utf-8")
         aws = tmp_path / "aws"
         aws.write_text(
             "#!/bin/sh\n"
             f"printf '%s\\n' \"$@\" >> \"{tmp_path / 'aws-args'}\"\n"
             "if printf '%s\\n' \"$@\" | grep -q -- '--next-token'; then\n"
-            f"  cat \"{SSM_PAGE_2}\"\n"
+            f"  cat \"{page2_path}\"\n"
             "else\n"
-            f"  cat \"{SSM_PAGE_1}\"\n"
+            f"  cat \"{page1_path}\"\n"
             "fi\n"
             "exit 0\n",
             encoding="utf-8",

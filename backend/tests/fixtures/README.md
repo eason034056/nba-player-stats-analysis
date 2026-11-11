@@ -19,10 +19,6 @@ Naming follows `<provider>_<endpoint>__<variant>.json`.
 
 `tests/fixtures/odds_api/load_odds_fixture(name)` reads these files. Tests copy a loaded body when they need a smaller case (one bookmaker, one side removed, a player relabeled). They do not type a new response.
 
-## SSM GetParametersByPath pages (SPO-133)
-
-`ssm/get-parameters-by-path-page1.json` and `page2.json` are the shape of `aws ssm get-parameters-by-path` for `deploy/pull-ssm-env.sh`. The values are fake. They are not a live capture. `test_spo133_ec2.py` loads them with `Path.read_text()` and the fake `aws` binary prints the files with `cat`.
-
 ## BALLDONTLIE client captures (SPO-130a)
 
 `bdl/` holds the SPO-130a captures unchanged. Each file is `{request, status, elapsed_s, rate_headers, response}`. The API key is not in these files. `response._raw` on the 429 file is the response text, not a JSON object. No second injuries page was recorded. The only 429 capture is `GET /nba/v1/lineups`, which the client does not call. This section stands alone. Other tickets may add their own files and their own heading in this directory.
@@ -38,3 +34,13 @@ Recorded 2026-11-10T19:02:40Z. The body is committed unchanged. `odds_api_event_
 Event: Boston Celtics @ Philadelphia 76ers, `commence_time` `2026-11-11T01:10:00Z`. FanDuel and DraftKings each returned the same 9 markets: assists, double-double, points+assists, points+rebounds, points+rebounds+assists, rebounds, rebounds+assists, steals, threes. `player_frees_made` and `player_field_goals` were requested and neither book posted them. Double-double is Yes only.
 
 `test_process_event_missing_over` copies recorded rebounds and drops Over. The double-double Yes case copies the first recorded Yes. Yes+No and No-only stay on the inline builder, marked `TODO(SPO-106)`, because no No was posted.
+
+## AWS SSM Parameter Store
+
+Recorded `ssm get-parameters-by-path` JSON used by `tests/test_spo133_ec2.py`.
+The values are placeholders, not production secrets.
+
+| File | Request |
+|---|---|
+| `ssm/get-parameters-by-path-page1.json` | First page under `/sportslab/prod/`, includes `NextToken` |
+| `ssm/get-parameters-by-path-page2.json` | Second page (`--next-token page-2`) |
