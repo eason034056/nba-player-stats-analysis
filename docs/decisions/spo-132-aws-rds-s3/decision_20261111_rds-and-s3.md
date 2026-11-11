@@ -12,7 +12,7 @@ The system of record is the Postgres started by `docker-compose.yml` (`postgres:
 
 ## Decision
 
-Provision one Single-AZ RDS PostgreSQL 16 instance (`db.t4g.micro`, gp3 20 GB, autoscaling to 50 GB, backups kept 7 days) and one private S3 bucket, described in `infra/aws/` and applied by Eason in `us-east-2`. No Multi-AZ. The instance is publicly reachable. TCP 5432 is allowed from the `sportslab-app` security group (no ingress yet; SPO-133 attaches EC2 to it) and from each id in `rds_allowed_security_group_ids` (default empty). `allowed_cidrs` may also allow IPv4 `/32` addresses and may be set to `[]` to remove those rules. `0.0.0.0/0`, `0.0.0.0/32`, duplicates, and every IPv6 CIDR are rejected. Until EC2 is live, the list is the box `184.193.214.44/32` plus the Mac's current public `/32`. `scripts/aws_update_my_ip.sh` rewrites the Mac line. No provisioner key is created.
+Provision one Single-AZ RDS PostgreSQL 16 instance (`db.t4g.micro`, gp3 20 GB, autoscaling to 50 GB, backups kept 7 days) and one private S3 bucket, described in `infra/aws/` and applied by Eason in `us-east-2`. No Multi-AZ. The instance is publicly reachable. TCP 5432 is allowed from the `sportslab-app` security group (no ingress yet; SPO-133 attaches EC2 to it) and from each id in `rds_allowed_security_group_ids` (default empty). `allowed_cidrs` may also allow IPv4 `/32` addresses and may be set to `[]` to remove those rules. `0.0.0.0/0`, `0.0.0.0/32`, duplicates, and every IPv6 CIDR are rejected. Until EC2 is live, the list is the real box `/32` (only in the gitignored `terraform.tfvars`; the tracked example uses `198.51.100.10/32`) plus the Mac's current public `/32`. `scripts/aws_update_my_ip.sh` rewrites the Mac line and leaves the box line. No provisioner key is created.
 
 Encryption at rest uses the AWS-managed key `aws/rds`. The master password is RDS-managed in Secrets Manager (`manage_master_user_password = true`). Terraform does not create access keys and does not output the password. The runtime IAM user can `s3:GetObject`, `s3:PutObject`, and `s3:ListBucket` on `bdl-raw/`, `bdl-archive/`, `bdl-samples/`, and `pg-dumps/` only. Listing the bucket with an empty prefix is denied. It cannot delete objects.
 
@@ -32,7 +32,7 @@ Logical dump (`scripts/pg_dump_to_s3.sh`) and the S3 sync run in addition to RDS
 
 ## Consequences
 
-- Eason applies the module from the Mac with his own `aws configure` credentials. `allowed_cidrs` is `184.193.214.44/32` and the Mac's current `/32`. A home IP change locks the Mac out of port 5432 until `scripts/aws_update_my_ip.sh` and `terraform apply` update the security group.
+- Eason applies the module from the Mac with his own `aws configure` credentials. `allowed_cidrs` is the real box `/32` in the gitignored tfvars and the Mac's current `/32`. A home IP change locks the Mac out of port 5432 until `scripts/aws_update_my_ip.sh` and `terraform apply` update the security group.
 - `pg_restore` for the one-time move must be PostgreSQL 16. The default is `docker exec` inside `no-vig-nba-postgres`. `PG_CLIENT=docker-run` uses a throwaway `postgres:16` client. The restore DSN gets `sslmode=require` when none was set. The daily dump may use another client; that path only dumps.
 - Restore expects an empty database. The migration script does not drop existing objects.
 - State stays on Eason's machine until someone adds an S3 backend on purpose. `*.tfvars` and `*.tfstate` are gitignored.

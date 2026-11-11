@@ -23,7 +23,7 @@ Redis stays on the local compose stack. It is not in this module.
 
 1. The AWS account already exists. Sign in as an IAM user with MFA, not the root user. In Billing, check the account's current plan and the recent bill. This is a check, not an upgrade. Then create a monthly cost budget of $25 with email alerts at 80% actual and 100% forecast.
 2. Region stays `us-east-2`. The backend runs on the home Mac. `us-east-1` and `us-east-2` have the same list prices for this set.
-3. When the home IP changes, run `../scripts/aws_update_my_ip.sh` from the repo (or `scripts/aws_update_my_ip.sh` from the repo root). It prints the public IP, rewrites the gitignored `terraform.tfvars` `# mac-home` line, keeps `184.193.214.44/32`, and prints `terraform apply`. It does not call AWS unless you pass `--apply`.
+3. When the home IP changes, run `../scripts/aws_update_my_ip.sh` from the repo (or `scripts/aws_update_my_ip.sh` from the repo root). It prints the public IP, rewrites the gitignored `terraform.tfvars` `# mac-home` line, leaves the `# box` line as written in that file, and prints `terraform apply`. It does not call AWS unless you pass `--apply`.
 4. Confirm the engine version:
 
 ```bash
@@ -32,7 +32,7 @@ aws rds describe-db-engine-versions --engine postgres --engine-version 16 --regi
 
 If the newest available 16.x is not `16.15`, set `engine_version` in `terraform.tfvars`.
 
-5. Copy the example variables and replace the placeholders. Keep `184.193.214.44/32` and put the Mac's current public IP as the `# mac-home` `/32`. Never `0.0.0.0/0`. The Mac file `terraform.tfvars` stays uncommitted.
+5. Copy the example variables and replace the placeholders. The example `# box` line is `198.51.100.10/32`, a documentation address. In the gitignored `terraform.tfvars`, replace it with the real box `/32`, and put the Mac's current public IP on the `# mac-home` line. Never `0.0.0.0/0`. Do not commit `terraform.tfvars`.
 
 ```bash
 cd infra/aws
@@ -80,7 +80,7 @@ Tearing the stack down is a separate decision. The provisioner policy below has 
 Use this if you would rather click than run Terraform. Names match the module.
 
 1. RDS → Parameter groups → Create. Family `postgres16`, name `sportslab-pg16`. Edit `rds.force_ssl` to `1`.
-2. EC2 → Security groups → Create `sportslab-app` in the default VPC. No inbound rules. Leave the default outbound allow-all. This is the group the future EC2 instance attaches to. Then create `sportslab-rds` in the same VPC. Inbound: PostgreSQL 5432 from `sportslab-app`, from `184.193.214.44/32` (the box), and from the Mac's current public `/32`. No other inbound. Do not add `0.0.0.0/0`. When the home IP changes, edit the CIDR rule; `scripts/aws_update_my_ip.sh` does the same thing for the Terraform path. After the EC2 instance is attached to `sportslab-app`, delete the two CIDR rules and leave the `sportslab-app` rule.
+2. EC2 → Security groups → Create `sportslab-app` in the default VPC. No inbound rules. Leave the default outbound allow-all. This is the group the future EC2 instance attaches to. Then create `sportslab-rds` in the same VPC. Inbound: PostgreSQL 5432 from `sportslab-app`, from the real box `/32` (the tracked example writes `198.51.100.10/32`), and from the Mac's current public `/32`. No other inbound. Do not add `0.0.0.0/0`. When the home IP changes, edit the CIDR rule; `scripts/aws_update_my_ip.sh` does the same thing for the Terraform path. After the EC2 instance is attached to `sportslab-app`, delete the two CIDR rules and leave the `sportslab-app` rule.
 3. RDS → Create database → Standard create → PostgreSQL → the current 16.x (16.15 unless step 4 above shows a newer minor) → Dev/Test template → Single-AZ → `db.t4g.micro` → gp3 20 GB, autoscaling max 50 → master username `sportslab_admin` → Managed in AWS Secrets Manager → Public access Yes → security group `sportslab-rds` (remove default) → parameter group `sportslab-pg16` → backups 7 days → encryption on (aws/rds) → deletion protection on → initial database name `novig_nba` → Create.
 4. S3 → Create bucket in the same region. ACLs disabled. Block all public access. Versioning enabled. Default encryption SSE-S3. Then Management → Lifecycle:
    - Objects larger than 128 KB: Standard-IA at 30 days, Glacier Instant Retrieval at 90 days.

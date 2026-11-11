@@ -4,7 +4,7 @@
 
 後端跑在這台 Mac。Postgres 跑在同一台 Mac 的 Docker 裡，容器名稱是 `no-vig-nba-postgres`（映像 `postgres:16-alpine`，`docker-compose.yml` 沒有把 5432 發佈到 Mac 本身）。這台 Mac 沒有部署到任何主機，也沒有固定 IP，家裡的對外 IP 會變。AWS 帳號已經存在。`terraform apply` 由 Eason 自己執行。不要建立 provisioner 使用者，也不要把任何金鑰貼到 repo 或聊天裡。
 
-允許連上 RDS 5432 的位址只有兩個 `/32`：固定的 box `184.193.214.44/32`，以及這台 Mac 目前的對外 IP。每天一份的 `pg-dumps/` 保留 90 天。
+允許連上 RDS 5432 的位址只有兩個 `/32`：真實的 box `/32`（只寫在 gitignore 的 `terraform.tfvars`；範例檔用 `198.51.100.10/32`），以及這台 Mac 目前的對外 IP。每天一份的 `pg-dumps/` 保留 90 天。
 
 ## 1. 用 Homebrew 安裝工具
 
@@ -57,8 +57,8 @@ cp terraform.tfvars.example terraform.tfvars
 編輯 `terraform.tfvars`（這個檔已被 gitignore，不要 commit）：
 
 - `bucket_name` 換成全域唯一的名稱，例如 `sportslab-data-<帳號編號>-us-east-2`。
-- `allowed_cidrs` 保留 `184.193.214.44/32` 那一行（註解是 `# box`）。
-- 把 `# mac-home` 那一行的 `203.0.113.10` 換成這台 Mac 現在的對外 IP。`203.0.113.10` 只是文件用的佔位，不是真的位址。
+- `allowed_cidrs` 的 `# box` 範例是 `198.51.100.10/32`。在這份 gitignore 檔裡把它換成真實的 box `/32`。不要把真實位址寫回 repo。
+- 把 `# mac-home` 那一行的 `203.0.113.10` 換成這台 Mac 現在的對外 IP。`203.0.113.10` 和 `198.51.100.10` 都只是文件用的佔位。
 
 查目前的對外 IP（下一節的腳本也會查）：
 
@@ -93,7 +93,7 @@ EC2 後端上線、而且實例已經掛在 `sportslab-app` 之後，把 gitigno
 腳本會：
 
 1. 用 `curl` 讀 `https://checkip.amazonaws.com`，把 IP 印出來。這不是 AWS 資源 API，也不使用你的金鑰。
-2. 改寫 gitignore 的 `infra/aws/terraform.tfvars`：只換 `# mac-home` 那一行，`184.193.214.44/32` 維持不動。
+2. 改寫 gitignore 的 `infra/aws/terraform.tfvars`：只換 `# mac-home` 那一行。`# box` 那一行維持你已經寫進去的真實 `/32`，腳本不會改它，腳本裡也沒有那個位址。
 3. 印出 `terraform apply` 指令。預設到這裡就停，不呼叫 AWS。
 
 你看過印出的指令之後，自己執行它，或再跑一次並加上 `--apply`（只有這個旗標會啟動 terraform，AWS 呼叫都是 terraform 發的）：
@@ -162,13 +162,14 @@ set +a
 ./scripts/db_migrate_to_rds.sh
 ```
 
-或只輸入 RDS 網址：
+或兩條都用 `read -s` 輸入，不要把網址寫在指令上：
 
 ```bash
+read -s -p "Local URL: " LOCAL_DATABASE_URL
+echo
 read -s -p "RDS URL: " RDS_DATABASE_URL
 echo
-export RDS_DATABASE_URL
-export LOCAL_DATABASE_URL='postgresql://novig:novig@localhost:5432/novig_nba'
+export LOCAL_DATABASE_URL RDS_DATABASE_URL
 ./scripts/db_migrate_to_rds.sh
 ```
 
