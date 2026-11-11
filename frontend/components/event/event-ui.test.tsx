@@ -112,6 +112,7 @@ describe("PlayerRail", () => {
       leanText: "O 72.0%",
       hasLean: true,
       probability: 0.72,
+      tier: null,
     },
     {
       name: "Tyler Herro",
@@ -121,6 +122,7 @@ describe("PlayerRail", () => {
       leanText: "No read",
       hasLean: false,
       probability: null,
+      tier: null,
     },
   ];
 
@@ -138,7 +140,29 @@ describe("PlayerRail", () => {
     );
     expect(screen.getByText("O 72.0%")).toBeInTheDocument();
     expect(screen.getByText("No read")).toBeInTheDocument();
+    expect(screen.queryByText("History")).not.toBeInTheDocument();
     expect(screen.queryByText("Jalen Brunson")).not.toBeInTheDocument();
+  });
+
+  it("does not label an NBA lean History, because that number is the blend", () => {
+    renderWithProviders(
+      <PlayerRail
+        league="nba"
+        rows={rows}
+        selected="Bam Adebayo"
+        onSelect={noop}
+        isLoading={false}
+        isError={false}
+        errorText={null}
+        onRetry={noop}
+      />,
+    );
+    const bam = screen.getByRole("button", { name: /O 72\.0%/ });
+    expect(bam).toHaveTextContent("O 72.0%");
+    expect(bam).not.toHaveTextContent("History");
+    const herro = screen.getByRole("button", { name: /Tyler Herro/ });
+    expect(herro).toHaveTextContent("No read");
+    expect(herro).not.toHaveTextContent("History");
   });
 
   it("shows loading, empty, and error states", () => {

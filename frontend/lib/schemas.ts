@@ -498,6 +498,7 @@ export const RECENT_GAMES_OPTIONS = recentGamesOptions("nba");
  * - bookmakers_count: 有開出這名球員這個盤口的博彩公司家數（同一家的 Over/Under 與替代盤只算一次）
  * - all_lines: 每家博彩公司的主盤，一家一條
  */
+/** One signal on a stored NBA pick. `value` is display text for the pick's side. */
 export const pickSignalSchema = z.object({
   key: z.string(),
   label: z.string(),
@@ -533,7 +534,15 @@ export const dailyPickSchema = z.object({
   injury_status: z.string().nullable().optional(),         // 傷病狀態（Free Trial 為 null）
   lineup_confirmed: z.boolean().nullable().optional(),     // 先發是否已確認
   position: z.string().nullable().optional().catch(null),
-  tier: z.enum(["Strong play", "Playable", "Lean"]).nullable().optional().catch(null),
+  // Display keeps Strong play, Playable, and Lean. Pass stays on the payload
+  // and is blank on the card. Any other string becomes null so the pick loads.
+  tier: z
+    .preprocess((value) => {
+      if (value == null) return null;
+      if (value === "Strong play" || value === "Playable" || value === "Lean" || value === "Pass") return value;
+      return null;
+    }, z.string().nullable())
+    .optional(),
   p_over: z.number().min(0).max(1).nullable().optional().catch(null),
   p_under: z.number().min(0).max(1).nullable().optional().catch(null),
   season_mean: z.number().nullable().optional().catch(null),

@@ -75,5 +75,4 @@ The game-page rail takes line, side, probability, and tier from the daily pick w
 
 - [ ] The about page still says the blend is planned. Its test locks that sentence.
 - [ ] `top_read` has no tier and no blend. Today uses the daily-picks row.
-- [ ] `pickTeamCode` still falls back to `home_team`. #53 owns that line.
 - [ ] EV and market delta stay signed one-decimal until that format is decided.

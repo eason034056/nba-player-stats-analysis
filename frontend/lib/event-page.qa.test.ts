@@ -69,18 +69,19 @@ describe("stored read, once", () => {
     expect(model.tier).toEqual({ name: "lean", label: "Lean" });
     expect(model.caption).toContain("58%");
     expect(model.caption).toContain(formatPercent(0.99));
-    expect(model.bar?.overText).toBe(formatPercent(math.consensus?.p_over_fair));
-    expect(model.bar?.overText).not.toBe("58%");
-    expect(model.bar).toEqual(consensusSplit(math.consensus, false));
+    expect(model.bar?.sourceLabel).toBe("Model");
+    expect(model.bar?.overText).toBe("58%");
+    expect(model.bar).not.toEqual(consensusSplit(math.consensus, false));
   });
 
   it("does not derive an NBA tier from the probability", () => {
-    expect(readFor(0.99).tier).toBeNull();
-    expect(readFor(0.7).tier).toBeNull();
-    expect(readFor(0.65).tier).toBeNull();
-    expect(readFor(0.56).tier).toBeNull();
+    const blank = { tier: null, combined_probability: null } as const;
+    expect(readFor(0.99, blank).tier).toBeNull();
+    expect(readFor(0.7, blank).tier).toBeNull();
+    expect(readFor(0.65, blank).tier).toBeNull();
+    expect(readFor(0.56, blank).tier).toBeNull();
     expect(readFor(null).tier).toBeNull();
-    expect(readFor(Number.NaN).tier).toBeNull();
+    expect(readFor(Number.NaN, blank).tier).toBeNull();
   });
 
   it("does not de-vig the stored rate into the other side", () => {

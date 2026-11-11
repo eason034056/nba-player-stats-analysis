@@ -4,7 +4,7 @@
  */
 
 import type { LeagueSegment } from "./event-detail-link";
-import { formatPercent, formatTierPercent } from "./player-dd";
+import { formatTierPercent } from "./player-dd";
 
 export interface ApiTier {
   name: "strong" | "playable" | "lean";
@@ -60,8 +60,8 @@ export function tierProbability(pick: {
 }
 
 /**
- * Main NBA probability. A tier floors the number that tier describes.
- * No tier and no blend is an em dash.
+ * Main NBA probability. A tier floors the blend that tier describes.
+ * A blend with no tier floors the same way. No blend is an em dash.
  */
 export function nbaTierFace(pick: {
   probability?: number | null;
@@ -73,7 +73,7 @@ export function nbaTierFace(pick: {
   if (!finiteRate(pick.combined_probability)) {
     return { probabilityText: "—", tier: null };
   }
-  return { probabilityText: formatPercent(pick.combined_probability), tier: null };
+  return { probabilityText: formatTierPercent(pick.combined_probability), tier: null };
 }
 
 /**
