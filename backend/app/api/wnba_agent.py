@@ -14,13 +14,13 @@ Why a separate route file instead of widening the existing one:
 
 from fastapi import APIRouter, HTTPException
 
+from app.api.agent_deadline import run_agent_chat
 from app.models.agent_chat import (
     AgentChatRequest,
     AgentChatResponse,
     AgentContext,
     AgentPageContext,
 )
-from app.services.agent_chat import agent_chat_service
 
 
 router = APIRouter(
@@ -57,6 +57,8 @@ def _default_to_wnba_league(request: AgentChatRequest) -> AgentChatRequest:
 )
 async def chat_with_wnba_agent(request: AgentChatRequest) -> AgentChatResponse:
     try:
-        return await agent_chat_service.handle_chat(_default_to_wnba_league(request))
+        return await run_agent_chat(_default_to_wnba_league(request))
+    except HTTPException:
+        raise
     except Exception as exc:  # noqa: BLE001 — mirrors NBA route behaviour
         raise HTTPException(status_code=500, detail=f"WNBA agent chat failed: {exc}") from exc

@@ -15,8 +15,9 @@ resource "aws_db_subnet_group" "this" {
   subnet_ids  = data.aws_subnets.default.ids
 }
 
-# sportslab-app when project is sportslab. No ingress yet. SPO-133 attaches
-# the backend EC2 instance to this group.
+# sportslab-app when project is sportslab. Ingress rules live in ec2.tf
+# (80/443, and 22 only when enable_ssh is true). The description stays as
+# first applied so a later apply does not replace the security group.
 resource "aws_security_group" "app" {
   name        = "${local.name_prefix}-app"
   description = "Future EC2 backend. No ingress. SPO-133 attaches the instance."

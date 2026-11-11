@@ -6,9 +6,11 @@ settings.py - 應用程式配置設定
 - 每個屬性都對應一個環境變數（大小寫不敏感）
 """
 
-from pydantic import SecretStr
+import re
+from typing import Any
+
+from pydantic import SecretStr, field_validator
 from pydantic_settings import BaseSettings
-from typing import List
 
 
 class Settings(BaseSettings):
@@ -61,9 +63,21 @@ class Settings(BaseSettings):
     lineup_active_refresh_interval_minutes: int = 15
     lineup_pre_tipoff_refresh_interval_minutes: int = 5
     
-    # CORS 設定
-    allowed_origins: str = "http://localhost:3000"  # 允許的前端來源，逗號分隔
-    
+    # CORS. CORS_ALLOWED_ORIGINS wins when it is set. ALLOWED_ORIGINS stays
+    # as the alias so local compose keeps working. Neither may contain '*'.
+    allowed_origins: str = "http://localhost:3000"
+    cors_allowed_origins: str | None = None
+    cors_allowed_origin_regex: str = ""
+
+    # Shared with the Vercel rewrite. Empty means x-real-ip and
+    # x-forwarded-for are never trusted. Loaded on EC2 from SSM.
+    vercel_proxy_secret: SecretStr = SecretStr("")
+
+    # Whole agent-chat request, including a slip or board of several graphs.
+    # Must finish before Vercel's 120s rewrite limit. 100s leaves room for
+    # the proxy. The validator refuses a value above 105.
+    agent_chat_timeout_seconds: float = 100
+
     # 日誌等級
     log_level: str = "info"
 
@@ -80,15 +94,82 @@ class Settings(BaseSettings):
     bot_api_keys_premium: str = ""  # Premium-tier bot API keys
     bot_picks_free_delay_minutes: int = 60  # Delay for free-tier picks (minutes)
     rate_limit_bot_picks: str = "12/minute"  # Rate limit for bot picks endpoint
-    
+
+    @field_validator("allowed_origins", "cors_allowed_origins")
+    @classmethod
+    def reject_wildcard_origin(cls, value: str | None) -> str | None:
+        """Refuse '*' in the allow-list. A star is not a valid origin."""
+        if value is None:
+            return None
+        for part in value.split(","):
+            token = part.strip()
+            if "*" in token:
+                raise ValueError(
+                    "CORS allow-list must not include '*'. "
+                    "Use exact origins or CORS_ALLOWED_ORIGIN_REGEX."
+                )
+        return value
+
+    @field_validator("cors_allowed_origin_regex")
+    @classmethod
+    def reject_open_origin_regex(cls, value: str) -> str:
+        """Refuse a regex that matches an arbitrary origin, including '*'."""
+        text = value.strip()
+        if text == "":
+            return ""
+        if text == "*":
+            raise ValueError("CORS_ALLOWED_ORIGIN_REGEX must not be '*'")
+        try:
+            compiled = re.compile(text)
+        except re.error as exc:
+            raise ValueError(
+                f"CORS_ALLOWED_ORIGIN_REGEX is not a valid regular expression ({exc})"
+            ) from exc
+        probes = ("https://evil.example", "http://evil.example")
+        if any(compiled.fullmatch(probe) for probe in probes):
+            raise ValueError(
+                "CORS_ALLOWED_ORIGIN_REGEX must not match an arbitrary origin"
+            )
+        return text
+
+    @field_validator("agent_chat_timeout_seconds")
+    @classmethod
+    def bound_agent_chat_timeout(cls, value: float) -> float:
+        """Keep the deadline under the 120s proxy limit."""
+        if value <= 0 or value > 105:
+            raise ValueError(
+                "agent_chat_timeout_seconds must be greater than 0 and at most 105"
+            )
+        return value
+
     @property
-    def allowed_origins_list(self) -> List[str]:
+    def allowed_origins_list(self) -> list[str]:
+        """Comma-separated browser origins.
+
+        A non-empty CORS_ALLOWED_ORIGINS wins. Blank or unset falls back to
+        ALLOWED_ORIGINS so local compose can pass an empty override.
         """
-        將 allowed_origins 字串轉換為列表
-        支援多個來源用逗號分隔
-        """
-        return [origin.strip() for origin in self.allowed_origins.split(",")]
-    
+        chosen = self.cors_allowed_origins
+        if chosen is None or chosen.strip() == "":
+            chosen = self.allowed_origins
+        return [origin.strip() for origin in chosen.split(",") if origin.strip()]
+
+    @property
+    def cors_origin_regex(self) -> str | None:
+        """Regex for CORSMiddleware.allow_origin_regex. None when unset."""
+        text = self.cors_allowed_origin_regex.strip()
+        return text or None
+
+    def cors_middleware_kwargs(self) -> dict[str, Any]:
+        """Arguments for CORSMiddleware. allow_origin_regex is omitted when empty."""
+        return {
+            "allow_origins": self.allowed_origins_list,
+            "allow_origin_regex": self.cors_origin_regex,
+            "allow_credentials": True,
+            "allow_methods": ["*"],
+            "allow_headers": ["*"],
+        }
+
     @property
     def bot_api_keys_set(self) -> set:
         """All valid bot API keys (free + premium)."""

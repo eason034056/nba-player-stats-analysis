@@ -1,0 +1,24 @@
+# Plain HTTP. Used when DOMAIN is empty.
+# No trusted_proxies: Caddy replaces X-Forwarded-For with the TCP peer
+# (the Vercel egress address, or a direct client) and drops a client-supplied
+# chain. x-real-ip and x-sportslab-proxy-secret are not hop-by-hop headers,
+# so Caddy passes them through unchanged. Do not add trusted_proxies.
+{
+	servers {
+		timeouts {
+			read_body 125s
+			read_header 30s
+		}
+	}
+}
+
+:80 {
+	reverse_proxy backend:8000 {
+		flush_interval -1
+		transport http {
+			read_timeout 125s
+			write_timeout 125s
+			response_header_timeout 125s
+		}
+	}
+}

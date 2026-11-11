@@ -30,3 +30,14 @@ tags = {
   Project   = "sportslab"
   ManagedBy = "terraform"
 }
+
+# EC2 backend. Defaults match the variables. domain empty means HTTP on the EIP.
+instance_type   = "t4g.small"
+root_volume_gb  = 30
+enable_ssh      = false
+domain          = ""
+alarm_email     = ""
+
+# Leave false until the repository name is set. No static deploy keys are created.
+enable_github_deploy_role = false
+# github_repository       = "owner/name"

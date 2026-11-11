@@ -10,14 +10,16 @@ State is local (`terraform.tfstate` in this directory). It is gitignored, as is 
 - Encrypted storage with the AWS-managed key `aws/rds` (`storage_encrypted` and no `kms_key_id`).
 - Automated backups kept `backup_retention_period` days (default 7), deletion protection on, final snapshot required.
 - Parameter group `${project}-pg16` (`postgres16`) with `rds.force_ssl = 1`.
-- Security group `${project}-app` (output `app_security_group_id`): no ingress. Egress is open. SPO-133 attaches the backend EC2 instance to it.
+- Security group `${project}-app` (output `app_security_group_id`): egress is open. Ingress is TCP 80 and 443 from the internet, plus TCP 22 only when `enable_ssh` is true and only from `allowed_cidrs`. The EC2 instance is attached to this group. RDS already allows TCP 5432 from it.
 - Security group `${project}-rds`: inbound TCP 5432 from `${project}-app` and from each id in `rds_allowed_security_group_ids` (default empty), by security group id. Inbound TCP 5432 from `allowed_cidrs` only while that list is non-empty. `allowed_cidrs = []` removes the CIDR rules. Each set entry must be a host CIDR (`/32` or narrower). `0.0.0.0/0` and `::/0` are rejected. An empty list is allowed.
 - S3 bucket: Block Public Access (all four), BucketOwnerEnforced, versioning, SSE-S3 (AES256), TLS-only bucket policy.
 - Lifecycle: current objects larger than 128 KB move to Standard-IA after 30 days and to Glacier Instant Retrieval (`GLACIER_IR`) after 90. Noncurrent versions expire after 30 days. Incomplete multipart uploads abort after 7 days. `pg-dumps/` current objects expire after `pg_dump_retention_days` (default 90).
 - Prefix objects: `bdl-raw/`, `bdl-archive/`, `bdl-samples/`, `pg-dumps/`.
 - IAM user `${project}-runtime` with GetObject, PutObject, and ListBucket on those prefixes only. No `s3:DeleteObject`. No access key.
 
-Redis stays on the local compose stack. It is not in this module.
+Redis stays on the EC2 compose stack (`deploy/docker-compose.prod.yml`). It is not an AWS service in this module.
+
+The same apply also creates the backend host: one `t4g.small` (change `instance_type`) in the default VPC, Amazon Linux 2023 arm64 from the public SSM AMI parameter, a 30 GB encrypted gp3 root, IMDSv2, an Elastic IP, and the instance role. There are no static access keys. Port 22 stays closed unless `enable_ssh` is true. CloudWatch recovers the instance on a failed system status check, and alarms at 80% disk. `alarm_email` empty means no SNS topic. `enable_github_deploy_role` defaults to false. The host bootstrap and the first deploy are in [docs/deployment/aws.md](../../docs/deployment/aws.md). Eason runs `terraform apply` himself.
 
 ## Before the first apply
 
@@ -78,7 +80,7 @@ Tearing the stack down is a separate decision. The provisioner policy below has 
 Use this if you would rather click than run Terraform. Names match the module.
 
 1. RDS → Parameter groups → Create. Family `postgres16`, name `sportslab-pg16`. Edit `rds.force_ssl` to `1`.
-2. EC2 → Security groups → Create `sportslab-app` in the default VPC. No inbound rules. Leave the default outbound allow-all. This is the group the future EC2 instance attaches to. Then create `sportslab-rds` in the same VPC. Inbound: PostgreSQL 5432 from `sportslab-app`, from `184.193.214.44/32` (the box), and from the Mac's current public `/32`. No other inbound. Do not add `0.0.0.0/0`. When the home IP changes, edit the CIDR rule; `scripts/aws_update_my_ip.sh` does the same thing for the Terraform path. After the EC2 instance is attached to `sportslab-app`, delete the two CIDR rules and leave the `sportslab-app` rule.
+2. EC2 → Security groups → Create `sportslab-app` in the default VPC. Inbound: HTTP 80 and HTTPS 443 from `0.0.0.0/0`. Do not add SSH unless you set the Terraform `enable_ssh` path, and then only from the same host CIDRs as RDS. Leave the default outbound allow-all. Then create `sportslab-rds` in the same VPC. Inbound: PostgreSQL 5432 from `sportslab-app`, from `184.193.214.44/32` (the box), and from the Mac's current public `/32`. No other inbound. Do not add `0.0.0.0/0` on 5432. When the home IP changes, edit the CIDR rule; `scripts/aws_update_my_ip.sh` does the same thing for the Terraform path. After the EC2 instance is attached to `sportslab-app` and the app is using it, delete the two CIDR rules and set the instance to not publicly accessible. Leave the `sportslab-app` rule. Database access from the Mac then uses Session Manager port forwarding, described in the EC2 section of `docs/deployment/aws.md`.
 3. RDS → Create database → Standard create → PostgreSQL → the current 16.x (16.15 unless step 4 above shows a newer minor) → Dev/Test template → Single-AZ → `db.t4g.micro` → gp3 20 GB, autoscaling max 50 → master username `sportslab_admin` → Managed in AWS Secrets Manager → Public access Yes → security group `sportslab-rds` (remove default) → parameter group `sportslab-pg16` → backups 7 days → encryption on (aws/rds) → deletion protection on → initial database name `novig_nba` → Create.
 4. S3 → Create bucket in the same region. ACLs disabled. Block all public access. Versioning enabled. Default encryption SSE-S3. Then Management → Lifecycle:
    - Objects larger than 128 KB: Standard-IA at 30 days, Glacier Instant Retrieval at 90 days.

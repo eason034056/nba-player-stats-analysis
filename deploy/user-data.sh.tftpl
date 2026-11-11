@@ -1,0 +1,60 @@
+#!/bin/bash
+# First boot for the Sports Lab backend host.
+# Installs Docker, the Compose plugin, and the CloudWatch agent.
+# Does not pull secrets and does not start compose. deploy/remote-up.sh does that.
+set -euo pipefail
+exec > >(tee /var/log/sportslab-user-data.log) 2>&1
+
+dnf install -y docker git awscli amazon-cloudwatch-agent
+
+install -d -m 755 /usr/local/lib/docker/cli-plugins
+arch="$(uname -m)"
+case "$arch" in
+  aarch64|arm64) compose_arch="aarch64" ;;
+  x86_64|amd64) compose_arch="x86_64" ;;
+  *)
+    echo "unsupported architecture: $arch" >&2
+    exit 1
+    ;;
+esac
+curl -fsSL -o /usr/local/lib/docker/cli-plugins/docker-compose \
+  "https://github.com/docker/compose/releases/download/v2.29.7/docker-compose-linux-$${compose_arch}"
+chmod 755 /usr/local/lib/docker/cli-plugins/docker-compose
+
+install -d -m 755 /etc/docker
+cat > /etc/docker/daemon.json <<'EOF'
+{
+  "log-driver": "json-file",
+  "log-opts": {
+    "max-size": "10m",
+    "max-file": "5"
+  }
+}
+EOF
+systemctl enable --now docker
+
+install -d -m 755 /opt/aws/amazon-cloudwatch-agent/etc
+cat > /opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json <<'EOF'
+${cw_agent_json}
+EOF
+/opt/aws/amazon-cloudwatch-agent/bin/amazon-cloudwatch-agent-ctl \
+  -a fetch-config -m ec2 -s \
+  -c file:/opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json
+
+install -d -m 700 /root/.aws
+cat > /root/.aws/config <<EOF
+[default]
+region = ${aws_region}
+EOF
+chmod 600 /root/.aws/config
+
+install -d -m 755 /etc/sportslab
+printf 'DOMAIN=%s\n' '${domain}' > /etc/sportslab/caddy.env
+chmod 644 /etc/sportslab/caddy.env
+
+install -d -m 755 /opt/sportslab/certs
+curl -fsSL -o /opt/sportslab/certs/global-bundle.pem \
+  https://truststore.pki.rds.amazonaws.com/global/global-bundle.pem
+chmod 644 /opt/sportslab/certs/global-bundle.pem
+
+echo "host packages are installed; compose starts from deploy/remote-up.sh"

@@ -179,3 +179,156 @@ DATABASE_REQUIRED=true
 後端還沒改指向 RDS：不要在 `.env` 設定 `DATABASE_URL`。`docker compose` 會繼續使用 `postgresql://novig:novig@postgres:5432/novig_nba`。
 
 已經切換之後：從 `.env` 移除 `DATABASE_URL`（或改回上面那條 compose 網址），重啟 compose 後端。不要把 Mac 上的行程指到 `localhost:5432`，因為 compose 沒有發佈這個埠。切換之後才寫進 RDS 的列，不會自動回到 `pg-data`。若要救回本機，用同一支遷移腳本、對調兩條網址，而且客戶端必須是 PostgreSQL 16。`pg-data` 留到 RDS 穩定跑過兩週再刪。
+
+## 11. EC2 後端（在這台 Mac 上操作）
+
+英文說明在 [docs/deployment/aws.md](aws.md) 的 EC2 段。這裡只寫你在 Mac 上要下的指令。`terraform apply` 還是你自己跑。這份變更不會幫你呼叫 AWS。
+
+順序要照下面。EC2 活著之後，才做最後一步把 RDS 收成私有。
+
+1. 先 apply SPO-132 的 RDS 和 S3（上面第 4 到第 8 節），遷移完成。
+2. 同一份 `infra/aws` 再 apply 這次的 EC2。
+3. 把密鑰放進 SSM，第一次把程式拉上主機，Vercel 的 `BACKEND_API_URL` 指到 `http://<EIP>`。
+4. 確認健康檢查和一筆真實讀取都打到 RDS 之後，另一次 apply 才把 RDS 改成私有。
+
+### 變數
+
+在 gitignore 的 `infra/aws/terraform.tfvars` 加上（值可以維持預設）：
+
+```hcl
+instance_type             = "t4g.small"
+root_volume_gb            = 30
+enable_ssh                = false
+domain                    = ""
+alarm_email               = ""
+enable_github_deploy_role = false
+```
+
+`enable_ssh = false` 時 22 埠關閉。不要為了方便把它打開。要用 SSH 時才改成 `true`，而且只會放行 `allowed_cidrs` 裡的 `/32`。`domain` 先留空，Caddy 只提供 HTTP。
+
+```bash
+cd infra/aws
+terraform init
+terraform fmt -recursive
+terraform validate
+terraform plan -out=tfplan
+terraform apply tfplan
+terraform output eip
+terraform output instance_id
+terraform output instance_role_arn
+```
+
+`plan` 和 `apply` 會打到 AWS。看完 plan 再 apply。
+
+### 把密鑰放進 SSM SecureString
+
+路徑是 `/sportslab/prod/<名稱>`，用預設的 `aws/ssm` 金鑰。不要寫進 git，不要貼進聊天。
+
+在這台 Mac 產生一把給 Vercel rewrite 用的密鑰，直接送進 SSM，終端機不要把它印出來：
+
+```bash
+openssl rand -hex 32 | aws ssm put-parameter \
+  --region us-east-2 \
+  --name /sportslab/prod/VERCEL_PROXY_SECRET \
+  --type SecureString \
+  --value file:///dev/stdin
+```
+
+同一個值貼進 Vercel 專案的環境變數 `VERCEL_PROXY_SECRET`。前端的 rewrite 會把它放在標頭 `x-sportslab-proxy-secret`。後端只在這把密鑰對上時，才用 `x-real-ip`（沒有的話用 `x-forwarded-for` 最左邊那個）當速率限制的 key。對不上、沒送、或密鑰是空的，就用 TCP 對端，也就是 Vercel 的出口 IP。不要用 Origin 標頭做登入。
+
+其他參數用同樣的方式建立，名稱對環境變數：`DATABASE_URL`、`ODDS_API_KEY`、`OPENAI_API_KEY`、`SPORTSDATA_API_KEY`、`BALLDONTLIE_API_KEY`、`BOT_API_KEYS`、`BOT_API_KEYS_PREMIUM`、`CORS_ALLOWED_ORIGINS`、`CORS_ALLOWED_ORIGIN_REGEX`。
+
+`DATABASE_URL` 要帶 `sslmode=verify-full`，`sslrootcert` 指到容器裡的 `/app/certs/global-bundle.pem`。主機第一次開機會把公開的 RDS CA 下載到 `/opt/sportslab/certs/global-bundle.pem`。
+
+輪替 `VERCEL_PROXY_SECRET`：先更新 SSM，在主機上跑 `deploy/pull-ssm-env.sh` 再 `docker compose up -d`，然後把 Vercel 改成同一個新值並重新部署前端。兩邊不一致的那段時間，速率限制會退回共用一個 bucket，不會因此放行更多請求。新值不要進 git 或聊天。
+
+在有網域之前，Vercel 到 EC2 是明文 HTTP，這個標頭也走在那段路上。這是已知且接受的風險。
+
+### 第一次部署
+
+Session Manager，不開 22 埠：
+
+```bash
+aws ssm start-session --target "$(terraform output -raw instance_id)" --region us-east-2
+```
+
+在主機上（把 `<git-sha>` 換成要跑的 commit）：
+
+```bash
+sudo mkdir -p /opt/sportslab
+sudo git clone https://github.com/eason034056/nba-player-stats-analysis.git /opt/sportslab/repo
+cd /opt/sportslab/repo
+sudo git fetch --depth 1 origin <git-sha>
+sudo git checkout --detach --force FETCH_HEAD
+sudo deploy/remote-up.sh <git-sha>
+```
+
+看到 `healthy` 就表示 Caddy 後面的 `/api/health` 過了。腳本不會印出密鑰。
+
+Vercel 專案設定 `BACKEND_API_URL=http://<EIP>`，不要加路徑。`<EIP>` 是 `terraform output -raw eip`。
+
+### 換網域
+
+1. DNS 的 A 記錄指到 EIP。
+2. `terraform.tfvars` 的 `domain` 改成主機名稱，不要加 `https://`。
+3. 主機上的 `/etc/sportslab/caddy.env` 寫 `DOMAIN=那個名稱`。user data 只在第一次開機寫這個檔。
+4. 重啟 compose。Caddy 會自己申請憑證。80 和 443 已經開放。
+5. Vercel 的 `BACKEND_API_URL` 改成 `https://<domain>`，仍然不要加路徑。
+
+在這之前，Vercel 伺服器轉送到 `http://<EIP>` 沒有 TLS。
+
+### 把 RDS 收成私有（另外一步）
+
+EC2 已經是唯一需要連資料庫的客戶之後，再改 `terraform.tfvars`：
+
+```hcl
+allowed_cidrs       = []
+publicly_accessible = false
+```
+
+再 apply 一次。RDS 仍然允許 `sportslab-app`，所以主機上的後端還連得到。不要在主機還沒接上之前做這一步。做完之後不要再跑 `scripts/aws_update_my_ip.sh --apply`，那個參數會把家裡和 box 的 `/32` 加回來。
+
+Mac 或 box 要連資料庫時，從 Session Manager 轉埠，不把 5432 開回你家的 IP：
+
+```bash
+aws ssm start-session \
+  --target i-INSTANCE \
+  --region us-east-2 \
+  --document-name AWS-StartPortForwardingSessionToRemoteHost \
+  --parameters '{"host":["RDS主機名稱"],"portNumber":["5432"],"localPortNumber":["5432"]}'
+```
+
+然後連 `127.0.0.1:5432`。
+
+### CORS 範例
+
+正式站（等 SPO-134 有真實專案名稱再填）：`https://<project>.vercel.app`。
+
+預覽站 regex 要涵蓋 `https://<project>-git-<branch>-<scope>.vercel.app` 和 `https://<project>-<hash>-<scope>.vercel.app`。範例：
+
+```text
+^https://sports-lab(-git-[a-z0-9-]+-team|-[a-z0-9]+-team)\.vercel\.app$
+```
+
+`sports-lab` 和 `team` 以後換成真實名稱。在那之前 regex 留空。不要填 `*`。
+
+### 排程器與較大的機型
+
+現在排程器跟 API 在同一個 Python 行程，機型維持 `t4g.small`。以後若要拆開，再加一個只跑排程器的容器，API 啟動時不要再啟動排程器，並把 `instance_type` 改成 `t4g.medium`（4 GiB）。不要在這台主機上 `docker build`。
+
+### 費用估計
+
+下面是 us-east-2、730 小時、on-demand、稅前的估計，不是帳單。價格表日期寫在英文文件的 EC2 段。重點：`t4g.small` 約 12.26 美元，30 GB gp3 約 2.40 美元，使用中的公網 IPv4 約 3.65 美元，CloudWatch 落在免費額度裡。這一台大約 18.3 到 19 美元。加上 SPO-132 大約 18 到 21 美元，兩份一起大約 36 到 40 美元。RDS 改成私有、拿掉它的公網 IPv4 之後，大約少 3.65 美元，變成大約 32 到 36 美元。不要假設帳戶還有 Free Tier。這是公開價目表的估計。
+
+### GitHub 部署
+
+`.github/workflows/deploy-backend.yml` 現在只有手動 `workflow_dispatch`。儲存庫變數 `DEPLOY_ENABLED` 不是 `true` 時，它會在建置之前停止。預設分支是 `master`，沒有 `main`。以後若要 push 到 `master` 就部署，在 workflow 的 `on` 加上 `push: branches: [master]`，並留著 `DEPLOY_ENABLED` 那個檢查。不要寫 `main`。
+
+要讓它真的跑起來，還要：
+
+- `enable_github_deploy_role = true` 並且 `github_repository = "eason034056/nba-player-stats-analysis"`，再 apply。
+- 儲存庫變數 `AWS_DEPLOY_ROLE_ARN` 設成 `terraform output -raw github_deploy_role_arn`。
+- 儲存庫變數 `AWS_REGION=us-east-2`、`EC2_INSTANCE_ID` 設成 instance id。
+- `DEPLOY_ENABLED=true`。
+
+Workflow 用 GitHub OIDC 擔任那個角色，不需要靜態 AWS 金鑰。第一次推上 GHCR 之後，把套件改成 public，主機才拉得到且不用 token。若套件維持 private，把 `GHCR_PULL_USER` 和 `GHCR_PULL_TOKEN` 放進 SSM，部署腳本會登入且不印出 token。

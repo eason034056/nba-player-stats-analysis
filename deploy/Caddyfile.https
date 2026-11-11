@@ -1,0 +1,21 @@
+# Automatic HTTPS once DOMAIN is a real hostname with an A record on the EIP.
+# Same proxy rules as deploy/Caddyfile: no trusted_proxies.
+{
+	servers {
+		timeouts {
+			read_body 125s
+			read_header 30s
+		}
+	}
+}
+
+{$DOMAIN} {
+	reverse_proxy backend:8000 {
+		flush_interval -1
+		transport http {
+			read_timeout 125s
+			write_timeout 125s
+			response_header_timeout 125s
+		}
+	}
+}
