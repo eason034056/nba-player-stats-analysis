@@ -173,6 +173,18 @@ async def get_player_history(
         default=False,
         description="Include play-in games. Default is regular season only.",
     ),
+    home_team: Optional[str] = Query(
+        default=None,
+        description="Event home club. With away_team, teammates are limited to a club in this game.",
+    ),
+    away_team: Optional[str] = Query(
+        default=None,
+        description="Event away club. With home_team, teammates are limited to a club in this game.",
+    ),
+    as_of: Optional[str] = Query(
+        default=None,
+        description="Event commence time. Selects the log club on that US game date.",
+    ),
 ) -> PlayerHistoryResponse:
     """Get WNBA player historical statistical summary."""
     valid_metrics = sorted(CONTINUOUS_METRIC_EXTRACTORS.keys())
@@ -200,6 +212,9 @@ async def get_player_history(
             teammate_played=teammate_played,
             include_playoffs=include_playoffs,
             include_play_in=include_play_in,
+            home_team=home_team,
+            away_team=away_team,
+            as_of=as_of,
         )
 
         histogram_bins = [

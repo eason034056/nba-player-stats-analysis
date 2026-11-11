@@ -243,7 +243,7 @@ def _outcome_names(event: dict) -> set[str]:
 
 
 class TestDailyAnalysisWiring:
-    def _picks(self, game_logs, commence_time, projections=None):
+    def _picks(self, game_logs, commence_time, projections=None, home_team=None, away_team=None):
         event = _load_recorded_event()
         events = load_odds_fixture(RECORDED_NBA_EVENTS)
         assert any(row["id"] == event["id"] for row in events)
@@ -271,8 +271,8 @@ class TestDailyAnalysisWiring:
         picks, _, _ = asyncio.run(
             service._analyze_single_event(
                 event_id=event["id"],
-                home_team=event["home_team"],
-                away_team=event["away_team"],
+                home_team=home_team or event["home_team"],
+                away_team=away_team or event["away_team"],
                 commence_time=commence_time,
                 projections=projections or {},
             )
@@ -303,11 +303,22 @@ class TestDailyAnalysisWiring:
         ]
         # The recorded tip is after this trade. The earlier commence is the
         # clock under test; the bookmaker body stays the recorded one.
-        picks, event = self._picks(logs, "2025-11-01T02:00:00Z")
+        # The recorded body is still Lakers at Hawks. Warriors is not in
+        # that game, so pass a slate that includes the pre-trade club.
+        # The clock stays before the Hawks log.
+        picks, event = self._picks(
+            logs,
+            "2025-11-01T02:00:00Z",
+            home_team="Boston Celtics",
+            away_team="Golden State Warriors",
+        )
         assert picks
         assert {p.player_name for p in picks} <= _outcome_names(event)
+        assert all(p.home_team == "Boston Celtics" for p in picks)
+        assert all(p.away_team == "Golden State Warriors" for p in picks)
         assert all(p.player_team == "Warriors" for p in picks)
         assert all(p.player_team_code == "GSW" for p in picks)
+        assert all(p.player_team != "Hawks" for p in picks)
 
     def test_projection_team_still_wins(self):
         logs = [
@@ -320,13 +331,16 @@ class TestDailyAnalysisWiring:
         picks, _ = self._picks(
             logs,
             event["commence_time"],
-            projections={projected: {"team": "GSW"}},
+            projections={projected: {"team": "LAL"}},
         )
         projected_picks = [p for p in picks if p.player_name == projected]
         other_picks = [p for p in picks if p.player_name != projected]
         assert projected_picks
         assert other_picks
-        assert all(p.player_team == "GSW" for p in projected_picks)
+        # LAL is the away club on the recorded event, so the projection
+        # is kept. A code for a club that is not playing is not kept.
+        assert all(p.player_team == "LAL" for p in projected_picks)
+        assert all(p.player_team_code == "LAL" for p in projected_picks)
         assert all(p.player_team == "Hawks" for p in other_picks)
 
 
