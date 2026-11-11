@@ -917,6 +917,10 @@ class OddsLineSnapshot(BaseModel):
     vig: Optional[float] = Field(default=None, description="Vig percentage")
     over_fair_prob: Optional[float] = Field(default=None, description="Over no-vig (fair) probability")
     under_fair_prob: Optional[float] = Field(default=None, description="Under no-vig (fair) probability")
+    is_main: bool = Field(
+        default=False,
+        description="True for the book's main line in this snapshot. An alternate rung is false and is left out of the consensus average.",
+    )
 
 
 class OddsConsensus(BaseModel):

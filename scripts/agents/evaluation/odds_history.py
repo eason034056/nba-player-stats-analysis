@@ -319,9 +319,11 @@ def open_close_from_snapshots(
 ) -> OddsHistory:
     """Reduce ``odds_line_snapshots``-shaped rows to open and close quotes.
 
-    The earliest ``snapshot_at`` in a (player, date, metric, book) group is
-    the open. The latest is the close. Rows missing a line or either price
-    are skipped. When several books cover the same prop, the alphabetically
+    Each book contributes one line per ``snapshot_at``: the main line from
+    ``bulk_props._main_book_line``. Alternate rungs at that same timestamp
+    are not an open or a close. The earliest of those main lines is the
+    open. The latest is the close. Rows missing a line or either price are
+    skipped. When several books cover the same prop, the alphabetically
     first bookmaker is kept so the choice does not depend on file order.
     Pass ``book`` to keep one bookmaker only.
 
@@ -385,6 +387,9 @@ def open_close_from_snapshots(
             )
         )
 
+    for key, samples in grouped.items():
+        grouped[key] = _main_line_per_snapshot(samples)
+
     # One quote per prop. Alphabetical bookmaker wins ties across books.
     by_prop: dict[tuple[str, str, str, str], tuple[str, list]] = {}
     for key, samples in grouped.items():
@@ -417,6 +422,41 @@ def open_close_from_snapshots(
     history = _index_quotes(quotes, source="odds_line_snapshots")
     history.skipped_rows = skipped
     return history
+
+
+def _main_line_per_snapshot(
+    samples: list[tuple[datetime, Mapping[str, Any]]],
+) -> list[tuple[datetime, Mapping[str, Any]]]:
+    """Keep the main line at each timestamp and drop the other rungs.
+
+    ``bulk_props._main_book_line`` is the same picker the stored-snapshot
+    reader uses. One timestamp with a ladder becomes one sample, so the
+    earliest and latest samples are opens and closes rather than the
+    ends of one book's alternate ladder.
+
+    Args:
+        samples: ``(snapshot_at, row)`` pairs for one bookmaker. Each row
+            has ``line``, ``over_odds``, and ``under_odds``.
+
+    Returns:
+        One pair per distinct ``snapshot_at``, in the order those
+        timestamps were first seen.
+    """
+    bootstrap()
+    from app.services.bulk_props import _main_book_line
+
+    by_time: dict[datetime, list[Mapping[str, Any]]] = {}
+    order: list[datetime] = []
+    for when, row in samples:
+        if when not in by_time:
+            order.append(when)
+            by_time[when] = []
+        by_time[when].append(row)
+    collapsed: list[tuple[datetime, Mapping[str, Any]]] = []
+    for when in order:
+        chosen = _main_book_line([dict(row) for row in by_time[when]])
+        collapsed.append((when, chosen))
+    return collapsed
 
 
 def _parse_timestamp(value: Any) -> datetime:

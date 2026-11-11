@@ -31,6 +31,11 @@ from app.settings import settings
 # ==================== Table Creation SQL ====================
 
 SCHEMA_SQL = """
+-- One lock for this whole script. A simple-query batch runs as one
+-- transaction, so two processes starting together take turns instead of
+-- deadlocking on the same ALTER TABLE.
+SELECT pg_advisory_xact_lock(1170117);
+
 -- Player Projections Table
 -- Stores daily player game projections from SportsDataIO
 -- Each row is (date, player_name, game_id) unique
@@ -281,13 +286,16 @@ ALTER TABLE odds_snapshot_logs
 -- new one, and two different totals can now coexist. No row is rewritten
 -- or deleted. CREATE TABLE above names the new key for a fresh database.
 -- This block is for a database created before that change. It drops every
--- unique constraint on this table that does not include ``line`` (the
--- primary key is not a unique constraint of this kind) and adds the named
--- key when it is missing. Running it again does nothing.
+-- unique constraint on this table that does not include ``line``, and every
+-- unique index that does not include ``line``. The primary key is left
+-- alone. A hand-built UNIQUE INDEX is not a constraint, so the index loop
+-- is what removes it. The named key is added when it is missing. Running
+-- the block again does nothing.
 
 DO $spo117_line_unique$
 DECLARE
     old_name text;
+    old_index record;
 BEGIN
     FOR old_name IN
         SELECT con.conname
@@ -306,6 +314,30 @@ BEGIN
         EXECUTE format(
             'ALTER TABLE odds_line_snapshots DROP CONSTRAINT %I',
             old_name
+        );
+    END LOOP;
+
+    FOR old_index IN
+        SELECT n.nspname AS schema_name, ic.relname AS index_name
+        FROM pg_index ix
+        JOIN pg_class ic ON ic.oid = ix.indexrelid
+        JOIN pg_namespace n ON n.oid = ic.relnamespace
+        WHERE ix.indrelid = 'odds_line_snapshots'::regclass
+          AND ix.indisunique
+          AND NOT ix.indisprimary
+          AND NOT EXISTS (
+              SELECT 1
+              FROM unnest(ix.indkey) AS col(attnum)
+              JOIN pg_attribute att
+                ON att.attrelid = ix.indrelid
+               AND att.attnum = col.attnum
+              WHERE att.attname = 'line'
+          )
+    LOOP
+        EXECUTE format(
+            'DROP INDEX IF EXISTS %I.%I',
+            old_index.schema_name,
+            old_index.index_name
         );
     END LOOP;
 

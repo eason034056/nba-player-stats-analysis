@@ -39,7 +39,9 @@ The old key was `(snapshot_at, event_id, player_name, market, bookmaker)`. The p
 
 The key is now `(snapshot_at, event_id, player_name, market, bookmaker, line)`, named `odds_line_snapshots_book_line_key`. The line is part of the identity, so the upsert does not update `line`. A second total is a new row.
 
-The new key is wider than the old one. Every existing row still satisfies it. Nothing is rewritten or deleted. There is no Alembic migration. `DatabaseService.init()` runs `SCHEMA_SQL` on startup. The SPO-117 block drops every UNIQUE constraint on `odds_line_snapshots` whose columns do not include `line` (the primary key is `contype = 'p'`, so it is left alone) and adds the named key when it is missing. Running it again does nothing. A fresh database gets the named key from `CREATE TABLE`.
+The new key is wider than the old one. Every existing row still satisfies it. Nothing is rewritten or deleted. There is no Alembic migration. `DatabaseService.init()` runs `SCHEMA_SQL` on startup. The SPO-117 block drops every UNIQUE constraint on `odds_line_snapshots` whose columns do not include `line`, and every unique index whose columns do not include `line`. A `CREATE UNIQUE INDEX` is not a constraint, so the index loop is what removes it. The primary key is `contype = 'p'` and `indisprimary`, so it is left alone. The named key is added when it is missing. Running the block again does nothing. A fresh database gets the named key from `CREATE TABLE`.
+
+`SCHEMA_SQL` starts with `pg_advisory_xact_lock(1170117)`. The script is one simple-query batch, so the lock is held until the batch finishes and two processes starting together take turns.
 
 The parser pairs Over and Under only when they share a point, rounded to one decimal. A rung with one side is skipped. A later quote at the same point replaces that side. Both the main total and each alternate are stored. Read-side `_main_book_line` still collapses one book to one vote.
 
@@ -56,7 +58,7 @@ A tie is not averaged. Averaging 24.5 and 25.5 produces 25.0, which nobody poste
 1. The unique mode wins.
 2. A tie is every line that shares the highest count. That includes the case where every line appears once. Previously an even count of all-unique lines averaged the two central values (the docstring example `[24.5, 25.0, 25.5, 26.0]` returned 25.25) and an odd count took the median. Both of those results are now the tie below, so the consensus is always a posted line.
 3. If `distances` is passed, one per vote, the tied line with the smallest distance wins. A line's distance is the smallest `_even_money_distance` among the books that voted it. Lower is closer to a coin flip.
-4. If those distances are equal, or `distances` is omitted, the lower posted line wins (`min` of the tied lines).
+4. If those distances are equal, or `distances` is omitted, the lower posted line wins (`min` of the tied lines). That unused no-price path favours the Over. Daily analysis and bulk props pass distances, so they do not take it. The rule is accepted: closest to even money, then the lower line.
 
 A two-way tie with no prices still returns the lower line. The old "lower of the two central values" rule did the same thing for exactly two modes, so those tests stay. Three or more tied lines used to keep the middle one. They now keep the lower line unless a distance says otherwise.
 

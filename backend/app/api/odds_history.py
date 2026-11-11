@@ -18,17 +18,19 @@ Usage:
     POST /api/nba/odds-history/snapshot?date=2026-02-08
 """
 
-from datetime import datetime, timezone
+from datetime import datetime
 from typing import Optional, Dict, List
 from collections import defaultdict
 
 from fastapi import APIRouter, HTTPException, Query
 
+from app.services.bulk_props import _main_book_line
 from app.services.db import db_service
 from app.services.odds_snapshot_service import (
     odds_snapshot_service,
     BINARY_MARKET_KEYS,
     OVER_UNDER_MARKET_KEYS,
+    nba_slate_date,
 )
 from app.models.schemas import (
     OddsLineSnapshot,
@@ -66,6 +68,29 @@ ORDER BY snapshot_at ASC, bookmaker ASC
 """
 
 
+def _main_rows(group_rows: list) -> list[dict]:
+    """One stored row per bookmaker: that book's main line.
+
+    The picker is ``bulk_props._main_book_line``, the same rule the
+    snapshot reader and the bulk-props board use. Call it with every
+    row from one snapshot. Alternate totals stay out of the list, so
+    an average of the result is an average across books.
+
+    Args:
+        group_rows: Rows that share one ``snapshot_at``.
+
+    Returns:
+        One row per bookmaker that posted a line. Empty when ``group_rows``
+        is empty.
+    """
+    by_book: Dict[str, list] = defaultdict(list)
+    for row in group_rows:
+        book = str(row.get("bookmaker") or "")
+        if book:
+            by_book[book].append(row)
+    return [_main_book_line(rows) for rows in by_book.values() if rows]
+
+
 @router.get(
     "",
     response_model=OddsHistoryResponse,
@@ -75,7 +100,7 @@ ORDER BY snapshot_at ASC, bookmaker ASC
 
     Returns a time-ordered list of snapshots. Each snapshot contains:
     - Per-bookmaker lines, odds, no-vig probabilities
-    - Market consensus (average no-vig probability across all bookmakers)
+    - Market consensus (average no-vig probability of each book's main line)
 
     Used for Line Movement Tracking: observe how lines change from opening to closing.
     """
@@ -100,7 +125,7 @@ async def get_odds_history(
     ),
     date: Optional[str] = Query(
         default=None,
-        description="Game date (YYYY-MM-DD), defaults to today"
+        description="US game date (YYYY-MM-DD). Defaults to today in America/New_York."
     ),
 ):
     """
@@ -113,7 +138,8 @@ async def get_odds_history(
     Args:
         player_name: Player name (required)
         market: Market type (required)
-        date: Game date, defaults to UTC today
+        date: US game date. Omitted means today in America/New_York, the
+            same date the snapshot writer stores.
 
     Returns:
         OddsHistoryResponse: List of snapshots sorted by time
@@ -128,7 +154,9 @@ async def get_odds_history(
         )
 
     if date is None:
-        date = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+        # The writer stores the Eastern slate date. After midnight UTC the
+        # evening games are still that Eastern date, so UTC "today" misses them.
+        date = nba_slate_date()[0]
 
     # 💡 Validate against the same allow-list `odds_snapshot_service` writes —
     # single source of truth means there's no chance of querying a market that
@@ -171,7 +199,14 @@ async def get_odds_history(
     snapshots: List[OddsSnapshotGroup] = []
 
     for snap_key, group_rows in groups.items():
-        # Line data for each bookmaker
+        # One main line per book. Alternate rungs stay in ``lines`` and
+        # are marked. They do not get a vote in the average.
+        main_rows = _main_rows(group_rows)
+        main_keys = {
+            (str(row["bookmaker"]), round(float(row["line"]), 1))
+            for row in main_rows
+            if row.get("line") is not None
+        }
         lines = [
             OddsLineSnapshot(
                 bookmaker=r["bookmaker"],
@@ -181,14 +216,17 @@ async def get_odds_history(
                 vig=float(r["vig"]) if r["vig"] is not None else None,
                 over_fair_prob=float(r["over_fair_prob"]) if r["over_fair_prob"] is not None else None,
                 under_fair_prob=float(r["under_fair_prob"]) if r["under_fair_prob"] is not None else None,
+                is_main=(
+                    r.get("line") is not None
+                    and (str(r["bookmaker"]), round(float(r["line"]), 1)) in main_keys
+                ),
             )
             for r in group_rows
         ]
 
-        # Calculate consensus (average no-vig probability)
-        # Only include rows with both over_fair_prob and under_fair_prob present
+        # Average the main lines only. A ladder rung is not a second book.
         valid_probs = [
-            r for r in group_rows
+            r for r in main_rows
             if r["over_fair_prob"] is not None and r["under_fair_prob"] is not None
         ]
 

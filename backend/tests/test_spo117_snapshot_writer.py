@@ -126,6 +126,17 @@ def _two_sided_points(book: dict, player: str) -> dict[float, dict[str, dict]]:
     }
 
 
+async def _connect_or_skip() -> None:
+    """Open the pool, or skip when this machine has no Postgres.
+
+    ``init`` catches a refused connection and leaves the pool unset.
+    CI runs these tests. A checkout without a database skips them.
+    """
+    await db_service.init()
+    if not db_service.is_connected:
+        pytest.skip("Postgres is not available")
+
+
 def _window_contains(call: dict, tip: datetime) -> bool:
     start = call["date_from"].replace(tzinfo=timezone.utc)
     end = call["date_to"].replace(tzinfo=timezone.utc)
@@ -365,8 +376,7 @@ async def test_take_snapshot_commits_the_recorded_ladder(monkeypatch):
     events = _events()
     points = _points()
     hawks = _hawks(events, points)
-    await db_service.init()
-    assert db_service.is_connected, "Postgres is required to prove the snapshot write commits"
+    await _connect_or_skip()
     started = datetime.now(timezone.utc)
 
     async def fake_get_events(**kwargs):
@@ -488,8 +498,7 @@ async def test_line_migration_keeps_existing_rows_and_both_totals():
         "DO UPDATE SET\n    line = EXCLUDED.line,\n    over_odds = EXCLUDED.over_odds,",
     )
 
-    await db_service.init()
-    assert db_service.is_connected, "Postgres is required to prove the line migration"
+    await _connect_or_skip()
     try:
         await db_service.execute(
             "DELETE FROM odds_line_snapshots WHERE event_id = $1",
@@ -522,7 +531,27 @@ async def test_line_migration_keeps_existing_rows_and_both_totals():
             _MIGRATION_EVENT,
         )
         await db_service.executemany(old_upsert, [main])
+        await db_service.execute(
+            """
+            CREATE UNIQUE INDEX spo117_old_book_idx
+            ON odds_line_snapshots (snapshot_at, event_id, player_name, market, bookmaker)
+            """
+        )
         await db_service.execute(SCHEMA_SQL)
+        index_names = {
+            row["index_name"]
+            for row in await db_service.fetch(
+                """
+                SELECT ic.relname AS index_name
+                FROM pg_index ix
+                JOIN pg_class ic ON ic.oid = ix.indexrelid
+                WHERE ix.indrelid = 'odds_line_snapshots'::regclass
+                  AND ix.indisunique
+                """
+            )
+        }
+        assert "spo117_old_book_idx" not in index_names
+        assert "odds_line_snapshots_pkey" in index_names
 
         names = {
             row["conname"]
@@ -559,5 +588,140 @@ async def test_line_migration_keeps_existing_rows_and_both_totals():
             await db_service.execute(
                 "ALTER TABLE odds_line_snapshots DROP CONSTRAINT IF EXISTS spo117_old_book_key"
             )
+            await db_service.execute("DROP INDEX IF EXISTS spo117_old_book_idx")
             await db_service.execute(SCHEMA_SQL)
             await db_service.close()
+
+
+def _history_rows(player: str) -> list[dict]:
+    """Stored rows for one player from the recorded points body."""
+    points = _points()
+    parsed = OddsSnapshotService().rows_from_bookmakers(
+        points["bookmakers"],
+        event_id=points["id"],
+        home_team=points["home_team"],
+        away_team=points["away_team"],
+        date="2026-11-09",
+        snapshot_at=_STAMP,
+    )
+    return [
+        _as_dict(row)
+        for row in parsed
+        if row[5] == player and row[6] == "player_points"
+    ]
+
+
+@pytest.mark.asyncio
+async def test_history_consensus_averages_one_main_line_per_book(monkeypatch):
+    from app.api.odds_history import get_odds_history
+    from app.services.bulk_props import _main_book_line as stored_main_line
+
+    # Recorded points ladder: six books, and Bovada posts the alternate rungs.
+    player = "Nickeil Alexander-Walker"
+    rows = _history_rows(player)
+    assert rows
+    books: dict[str, list[dict]] = {}
+    for row in rows:
+        books.setdefault(row["bookmaker"], []).append(row)
+    mains = [stored_main_line(group) for group in books.values()]
+    main_lines = [float(row["line"]) for row in mains]
+    ladder_lines = [float(row["line"]) for row in rows]
+
+    class FakeDB:
+        is_connected = True
+
+        async def fetch(self, query, *args):
+            return rows
+
+    monkeypatch.setattr("app.api.odds_history.db_service", FakeDB())
+    result = await get_odds_history(player, "player_points", "2026-11-09")
+    assert result.date == "2026-11-09"
+    assert len(result.snapshots) == 1
+    snapshot = result.snapshots[0]
+    assert len(snapshot.lines) == len(rows) > len(books)
+    assert sum(1 for line in snapshot.lines if line.is_main) == len(books)
+    consensus = snapshot.consensus
+    assert consensus is not None
+    assert consensus.bookmaker_count == len(books)
+    assert consensus.avg_line == pytest.approx(round(sum(main_lines) / len(main_lines), 2))
+    assert consensus.avg_line != pytest.approx(round(sum(ladder_lines) / len(ladder_lines), 2))
+    posted = {round(float(row["line"]), 1) for row in rows}
+    for line in snapshot.lines:
+        if line.is_main:
+            assert round(line.line, 1) in posted
+    main_over = sum(float(row["over_fair_prob"]) for row in mains) / len(mains)
+    assert consensus.over_fair_prob == pytest.approx(round(main_over, 4))
+
+
+@pytest.mark.asyncio
+async def test_omitted_history_date_follows_the_eastern_slate(monkeypatch):
+    import app.services.odds_snapshot_service as snap
+    from app.api.odds_history import get_odds_history
+
+    class FrozenDateTime(datetime):
+        @classmethod
+        def now(cls, tz=None):
+            moment = datetime(2026, 11, 10, 3, 0, tzinfo=timezone.utc)
+            if tz is not None:
+                return moment.astimezone(tz)
+            return moment
+
+    monkeypatch.setattr(snap, "datetime", FrozenDateTime)
+    seen: dict[str, object] = {}
+
+    class FakeDB:
+        is_connected = True
+
+        async def fetch(self, query, *args):
+            seen["date"] = args[2]
+            return []
+
+    monkeypatch.setattr("app.api.odds_history.db_service", FakeDB())
+    result = await get_odds_history("Nickeil Alexander-Walker", "player_points", None)
+    assert seen["date"] == datetime(2026, 11, 9).date()
+    assert result.date == "2026-11-09"
+    assert result.snapshot_count == 0
+
+
+def test_open_close_uses_the_main_line_not_the_bovada_ladder():
+    import sys
+    from pathlib import Path
+
+    agents = Path(__file__).resolve().parents[2] / "scripts" / "agents"
+    if str(agents) not in sys.path:
+        sys.path.insert(0, str(agents))
+    from evaluation.odds_history import open_close_from_snapshots
+
+    from app.services.bulk_props import _main_book_line as stored_main_line
+
+    player = "Nickeil Alexander-Walker"
+    rows = [row for row in _history_rows(player) if row["bookmaker"] == "bovada"]
+    assert len(rows) > 1
+    main = stored_main_line(rows)
+    snapshots = []
+    for stamp in ("2026-11-09T16:05:00Z", "2026-11-09T23:35:00Z"):
+        for row in rows:
+            snapshots.append(
+                {
+                    "player_name": player,
+                    "date": "2026-11-09",
+                    "market": "player_points",
+                    "bookmaker": "bovada",
+                    "line": row["line"],
+                    "over_odds": row["over_odds"],
+                    "under_odds": row["under_odds"],
+                    "snapshot_at": stamp,
+                }
+            )
+    history = open_close_from_snapshots(snapshots, league="nba", book="bovada")
+    quote = history.lookup("nba", player, "2026-11-09", "points")
+    assert quote is not None
+    assert quote.open_line == pytest.approx(float(main["line"]))
+    assert quote.close_line == pytest.approx(float(main["line"]))
+    assert quote.open_over_price == int(main["over_odds"])
+    assert quote.close_over_price == int(main["over_odds"])
+    ends = {round(float(row["line"]), 1) for row in rows}
+    low, high = min(ends), max(ends)
+    assert low < float(main["line"]) < high
+    assert quote.open_line != pytest.approx(low)
+    assert quote.close_line != pytest.approx(high)
