@@ -55,7 +55,7 @@ On PostgreSQL 15+ the `public` schema does not allow `CREATE` for every role. Th
 
 ## Cutover
 
-The AWS account already exists. Check its plan and billing, set a monthly $25 budget alarm, then apply. Do not treat this as creating a new account or as an upgrade. There is no Paid-plan button. $25 is a budget cap, not the bill: the `db.t4g.micro` compute price is about $0.016 per hour (about $12 per month) in both `us-east-1` and `us-east-2`. 20 GB of gp3, backups, S3, data transfer from the public endpoint, and t4g Unlimited CPU credits are extra.
+The AWS account already exists. Check its plan and billing, set a monthly $25 budget alarm, then apply. Do not treat this as creating a new account or as an upgrade. There is no Paid-plan button. $25 is a budget cap, not an estimate. The `db.t4g.micro` compute price is about $0.016 per hour (about $12 per month) in both `us-east-1` and `us-east-2`. On top of that, expect gp3 storage, backup storage beyond the free allocation, data transfer, and T4g unlimited CPU credits.
 
 1. On the Mac, `aws configure` with Eason's own keys. Those keys stay in `~/.aws`. They do not go in the repo or in chat.
 2. `cd infra/aws && cp terraform.tfvars.example terraform.tfvars`. Set the bucket name. `allowed_cidrs` is `184.193.214.44/32` plus the Mac's current public `/32`. `./scripts/aws_update_my_ip.sh` rewrites the Mac line and prints `terraform apply`; it does not call AWS unless `--apply` is passed.
@@ -72,7 +72,7 @@ Do not paste that JSON, or the password, into the URL, into chat, or into git. T
 4. Create `sportslab_app`. Start the backend once against the empty database and confirm the six tables and the SPO-117 key (`\d odds_line_snapshots`). Stop it before the restore. If that startup created tables, drop them or recreate `novig_nba` so the restore target is empty.
 5. Stop the local backend so the scheduler is not writing. Dump with the Postgres 16 container (the compose port is not published to the Mac):
 
-Put the two URLs in a mode `600` file that is not in the repo, then load it. A password on the same line as the command is stored in shell history.
+Do not type the DSN on the command line. Shell history would keep the password. Put the two URLs in a mode `600` file outside the repo, or type the RDS URL with `read -s` so it is not echoed and not saved as a command.
 
 ```bash
 touch ~/.sportslab-migrate.env
@@ -82,6 +82,14 @@ chmod 600 ~/.sportslab-migrate.env
 set -a
 source ~/.sportslab-migrate.env
 set +a
+./scripts/db_migrate_to_rds.sh
+```
+
+```bash
+read -s -p "RDS URL: " RDS_DATABASE_URL
+echo
+export RDS_DATABASE_URL
+export LOCAL_DATABASE_URL='postgresql://novig:novig@localhost:5432/novig_nba'
 ./scripts/db_migrate_to_rds.sh
 ```
 

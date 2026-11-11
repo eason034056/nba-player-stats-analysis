@@ -36,11 +36,11 @@ Single-AZ, a public endpoint with an allowlist, SSE-S3, and the AWS-managed RDS 
 
 ## Tests / Verification
 
-- Backend pytest: `cd backend && /tmp/nba-venv/bin/python -m pytest -q --tb=line` → 1234 passed, 26 skipped, 6 xfailed, 0 failed.
+- Backend pytest: `cd backend && /tmp/nba-venv/bin/python -m pytest -q --tb=line` → 1236 passed, 26 skipped, 6 xfailed, 0 failed.
 - Frontend: not touched.
 - Integration test: SKIPPED. No AWS account, no `RUN_INTEGRATION`. Script tests use fake `pg_dump`, `pg_restore`, `psql`, `docker`, `curl`, and `aws` binaries.
 - Fabrication scan: PASS. This change does not mock an external odds or stats API and does not add a hand-typed response body.
-- Terraform: `terraform fmt -check -recursive` clean. `terraform init -backend=false` uses hashicorp/aws v5.100.0. `terraform validate` succeeded. `terraform console` accepts `allowed_cidrs=[]` and `184.193.214.44/32` plus `203.0.113.10/32`. It rejects `0.0.0.0/0`, `::/0`, `10.1.2.0/24`, `10.1.2.0/31`, `2001:db8::/32`, `2001:db8::/64`, `::/32`, `2001:db8::1/128`, `0.0.0.0/32`, and a duplicated `/32`. It does not call AWS. `terraform plan` and `terraform apply` were not run.
+- Terraform: `terraform fmt -check -recursive` clean. `terraform init -backend=false` uses hashicorp/aws v5.100.0. `terraform validate` succeeded. `terraform console` accepts `allowed_cidrs=[]` and `["184.193.214.44/32","203.0.113.10/32"]`. It rejects `2001:db8::/32`, `2001:db8::/64`, `::/32`, `2001:db8::1/128`, `0.0.0.0/0`, `::/0`, `10.1.2.0/24`, `0.0.0.0/32`, and a duplicated `/32`. It does not call AWS. `terraform plan` and `terraform apply` were not run. The final snapshot id uses `formatdate` plus `lifecycle.ignore_changes`, so later plans do not rewrite it.
 
 ## Follow-ups
 

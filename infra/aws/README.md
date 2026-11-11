@@ -53,6 +53,8 @@ terraform apply tfplan
 
 `terraform plan` and `terraform apply` talk to AWS. Review the plan before apply. `tfplan` is gitignored.
 
+Optional, not part of CI: [tflint](https://github.com/terraform-linters/tflint) with the AWS ruleset. A local `.tflint.hcl` can enable `plugin "aws"`. This repository does not run tflint in GitHub Actions.
+
 Read these outputs (no secret values):
 
 ```bash

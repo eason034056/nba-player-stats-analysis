@@ -43,7 +43,7 @@ aws sts get-caller-identity
 1. 打開主控台，搜尋 **Billing and Cost Management**，看目前的帳單。
 2. 搜尋 **AWS Budgets**，或打開 **Billing and Cost Management → Budgets**。建立每月成本預算 25 美元。實際花費到 80% 寄信，預測花費到 100% 也寄信。收件人用你自己的信箱。
 
-25 美元是上限，不是這個月的固定帳單。`db.t4g.micro` 的運算大約每小時 0.016 美元（一個月大約 12 美元）。20 GB gp3、備份、S3、公開端點的資料傳出，以及 t4g Unlimited 的 CPU credit，都要另外算。
+25 美元是預算上限，不是估價，也不是這個月的固定帳單。`db.t4g.micro` 的運算大約每小時 0.016 美元（一個月大約 12 美元）。除此之外還要算：gp3 儲存、超過免費額度的備份儲存、資料傳出，以及 T4g unlimited 的 CPU credit。
 
 ## 4. terraform init、plan、apply
 
@@ -149,7 +149,7 @@ PostgreSQL 15 以後，`public` schema 不會讓每個角色都能 `CREATE`。�
 
 `5432` 沒有發佈到 Mac，所以不要在 Mac 上直接跑 `pg_dump` 去連 `localhost:5432`。預設路徑是進到容器裡執行 `pg_dump`。在容器裡面，`localhost:5432` 就是這顆 Postgres。
 
-在 repo 根目錄。兩條網址放在權限 `600` 的檔案，不要寫在同一行指令上（那會進 shell history）。腳本不會呼叫 Secrets Manager。
+在 repo 根目錄。不要把 DSN 打在指令列上，否則密碼會進 shell history。兩條網址放在權限 `600`、且不在 repo 裡的檔案，或用 `read -s` 輸入（不回顯、也不會變成一條指令）。腳本不會呼叫 Secrets Manager。
 
 ```bash
 touch ~/.sportslab-migrate.env
@@ -159,6 +159,16 @@ chmod 600 ~/.sportslab-migrate.env
 set -a
 source ~/.sportslab-migrate.env
 set +a
+./scripts/db_migrate_to_rds.sh
+```
+
+或只輸入 RDS 網址：
+
+```bash
+read -s -p "RDS URL: " RDS_DATABASE_URL
+echo
+export RDS_DATABASE_URL
+export LOCAL_DATABASE_URL='postgresql://novig:novig@localhost:5432/novig_nba'
 ./scripts/db_migrate_to_rds.sh
 ```
 
