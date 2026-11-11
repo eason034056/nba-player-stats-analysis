@@ -719,3 +719,38 @@ class TestHttpsCaddy:
             response = client.get("/health")
         assert response.status_code == 200
         assert response.json()["ok"] is True
+
+
+class TestPublicSubnets:
+    def test_instance_uses_the_first_sorted_public_subnet(self) -> None:
+        ec2 = (REPO / "infra" / "aws" / "ec2.tf").read_text(encoding="utf-8")
+        network = (REPO / "infra" / "aws" / "network.tf").read_text(encoding="utf-8")
+        assert "app_subnet_id = sort(local.public_subnet_ids)[0]" in ec2
+        assert "data.aws_subnets" not in ec2
+        assert "data.aws_vpc" not in ec2
+        assert 'data "aws_subnet" "selected"' in network
+        assert "for_each = toset(local.subnet_ids)" in network
+        instance = ec2.split('resource "aws_instance" "app"', 1)[1]
+        assert (
+            "public_subnet_ids is empty. Set vpc_id to a VPC whose subnets "
+            "have MapPublicIpOnLaunch=true."
+        ) in instance
+        group = network.split('resource "aws_db_subnet_group" "this"', 1)[1].split(
+            'resource "aws_security_group"', 1
+        )[0]
+        assert "data.aws_subnet.selected" in group
+        assert "availability_zone" in group
+        assert ">= 2" in group
+        assert 'name        = "${local.name_prefix}-rds"' in group
+        assert 'description = "Subnets for ${local.name_prefix} RDS"' in group
+
+    def test_docs_say_a_check_cannot_catch_a_missing_default_vpc(self) -> None:
+        for relative in (
+            "docs/deployment/aws.md",
+            "docs/deployment/aws-steps-zh-TW.md",
+            "infra/aws/README.md",
+        ):
+            text = (REPO / relative).read_text(encoding="utf-8")
+            assert "MapPublicIpOnLaunch" in text
+            assert "no matching EC2 VPC found" in text
+            assert "check" in text.lower()
