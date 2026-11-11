@@ -2,7 +2,7 @@
 
 - Ticket: SPO-135d
 - Branch: `feature/SPO-135d-frontend-followups`
-- Base: `dev`, stacked on #71 (`feature/SPO-135b-remove-projections-frontend` @ `038f859`)
+- Stacked on #71. This PR's base is `feature/SPO-135b-remove-projections-frontend` @ `038f859`. #71 targets `dev`.
 - Frontend only. WNBA routes are unchanged.
 
 ## Summary
