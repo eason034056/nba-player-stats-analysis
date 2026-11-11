@@ -167,7 +167,7 @@ function boardProps(overrides: Partial<DailyPicksBoardProps>): DailyPicksBoardPr
 }
 
 describe("DailyPicksBoard with an Out pick", () => {
-  it("offers no slip, reverse, or Ask control for an Out pick that is already in the slip", () => {
+  it("offers a remove control, and no reverse or Ask, for an Out pick that is already in the slip", () => {
     const out = withStatus({ ...boardPick, player_name: "Jimmy Butler" }, "out");
     const onToggleSlip = vi.fn();
     const onAddReverse = vi.fn();
@@ -188,7 +188,9 @@ describe("DailyPicksBoard with an Out pick", () => {
     expect(card).toHaveTextContent("Out");
     expect(card).not.toHaveTextContent("%");
     expect(card).not.toHaveTextContent("In slip");
-    expect(within(card).queryByRole("button")).not.toBeInTheDocument();
+    expect(within(card).getByRole("button", { name: "Remove Jimmy Butler" })).toBeInTheDocument();
+    expect(within(card).queryByRole("button", { name: /ask the agent/i })).not.toBeInTheDocument();
+    expect(within(card).queryByRole("button", { name: /under|over/i })).not.toBeInTheDocument();
     expect(screen.getByText("picks").previousElementSibling).toHaveTextContent("0");
     expect(screen.getByText("strong").previousElementSibling).toHaveTextContent("0");
   });
