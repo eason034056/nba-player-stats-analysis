@@ -19,6 +19,7 @@ from urllib.parse import parse_qs, urlparse
 
 import httpx
 import pytest
+from pydantic import SecretStr
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
@@ -156,12 +157,13 @@ def test_fixtures_match_recorded_paths_and_contain_no_key():
 
 def test_settings_reads_balldontlie_env(monkeypatch):
     """The key and the per-minute limit use the same settings path as ODDS_API_KEY."""
-    assert Settings.model_fields["balldontlie_api_key"].default == ""
+    assert Settings.model_fields["balldontlie_api_key"].default.get_secret_value() == ""
     assert Settings.model_fields["bdl_rate_limit_per_min"].default == 5
     monkeypatch.setenv("BALLDONTLIE_API_KEY", "from-env")
     monkeypatch.setenv("BDL_RATE_LIMIT_PER_MIN", "600")
     fresh = Settings()
-    assert fresh.balldontlie_api_key == "from-env"
+    assert fresh.balldontlie_api_key.get_secret_value() == "from-env"
+    assert "from-env" not in repr(fresh)
     assert fresh.bdl_rate_limit_per_min == 600
 
 
@@ -403,8 +405,10 @@ async def test_list_projected_lineups_uses_the_recorded_path():
 
 @pytest.mark.asyncio
 async def test_auth_header_comes_from_settings_and_is_not_logged(monkeypatch, caplog):
-    """Authorization is the settings key. The log line does not contain it."""
-    monkeypatch.setattr(settings, "balldontlie_api_key", "from-settings-not-for-logs")
+    """A default client unwraps the SecretStr into Authorization and does not log or repr it."""
+    monkeypatch.setattr(
+        settings, "balldontlie_api_key", SecretStr("from-settings-not-for-logs")
+    )
     monkeypatch.setattr(settings, "bdl_rate_limit_per_min", 5)
     capture = _load("games_2026-11-11.json")
     seen: list[httpx.Request] = []
@@ -429,6 +433,7 @@ async def test_auth_header_comes_from_settings_and_is_not_logged(monkeypatch, ca
 
     assert seen[0].headers["authorization"] == "from-settings-not-for-logs"
     assert "from-settings-not-for-logs" not in caplog.text
+    assert "from-settings-not-for-logs" not in repr(client)
     assert "authorization" not in caplog.text.lower()
 
 

@@ -5,8 +5,10 @@ This module only talks to https://api.balldontlie.io. It is not imported by
 a route, the scheduler, or the odds gateway. A later ticket wires it in.
 
 Authentication is the raw API key in the Authorization header
-(``Authorization: <BALLDONTLIE_API_KEY>``), read from ``settings`` the same
-way ``ODDS_API_KEY`` is. The key is never written to a log line.
+(``Authorization: <BALLDONTLIE_API_KEY>``). The setting is a ``SecretStr``.
+The client calls ``get_secret_value()`` and keeps a plain ``str``. A
+constructor ``api_key`` overrides that and is also a plain ``str``. The key
+is never written to a log line or to ``repr``.
 
 Paths below are the paths in the recorded captures under
 ``backend/tests/fixtures/bdl/``:
@@ -148,17 +150,17 @@ class BdlClient:
     ``redis``, ``sleep``, and ``clock`` so no network call and no real
     wait happens.
 
-        The shared budget is a Redis counter keyed by the current minute.
-        ``BDL_RATE_LIMIT_PER_MIN`` (default 5) is the limit until a response
-        includes ``x-ratelimit-limit``. That value is stored for one day
-        (``bdl:ratelimit:v1:observed_limit``, TTL 86400). A day with no
-        response falls back to ``BDL_RATE_LIMIT_PER_MIN``. Before a call, a
-        spent budget waits until that minute ends. A response with
-        ``x-ratelimit-remaining: 0``, or an HTTP 429, writes
-        ``bdl:ratelimit:v1:pause_until`` so every process waits out the
-        server window. The server reset is not aligned to the clock minute.
-        Any wait derived from ``x-ratelimit-reset`` is capped at 65 seconds
-        so a clock that is behind the server cannot sleep for an hour.
+    The shared budget is a Redis counter keyed by the current minute.
+    ``BDL_RATE_LIMIT_PER_MIN`` (default 5) is the limit until a response
+    includes ``x-ratelimit-limit``. That value is stored for one day
+    (``bdl:ratelimit:v1:observed_limit``, TTL 86400). A day with no
+    response falls back to ``BDL_RATE_LIMIT_PER_MIN``. Before a call, a
+    spent budget waits until that minute ends. A response with
+    ``x-ratelimit-remaining: 0``, or an HTTP 429, writes
+    ``bdl:ratelimit:v1:pause_until`` so every process waits out the
+    server window. The server reset is not aligned to the clock minute.
+    Any wait derived from ``x-ratelimit-reset`` is capped at 65 seconds
+    so a clock that is behind the server cannot sleep for an hour.
 
     Usage:
         client = BdlClient()
@@ -179,7 +181,8 @@ class BdlClient:
         timeout: float = 30.0,
     ) -> None:
         if api_key is None:
-            api_key = settings.balldontlie_api_key
+            # SecretStr stays out of repr. The header needs a plain str.
+            api_key = settings.balldontlie_api_key.get_secret_value()
         if rate_limit_per_min is None:
             rate_limit_per_min = settings.bdl_rate_limit_per_min
         if rate_limit_per_min < 1:
@@ -371,9 +374,10 @@ class BdlClient:
         immediately. A transport error waits 60 seconds and tries again.
         The wait is ``self._sleep``, so a test clock can skip the real delay.
 
-        Worst case for one call is about 3 retries times 65 seconds.
-        Each retry backoff, and each pause taken from ``x-ratelimit-reset``,
-        is capped at 65 seconds, and a call makes at most 3 attempts.
+        Retry backoff is at most 2 times 65 seconds: two waits between the
+        three attempts. Each attempt may also wait for a budget slot, up
+        to 8 waits, and each of those is capped at 65 seconds. The real
+        bound is ``3 * 8 * 65 + 2 * 65`` = 1690 seconds.
         """
         last_status: int | None = None
         for attempt in range(_MAX_ATTEMPTS):
