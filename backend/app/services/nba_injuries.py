@@ -25,7 +25,7 @@ from pathlib import Path
 from typing import Any, Mapping, Protocol
 
 from app.services.cache import CacheService
-from app.services.normalize import player_name_key
+from app.services.normalize import normalize_name
 
 logger = logging.getLogger(__name__)
 
@@ -422,6 +422,21 @@ async def refresh_nba_injuries(
         return None
 
 
+def _injury_name_key(name: str | None) -> str:
+    """Fold case, punctuation, and accents. Keep Jr, Sr, and II–VI.
+
+    ``player_name_key`` drops a trailing generational suffix. Injury
+    matching must not: ``Gary Trent Jr.`` and ``Gary Trent`` are
+    different people, and there is no suffix-stripped fallback.
+    ``normalize_name`` is the whole fold. ``Luka Dončić`` and
+    ``luka doncic`` share a key. ``Gary Trent Jr.`` and ``gary trent jr``
+    share a key. ``Gary Trent`` does not.
+    """
+    if not name:
+        return ""
+    return normalize_name(str(name))
+
+
 def match_injury_entry(
     entries: list[dict],
     player: str,
@@ -429,14 +444,17 @@ def match_injury_entry(
 ) -> dict[str, Any] | None:
     """Pick one injury row for ``player``.
 
-    A caller-supplied ``bdl_player_id`` wins. Scraper rows (ESPN and
-    CBS often list the same player twice) and BDL rows that share one
-    id use the first name match. Two BDL rows with different ids, or
-    two BDL rows with the same name and no id, are left unmatched so
-    the report does not attach the wrong person.
+    A caller-supplied ``bdl_player_id`` wins when a row carries that
+    same id. Daily picks and ``/reads`` do not have one: an Odds API
+    outcome and a snapshot row are a player name only, so those
+    callers leave this argument unset. The agent tool passes an id
+    when it has one.
 
-    Names compare through :func:`player_name_key` (case, accents,
-    punctuation, and a trailing generational suffix).
+    Names compare through :func:`_injury_name_key` (case, punctuation,
+    and accents). The suffix stays. There is no fallback that drops
+    Jr/Sr/II/III/IV. Scraper rows that share a name and have no id
+    still return the first row. Two BDL rows with different ids, or
+    the same name and no id, are left unmatched.
     """
     rows = [entry for entry in entries if isinstance(entry, dict) and not entry.get("unavailable")]
     if bdl_player_id is not None:
@@ -445,8 +463,8 @@ def match_injury_entry(
                 return entry
 
     def _same(entry: dict) -> bool:
-        key = player_name_key(str(entry.get("player") or ""))
-        return bool(key) and key == player_name_key(player)
+        key = _injury_name_key(str(entry.get("player") or ""))
+        return bool(key) and key == _injury_name_key(player)
 
     named = [entry for entry in rows if _same(entry)]
     if not named:

@@ -441,9 +441,10 @@ def _match_injury_entry(
 ) -> Optional[Dict[str, Any]]:
     """Pick one injury row for ``player``.
 
-    Delegates to ``match_injury_entry`` so the pick board and this tool
-    share one ambiguous-name rule. A caller-supplied id wins. Two rows
-    with different ids, or the same name and no id, are not guessed.
+    Delegates to ``match_injury_entry`` so the pick board, /reads, and
+    this tool share one name rule. The suffix stays. A caller-supplied
+    id wins when both sides have it. Two rows with different ids, or
+    the same name and no id, are not guessed.
     """
     from app.services.nba_injuries import match_injury_entry
 
