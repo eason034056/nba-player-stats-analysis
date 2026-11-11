@@ -74,6 +74,8 @@ The default is `docker exec no-vig-nba-postgres`. In that container, `localhost:
 
 When the home IP changes, run `scripts/aws_update_my_ip.sh` and then the printed `terraform apply`. Until that apply finishes, the Mac cannot open 5432.
 
+Apply also creates security group `sportslab-app` (output `app_security_group_id`). It has no ingress rules. It exists so a later EC2 instance (SPO-133) can attach to it. RDS already allows TCP 5432 from that group, by security group id, and from any id in `rds_allowed_security_group_ids` (default empty). Once that EC2 backend is live and attached to `sportslab-app`, set `allowed_cidrs = []` in the gitignored `terraform.tfvars` and apply again. That removes the Mac and box CIDR rules. Do not run `scripts/aws_update_my_ip.sh --apply` after that, because `--apply` passes those two CIDRs back in. `0.0.0.0/0` and `::/0` stay rejected.
+
 ## Rollback
 
 - Before the backend is pointed at RDS: leave `.env` unset for `DATABASE_URL`. `docker compose` still uses `postgresql://novig:novig@postgres:5432/novig_nba`. Start the compose backend again.

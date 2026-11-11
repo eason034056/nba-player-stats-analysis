@@ -31,18 +31,24 @@ variable "tags" {
 
 variable "allowed_cidrs" {
   type        = list(string)
-  description = "IPv4 host CIDRs (/32) allowed to open TCP 5432. No default. Use the box 184.193.214.44/32 and the Mac's current public IP/32. 0.0.0.0/0 and ::/0 are rejected."
+  description = "IPv4 host CIDRs (/32) allowed to open TCP 5432. No default. Use the box 184.193.214.44/32 and the Mac's current public IP/32 until the EC2 backend exists. Set to [] to remove those CIDR rules. 0.0.0.0/0 and ::/0 are rejected. An empty list is allowed."
 
   validation {
-    condition = length(var.allowed_cidrs) > 0 && alltrue([
+    condition = alltrue([
       for cidr in var.allowed_cidrs :
       cidr != "0.0.0.0/0" &&
       cidr != "::/0" &&
       can(cidrhost(cidr, 0)) &&
       can(regex("/(3[2-9]|[4-9][0-9])$", cidr))
     ])
-    error_message = "Every allowed_cidrs entry must be a valid host CIDR (/32 or narrower). 0.0.0.0/0 and ::/0 are rejected."
+    error_message = "allowed_cidrs may be empty. Every entry that is set must be a valid host CIDR (/32 or narrower). 0.0.0.0/0 and ::/0 are rejected."
   }
+}
+
+variable "rds_allowed_security_group_ids" {
+  type        = list(string)
+  default     = []
+  description = "Extra security group ids, besides the app security group created here, that may open TCP 5432 on RDS. Default is empty. The app group is always allowed by reference and is not listed here."
 }
 
 variable "bucket_name" {
@@ -190,7 +196,7 @@ variable "db_name" {
 variable "publicly_accessible" {
   type        = bool
   default     = true
-  description = "Give the RDS instance a public endpoint. Ingress is still limited to allowed_cidrs. Set false only when clients share the VPC."
+  description = "Give the RDS instance a public endpoint. Ingress is still the app security group, rds_allowed_security_group_ids, and allowed_cidrs. Set false only when clients share the VPC."
 }
 
 variable "maintenance_window" {

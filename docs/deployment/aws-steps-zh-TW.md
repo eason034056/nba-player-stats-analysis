@@ -72,7 +72,11 @@ terraform plan
 terraform apply
 ```
 
-`plan` 裡不該出現 `0.0.0.0/0`。apply 結束後記下三個輸出：`db_endpoint`、`master_user_secret_arn`、`bucket_name`。
+`plan` 裡不該出現 `0.0.0.0/0`。apply 結束後記下 `db_endpoint`、`master_user_secret_arn`、`bucket_name`，以及 `app_security_group_id`。
+
+`app_security_group_id` 是 `sportslab-app` 這個安全群組。它現在沒有任何進站規則，是留給之後的 EC2 後端（SPO-133）掛上去用的。RDS 已經用安全群組 id 放行這個群組的 TCP 5432，也放行 `rds_allowed_security_group_ids` 裡的每一個 id（預設是空清單）。
+
+EC2 後端上線、而且實例已經掛在 `sportslab-app` 之後，把 gitignore 的 `terraform.tfvars` 改成 `allowed_cidrs = []` 再 `terraform apply`。這樣 Mac 和 box 的 IP 規則會消失。RDS 仍然允許 `sportslab-app`。之後不要再跑 `./scripts/aws_update_my_ip.sh --apply`，因為 `--apply` 會把那兩個 `/32` 再傳回去。`0.0.0.0/0` 和 `::/0` 仍然會被拒絕。空清單是允許的。
 
 `infra/aws/README.md` 裡的 provisioner IAM JSON 是舊計畫的對照清單。不要照它去建立另一把金鑰。
 

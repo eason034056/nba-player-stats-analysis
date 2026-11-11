@@ -13,6 +13,11 @@ output "bucket_name" {
   value       = aws_s3_bucket.this.bucket
 }
 
+output "app_security_group_id" {
+  description = "Id of the app security group. SPO-133 attaches the backend EC2 instance to it. The group has no ingress rules. RDS allows TCP 5432 from this id."
+  value       = aws_security_group.app.id
+}
+
 output "runtime_s3_policy_json" {
   description = "Runtime IAM policy (Get/Put/List on the four prefixes, no delete). Access keys are not created here."
   value       = data.aws_iam_policy_document.runtime.json

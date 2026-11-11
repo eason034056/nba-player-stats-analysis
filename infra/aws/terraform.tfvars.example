@@ -6,13 +6,18 @@ region      = "us-east-2"
 project     = "sportslab"
 bucket_name = "sportslab-data-ACCOUNT-us-east-2"
 
-# /32 only. 0.0.0.0/0 is rejected.
+# /32 only. 0.0.0.0/0 is rejected. An empty list is allowed and removes the
+# CIDR rules. After the EC2 backend is attached to sportslab-app, set
+# allowed_cidrs = [] and apply. RDS still allows that security group.
 # box: fixed. mac-home: replace 203.0.113.10 with the Mac's current public IP.
 # scripts/aws_update_my_ip.sh rewrites the mac-home line and keeps the box line.
 allowed_cidrs = [
   "184.193.214.44/32", # box
   "203.0.113.10/32", # mac-home
 ]
+
+# Extra security groups besides sportslab-app. The app group is always allowed.
+# rds_allowed_security_group_ids = []
 
 db_instance_class       = "db.t4g.micro"
 engine_version          = "16.15"
