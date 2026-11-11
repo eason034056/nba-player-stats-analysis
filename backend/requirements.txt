@@ -71,6 +71,10 @@ pytest==8.3.0
 # - 用於測試 async 函數
 pytest-asyncio==0.24.0
 
+# fakeredis: BALLDONTLIE 速率預算的記憶體 Redis。
+# client 本身用 redis.asyncio；測試不需要一台真的 Redis。
+fakeredis==2.26.2
+
 # ==================== 開發工具（可選）====================
 # python-dotenv: .env 檔案支援
 # - 開發時使用

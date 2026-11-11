@@ -21,6 +21,13 @@ class Settings(BaseSettings):
     # The Odds API 設定
     odds_api_key: str = ""  # The Odds API 的 API 金鑰
     odds_api_base_url: str = "https://api.the-odds-api.com"  # API 基礎 URL
+
+    # BALLDONTLIE 設定。client 讀這兩個欄位，這張票還沒把 client 接到路由或排程。
+    # balldontlie_api_key 對應 BALLDONTLIE_API_KEY，放在 Authorization 標頭，不要寫進日誌。
+    balldontlie_api_key: str = ""
+    # bdl_rate_limit_per_min 對應 BDL_RATE_LIMIT_PER_MIN。試用 key 是 5，付費 GOAT 是 600。
+    # 真正送出請求後，如果回應帶 x-ratelimit-limit，共用預算改跟那個標頭。
+    bdl_rate_limit_per_min: int = 5
     
     # SportsDataIO 設定（球員投影數據）
     sportsdata_api_key: str = ""  # SportsDataIO API 金鑰

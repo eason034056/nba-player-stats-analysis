@@ -1,0 +1,115 @@
+{
+ "request": "https://api.balldontlie.io/nba/v1/projected_lineups?game_ids%5B%5D=21718080",
+ "status": 200,
+ "elapsed_s": 0.17,
+ "rate_headers": {
+  "x-ratelimit-limit": "5",
+  "x-ratelimit-remaining": "0",
+  "x-ratelimit-reset": "1794370246"
+ },
+ "response": {
+  "data": [
+   {
+    "id": 8981,
+    "game_id": 21718080,
+    "team_id": 25,
+    "status": "confirmed",
+    "lineup": [
+     {
+      "position": "PG",
+      "player": {
+       "id": 278,
+       "first_name": "Damian",
+       "last_name": "Lillard"
+      }
+     },
+     {
+      "position": "SG",
+      "player": {
+       "id": 3547242,
+       "first_name": "Deni",
+       "last_name": "Avdija"
+      }
+     },
+     {
+      "position": "SF",
+      "player": {
+       "id": 56677850,
+       "first_name": "Toumani",
+       "last_name": "Camara"
+      }
+     },
+     {
+      "position": "PF",
+      "player": {
+       "id": 56677817,
+       "first_name": "Sidy",
+       "last_name": "Cissoko"
+      }
+     },
+     {
+      "position": "C",
+      "player": {
+       "id": 1028025344,
+       "first_name": "Donovan",
+       "last_name": "Clingan"
+      }
+     }
+    ],
+    "updated_at": "2026-11-11T03:40:01.879Z"
+   },
+   {
+    "id": 8982,
+    "game_id": 21718080,
+    "team_id": 21,
+    "status": "confirmed",
+    "lineup": [
+     {
+      "position": "PG",
+      "player": {
+       "id": 175,
+       "first_name": "Shai",
+       "last_name": "Gilgeous-Alexander"
+      }
+     },
+     {
+      "position": "SG",
+      "player": {
+       "id": 1028027372,
+       "first_name": "Jared",
+       "last_name": "McCain"
+      }
+     },
+     {
+      "position": "SF",
+      "player": {
+       "id": 1028037477,
+       "first_name": "Ajay",
+       "last_name": "Mitchell"
+      }
+     },
+     {
+      "position": "PF",
+      "player": {
+       "id": 480,
+       "first_name": "Kenrich",
+       "last_name": "Williams"
+      }
+     },
+     {
+      "position": "C",
+      "player": {
+       "id": 201,
+       "first_name": "Isaiah",
+       "last_name": "Hartenstein"
+      }
+     }
+    ],
+    "updated_at": "2026-11-11T03:40:02.196Z"
+   }
+  ],
+  "meta": {
+   "per_page": 25
+  }
+ }
+}
