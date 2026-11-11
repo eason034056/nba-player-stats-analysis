@@ -31,9 +31,7 @@ from apscheduler.triggers.interval import IntervalTrigger
 from app.services.daily_analysis import daily_analysis_service
 from app.services.csv_downloader import csv_downloader_service
 from app.services.odds_gateway import odds_gateway
-from app.services.projection_service import projection_service
 from app.services.odds_snapshot_service import odds_snapshot_service
-from app.services.cache import cache_service
 from app.services.lineup_service import lineup_service, wnba_lineup_service
 
 
@@ -113,40 +111,6 @@ class SchedulerService:
             replace_existing=True
         )
         
-        # Add projection data prefetch jobs (3 times a day)
-        # 
-        # Projection fetch strategy:
-        # - Early (UTC 16:00 ≈ US Eastern 11AM): Initial projections, ~8 hours before games
-        # - Mid (UTC 22:00 ≈ US Eastern 5PM): Updated projections, after most starters confirmed
-        # - Final (UTC 23:30 ≈ US Eastern 6:30PM): Final projections, right before games
-        #
-        # SportsDataIO's Projection API is a bulk endpoint,
-        # a single call returns projection data for all players of the day,
-        # so calling 3 times covers all needs.
-        self._scheduler.add_job(
-            self._run_projection_fetch_job,
-            trigger=CronTrigger(hour=16, minute=0),
-            id='projection_fetch_early',
-            name='Projection Data Prefetch (Early - Initial)',
-            replace_existing=True
-        )
-        
-        self._scheduler.add_job(
-            self._run_projection_fetch_job,
-            trigger=CronTrigger(hour=22, minute=0),
-            id='projection_fetch_mid',
-            name='Projection Data Prefetch (Mid - After Starters Confirmed)',
-            replace_existing=True
-        )
-        
-        self._scheduler.add_job(
-            self._run_projection_fetch_final_job,
-            trigger=CronTrigger(hour=23, minute=30),
-            id='projection_fetch_final',
-            name='Projection Data Prefetch (Final + Clear Daily Picks Cache)',
-            replace_existing=True
-        )
-        
         # Add CSV download job
         # Runs at 10:00 Chicago time
         # timezone="America/Chicago": APScheduler will handle daylight saving automatically
@@ -165,7 +129,7 @@ class SchedulerService:
             replace_existing=True
         )
         
-        # Add odds snapshot jobs (3 times, same times as projection prefetch)
+        # Add odds snapshot jobs (3 times a day)
         #
         # Odds snapshot strategy (Line Movement Tracking):
         # - Early (UTC 16:00 ≈ US Eastern 11AM): Early line, after injury reports
@@ -174,7 +138,7 @@ class SchedulerService:
         #
         # Each snapshot calls odds API once per event for 4 markets,
         # calculates no-vig for all bookmaker/player/market, and batch writes to PostgreSQL.
-        # Failure does not affect projection prefetch or daily analysis.
+        # Failure does not affect daily analysis.
         self._scheduler.add_job(
             self._run_odds_snapshot_job,
             trigger=CronTrigger(hour=16, minute=5),
@@ -435,62 +399,6 @@ class SchedulerService:
         
         print("=" * 50 + "\n")
     
-    async def _run_projection_fetch_job(self):
-        """
-        Run projection data prefetch job
-        
-        Calls projection_service.fetch_and_store() to get today's projections.
-        Data is written to Redis and PostgreSQL.
-        """
-        print("\n" + "=" * 50)
-        print(f"📊 Starting projection data prefetch: {datetime.now(timezone.utc).isoformat()}")
-        print("=" * 50)
-        
-        try:
-            today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
-            projections = await projection_service.fetch_and_store(today)
-            
-            print(f"✅ Projection data prefetch completed! {len(projections)} players")
-        
-        except Exception as e:
-            print(f"❌ Projection data prefetch failed: {e}")
-            import traceback
-            traceback.print_exc()
-        
-        print("=" * 50 + "\n")
-    
-    async def _run_projection_fetch_final_job(self):
-        """
-        Run final projection data prefetch
-        
-        Same as _run_projection_fetch_job, but also clears daily picks cache,
-        so the next request for daily picks will use the latest projections.
-        """
-        print("\n" + "=" * 50)
-        print(f"📊 Starting final projection data prefetch: {datetime.now(timezone.utc).isoformat()}")
-        print("=" * 50)
-        
-        try:
-            today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
-            projections = await projection_service.fetch_and_store(today)
-            
-            print(f"✅ Final projection data prefetch completed! {len(projections)} players")
-            
-            # SPO-35: scope to NBA — projection prefetch only writes
-            # NBA projections (no SportsDataIO WNBA wrapper today, see
-            # daily_analysis._LEAGUES_WITH_PROJECTIONS), so the WNBA
-            # picks cache must NOT be invalidated here.
-            deleted = await cache_service.clear_daily_picks_cache(league="nba")
-            if deleted > 0:
-                print(f"🗑️ Cleared {deleted} daily picks cache")
-        
-        except Exception as e:
-            print(f"❌ Final projection data prefetch failed: {e}")
-            import traceback
-            traceback.print_exc()
-        
-        print("=" * 50 + "\n")
-    
     async def _run_odds_snapshot_job(self):
         """
         Run odds snapshot job
@@ -587,20 +495,6 @@ class SchedulerService:
         if date is None:
             return await odds_snapshot_service.take_snapshot()
         return await odds_snapshot_service.take_snapshot(date)
-
-    async def trigger_projection_fetch_now(self, date: Optional[str] = None) -> dict:
-        """
-        Manually trigger projection data prefetch
-        
-        Args:
-            date: Date (YYYY-MM-DD), None means today
-        
-        Returns:
-            Projections dict
-        """
-        if date is None:
-            date = datetime.now(timezone.utc).strftime("%Y-%m-%d")
-        return await projection_service.fetch_and_store(date)
 
     async def trigger_lineup_fetch_now(self, date: Optional[str] = None) -> dict:
         if date is None:

@@ -142,8 +142,8 @@ TOOL_EXPLANATIONS = {
     # ========== Projection Agent (Dimension 6 - stub) ==========
     "get_full_projection": {
         "name": "完整投影 (Full Projection)",
-        "desc": "預測點數/籃板/助攻/PRA、上場時間、usage%。目前為 stub，SportsDataIO 為假資料。",
-        "source": "unavailable (SportsDataIO dummy)",
+        "desc": "預測點數/籃板/助攻/PRA、上場時間、usage%。目前為 stub，沒有投影來源，模型尚未接上。",
+        "source": "unavailable (projection stub)",
         "fields": [],
     },
     "calculate_edge": {

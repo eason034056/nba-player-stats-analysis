@@ -10,8 +10,6 @@ Covers:
   with the league-average prior on good inputs)
 - DD binary parser path in odds_snapshot_service (Yes-only and Yes+No cases,
   no point=None rows leak through)
-- Combo derived fields in projection_provider.normalize_projection (r_a, p_r,
-  p_a present, dd absent)
 - Allow-list expansion in odds_history GET endpoint
 - SUPPORTED_MARKETS / SNAPSHOT_MARKETS / OVER_UNDER_MARKET_KEYS /
   BINARY_MARKET_KEYS canonical sets cover the spec'd markets
@@ -43,7 +41,6 @@ from tests.fixtures.odds_api import (
 
 from app.services.csv_player_history import CSVPlayerHistoryService
 from app.services.prob import single_leg_devig, DEFAULT_BINARY_VIG
-from app.services.projection_provider import projection_provider
 from app.services.odds_snapshot_service import (
     SNAPSHOT_MARKETS,
     OVER_UNDER_MARKET_KEYS,
@@ -53,7 +50,6 @@ from app.services.odds_snapshot_service import (
 from app.services.daily_analysis import (
     SUPPORTED_MARKETS,
     BINARY_MARKETS,
-    PROJECTION_FIELD_ALIASES,
 )
 
 
@@ -582,111 +578,6 @@ class TestDdBinaryParser:
         # makes the separation explicit.
         assert "_parse_binary_market" in snapshot_src
 
-
-# ===========================================================================
-# 6. projection_provider — combo derived fields
-# ===========================================================================
-
-class TestNormalizeProjectionDerivedFields:
-    def test_pra_unchanged(self):
-        raw = {"Name": "Alice", "Points": 20, "Rebounds": 8, "Assists": 7}
-        out = projection_provider.normalize_projection(raw)
-        assert out["pra"] == 35.0
-
-    def test_r_a_present(self):
-        raw = {"Name": "Alice", "Rebounds": 8, "Assists": 7}
-        out = projection_provider.normalize_projection(raw)
-        assert out["r_a"] == 15.0
-
-    def test_p_r_present(self):
-        raw = {"Name": "Alice", "Points": 20, "Rebounds": 8}
-        out = projection_provider.normalize_projection(raw)
-        assert out["p_r"] == 28.0
-
-    def test_p_a_present(self):
-        raw = {"Name": "Alice", "Points": 20, "Assists": 7}
-        out = projection_provider.normalize_projection(raw)
-        assert out["p_a"] == 27.0
-
-    def test_dd_field_explicitly_absent(self):
-        # Acceptance: DD has no Phase 1 projection.
-        raw = {"Name": "Alice", "Points": 20, "Rebounds": 10, "Assists": 10}
-        out = projection_provider.normalize_projection(raw)
-        assert "dd" not in out
-
-    def test_field_goals_made_surfaces(self):
-        # FIELD_MAPPING must keep FreeThrowsMade / FieldGoalsMade.
-        raw = {"Name": "Alice", "FieldGoalsMade": 9, "FreeThrowsMade": 4}
-        out = projection_provider.normalize_projection(raw)
-        assert out["field_goals_made"] == 9
-        assert out["free_throws_made"] == 4
-
-    def test_combos_return_none_when_all_components_missing(self):
-        raw = {"Name": "Alice"}
-        out = projection_provider.normalize_projection(raw)
-        assert out["pra"] is None
-        assert out["r_a"] is None
-        assert out["p_r"] is None
-        assert out["p_a"] is None
-
-
-# ===========================================================================
-# 7. daily_analysis projection field aliases
-# ===========================================================================
-
-class TestProjectionFieldAliases:
-    def test_threes_made_aliased(self):
-        assert PROJECTION_FIELD_ALIASES["threes_made"] == "three_pointers_made"
-
-    def test_ftm_aliased(self):
-        assert PROJECTION_FIELD_ALIASES["ftm"] == "free_throws_made"
-
-    def test_fgm_aliased(self):
-        assert PROJECTION_FIELD_ALIASES["fgm"] == "field_goals_made"
-
-    def test_combos_aliased(self):
-        # ⚠ Regression guard for SPO-17: ra/pr/pa must map to r_a/p_r/p_a
-        # because normalize_projection() writes the underscored derived keys.
-        # Forgetting these aliases silently nulls `edge` and `projected_value`
-        # on every R+A / P+R / P+A pick.
-        assert PROJECTION_FIELD_ALIASES["ra"] == "r_a"
-        assert PROJECTION_FIELD_ALIASES["pr"] == "p_r"
-        assert PROJECTION_FIELD_ALIASES["pa"] == "p_a"
-
-    def test_every_supported_market_metric_resolves_in_projection(self):
-        """End-to-end alias coverage: for every (market, metric) that
-        daily_analysis flows through, a fully-populated synthetic projection
-        payload must yield a non-None value via the alias-resolved key.
-
-        💡 This is the test that *would have caught the SPO-17 bug*. Walking
-        SUPPORTED_MARKETS makes the next combo / single-stat addition fail
-        loudly the moment its alias is missing, instead of silently nulling
-        `edge` in production.
-        """
-        # Synthetic raw payload populating every component field that any
-        # SUPPORTED_MARKETS metric depends on. PascalCase keys mirror the
-        # SportsDataIO projection API (FIELD_MAPPING).
-        raw = {
-            "Name": "Alice",
-            "Points": 25,
-            "Rebounds": 8,
-            "Assists": 7,
-            "Steals": 1.5,
-            "ThreePointersMade": 3,
-            "FreeThrowsMade": 4,
-            "FieldGoalsMade": 9,
-        }
-        proj = projection_provider.normalize_projection(raw)
-
-        for market_key, metric_key in SUPPORTED_MARKETS:
-            projection_field = PROJECTION_FIELD_ALIASES.get(metric_key, metric_key)
-            value = proj.get(projection_field)
-            assert value is not None, (
-                f"market={market_key} metric={metric_key} resolved to "
-                f"projection_field={projection_field!r} but normalize_projection "
-                f"returned None — alias is missing or projection_provider does "
-                f"not expose this field."
-            )
 
 
 def _recorded_points_ou(player: str, line: float) -> list[dict]:

@@ -309,10 +309,6 @@ class TestStoredCandidates:
             "app.services.daily_analysis.cache_service.set",
             AsyncMock(),
         )
-        monkeypatch.setattr(
-            "app.services.daily_analysis.projection_service.get_projections",
-            AsyncMock(return_value={}),
-        )
         service._get_events_for_date = AsyncMock(return_value=[_recorded_event()])
 
         async def props(event_id, market_key, league="nba"):

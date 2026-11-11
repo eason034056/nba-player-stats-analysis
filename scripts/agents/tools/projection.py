@@ -1,9 +1,9 @@
 """
 projection.py – Dimension 6 stub tools.
 
-SportsDataIO feed is dummy data. All tools return 'unavailable' with zero
-weight so the deterministic scoring node never incorporates them.
-The interfaces are preserved for future activation.
+No projection source is wired. An ML model is pending. All tools return
+'unavailable' with zero weight so the deterministic scoring node never
+incorporates them. The interfaces stay for that later model.
 """
 
 from datetime import datetime, timezone
@@ -13,7 +13,7 @@ _NOW_ISO = lambda: datetime.now(timezone.utc).isoformat()
 
 _STUB = {
     "status": "unavailable",
-    "reason": "SportsDataIO data is dummy and excluded from scoring",
+    "reason": "no projection source; ML model pending",
 }
 
 
@@ -24,7 +24,7 @@ def _unavailable_signal(tool_name: str, **kwargs) -> Dict[str, Any]:
         "sample_size": 0,
         "reliability": 0.0,
         "window": "n/a",
-        "source": "sportsdataio_stub",
+        "source": "projection_stub",
         "as_of": _NOW_ISO(),
         "details": {**_STUB, "tool": tool_name, "params": kwargs},
     }

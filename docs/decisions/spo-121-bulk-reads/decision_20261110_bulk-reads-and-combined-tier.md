@@ -4,6 +4,8 @@
 - **Date:** 2026-11-10
 - **Status:** Accepted
 
+> Superseded in part by SPO-135 (2026-11-11): event reads do not look up `projections:nba:{date}`. The projection signal is missing. Defense ranks come from the game log.
+
 ## Context
 
 SPO-114 serves every posted player line for one NBA event from `odds_line_snapshots`. The game page still has no side, combined probability, tier, or signals for the players who are not on the daily-picks board.

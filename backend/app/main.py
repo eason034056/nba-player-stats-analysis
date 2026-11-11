@@ -15,7 +15,7 @@ from urllib.parse import urlsplit
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from app.api import agent, health, metrics, nba, wnba, wnba_agent, daily_picks, picks, projections, odds_history, lineups
+from app.api import agent, health, metrics, nba, wnba, wnba_agent, daily_picks, picks, odds_history, lineups
 from app.middleware.logging_config import RequestLoggingMiddleware, setup_logging
 from app.middleware.rate_limit import install_rate_limiter
 from app.dsn import mask_database_url, redact_secrets
@@ -63,8 +63,7 @@ async def lifespan(app: FastAPI):
     print(f"📊 Odds API Base URL: {settings.odds_api_base_url}")
     print(f"🔴 Redis URL: {mask_database_url(settings.redis_url)}")
     print(f"🐘 Database URL: {mask_database_url(settings.database_url)}")
-    print(f"📈 SportsDataIO: {'已設定' if settings.sportsdata_api_key else '未設定（投影功能停用）'}")
-    
+
     # 初始化 PostgreSQL 連線池。
     # init() 自己吞掉連線錯誤並把 pool 設成 None，所以這裡還要看 is_connected。
     # DATABASE_REQUIRED=true 時啟動必須失敗；預設 false，本機沒有 Postgres 仍可啟動。
@@ -80,7 +79,7 @@ async def lifespan(app: FastAPI):
                 f"Detail: {safe}"
             ) from None
         print("⚠️ PostgreSQL 初始化失敗（連線字串已遮罩，詳見 error log）")
-        print("   投影功能的持久化儲存將不可用（仍可使用 Redis 快取）")
+        print("   PostgreSQL 持久化儲存將不可用（仍可使用 Redis 快取）")
     else:
         if not db_service.is_connected:
             if settings.database_required:
@@ -91,7 +90,7 @@ async def lifespan(app: FastAPI):
                     "DATABASE_REQUIRED is true but PostgreSQL initialization did not open a pool"
                 )
             print("⚠️ PostgreSQL 初始化失敗（連線字串已遮罩，詳見 error log）")
-            print("   投影功能的持久化儲存將不可用（仍可使用 Redis 快取）")
+            print("   PostgreSQL 持久化儲存將不可用（仍可使用 Redis 快取）")
     
     # 啟動定時任務排程器
     try:
@@ -174,7 +173,6 @@ app.include_router(agent.router)
 app.include_router(wnba_agent.router)  # SPO-58 Phase 5c: WNBA agent chat
 app.include_router(daily_picks.router)  # 每日高機率球員分析
 app.include_router(picks.router)  # Discord bot AI picks API
-app.include_router(projections.router)  # 球員投影資料（SportsDataIO）
 app.include_router(odds_history.router)  # 盤口歷史快照（Line Movement Tracking）
 app.include_router(lineups.router)  # 免費先發預測共識
 

@@ -141,7 +141,7 @@ Browser (Next.js)
 * 取得單場 event 的 player props（Points）
 * 注意：player props 通常需要「單場查」的 event odds endpoint（non-featured markets），因此要設計快取與節流。
 
-> 實作上請把「外部 API 供應商」做成可替換 adapter（未來可換 Sportradar / SportsDataIO）。
+> 實作上請把「外部 API 供應商」做成可替換 adapter。NBA 投影目前沒有外部來源。
 
 ---
 

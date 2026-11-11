@@ -58,19 +58,12 @@ services:
       
       # 日誌等級
       - LOG_LEVEL=${LOG_LEVEL:-info}
-      
-      # SportsDataIO 設定
-      - SPORTSDATA_API_KEY=${SPORTSDATA_API_KEY:-}
-      - SPORTSDATA_BASE_URL=${SPORTSDATA_BASE_URL:-https://api.sportsdata.io}
-      
+
       # PostgreSQL 設定。未設定時仍連本機 compose 的 postgres。
       # 正式環境把 DATABASE_URL 指到 RDS，並設 DATABASE_REQUIRED=true。
       - DATABASE_URL=${DATABASE_URL:-postgresql://novig:novig@postgres:5432/novig_nba}
       - DATABASE_REQUIRED=${DATABASE_REQUIRED:-false}
-      
-      # 投影資料快取 TTL
-      - CACHE_TTL_PROJECTIONS=${CACHE_TTL_PROJECTIONS:-7200}
-    
+
     # 掛載 data 目錄（CSV 檔案）
     # 將主機的 data 目錄掛載到容器的 /app/data 目錄
     # 移除 :ro 只讀限制，讓容器可以下載並更新 CSV 文件

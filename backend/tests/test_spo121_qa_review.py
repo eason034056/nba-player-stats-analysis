@@ -245,7 +245,7 @@ class TestRecordedCapture:
         reads = {
             item.player: item
             for item in assemble_event_reads(
-                event_id, rows, market="player_points", projections={}
+                event_id, rows, market="player_points"
             ).reads
         }
         for pick in picks:
@@ -266,12 +266,12 @@ class TestRecordedCapture:
             if pick.combined_probability is not None
             and reads[pick.player_name].combined_probability is not None
         ]
-        assert max(gaps) == pytest.approx(0.0069, abs=0.0001)
+        assert max(gaps) == pytest.approx(0.0074, abs=0.0001)
         walker = next(pick for pick in picks if pick.player_name == "Nickeil Alexander-Walker")
-        assert walker.combined_probability == pytest.approx(0.6730)
-        assert reads[walker.player_name].combined_probability == pytest.approx(0.6661)
-        assert walker.tier == "Playable"
-        assert reads[walker.player_name].tier == "Playable"
+        assert walker.combined_probability == pytest.approx(0.6088)
+        assert reads[walker.player_name].combined_probability == pytest.approx(0.6014)
+        assert walker.tier == "Lean"
+        assert reads[walker.player_name].tier == "Lean"
 
     def test_under_pick_tier_is_from_the_under_side_blend(self):
         picks = {pick.player_name: pick for pick in _stored_picks()}
@@ -290,18 +290,15 @@ class TestReadsRoute:
         monkeypatch.setattr("app.services.event_reads.cache_service", cache)
         from app.services.odds_gateway import odds_gateway
         from app.services.odds_theoddsapi import odds_provider
-        from app.services.projection_service import projection_service
 
         spies = {
             "gateway": AsyncMock(),
             "event_odds": AsyncMock(),
             "events": AsyncMock(),
-            "projections": AsyncMock(),
         }
         monkeypatch.setattr(odds_gateway, "get_market_snapshot", spies["gateway"])
         monkeypatch.setattr(odds_provider, "get_event_odds", spies["event_odds"])
         monkeypatch.setattr(odds_provider, "get_events", spies["events"])
-        monkeypatch.setattr(projection_service, "get_projections", spies["projections"])
         return db, spies
 
     def _get(self, path, params=None):
@@ -323,7 +320,7 @@ class TestReadsRoute:
         assert self._get(base, {"market": "player_points"}).status_code == 200
         assert self._get(base, {"market": ""}).status_code == 200
 
-    def test_no_odds_api_or_sportsdata_call_on_projection_miss_or_redis_error(self, monkeypatch):
+    def test_no_odds_api_call_and_no_projection_cache_read(self, monkeypatch):
         event_id, rows = _points_rows()
         cache = _FakeCache(fail_projections=True)
         db, spies = self._patch(monkeypatch, rows, cache)
@@ -332,7 +329,7 @@ class TestReadsRoute:
         assert response.json()["reads"]
         for spy in spies.values():
             assert spy.await_count == 0
-        assert any(key.startswith("projections:nba:2026-11-09") for key in cache.gets)
+        assert not any(str(key).startswith("projections:") for key in cache.gets)
 
     def test_empty_snapshot_is_200_and_cached(self, monkeypatch):
         cache = _FakeCache()
@@ -355,7 +352,7 @@ class TestReadsRoute:
         event_id, rows = _points_rows()
         cache = _FakeCache()
         self._patch(monkeypatch, rows, cache)
-        asyncio.run(get_event_reads(event_id, market="player_points", projections={}))
+        asyncio.run(get_event_reads(event_id, market="player_points"))
         assert cache.sets == [(event_reads_cache_key(event_id, "player_points"), 60)]
 
     def test_wnba_routes_have_no_reads_endpoint(self):

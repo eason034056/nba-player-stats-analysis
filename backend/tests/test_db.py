@@ -192,7 +192,7 @@ class TestFetch:
             {"id": 1, "player_name": "Curry"},
             {"id": 2, "player_name": "LeBron"},
         ]
-        result = await db_service.fetch("SELECT * FROM player_projections WHERE date = $1", "2026-02-08")
+        result = await db_service.fetch("SELECT * FROM odds_line_snapshots WHERE date = $1", "2026-02-08")
 
         assert len(result) == 2
         assert result[0]["player_name"] == "Curry"
@@ -225,7 +225,7 @@ class TestFetchrow:
         """fetchrow() should return a single dict row."""
         fake_conn.fetchrow_return = {"id": 42, "player_name": "Doncic"}
         result = await db_service.fetchrow(
-            "SELECT * FROM player_projections WHERE id = $1", 42
+            "SELECT * FROM odds_line_snapshots WHERE id = $1", 42
         )
         assert result == {"id": 42, "player_name": "Doncic"}
         assert len(fake_conn.fetchrow_calls) == 1

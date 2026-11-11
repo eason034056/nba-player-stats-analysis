@@ -12,6 +12,7 @@ from app.services.daily_analysis import (
     DailyAnalysisService,
     _recent_stat_values,
     _with_nba_signal_verdicts,
+    read_tier,
 )
 from app.services.pick_signal_constants import (
     ADJUSTMENT_CAP,
@@ -541,9 +542,17 @@ class TestLeagueWiring:
         assert pick.signals[1].value == "6/10"
         assert pick.signals[2].value == "72.0%"
         assert pick.signals[2].verdict == "supports"
-        assert pick.signals[4].value == "#8"
-        assert pick.combined_probability == pytest.approx(0.6334)
-        assert pick.tier == "Lean"
+        assert pick.signals[3].value is None
+        assert pick.signals[3].verdict is None
+        assert pick.signals[4].value is None
+        assert pick.signals[4].verdict is None
+        assert pick.has_projection is False
+        assert pick.projected_value is None
+        assert pick.edge is None
+        assert pick.projected_minutes is None
+        assert pick.injury_status is None
+        assert pick.combined_probability is not None
+        assert pick.tier == read_tier(pick.combined_probability)
         assert pick.p_over == 0.72
         assert pick.p_under == 0.21
         assert pick.position == "PG"

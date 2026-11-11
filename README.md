@@ -85,7 +85,7 @@ Notes:
 
 - `ODDS_API_KEY` is used to fetch live odds data
 - `OPENAI_API_KEY` is needed to enable multi-agent chat/analysis features
-- `SPORTSDATA_API_KEY` is optional – you can start the project without it
+- NBA projections are not loaded. `has_projection` stays false until a model writes those fields.
 
 3. Start the backend, Redis, and PostgreSQL
 

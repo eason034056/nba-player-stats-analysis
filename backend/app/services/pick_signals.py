@@ -9,12 +9,12 @@ Every rule is relative to the pick's side (over or under).
 * ``market`` — no-vig consensus of books posted at the pick's line.
 * ``last10`` — strict hits in the last 10 non-DNP games, shown as ``k/10``.
 * ``history`` — the published historical ``probability`` for the side.
-* ``projection`` — ``projected_value``. The verdict uses the edge in the
-  side's direction. The flat ±0.5 threshold does not scale with the
-  metric's spread; that scaling is left for later.
+* ``projection`` — ``projected_value``. The slot stays in the list.
+  It is missing until a model writes a value. The verdict uses the
+  edge in the side's direction. The flat ±0.5 threshold does not scale
+  with the metric's spread; that scaling is left for later.
 * ``defense`` — ``opponent_position_rank``, then ``opponent_rank``.
-  Rank 1 is the weakest defense, which is how the number is stored:
-  ``normalize_projection`` copies SportsDataIO's field with no inversion.
+  Rank 1 is the weakest defense. The game log fills that number.
 
 ``combined_probability`` starts from the market no-vig log-odds, adds
 bounded adjustments from the other four signals, and applies Platt scaling
@@ -523,7 +523,7 @@ def build_nba_signals(
             explicitly; this function never substitutes 0.5 on its own.
         last10_values: Exactly 10 non-DNP values, or None when 10 are not available.
         history_rate: Published side rate (``DailyPick.probability``).
-        projected_value: SportsDataIO projection for this metric.
+        projected_value: Model projection for this metric. None when no model has written one.
         opponent_rank: Overall defense rank. Used only when the position rank is missing.
         opponent_position_rank: Defense rank versus the player's position. Preferred.
         injury_status: Out or Doubtful forces the combined probability to None.
