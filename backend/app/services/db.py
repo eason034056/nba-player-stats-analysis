@@ -23,9 +23,15 @@ Usage:
     await db_service.close()
 """
 
+import logging
+from urllib.parse import urlsplit
+
 import asyncpg
 from typing import Optional, Any, List
+from app.dsn import redact_secrets
 from app.settings import settings
+
+logger = logging.getLogger(__name__)
 
 
 # ==================== Table Creation SQL ====================
@@ -406,10 +412,25 @@ class DatabaseService:
 
             print("✅ PostgreSQL connection pool established, tables are ready")
 
-        except Exception as e:
-            print(f"⚠️ PostgreSQL initialization failed: {e}")
-            print("   Projections will run without persistent storage (Redis only)")
+        except Exception as exc:
+            # Log the failure without the password. main.lifespan decides
+            # whether DATABASE_REQUIRED should abort startup.
+            password = urlsplit(settings.database_url).password or ""
+            secrets = (password,) if len(password) >= 4 else ()
+            logger.error(
+                "PostgreSQL initialization failed: %s",
+                redact_secrets(str(exc), secrets),
+            )
+            pool = self._pool
             self._pool = None
+            if pool is not None:
+                try:
+                    await pool.close()
+                except Exception as close_exc:
+                    logger.error(
+                        "PostgreSQL pool close after a failed init also failed: %s",
+                        redact_secrets(str(close_exc), secrets),
+                    )
 
     async def close(self):
         """

@@ -1,0 +1,34 @@
+# Copy to terraform.tfvars and edit. terraform.tfvars is gitignored.
+# Placeholders only. Do not commit account ids, real home IPs, or any secret.
+# Region default is us-east-2. The backend is a home Mac, not a hosted box.
+
+region      = "us-east-2"
+project     = "sportslab"
+bucket_name = "sportslab-data-ACCOUNT-us-east-2"
+
+# /32 only. 0.0.0.0/0 is rejected. An empty list is allowed and removes the
+# CIDR rules. After the EC2 backend is attached to sportslab-app, set
+# allowed_cidrs = [] and apply. RDS still allows that security group.
+# Both addresses below are documentation examples (RFC 5737), not the real
+# box or the real home IP. In the gitignored terraform.tfvars, replace the
+# # box line with the real box /32 and the # mac-home line with the Mac's
+# current public IP. The update script rewrites only the mac-home line.
+allowed_cidrs = [
+  "198.51.100.10/32", # box
+  "203.0.113.10/32", # mac-home
+]
+
+# Extra security groups besides sportslab-app. The app group is always allowed.
+# rds_allowed_security_group_ids = []
+
+db_instance_class       = "db.t4g.micro"
+engine_version          = "16.15"
+allocated_storage       = 20
+max_allocated_storage   = 50
+backup_retention_period = 7
+pg_dump_retention_days  = 90
+
+tags = {
+  Project   = "sportslab"
+  ManagedBy = "terraform"
+}
