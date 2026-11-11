@@ -515,12 +515,13 @@ def _match_injury_entry(
     player: str,
     bdl_player_id: Any = None,
 ) -> Optional[Dict[str, Any]]:
-    """Pick one cached row for ``player``.
+    """Pick one injury row for ``player``.
 
-    A ``bdl_player_id`` match wins, including after a trade moved the
-    row off the CSV team. Otherwise the name must match exactly one
-    row. Two rows with the same name and no id are left unmatched so
-    the report does not attach the wrong club.
+    A caller-supplied ``bdl_player_id`` wins. Scraper rows (ESPN and
+    CBS often list the same player twice) and BDL rows that share one
+    id use the first name match. Two BDL rows with different ids, or
+    two BDL rows with the same name and no id, are left unmatched so
+    the report does not attach the wrong person.
     """
     rows = [entry for entry in entries if isinstance(entry, dict) and not entry.get("unavailable")]
     if bdl_player_id is not None:
@@ -528,8 +529,21 @@ def _match_injury_entry(
             if entry.get("bdl_player_id") == bdl_player_id:
                 return entry
     named = [entry for entry in rows if _is_same_player(entry.get("player") or "", player)]
-    if len(named) == 1:
+    if not named:
+        return None
+    bdl_rows = [entry for entry in named if "bdl_player_id" in entry or entry.get("source") == "balldontlie"]
+    if not bdl_rows:
         return named[0]
+    ids = {entry.get("bdl_player_id") for entry in bdl_rows if entry.get("bdl_player_id") is not None}
+    if len(ids) > 1:
+        return None
+    if len(ids) == 1:
+        wanted = next(iter(ids))
+        for entry in named:
+            if entry.get("bdl_player_id") == wanted:
+                return entry
+    if len(bdl_rows) == 1:
+        return bdl_rows[0]
     return None
 
 

@@ -116,8 +116,8 @@ def _mapped_status(raw_status: Any) -> str | None:
     ``Available`` is not an injury. ``Doubtful`` is stored as
     ``Questionable`` because the scorer's unresolved bucket is
     ``Questionable`` / ``Day-To-Day`` and has no ``Doubtful`` label.
-    The original word stays on ``raw_status``. This mapping is waiting
-    on Eason's written confirmation.
+    The original word stays on ``raw_status``. Eason chose this
+    mapping in the Sports Lab Lead chat on 2026-11-10 (~10:34 PM CT).
 
     A word this module does not know is not left as-is. Downstream
     treats an unknown status as healthy. A word that contains ``Out``
@@ -312,7 +312,9 @@ async def refresh_nba_injuries(
     Follows ``meta.next_cursor`` until it is missing, null, or equal to
     the cursor just requested. Stops after
     :data:`NBA_INJURIES_MAX_PAGES` pages and logs a warning when that
-    cap is what stopped the walk. Rate limits and 429 retries belong
+    cap is what stopped the walk. Hitting the cap does not write: a
+    partial list would replace a complete snapshot and the missing
+    pages would be read as healthy. Rate limits and 429 retries belong
     to ``client``. A ``ValueError`` (a page without a ``data`` list)
     logs a warning. Any other exception logs the exception type and
     not the message: a client error can echo a request header. An
@@ -351,9 +353,10 @@ async def refresh_nba_injuries(
             cursor = next_cursor
         if hit_page_cap:
             logger.warning(
-                "NBA injury refresh stopped at the %s page cap",
+                "NBA injury refresh stopped at the %s page cap; previous cache left in place",
                 NBA_INJURIES_MAX_PAGES,
             )
+            return None
         fetched_at = datetime.now(timezone.utc).isoformat()
         entries = normalize_bdl_injuries(
             rows,

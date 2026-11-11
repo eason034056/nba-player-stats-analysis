@@ -11,7 +11,7 @@ NBA product agents read the BALLDONTLIE injury cache only when `NBA_INJURY_SOURC
 
 | 檔案 | 變更 |
 |---|---|
-| `backend/app/services/nba_injuries.py` | Normalize BDL rows, page through `next_cursor` (stop on a missing, null, or repeated cursor, and at 20 pages), write `injuries:nba:latest` with a 24h TTL, and treat `fetched_at` older than 6h as stale. `entries` that is not a list is stale. An empty team map, or rows that normalize to nothing, does not write. A first page with `data: []` and a usable map stores an empty list. Unknown statuses containing `Out` become `Out`; every other unknown status becomes `Questionable`. `BdlInjuryClient` is the protocol SPO-130a will implement. A `ValueError` logs a warning. Any other refresh failure logs the exception type and not the message. Both leave the previous cache. The request-path Redis client uses a 2 second socket timeout. |
+| `backend/app/services/nba_injuries.py` | Normalize BDL rows, page through `next_cursor` (stop on a missing, null, or repeated cursor, and at 20 pages), write `injuries:nba:latest` with a 24h TTL, and treat `fetched_at` older than 6h as stale. Hitting the 20-page cap does not write. `entries` that is not a list is stale. An empty team map, or rows that normalize to nothing, does not write. A first page with `data: []` and a usable map stores an empty list. Unknown statuses containing `Out` become `Out`; every other unknown status becomes `Questionable`. `BdlInjuryClient` is the protocol SPO-130a will implement. A `ValueError` logs a warning. Any other refresh failure logs the exception type and not the message. Both leave the previous cache. The request-path Redis client uses a 2 second socket timeout. |
 | `backend/app/settings.py` | `NBA_INJURY_SOURCE` (default `espn_cbs`; `bdl` is the other allowed value; comparison is case-insensitive), `BALLDONTLIE_API_KEY` as `SecretStr`, and `NBA_INJURIES_REFRESH_MINUTES` (default 15). The job is not registered. |
 | `scripts/agents/tools/historical.py` | NBA reads the cache only when `NBA_INJURY_SOURCE` is `bdl`. `BDL` folds to `bdl`. A blank value, an unknown value, and a failure reading the setting keep `InjuriesPageFetcher` and log a warning. WNBA always keeps it. A stale, missing, or malformed cache on the `bdl` path does not default players to Healthy, including when the key is unset. Player matching prefers `bdl_player_id`, then one name on the CSV team, then one name in the whole snapshot. The caution payload includes `fetched_at`. The request-path cache client is closed with `await local.close()`. |
 | `scripts/agents/data_logger.py` | Source labels name the BALLDONTLIE cache for `NBA_INJURY_SOURCE=bdl`, and ESPN/CBS for the default and for WNBA. |
@@ -24,16 +24,16 @@ NBA product agents read the BALLDONTLIE injury cache only when `NBA_INJURY_SOURC
 
 ## Why
 
-The shared BALLDONTLIE key allows 5 requests per minute. Injury lookups happen inside a user request and can run more than once per question, so the agent must not be the caller. The injury payload has no timestamp and no history; `fetched_at` on the cache body is the clock, and entries keep `bdl_player_id`, `raw_status`, and `fetched_at` for a later history table. `Doubtful` becomes `Questionable` so the scorer's existing unresolved bucket applies, and `raw_status` keeps the original word. `Available` is dropped. The standings fixture's abbreviations already equal `NBA_TEAMS` and `TEAM_ALIASES`, so the id-to-code map is read from that file rather than typed. `NBA_INJURY_SOURCE` defaults to `espn_cbs` because the key is already deployed and the refresh job is not. The flag moves to `bdl` only after `nba_injuries_refresh` lands with SPO-130a. See `docs/decisions/SPO-131/decision_20261111_bdl-injury-cache.md`.
+The shared BALLDONTLIE key allows 5 requests per minute. Injury lookups happen inside a user request and can run more than once per question, so the agent must not be the caller. The injury payload has no timestamp and no history; `fetched_at` on the cache body is the clock, and entries keep `bdl_player_id`, `raw_status`, and `fetched_at` for a later history table. `Doubtful` becomes `Questionable` so the scorer's existing unresolved bucket applies. Eason chose that mapping in the Sports Lab Lead chat on 2026-11-10 (~10:34 PM CT). `raw_status` keeps the original word. `Available` is dropped. The standings fixture's abbreviations already equal `NBA_TEAMS` and `TEAM_ALIASES`, so the id-to-code map is read from that file rather than typed. `NBA_INJURY_SOURCE` defaults to `espn_cbs` because the key is already deployed and the refresh job is not. The flag moves to `bdl` only after `nba_injuries_refresh` lands with SPO-130a. See `docs/decisions/SPO-131/decision_20261111_bdl-injury-cache.md`.
 
 ## Tests
 
 Recorded fixtures only. No live BALLDONTLIE call.
 
 - `normalize`: 5 `Available` rows dropped, 2 `Doubtful` rows become `Questionable` with `raw_status` kept, team codes come from the standings file, and those 30 codes equal `NBA_TEAMS` and `TEAM_ALIASES`.
-- Refresh serves the recorded page and then a last page whose `next_cursor` is null, and again whose `next_cursor` is absent. A client that repeats one `next_cursor` stops on the second call. A client that never ends stops at 20 pages and logs the cap.
+- Refresh serves the recorded page and then a last page whose `next_cursor` is null, and again whose `next_cursor` is absent. A client that repeats one `next_cursor` stops on the second call. A client that never ends stops at 20 pages, logs the cap, and does not replace the previous snapshot.
 - Redis TTL is 24 hours. A body 7 hours old is still in the cache and is stale: the injury report is `caution` / `injury data unavailable` with that `fetched_at`, which is the stale path rather than a missing key.
-- A page without `data` logs a warning and keeps the previous cache. An unexpected exception logs the traceback and keeps the previous cache.
+- A page without `data` is a copy of the recorded page with `data` removed. It logs a warning and keeps the previous cache. An unexpected exception logs the exception type and not the message, and keeps the previous cache.
 - A failure on the first page, a failure on the second page, and a cache write that returns false all leave the previous snapshot in place, including a non-empty list.
 - Missing cache and a snapshot older than 6 hours are `stale`. Exactly 6 hours is not.
 - `get_official_injury_report` for one club in the fixture matches the normalized rows. The call does not open a socket, does not scrape, and does not refresh.
@@ -52,10 +52,10 @@ Recorded fixtures only. No live BALLDONTLIE call.
 
 ```
 cd backend && python -m pytest tests/test_spo131_bdl_injuries.py tests/test_spo131_qa.py -q --tb=short
-# 71 passed
+# 78 passed
 
 cd backend && python -m pytest --tb=line -q
-# 1268 passed, 26 skipped, 6 xfailed
+# 1275 passed, 26 skipped, 6 xfailed
 
 cd scripts/agents && python -m pytest tests --tb=line -q
 # 114 passed
