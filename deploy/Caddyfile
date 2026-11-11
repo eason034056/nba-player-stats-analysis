@@ -1,3 +1,5 @@
+# Not used in production. deploy/caddy-entrypoint.sh runs Caddyfile.https.
+# Kept so a local experiment can still read the old proxy timeouts.
 # Plain HTTP. Used when DOMAIN is empty.
 # No trusted_proxies: Caddy replaces X-Forwarded-For with the TCP peer
 # (the Vercel egress address, or a direct client) and drops a client-supplied

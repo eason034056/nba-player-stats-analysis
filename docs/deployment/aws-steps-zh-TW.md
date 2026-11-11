@@ -235,7 +235,7 @@ DATABASE_REQUIRED=false
 
 1. 先 apply SPO-132 的 RDS 和 S3（上面第 4 到第 8 節），遷移完成。
 2. 同一份 `infra/aws` 再 apply 這次的 EC2。
-3. 把密鑰放進 SSM，第一次把程式拉上主機，Vercel 的 `BACKEND_API_URL` 指到 `http://<EIP>`。
+3. 把密鑰放進 SSM，第一次把程式拉上主機，Vercel 的 `BACKEND_API_URL` 指到 `terraform output -raw backend_api_url`。
 4. 確認健康檢查和一筆真實讀取都打到 RDS 之後，另一次 apply 才把 RDS 改成私有。
 
 ### 變數
@@ -247,11 +247,12 @@ instance_type             = "t4g.small"
 root_volume_gb            = 30
 enable_ssh                = false
 domain                    = ""
+acme_email                = ""
 alarm_email               = ""
 enable_github_deploy_role = false
 ```
 
-`enable_ssh = false` 時 22 埠關閉。不要為了方便把它打開。要用 SSH 時才改成 `true`，而且只會放行 `allowed_cidrs` 裡的 `/32`。`domain` 先留空，Caddy 只提供 HTTP。
+`enable_ssh = false` 時 22 埠關閉。不要為了方便把它打開。要用 SSH 時才改成 `true`，而且只會放行 `allowed_cidrs` 裡的 `/32`。`domain` 留空時，主機名稱是 EIP 的點改成減號再加 `.sslip.io`。有填真實名稱就用那個名稱。`acme_email` 可以留空。
 
 ```bash
 cd infra/aws
@@ -260,6 +261,7 @@ terraform fmt -recursive
 terraform validate
 terraform plan -out=tfplan
 terraform apply tfplan
+terraform output -raw backend_api_url
 terraform output eip
 terraform output instance_id
 terraform output instance_role_arn
@@ -283,7 +285,7 @@ openssl rand -hex 32 | aws ssm put-parameter \
 
 同一個值貼進 Vercel 專案的環境變數 `VERCEL_PROXY_SECRET`。前端的 rewrite 會把它放在標頭 `x-sportslab-proxy-secret`。後端只在這把密鑰對上時，才用 `x-real-ip`（沒有的話用 `x-forwarded-for` 最左邊那個）當速率限制的 key。
 
-`PROXY_SECRET_REQUIRED` 預設是 false。`deploy/docker-compose.prod.yml` 把它釘成 `false`，這個值蓋過 env file，所以 SSM 不能自己把它打開。旗標若是 true 而且密鑰有值，除了 `GET /api/health` 和 `GET /health`，每個請求（含 `OPTIONS` 和 SSE）都要帶對的 `x-sportslab-proxy-secret`，否則回 403。旗標是 true 但密鑰是空的，行程拒絕啟動。健康檢查留著，是因為 healthcheck 和 `deploy/remote-up.sh` 打 `/api/health` 時不帶標頭。沒有另外的 readiness 路由。
+`PROXY_SECRET_REQUIRED` 預設是 false。`deploy/docker-compose.prod.yml` 把它釘成 `false`，這個值蓋過 env file，所以 SSM 不能自己把它打開。旗標若是 true 而且密鑰有值，除了 `GET /api/health` 和 `GET /health`，每個請求（含 `OPTIONS` 和 SSE）都要帶對的 `x-sportslab-proxy-secret`，否則回 403。旗標是 true 但密鑰是空的，行程拒絕啟動。健康檢查留著。compose 的 healthcheck 和 `deploy/remote-up.sh` 打的是容器裡面的 `http://127.0.0.1:8000/api/health`，不經過 Caddy。外面用 `http://` 打 `/health` 會被轉到 HTTPS。沒有另外的 readiness 路由。
 
 現在不要打開。這個 repo 的 `frontend/lib/api.ts` 仍用 `NEXT_PUBLIC_API_URL`（沒有就用 `http://localhost:8000`）在瀏覽器直接打後端，`frontend/next.config.js` 也把那個變數暴露給瀏覽器。沒有 `EventSource`。這些請求不經過 Vercel 的伺服器代理，現在打開檢查會把目前的畫面全部擋下來。這是先接受的風險。Frontend #63 的 `7c034de` 才改成同源 `/api/backend`，由 `frontend/middleware.ts` 轉到 `BACKEND_API_URL` 並帶密鑰。等 Vercel 跑的是那一版，再把 compose 那一行改成 `"true"` 然後重新部署後端。#63 的瀏覽器若發 CORS preflight，對象是 Next.js，不是 EC2。後端在旗標打開時仍會對直接來的 `OPTIONS` 回 403。
 
@@ -296,8 +298,6 @@ openssl rand -hex 32 | aws ssm put-parameter \
 `DATABASE_URL` 要帶 `sslmode=verify-full`，`sslrootcert` 指到容器裡的 `/app/certs/global-bundle.pem`。主機第一次開機會把公開的 RDS CA 下載到 `/opt/sportslab/certs/global-bundle.pem`。
 
 輪替 `VERCEL_PROXY_SECRET`：先在 Vercel 和 SSM 設好新值，然後再部署兩邊。主機上是 `deploy/pull-ssm-env.sh` 再 `docker compose up -d`。旗標仍是 false 時，對不上只會改速率限制的 key。等旗標改成 true，兩邊不一致的那段時間，健康檢查以外的請求會回 403。新值不要進 git 或聊天。載入時會去掉密鑰前後的空白。`x-real-ip` 優先於 `X-Forwarded-For`，因為 Caddy 會把 `X-Forwarded-For` 換成出口位址，而 #63 把瀏覽器位址放在 `x-real-ip`。
-
-在有網域之前，Vercel 到 EC2 是明文 HTTP，這個標頭也走在那段路上。這是已知且接受的風險。
 
 ### 第一次部署
 
@@ -318,19 +318,38 @@ sudo git checkout --detach --force FETCH_HEAD
 sudo deploy/remote-up.sh <git-sha>
 ```
 
-看到 `healthy` 就表示 Caddy 後面的 `/api/health` 過了。腳本不會印出密鑰。
+看到 `healthy` 表示後端容器自己的 `/api/health` 過了。腳本不打 80 埠，也不印出密鑰。
 
-Vercel 專案設定 `BACKEND_API_URL=http://<EIP>`，不要加路徑。`<EIP>` 是 `terraform output -raw eip`。
+在 Vercel 的 Production 和 Preview 都設定：
 
-### 換網域
+- `BACKEND_API_URL` 等於 `terraform output -raw backend_api_url`，不要加路徑。`domain` 留空時這是 `https://<EIP 的點改成減號>.sslip.io`。
+- `VERCEL_PROXY_SECRET` 等於 SSM 裡同一把密鑰。
 
-1. DNS 的 A 記錄指到 EIP。
-2. `terraform.tfvars` 的 `domain` 改成主機名稱，不要加 `https://`。
-3. 主機上的 `/etc/sportslab/caddy.env` 寫 `DOMAIN=那個名稱`。user data 只在第一次開機寫這個檔。
-4. 重啟 compose。Caddy 會自己申請憑證。80 和 443 已經開放。
-5. Vercel 的 `BACKEND_API_URL` 改成 `https://<domain>`，仍然不要加路徑。
+然後重新部署前端。在這台 Mac 確認憑證：
 
-在這之前，Vercel 伺服器轉送到 `http://<EIP>` 沒有 TLS。
+```bash
+curl -I https://<backend_api_url 的主機>/health
+```
+
+200 表示憑證和後端都好了。用 `http://` 打同一條路徑會被轉到 `https://`。
+
+`aws_eip.app` 用 `domain = "vpc"` 單獨建立，不寫 `instance`。`public_ip` 在位址建立時就有。instance 的 user data 讀 `local.backend_hostname`。`aws_eip_association.app` 再把位址掛上 instance。位址資源不依賴 instance，所以 user data 和 EIP 不會互相卡住。
+
+### 憑證和速率限制
+
+正式環境用 `deploy/Caddyfile.https`。主機名稱那段反向代理到後端，`flush_interval -1`，讀取逾時 125 秒。唯一的 `http://` 站點只做重新導向，而且排除 `/.well-known/acme-challenge/`。80 埠給 ACME HTTP-01 和導向，443 埠給 HTTPS。憑證放在 `caddy_data` volume。`docker compose up` 不會刪這個 volume，重新部署不會再申請一張新憑證。不要跑 `docker compose down -v`。
+
+Let's Encrypt 的速率限制頁，2026-08-05 更新，寫註冊網域是用 Public Suffix List 判斷的，每個註冊網域每 7 天最多 50 張新憑證，而且所有帳號一起算。同一組名稱每 7 天最多 5 張。2026-11-11 抓下來的 `https://publicsuffix.org/list/public_suffix_list.dat` 沒有 `sslip.io`。以這兩份資料，`203-0-113-10.sslip.io` 這種名稱算在註冊網域 `sslip.io` 底下，和其他 sslip.io 名稱共用那 50 張。這次沒有看到 Let's Encrypt 另外點名 sslip.io 的頁面。若以後清單把 `sslip.io` 加進去，每個主機名稱會變成自己的註冊網域。那件事現在不能當成已經發生。
+
+申請失敗時，Caddy 的 automatic HTTPS 文件寫：先重試一次，再換下一種驗證，然後換下一個發行者。預設是 Let's Encrypt，接著 ZeroSSL。兩邊都失敗就退避，最多一天試一次，最長 30 天。對 Let's Encrypt 重試時也會改打 staging。留著 `caddy_data`，看 `docker logs sportslab-caddy`。刪掉 volume 會再花掉「同一組名稱」那 5 張裡的額度。`curl -I` 成功之前不要改 Vercel。
+
+### 換真實網域
+
+1. DNS 的 A 記錄指到 `terraform output -raw eip`。
+2. `terraform.tfvars` 的 `domain` 改成主機名稱，不要加 `https://`。可以 apply，也可以不 apply，直接改主機上的檔。user data 只在第一次開機寫 `/etc/sportslab/caddy.env`。
+3. 主機上的那個檔把 `DOMAIN=` 改成同一個名稱。
+4. `docker compose -f deploy/docker-compose.prod.yml up -d`。舊憑證留在 `caddy_data`，新名稱會另外申請。
+5. Vercel 的 Production 和 Preview 把 `BACKEND_API_URL` 改成 `https://<domain>`，不要加路徑，然後重新部署前端。
 
 ### 把 RDS 收成私有（另外一步）
 

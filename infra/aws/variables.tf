@@ -244,11 +244,22 @@ variable "enable_ssh" {
 variable "domain" {
   type        = string
   default     = ""
-  description = "Bare hostname for Caddy automatic HTTPS. Empty serves plain HTTP on the Elastic IP. No scheme and no path."
+  description = "Bare hostname for Caddy. Empty derives <eip-with-dashes>.sslip.io from the Elastic IP. A non-empty value wins. No scheme and no path."
 
   validation {
     condition     = var.domain == "" || can(regex("^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?(\\.[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?)+$", var.domain))
     error_message = "domain must be empty or a bare hostname such as api.example.com."
+  }
+}
+
+variable "acme_email" {
+  type        = string
+  default     = ""
+  description = "Optional contact email for the ACME account. Empty omits the Caddy email option. Let's Encrypt still issues without it."
+
+  validation {
+    condition     = var.acme_email == "" || can(regex("^[^@[:space:]]+@[^@[:space:]]+\\.[^@[:space:]]+$", var.acme_email))
+    error_message = "acme_email must be empty or a single email address."
   }
 }
 

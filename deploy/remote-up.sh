@@ -50,7 +50,10 @@ docker compose -f deploy/docker-compose.prod.yml up -d --remove-orphans
 
 i=0
 while [ "$i" -lt 30 ]; do
-  if curl -fsS http://127.0.0.1/api/health >/dev/null; then
+  # Inside the backend container. Port 80 on the host redirects to HTTPS,
+  # including /health, so this check does not go through Caddy.
+  if docker compose -f deploy/docker-compose.prod.yml exec -T backend \
+    curl -fsS http://127.0.0.1:8000/api/health >/dev/null; then
     echo "healthy"
     exit 0
   fi

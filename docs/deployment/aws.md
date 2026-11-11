@@ -131,7 +131,7 @@ Terraform adds, on top of the RDS and S3 stack:
 - The existing `sportslab-app` security group. TCP 80 and 443 are open to the internet. TCP 22 is closed unless `enable_ssh = true`, and then only from `allowed_cidrs`. 8000 and 6379 are not published.
 - An instance role (`terraform output instance_role_arn`). Managed policies are `AmazonSSMManagedInstanceCore` and `CloudWatchAgentServerPolicy`. S3 is the same prefix policy as the runtime user (list, get, put; no delete). SSM `GetParameter`, `GetParameters`, and `GetParametersByPath` are limited to `/sportslab/prod` and `/sportslab/prod/*`. `kms:Decrypt` is only via `ssm.<region>.amazonaws.com` and only when the encryption context parameter ARN is under `/sportslab/prod/`. No access keys are created.
 - A system-status alarm that recovers the instance, a CloudWatch agent config for disk and memory, and a disk alarm at 80%. `alarm_email` empty skips the SNS topic. A non-empty value creates an email subscription that stays pending until the inbox confirms it.
-- `domain` default empty. User data writes it to `/etc/sportslab/caddy.env`. Changing it later does not replace the instance. Edit that file and restart Caddy, or replace the instance on purpose.
+- `domain` default empty. Empty derives `<eip-with-dashes>.sslip.io` from the Elastic IP. A non-empty hostname wins. User data writes `DOMAIN` and the optional `ACME_EMAIL` to `/etc/sportslab/caddy.env` on first boot only. Changing either later does not replace the instance. Edit that file and recreate the Caddy container.
 - `enable_github_deploy_role` default false. When true, `github_repository` must be `owner/name`. The role can `ssm:SendCommand` only to this instance. Output `github_deploy_role_arn`.
 
 `terraform plan` and `terraform apply` are Eason's commands. They are not part of CI.
@@ -152,7 +152,7 @@ openssl rand -hex 32 | aws ssm put-parameter \
 
 `openssl rand -hex 32` runs on the Mac. The same secret goes in the Vercel project environment as `VERCEL_PROXY_SECRET`. Frontend's rewrite sends it as the header `x-sportslab-proxy-secret`. The header name is `PROXY_SECRET_HEADER` in `backend/app/middleware/rate_limit.py`.
 
-`PROXY_SECRET_REQUIRED` defaults to false. `deploy/docker-compose.prod.yml` pins it to `false`, and that compose value wins over `/etc/sportslab/backend.env`, so an SSM parameter cannot turn the check on by itself. When the flag is true and `VERCEL_PROXY_SECRET` is set, every request except the health routes requires a matching `x-sportslab-proxy-secret`. A missing, blank, or wrong header is HTTP 403. That includes `OPTIONS` and any SSE route, because the check runs before the route. The process refuses to start when the flag is true and the secret is empty. `GET /api/health` and `GET /health` stay open because the compose healthcheck and `deploy/remote-up.sh` call `/api/health` without the header. There is no separate readiness route.
+`PROXY_SECRET_REQUIRED` defaults to false. `deploy/docker-compose.prod.yml` pins it to `false`, and that compose value wins over `/etc/sportslab/backend.env`, so an SSM parameter cannot turn the check on by itself. When the flag is true and `VERCEL_PROXY_SECRET` is set, every request except the health routes requires a matching `x-sportslab-proxy-secret`. A missing, blank, or wrong header is HTTP 403. That includes `OPTIONS` and any SSE route, because the check runs before the route. The process refuses to start when the flag is true and the secret is empty. `GET /api/health` and `GET /health` stay open. The compose healthcheck and `deploy/remote-up.sh` call `http://127.0.0.1:8000/api/health` inside the backend container, so they do not hit Caddy. A public request to `http://<hostname>/health` is redirected to HTTPS. There is no separate readiness route.
 
 The flag stays off on this host. `frontend/lib/api.ts` in this repository still builds every browser call as `process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000"` plus the path, and `frontend/next.config.js` exposes `NEXT_PUBLIC_API_URL` to the browser. There is no `EventSource`. Those calls do not go through the Vercel server proxy, so requiring the header now would reject the current UI. That is an accepted risk until Vercel serves Frontend #63 at `7c034de`. That revision replaces the client base URL with the same-origin `/api/backend` prefix. `frontend/middleware.ts` there matches `/api/backend/:path*` and forwards to `BACKEND_API_URL` with the secret. `BACKEND_API_URL` has no `NEXT_PUBLIC_` prefix. After that frontend is what Vercel serves, change the compose line to `"true"` and redeploy the backend. A CORS preflight from the #63 browser, if one is sent, is for the Next.js origin. This backend still answers a direct `OPTIONS` with 403 when the flag is on.
 
@@ -177,7 +177,7 @@ To rotate `VERCEL_PROXY_SECRET`: set the new secret on Vercel and in SSM, then r
 
 ### First deploy
 
-1. Apply the Terraform stack. Read `eip`, `instance_id`, and `instance_role_arn`.
+1. Apply the Terraform stack. Read `backend_api_url`, `eip`, `instance_id`, and `instance_role_arn`.
 2. Store the SecureStrings, including `DATABASE_URL` and `VERCEL_PROXY_SECRET`.
 3. Connect with Session Manager (no SSH key):
 
@@ -196,27 +196,49 @@ sudo git checkout --detach --force FETCH_HEAD
 sudo deploy/remote-up.sh <git-sha>
 ```
 
-`remote-up.sh` pulls `/sportslab/prod/*`, pulls the GHCR image, and starts compose. It prints `healthy` after `http://127.0.0.1/api/health` succeeds. It does not print secrets.
+`remote-up.sh` pulls `/sportslab/prod/*`, pulls the GHCR image, and starts compose. It prints `healthy` after the backend container answers `http://127.0.0.1:8000/api/health`. It does not print secrets and it does not call port 80.
 
-5. In the Vercel project, set `BACKEND_API_URL` to `http://<eip>` with no path. That is the stable origin the rewrite calls.
+5. Read the origin and point Vercel at it. Do this for Production and Preview:
 
-### Plain HTTP until a domain exists
+```bash
+terraform output -raw backend_api_url
+```
 
-`domain` is empty, so Caddy serves `http://:80` and reverse-proxies to the backend. There is no TLS certificate on a bare IP. Vercel's server-side rewrite to `http://<eip>` is unencrypted. The proxy secret header travels on that hop too. This is an accepted known risk until a hostname exists. Do not treat the header as hidden from the network path.
+Set `BACKEND_API_URL` to that value. It looks like `https://203-0-113-10.sslip.io` when `domain` is empty, with dots in the Elastic IP replaced by hyphens. No path. Set `VERCEL_PROXY_SECRET` to the same value stored in SSM, then redeploy the frontend. Check the certificate from the Mac:
 
-### Switching to a domain
+```bash
+curl -I https://203-0-113-10.sslip.io/health
+```
+
+Use the hostname from the output, not this example. A 200 means Caddy has a certificate and the backend answered. A redirect from `http://` to `https://` on that path is expected. The deploy workflow uses `remote-up.sh`, which checks the container address instead of this public URL, because port 80 redirects before the certificate is required for the script to pass.
+
+`aws_eip.app` is created with `domain = "vpc"` and does not set `instance`. `public_ip` is known as soon as the address exists. The instance user data reads `local.backend_hostname`, which uses that address when `var.domain` is empty. `aws_eip_association.app` attaches the address after the instance exists. The address resource does not depend on the instance, so user data and the Elastic IP are not a cycle.
+
+### sslip.io and certificates
+
+`deploy/Caddyfile.https` is the production config. The hostname block reverse-proxies to `backend:8000` with `flush_interval -1` and 125 second timeouts. The only `http://` site redirects to HTTPS, and it skips `/.well-known/acme-challenge/` so HTTP-01 is not redirected. Port 80 is open for that challenge and for the redirect. Port 443 is open for HTTPS. No other inbound port is open unless `enable_ssh` is true.
+
+Caddy stores the certificate in the `caddy_data` volume. `docker compose up` does not remove that volume, so a redeploy renews instead of asking for a new certificate. Do not run `docker compose down -v`.
+
+`acme_email` is optional. Empty leaves the Caddy `email` option out. Let's Encrypt issues either way. A non-empty value is written to `/etc/sportslab/caddy.env` as `ACME_EMAIL` and the entrypoint inserts it.
+
+Let's Encrypt's rate-limit page, updated 2026-08-05, says a registered domain is the registrar name identified with the Public Suffix List, and that up to 50 new certificates per registered domain are issued every 7 days. That limit is global across accounts. The same page says up to 5 certificates are issued for one exact set of identifiers every 7 days. The public suffix list fetched from `https://publicsuffix.org/list/public_suffix_list.dat` on 2026-11-11 does not contain `sslip.io`. Under those two sources, `203-0-113-10.sslip.io` counts against the registered domain `sslip.io`, shared with every other `sslip.io` hostname. There is no Let's Encrypt page in this check that names `sslip.io` itself. If the public suffix list later adds `sslip.io`, each hostname would be its own registered domain. That later change is not something this page can confirm.
+
+If issuance fails, Caddy's automatic HTTPS docs say it retries once, tries the next challenge type, then tries the next issuer. The default issuers are Let's Encrypt and then ZeroSSL. If both fail, it backs off, at most one day between attempts, for up to 30 days. During Let's Encrypt retries it also tries the staging environment. Leave `caddy_data` in place and read `docker logs sportslab-caddy`. Deleting the volume spends another certificate from the exact-set limit. Do not change Vercel until `curl -I https://<hostname>/health` succeeds.
+
+### Switching to a real domain
 
 1. Create a DNS A record for the hostname pointing at `terraform output -raw eip`.
-2. Set `domain` in `terraform.tfvars` to that bare hostname (no `https://`).
-3. On the instance, set `DOMAIN=` in `/etc/sportslab/caddy.env` to the same hostname. User data writes this file only on first boot.
-4. `docker compose -f deploy/docker-compose.prod.yml up -d` so Caddy reloads. With `DOMAIN` set, Caddy uses automatic HTTPS on 443 and answers on 80. Ports 80 and 443 are already open.
-5. Change Vercel `BACKEND_API_URL` to `https://<domain>` with no path.
+2. Set `domain` in `terraform.tfvars` to that bare hostname (no `https://`). Apply, or skip the apply and edit the host file in the next step. User data does not rewrite `/etc/sportslab/caddy.env` on a reboot.
+3. On the instance, set `DOMAIN=` in `/etc/sportslab/caddy.env` to the same hostname.
+4. `docker compose -f deploy/docker-compose.prod.yml up -d` so Caddy loads the new name. The old certificate stays in `caddy_data` until it expires. The new name gets its own certificate.
+5. Change Vercel `BACKEND_API_URL` on Production and Preview to `https://<domain>` with no path, and redeploy the frontend.
 
 ### Cutover order
 
 1. Apply the SPO-132 stack (RDS and S3), then this EC2 change in the same `infra/aws` directory.
 2. Run the RDS migration in the section above. The Mac and the box can still open 5432.
-3. Deploy the EC2 host and point Vercel `BACKEND_API_URL` at `http://<eip>`. Confirm `/api/health` and a real read against RDS.
+3. Deploy the EC2 host and point Vercel `BACKEND_API_URL` at `terraform output -raw backend_api_url`. Confirm `curl -I https://<hostname>/health` and a real read against RDS.
 4. As a separate later apply, make RDS private: `allowed_cidrs = []` and `publicly_accessible = false`. RDS still allows the app security group, so the instance keeps its connection. Do not do this before the host is the only client that must reach the database.
 
 After step 4, a Mac or the box reaches Postgres through the instance:
@@ -235,7 +257,7 @@ Then connect to `127.0.0.1:5432`. The security group does not need the Mac's IP.
 
 Vercel calls this API from its own egress addresses. slowapi no longer keys only on that address. If `VERCEL_PROXY_SECRET` is non-empty and `x-sportslab-proxy-secret` matches it, the key is `x-real-ip`, or else the left-most `x-forwarded-for` entry, after `ipaddress` accepts it. Any other case uses `request.client.host`.
 
-On this host that host is not the Caddy container. uvicorn `--proxy-headers` rewrites `request.client` from `X-Forwarded-For` before the key function runs, and only when the TCP peer is exactly `172.30.133.10`. `--forwarded-allow-ips` is that address, not `*` and not the subnet. Caddy does not set `trusted_proxies`, so it replaces `X-Forwarded-For` with the single TCP peer it accepted: a Vercel egress address, or a client that connected to port 80. A client cannot spoof that value by sending their own `X-Forwarded-For`. The subnet `172.30.133.0/24` is pinned so `172.30.133.10` stays on Caddy. The backend port is not published. If `trusted_proxies` is added later, Caddy would keep the client-supplied chain, and this path has to be reviewed again.
+On this host that host is not the Caddy container. uvicorn `--proxy-headers` rewrites `request.client` from `X-Forwarded-For` before the key function runs, and only when the TCP peer is exactly `172.30.133.10`. `--forwarded-allow-ips` is that address, not `*` and not the subnet. Caddy does not set `trusted_proxies`, so it replaces `X-Forwarded-For` with the single TCP peer it accepted: a Vercel egress address, or a client that connected to port 80 or 443. A client cannot spoof that value by sending their own `X-Forwarded-For`. The subnet `172.30.133.0/24` is pinned so `172.30.133.10` stays on Caddy. The backend port is not published. If `trusted_proxies` is added later, Caddy would keep the client-supplied chain, and this path has to be reviewed again.
 
 With `PROXY_SECRET_REQUIRED=true`, a request that fails the secret check is 403 before the route runs, including `OPTIONS` and a streaming response. The slowapi middleware is outside that check, so the 403 still counts toward the limit. `/api/health` and `/health` do not require the header. `x-real-ip` is the key when the secret matches, ahead of `X-Forwarded-For`, because Caddy replaces `X-Forwarded-For` with the egress address while the frontend sets `x-real-ip` to the browser address.
 

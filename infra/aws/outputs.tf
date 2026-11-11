@@ -24,8 +24,13 @@ output "instance_id" {
 }
 
 output "eip" {
-  description = "Elastic IP of the backend. BACKEND_API_URL is http://<this> until domain is set. No password."
+  description = "Elastic IP attached to the backend. When domain is empty, backend_api_url is derived from this address. No password."
   value       = aws_eip.app.public_ip
+}
+
+output "backend_api_url" {
+  description = "HTTPS origin for Vercel BACKEND_API_URL. No path and no password."
+  value       = "https://${local.backend_hostname}"
 }
 
 output "instance_role_arn" {

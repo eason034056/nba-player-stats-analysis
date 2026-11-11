@@ -60,6 +60,23 @@ async def health_check() -> HealthResponse:
     )
 
 
+# Same check without the /api prefix. curl -I https://<host>/health uses this.
+# Caddy redirects plain HTTP, so this route is only reached over HTTPS or
+# from inside the backend container.
+root_router = APIRouter(tags=["health"])
+
+
+@root_router.get(
+    "/health",
+    response_model=HealthResponse,
+    summary="Health Check",
+    include_in_schema=False,
+)
+async def root_health() -> HealthResponse:
+    """GET /health. Same body as GET /api/health."""
+    return await health_check()
+
+
 @router.post(
     "/trigger-csv-download",
     summary="Manually Trigger CSV Download",

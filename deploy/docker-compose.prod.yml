@@ -17,10 +17,12 @@ services:
       - "443:443"
     environment:
       DOMAIN: ${DOMAIN:-}
+      ACME_EMAIL: ${ACME_EMAIL:-}
     volumes:
-      - ./Caddyfile:/etc/caddy/Caddyfile:ro
       - ./Caddyfile.https:/etc/caddy/Caddyfile.https:ro
       - ./caddy-entrypoint.sh:/usr/local/bin/caddy-entrypoint.sh:ro
+      # Certificate storage. docker compose up does not delete this volume,
+      # so a redeploy renews instead of requesting a new certificate.
       - caddy_data:/data
       - caddy_config:/config
     entrypoint: ["/bin/sh", "/usr/local/bin/caddy-entrypoint.sh"]

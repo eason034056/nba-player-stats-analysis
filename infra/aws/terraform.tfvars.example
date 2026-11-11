@@ -33,11 +33,13 @@ tags = {
   ManagedBy = "terraform"
 }
 
-# EC2 backend. Defaults match the variables. domain empty means HTTP on the EIP.
+# EC2 backend. Defaults match the variables.
+# domain empty derives <eip-with-dashes>.sslip.io. A real hostname wins.
 instance_type   = "t4g.small"
 root_volume_gb  = 30
 enable_ssh      = false
 domain          = ""
+acme_email      = ""
 alarm_email     = ""
 
 # Leave false until the repository name is set. No static deploy keys are created.

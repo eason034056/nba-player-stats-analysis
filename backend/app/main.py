@@ -164,6 +164,7 @@ install_rate_limiter(app)
 # include_router: 將路由器的所有端點加入應用
 # 這樣組織代碼可以讓不同功能模組分開管理
 app.include_router(health.router)
+app.include_router(health.root_router)
 app.include_router(metrics.router)
 app.include_router(nba.router)
 app.include_router(wnba.router)  # SPO-32 Phase 1: WNBA CSV + read-only stats

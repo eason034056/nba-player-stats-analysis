@@ -634,3 +634,88 @@ class TestPullSsmEnv:
         assert secret not in result.stdout + result.stderr
         assert "ssm get-parameters-by-path failed" in result.stderr
         assert not dest.exists()
+
+
+def _caddy_sites(text: str) -> list[tuple[str, str]]:
+    """Top-level site blocks. The global options block is not a site."""
+    lines = text.splitlines()
+    sites: list[tuple[str, str]] = []
+    index = 0
+    while index < len(lines):
+        stripped = lines[index].strip()
+        if not stripped or stripped.startswith("#"):
+            index += 1
+            continue
+        if stripped == "{":
+            depth = 1
+            index += 1
+            while index < len(lines) and depth:
+                depth += lines[index].count("{") - lines[index].count("}")
+                index += 1
+            continue
+        if stripped.endswith("{"):
+            address = stripped[:-1].strip()
+            body: list[str] = []
+            depth = 1
+            index += 1
+            while index < len(lines) and depth:
+                depth += lines[index].count("{") - lines[index].count("}")
+                if depth:
+                    body.append(lines[index])
+                index += 1
+            sites.append((address, "\n".join(body)))
+            continue
+        index += 1
+    return sites
+
+
+class TestHttpsCaddy:
+    def test_rendered_caddyfile_redirects_http_and_proxies_https(self) -> None:
+        host = "203-0-113-10.sslip.io"
+        raw = (REPO / "deploy" / "Caddyfile.https").read_text(encoding="utf-8")
+        rendered = raw.replace("{$DOMAIN}", host)
+        assert host in rendered
+        assert "flush_interval -1" in rendered
+        assert "read_timeout 125s" in rendered
+        sites = _caddy_sites(rendered)
+        assert [address for address, _body in sites] == [host, f"http://{host}"]
+        https_body = sites[0][1]
+        redirect_body = sites[1][1]
+        assert "reverse_proxy backend:8000" in https_body
+        assert "redir" in redirect_body
+        assert "reverse_proxy" not in redirect_body
+        http_sites = [address for address, _body in sites if address.startswith("http://")]
+        assert http_sites == [f"http://{host}"]
+
+    def test_entrypoint_refuses_plain_http(self) -> None:
+        text = (REPO / "deploy" / "caddy-entrypoint.sh").read_text(encoding="utf-8")
+        assert "Caddyfile.https" in text
+        assert "DOMAIN is empty" in text
+        assert "Caddyfile --adapter" not in text
+
+    def test_backend_api_url_is_https(self) -> None:
+        outputs = (REPO / "infra" / "aws" / "outputs.tf").read_text(encoding="utf-8")
+        ec2 = (REPO / "infra" / "aws" / "ec2.tf").read_text(encoding="utf-8")
+        assert 'output "backend_api_url"' in outputs
+        assert 'value       = "https://${local.backend_hostname}"' in outputs
+        expression = (
+            'var.domain != "" ? var.domain : '
+            '"${replace(aws_eip.app.public_ip, ".", "-")}.sslip.io"'
+        )
+        assert expression in ec2
+        assert "resource \"aws_eip_association\" \"app\"" in ec2
+        eip = ec2.split("resource \"aws_eip\" \"app\"", 1)[1].split("resource ", 1)[0]
+        assert "instance" not in eip
+        sample = "203.0.113.10"
+        hostname = sample.replace(".", "-") + ".sslip.io"
+        assert f"https://{hostname}" == "https://203-0-113-10.sslip.io"
+        real = "api.example.com"
+        chosen = real if real != "" else hostname
+        assert chosen == real
+        assert f"https://{chosen}" == "https://api.example.com"
+
+    def test_root_health_answers(self) -> None:
+        with TestClient(app) as client:
+            response = client.get("/health")
+        assert response.status_code == 200
+        assert response.json()["ok"] is True

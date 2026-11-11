@@ -9,17 +9,17 @@
 
 The backend host is one EC2 instance in us-east-2, described in the existing `infra/aws` stack and started with Docker Compose. Caddy, FastAPI, and Redis run on the host. The scheduler stays in the API process. Postgres stays on RDS. Images are pulled from GHCR. Eason applies Terraform himself. Nothing here calls AWS.
 
-Vercel rewrites share one egress address, so slowapi now trusts `x-real-ip` only when `x-sportslab-proxy-secret` matches `VERCEL_PROXY_SECRET`. Agent chat returns 504 at 100 seconds so the 120 second rewrite limit is not the thing that cuts the response.
+Vercel rewrites share one egress address, so slowapi now trusts `x-real-ip` only when `x-sportslab-proxy-secret` matches `VERCEL_PROXY_SECRET`. The public origin is HTTPS. An empty `domain` becomes `<eip-with-dashes>.sslip.io`. A set `domain` wins. Output `backend_api_url` is `https://<hostname>`. Agent chat returns 504 at 100 seconds so the 120 second rewrite limit is not the thing that cuts the response.
 
 ## Changes
 
 | Area | File | Change |
 |---|---|---|
 | Terraform | `infra/aws/ec2.tf`, `cloudwatch.tf`, `github_oidc.tf`, `iam.tf`, `variables.tf`, `outputs.tf`, `network.tf`, `terraform.tfvars.example`, `README.md` | t4g.small (variable), AL2023 arm64 from the SSM public AMI, 30 GB encrypted gp3, IMDSv2, Elastic IP, app security group ingress 80/443, SSH only when `enable_ssh` is true and only from `allowed_cidrs`. Instance role: SSM core, CloudWatch agent, S3 prefixes, `ssm:GetParameter(s)ByPath` and `kms:Decrypt` on `/sportslab/prod/*`. No static keys. Status-check recover alarm, disk alarm at 80%, optional `alarm_email`. GitHub OIDC deploy role is off unless `enable_github_deploy_role` is true. |
-| Host | `deploy/user-data.sh.tftpl`, `deploy/cloudwatch-agent.json`, `deploy/docker-compose.prod.yml`, `deploy/Caddyfile`, `deploy/Caddyfile.https`, `deploy/caddy-entrypoint.sh`, `deploy/pull-ssm-env.sh`, `deploy/remote-up.sh` | User data installs Docker, Compose v2.29.7, the CloudWatch agent, and json-file log rotation. Compose runs Caddy, the backend (scheduler in-process, 1 GiB limit), and Redis 100mb allkeys-lru. No database container and no published 8000 or 6379. Caddy is HTTP on :80 until `DOMAIN` is set, then automatic HTTPS. Read timeout 125s and `flush_interval -1`. uvicorn trusts only Caddy at `172.30.133.10` on subnet `172.30.133.0/24`. The env script writes mode 600 and does not print values. |
+| Host | `deploy/user-data.sh.tftpl`, `deploy/cloudwatch-agent.json`, `deploy/docker-compose.prod.yml`, `deploy/Caddyfile.https`, `deploy/caddy-entrypoint.sh`, `deploy/pull-ssm-env.sh`, `deploy/remote-up.sh` | User data installs Docker, Compose v2.29.7, the CloudWatch agent, and json-file log rotation. Compose runs Caddy, the backend (scheduler in-process, 1 GiB limit), and Redis 100mb allkeys-lru. No database container and no published 8000 or 6379. Caddyfile.https is the prod config: automatic HTTPS, HTTP only redirects, `caddy_data` keeps the certificate. Read timeout 125s and `flush_interval -1`. uvicorn trusts only Caddy at `172.30.133.10` on subnet `172.30.133.0/24`. The env script writes mode 600 and does not print values. |
 | Workflow | `.github/workflows/deploy-backend.yml` | `workflow_dispatch` only. Exits before build unless `DEPLOY_ENABLED` is `true`. Builds linux/arm64 and pushes to GHCR, then SSM `AWS-RunShellScript`. OIDC role, no static keys. Push to `master` is documented and not enabled. There is no `main`. |
 | API | `backend/app/settings.py`, `backend/app/main.py`, `backend/app/api/agent.py`, `backend/app/api/wnba_agent.py`, `backend/app/api/agent_deadline.py`, `backend/app/middleware/rate_limit.py`, `backend/app/middleware/event_stream.py`, `docker-compose.yml`, `env.example` | `CORS_ALLOWED_ORIGINS` with `ALLOWED_ORIGINS` as the alias, `CORS_ALLOWED_ORIGIN_REGEX` for `allow_origin_regex`, `*` rejected. `VERCEL_PROXY_SECRET` is a SecretStr. The slowapi key uses the forwarded client IP only after `hmac.compare_digest` on `x-sportslab-proxy-secret`. Agent chat 504 at 100s. Event-stream responses get `Cache-Control: no-cache, no-transform`. |
-| Docs | `docs/deployment/aws.md`, `docs/deployment/aws-steps-zh-TW.md` | EC2 apply, SSM SecureString, first deploy, Session Manager, `BACKEND_API_URL=http://<EIP>`, the unencrypted hop, domain cutover, the private-RDS step with SSM port forwarding, the t4g.medium scheduler split, the proxy secret, and the cost estimate with its price-list sources. |
+| Docs | `docs/deployment/aws.md`, `docs/deployment/aws-steps-zh-TW.md` | EC2 apply, SSM SecureString, first deploy, Session Manager, `backend_api_url` as `https://<hostname>`, sslip.io when `domain` is empty, a later real-domain cutover, the private-RDS step with SSM port forwarding, the t4g.medium scheduler split, the proxy secret, and the cost estimate with its price-list sources. |
 | Tests | `backend/tests/test_spo133_ec2.py`, `backend/tests/test_agent_chat.py` | CORS, deadline, rate-limit key and buckets, SSM env file. The existing chat endpoint test patches the deadline module. |
 
 ## Why
@@ -38,7 +38,7 @@ CORS `*` is rejected because a credentialed wildcard is not a configuration we w
 
 ## Tests / Verification
 
-- Backend pytest: `cd backend && /tmp/nba-venv/bin/python -m pytest -q --tb=line` → 1344 passed, 27 skipped, 6 xfailed, 0 failed. After merging SPO-132 at 7fbbf54. `tests/test_spo133_ec2.py` is 44 passed. The SSM pages live in `backend/tests/fixtures/ssm/`.
+- Backend pytest: `cd backend && /tmp/nba-venv/bin/python -m pytest -q --tb=line` → 1348 passed, 27 skipped, 6 xfailed, 0 failed. After merging SPO-132 at 7fbbf54. `tests/test_spo133_ec2.py` is 48 passed. The SSM pages live in `backend/tests/fixtures/ssm/`.
 - Terraform: `terraform fmt -check -recursive` clean. `terraform init -backend=false` uses hashicorp/aws v5.100.0. `terraform validate` succeeded. No plan and no apply.
 - Frontend: not exercised. Compose and the header contract are documented for the frontend rewrite.
 - Integration test: SKIPPED. No AWS account and no `RUN_INTEGRATION`. The SSM script test uses a fake `aws` binary.
@@ -47,10 +47,10 @@ CORS `*` is rejected because a credentialed wildcard is not a configuration we w
 
 ## Follow-ups
 
-- [ ] Eason applies `infra/aws` after SPO-132, stores the SecureStrings, deploys the host, and sets Vercel `BACKEND_API_URL=http://<EIP>`.
+- [ ] Eason applies `infra/aws` after SPO-132, stores the SecureStrings, deploys the host, and sets Vercel Production and Preview `BACKEND_API_URL` to `terraform output -raw backend_api_url`.
 - [ ] After the host is the database client, a separate apply sets `allowed_cidrs = []` and `publicly_accessible = false`. Mac and box access then use SSM port forwarding.
 - [ ] Set `DEPLOY_ENABLED`, `AWS_DEPLOY_ROLE_ARN`, `AWS_REGION`, and `EC2_INSTANCE_ID`, and apply `enable_github_deploy_role` before the workflow can deploy. Make the GHCR package public, or store a pull token in SSM.
 - [ ] Add `push: branches: [master]` later if deploys should follow the default branch. Do not use `main`.
 - [ ] Put the real Vercel production origin and preview regex in SSM when SPO-134 has the names.
-- [ ] A domain removes the unencrypted Vercel-to-EC2 hop. Until then the proxy secret travels in clear text. That is an accepted risk.
+- [ ] A real domain later: A record to the Elastic IP, set `domain`, edit `/etc/sportslab/caddy.env`, recreate Caddy, then change `BACKEND_API_URL` and redeploy the frontend.
 - [ ] Splitting the scheduler is a t4g.medium change, not this host.

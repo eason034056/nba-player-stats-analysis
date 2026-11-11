@@ -49,7 +49,9 @@ EOF
 chmod 600 /root/.aws/config
 
 install -d -m 755 /etc/sportslab
-printf 'DOMAIN=%s\n' '${domain}' > /etc/sportslab/caddy.env
+# domain is the sslip.io hostname or a real hostname. acme_email may be empty.
+# Neither value is a secret. User data runs on first boot only.
+printf 'DOMAIN=%s\nACME_EMAIL=%s\n' '${domain}' '${acme_email}' > /etc/sportslab/caddy.env
 chmod 644 /etc/sportslab/caddy.env
 
 install -d -m 755 /opt/sportslab/certs

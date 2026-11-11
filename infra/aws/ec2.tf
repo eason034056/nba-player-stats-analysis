@@ -5,12 +5,17 @@ data "aws_ssm_parameter" "al2023_arm64" {
 locals {
   # sort() keeps the subnet stable across plans. Default-VPC subnets are public.
   app_subnet_id = sort(data.aws_subnets.default.ids)[0]
+  # aws_eip.app is allocated on its own (domain = "vpc"), so public_ip exists
+  # before the instance. user_data reads it. aws_eip_association attaches the
+  # address afterwards. The EIP resource does not reference the instance, so
+  # this is not a cycle. A non-empty var.domain replaces the sslip.io name.
+  backend_hostname = var.domain != "" ? var.domain : "${replace(aws_eip.app.public_ip, ".", "-")}.sslip.io"
 }
 
 resource "aws_security_group_rule" "http" {
   type              = "ingress"
   security_group_id = aws_security_group.app.id
-  description       = "HTTP for Caddy"
+  description       = "HTTP for ACME HTTP-01 and the redirect to HTTPS"
   from_port         = 80
   to_port           = 80
   protocol          = "tcp"
@@ -63,7 +68,8 @@ resource "aws_instance" "app" {
   }
 
   user_data = templatefile("${path.module}/../../deploy/user-data.sh.tftpl", {
-    domain        = var.domain
+    domain        = local.backend_hostname
+    acme_email    = var.acme_email
     aws_region    = var.region
     cw_agent_json = file("${path.module}/../../deploy/cloudwatch-agent.json")
   })
