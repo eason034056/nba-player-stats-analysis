@@ -1042,12 +1042,7 @@ function clamp01(value: number): number {
   return Math.min(1, Math.max(0, value));
 }
 
-function modelSplit(
-  combined: number,
-  side: "over" | "under",
-  binary: boolean,
-  tier: ReadTier | null,
-): FairSplit {
+function modelSplit(combined: number, side: "over" | "under", binary: boolean): FairSplit {
   const lean = clamp01(combined);
   const over = side === "over" ? lean : 1 - lean;
   const under = 1 - over;
@@ -1055,8 +1050,8 @@ function modelSplit(
     sourceLabel: "Model",
     overLabel: binary ? "Yes" : "Over",
     underLabel: binary ? "No" : "Under",
-    overText: percentBesideTier(over, side === "over" ? tier : null),
-    underText: percentBesideTier(under, side === "under" ? tier : null),
+    overText: side === "over" ? formatTierPercent(over) : formatPercent(over),
+    underText: side === "under" ? formatTierPercent(under) : formatPercent(under),
     overWidth: over * 100,
   };
 }
@@ -1176,7 +1171,7 @@ function buildNbaRead(args: {
     }
   }
   const bar = finite(pick.combined_probability)
-    ? modelSplit(pick.combined_probability, direction, args.binary, tier)
+    ? modelSplit(pick.combined_probability, direction, args.binary)
     : null;
   return {
     player: args.player,
@@ -1383,7 +1378,7 @@ export function actionBarPercent(
 export function slipButtonLabel(seed: SlipSeed, inSlip: boolean): string {
   const side = seed.direction === "under" ? "U" : "O";
   if (inSlip) return `In slip · ${playerLastName(seed.player_name)} ${side} ${formatThreshold(seed.threshold)}`;
-  const percent = seed.tier
+  const percent = tierFromBackend(seed.tier)
     ? formatTierPercent(tierProbability(seed))
     : formatPercent(seed.probability);
   return `Add ${playerLastName(seed.player_name)} ${side} ${formatThreshold(seed.threshold)} ${percent}`;

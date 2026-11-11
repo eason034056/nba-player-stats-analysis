@@ -9,7 +9,6 @@ const TIER_PILL = {
   strong: "bg-accent text-accent-ink",
   playable: "bg-brand text-white",
   lean: "bg-lean text-brand",
-  pass: "bg-pass text-ink-2",
 } as const;
 
 export function PlayerRail({
@@ -56,10 +55,10 @@ export function PlayerRail({
           {rows.map((row) => {
             const active = row.name === selected;
             const meta = joinMeta(row.position, row.team, " · ");
-            const tier = row.tier ?? null;
+            const tierName = row.tier && row.tier.name !== "pass" ? row.tier.name : null;
             const pill = nba
-              ? tier
-                ? TIER_PILL[tier.name]
+              ? tierName
+                ? TIER_PILL[tierName]
                 : row.hasLean
                   ? "bg-pass text-ink-2"
                   : "bg-seg text-muted"

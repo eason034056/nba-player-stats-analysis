@@ -15,7 +15,7 @@ The odds table and bookmaker picker stay on the Odds tab, and on the desktop mai
 | `frontend/components/EventDetail.tsx` | NBA layout: short names, ET clock, chips under the players, three tabs, filter sheet, action bar. History request and the history queries are unchanged. |
 | `frontend/components/event/EventHeader.tsx` | Mobile 44px back button and short title. Home disc is `brand-soft` on NBA. |
 | `frontend/components/event/StatChips.tsx` | All 12 markets. NBA chips use `rounded-control` and `border-line-strong`. |
-| `frontend/components/event/PlayerRail.tsx` | Pill color from the backend tier. An NBA lean shows a `History` caption. Meta is position and team with a separator only when both exist. Selected player is first on mobile. |
+| `frontend/components/event/PlayerRail.tsx` | Pill color from `tierFromBackend`. The rail prints the floored blend and has no History caption. Meta is position and team with a separator only when both exist. Selected player is first on mobile. |
 | `frontend/components/event/OurRead.tsx` | NBA headline, stored signals, and web slip buttons. The bar is labeled `Model`. The slip buttons are labeled `History`. |
 | `frontend/components/event/EventActionBar.tsx` | Mobile "Add {Last} {O\|U} {line} {percent}", the other side, and Ask. |
 | `frontend/components/event/FilterSheet.tsx` | Mobile filters as a bottom sheet. Focus moves in only when the sheet opens. Tab stays inside. Escape closes it and returns focus. |
@@ -27,11 +27,11 @@ The odds table and bookmaker picker stay on the Odds tab, and on the desktop mai
 
 ## Why
 
-The tier string is `DailyPick.tier` through `tierFromApi`. The NBA path does not call `readTier`. `Pass` and any other string stay unlabeled. WNBA still calls `readTier`, because SPO-121b owns removing that call from the picks board, the WNBA event path, and the bet slip.
+The tier string is `DailyPick.tier` through `tierFromBackend`. The NBA path does not call `readTier` or `tierFromApi`. `Pass` and any other unknown string stay unlabeled. WNBA still uses `readTier` and `formatPercent`.
 
-A percent that sits in the same control as a tier uses `formatTierPercent` (`Math.floor(p * 100 + 1e-9)`). The rail pill and the action bar print `DailyPick.probability`, which is the field the tier describes. The model bar prints `combined_probability` when that field is finite, and floors only the lean side. The other side of the bar stays on `formatPercent`. Those two numbers can disagree. The floor stops `0.697` from printing `70%` beside Playable. A missing probability is `—`. A row with no tier keeps half-away `formatPercent`, so `0.699` with a null tier prints `70%`.
+A percent that sits in the same control as a tier uses `formatTierPercent` (`Math.floor(p * 100 + 1e-9)`). The rail and the action bar print the floored blend (`tierProbability`: `combined_probability`, or `probability` when the blend is missing). The model bar prints `combined_probability` when that field is finite, and floors the lean side with or without a tier, Pass included. The other side of the bar stays on `formatPercent`. `0.6755` shows `Over 67%`. A Pass pick at `0.5551` shows `55%`. A missing blend is `—`.
 
-The primary slip seed stores `pick.probability`. The other side stores the pick's own opposite field, `p_under` or `p_over`, and uses the `/history` rate for that side only when the field is missing. It does not store `1 − combined_probability` and it does not store `1 − probability`. Both buttons are the historical source. The model bar is `combined_probability` and is labeled `Model`. The slip buttons and the NBA rail lean are labeled `History`. A new `onClose` from the parent does not pull focus back into the filter sheet; focus moves only when `open` changes. Tab and Shift+Tab wrap inside the dialog. WNBA's other side stays the history rate. The QA case "does not de-vig the stored rate" still passes on the default path.
+The primary slip seed stores `pick.probability`. The other side stores the pick's own opposite field, `p_under` or `p_over`, and uses the `/history` rate for that side only when the field is missing. It does not store `1 − combined_probability` and it does not store `1 − probability`. Both buttons are the historical source. The model bar is `combined_probability` and is labeled `Model`. A History label sits only on a historical hit rate. The rail lean and the action-bar blend do not carry one. The other slip button does. A new `onClose` from the parent does not pull focus back into the filter sheet; focus moves only when `open` changes. Tab and Shift+Tab wrap inside the dialog. WNBA's other side stays the history rate. The QA case "does not de-vig the stored rate" still passes on the default path.
 
 QA's first `event-page-nba.qa.test.ts` pinned three other-side cases to `1 − combined_probability`. That is the mix this follow-up removes (`0.59` historical next to `0.327` model, which does not add to 1). Those three cases were rewritten in a later commit, and one case was added so `p_under` wins over both the history rate and the model. The other twenty-one QA cases are unchanged.
 
@@ -45,7 +45,7 @@ The home disc is `#9564DD`. White on that purple is about 4.08:1, under 4.5. The
 
 ## Tests / Verification
 
-- Frontend `npm test` (`TZ=America/Chicago vitest run`) after the `4bfb2ec` merge: 61 files, 455 tests, passed.
+- Frontend `npm test` (`TZ=America/Chicago vitest run`) after the model-bar floor: 62 files, 464 tests, passed.
 - `./node_modules/.bin/tsc --noEmit`: passed.
 - `npm run lint`: passed, 0 warnings.
 - `npm run build`: passed.
@@ -67,7 +67,7 @@ The home disc is `#9564DD`. White on that purple is about 4.08:1, under 4.5. The
 | Filter sheet focus | `is a modal dialog, moves focus inside, and returns focus on Escape` |
 | A new `onClose` does not steal focus | `does not move focus when the parent passes a new onClose` |
 | Tab stays in the filter sheet | `traps Tab and Shift+Tab inside the sheet` |
-| NBA rail lean is labeled History | `labels an NBA lean as History and leaves a missing read unlabeled` |
+| NBA rail prints the floored blend and has no History label | `lib/event-page-nba.qa.test.ts`, `lib/event-page-nba.qa2.test.tsx`, `does not label an NBA lean History, because that number is the blend` |
 
 Playwright (system Chrome) against `next start` on port 3010, with the committed event fixtures served on port 8000:
 
@@ -102,7 +102,7 @@ Design files are `docs/design/redesign-2026-11/screenshots/web-02-event.png` and
 | `verdict` null | No Supports / Against / Neutral word. Null is not Neutral. |
 | `combined_probability` null | No model bar. The other slip side still uses `p_under` / `p_over`, then the history rate. |
 | `p_under` / `p_over` null | The other slip side uses the history rate at the same line. It does not subtract `combined_probability`. |
-| `tier` null, `Pass`, or unknown | No tier pill. The percent uses `formatPercent`. |
+| `tier` null, `Pass`, or unknown | No tier pill. `tierFromBackend` returns null, so Pass stays unlabeled. The lean side still floors: a Pass blend of `0.5551` shows `55%`. |
 | `position` or `team` null | The other part shows. No stray separator. |
 | `lineup_status` null | "lineup status unavailable". A lineup snapshot is not promoted to confirmed. |
 | `commence_time_et` missing | `eventWhen(commence_time)`, no zone suffix. |
