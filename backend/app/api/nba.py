@@ -1036,6 +1036,18 @@ async def get_player_history(
             "p_over, and p_under stay the all-games sample."
         ),
     ),
+    home_team: Optional[str] = Query(
+        default=None,
+        description="Event home club. With away_team, teammates are limited to a club in this game.",
+    ),
+    away_team: Optional[str] = Query(
+        default=None,
+        description="Event away club. With home_team, teammates are limited to a club in this game.",
+    ),
+    as_of: Optional[str] = Query(
+        default=None,
+        description="Event commence time. Selects the log club on that US game date.",
+    ),
 ) -> PlayerHistoryResponse:
     """
     Get player historical statistical summary
@@ -1125,6 +1137,9 @@ async def get_player_history(
             include_playoffs=include_playoffs,
             include_play_in=include_play_in,
             season=season,
+            home_team=home_team,
+            away_team=away_team,
+            as_of=as_of,
         )
         
         # Convert histogram to Pydantic model
