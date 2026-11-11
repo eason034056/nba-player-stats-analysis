@@ -6,6 +6,7 @@ settings.py - 應用程式配置設定
 - 每個屬性都對應一個環境變數（大小寫不敏感）
 """
 
+from pydantic import SecretStr
 from pydantic_settings import BaseSettings
 from typing import List
 
@@ -71,7 +72,8 @@ class Settings(BaseSettings):
 
     # BALLDONTLIE. Read from BALLDONTLIE_API_KEY in the environment.
     # The key does not select the injury feed. NBA_INJURY_SOURCE does.
-    balldontlie_api_key: str = ""
+    # SecretStr keeps the value out of Settings repr and model dumps.
+    balldontlie_api_key: SecretStr = SecretStr("")
     # NBA injury feed for product agents. espn_cbs is the default until
     # the nba_injuries_refresh job is registered (SPO-130a). bdl reads
     # the Redis cache only. Any other value is treated as espn_cbs.

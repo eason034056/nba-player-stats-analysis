@@ -2,9 +2,9 @@
 
 No test in this module calls BALLDONTLIE, ESPN, or CBS. The injury page
 and the standings file are the recorded responses copied under
-``tests/fixtures/bdl/``. A terminal page used to stop pagination has no
-player rows; it only carries the ``next_cursor`` shape the client
-returns when a page is the last one.
+``tests/fixtures/bdl/``. A terminal page is a deepcopy of that recorded
+page with ``meta.next_cursor`` cleared or removed. Tests do not type a
+new BDL response.
 """
 
 from __future__ import annotations
@@ -34,12 +34,14 @@ from app.services.nba_injuries import (  # noqa: E402
     NBA_INJURIES_CACHE_TTL_SECONDS,
     NBA_INJURIES_MAX_PAGES,
     NBA_INJURIES_STALE_AFTER_SECONDS,
+    NBA_INJURY_CACHE_SOCKET_TIMEOUT_SECONDS,
     get_cached_nba_injuries,
     normalize_bdl_injuries,
     refresh_nba_injuries,
     team_id_to_code_from_standings,
 )
 from app.settings import Settings, settings  # noqa: E402
+from pydantic import SecretStr  # noqa: E402
 from src.config import NBA_TEAMS  # noqa: E402
 
 _FIXTURE_DIR = os.path.join(_BACKEND, "tests", "fixtures", "bdl")
@@ -138,9 +140,20 @@ def _cache() -> tuple[CacheService, FakeRedis]:
     return service, fake
 
 
-def _terminal(meta: dict) -> dict:
-    """Last page. No player rows; only the cursor shape under test."""
-    return {"data": [], "meta": meta}
+def _recorded_page(*, next_cursor: object = None, drop_next_cursor: bool = False) -> dict:
+    """Deepcopy of the recorded page. Only ``meta.next_cursor`` changes.
+
+    ``drop_next_cursor`` deletes the field. Otherwise the copied page
+    keeps every recorded row and sets ``next_cursor`` to the argument
+    (``None`` is a last page).
+    """
+    page = copy.deepcopy(INJURY_PAGE)
+    meta = page.setdefault("meta", {})
+    if drop_next_cursor:
+        meta.pop("next_cursor", None)
+    else:
+        meta["next_cursor"] = next_cursor
+    return page
 
 
 def _guard_network(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -172,12 +185,12 @@ def _use_cache(monkeypatch: pytest.MonkeyPatch, service: CacheService) -> None:
 
 def _set_dummy_key(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("BALLDONTLIE_API_KEY", _DUMMY_KEY)
-    monkeypatch.setattr(settings, "balldontlie_api_key", _DUMMY_KEY)
+    monkeypatch.setattr(settings, "balldontlie_api_key", SecretStr(_DUMMY_KEY))
 
 
 def _clear_key(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.delenv("BALLDONTLIE_API_KEY", raising=False)
-    monkeypatch.setattr(settings, "balldontlie_api_key", "")
+    monkeypatch.setattr(settings, "balldontlie_api_key", SecretStr(""))
 
 
 def _set_injury_source(monkeypatch: pytest.MonkeyPatch, value: str) -> None:
@@ -307,17 +320,12 @@ def _old_snapshot() -> dict:
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize(
-    "terminal_meta",
-    [
-        {"next_cursor": None, "per_page": 100},
-        {"per_page": 100},
-    ],
-)
-async def test_refresh_reads_fixture_then_stops(terminal_meta: dict) -> None:
+@pytest.mark.parametrize("drop_next_cursor", [False, True])
+async def test_refresh_reads_fixture_then_stops(drop_next_cursor: bool) -> None:
     service, fake = _cache()
     mapping = team_id_to_code_from_standings(STANDINGS)
-    client = PageClient([INJURY_PAGE, _terminal(terminal_meta)])
+    last = _recorded_page(drop_next_cursor=drop_next_cursor) if drop_next_cursor else _recorded_page(next_cursor=None)
+    client = PageClient([INJURY_PAGE, last])
 
     payload = await refresh_nba_injuries(client, service, mapping)
 
@@ -325,7 +333,7 @@ async def test_refresh_reads_fixture_then_stops(terminal_meta: dict) -> None:
     assert [call["per_page"] for call in client.calls] == [100, 100]
     assert payload is not None
     assert payload["entries"] == normalize_bdl_injuries(
-        INJURY_PAGE["data"],
+        INJURY_PAGE["data"] + last["data"],
         mapping,
         fetched_at=payload["fetched_at"],
     )
@@ -345,7 +353,7 @@ async def test_page_failure_keeps_the_previous_cache(fail_at: int) -> None:
     previous = _old_snapshot()
     await service.set(NBA_INJURIES_CACHE_KEY, previous, ttl=100)
     writes_after_seed = len(fake.set_calls)
-    client = PageClient([INJURY_PAGE, _terminal({"next_cursor": None, "per_page": 100})], fail_at=fail_at)
+    client = PageClient([INJURY_PAGE, _recorded_page(next_cursor=None)], fail_at=fail_at)
 
     result = await refresh_nba_injuries(client, service, team_id_to_code_from_standings(STANDINGS))
 
@@ -359,20 +367,22 @@ async def test_page_failure_keeps_the_previous_cache(fail_at: int) -> None:
 
 @pytest.mark.asyncio
 async def test_cache_write_failure_keeps_the_previous_body() -> None:
-    previous = _old_snapshot()
-
     class _Refuse:
         def __init__(self) -> None:
-            self.body = copy.deepcopy(previous)
+            self.calls: list[dict] = []
 
         async def set(self, key: str, value: dict, ttl: int) -> bool:
+            self.calls.append({"key": key, "value": value, "ttl": ttl})
             return False
 
     cache = _Refuse()
-    client = PageClient([INJURY_PAGE, _terminal({"next_cursor": None})])
+    client = PageClient([INJURY_PAGE, _recorded_page(next_cursor=None)])
     result = await refresh_nba_injuries(client, cache, team_id_to_code_from_standings(STANDINGS))
     assert result is None
-    assert cache.body == previous
+    assert len(cache.calls) == 1
+    assert cache.calls[0]["key"] == NBA_INJURIES_CACHE_KEY
+    assert cache.calls[0]["ttl"] == NBA_INJURIES_CACHE_TTL_SECONDS
+    assert cache.calls[0]["value"]["entries"]
 
 
 def test_stale_boundary_is_older_than_six_hours() -> None:
@@ -392,7 +402,7 @@ class _RepeatingCursorClient:
 
     async def list_player_injuries(self, *, cursor: int | None = None, per_page: int = 100) -> dict:
         self.calls.append({"cursor": cursor, "per_page": per_page})
-        return {"data": [], "meta": {"next_cursor": 7, "per_page": per_page}}
+        return _recorded_page(next_cursor=7)
 
 
 class _EndlessCursorClient:
@@ -404,14 +414,14 @@ class _EndlessCursorClient:
     async def list_player_injuries(self, *, cursor: int | None = None, per_page: int = 100) -> dict:
         self.calls.append({"cursor": cursor, "per_page": per_page})
         nxt = 0 if cursor is None else int(cursor) + 1
-        return {"data": [], "meta": {"next_cursor": nxt, "per_page": per_page}}
+        return _recorded_page(next_cursor=nxt)
 
 
 @pytest.mark.asyncio
 async def test_repeated_next_cursor_stops_without_looping() -> None:
     service, _fake = _cache()
     client = _RepeatingCursorClient()
-    payload = await refresh_nba_injuries(client, service, {})
+    payload = await refresh_nba_injuries(client, service, team_id_to_code_from_standings(STANDINGS))
     assert payload is not None
     assert len(client.calls) == 2
     assert len(client.calls) < NBA_INJURIES_MAX_PAGES
@@ -423,7 +433,9 @@ async def test_refresh_stops_at_the_page_cap(caplog: pytest.LogCaptureFixture) -
     service, _fake = _cache()
     client = _EndlessCursorClient()
     with caplog.at_level(logging.WARNING):
-        payload = await refresh_nba_injuries(client, service, {})
+        payload = await refresh_nba_injuries(
+            client, service, team_id_to_code_from_standings(STANDINGS)
+        )
     assert payload is not None
     assert len(client.calls) == NBA_INJURIES_MAX_PAGES == 20
     assert "page cap" in caplog.text
@@ -458,12 +470,13 @@ async def test_unexpected_error_logs_the_traceback_and_keeps_the_cache(
     previous = _old_snapshot()
     await service.set(NBA_INJURIES_CACHE_KEY, previous, ttl=NBA_INJURIES_CACHE_TTL_SECONDS)
     client = PageClient([INJURY_PAGE], fail_at=0)
-    with caplog.at_level(logging.ERROR):
+    with caplog.at_level(logging.WARNING):
         result = await refresh_nba_injuries(client, service, {})
     assert result is None
     assert await service.get(NBA_INJURIES_CACHE_KEY) == previous
-    traced = [record for record in caplog.records if record.exc_info and record.exc_info[0] is RuntimeError]
-    assert traced
+    assert "RuntimeError" in caplog.text
+    assert "player_injuries page failed" not in caplog.text
+    assert all(record.exc_info in (None, (None, None, None)) for record in caplog.records)
 
 
 @pytest.mark.asyncio
@@ -510,7 +523,9 @@ async def test_get_cached_missing_and_stale_and_team_filter() -> None:
 
 
 def test_settings_expose_the_refresh_interval_and_key() -> None:
-    assert Settings.model_fields["balldontlie_api_key"].default == ""
+    default_key = Settings.model_fields["balldontlie_api_key"].default
+    assert isinstance(default_key, SecretStr)
+    assert default_key.get_secret_value() == ""
     assert Settings.model_fields["nba_injuries_refresh_minutes"].default == 15
     assert Settings.model_fields["nba_injury_source"].default == "espn_cbs"
 
@@ -530,7 +545,7 @@ def test_official_report_for_one_team_reads_the_cache_only(monkeypatch: pytest.M
     historical = _historical()
     service, _fake = _cache()
     mapping = team_id_to_code_from_standings(STANDINGS)
-    client = PageClient([INJURY_PAGE, _terminal({"next_cursor": None, "per_page": 100})])
+    client = PageClient([INJURY_PAGE, _recorded_page(next_cursor=None)])
     payload = asyncio.run(refresh_nba_injuries(client, service, mapping))
     assert payload is not None
 
@@ -560,7 +575,7 @@ def test_fresh_team_with_no_rows_is_not_reported_unavailable(monkeypatch: pytest
     mapping = team_id_to_code_from_standings(STANDINGS)
     payload = asyncio.run(
         refresh_nba_injuries(
-            PageClient([INJURY_PAGE, _terminal({"per_page": 100})]),
+            PageClient([INJURY_PAGE, _recorded_page(drop_next_cursor=True)]),
             service,
             mapping,
         )
@@ -731,6 +746,7 @@ def test_unknown_injury_source_falls_back_to_espn_cbs(
     caplog: pytest.LogCaptureFixture,
 ) -> None:
     historical = _historical()
+    historical._logged_unknown_injury_sources.clear()
     _set_dummy_key(monkeypatch)
     _set_injury_source(monkeypatch, "rotowire")
     _expect_espn_cbs(monkeypatch)
@@ -772,6 +788,261 @@ def test_wnba_stays_on_the_scraper_for_every_flag(
     rows = historical._fetch_injury_report_for_team("NYL", league="wnba")
     assert rows[0]["player"] == "Breanna Stewart"
     assert "bdl_player_id" not in rows[0]
+
+
+def test_empty_data_page_with_a_team_map_stores_an_empty_list() -> None:
+    """``data: []`` plus a usable map is a real empty league, not a failure."""
+    page = _recorded_page(next_cursor=None)
+    page["data"] = []
+    service, _fake = _cache()
+    mapping = team_id_to_code_from_standings(STANDINGS)
+    payload = asyncio.run(refresh_nba_injuries(PageClient([page]), service, mapping))
+    assert payload is not None
+    assert payload["entries"] == []
+    stored = asyncio.run(service.get(NBA_INJURIES_CACHE_KEY))
+    assert stored["entries"] == []
+
+
+@pytest.mark.asyncio
+async def test_rows_that_all_drop_keep_the_previous_snapshot() -> None:
+    service, _fake = _cache()
+    previous = _old_snapshot()
+    await service.set(NBA_INJURIES_CACHE_KEY, previous, ttl=NBA_INJURIES_CACHE_TTL_SECONDS)
+    page = _recorded_page(next_cursor=None)
+    result = await refresh_nba_injuries(PageClient([page]), service, {999999: "ZZZ"})
+    assert result is None
+    assert await service.get(NBA_INJURIES_CACHE_KEY) == previous
+
+
+def test_injury_cache_client_sets_socket_timeouts(monkeypatch: pytest.MonkeyPatch) -> None:
+    captured: dict = {}
+
+    def _from_url(url: str, **kwargs):
+        captured["url"] = url
+        captured["kwargs"] = kwargs
+        return FakeRedis()
+
+    monkeypatch.setattr("app.services.cache.redis.from_url", _from_url)
+    service = nba_injuries.open_injury_cache()
+    asyncio.run(service.get_client())
+    assert captured["kwargs"]["decode_responses"] is True
+    assert captured["kwargs"]["socket_timeout"] == NBA_INJURY_CACHE_SOCKET_TIMEOUT_SECONDS == 2.0
+    assert captured["kwargs"]["socket_connect_timeout"] == NBA_INJURY_CACHE_SOCKET_TIMEOUT_SECONDS
+
+
+def _seed_fresh(service: CacheService, entries: list[dict]) -> str:
+    fetched_at = datetime.now(timezone.utc).isoformat()
+    asyncio.run(
+        service.set(
+            NBA_INJURIES_CACHE_KEY,
+            {"fetched_at": fetched_at, "entries": entries},
+            ttl=NBA_INJURIES_CACHE_TTL_SECONDS,
+        )
+    )
+    return fetched_at
+
+
+def test_uppercase_bdl_is_the_cache_source(monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture) -> None:
+    """``BDL`` is folded to ``bdl``. It is not an unknown value."""
+    historical = _historical()
+    service, _fake = _cache()
+    mapping = team_id_to_code_from_standings(STANDINGS)
+    entries = normalize_bdl_injuries(INJURY_PAGE["data"], mapping, fetched_at="2026-11-11T12:00:00+00:00")
+    fetched_at = _seed_fresh(service, entries)
+    _set_dummy_key(monkeypatch)
+    _set_injury_source(monkeypatch, "BDL")
+    _use_cache(monkeypatch, service)
+    _forbid_scraper(monkeypatch)
+    _guard_network(monkeypatch)
+    with caplog.at_level(logging.WARNING):
+        report = asyncio.run(historical.get_official_injury_report(entries[0]["team"], league="nba"))
+    assert "unknown" not in caplog.text.lower()
+    assert report["details"]["injuries"]
+    assert report["details"]["injuries"][0]["fetched_at"]
+    assert fetched_at
+
+
+@pytest.mark.parametrize("value", ["foo", ""])
+def test_invalid_injury_source_logs_and_uses_espn_cbs(
+    monkeypatch: pytest.MonkeyPatch,
+    caplog: pytest.LogCaptureFixture,
+    value: str,
+) -> None:
+    historical = _historical()
+    historical._logged_unknown_injury_sources.clear()
+    _set_dummy_key(monkeypatch)
+    _set_injury_source(monkeypatch, value)
+    _expect_espn_cbs(monkeypatch)
+    with caplog.at_level(logging.WARNING):
+        result = asyncio.run(historical.get_official_injury_report("76ers", league="nba"))
+    assert _ScrapingFetcher.calls == 1
+    assert result["details"]["injuries"][0]["source"] == "espn"
+    assert "espn_cbs" in caplog.text
+
+
+def test_settings_read_failure_uses_espn_cbs(
+    monkeypatch: pytest.MonkeyPatch,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    historical = _historical()
+    monkeypatch.delenv("NBA_INJURY_SOURCE", raising=False)
+
+    class _Broken:
+        @property
+        def nba_injury_source(self) -> str:
+            raise RuntimeError("settings unreadable")
+
+    monkeypatch.setattr("app.settings.settings", _Broken())
+    _expect_espn_cbs(monkeypatch)
+    with caplog.at_level(logging.WARNING):
+        result = asyncio.run(historical.get_official_injury_report("76ers", league="nba"))
+    assert _ScrapingFetcher.calls == 1
+    assert result["details"]["injuries"][0]["source"] == "espn"
+    assert "could not be read" in caplog.text
+    assert "espn_cbs" in caplog.text
+
+
+def test_bdl_without_a_key_and_no_cache_is_caution(monkeypatch: pytest.MonkeyPatch) -> None:
+    historical = _historical()
+    historical._logged_bdl_without_key = False
+    service, _fake = _cache()
+    _clear_key(monkeypatch)
+    _set_injury_source(monkeypatch, "bdl")
+    _use_cache(monkeypatch, service)
+    _forbid_scraper(monkeypatch)
+    _guard_network(monkeypatch)
+
+    report = asyncio.run(historical.get_official_injury_report("PHI", league="nba"))
+    assert report["signal"] == "caution"
+    assert report["details"]["reason"] == "injury data unavailable"
+    availability = historical.get_availability_context("Jaren Jackson Jr", league="nba")
+    assert availability["signal"] == "caution"
+    assert availability["details"]["fetched_at"] is None
+    assert availability["details"]["status"] is None
+    impact = historical.auto_teammate_impact("Jaren Jackson Jr", "points", 12.5, league="nba")
+    assert impact["signal"] == "caution"
+    assert impact["details"]["fetched_at"] is None
+    assert "Healthy" not in json.dumps(impact["details"])
+
+
+def test_bdl_without_a_key_and_a_stale_cache_is_caution(monkeypatch: pytest.MonkeyPatch) -> None:
+    historical = _historical()
+    service, _fake = _cache()
+    fetched_at = "2026-11-01T00:00:00+00:00"
+    mapping = team_id_to_code_from_standings(STANDINGS)
+    entries = normalize_bdl_injuries(INJURY_PAGE["data"], mapping, fetched_at=fetched_at)
+    asyncio.run(
+        service.set(
+            NBA_INJURIES_CACHE_KEY,
+            {"fetched_at": fetched_at, "entries": entries},
+            ttl=NBA_INJURIES_CACHE_TTL_SECONDS,
+        )
+    )
+    _clear_key(monkeypatch)
+    _set_injury_source(monkeypatch, "bdl")
+    _use_cache(monkeypatch, service)
+    _forbid_scraper(monkeypatch)
+    _guard_network(monkeypatch)
+    report = asyncio.run(historical.get_official_injury_report("PHI", league="nba"))
+    assert report["signal"] == "caution"
+    assert report["details"]["reason"] == "injury data unavailable"
+    assert report["details"]["fetched_at"] == fetched_at
+    availability = historical.get_availability_context("Jaren Jackson Jr", league="nba")
+    assert availability["signal"] == "caution"
+    assert availability["details"]["fetched_at"] == fetched_at
+    assert availability["details"]["status"] is None
+
+
+def test_bdl_without_a_key_reads_a_fresh_cache(monkeypatch: pytest.MonkeyPatch) -> None:
+    historical = _historical()
+    service, _fake = _cache()
+    mapping = team_id_to_code_from_standings(STANDINGS)
+    entries = normalize_bdl_injuries(
+        INJURY_PAGE["data"],
+        mapping,
+        fetched_at=datetime.now(timezone.utc).isoformat(),
+    )
+    _seed_fresh(service, entries)
+    _clear_key(monkeypatch)
+    monkeypatch.setattr(settings, "balldontlie_api_key", SecretStr(""))
+    _set_injury_source(monkeypatch, "bdl")
+    _use_cache(monkeypatch, service)
+    _forbid_scraper(monkeypatch)
+    _guard_network(monkeypatch)
+    team = entries[0]["team"]
+    report = asyncio.run(historical.get_official_injury_report(team, league="nba"))
+    assert report["signal"] == "caution"
+    assert report["details"]["injuries"]
+    assert "reason" not in report["details"]
+
+
+def test_empty_secret_is_not_a_configured_key(
+    monkeypatch: pytest.MonkeyPatch,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    historical = _historical()
+    historical._logged_bdl_without_key = False
+    service, _fake = _cache()
+    monkeypatch.delenv("BALLDONTLIE_API_KEY", raising=False)
+    monkeypatch.setattr(settings, "balldontlie_api_key", SecretStr(""))
+    _set_injury_source(monkeypatch, "bdl")
+    _use_cache(monkeypatch, service)
+    _forbid_scraper(monkeypatch)
+    with caplog.at_level(logging.WARNING):
+        report = asyncio.run(historical.get_official_injury_report("PHI", league="nba"))
+    assert report["signal"] == "caution"
+    assert "BALLDONTLIE_API_KEY is unset" in caplog.text
+
+
+def test_traded_player_matches_by_name_off_the_csv_team(monkeypatch: pytest.MonkeyPatch) -> None:
+    historical = _historical()
+    service, _fake = _cache()
+    mapping = team_id_to_code_from_standings(STANDINGS)
+    entries = normalize_bdl_injuries(
+        INJURY_PAGE["data"],
+        mapping,
+        fetched_at=datetime.now(timezone.utc).isoformat(),
+    )
+    row = copy.deepcopy(next(entry for entry in entries if entry["player"] == "Jaren Jackson Jr."))
+    row["team"] = "MEM"
+    _seed_fresh(service, [row])
+    _set_dummy_key(monkeypatch)
+    _set_injury_source(monkeypatch, "bdl")
+    _use_cache(monkeypatch, service)
+    _forbid_scraper(monkeypatch)
+    _guard_network(monkeypatch)
+    availability = historical.get_availability_context("Jaren Jackson Jr", league="nba")
+    assert availability["signal"] == "caution"
+    assert availability["details"]["status"] == "Out"
+    assert availability["details"]["detail"]["team"] == "MEM"
+
+
+def test_bdl_player_id_wins_when_names_collide(monkeypatch: pytest.MonkeyPatch) -> None:
+    historical = _historical()
+    service, _fake = _cache()
+    mapping = team_id_to_code_from_standings(STANDINGS)
+    entries = normalize_bdl_injuries(
+        INJURY_PAGE["data"],
+        mapping,
+        fetched_at=datetime.now(timezone.utc).isoformat(),
+    )
+    original = next(entry for entry in entries if entry["player"] == "Jaren Jackson Jr.")
+    other = copy.deepcopy(original)
+    other["bdl_player_id"] = original["bdl_player_id"] + 1
+    other["status"] = "Questionable"
+    _seed_fresh(service, [original, other])
+    _set_dummy_key(monkeypatch)
+    _set_injury_source(monkeypatch, "bdl")
+    _use_cache(monkeypatch, service)
+    _forbid_scraper(monkeypatch)
+    _guard_network(monkeypatch)
+    availability = historical.get_availability_context(
+        "Jaren Jackson Jr",
+        league="nba",
+        bdl_player_id=original["bdl_player_id"],
+    )
+    assert availability["details"]["status"] == "Out"
+    assert availability["details"]["detail"]["bdl_player_id"] == original["bdl_player_id"]
 
 
 def test_data_logger_names_the_balldontlie_cache() -> None:

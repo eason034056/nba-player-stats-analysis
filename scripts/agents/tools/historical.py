@@ -23,6 +23,8 @@ import sys
 from datetime import datetime, timezone, timedelta
 from typing import Any, Dict, List, Optional, Tuple
 
+from pydantic import SecretStr
+
 logger = logging.getLogger(__name__)
 
 # Shown when the NBA cache is required but missing or older than 6 hours.
@@ -401,38 +403,51 @@ _logged_unknown_injury_sources: set[str] = set()
 _logged_bdl_without_key = False
 
 
+def _secret_text(value: Any) -> str:
+    """Return the text of a setting that may be a ``SecretStr``."""
+    if isinstance(value, SecretStr):
+        value = value.get_secret_value()
+    return str(value or "").strip()
+
+
 def _balldontlie_key_present() -> bool:
     """True when ``BALLDONTLIE_API_KEY`` is non-blank.
 
     Used only to warn that a ``bdl`` source has no key for the refresh
     job. It is not the feed switch, and the value is never logged.
+    A failure reading the setting is treated as no key.
     """
     env_value = os.environ.get("BALLDONTLIE_API_KEY", "")
     if isinstance(env_value, str) and env_value.strip():
         return True
     try:
         from app.settings import settings
-    except ImportError:
+
+        return bool(_secret_text(settings.balldontlie_api_key))
+    except Exception:
         return False
-    configured = settings.balldontlie_api_key or ""
-    return bool(str(configured).strip())
 
 
 def _nba_injury_source() -> str:
     """Return ``espn_cbs`` or ``bdl``.
 
     ``NBA_INJURY_SOURCE`` in the environment wins over the settings
-    object so a value exported after startup is visible. Blank and
-    unknown values are ``espn_cbs``. An unknown value is logged once.
+    object so a value exported after startup is visible. Comparison is
+    case-insensitive after stripping, so ``BDL`` is ``bdl`` and
+    ``Espn_CBS`` is ``espn_cbs``. A blank value, an unknown value, and
+    a failure reading the setting are ``espn_cbs``. An unknown value
+    and a read failure are logged once each.
     """
-    if "NBA_INJURY_SOURCE" in os.environ:
-        raw = os.environ.get("NBA_INJURY_SOURCE") or ""
-    else:
-        try:
+    try:
+        if "NBA_INJURY_SOURCE" in os.environ:
+            raw = os.environ.get("NBA_INJURY_SOURCE") or ""
+        else:
             from app.settings import settings
-        except ImportError:
-            return _NBA_INJURY_SOURCE_ESPN
-        raw = settings.nba_injury_source or ""
+
+            raw = settings.nba_injury_source or ""
+    except Exception:
+        logger.warning("NBA_INJURY_SOURCE could not be read; using espn_cbs")
+        return _NBA_INJURY_SOURCE_ESPN
     normalized = str(raw).strip().lower()
     if normalized in _NBA_INJURY_SOURCES:
         return normalized
@@ -493,6 +508,29 @@ def _fetch_espn_cbs_injury_report(team_code: str) -> List[Dict[str, Any]]:
 def _report_is_unavailable(entries: List[Dict[str, Any]]) -> bool:
     """True when the list is the cache-miss marker, not player rows."""
     return bool(entries) and isinstance(entries[0], dict) and bool(entries[0].get("unavailable"))
+
+
+def _match_injury_entry(
+    entries: List[Dict[str, Any]],
+    player: str,
+    bdl_player_id: Any = None,
+) -> Optional[Dict[str, Any]]:
+    """Pick one cached row for ``player``.
+
+    A ``bdl_player_id`` match wins, including after a trade moved the
+    row off the CSV team. Otherwise the name must match exactly one
+    row. Two rows with the same name and no id are left unmatched so
+    the report does not attach the wrong club.
+    """
+    rows = [entry for entry in entries if isinstance(entry, dict) and not entry.get("unavailable")]
+    if bdl_player_id is not None:
+        for entry in rows:
+            if entry.get("bdl_player_id") == bdl_player_id:
+                return entry
+    named = [entry for entry in rows if _is_same_player(entry.get("player") or "", player)]
+    if len(named) == 1:
+        return named[0]
+    return None
 
 
 def _unavailable_marker(fetched_at: Any) -> Dict[str, Any]:
@@ -832,7 +870,13 @@ async def get_player_lineup_context(player: str, date: str = "", team: str = "",
     )
 
 
-def get_availability_context(player: str, date: str = "", league: str = "nba") -> Dict[str, Any]:
+def get_availability_context(
+    player: str,
+    date: str = "",
+    league: str = "nba",
+    *,
+    bdl_player_id: Any = None,
+) -> Dict[str, Any]:
     games = _games_for(player, 10, league=league)
     if not games:
         return _signal_payload("unavailable", 0, 0, 0, "last_10", "csv", {"error": "no games"})
@@ -840,6 +884,7 @@ def get_availability_context(player: str, date: str = "", league: str = "nba") -
     code = _team_code_from_name(team, league=league)
     injuries = _fetch_injury_report_for_team(code, league=league)
     if _report_is_unavailable(injuries):
+        marker = injuries[0]
         return _signal_payload(
             "caution",
             0.0,
@@ -853,12 +898,21 @@ def get_availability_context(player: str, date: str = "", league: str = "nba") -
                 "reason": _INJURY_DATA_UNAVAILABLE,
                 "detail": None,
                 "stale": True,
+                "fetched_at": marker.get("fetched_at"),
             },
         )
-    player_entry = next(
-        (e for e in injuries if _is_same_player(e.get("player") or "", player)),
-        None,
-    )
+    player_entry = _match_injury_entry(injuries, player, bdl_player_id)
+    league_key = (league or "nba").strip().lower()
+    if player_entry is None and _nba_uses_bdl_injury_cache(league_key):
+        # CSV team can lag a trade. The id, then a unique name, is
+        # checked against the whole snapshot.
+        snapshot = _read_cached_injury_snapshot("")
+        if not snapshot.get("stale"):
+            player_entry = _match_injury_entry(
+                list(snapshot.get("entries") or []),
+                player,
+                bdl_player_id,
+            )
     status = player_entry["status"] if player_entry else "Healthy"
     return _signal_payload(
         "caution" if status in ("Out", "Questionable", "Day-To-Day") else "neutral",
@@ -908,6 +962,7 @@ def auto_teammate_impact(player: str, metric: str, threshold: float, league: str
                 "today_scenario": _INJURY_DATA_UNAVAILABLE,
                 "reason": _INJURY_DATA_UNAVAILABLE,
                 "stale": True,
+                "fetched_at": injuries[0].get("fetched_at"),
             },
         )
     injury_map = {}

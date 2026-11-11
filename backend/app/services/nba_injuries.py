@@ -32,6 +32,9 @@ NBA_INJURIES_CACHE_TTL_SECONDS = 24 * 60 * 60
 NBA_INJURIES_STALE_AFTER_SECONDS = 6 * 60 * 60
 # per_page is 100, so 20 pages is about 2000 rows.
 NBA_INJURIES_MAX_PAGES = 20
+# Request-path reads open their own client. A stuck Redis must not
+# hold the user request open.
+NBA_INJURY_CACHE_SOCKET_TIMEOUT_SECONDS = 2.0
 
 BALLDONTLIE_SOURCE = "balldontlie"
 
@@ -53,8 +56,13 @@ def open_injury_cache() -> CacheService:
     Sync product-agent tools run on a worker thread. The shared
     ``cache_service`` client belongs to the server event loop, so a
     request-path read opens and closes its own client instead.
+    The socket timeouts are short so a stuck Redis fails the read
+    and the report becomes unavailable.
     """
-    return CacheService()
+    return CacheService(
+        socket_timeout=NBA_INJURY_CACHE_SOCKET_TIMEOUT_SECONDS,
+        socket_connect_timeout=NBA_INJURY_CACHE_SOCKET_TIMEOUT_SECONDS,
+    )
 
 
 def team_id_to_code_from_standings(payload: Mapping[str, Any]) -> dict[int, str]:
@@ -108,7 +116,14 @@ def _mapped_status(raw_status: Any) -> str | None:
     ``Available`` is not an injury. ``Doubtful`` is stored as
     ``Questionable`` because the scorer's unresolved bucket is
     ``Questionable`` / ``Day-To-Day`` and has no ``Doubtful`` label.
-    The original word stays on ``raw_status``.
+    The original word stays on ``raw_status``. This mapping is waiting
+    on Eason's written confirmation.
+
+    A word this module does not know is not left as-is. Downstream
+    treats an unknown status as healthy. A word that contains ``Out``
+    (``Out For Season``) is stored as ``Out``. Every other unknown
+    word is stored as ``Questionable``. ``raw_status`` keeps the
+    original word, and the caller logs it.
     """
     if raw_status == _STATUS_AVAILABLE:
         return None
@@ -116,7 +131,11 @@ def _mapped_status(raw_status: Any) -> str | None:
         return _STATUS_QUESTIONABLE
     if not isinstance(raw_status, str):
         return None
-    return raw_status
+    if raw_status in _PASSTHROUGH_STATUSES:
+        return raw_status
+    if "Out" in raw_status:
+        return "Out"
+    return _STATUS_QUESTIONABLE
 
 
 def normalize_bdl_injuries(
@@ -229,7 +248,11 @@ def _snapshot_from_payload(
     """Turn a cached JSON object into entries, fetched_at, and stale.
 
     A missing body, a non-object, or an unreadable time is stale with
-    an empty entry list. Filtering by team does not change ``stale``.
+    an empty entry list. ``entries`` must be a list, including an
+    empty list, before the snapshot can be fresh. A missing key, null,
+    string, or object is malformed and stale, so readers say the data
+    is unavailable instead of reporting a healthy team. Filtering by
+    team does not change ``stale``.
     """
     if not isinstance(raw, dict):
         return {"entries": [], "fetched_at": None, "stale": True}
@@ -238,7 +261,7 @@ def _snapshot_from_payload(
         fetched_at = None
     entries = raw.get("entries")
     if not isinstance(entries, list):
-        entries = []
+        return {"entries": [], "fetched_at": fetched_at, "stale": True}
     kept = [row for row in entries if isinstance(row, dict)]
     if team_code:
         wanted = team_code.strip().upper()
@@ -267,7 +290,8 @@ async def get_cached_nba_injuries(
 
     Returns:
         ``{"entries", "fetched_at", "stale"}``. ``stale`` is true when
-        the key is missing or ``fetched_at`` is older than six hours.
+        the key is missing, ``entries`` is not a list, or ``fetched_at``
+        is older than six hours.
     """
     reader = cache
     if reader is None:
@@ -290,8 +314,13 @@ async def refresh_nba_injuries(
     :data:`NBA_INJURIES_MAX_PAGES` pages and logs a warning when that
     cap is what stopped the walk. Rate limits and 429 retries belong
     to ``client``. A ``ValueError`` (a page without a ``data`` list)
-    logs a warning. Any other exception logs the traceback. Both leave
-    the previous ``injuries:nba:latest`` value untouched.
+    logs a warning. Any other exception logs the exception type and
+    not the message: a client error can echo a request header. An
+    empty team map, or a non-empty page that normalizes to zero
+    entries, is also a failure and does not write. A first page whose
+    ``data`` is an empty list, with a non-empty team map, is a real
+    empty league and is stored. All of these failures leave the
+    previous ``injuries:nba:latest`` value untouched.
 
     Args:
         client: SPO-130a client. Only ``list_player_injuries`` is used.
@@ -331,6 +360,20 @@ async def refresh_nba_injuries(
             team_id_to_code,
             fetched_at=fetched_at,
         )
+        # An empty map, or rows that all drop, would publish "nobody is
+        # injured" over a good snapshot. A real empty league is
+        # ``data: []`` together with a map we could have used.
+        if len(team_id_to_code) == 0:
+            logger.warning(
+                "NBA injury refresh has an empty team map; previous cache left in place"
+            )
+            return None
+        if rows and not entries:
+            logger.warning(
+                "NBA injury refresh kept no entries from %s rows; previous cache left in place",
+                len(rows),
+            )
+            return None
         payload = {"fetched_at": fetched_at, "entries": entries}
         stored = await cache.set(
             NBA_INJURIES_CACHE_KEY,
@@ -345,9 +388,12 @@ async def refresh_nba_injuries(
             "NBA injury refresh rejected a page; previous cache left in place"
         )
         return None
-    except Exception:
+    except Exception as exc:
         # TODO(SPO-130a): narrow this catch to BdlError once bdl_client.py lands.
-        logger.exception(
-            "NBA injury refresh failed; previous cache left in place"
+        # The message is omitted on purpose. A client error can include
+        # the request line, and that line can carry a credential.
+        logger.warning(
+            "NBA injury refresh failed (%s); previous cache left in place",
+            type(exc).__name__,
         )
         return None

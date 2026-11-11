@@ -1,8 +1,7 @@
 """SPO-131 QA — cache edge cases on the recorded BALLDONTLIE fixtures.
 
 Every BDL body here is the recorded page or a copy of it. No test types
-a new BDL response. ``xfail(strict=True)`` marks behaviour the review
-asks to change; each one flips to a pass when the fix lands.
+a new BDL response.
 """
 
 from __future__ import annotations
@@ -49,6 +48,8 @@ def _seed(body) -> base.CacheService:
 def _agent_path(monkeypatch: pytest.MonkeyPatch, service) -> object:
     historical = base._historical()
     base._set_dummy_key(monkeypatch)
+    # The cache is selected by NBA_INJURY_SOURCE, not by the API key.
+    base._set_injury_source(monkeypatch, "bdl")
     base._use_cache(monkeypatch, service)
     base._forbid_scraper(monkeypatch)
     base._forbid_refresh(monkeypatch)
@@ -81,7 +82,6 @@ def test_fresh_snapshot_with_an_empty_list_means_no_injuries(monkeypatch):
     assert "reason" not in report["details"]
 
 
-@pytest.mark.xfail(strict=True, reason="must-fix M1: fresh body without an entries list reads as no injuries")
 @pytest.mark.parametrize("entries", ["missing", None, "oops", {"UTA": []}])
 def test_fresh_body_without_an_entries_list_is_unavailable(monkeypatch, entries):
     body = {"fetched_at": _now_iso()}
@@ -166,7 +166,6 @@ def test_refresh_stamps_fetched_at_in_utc():
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.xfail(strict=True, reason="should-fix S1: every row dropped (no team map) still overwrites a good snapshot")
 def test_refresh_with_no_team_map_keeps_the_previous_snapshot():
     service, _fake = base._cache()
     previous = {"fetched_at": _now_iso(), "entries": _fresh_entries()}
@@ -218,7 +217,6 @@ def test_doubtful_player_reads_as_caution_with_the_source_word(monkeypatch):
     assert row["raw_status"] == "Doubtful"
 
 
-@pytest.mark.xfail(strict=True, reason="should-fix S2: an unrecognized BDL status passes through and reads as healthy")
 def test_unrecognized_status_is_not_read_as_healthy(monkeypatch):
     row = _row("Jackson Jr.")
     row["status"] = "Out For Season"
