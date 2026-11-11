@@ -474,8 +474,8 @@ export function PlayerDDTile({
             </p>
             <p>
               <span className="font-semibold">ML projection is not available.</span>{" "}
-              A double-double is a joint outcome. This tile does not derive one
-              from separate stat projections.
+              A double-double is a joint outcome. This tile does not estimate one
+              from the other stats.
             </p>
           </div>
         </div>
