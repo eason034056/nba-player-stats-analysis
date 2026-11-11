@@ -12,7 +12,7 @@ import { enUS } from "date-fns/locale";
 import { buildEventDetailHref, type LeagueSegment } from "./event-detail-link";
 import { METRIC_TO_MARKET, type MetricKey } from "./metric-to-market";
 import { boardRate, nbaTierFace, tierFromBackend } from "./nba-card";
-import { isOutPick } from "./picks-board";
+import { isOutPick, isPlayerOutInGame } from "./picks-board";
 import { formatPercent, formatTierPercent } from "./player-dd";
 import {
   DIRECTION_DISPLAY_NAMES,
@@ -228,7 +228,10 @@ export function todayReads(
   events: NBAEvent[] = [],
 ): TodayReadCard[] {
   const tipByEvent = new Map(events.map((event) => [event.event_id, eventTipClock(event)]));
-  return rankReads(picks, league)
+  const eligible = rankReads(picks, league).filter(
+    (pick) => league !== "nba" || !isPlayerOutInGame(picks, pick.event_id, pick.player_name),
+  );
+  return eligible
     .slice(0, limit)
     .map((pick, index) => {
       const time = tipByEvent.get(pick.event_id) ?? boardClock(pick.commence_time);
@@ -299,7 +302,14 @@ function tierForTopRead(read: TopRead, eventId: string, picks: DailyPick[]): Rea
   return match ? tierFromBackend(match.tier) : null;
 }
 
-function topReadIsOut(read: TopRead, eventId: string, picks: DailyPick[]): boolean {
+function topReadIsOut(
+  read: TopRead,
+  eventId: string,
+  picks: DailyPick[],
+  league: LeagueSegment,
+  injuryPicks: readonly DailyPick[],
+): boolean {
+  if (league === "nba") return isPlayerOutInGame(injuryPicks, eventId, read.player);
   return picks.some((pick) => isOutPick(pick) && samePublishedProp(pick, eventId, read));
 }
 
@@ -308,15 +318,26 @@ export function todayGames(
   picks: DailyPick[],
   league: LeagueSegment,
   date: string,
+  /**
+   * Injury rows. Defaults to `picks`. Today also passes the last picks
+   * body when that request failed, so a known Out player is not left on
+   * the fallback `top_read`. An empty list has no injury status. The
+   * events payload does not say who is Out, so that `top_read` stays.
+   */
+  injuryPicks: readonly DailyPick[] = picks,
 ): TodayGameCard[] {
-  const ranked = rankReads(picks, league);
+  const ranked = rankReads(picks, league).filter(
+    (pick) => league !== "nba" || !isPlayerOutInGame(injuryPicks, pick.event_id, pick.player_name),
+  );
   return events.map((event) => {
     // NBA: the top published pick by blend. top_read is ranked on the
     // historical rate and carries no blend, so it only fills text when no
     // published pick exists, without a percent or tier.
     const publishedRead = event.top_read ?? null;
     const apiRead =
-      publishedRead && topReadIsOut(publishedRead, event.event_id, picks) ? null : publishedRead;
+      publishedRead && topReadIsOut(publishedRead, event.event_id, picks, league, injuryPicks)
+        ? null
+        : publishedRead;
     const best = ranked.find((pick) => pick.event_id === event.event_id) ?? null;
     const useApi = league === "nba" ? best == null && apiRead != null : apiRead != null;
     const pick = useApi ? null : best;

@@ -217,13 +217,15 @@ export function OurRead({
                   The other side&apos;s hit rate is not on this response.
                 </p>
               ) : null}
-              <button
-                type="button"
-                onClick={onAsk}
-                className="min-h-[46px] rounded-full bg-brand-tint px-4 text-sm font-semibold text-brand"
-              >
-                Ask the agent
-              </button>
+              {model.listedOut ? null : (
+                <button
+                  type="button"
+                  onClick={onAsk}
+                  className="min-h-[46px] rounded-full bg-brand-tint px-4 text-sm font-semibold text-brand"
+                >
+                  Ask the agent
+                </button>
+              )}
             </div>
           </>
         )}

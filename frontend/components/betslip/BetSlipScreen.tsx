@@ -2,13 +2,14 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
-import { useQuery } from "@tanstack/react-query";
+import { useQueries, useQuery } from "@tanstack/react-query";
 
 import { LineupStatusBadge } from "@/components/LineupStatusBadge";
 import { useAgentWidget } from "@/contexts/AgentWidgetContext";
 import { useBetSlip, type BetSlipPick } from "@/contexts/BetSlipContext";
 import { createAgentPickContextFromBetSlip } from "@/lib/agent-chat";
-import { getLineups } from "@/lib/api";
+import { getDailyPicks, getLineups } from "@/lib/api";
+import { isPlayerOutInGame } from "@/lib/picks-board";
 import {
   complementHitRateLabel,
   slipDetailHref,
@@ -19,16 +20,18 @@ import {
   slipTeamCode,
 } from "@/lib/bet-slip-board";
 import { getCanonicalTeamCode } from "@/lib/team-logos";
-import { getLocalDateString } from "@/lib/utils";
+import { cn, getLocalDateString } from "@/lib/utils";
 
 const SHARE_FONT_SANS = "Instrument Sans, system-ui, sans-serif";
 const SHARE_FONT_MONO = "JetBrains Mono, ui-monospace, monospace";
 
 function ShareCard({
   picks,
+  outIds,
   forwardedRef,
 }: {
   picks: BetSlipPick[];
+  outIds: ReadonlySet<string>;
   forwardedRef: React.RefObject<HTMLDivElement>;
 }) {
   const stamp = picks[0]?.commence_time
@@ -80,7 +83,7 @@ function ShareCard({
             ) : null}
           </div>
           <div style={{ fontFamily: SHARE_FONT_MONO, fontWeight: 700, fontSize: 16, color: "#E4DA72" }}>
-            {slipCardFace(pick).probabilityText}
+            {outIds.has(pick.id) ? "Out" : slipCardFace(pick).probabilityText}
           </div>
         </div>
       ))}
@@ -98,9 +101,6 @@ export function BetSlipScreen() {
   const [copySuccess, setCopySuccess] = useState(false);
   const shareImageRef = useRef<HTMLDivElement>(null);
   const picksHref = "/picks";
-  const totals = useMemo(() => slipTotals(picks), [picks]);
-  const summary = totals.summary;
-
   const lineupDates = useMemo(() => {
     return Array.from(
       new Set(
@@ -110,6 +110,23 @@ export function BetSlipScreen() {
       ),
     ).sort();
   }, [picks]);
+  const boardQueries = useQueries({
+    queries: lineupDates.map((date) => ({
+      queryKey: ["daily-picks", date],
+      queryFn: () => getDailyPicks({ date }),
+      staleTime: 5 * 60 * 1000,
+      retry: false,
+      refetchOnWindowFocus: false,
+    })),
+  });
+  const loadedPicks = boardQueries.flatMap((query) => query.data?.picks ?? []);
+  const outIds = new Set(
+    picks
+      .filter((pick) => isPlayerOutInGame(loadedPicks, pick.event_id, pick.player_name))
+      .map((pick) => pick.id),
+  );
+  const totals = slipTotals(picks, outIds);
+  const summary = totals.summary;
 
   const {
     data: lineupResponses,
@@ -272,6 +289,7 @@ export function BetSlipScreen() {
           <div className="flex min-w-0 flex-[3_1_420px] flex-col gap-2.5">
             <h2 className="sr-only">Your picks</h2>
             {picks.map((pick) => {
+              const listedOut = outIds.has(pick.id);
               const face = slipCardFace(pick);
               const lineup =
                 lineupsByDateAndTeam.get(
@@ -280,7 +298,10 @@ export function BetSlipScreen() {
               return (
                 <article
                   key={pick.id}
-                  className="flex items-center gap-3.5 rounded-[20px] border border-line bg-white px-4 py-4 md:px-[18px]"
+                  className={cn(
+                    "flex items-center gap-3.5 rounded-[20px] border border-line bg-white px-4 py-4 md:px-[18px]",
+                    listedOut && "opacity-60",
+                  )}
                 >
                   <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-line font-mono text-[11px] font-bold text-brand">
                     {slipTeamCode(pick, "nba")}
@@ -308,18 +329,28 @@ export function BetSlipScreen() {
                     </div>
                   </div>
                   <div className="text-right">
-                    <div className="font-mono text-xl font-bold text-brand">
-                      {face.probabilityText}
-                    </div>
-                    {face.tier ? <div className="text-[11px] font-semibold text-muted">{face.tier.label}</div> : null}
+                    {listedOut ? (
+                      <div className="text-sm font-bold text-ink">Out</div>
+                    ) : (
+                      <>
+                        <div className="font-mono text-xl font-bold text-brand">
+                          {face.probabilityText}
+                        </div>
+                        {face.tier ? <div className="text-[11px] font-semibold text-muted">{face.tier.label}</div> : null}
+                      </>
+                    )}
                   </div>
                   <button
                     type="button"
                     aria-label={`Remove ${pick.player_name}`}
                     onClick={() => removePick(pick.id)}
-                    className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-line bg-white text-base text-muted hover:border-red hover:text-red"
+                    className={
+                      listedOut
+                        ? "min-h-11 shrink-0 rounded-full border border-line bg-white px-4 text-[13px] font-bold text-ink"
+                        : "flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-line bg-white text-base text-muted hover:border-red hover:text-red"
+                    }
                   >
-                    ×
+                    {listedOut ? "Remove" : "×"}
                   </button>
                 </article>
               );
@@ -364,7 +395,7 @@ export function BetSlipScreen() {
                   ? "History: a leg has no blend, so avg and all hit use the historical rate on every leg. A reverse add stores the complement of the other side's hit rate, not a de-vigged price."
                   : "Avg and all hit use the stored hit rates. A reverse add stores the complement of the other side's hit rate, not a de-vigged price. All hit is the product of those stored rates. It is not a joint probability from the API."}
             </p>
-            <ShareCard picks={picks} forwardedRef={shareImageRef} />
+            <ShareCard picks={picks} outIds={outIds} forwardedRef={shareImageRef} />
             <div className="flex flex-wrap gap-2">
               <button
                 type="button"

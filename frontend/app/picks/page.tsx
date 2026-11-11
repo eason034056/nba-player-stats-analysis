@@ -193,11 +193,14 @@ export default function PicksPage() {
 
   const handleToggleSlip = useCallback(
     (pick: DailyPick) => {
-      if (isOutPick(pick)) return;
       const id = `${pick.player_name}-${pick.metric}`;
       const existing = slipPicks.find(
         (item) => item.player_name === pick.player_name && item.metric === pick.metric,
       );
+      if (isOutPick(pick)) {
+        if (existing) removePick(id);
+        return;
+      }
       const reverse = pick.direction === "over" ? "under" : "over";
       if (existing && existing.direction !== reverse) {
         removePick(id);

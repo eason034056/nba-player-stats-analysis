@@ -395,7 +395,12 @@ export function DailyPicksBoard({
                     </div>
                   </div>
 
-                  <div className="flex min-w-0 flex-1 basis-[220px] flex-col gap-2">
+                  <div
+                    className={cn(
+                      "flex min-w-0 flex-col gap-2",
+                      row.dimmed ? "md:flex-1 md:basis-[220px]" : "flex-1 basis-[220px]",
+                    )}
+                  >
                     <div className="text-[15px] font-bold">{row.propText}</div>
                     {slipCaption?.(pick) ? (
                       <p className="text-xs leading-5 text-muted">{slipCaption(pick)}</p>
@@ -434,7 +439,20 @@ export function DailyPicksBoard({
                   </div>
                   )}
 
-                  {row.dimmed ? null : (
+                  {row.dimmed ? (
+                    inSlip ? (
+                      <div className="flex shrink-0 justify-end">
+                        <button
+                          type="button"
+                          aria-label={`Remove ${pick.player_name}`}
+                          onClick={() => onToggleSlip(pick)}
+                          className="min-h-11 rounded-full border border-line bg-white px-4 text-[13px] font-bold text-ink"
+                        >
+                          Remove
+                        </button>
+                      </div>
+                    ) : null
+                  ) : (
                   <div className="flex shrink-0 flex-wrap justify-end gap-2">
                       <button
                         type="button"
