@@ -245,6 +245,29 @@ def _parse_utc(fetched_at: str | None) -> datetime | None:
     return parsed.astimezone(timezone.utc)
 
 
+def injury_snapshot_is_fresh(raw: object) -> bool:
+    """True when pick and reads loaders would use this body.
+
+    The body must be a dict with an ``entries`` list and a
+    ``fetched_at`` that is not older than six hours. Exactly six hours
+    is still fresh. A missing body, a non-list ``entries``, and an
+    unreadable time are not fresh. This does not log.
+
+    Args:
+        raw: Value stored at ``injuries:nba:latest``, or None.
+
+    Returns:
+        True when the snapshot is usable. False when a reader would
+        leave ``injury_status`` null.
+    """
+    if not isinstance(raw, dict) or not isinstance(raw.get("entries"), list):
+        return False
+    fetched_at = raw.get("fetched_at")
+    if not isinstance(fetched_at, str):
+        return False
+    return not _is_stale(fetched_at)
+
+
 def _is_stale(fetched_at: str | None, *, now: datetime | None = None) -> bool:
     """True when ``fetched_at`` is missing or older than the 6h window.
 

@@ -572,7 +572,7 @@ def test_job_is_registered_on_the_half_hour_marks(monkeypatch) -> None:
     assert "7" in text and "37" in text
     assert NBA_INJURY_REFRESH_CRON_HOUR in text
     assert str(trigger.timezone) == str(NBA_INJURY_REFRESH_TZ) == "America/Chicago"
-    assert found["misfire_grace_time"] == 1
+    assert found["misfire_grace_time"] == 25 * 60
     assert found["max_instances"] == 1
     assert found["coalesce"] is True
     assert startup is not None
@@ -615,7 +615,10 @@ def test_startup_fill_runs_once_only_when_the_key_is_missing(monkeypatch) -> Non
     assert calls == [True]
 
     async def _present(_key):
-        return {"fetched_at": "2026-11-11T18:00:00+00:00", "entries": []}
+        return {
+            "fetched_at": datetime.now(timezone.utc).isoformat(),
+            "entries": [],
+        }
 
     monkeypatch.setattr("app.services.cache.cache_service.get", _present)
     asyncio.run(service._fill_nba_injuries_if_missing())
