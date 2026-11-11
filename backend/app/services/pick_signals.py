@@ -19,7 +19,9 @@ Every rule is relative to the pick's side (over or under).
 ``combined_probability`` starts from the market no-vig log-odds, adds
 bounded adjustments from the other four signals, and applies Platt scaling
 to the adjustment total only. No market price, or an injury status of Out
-or Doubtful, returns None. WNBA does not call this module.
+or Doubtful, returns None. Doubtful from the BALLDONTLIE cache is stored
+as Questionable; that block reads ``raw_status``. WNBA does not call
+this module.
 """
 
 from __future__ import annotations
@@ -139,11 +141,25 @@ def rate_verdict(
     return NEUTRAL
 
 
-def injury_blocks_combined(status: str | None) -> bool:
-    """True when the player is Out or Doubtful, ignoring case and whitespace."""
+def _injury_word_blocks(status: str | None) -> bool:
+    """True when this one word is Out or Doubtful, ignoring case and whitespace."""
     if not isinstance(status, str):
         return False
     return status.strip().casefold() in _INJURY_BLOCK
+
+
+def injury_blocks_combined(
+    status: str | None,
+    raw_status: str | None = None,
+) -> bool:
+    """True when the player is Out or Doubtful, ignoring case and whitespace.
+
+    ``status`` is the normalized word on the pick. The BALLDONTLIE cache
+    stores Doubtful as Questionable and keeps the source word on
+    ``raw_status``. A later pick path passes that source word so the
+    block still fires. Either word is enough.
+    """
+    return _injury_word_blocks(status) or _injury_word_blocks(raw_status)
 
 
 def american_pairs_at_line(
@@ -447,17 +463,20 @@ def combined_probability(
     market_probability: float | None,
     adjustment: float,
     injury_status: str | None = None,
+    raw_status: str | None = None,
 ) -> float | None:
     """Calibrated probability of ``side``.
 
     ``logit(market)`` is added with coefficient 1. Platt has already been
     applied to ``adjustment``. None when the market is missing, the side
     is not over or under, or the player is Out or Doubtful.
+    ``raw_status`` is the source word when ``injury_status`` was normalized
+    (Doubtful stored as Questionable).
 
     The result is rounded to 4 decimals and kept inside ``[0.0001, 0.9999]``
     so a later log loss stays finite.
     """
-    if injury_blocks_combined(injury_status):
+    if injury_blocks_combined(injury_status, raw_status):
         return None
     if side not in ("over", "under"):
         return None
@@ -506,6 +525,7 @@ def build_nba_signals(
     opponent_rank: float | None = None,
     opponent_position_rank: float | None = None,
     injury_status: str | None = None,
+    raw_status: str | None = None,
 ) -> tuple[list[PickSignal], float | None, float | None]:
     """Build the five signals, the calibrated probability, and the pre-Platt total.
 
@@ -528,6 +548,9 @@ def build_nba_signals(
         opponent_position_rank: Defense rank versus the player's position. Preferred.
         injury_status: Out or Doubtful forces the combined probability to None.
             The five signals are still returned.
+        raw_status: Source word from the injury cache. Doubtful is normalized
+            to Questionable on ``injury_status`` and still blocks when this
+            argument is Doubtful.
 
     Returns:
         ``(signals, combined_probability, adjustment_total)``. ``signals``
@@ -578,5 +601,6 @@ def build_nba_signals(
         market_probability=market,
         adjustment=total,
         injury_status=injury_status,
+        raw_status=raw_status,
     )
     return signals, combined, total

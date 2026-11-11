@@ -4,6 +4,8 @@
 - **Date:** 2026-11-11
 - **Status:** Accepted
 
+> Superseded in part by SPO-135c (2026-11-11): NBA always reads `injuries:nba:latest`. `NBA_INJURY_SOURCE` is removed. `nba_injuries_refresh` is registered. The request path still does not call BALLDONTLIE.
+
 ## Context
 
 Product agents scrape ESPN and CBS on every injury lookup. `get_official_injury_report`, the own-team report, and `auto_teammate_impact` each call `_fetch_injury_report_for_team`, and that function has no cache.

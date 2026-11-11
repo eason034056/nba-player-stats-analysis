@@ -16,11 +16,16 @@ map the caller supplies (SPO-130d will own the official map).
 
 from __future__ import annotations
 
+import asyncio
+import json
 import logging
+import time
 from datetime import datetime, timedelta, timezone
+from pathlib import Path
 from typing import Any, Mapping, Protocol
 
 from app.services.cache import CacheService
+from app.services.normalize import player_name_key
 
 logger = logging.getLogger(__name__)
 
@@ -35,6 +40,20 @@ NBA_INJURIES_MAX_PAGES = 20
 # Request-path reads open their own client. A stuck Redis must not
 # hold the user request open.
 NBA_INJURY_CACHE_SOCKET_TIMEOUT_SECONDS = 2.0
+# One page every 15 seconds is 4 calls in any clock minute. The shared
+# trial budget is 5/min (``bdl_rate_limit_per_min``). The spare slot is
+# for the other caller on this key. The limiter still refuses a 6th.
+NBA_INJURY_PAGE_INTERVAL_SECONDS = 15.0
+
+# Recorded standings body. Team ids are read from this file, not typed.
+# ``backend/app/services/nba_injuries.py`` -> ``backend/tests/fixtures/bdl``.
+_STANDINGS_FIXTURE = (
+    Path(__file__).resolve().parents[2]
+    / "tests"
+    / "fixtures"
+    / "bdl"
+    / "standings_2026.json"
+)
 
 BALLDONTLIE_SOURCE = "balldontlie"
 
@@ -392,11 +411,201 @@ async def refresh_nba_injuries(
         )
         return None
     except Exception as exc:
-        # TODO(SPO-130a): narrow this catch to BdlError once bdl_client.py lands.
-        # The message is omitted on purpose. A client error can include
-        # the request line, and that line can carry a credential.
+        # BdlError is the expected client failure. Any other exception is
+        # logged the same way: type only, never the message. A client
+        # error can include the request line, and that line can carry a
+        # credential.
         logger.warning(
             "NBA injury refresh failed (%s); previous cache left in place",
             type(exc).__name__,
         )
         return None
+
+
+def match_injury_entry(
+    entries: list[dict],
+    player: str,
+    bdl_player_id: Any = None,
+) -> dict[str, Any] | None:
+    """Pick one injury row for ``player``.
+
+    A caller-supplied ``bdl_player_id`` wins. Scraper rows (ESPN and
+    CBS often list the same player twice) and BDL rows that share one
+    id use the first name match. Two BDL rows with different ids, or
+    two BDL rows with the same name and no id, are left unmatched so
+    the report does not attach the wrong person.
+
+    Names compare through :func:`player_name_key` (case, accents,
+    punctuation, and a trailing generational suffix).
+    """
+    rows = [entry for entry in entries if isinstance(entry, dict) and not entry.get("unavailable")]
+    if bdl_player_id is not None:
+        for entry in rows:
+            if entry.get("bdl_player_id") == bdl_player_id:
+                return entry
+
+    def _same(entry: dict) -> bool:
+        key = player_name_key(str(entry.get("player") or ""))
+        return bool(key) and key == player_name_key(player)
+
+    named = [entry for entry in rows if _same(entry)]
+    if not named:
+        return None
+    bdl_rows = [
+        entry
+        for entry in named
+        if "bdl_player_id" in entry or entry.get("source") == BALLDONTLIE_SOURCE
+    ]
+    if not bdl_rows:
+        return named[0]
+    ids = {entry.get("bdl_player_id") for entry in bdl_rows if entry.get("bdl_player_id") is not None}
+    if len(ids) > 1:
+        return None
+    if len(ids) == 1:
+        wanted = next(iter(ids))
+        for entry in named:
+            if entry.get("bdl_player_id") == wanted:
+                return entry
+    if len(bdl_rows) == 1:
+        return bdl_rows[0]
+    return None
+
+
+def load_recorded_team_id_map() -> dict[int, str]:
+    """Read ``team_id -> abbreviation`` from the recorded standings fixture.
+
+    The file is the standings capture committed with the injury cache.
+    A missing or unreadable file returns an empty map. The refresh then
+    refuses to write, which leaves the previous snapshot in place.
+    The log line is the exception type only.
+    """
+    try:
+        payload = json.loads(_STANDINGS_FIXTURE.read_text(encoding="utf-8"))
+    except (OSError, ValueError) as exc:
+        logger.warning(
+            "NBA injury team map could not be read (%s); previous cache left in place",
+            type(exc).__name__,
+        )
+        return {}
+    if not isinstance(payload, dict):
+        logger.warning(
+            "NBA injury team map could not be read (%s); previous cache left in place",
+            type(payload).__name__,
+        )
+        return {}
+    return team_id_to_code_from_standings(payload)
+
+
+class PacedInjuryClient:
+    """Space ``list_player_injuries`` so one refresh stays under 5 calls/min.
+
+    The first call goes immediately. Each later call waits
+    ``interval_seconds`` after the previous one started. At 15 seconds
+    that is 4 calls in any clock minute. The wrapped client is still
+    responsible for the shared Redis limiter; this only stops the
+    refresh from using every slot itself.
+
+    Args:
+        client: Object with ``list_player_injuries`` (the BDL client).
+        interval_seconds: Gap between page starts. Default 15.
+        sleep: Awaitable delay. Tests pass a clock that records the gap.
+        clock: Monotonic clock in seconds. Tests pass the same clock
+            ``sleep`` advances.
+    """
+
+    def __init__(
+        self,
+        client: BdlInjuryClient,
+        *,
+        interval_seconds: float = NBA_INJURY_PAGE_INTERVAL_SECONDS,
+        sleep: Any = None,
+        clock: Any = None,
+    ) -> None:
+        self._client = client
+        self._interval = interval_seconds
+        self._sleep = sleep or asyncio.sleep
+        self._clock = clock or time.monotonic
+        self._next_allowed: float | None = None
+
+    async def list_player_injuries(
+        self,
+        *,
+        cursor: int | None = None,
+        per_page: int = 100,
+    ) -> dict:
+        """Fetch one page after the pacing gap, then return the client body."""
+        now = float(self._clock())
+        if self._next_allowed is not None and now < self._next_allowed:
+            await self._sleep(self._next_allowed - now)
+            now = float(self._clock())
+        self._next_allowed = now + self._interval
+        return await self._client.list_player_injuries(cursor=cursor, per_page=per_page)
+
+
+async def refresh_nba_injuries_from_bdl(
+    client: BdlInjuryClient,
+    cache: Any,
+    *,
+    team_id_to_code: Mapping[Any, str] | None = None,
+    sleep: Any = None,
+    clock: Any = None,
+    page_interval_seconds: float = NBA_INJURY_PAGE_INTERVAL_SECONDS,
+) -> dict[str, Any] | None:
+    """Refresh through a paced client and the recorded team-id map.
+
+    ``client`` is the shared BDL client, so every page takes a Redis
+    budget slot. ``team_id_to_code`` defaults to the recorded standings
+    fixture. Passing a map is how tests avoid the file.
+
+    Returns the stored body, or None when nothing was written.
+    """
+    mapping = team_id_to_code if team_id_to_code is not None else load_recorded_team_id_map()
+    paced = PacedInjuryClient(
+        client,
+        interval_seconds=page_interval_seconds,
+        sleep=sleep,
+        clock=clock,
+    )
+    return await refresh_nba_injuries(paced, cache, mapping)
+
+
+async def load_nba_pick_injuries(*, cache: Any | None = None) -> list[dict[str, Any]] | None:
+    """Return a fresh injury list for NBA picks, or None when it cannot be used.
+
+    This never calls BALLDONTLIE. A missing key, a stale ``fetched_at``,
+    a body that is not ``{"entries": [...]}``, and a read error each log
+    one warning and return None. The warning names the failure kind, or
+    the exception type. It does not include the message, a URL, or a key.
+    A fresh empty list is a real snapshot and returns ``[]`` with no warning.
+
+    Args:
+        cache: Object with ``async get(key)``. Defaults to the process
+            cache client.
+
+    Returns:
+        The entry list, or None when picks must leave ``injury_status`` null.
+    """
+    reader = cache
+    if reader is None:
+        from app.services.cache import cache_service
+
+        reader = cache_service
+    try:
+        raw = await reader.get(NBA_INJURIES_CACHE_KEY)
+    except Exception as exc:
+        logger.warning(
+            "NBA pick injury read failed (%s); injury_status left null",
+            type(exc).__name__,
+        )
+        return None
+    if raw is None:
+        logger.warning("NBA injury snapshot missing; injury_status left null")
+        return None
+    if not isinstance(raw, dict) or not isinstance(raw.get("entries"), list):
+        logger.warning("NBA injury snapshot malformed; injury_status left null")
+        return None
+    snapshot = _snapshot_from_payload(raw, None)
+    if snapshot["stale"]:
+        logger.warning("NBA injury snapshot stale; injury_status left null")
+        return None
+    return [row for row in snapshot["entries"] if isinstance(row, dict)]

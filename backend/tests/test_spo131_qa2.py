@@ -53,23 +53,27 @@ def _scrape_path(monkeypatch, league_source: str | None = None):
     return historical
 
 
-def test_scrape_rows_reach_the_tool_unchanged(monkeypatch):
+def test_scrape_rows_reach_the_wnba_tool_unchanged(monkeypatch):
     historical = _scrape_path(monkeypatch)
-    rows = historical._fetch_injury_report_for_team("PHI", league="nba")
+    rows = historical._fetch_injury_report_for_team("PHI", league="wnba")
     assert [(r["player"], r["source"]) for r in rows] == [("Joel Embiid", "espn"), ("Joel Embiid", "cbs")]
 
 
-def test_player_on_both_scrape_sources_is_still_out_on_the_default_path(monkeypatch):
+def test_wnba_player_on_both_scrape_sources_is_still_out(monkeypatch):
     historical = _scrape_path(monkeypatch)
-    availability = historical.get_availability_context("Joel Embiid", league="nba")
-    assert availability["details"]["status"] == "Out"
-    assert availability["signal"] == "caution"
+    rows = historical._fetch_injury_report_for_team("PHI", league="wnba")
+    matched = historical._match_injury_entry(rows, "Joel Embiid")
+    assert matched is not None
+    assert matched["status"] == "Out"
+    assert matched["source"] == "espn"
 
 
-def test_player_on_both_scrape_sources_with_unknown_flag(monkeypatch):
+def test_wnba_scrape_ignores_the_old_injury_source_env(monkeypatch):
     historical = _scrape_path(monkeypatch, "foo")
-    availability = historical.get_availability_context("Joel Embiid", league="nba")
-    assert availability["details"]["status"] == "Out"
+    rows = historical._fetch_injury_report_for_team("PHI", league="wnba")
+    matched = historical._match_injury_entry(rows, "Joel Embiid")
+    assert matched is not None
+    assert matched["status"] == "Out"
 
 
 def test_same_player_twice_in_the_cache_without_ids_is_not_guessed():

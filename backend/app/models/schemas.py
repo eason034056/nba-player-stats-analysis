@@ -683,7 +683,13 @@ class DailyPick(BaseModel):
     )
     injury_status: Optional[str] = Field(
         default=None,
-        description="Injury status. Null until a lineup source writes it onto the pick."
+        description=(
+            "Normalized NBA injury status from the BALLDONTLIE snapshot: "
+            "Out, Questionable, Probable, or Day-To-Day. Doubtful is stored "
+            "as Questionable; the blend still drops when the source word is "
+            "Doubtful. Null when the snapshot is missing, stale, or malformed, "
+            "or when the name is missing or ambiguous. WNBA stays null."
+        ),
     )
     lineup_confirmed: Optional[bool] = Field(
         default=None,

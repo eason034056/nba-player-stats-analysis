@@ -48,7 +48,7 @@ def _seed(body) -> base.CacheService:
 def _agent_path(monkeypatch: pytest.MonkeyPatch, service) -> object:
     historical = base._historical()
     base._set_dummy_key(monkeypatch)
-    # The cache is selected by NBA_INJURY_SOURCE, not by the API key.
+    # NBA always reads the cache. The retired env var is ignored.
     base._set_injury_source(monkeypatch, "bdl")
     base._use_cache(monkeypatch, service)
     base._forbid_scraper(monkeypatch)

@@ -194,17 +194,12 @@ def _clear_key(monkeypatch: pytest.MonkeyPatch) -> None:
 
 
 def _set_injury_source(monkeypatch: pytest.MonkeyPatch, value: str) -> None:
+    """Set the retired env var. NBA and WNBA both ignore it."""
     monkeypatch.setenv("NBA_INJURY_SOURCE", value)
-    monkeypatch.setattr(settings, "nba_injury_source", value)
 
 
 def _use_default_injury_source(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.delenv("NBA_INJURY_SOURCE", raising=False)
-    monkeypatch.setattr(
-        settings,
-        "nba_injury_source",
-        Settings.model_fields["nba_injury_source"].default,
-    )
 
 
 def _install_injuries_module(monkeypatch: pytest.MonkeyPatch, fetcher_cls: type) -> None:
@@ -551,8 +546,8 @@ def test_settings_expose_the_refresh_interval_and_key() -> None:
     default_key = Settings.model_fields["balldontlie_api_key"].default
     assert isinstance(default_key, SecretStr)
     assert default_key.get_secret_value() == ""
-    assert Settings.model_fields["nba_injuries_refresh_minutes"].default == 15
-    assert Settings.model_fields["nba_injury_source"].default == "espn_cbs"
+    assert Settings.model_fields["nba_injuries_refresh_minutes"].default == 30
+    assert "nba_injury_source" not in Settings.model_fields
 
 
 # ---------------------------------------------------------------------------
@@ -721,67 +716,92 @@ def _expect_espn_cbs(monkeypatch: pytest.MonkeyPatch) -> None:
     _guard_network(monkeypatch)
 
 
-def test_without_key_nba_keeps_the_espn_cbs_scraper(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_without_key_nba_reads_the_cache_and_does_not_scrape(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The API key is not the feed switch. NBA never scrapes."""
     historical = _historical()
+    service, _fake = _cache()
     _clear_key(monkeypatch)
     _use_default_injury_source(monkeypatch)
-    _expect_espn_cbs(monkeypatch)
+    _use_cache(monkeypatch, service)
+    _forbid_scraper(monkeypatch)
+    _guard_network(monkeypatch)
 
-    result = asyncio.run(historical.get_official_injury_report("76ers", league="nba"))
-    assert _ScrapingFetcher.calls == 1
+    result = asyncio.run(historical.get_official_injury_report("PHI", league="nba"))
     assert result["signal"] == "caution"
-    assert result["details"]["injuries"] == [
-        {
-            "player": "Joel Embiid",
-            "position": "C",
-            "status": "Out",
-            "injury": "knee",
-            "source": "espn",
-        }
-    ]
-    assert "reason" not in result["details"]
+    assert result["details"]["reason"] == "injury data unavailable"
+    assert result["details"]["injuries"] == []
 
 
-def test_key_present_and_flag_unset_uses_espn_cbs(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_nba_reads_the_cache_when_the_old_flag_is_unset(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     historical = _historical()
+    service, _fake = _cache()
+    mapping = team_id_to_code_from_standings(STANDINGS)
+    payload = asyncio.run(
+        refresh_nba_injuries(
+            PageClient([INJURY_PAGE, _recorded_page(next_cursor=None)]),
+            service,
+            mapping,
+        )
+    )
+    assert payload is not None
     _set_dummy_key(monkeypatch)
     _use_default_injury_source(monkeypatch)
-    _expect_espn_cbs(monkeypatch)
+    _use_cache(monkeypatch, service)
+    _forbid_scraper(monkeypatch)
+    _guard_network(monkeypatch)
 
-    result = asyncio.run(historical.get_official_injury_report("76ers", league="nba"))
-    assert _ScrapingFetcher.calls == 1
-    assert result["details"]["injuries"][0]["source"] == "espn"
+    team_code = payload["entries"][0]["team"]
+    result = asyncio.run(historical.get_official_injury_report(team_code, league="nba"))
+    assert result["details"]["injuries"][0]["source"] == "balldontlie"
     assert "reason" not in result["details"]
 
 
-def test_key_present_and_explicit_espn_cbs_uses_the_scraper(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_nba_ignores_espn_cbs_env_and_reads_the_cache(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     historical = _historical()
+    service, _fake = _cache()
+    mapping = team_id_to_code_from_standings(STANDINGS)
+    payload = asyncio.run(
+        refresh_nba_injuries(
+            PageClient([INJURY_PAGE, _recorded_page(next_cursor=None)]),
+            service,
+            mapping,
+        )
+    )
+    assert payload is not None
     _set_dummy_key(monkeypatch)
     _set_injury_source(monkeypatch, "espn_cbs")
-    _expect_espn_cbs(monkeypatch)
+    _use_cache(monkeypatch, service)
+    _forbid_scraper(monkeypatch)
+    _guard_network(monkeypatch)
 
-    result = asyncio.run(historical.get_official_injury_report("76ers", league="nba"))
-    assert _ScrapingFetcher.calls == 1
-    assert result["details"]["injuries"][0]["source"] == "espn"
-    assert "reason" not in result["details"]
+    team_code = payload["entries"][0]["team"]
+    result = asyncio.run(historical.get_official_injury_report(team_code, league="nba"))
+    assert result["details"]["injuries"][0]["source"] == "balldontlie"
 
 
-def test_unknown_injury_source_falls_back_to_espn_cbs(
+def test_nba_ignores_an_unknown_injury_source_env(
     monkeypatch: pytest.MonkeyPatch,
     caplog: pytest.LogCaptureFixture,
 ) -> None:
     historical = _historical()
-    historical._logged_unknown_injury_sources.clear()
+    service, _fake = _cache()
     _set_dummy_key(monkeypatch)
     _set_injury_source(monkeypatch, "rotowire")
-    _expect_espn_cbs(monkeypatch)
+    _use_cache(monkeypatch, service)
+    _forbid_scraper(monkeypatch)
+    _guard_network(monkeypatch)
 
     with caplog.at_level(logging.WARNING):
-        result = asyncio.run(historical.get_official_injury_report("76ers", league="nba"))
-    assert _ScrapingFetcher.calls == 1
-    assert result["details"]["injuries"][0]["source"] == "espn"
-    assert "rotowire" in caplog.text
-    assert "espn_cbs" in caplog.text
+        result = asyncio.run(historical.get_official_injury_report("PHI", league="nba"))
+    assert result["details"]["reason"] == "injury data unavailable"
+    assert "rotowire" not in caplog.text
+    assert "espn_cbs" not in caplog.text
 
 
 @pytest.mark.parametrize("source", [None, "espn_cbs", "bdl", "rotowire"])
@@ -888,43 +908,48 @@ def test_uppercase_bdl_is_the_cache_source(monkeypatch: pytest.MonkeyPatch, capl
 
 
 @pytest.mark.parametrize("value", ["foo", ""])
-def test_invalid_injury_source_logs_and_uses_espn_cbs(
+def test_invalid_injury_source_env_still_reads_the_cache(
     monkeypatch: pytest.MonkeyPatch,
     caplog: pytest.LogCaptureFixture,
     value: str,
 ) -> None:
     historical = _historical()
-    historical._logged_unknown_injury_sources.clear()
+    service, _fake = _cache()
     _set_dummy_key(monkeypatch)
     _set_injury_source(monkeypatch, value)
-    _expect_espn_cbs(monkeypatch)
+    _use_cache(monkeypatch, service)
+    _forbid_scraper(monkeypatch)
+    _guard_network(monkeypatch)
     with caplog.at_level(logging.WARNING):
-        result = asyncio.run(historical.get_official_injury_report("76ers", league="nba"))
-    assert _ScrapingFetcher.calls == 1
-    assert result["details"]["injuries"][0]["source"] == "espn"
-    assert "espn_cbs" in caplog.text
+        result = asyncio.run(historical.get_official_injury_report("PHI", league="nba"))
+    assert result["details"]["reason"] == "injury data unavailable"
+    if value:
+        assert value not in caplog.text
+    assert "espn_cbs" not in caplog.text
 
 
-def test_settings_read_failure_uses_espn_cbs(
+def test_nba_cache_read_does_not_consult_a_source_setting(
     monkeypatch: pytest.MonkeyPatch,
-    caplog: pytest.LogCaptureFixture,
 ) -> None:
+    """A settings object with no injury-source field still reads the cache."""
     historical = _historical()
-    monkeypatch.delenv("NBA_INJURY_SOURCE", raising=False)
-
-    class _Broken:
-        @property
-        def nba_injury_source(self) -> str:
-            raise RuntimeError("settings unreadable")
-
-    monkeypatch.setattr("app.settings.settings", _Broken())
-    _expect_espn_cbs(monkeypatch)
-    with caplog.at_level(logging.WARNING):
-        result = asyncio.run(historical.get_official_injury_report("76ers", league="nba"))
-    assert _ScrapingFetcher.calls == 1
-    assert result["details"]["injuries"][0]["source"] == "espn"
-    assert "could not be read" in caplog.text
-    assert "espn_cbs" in caplog.text
+    service, _fake = _cache()
+    mapping = team_id_to_code_from_standings(STANDINGS)
+    payload = asyncio.run(
+        refresh_nba_injuries(
+            PageClient([INJURY_PAGE, _recorded_page(next_cursor=None)]),
+            service,
+            mapping,
+        )
+    )
+    assert payload is not None
+    _use_default_injury_source(monkeypatch)
+    _use_cache(monkeypatch, service)
+    _forbid_scraper(monkeypatch)
+    _guard_network(monkeypatch)
+    team_code = payload["entries"][0]["team"]
+    result = asyncio.run(historical.get_official_injury_report(team_code, league="nba"))
+    assert result["details"]["injuries"][0]["source"] == "balldontlie"
 
 
 def test_bdl_without_a_key_and_no_cache_is_caution(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -1016,7 +1041,9 @@ def test_empty_secret_is_not_a_configured_key(
     with caplog.at_level(logging.WARNING):
         report = asyncio.run(historical.get_official_injury_report("PHI", league="nba"))
     assert report["signal"] == "caution"
-    assert "BALLDONTLIE_API_KEY is unset" in caplog.text
+    assert report["details"]["reason"] == "injury data unavailable"
+    assert "unset" not in caplog.text
+    assert "SecretStr" not in caplog.text
 
 
 def test_traded_player_matches_by_name_off_the_csv_team(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -1071,45 +1098,44 @@ def test_bdl_player_id_wins_when_names_collide(monkeypatch: pytest.MonkeyPatch) 
 
 
 def _dual_source_scrape(monkeypatch: pytest.MonkeyPatch):
-    """ESPN and CBS both list the same Out player. The cache must not open."""
+    """ESPN and CBS both list the same WNBA Out player. The cache must not open."""
     historical = _historical()
-    team = historical._team_for("Jaren Jackson Jr", league="nba")
-    code = historical._team_code_from_name(team, league="nba")
+    team = historical._team_for("Breanna Stewart", league="wnba")
+    code = historical._team_code_from_name(team, league="wnba")
 
     class _BothSources:
         def fetch_all(self) -> dict:
             def _row() -> _ScrapedInjury:
-                return _ScrapedInjury(code, "Jaren Jackson Jr.", "PF", "Out", "knee")
+                return _ScrapedInjury(code, "Breanna Stewart", "F", "Out", "foot")
 
             return {"espn": [_row()], "cbs": [_row()]}
 
     _install_injuries_module(monkeypatch, _BothSources)
 
     def _no_cache() -> None:
-        raise AssertionError("NBA injury cache opened on the ESPN/CBS path")
+        raise AssertionError("NBA injury cache opened on the WNBA scrape path")
 
     monkeypatch.setattr(nba_injuries, "open_injury_cache", _no_cache)
     _guard_network(monkeypatch)
     return historical
 
 
-def test_player_on_both_scrape_sources_is_still_out_on_the_default_path(
+def test_wnba_player_on_both_scrape_sources_is_still_out(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     historical = _dual_source_scrape(monkeypatch)
     _use_default_injury_source(monkeypatch)
-    availability = historical.get_availability_context("Jaren Jackson Jr", league="nba")
+    availability = historical.get_availability_context("Breanna Stewart", league="wnba")
     assert availability["signal"] == "caution"
     assert availability["details"]["status"] == "Out"
 
 
-def test_player_on_both_scrape_sources_is_still_out_with_unknown_flag(
+def test_wnba_player_on_both_scrape_sources_ignores_the_old_flag(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     historical = _dual_source_scrape(monkeypatch)
-    historical._logged_unknown_injury_sources.clear()
     _set_injury_source(monkeypatch, "foo")
-    availability = historical.get_availability_context("Jaren Jackson Jr", league="nba")
+    availability = historical.get_availability_context("Breanna Stewart", league="wnba")
     assert availability["signal"] == "caution"
     assert availability["details"]["status"] == "Out"
 
