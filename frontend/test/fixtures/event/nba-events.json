@@ -6,7 +6,10 @@
       "sport_key": "basketball_nba",
       "home_team": "Miami Heat",
       "away_team": "Boston Celtics",
-      "commence_time": "2026-11-11T00:30:00Z"
+      "commence_time": "2026-11-11T00:30:00Z",
+      "commence_time_et": "2026-11-10T19:30:00-05:00",
+      "display_tz": "ET",
+      "lineup_status": { "home": "projected", "away": "confirmed" }
     }
   ]
 }

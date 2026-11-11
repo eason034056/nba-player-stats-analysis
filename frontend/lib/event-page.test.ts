@@ -4,10 +4,13 @@ import {
   buildOurRead,
   buildReadSignals,
   consensusSplit,
+  eventClock,
+  eventLineupChips,
   eventPlayerRows,
   eventTeammates,
   eventWhen,
   gameLogChart,
+  joinMeta,
   lineupChip,
   postedLine,
 } from "@/lib/event-page";
@@ -132,7 +135,7 @@ describe("player rows and lines", () => {
     });
     const bam = rows.find((row) => row.name === "Bam Adebayo");
     const herro = rows.find((row) => row.name === "Tyler Herro");
-    expect(bam?.leanText).toBe("O —");
+    expect(bam?.leanText).toBe("O 72% Strong play");
     expect(bam?.lineText).toBe("18.5");
     expect(herro?.leanText).toBe("No read");
     expect(herro?.lineText).toBe("16.5");
@@ -332,13 +335,13 @@ describe("our read", () => {
       projection: null,
       league: "nba",
     });
-    expect(model.tier).toBeNull();
+    expect(model.tier?.label).toBe("Strong play");
     expect(model.headlineLead).toBe("Over 18.5");
     expect(model.caption).toMatch(/Combined probability —/);
     expect(model.caption).toMatch(/Historical hit rate 72%/);
     expect(model.primary?.probability).toBe(0.72);
     expect(model.other).toBeNull();
-    expect(model.bar?.sourceLabel).toBe("No-vig consensus");
+    expect(model.bar).toBeNull();
     expect(consensusSplit(null, false)).toBeNull();
   });
 
@@ -366,7 +369,7 @@ describe("our read", () => {
     expect(model.other?.direction).toBe("under");
     expect(model.other?.probability).toBe(0.35);
     expect(model.other?.probability).not.toBeCloseTo(0.28);
-    expect(model.bar?.sourceLabel).toBe("Hit rate");
+    expect(model.bar).toBeNull();
   });
 
   it("hides the tier when there is no stored pick", () => {
@@ -406,5 +409,248 @@ describe("clock", () => {
   it("returns null for a blank time", () => {
     expect(eventWhen(null)).toBeNull();
     expect(eventWhen("not-a-date")).toBeNull();
+  });
+
+  it("prints the ET face and appends ET only when display_tz is ET", () => {
+    const clock = eventClock(
+      {
+        commence_time: "2026-11-11T00:30:00Z",
+        commence_time_et: "2026-11-10T19:30:00-05:00",
+        display_tz: "ET",
+      },
+      "nba",
+    );
+    expect(clock.web).toBe("Tue, Nov 10 · 7:30 PM ET");
+    expect(clock.mobile).toBe("7:30 PM ET");
+    const unlabeled = eventClock(
+      {
+        commence_time: "2026-11-11T00:30:00Z",
+        commence_time_et: "2026-11-10T19:30:00-05:00",
+        display_tz: null,
+      },
+      "nba",
+    );
+    expect(unlabeled.web).toBe("Tue, Nov 10 · 7:30 PM");
+    expect(unlabeled.web).not.toMatch(/ET/);
+  });
+});
+
+describe("NBA read uses the backend tier", () => {
+  const base = {
+    player: "Bam Adebayo",
+    marketName: "Points",
+    market: "player_points",
+    binary: false,
+    supportsProjection: true,
+    eventId: "evt-mia-bos",
+    homeTeam: "Miami Heat",
+    awayTeam: "Boston Celtics",
+    commenceTime: "2026-11-11T00:30:00Z",
+    team: "MIA" as string | null,
+    position: "C" as string | null,
+    line: 18.5 as number | null,
+    consensus: null,
+    last10: [],
+    history: null,
+    projection: null,
+    league: "nba" as const,
+  };
+
+  it("keeps Playable at 0.91 and stays blank when the tier field is null", () => {
+    const playable = buildOurRead({
+      ...base,
+      pick: pick({ probability: 0.91, tier: "Playable", signals: null, combined_probability: null }),
+    });
+    expect(playable.tier).toEqual({ name: "playable", label: "Playable" });
+    const blank = buildOurRead({
+      ...base,
+      pick: pick({ probability: 0.91, tier: null, signals: null, combined_probability: null }),
+    });
+    expect(blank.tier).toBeNull();
+    expect(blank.tier).not.toEqual({ name: "strong", label: "Strong play" });
+  });
+
+  it("floors the percent beside the tier at 0.56, 0.65, and 0.70", () => {
+    const cases: Array<[number, string, string]> = [
+      [0.7, "Strong play", "70%"],
+      [0.699, "Playable", "69%"],
+      [0.697, "Playable", "69%"],
+      [0.65, "Playable", "65%"],
+      [0.649, "Lean", "64%"],
+      [0.56, "Lean", "56%"],
+      [0.559, "Lean", "55%"],
+    ];
+    for (const [probability, tier, text] of cases) {
+      const rows = eventPlayerRows({
+        suggested: [],
+        picks: [pick({ probability, tier, signals: null, combined_probability: probability })],
+        metric: "player_points",
+        eventId: "evt-mia-bos",
+        selectedName: "Bam Adebayo",
+        postedLine: 18.5,
+        awayLineup: null,
+        homeLineup: null,
+        awayAbbr: "BOS",
+        homeAbbr: "MIA",
+        league: "nba",
+      });
+      expect(rows[0]?.leanText).toBe(`O ${text} ${tier}`);
+      const model = buildOurRead({
+        ...base,
+        pick: pick({
+          probability,
+          tier,
+          combined_probability: probability,
+          signals: null,
+        }),
+      });
+      expect(model.bar?.overText).toBe(text);
+      expect(model.leanProbability).toBe(probability);
+      expect(model.primary?.probability).toBe(probability);
+    }
+  });
+
+  it("prints an em dash when an NBA pick has no tier and no blend", () => {
+    const rows = eventPlayerRows({
+      suggested: [],
+      picks: [pick({ probability: 0.699, tier: null, signals: null, combined_probability: null })],
+      metric: "player_points",
+      eventId: "evt-mia-bos",
+      selectedName: "Bam Adebayo",
+      postedLine: 18.5,
+      awayLineup: null,
+      homeLineup: null,
+      awayAbbr: "BOS",
+      homeAbbr: "MIA",
+      league: "nba",
+    });
+    expect(rows[0]?.tier).toBeNull();
+    expect(rows[0]?.leanText).toBe("O —");
+  });
+
+  it("does not flip an under signal into an over sentence", () => {
+    const model = buildOurRead({
+      ...base,
+      pick: pick({
+        direction: "under",
+        probability: 0.697,
+        tier: "Playable",
+        combined_probability: 0.697,
+        p_over: 0.28,
+        signals: [
+          { key: "last10", label: "Last 10 games", value: "7/10", verdict: "supports" },
+          { key: "market", label: "Market price", value: "54.0%", verdict: "neutral" },
+        ],
+      }),
+    });
+    expect(model.caption).toContain("1 of 2 signals support the under.");
+    expect(model.signals[0]?.detail).toBe("Went under 18.5 in 7 of 10");
+    expect(model.signals[1]?.value).toBe("54.0%");
+    expect(model.bar?.underText).toBe("69%");
+    expect(model.bar?.overText).toBe("30%");
+    expect(model.other?.probability).toBe(0.28);
+    expect(model.other?.probability).not.toBeCloseTo(0.303);
+    expect(model.primary?.probability).toBe(0.697);
+  });
+
+  it("keeps both slip sides on the historical pick when the model disagrees", () => {
+    const model = buildOurRead({
+      ...base,
+      history: bamHistory,
+      pick: pick({
+        probability: 0.59,
+        tier: "Lean",
+        p_under: 0.41,
+        combined_probability: 0.673,
+        signals: null,
+      }),
+    });
+    expect(model.primary?.probability).toBe(0.59);
+    expect(model.leanProbability).toBe(0.59);
+    expect(model.other?.direction).toBe("under");
+    expect(model.other?.probability).toBe(0.41);
+    expect(model.other?.probability).not.toBeCloseTo(1 - 0.673, 2);
+    expect(model.other?.probability).not.toBe(bamHistory.p_under);
+    expect(model.bar?.sourceLabel).toBe("Model");
+    expect(model.bar?.overText).toBe("67%");
+    expect(model.bar?.underText).toBe("33%");
+  });
+
+  it("uses the pick's opposite field for an under before history or the model", () => {
+    const model = buildOurRead({
+      ...base,
+      history: bamHistory,
+      pick: pick({
+        direction: "under",
+        probability: 0.62,
+        p_over: 0.38,
+        combined_probability: 0.7,
+        signals: null,
+      }),
+    });
+    expect(model.primary?.probability).toBe(0.62);
+    expect(model.other?.direction).toBe("over");
+    expect(model.other?.probability).toBe(0.38);
+    expect(model.other?.probability).not.toBeCloseTo(0.3, 2);
+    expect(model.other?.probability).not.toBe(bamHistory.p_over);
+  });
+
+  it("falls back to history when the pick has no opposite field, even if combined is set", () => {
+    const model = buildOurRead({
+      ...base,
+      history: bamHistory,
+      pick: pick({
+        probability: 0.59,
+        p_over: null,
+        p_under: null,
+        combined_probability: 0.673,
+        signals: null,
+      }),
+    });
+    expect(model.other?.probability).toBe(bamHistory.p_under);
+    expect(model.other?.n_games).toBe(bamHistory.n_games);
+    expect(model.other?.probability).not.toBeCloseTo(1 - 0.673, 2);
+    expect(model.other?.probability).not.toBeCloseTo(1 - 0.59, 2);
+  });
+
+  it("says there is no stored read and does not invent signal rows", () => {
+    const model = buildOurRead({ ...base, pick: null, line: null });
+    expect(model.caption).toBe("No stored read for this player.");
+    expect(model.signals).toEqual([]);
+    expect(model.tier).toBeNull();
+    expect(model.bar).toBeNull();
+  });
+
+  it("joins position and team only when both exist", () => {
+    expect(joinMeta("C", "NYK", " · ")).toBe("C · NYK");
+    expect(joinMeta("C", null, " · ")).toBe("C");
+    expect(joinMeta(null, "NYK", ", ")).toBe("NYK");
+    expect(joinMeta("  ", "  ", " · ")).toBeNull();
+    const model = buildOurRead({ ...base, team: null, position: "C", pick: null });
+    expect(model.meta).toBe("C");
+  });
+
+  it("reads NBA lineup chips from the event and ignores a confirmed snapshot", () => {
+    const chips = eventLineupChips({
+      league: "nba",
+      awayAbbr: "BOS",
+      homeAbbr: "MIA",
+      status: null,
+      awayLineup: confirmedLineup,
+      homeLineup: confirmedLineup,
+    });
+    expect(chips.map((chip) => chip.label)).toEqual([
+      "BOS lineup status unavailable",
+      "MIA lineup status unavailable",
+    ]);
+    const posted = eventLineupChips({
+      league: "nba",
+      awayAbbr: "BOS",
+      homeAbbr: "MIA",
+      status: { away: "confirmed", home: "projected" },
+      awayLineup: null,
+      homeLineup: null,
+    });
+    expect(posted.map((chip) => chip.label)).toEqual(["BOS lineup confirmed", "MIA lineup projected"]);
   });
 });

@@ -7,6 +7,7 @@
       "player_name": "Bam Adebayo",
       "player_team": "Heat",
       "player_team_code": "MIA",
+      "position": "C",
       "event_id": "evt-mia-bos",
       "home_team": "Miami Heat",
       "away_team": "Boston Celtics",
@@ -15,6 +16,14 @@
       "threshold": 18.5,
       "direction": "over",
       "probability": 0.72,
+      "tier": "Strong play",
+      "signals": [
+        { "key": "market", "label": "Market price", "value": "54.0%", "verdict": "neutral" },
+        { "key": "last10", "label": "Last 10 games", "value": "7/10", "verdict": "supports" },
+        { "key": "history", "label": "All-game hit rate", "value": "72.0%", "verdict": "supports" },
+        { "key": "projection", "label": "Projection", "value": "20.4", "verdict": "supports" },
+        { "key": "defense", "label": "Opponent defense", "value": "#9", "verdict": "neutral" }
+      ],
       "n_games": 40,
       "bookmakers_count": 4,
       "all_lines": [18.5, 18.5, 19.5],

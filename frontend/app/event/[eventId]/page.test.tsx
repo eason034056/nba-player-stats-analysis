@@ -97,8 +97,8 @@ describe("EventPage", () => {
     renderWithProviders(<EventPage />);
 
     expect(
-      await screen.findByRole("heading", { name: /golden state warriors/i }),
-    ).toBeInTheDocument();
+      (await screen.findAllByRole("heading", { name: /warriors @ lakers/i })).length,
+    ).toBeGreaterThan(0);
     expect(apiMocks.getEvents).toHaveBeenCalledWith("2026-03-16");
     expect(
       screen.queryByText(/game information not found/i),

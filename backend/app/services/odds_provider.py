@@ -48,34 +48,6 @@ class OddsProvider(ABC):
         """
         pass
 
-
-@dataclass(frozen=True)
-class QuotaUsage:
-    """
-    Odds API quota usage information.
-
-    - remaining: Number of remaining allowed requests
-    - used: Number of requests already used
-    - last: Number used in the most recent request
-    """
-
-    remaining: Optional[int] = None
-    used: Optional[int] = None
-    last: Optional[int] = None
-
-    @property
-    def total(self) -> Optional[int]:
-        if self.remaining is None or self.used is None:
-            return None
-        return self.remaining + self.used
-
-    @property
-    def remaining_ratio(self) -> Optional[float]:
-        total = self.total
-        if total in (None, 0) or self.remaining is None:
-            return None
-        return self.remaining / total
-    
     @abstractmethod
     async def get_event_odds(
         self,
@@ -104,6 +76,34 @@ class QuotaUsage:
             OddsAPIError: When an API call fails
         """
         pass
+
+
+@dataclass(frozen=True)
+class QuotaUsage:
+    """
+    Odds API quota usage information.
+
+    - remaining: Number of remaining allowed requests
+    - used: Number of requests already used
+    - last: Number used in the most recent request
+    """
+
+    remaining: Optional[int] = None
+    used: Optional[int] = None
+    last: Optional[int] = None
+
+    @property
+    def total(self) -> Optional[int]:
+        if self.remaining is None or self.used is None:
+            return None
+        return self.remaining + self.used
+
+    @property
+    def remaining_ratio(self) -> Optional[float]:
+        total = self.total
+        if total in (None, 0) or self.remaining is None:
+            return None
+        return self.remaining / total
 
 
 class OddsAPIError(Exception):

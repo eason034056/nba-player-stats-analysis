@@ -6,6 +6,7 @@ settings.py - 應用程式配置設定
 - 每個屬性都對應一個環境變數（大小寫不敏感）
 """
 
+from pydantic import SecretStr
 from pydantic_settings import BaseSettings
 from typing import List
 
@@ -21,6 +22,14 @@ class Settings(BaseSettings):
     # The Odds API 設定
     odds_api_key: str = ""  # The Odds API 的 API 金鑰
     odds_api_base_url: str = "https://api.the-odds-api.com"  # API 基礎 URL
+
+    # BALLDONTLIE 設定。client 讀這兩個欄位，這張票還沒把 client 接到路由或排程。
+    # balldontlie_api_key 對應 BALLDONTLIE_API_KEY。SecretStr 讓 Settings 的 repr
+    # 不印出金鑰。client 用 get_secret_value() 取出 str，放進 Authorization，不要寫進日誌。
+    balldontlie_api_key: SecretStr = SecretStr("")
+    # bdl_rate_limit_per_min 對應 BDL_RATE_LIMIT_PER_MIN。試用 key 是 5，付費 GOAT 是 600。
+    # 真正送出請求後，如果回應帶 x-ratelimit-limit，共用預算改跟那個標頭。
+    bdl_rate_limit_per_min: int = 5
     
     # SportsDataIO 設定（球員投影數據）
     sportsdata_api_key: str = ""  # SportsDataIO API 金鑰
