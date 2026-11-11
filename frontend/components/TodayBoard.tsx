@@ -483,7 +483,7 @@ export function TodayBoard({ league }: { league: LeagueSegment }) {
     picksLabel,
     blurb:
       league === "nba"
-        ? "Each prop gets one probability, built from market prices, recent form, matchup and defense rank, and rest. Start with the strongest calls, or open any game."
+        ? "Each prop gets one probability, built from market prices, recent form, all-game history, and matchup. Start with the strongest calls, or open any game."
         : "Each card is a historical hit rate from tonight's board. Start with the strongest calls, or open any game.",
   };
 

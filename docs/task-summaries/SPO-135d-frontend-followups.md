@@ -14,7 +14,7 @@ The picks board shows an injury tag only for `Out` and `Questionable`. A literal
 | Area | File | Change |
 |---|---|---|
 | Tags | `frontend/lib/picks-board.ts` | Injury tag allow-list. Removed the `Lineup confirmed` tag. `Lineup unconfirmed` stays. |
-| Copy | `frontend/components/TodayBoard.tsx`, `frontend/components/AgentWidget.tsx`, `frontend/components/agent-widget/AgentWidgetTranscript.tsx` | Replaced the projection phrase with recent form, matchup and defense rank, and rest. |
+| Copy | `frontend/components/TodayBoard.tsx`, `frontend/components/AgentWidget.tsx`, `frontend/components/agent-widget/AgentWidgetTranscript.tsx` | Today board names market prices, recent form, all-game history, and matchup. The agent header and transcript keep rest. |
 | Comments | `frontend/lib/api.ts` | Dropped `projections` from the two WNBA-vs-NBA comments. |
 | Indent | `frontend/components/EventDetail.tsx` | Indented the WNBA unavailable panel. Copy is unchanged. |
 | Tests | `frontend/lib/picks-board.test.ts`, `frontend/components/picks/DailyPicksBoard.test.tsx`, `frontend/lib/out-pick-render.test.tsx` | Allow-list, no lineup-confirmed tag, Out plus a null blend. |
@@ -28,7 +28,7 @@ PR #72 stores NBA `injury_status` as `Out`, `Questionable`, `Probable`, or `Day-
 
 Today board, before: `Each prop gets one probability, built from market prices, recent form, projection and matchup. Start with the strongest calls, or open any game.`
 
-Today board, after: `Each prop gets one probability, built from market prices, recent form, matchup and defense rank, and rest. Start with the strongest calls, or open any game.`
+Today board, after: `Each prop gets one probability, built from market prices, recent form, all-game history, and matchup. Start with the strongest calls, or open any game.`
 
 Agent header, before: `Checks market, form, projection and matchup`
 
