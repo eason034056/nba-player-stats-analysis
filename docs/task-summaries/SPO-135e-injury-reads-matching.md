@@ -38,8 +38,8 @@ NBA daily picks, NBA `/reads`, and the NBA agent tool share `match_injury_entry`
 
 Recorded fixtures only. No live BALLDONTLIE or Odds API call. Gary Trent and Luka Doncic rows in the new tests are recorded injury entries with only `player` changed. The injury page has neither name.
 
-- `cd backend && python3 -m pytest tests -q --tb=line`
-- Redis on localhost. Snapshot seeded by `refresh_nba_injuries_from_bdl` with a mocked transport over the recorded `player_injuries` page and a terminal copy. Daily picks and `/reads` then served the recorded `player_points` body, with one description relabeled to Jimmy Butler (Out on that page).
+- `cd backend && python3 -m pytest tests -q --tb=line` → 1379 passed, 28 skipped, 6 xfailed, 0 failed.
+- Redis on localhost. Snapshot seeded by `refresh_nba_injuries_from_bdl` with a mocked transport over the recorded `player_injuries` page and a terminal copy (190 entries). `GET /api/health` 200. `GET /api/nba/daily-picks?date=2026-11-10&tz_offset=480&min_probability=0.5&min_games=5` 200, 11 picks. Jimmy Butler `injury_status` `Out`, `combined_probability` null, `lineup_confirmed` null. Dyson Daniels `injury_status` null, `combined_probability` 0.743. `GET /api/nba/events/07361a8381206817e27bd2697fad7479/reads?market=player_points` 200, 15 reads. Jimmy Butler `combined_probability` null. Dyson Daniels `combined_probability` 0.743. Odds and the snapshot rows are the recorded `player_points` capture with one description relabeled to Jimmy Butler.
 
 ## Open question
 
