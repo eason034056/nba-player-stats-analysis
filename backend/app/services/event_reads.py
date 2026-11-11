@@ -10,6 +10,14 @@ game log. The projection signal is omitted.
 change that math. There is no projection cache read. The projection
 signal is omitted. Defense ranks, when the player's club is in the
 event, come from the NBA game log.
+
+NBA injury status comes from Redis key ``injuries:nba:latest``. The
+lookup uses ``match_injury_entry``, the same helper daily picks use.
+This module reads that key and does not call BALLDONTLIE. A snapshot
+row has a player name and no BALLDONTLIE id, so the id argument stays
+unset. Out, and a source word of Doubtful, set ``combined_probability``
+to null. A missing or stale snapshot leaves the blend in place and the
+loader logs one warning.
 """
 
 from __future__ import annotations
@@ -45,6 +53,7 @@ from app.services.daily_analysis import (
 )
 from app.services.db import db_service
 from app.services.defense_ranks import defense_fields
+from app.services.nba_injuries import load_nba_pick_injuries, match_injury_entry
 from app.services.pick_signals import (
     american_pairs_at_line,
     build_nba_signals,
@@ -264,6 +273,38 @@ def _ranks_for_player(
         return empty
 
 
+def _injury_words(
+    entries: list[dict[str, Any]] | None,
+    player_name: str,
+) -> tuple[str | None, str | None]:
+    """Return ``(status, raw_status)`` for one posted name.
+
+    ``entries`` is None when the snapshot is missing, stale, or
+    malformed. Both words are then None, so the blend is not blocked.
+    The snapshot row and the Odds API description are a name only.
+    Daily picks leave ``bdl_player_id`` unset for the same reason, and
+    this calls the same helper.
+
+    Args:
+        entries: Fresh injury rows, or None.
+        player_name: Name stored on the odds snapshot.
+
+    Returns:
+        The normalized status and the source word. Either can be None.
+    """
+    if not entries:
+        return None, None
+    matched = match_injury_entry(entries, player_name)
+    if matched is None:
+        return None, None
+    status = matched.get("status")
+    raw_status = matched.get("raw_status")
+    return (
+        status if isinstance(status, str) else None,
+        raw_status if isinstance(raw_status, str) else None,
+    )
+
+
 def _read_for_player(
     *,
     market: str,
@@ -271,6 +312,7 @@ def _read_for_player(
     csv_service: Any,
     home_team: str | None,
     away_team: str | None,
+    injury_entries: list[dict[str, Any]] | None = None,
 ) -> PropRead:
     """Build one read. The player is returned even when every score is null."""
     metric = _MARKET_TO_METRIC.get(market)
@@ -309,6 +351,7 @@ def _read_for_player(
     values = _recent_stat_values(stats.get("game_logs") or [])
     last10 = values[-10:] if len(values) >= 10 else None
     ranks = _ranks_for_player(player.player, home_team, away_team, csv_service)
+    injury_status, raw_status = _injury_words(injury_entries, player.player)
     signals, combined, _adjustment = build_nba_signals(
         side=side,
         line=player.line,
@@ -319,7 +362,8 @@ def _read_for_player(
         projected_value=None,
         opponent_rank=ranks["opponent_rank"],
         opponent_position_rank=ranks["opponent_position_rank"],
-        injury_status=None,
+        injury_status=injury_status,
+        raw_status=raw_status,
     )
     return PropRead(
         player=player.player,
@@ -338,6 +382,7 @@ def assemble_event_reads(
     *,
     market: str | None = None,
     csv_service: Any | None = None,
+    injury_entries: list[dict[str, Any]] | None = None,
 ) -> EventReadsResponse:
     """Build one read per posted player. No I/O of its own besides the CSV service.
 
@@ -352,6 +397,9 @@ def assemble_event_reads(
         rows: Snapshot rows for the event. Older captures are ignored.
         market: One market key, or None for every stored market.
         csv_service: NBA history service. Defaults to the process singleton.
+        injury_entries: Fresh rows from ``injuries:nba:latest``. None
+            leaves every injury word unset. This function does not read
+            Redis and does not call BALLDONTLIE.
 
     Returns:
         The reads payload. ``source`` is ``"snapshot"``.
@@ -373,6 +421,7 @@ def assemble_event_reads(
                     csv_service=csv_service,
                     home_team=home_team,
                     away_team=away_team,
+                    injury_entries=injury_entries,
                 )
             )
     return EventReadsResponse(
@@ -396,7 +445,10 @@ async def get_event_reads(
     ``odds_line_snapshots`` capture. Do not call the Odds API on a hit,
     a miss, a cache failure, or a database failure. An empty capture is
     cached too, so a cold event cannot become a live quote. This does
-    not read a projection cache.
+    not read a projection cache. It does read the NBA injury snapshot
+    from Redis when the reads payload is built. That read never calls
+    BALLDONTLIE. A missing or stale snapshot logs one warning inside
+    the loader and leaves ``combined_probability`` unchanged.
 
     Args:
         event_id: Well-formed event id. The route checks the shape.
@@ -430,12 +482,16 @@ async def get_event_reads(
         logger.exception("Event reads query failed for event %s", event_id)
         raise BulkPropsQueryFailed("Failed to read odds snapshots") from exc
 
+    # One Redis read for the whole event. The loader warns once when
+    # the snapshot is missing, stale, or malformed, and returns None.
+    injury_entries = await load_nba_pick_injuries()
     payload = await asyncio.to_thread(
         assemble_event_reads,
         event_id,
         rows,
         market=market,
         csv_service=csv_service,
+        injury_entries=injury_entries,
     )
     await cache_service.set(
         key,

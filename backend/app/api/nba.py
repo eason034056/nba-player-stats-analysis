@@ -749,8 +749,11 @@ async def get_event_props(
 
     The line is the same modal consensus bulk props uses. Prices come
     from that capture. History comes from the NBA game log.
-    `combined_probability` is the existing signal model. This route does
-    not call The Odds API, including when no capture is stored.
+    `combined_probability` is the existing signal model. An Out player
+    in the Redis injury snapshot, and a source word of Doubtful, has a
+    null blend. This route reads that snapshot and does not call
+    BALLDONTLIE. It does not call The Odds API, including when no
+    capture is stored.
 
     `market` limits the work to one snapshot market key (the game page
     tab). Omit it to score every stored market. An unknown key is HTTP
