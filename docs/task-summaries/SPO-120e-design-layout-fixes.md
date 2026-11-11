@@ -48,7 +48,7 @@ The desktop Our read heading "History" is drawn only when `model.other.combined_
 
 ## Tests / Verification
 
-- Frontend `npx vitest run`: 69 files, 527 tests, passed.
+- Frontend `npx vitest run`: 71 files, 549 tests, passed. That includes the 22 QA cases in `other-side-parity.qa.test.tsx` and `responsive-md-only.qa.test.tsx`.
 - `npx tsc --noEmit`: passed.
 - `npm run lint`: passed, no warnings or errors.
 - `npm run build`: passed. Next.js 14.2.35 compiled and generated 10 static pages. `/wnba`, `/wnba/betslip`, `/wnba/event/[eventId]`, `/wnba/picks`, and `/wnba/player/[name]` are still in the route list.
@@ -72,7 +72,7 @@ The desktop Our read heading "History" is drawn only when `model.other.combined_
 | Bookmaker picker is one line below `md` and open from `md` | `BookmakerSelect.test.tsx` |
 | Hero eyebrow is `text-accent`, not `text-eyebrow` | `TodayBoard.test.tsx` |
 
-Screenshots were taken with system Chrome against `next dev` on port 3000 and a local mock on port 8000. The mock pick is Evan Mobley, under 21.5 points, `combined_probability` `0.67`, historical `p_over` `0.22`. Viewport 390×900 for the three mobile shots and 1440×900 (event page 1440×1000) for the two desktop shots.
+The first screenshots were taken with system Chrome against `next dev` on port 3000 and a local mock on port 8000. Evan Mobley was under 21.5 points, `combined_probability` `0.67`, historical `p_over` `0.22`. The event after shots were retaken from `next start` so the dev indicator is absent. That retake uses `combined_probability` `0.675`, which floors to a 67 / 32 bar. Viewport 390×900 for the mobile shots and 1440×1000 for the event page.
 
 Measured on that mock:
 
@@ -80,10 +80,14 @@ Measured on that mock:
 |---|---|---|
 | First pick card height at 390px | 526px | 281px |
 | Hero eyebrow computed color | `rgb(123, 79, 196)` (`#7B4FC4`) | `rgb(228, 218, 114)` (`#E4DA72`) |
-| Web other-side button | `Over instead (22%)` | `Over instead (33%)` |
-| Mobile other-side button | `HISTORY Over 22%` | `Over 33%` |
+| Web other-side button | `Over instead (22%)` | `Over instead (32%)` |
+| Mobile other-side button | `HISTORY Over 22%` | `Over 32%` |
+| Model bar | `Over 33%` / `Under 67%` | `Over 32%` / `Under 67%` |
+| Slip pill for the other side |  | `32%` |
 | Odds page overflow at 390px | 0 | 0 |
 | Odds table overflow inside its scroller | 499px | 499px |
+
+The before column is `combined_probability` `0.67`. The retaken after column for the bar, the buttons, and the slip is `0.675`: the other side is `0.325`, and the bar, `Over instead (32%)`, `Over 32%`, and the slip pill all print `32%`. There is no History heading on that model complement. On the production server, `0.67` still prints `33%` on the bar, both buttons, and the slip pill.
 
 ### Screenshots
 
