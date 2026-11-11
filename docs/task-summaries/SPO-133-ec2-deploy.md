@@ -28,7 +28,9 @@ A 1 GiB instance is tight once Docker, Caddy, Redis, and the API share it, so th
 
 Port 22 stays closed because Session Manager is enough. The instance role is the only AWS credential on the host.
 
-Caddy, without `trusted_proxies`, replaces `X-Forwarded-For` with the TCP peer. That peer is the Vercel egress address or a direct client. uvicorn 0.30 compares `--forwarded-allow-ips` as an exact address, so the allow list is Caddy's pinned address `172.30.133.10`, not `*` and not the subnet CIDR. The subnet is pinned so that address stays on Caddy. `x-real-ip` and `x-sportslab-proxy-secret` are not hop-by-hop, so Caddy forwards them. They are trusted only when the secret matches. An empty secret never matches.
+Caddy, without `trusted_proxies`, replaces `X-Forwarded-For` with the TCP peer. That peer is the Vercel egress address or a direct client. uvicorn 0.30 compares `--forwarded-allow-ips` as an exact address, so the allow list is Caddy's pinned address `172.30.133.10`, not `*` and not the subnet CIDR. The subnet is pinned so that address stays on Caddy. uvicorn rewrites `request.client.host` from that header before the rate-limit key runs, so a failed secret check is keyed by the peer Caddy saw, not by the Caddy container address. Adding `trusted_proxies` later would keep a client-supplied chain and has to be reviewed again. `x-real-ip` and `x-sportslab-proxy-secret` are not hop-by-hop, so Caddy forwards them. They are trusted only when the secret matches. An empty secret never matches.
+
+`PROXY_SECRET_REQUIRED` defaults to false. Production compose sets it to true, which wins over the env file. Non-health routes then return 401 without a matching header, including when the configured secret is empty. `/api/health` and `/health` stay open for the healthcheck. This was checked against Frontend #63 at `7c034de`: the only backend fetch is `frontend/lib/api.ts` through same-origin `/api/backend/*`, and `frontend/middleware.ts` forwards that to `BACKEND_API_URL` with the secret. There is no `NEXT_PUBLIC` backend URL and no `EventSource`.
 
 Agent chat can run three graph passes, and a slip or board runs up to six of those in series. The model client does not impose a short timeout, so the worst case is well over 120 seconds. The route returns 504 at 100 seconds with a message that says to try one pick. Caddy waits 125 seconds for that response.
 
@@ -36,7 +38,7 @@ CORS `*` is rejected because a credentialed wildcard is not a configuration we w
 
 ## Tests / Verification
 
-- Backend pytest: `cd backend && /tmp/nba-venv/bin/python -m pytest -q --tb=line` → 1324 passed, 27 skipped, 6 xfailed, 0 failed. After merging SPO-132 at 7fbbf54.
+- Backend pytest: `cd backend && /tmp/nba-venv/bin/python -m pytest -q --tb=line` → 1336 passed, 27 skipped, 6 xfailed, 0 failed. After merging SPO-132 at 7fbbf54. `tests/test_spo133_ec2.py` is 36 passed. The SSM pages live in `backend/tests/fixtures/ssm/`.
 - Terraform: `terraform fmt -check -recursive` clean. `terraform init -backend=false` uses hashicorp/aws v5.100.0. `terraform validate` succeeded. No plan and no apply.
 - Frontend: not exercised. Compose and the header contract are documented for the frontend rewrite.
 - Integration test: SKIPPED. No AWS account and no `RUN_INTEGRATION`. The SSM script test uses a fake `aws` binary.

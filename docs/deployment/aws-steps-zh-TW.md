@@ -281,13 +281,19 @@ openssl rand -hex 32 | aws ssm put-parameter \
   --value file:///dev/stdin
 ```
 
-同一個值貼進 Vercel 專案的環境變數 `VERCEL_PROXY_SECRET`。前端的 rewrite 會把它放在標頭 `x-sportslab-proxy-secret`。後端只在這把密鑰對上時，才用 `x-real-ip`（沒有的話用 `x-forwarded-for` 最左邊那個）當速率限制的 key。對不上、沒送、或密鑰是空的，就用 TCP 對端，也就是 Vercel 的出口 IP。不要用 Origin 標頭做登入。
+同一個值貼進 Vercel 專案的環境變數 `VERCEL_PROXY_SECRET`。前端的 rewrite 會把它放在標頭 `x-sportslab-proxy-secret`。後端只在這把密鑰對上時，才用 `x-real-ip`（沒有的話用 `x-forwarded-for` 最左邊那個）當速率限制的 key。
+
+`PROXY_SECRET_REQUIRED` 預設是 false，本機不會擋請求。`deploy/docker-compose.prod.yml` 設成 `true`，而且這個值蓋過 `/etc/sportslab/backend.env`。正式環境除了 `GET /api/health` 和 `GET /health`，每個請求都要帶對的標頭，否則回 401。密鑰是空的也回 401，不會因為忘了放 SSM 就把 API 打開。健康檢查留著，是因為 compose 的 healthcheck 和 `deploy/remote-up.sh` 打 `/api/health` 時不帶這個標頭。
+
+這件事對過 Frontend #63 的 `7c034de`。唯一打後端的地方是 `frontend/lib/api.ts`，它走同源的 `/api/backend/*`。`frontend/middleware.ts` 再把這條路徑轉到 `BACKEND_API_URL`，並帶上密鑰。沒有 `NEXT_PUBLIC` 的後端網址，也沒有 `EventSource`，所以瀏覽器不會自己打這支 API。
+
+對不上密鑰時，限流 key 用的是 `request.client.host`。在這台主機上，uvicorn 的 `--proxy-headers` 會在進 key 函式之前，只在 TCP 對端正好是 Caddy `172.30.133.10` 時，用 `X-Forwarded-For` 改寫這個位址。Caddy 沒有 `trusted_proxies`，所以那個標頭是 Caddy 看到的 TCP 對端（Vercel 出口或直連的客戶端），不是 Caddy 容器自己的位址，客戶端也不能靠自己帶的 `X-Forwarded-For` 偽造。以後若加上 `trusted_proxies`，這條路徑要重看。不要用 Origin 標頭做登入。
 
 其他參數用同樣的方式建立，名稱對環境變數：`DATABASE_URL`、`ODDS_API_KEY`、`OPENAI_API_KEY`、`SPORTSDATA_API_KEY`、`BALLDONTLIE_API_KEY`、`BOT_API_KEYS`、`BOT_API_KEYS_PREMIUM`、`CORS_ALLOWED_ORIGINS`、`CORS_ALLOWED_ORIGIN_REGEX`。
 
 `DATABASE_URL` 要帶 `sslmode=verify-full`，`sslrootcert` 指到容器裡的 `/app/certs/global-bundle.pem`。主機第一次開機會把公開的 RDS CA 下載到 `/opt/sportslab/certs/global-bundle.pem`。
 
-輪替 `VERCEL_PROXY_SECRET`：先更新 SSM，在主機上跑 `deploy/pull-ssm-env.sh` 再 `docker compose up -d`，然後把 Vercel 改成同一個新值並重新部署前端。兩邊不一致的那段時間，速率限制會退回共用一個 bucket，不會因此放行更多請求。新值不要進 git 或聊天。
+輪替 `VERCEL_PROXY_SECRET`：SSM 和 Vercel 都改成新值，然後讓後端重新載入（`deploy/pull-ssm-env.sh` 再 `docker compose up -d`）並重新部署前端，兩件事盡量接在一起。兩邊不一致的那段時間，健康檢查以外的請求會回 401。新值不要進 git 或聊天。
 
 在有網域之前，Vercel 到 EC2 是明文 HTTP，這個標頭也走在那段路上。這是已知且接受的風險。
 

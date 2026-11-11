@@ -152,11 +152,15 @@ openssl rand -hex 32 | aws ssm put-parameter \
 
 `openssl rand -hex 32` runs on the Mac. The same secret goes in the Vercel project environment as `VERCEL_PROXY_SECRET`. Frontend's rewrite sends it as the header `x-sportslab-proxy-secret`. The header name is `PROXY_SECRET_HEADER` in `backend/app/middleware/rate_limit.py`.
 
+`PROXY_SECRET_REQUIRED` defaults to false, so a local run does not ask for the header. `deploy/docker-compose.prod.yml` sets it to `true`, and that compose value wins over `/etc/sportslab/backend.env`. When it is true, every route except `GET /api/health` and `GET /health` requires a matching header. A missing, blank, or wrong header is HTTP 401, and so is an empty configured secret. The health routes stay open because the compose healthcheck and `deploy/remote-up.sh` call `/api/health` without the header.
+
+This was checked against Frontend #63 at `7c034de`. The only backend fetch is `frontend/lib/api.ts`, and it calls the same-origin `/api/backend/*` path. `frontend/middleware.ts` forwards that path to `BACKEND_API_URL` and sets the secret header. There is no `NEXT_PUBLIC` backend URL and no `EventSource`, so the browser does not call this API on its own.
+
 Other names the app reads, same prefix: `DATABASE_URL`, `ODDS_API_KEY`, `OPENAI_API_KEY`, `SPORTSDATA_API_KEY`, `BALLDONTLIE_API_KEY`, `BOT_API_KEYS`, `BOT_API_KEYS_PREMIUM`, `CORS_ALLOWED_ORIGINS`, `CORS_ALLOWED_ORIGIN_REGEX`. `DATABASE_URL` must use `sslmode=verify-full` and `sslrootcert=/app/certs/global-bundle.pem`. User data downloads that public bundle to `/opt/sportslab/certs/global-bundle.pem` and compose mounts it there.
 
 `deploy/pull-ssm-env.sh` writes `/etc/sportslab/backend.env` mode 600. It does not print values. `GHCR_PULL_USER` and `GHCR_PULL_TOKEN`, if present, go to `/etc/sportslab/ghcr.env` instead, also mode 600, and are used only when the GHCR package is private.
 
-To rotate `VERCEL_PROXY_SECRET`: write the new value to SSM, run `deploy/pull-ssm-env.sh` on the host and `docker compose up -d` so the backend reloads it, then set the same value in Vercel and redeploy the frontend. While the two sides differ, the header does not match, so rate limits use the socket peer (one shared bucket). That is stricter, not a bypass. Do not put the new value in git or chat.
+To rotate `VERCEL_PROXY_SECRET`: write the new value to SSM and to Vercel, then reload the backend (`deploy/pull-ssm-env.sh` and `docker compose up -d`) and redeploy the frontend as close together as you can. While the two sides differ, non-health requests return 401. Do not put the new value in git or chat.
 
 ### First deploy
 
@@ -216,7 +220,11 @@ Then connect to `127.0.0.1:5432`. The security group does not need the Mac's IP.
 
 ### Rate limits behind the rewrite
 
-Vercel calls this API from its own egress addresses. slowapi no longer keys only on that address. If `VERCEL_PROXY_SECRET` is non-empty and `x-sportslab-proxy-secret` matches it, the key is `x-real-ip`, or else the left-most `x-forwarded-for` entry, after `ipaddress` accepts it. Any other case uses the socket peer. Caddy does not set `trusted_proxies`, so it replaces `X-Forwarded-For` with the TCP peer it actually saw. uvicorn runs with `--proxy-headers` and `--forwarded-allow-ips` set to Caddy's address `172.30.133.10` on the pinned compose subnet `172.30.133.0/24`. It is not `*`. The backend port is not published on the host.
+Vercel calls this API from its own egress addresses. slowapi no longer keys only on that address. If `VERCEL_PROXY_SECRET` is non-empty and `x-sportslab-proxy-secret` matches it, the key is `x-real-ip`, or else the left-most `x-forwarded-for` entry, after `ipaddress` accepts it. Any other case uses `request.client.host`.
+
+On this host that host is not the Caddy container. uvicorn `--proxy-headers` rewrites `request.client` from `X-Forwarded-For` before the key function runs, and only when the TCP peer is exactly `172.30.133.10`. `--forwarded-allow-ips` is that address, not `*` and not the subnet. Caddy does not set `trusted_proxies`, so it replaces `X-Forwarded-For` with the single TCP peer it accepted: a Vercel egress address, or a client that connected to port 80. A client cannot spoof that value by sending their own `X-Forwarded-For`. The subnet `172.30.133.0/24` is pinned so `172.30.133.10` stays on Caddy. The backend port is not published. If `trusted_proxies` is added later, Caddy would keep the client-supplied chain, and this path has to be reviewed again.
+
+With `PROXY_SECRET_REQUIRED=true`, a request that fails the secret check is 401 before the route runs. The slowapi middleware is outside that check, so the 401 still counts toward the limit. `/api/health` does not require the header.
 
 Browser CORS is not required for the Vercel rewrite, because that call is server to server. The allow-list stays for any browser client. `CORS_ALLOWED_ORIGINS` is the list. `ALLOWED_ORIGINS` is the alias. `CORS_ALLOWED_ORIGIN_REGEX` is optional and is passed to `allow_origin_regex`. `*` is rejected. Nothing in this API authenticates from the Origin header.
 

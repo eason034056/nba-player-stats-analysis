@@ -59,14 +59,21 @@ def _forwarded_client_ip(request: Request) -> str | None:
 def _proxy_secret_matches(request: Request) -> bool:
     """True only when a non-empty configured secret matches the header.
 
-    An empty secret never matches, including an empty header. The header
-    value and the secret are not logged.
+    An empty secret never matches, including an empty or whitespace-only
+    header. Leading and trailing spaces are ignored so a padded SSM value
+    still matches the trimmed Vercel value. The header value and the
+    secret are not logged. This function only answers the comparison.
+    ProxySecretMiddleware rejects the request when proxy_secret_required
+    is true.
     """
-    configured = settings.vercel_proxy_secret.get_secret_value()
+    configured = settings.vercel_proxy_secret.get_secret_value().strip()
     if configured == "":
         return False
     provided = request.headers.get(PROXY_SECRET_HEADER)
-    if not provided:
+    if provided is None:
+        return False
+    provided = provided.strip()
+    if provided == "":
         return False
     try:
         return hmac.compare_digest(
@@ -80,8 +87,18 @@ def _proxy_secret_matches(request: Request) -> bool:
 def client_address_key(request: Request) -> str:
     """Key for every slowapi limit on this process.
 
-    Trust the forwarded client IP only after the proxy secret matches.
-    Every other request is bucketed by the socket peer.
+    Trust x-real-ip, or else the left-most x-forwarded-for entry, only
+    after the proxy secret matches. Every other request uses
+    request.client.host.
+
+    On the production host, uvicorn --proxy-headers rewrites that host
+    before this function runs, and only when the TCP peer is Caddy at
+    172.30.133.10. Caddy does not set trusted_proxies, so it has already
+    replaced X-Forwarded-For with the single TCP peer it accepted. The
+    key is that peer: a Vercel egress address, or a client that connected
+    to port 80. It is not the Caddy container address. A client cannot
+    spoof it with their own X-Forwarded-For. Adding trusted_proxies later
+    would keep the client-supplied chain and has to be reviewed again.
     """
     peer = _peer_host(request)
     if not _proxy_secret_matches(request):
@@ -111,8 +128,51 @@ def _rate_limit_exceeded_handler(request: Request, exc: RateLimitExceeded):
     )
 
 
+# remote-up.sh and the compose healthcheck call these without the header.
+HEALTH_PATHS = {"/api/health", "/health"}
+
+
+def _is_health_path(path: str) -> bool:
+    """True for the health routes, with or without a trailing slash."""
+    return path.rstrip("/") in HEALTH_PATHS
+
+
+class ProxySecretMiddleware:
+    """Reject non-health requests when PROXY_SECRET_REQUIRED is true.
+
+    The default is false, so local runs and tests stay open. Production
+    compose sets the flag. /api/health and /health stay open so the host
+    healthcheck can run without the header. A missing, blank, or wrong
+    secret is 401. The response does not include the secret or the header.
+    """
+
+    def __init__(self, app):
+        self.app = app
+
+    async def __call__(self, scope, receive, send):
+        if scope["type"] != "http" or not settings.proxy_secret_required:
+            await self.app(scope, receive, send)
+            return
+        if _is_health_path(scope.get("path") or ""):
+            await self.app(scope, receive, send)
+            return
+        if _proxy_secret_matches(Request(scope)):
+            await self.app(scope, receive, send)
+            return
+        response = JSONResponse(
+            status_code=401,
+            content={"detail": "A valid proxy secret is required."},
+        )
+        await response(scope, receive, send)
+
+
 def install_rate_limiter(app: FastAPI) -> None:
-    """Attach the slowapi limiter and error handler to the FastAPI app."""
+    """Attach the proxy-secret check, the slowapi limiter, and the 429 handler.
+
+    SlowAPIMiddleware is added last so it runs first. A request that fails
+    the secret check still counts against the rate limit.
+    """
     app.state.limiter = limiter
+    app.add_middleware(ProxySecretMiddleware)
     app.add_middleware(SlowAPIMiddleware)
     app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)

@@ -19,6 +19,10 @@ Naming follows `<provider>_<endpoint>__<variant>.json`.
 
 `tests/fixtures/odds_api/load_odds_fixture(name)` reads these files. Tests copy a loaded body when they need a smaller case (one bookmaker, one side removed, a player relabeled). They do not type a new response.
 
+## SSM GetParametersByPath pages (SPO-133)
+
+`ssm/get-parameters-by-path-page1.json` and `page2.json` are the shape of `aws ssm get-parameters-by-path` for `deploy/pull-ssm-env.sh`. The values are fake. They are not a live capture. `test_spo133_ec2.py` loads them with `Path.read_text()` and the fake `aws` binary prints the files with `cat`.
+
 ## BALLDONTLIE client captures (SPO-130a)
 
 `bdl/` holds the SPO-130a captures unchanged. Each file is `{request, status, elapsed_s, rate_headers, response}`. The API key is not in these files. `response._raw` on the 429 file is the response text, not a JSON object. No second injuries page was recorded. The only 429 capture is `GET /nba/v1/lineups`, which the client does not call. This section stands alone. Other tickets may add their own files and their own heading in this directory.

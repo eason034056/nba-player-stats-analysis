@@ -42,6 +42,9 @@ services:
     environment:
       REDIS_URL: redis://redis:6379/0
       DATABASE_REQUIRED: "true"
+      # Wins over backend.env. Direct callers without the proxy header get 401.
+      # /api/health stays open for the healthcheck below and for remote-up.sh.
+      PROXY_SECRET_REQUIRED: "true"
     # uvicorn 0.30 matches --forwarded-allow-ips as an exact peer address, not a
     # CIDR. 172.30.133.10 is Caddy. The subnet below is pinned so that address
     # stays on Caddy. Never set this to "*".

@@ -1,6 +1,7 @@
 """SPO-133: CORS, agent-chat deadline, proxy rate-limit key, SSM env file."""
 
 import asyncio
+import json
 import os
 import stat
 import subprocess
@@ -22,6 +23,8 @@ from app.main import app
 from app.middleware.event_stream import EventStreamCacheControlMiddleware
 from app.middleware.rate_limit import (
     PROXY_SECRET_HEADER,
+    ProxySecretMiddleware,
+    _is_health_path,
     client_address_key,
     limiter,
 )
@@ -30,6 +33,9 @@ from app.settings import Settings, settings
 
 REPO = Path(__file__).resolve().parents[2]
 PULL_SCRIPT = REPO / "deploy" / "pull-ssm-env.sh"
+SSM_FIXTURES = Path(__file__).resolve().parent / "fixtures" / "ssm"
+SSM_PAGE_1 = SSM_FIXTURES / "get-parameters-by-path-page1.json"
+SSM_PAGE_2 = SSM_FIXTURES / "get-parameters-by-path-page2.json"
 PEER = "198.51.100.9"
 SECRET = "correct-secret-value"
 PREVIEW_REGEX = (
@@ -298,6 +304,132 @@ class TestProxyRateLimitKey:
         assert first.json()["key"] == "203.0.113.10"
         assert other.json()["key"] == "203.0.113.20"
 
+    def test_missing_header_uses_the_peer(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        _use_secret(monkeypatch, SECRET)
+        assert client_address_key(_request()) == PEER
+
+    def test_blank_header_uses_the_peer(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        _use_secret(monkeypatch, SECRET)
+        request = _request(**{PROXY_SECRET_HEADER: "   ", "x-real-ip": "203.0.113.8"})
+        assert client_address_key(request) == PEER
+
+    def test_different_length_secret_uses_the_peer(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        _use_secret(monkeypatch, SECRET)
+        request = _request(
+            **{
+                PROXY_SECRET_HEADER: SECRET + "-extra",
+                "x-real-ip": "203.0.113.8",
+            }
+        )
+        assert client_address_key(request) == PEER
+
+    def test_padded_secret_matches_the_trimmed_value(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        _use_secret(monkeypatch, f"  {SECRET}  ")
+        request = _request(
+            **{
+                PROXY_SECRET_HEADER: f"\t{SECRET}\n",
+                "x-real-ip": "203.0.113.8",
+            }
+        )
+        assert client_address_key(request) == "203.0.113.8"
+
+    def test_valid_secret_uses_ipv6_real_ip(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        _use_secret(monkeypatch, SECRET)
+        request = _request(
+            **{
+                PROXY_SECRET_HEADER: SECRET,
+                "x-real-ip": "[2001:db8::1]",
+                "x-forwarded-for": "203.0.113.8",
+            }
+        )
+        assert client_address_key(request) == "2001:db8::1"
+
+    def test_valid_secret_with_only_ipv6_xff_uses_the_left_most(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        _use_secret(monkeypatch, SECRET)
+        request = _request(
+            **{
+                PROXY_SECRET_HEADER: SECRET,
+                "x-forwarded-for": "2001:db8::2, 203.0.113.8",
+            }
+        )
+        assert client_address_key(request) == "2001:db8::2"
+
+
+def _gated_app() -> FastAPI:
+    mini = FastAPI()
+
+    @mini.get("/api/health")
+    def health():
+        return {"ok": True}
+
+    @mini.get("/health")
+    def short_health():
+        return {"ok": True}
+
+    @mini.get("/api/ping")
+    def ping():
+        return {"ok": True}
+
+    mini.add_middleware(ProxySecretMiddleware)
+    return mini
+
+
+class TestProxySecretRequired:
+    def test_defaults_false(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.delenv("PROXY_SECRET_REQUIRED", raising=False)
+        created = Settings(_env_file=None)
+        assert created.proxy_secret_required is False
+
+    def test_off_allows_a_request_without_the_header(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setattr(settings, "proxy_secret_required", False)
+        with TestClient(_gated_app()) as client:
+            response = client.get("/api/ping")
+        assert response.status_code == 200
+
+    def test_on_rejects_missing_wrong_and_blank(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setattr(settings, "proxy_secret_required", True)
+        _use_secret(monkeypatch, SECRET)
+        with TestClient(_gated_app()) as client:
+            missing = client.get("/api/ping")
+            blank = client.get("/api/ping", headers={PROXY_SECRET_HEADER: "  "})
+            wrong = client.get("/api/ping", headers={PROXY_SECRET_HEADER: "nope"})
+            ok = client.get("/api/ping", headers={PROXY_SECRET_HEADER: SECRET})
+        assert missing.status_code == 401
+        assert blank.status_code == 401
+        assert wrong.status_code == 401
+        assert missing.json()["detail"] == "A valid proxy secret is required."
+        assert SECRET not in missing.text
+        assert "nope" not in wrong.text
+        assert ok.status_code == 200
+
+    def test_health_stays_open_and_an_empty_secret_rejects_the_rest(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setattr(settings, "proxy_secret_required", True)
+        _use_secret(monkeypatch, "")
+        with TestClient(_gated_app()) as client:
+            api_health = client.get("/api/health")
+            short = client.get("/health")
+            ping = client.get("/api/ping", headers={PROXY_SECRET_HEADER: SECRET})
+        assert api_health.status_code == 200
+        assert short.status_code == 200
+        assert ping.status_code == 401
+
+    def test_trailing_slash_is_still_health(self) -> None:
+        assert _is_health_path("/api/health/")
+        assert _is_health_path("/health")
+        assert not _is_health_path("/api/healthcheck")
+
+    def test_prod_compose_turns_the_flag_on(self) -> None:
+        text = (REPO / "deploy" / "docker-compose.prod.yml").read_text(encoding="utf-8")
+        assert 'PROXY_SECRET_REQUIRED: "true"' in text
+
 
 class TestPullSsmEnv:
     def _aws(self, tmp_path: Path, body: str, code: int = 0) -> Path:
@@ -311,28 +443,22 @@ class TestPullSsmEnv:
         return path
 
     def test_writes_env_file_without_printing_values(self, tmp_path: Path) -> None:
-        secret = "db-password-value"
-        token = "ghcr-token-value"
-        page1 = (
-            '{"Parameters":['
-            '{"Name":"/sportslab/prod/DATABASE_URL","Value":"%s"},'
-            '{"Name":"/sportslab/prod/GHCR_PULL_USER","Value":"octo"},'
-            '{"Name":"/sportslab/prod/GHCR_PULL_TOKEN","Value":"%s"}'
-            '],"NextToken":"page-2"}'
-        ) % (secret, token)
-        page2 = (
-            '{"Parameters":['
-            '{"Name":"/sportslab/prod/OPENAI_API_KEY","Value":"sk-test-value"}'
-            ']}'
-        )
+        page1 = json.loads(SSM_PAGE_1.read_text(encoding="utf-8"))
+        page2 = json.loads(SSM_PAGE_2.read_text(encoding="utf-8"))
+        values = {
+            item["Name"].rsplit("/", 1)[-1]: item["Value"]
+            for item in [*page1["Parameters"], *page2["Parameters"]]
+        }
+        secret = values["DATABASE_URL"]
+        token = values["GHCR_PULL_TOKEN"]
         aws = tmp_path / "aws"
         aws.write_text(
             "#!/bin/sh\n"
             f"printf '%s\\n' \"$@\" >> \"{tmp_path / 'aws-args'}\"\n"
             "if printf '%s\\n' \"$@\" | grep -q -- '--next-token'; then\n"
-            f"  printf '%s' '{page2}'\n"
+            f"  cat \"{SSM_PAGE_2}\"\n"
             "else\n"
-            f"  printf '%s' '{page1}'\n"
+            f"  cat \"{SSM_PAGE_1}\"\n"
             "fi\n"
             "exit 0\n",
             encoding="utf-8",
@@ -358,15 +484,15 @@ class TestPullSsmEnv:
         assert result.returncode == 0, combined
         assert secret not in combined
         assert token not in combined
-        assert "sk-test-value" not in combined
+        assert values["OPENAI_API_KEY"] not in combined
         assert stat.S_IMODE(dest.stat().st_mode) == 0o600
         assert stat.S_IMODE(ghcr.stat().st_mode) == 0o600
         text = dest.read_text(encoding="utf-8")
         assert f"DATABASE_URL={secret}\n" in text
-        assert "OPENAI_API_KEY=sk-test-value\n" in text
+        assert f"OPENAI_API_KEY={values['OPENAI_API_KEY']}\n" in text
         assert "GHCR_PULL_TOKEN" not in text
         assert ghcr.read_text(encoding="utf-8") == (
-            "GHCR_PULL_USER=octo\n"
+            f"GHCR_PULL_USER={values['GHCR_PULL_USER']}\n"
             f"GHCR_PULL_TOKEN={token}\n"
         )
         assert "--next-token" in (tmp_path / "aws-args").read_text(encoding="utf-8")
