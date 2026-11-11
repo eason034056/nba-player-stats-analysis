@@ -12,7 +12,7 @@ import Link from "next/link";
 export const metadata: Metadata = {
   title: "Method",
   description:
-    "How No-Vig reads a prop: remove the bookmaker margin, then show the historical hit rate and any projection the API returns.",
+    "How No-Vig reads a prop: remove the bookmaker margin, then show the historical hit rate.",
 };
 
 export default function AboutPage() {
@@ -25,8 +25,7 @@ export default function AboutPage() {
         <p className="max-w-[720px] text-base leading-relaxed text-muted">
           The price and the player&apos;s history are separate reads. The bookmaker margin
           comes out of the posted odds. The board then shows how often the player cleared
-          that line, plus a projection when the API returns one. Those numbers are not
-          blended into a single probability.
+          that line. Those numbers are not blended into a single probability.
         </p>
       </div>
 
@@ -77,10 +76,6 @@ export default function AboutPage() {
           <Signal
             label="No-vig consensus"
             detail="On a game page, the mean fair price from the no-vig route. It is not copied onto DailyPick.probability."
-          />
-          <Signal
-            label="Projection"
-            detail="Projected value, edge, and minutes stay hidden while those fields are null. WNBA picks leave them null, so those tags stay hidden."
           />
           <Signal
             label="Opponent rank"

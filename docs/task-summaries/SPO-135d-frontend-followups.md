@@ -22,6 +22,7 @@ Hiding the card would drop a player someone is looking for. Keeping it dimmed at
 | Today | `frontend/lib/today-board.ts`, `frontend/components/TodayBoard.tsx` | Out is skipped for tonight's reads, the game top read, and the picks count. |
 | Event | `frontend/lib/event-page.ts` | An Out player is not a rail lean and has no slip seed. |
 | Copy | `frontend/components/TodayBoard.tsx`, `frontend/components/AgentWidget.tsx`, `frontend/components/agent-widget/AgentWidgetTranscript.tsx` | Today board names market prices, recent form, all-game history, and matchup. The agent header and transcript keep rest. |
+| Copy | `frontend/components/picks/DailyPicksBoard.tsx`, `frontend/app/about/page.tsx`, `frontend/components/ResultsTable.tsx`, `frontend/components/PlayerDDTile.tsx` | Dropped projection, edge, and minutes from the sentences that implied those fields still arrive. Opponent rank stays. |
 | Comments | `frontend/lib/api.ts` | Dropped `projections` from the two WNBA-vs-NBA comments. |
 | Indent | `frontend/components/EventDetail.tsx` | Indented the WNBA unavailable panel. Copy is unchanged. |
 | Tests | `frontend/lib/picks-board.test.ts`, `frontend/components/picks/DailyPicksBoard.test.tsx`, `frontend/lib/today-board.test.ts`, `frontend/components/TodayBoard.test.tsx`, `frontend/lib/event-page.test.ts`, `frontend/lib/out-pick-render.test.tsx` | Allow-list, and Out excluded from strong, the bar, the top read, and slip suggestions. Questionable stays. |
@@ -58,7 +59,7 @@ Agent empty transcript, after: `I check any prop against market price, recent fo
 
 Before, the Out card is first because the bar falls back to that 0.91 rate. It shows `—`, a filled bar, `Out`, `Def #9`, and the slip actions. The header counts both cards, including Out as strong.
 
-After, Bam is first at `74%` with the Questionable tag. Jimmy is last, dimmed, with only the Out tag. No bar, no percent, no slip. The header counts 1 pick and 1 strong.
+After, Bam is first at `74%` with the Questionable tag. Jimmy is last, dimmed, with only the Out tag. No bar, no percent, no slip. The header counts 1 pick and 1 strong. The footer mentions opponent rank only.
 
 ![Picks board before, 1440](assets/SPO-135d/picks-before-1440.png)
 
@@ -72,5 +73,5 @@ After, Bam is first at `74%` with the Questionable tag. Jimmy is last, dimmed, w
 
 - `Lineup unconfirmed` still appears when `lineup_confirmed` is false. The badge from the lineups route was left alone.
 - A null blend that is not Out still prints `—` and can still fill the bar from the historical rate.
-- The picks-board footer still says projection, edge, and minutes appear only when the response includes them. That sentence is still true.
+- The picks-board footer mentions opponent rank only. The Method page and the empty odds note no longer describe a projection, edge, or minutes panel.
 - WNBA copy, including the unavailable projection panel, is unchanged.
