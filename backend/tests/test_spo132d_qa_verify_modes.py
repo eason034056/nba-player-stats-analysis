@@ -301,13 +301,63 @@ def test_a_failing_query_on_the_target_is_not_reported_as_a_match(
     assert "QA injected failure" in result.stderr, shown
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason="should-fix: zero public tables on both sides still prints ok and exits 0",
-)
 def test_empty_public_schema_on_both_sides_is_not_ok(
     empty_pair: _Pair, tmp_path: Path
 ) -> None:
     result, shown = _run(empty_pair, _mode_env("host", tmp_path, empty_pair.psql))
-    assert result.returncode != 0, shown
+    assert result.returncode == 1, shown
+    assert "ok:" not in result.stdout
+    assert "local lists 0 public tables" in result.stderr, shown
+    assert "rds lists 0 public tables" in result.stderr, shown
+
+
+@pytest.mark.parametrize("mode", _MODES)
+def test_zero_tables_on_only_one_side_is_not_ok(
+    mode: str, empty_pair: _Pair, tmp_path: Path
+) -> None:
+    loaded = _psql(
+        empty_pair.psql,
+        empty_pair.source,
+        "CREATE TABLE only_src (v integer NOT NULL); INSERT INTO only_src (v) VALUES (1);",
+    )
+    assert loaded.returncode == 0, _redact(loaded.stderr, [empty_pair.source])
+    result, shown = _run(empty_pair, _mode_env(mode, tmp_path, empty_pair.psql))
+    assert result.returncode == 1, shown
+    assert "ok:" not in result.stdout
+    assert "local lists 1 public tables" in result.stderr, shown
+    assert "rds lists 0 public tables" in result.stderr, shown
+
+
+_TABLE_ONLY = """
+CREATE TABLE plain_rows (v integer NOT NULL);
+INSERT INTO plain_rows (v) VALUES (1), (2);
+"""
+
+
+@pytest.mark.parametrize("mode", _MODES)
+def test_zero_sequences_on_both_sides_is_ok(mode: str, tmp_path: Path) -> None:
+    # A table with no serial column has no sequence. That is a real
+    # database, so verify must still print ok when both sides list zero
+    # sequences.
+    gen = _make_pair(_TABLE_ONLY)
+    pair = next(gen)
+    try:
+        result, shown = _run(pair, _mode_env(mode, tmp_path, pair.psql))
+        assert result.returncode == 0, shown
+        assert "plain_rows|count|2|2|OK" in result.stdout, shown
+        assert "|last_value|" not in result.stdout
+        assert "ok:" in result.stdout
+    finally:
+        gen.close()
+
+
+@pytest.mark.parametrize("mode", _MODES)
+def test_sequence_present_on_only_one_side_fails(
+    mode: str, pair: _Pair, tmp_path: Path
+) -> None:
+    pair.on_target("DROP SEQUENCE extra_seq;")
+    result, shown = _run(pair, _mode_env(mode, tmp_path, pair.psql))
+    assert result.returncode == 1, shown
+    assert "extra_seq|last_value|5|MISSING|MISMATCH" in result.stdout, shown
+    assert "public sequences" in result.stderr, shown
     assert "ok:" not in result.stdout
