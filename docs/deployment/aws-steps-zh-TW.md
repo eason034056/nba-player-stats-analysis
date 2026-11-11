@@ -283,9 +283,11 @@ openssl rand -hex 32 | aws ssm put-parameter \
 
 同一個值貼進 Vercel 專案的環境變數 `VERCEL_PROXY_SECRET`。前端的 rewrite 會把它放在標頭 `x-sportslab-proxy-secret`。後端只在這把密鑰對上時，才用 `x-real-ip`（沒有的話用 `x-forwarded-for` 最左邊那個）當速率限制的 key。
 
-`PROXY_SECRET_REQUIRED` 預設是 false，本機不會擋請求。`deploy/docker-compose.prod.yml` 設成 `true`，而且這個值蓋過 `/etc/sportslab/backend.env`。正式環境除了 `GET /api/health` 和 `GET /health`，每個請求都要帶對的標頭，否則回 401。密鑰是空的也回 401，不會因為忘了放 SSM 就把 API 打開。健康檢查留著，是因為 compose 的 healthcheck 和 `deploy/remote-up.sh` 打 `/api/health` 時不帶這個標頭。
+`PROXY_SECRET_REQUIRED` 預設是 false。`deploy/docker-compose.prod.yml` 把它釘成 `false`，這個值蓋過 env file，所以 SSM 不能自己把它打開。旗標若是 true 而且密鑰有值，除了 `GET /api/health` 和 `GET /health`，每個請求（含 `OPTIONS` 和 SSE）都要帶對的 `x-sportslab-proxy-secret`，否則回 403。旗標是 true 但密鑰是空的，行程拒絕啟動。健康檢查留著，是因為 healthcheck 和 `deploy/remote-up.sh` 打 `/api/health` 時不帶標頭。沒有另外的 readiness 路由。
 
-這件事對過 Frontend #63 的 `7c034de`。唯一打後端的地方是 `frontend/lib/api.ts`，它走同源的 `/api/backend/*`。`frontend/middleware.ts` 再把這條路徑轉到 `BACKEND_API_URL`，並帶上密鑰。沒有 `NEXT_PUBLIC` 的後端網址，也沒有 `EventSource`，所以瀏覽器不會自己打這支 API。
+現在不要打開。這個 repo 的 `frontend/lib/api.ts` 仍用 `NEXT_PUBLIC_API_URL`（沒有就用 `http://localhost:8000`）在瀏覽器直接打後端，`frontend/next.config.js` 也把那個變數暴露給瀏覽器。沒有 `EventSource`。這些請求不經過 Vercel 的伺服器代理，現在打開檢查會把目前的畫面全部擋下來。這是先接受的風險。Frontend #63 的 `7c034de` 才改成同源 `/api/backend`，由 `frontend/middleware.ts` 轉到 `BACKEND_API_URL` 並帶密鑰。等 Vercel 跑的是那一版，再把 compose 那一行改成 `"true"` 然後重新部署後端。#63 的瀏覽器若發 CORS preflight，對象是 Next.js，不是 EC2。後端在旗標打開時仍會對直接來的 `OPTIONS` 回 403。
+
+目前瀏覽器會打的路徑都在 `frontend/lib/api.ts` 的 `fetchApi`：`/api/health`、`/api/nba/events`、`/api/nba/props/no-vig`、`/api/nba/players/suggest`、`/api/nba/csv/players`、`/api/nba/player-history`、`/api/nba/player-dd-history`、`/api/nba/daily-picks`、`/api/nba/daily-picks/trigger`、`/api/nba/agent/chat`、`/api/nba/lineups`、`/api/nba/lineups/{team}`、`/api/nba/lineups/refresh`、`/api/nba/projections`、`/api/nba/projections/refresh`、`/api/nba/projections/{player}`、`/api/nba/events/{id}/reads`、`/api/nba/events/{id}/props`，以及 WNBA 的 events、props/no-vig、players/suggest、csv/players、player-history、player-dd-history、daily-picks、daily-picks/trigger、lineups/{team}。
 
 對不上密鑰時，限流 key 用的是 `request.client.host`。在這台主機上，uvicorn 的 `--proxy-headers` 會在進 key 函式之前，只在 TCP 對端正好是 Caddy `172.30.133.10` 時，用 `X-Forwarded-For` 改寫這個位址。Caddy 沒有 `trusted_proxies`，所以那個標頭是 Caddy 看到的 TCP 對端（Vercel 出口或直連的客戶端），不是 Caddy 容器自己的位址，客戶端也不能靠自己帶的 `X-Forwarded-For` 偽造。以後若加上 `trusted_proxies`，這條路徑要重看。不要用 Origin 標頭做登入。
 
@@ -293,7 +295,7 @@ openssl rand -hex 32 | aws ssm put-parameter \
 
 `DATABASE_URL` 要帶 `sslmode=verify-full`，`sslrootcert` 指到容器裡的 `/app/certs/global-bundle.pem`。主機第一次開機會把公開的 RDS CA 下載到 `/opt/sportslab/certs/global-bundle.pem`。
 
-輪替 `VERCEL_PROXY_SECRET`：SSM 和 Vercel 都改成新值，然後讓後端重新載入（`deploy/pull-ssm-env.sh` 再 `docker compose up -d`）並重新部署前端，兩件事盡量接在一起。兩邊不一致的那段時間，健康檢查以外的請求會回 401。新值不要進 git 或聊天。
+輪替 `VERCEL_PROXY_SECRET`：先在 Vercel 和 SSM 設好新值，然後再部署兩邊。主機上是 `deploy/pull-ssm-env.sh` 再 `docker compose up -d`。旗標仍是 false 時，對不上只會改速率限制的 key。等旗標改成 true，兩邊不一致的那段時間，健康檢查以外的請求會回 403。新值不要進 git 或聊天。載入時會去掉密鑰前後的空白。`x-real-ip` 優先於 `X-Forwarded-For`，因為 Caddy 會把 `X-Forwarded-For` 換成出口位址，而 #63 把瀏覽器位址放在 `x-real-ip`。
 
 在有網域之前，Vercel 到 EC2 是明文 HTTP，這個標頭也走在那段路上。這是已知且接受的風險。
 

@@ -9,7 +9,7 @@ settings.py - 應用程式配置設定
 import re
 from typing import Any
 
-from pydantic import SecretStr, field_validator
+from pydantic import SecretStr, field_validator, model_validator
 from pydantic_settings import BaseSettings
 
 
@@ -98,6 +98,25 @@ class Settings(BaseSettings):
     bot_api_keys_premium: str = ""  # Premium-tier bot API keys
     bot_picks_free_delay_minutes: int = 60  # Delay for free-tier picks (minutes)
     rate_limit_bot_picks: str = "12/minute"  # Rate limit for bot picks endpoint
+
+    @field_validator("vercel_proxy_secret", mode="before")
+    @classmethod
+    def strip_vercel_proxy_secret(cls, value: object) -> object:
+        """Drop surrounding whitespace so a padded SSM value still matches."""
+        if isinstance(value, SecretStr):
+            return value.get_secret_value().strip()
+        if isinstance(value, str):
+            return value.strip()
+        return value
+
+    @model_validator(mode="after")
+    def refuse_required_proxy_secret_when_empty(self) -> "Settings":
+        """Do not start when the flag is on and the secret is blank."""
+        if self.proxy_secret_required and self.vercel_proxy_secret.get_secret_value() == "":
+            raise ValueError(
+                "PROXY_SECRET_REQUIRED is true but VERCEL_PROXY_SECRET is empty"
+            )
+        return self
 
     @field_validator("allowed_origins", "cors_allowed_origins")
     @classmethod

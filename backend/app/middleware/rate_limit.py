@@ -45,7 +45,13 @@ def _valid_ip(value: str | None) -> str | None:
 
 
 def _forwarded_client_ip(request: Request) -> str | None:
-    """Prefer x-real-ip. Otherwise the left-most x-forwarded-for entry."""
+    """Prefer x-real-ip. Otherwise the left-most x-forwarded-for entry.
+
+    x-real-ip has to win. Caddy, with no trusted_proxies, replaces
+    X-Forwarded-For with the TCP peer it accepted, which for a Vercel
+    rewrite is the egress address. Frontend #63 sets x-real-ip to the
+    browser address. That header is not hop-by-hop, so Caddy leaves it.
+    """
     real_ip = _valid_ip(request.headers.get("x-real-ip"))
     if real_ip is not None:
         return real_ip
@@ -91,14 +97,15 @@ def client_address_key(request: Request) -> str:
     after the proxy secret matches. Every other request uses
     request.client.host.
 
-    On the production host, uvicorn --proxy-headers rewrites that host
-    before this function runs, and only when the TCP peer is Caddy at
-    172.30.133.10. Caddy does not set trusted_proxies, so it has already
-    replaced X-Forwarded-For with the single TCP peer it accepted. The
-    key is that peer: a Vercel egress address, or a client that connected
-    to port 80. It is not the Caddy container address. A client cannot
-    spoof it with their own X-Forwarded-For. Adding trusted_proxies later
-    would keep the client-supplied chain and has to be reviewed again.
+    On the production host, uvicorn --proxy-headers rewrites
+    request.client from X-Forwarded-For before this function runs, and
+    only when the TCP peer is Caddy at 172.30.133.10. The fallback is
+    therefore the TCP client Caddy accepted: a Vercel egress address, or
+    a direct client. It is not the Caddy container. That value is not
+    spoofable while the Caddyfile has no trusted_proxies, because Caddy
+    replaces X-Forwarded-For instead of appending to it. Adding
+    trusted_proxies would keep a client-supplied chain and needs a
+    security re-review.
     """
     peer = _peer_host(request)
     if not _proxy_secret_matches(request):
@@ -143,7 +150,9 @@ class ProxySecretMiddleware:
     The default is false, so local runs and tests stay open. Production
     compose sets the flag. /api/health and /health stay open so the host
     healthcheck can run without the header. A missing, blank, or wrong
-    secret is 401. The response does not include the secret or the header.
+    secret is 403. The response does not include the secret or the header.
+    The check runs for every HTTP method, including OPTIONS and SSE,
+    before the route.
     """
 
     def __init__(self, app):
@@ -160,10 +169,24 @@ class ProxySecretMiddleware:
             await self.app(scope, receive, send)
             return
         response = JSONResponse(
-            status_code=401,
+            status_code=403,
             content={"detail": "A valid proxy secret is required."},
         )
         await response(scope, receive, send)
+
+
+def require_configured_proxy_secret() -> None:
+    """Stop startup when the flag is on and the secret is empty.
+
+    The message does not include the secret. Settings construction
+    rejects the same combination, and the lifespan calls this again.
+    """
+    if not settings.proxy_secret_required:
+        return
+    if settings.vercel_proxy_secret.get_secret_value().strip() == "":
+        raise RuntimeError(
+            "PROXY_SECRET_REQUIRED is true but VERCEL_PROXY_SECRET is empty"
+        )
 
 
 def install_rate_limiter(app: FastAPI) -> None:

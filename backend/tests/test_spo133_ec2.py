@@ -440,6 +440,14 @@ def _gated_app() -> FastAPI:
     def ping():
         return {"ok": True}
 
+    @mini.options("/api/ping")
+    def options_ping():
+        return {"ok": True}
+
+    @mini.get("/api/stream")
+    def stream():
+        return StreamingResponse(iter([b"data: hi\n\n"]), media_type="text/event-stream")
+
     mini.add_middleware(ProxySecretMiddleware)
     return mini
 
@@ -468,35 +476,64 @@ class TestProxySecretRequired:
             blank = client.get("/api/ping", headers={PROXY_SECRET_HEADER: "  "})
             wrong = client.get("/api/ping", headers={PROXY_SECRET_HEADER: "nope"})
             ok = client.get("/api/ping", headers={PROXY_SECRET_HEADER: SECRET})
-        assert missing.status_code == 401
-        assert blank.status_code == 401
-        assert wrong.status_code == 401
+        assert missing.status_code == 403
+        assert blank.status_code == 403
+        assert wrong.status_code == 403
         assert missing.json()["detail"] == "A valid proxy secret is required."
         assert SECRET not in missing.text
         assert "nope" not in wrong.text
         assert ok.status_code == 200
 
-    def test_health_stays_open_and_an_empty_secret_rejects_the_rest(
+    def test_health_stays_open_without_the_header(
         self, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         monkeypatch.setattr(settings, "proxy_secret_required", True)
-        _use_secret(monkeypatch, "")
+        _use_secret(monkeypatch, SECRET)
         with TestClient(_gated_app()) as client:
             api_health = client.get("/api/health")
             short = client.get("/health")
-            ping = client.get("/api/ping", headers={PROXY_SECRET_HEADER: SECRET})
+            ping = client.get("/api/ping")
         assert api_health.status_code == 200
         assert short.status_code == 200
-        assert ping.status_code == 401
+        assert ping.status_code == 403
+
+    def test_options_and_sse_require_the_header(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setattr(settings, "proxy_secret_required", True)
+        _use_secret(monkeypatch, SECRET)
+        with TestClient(_gated_app()) as client:
+            options = client.options("/api/ping")
+            streamed = client.get("/api/stream")
+            allowed = client.get("/api/stream", headers={PROXY_SECRET_HEADER: SECRET})
+        assert options.status_code == 403
+        assert streamed.status_code == 403
+        assert allowed.status_code == 200
+        assert allowed.headers["content-type"].startswith("text/event-stream")
+
+    def test_required_without_a_secret_refuses_to_load(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setenv("PROXY_SECRET_REQUIRED", "true")
+        monkeypatch.setenv("VERCEL_PROXY_SECRET", "   ")
+        with pytest.raises(ValidationError, match="PROXY_SECRET_REQUIRED"):
+            Settings(_env_file=None)
+
+    def test_loaded_secret_strips_surrounding_whitespace(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setenv("VERCEL_PROXY_SECRET", f"  {SECRET} \n")
+        created = Settings(_env_file=None)
+        assert created.vercel_proxy_secret.get_secret_value() == SECRET
 
     def test_trailing_slash_is_still_health(self) -> None:
         assert _is_health_path("/api/health/")
         assert _is_health_path("/health")
         assert not _is_health_path("/api/healthcheck")
 
-    def test_prod_compose_turns_the_flag_on(self) -> None:
+    def test_prod_compose_leaves_the_flag_off(self) -> None:
         text = (REPO / "deploy" / "docker-compose.prod.yml").read_text(encoding="utf-8")
-        assert 'PROXY_SECRET_REQUIRED: "true"' in text
+        assert 'PROXY_SECRET_REQUIRED: "false"' in text
 
 
 class TestPullSsmEnv:

@@ -18,7 +18,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.api import agent, health, metrics, nba, wnba, wnba_agent, daily_picks, picks, projections, odds_history, lineups
 from app.middleware.event_stream import EventStreamCacheControlMiddleware
 from app.middleware.logging_config import RequestLoggingMiddleware, setup_logging
-from app.middleware.rate_limit import install_rate_limiter
+from app.middleware.rate_limit import install_rate_limiter, require_configured_proxy_secret
 from app.dsn import mask_database_url, redact_secrets
 from app.services.cache import cache_service
 from app.services.db import db_service
@@ -58,7 +58,8 @@ async def lifespan(app: FastAPI):
     Usage:
         app = FastAPI(lifespan=lifespan)
     """
-    # 啟動時執行
+    # 啟動時執行。正式環境要求代理密鑰，空密鑰不應該把行程留在能收請求的狀態。
+    require_configured_proxy_secret()
     setup_logging()
     print("🚀 Starting No-Vig NBA API...")
     print(f"📊 Odds API Base URL: {settings.odds_api_base_url}")
