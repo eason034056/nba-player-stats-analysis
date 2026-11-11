@@ -2,7 +2,7 @@
 
 Sports Lab keeps Redis local. PostgreSQL and the raw Ball Don't Lie files move to AWS. Terraform for the resources is in `infra/aws/`. Eason runs `terraform apply` on his Mac with his own AWS login. This repository does not call AWS, and no provisioner key is created for anyone else.
 
-Until the EC2 cutover below, the backend and Postgres both run on that Mac. Postgres is the `no-vig-nba-postgres` container (`postgres:16-alpine` in `docker-compose.yml`). The Mac is not deployed anywhere and its home IP can change. The fixed allowlist entry is the box, `184.193.214.44/32`. The other entry is the Mac's current public `/32`, updated with `scripts/aws_update_my_ip.sh`. The EC2 section is the host that replaces the Mac process. Do not point production traffic at it until the RDS migration in this document has finished.
+Until the EC2 cutover below, the backend and Postgres both run on that Mac. Postgres is the `no-vig-nba-postgres` container (`postgres:16-alpine` in `docker-compose.yml`). The Mac is not deployed anywhere and its home IP can change. The allowlist is the real box `/32`, written only in the gitignored `terraform.tfvars`, plus the Mac's current public `/32`. The tracked example uses `198.51.100.10/32` for the box line. `scripts/aws_update_my_ip.sh` rewrites only the Mac line. The EC2 section is the host that replaces the Mac process. Do not point production traffic at it until the RDS migration in this document has finished.
 
 Step-by-step for that Mac, in Traditional Chinese: [docs/deployment/aws-steps-zh-TW.md](aws-steps-zh-TW.md).
 
@@ -58,7 +58,7 @@ On PostgreSQL 15+ the `public` schema does not allow `CREATE` for every role. Th
 The AWS account already exists. Check its plan and billing, set a monthly $25 budget alarm, then apply. Do not treat this as creating a new account or as an upgrade. There is no Paid-plan button. $25 is a budget cap, not an estimate. The `db.t4g.micro` compute price is about $0.016 per hour (about $12 per month) in both `us-east-1` and `us-east-2`. On top of that, expect gp3 storage, backup storage beyond the free allocation, data transfer, and T4g unlimited CPU credits.
 
 1. On the Mac, `aws configure` with Eason's own keys. Those keys stay in `~/.aws`. They do not go in the repo or in chat.
-2. `cd infra/aws && cp terraform.tfvars.example terraform.tfvars`. Set the bucket name. `allowed_cidrs` is `184.193.214.44/32` plus the Mac's current public `/32`. `./scripts/aws_update_my_ip.sh` rewrites the Mac line and prints `terraform apply`; it does not call AWS unless `--apply` is passed.
+2. `cd infra/aws && cp terraform.tfvars.example terraform.tfvars`. Set the bucket name. Replace the example box line `198.51.100.10/32` with the real box `/32` in that gitignored file, and set the `# mac-home` line to the Mac's current public `/32`. `./scripts/aws_update_my_ip.sh` rewrites the Mac line and prints `terraform apply`; it does not call AWS unless `--apply` is passed.
 3. `terraform init`, `terraform plan`, `terraform apply`. Read `db_endpoint`, `master_user_secret_arn`, `bucket_name`, and `app_security_group_id`. The migration and dump scripts do not call Secrets Manager. They read `RDS_DATABASE_URL`, which you build. `SecretString` is JSON. Take only the password field:
 
 ```bash
@@ -86,10 +86,11 @@ set +a
 ```
 
 ```bash
+read -s -p "Local URL: " LOCAL_DATABASE_URL
+echo
 read -s -p "RDS URL: " RDS_DATABASE_URL
 echo
-export RDS_DATABASE_URL
-export LOCAL_DATABASE_URL='postgresql://novig:novig@localhost:5432/novig_nba'
+export LOCAL_DATABASE_URL RDS_DATABASE_URL
 ./scripts/db_migrate_to_rds.sh
 ```
 

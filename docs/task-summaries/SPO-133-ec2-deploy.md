@@ -36,7 +36,7 @@ CORS `*` is rejected because a credentialed wildcard is not a configuration we w
 
 ## Tests / Verification
 
-- Backend pytest: `cd backend && /tmp/nba-venv/bin/python -m pytest -q --tb=line` → 1324 passed, 27 skipped, 6 xfailed, 0 failed. After merging SPO-132 at 5a20e40.
+- Backend pytest: `cd backend && /tmp/nba-venv/bin/python -m pytest -q --tb=line` → 1324 passed, 27 skipped, 6 xfailed, 0 failed. After merging SPO-132 at 7fbbf54.
 - Terraform: `terraform fmt -check -recursive` clean. `terraform init -backend=false` uses hashicorp/aws v5.100.0. `terraform validate` succeeded. No plan and no apply.
 - Frontend: not exercised. Compose and the header contract are documented for the frontend rewrite.
 - Integration test: SKIPPED. No AWS account and no `RUN_INTEGRATION`. The SSM script test uses a fake `aws` binary.

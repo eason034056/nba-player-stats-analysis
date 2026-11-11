@@ -811,7 +811,7 @@ class TestUpdateMyIp:
                 [
                     'region = "us-east-2"',
                     "allowed_cidrs = [",
-                    '  "184.193.214.44/32", # box',
+                    '  "198.51.100.10/32", # box',
                     '  "203.0.113.10/32", # mac-home',
                     "]",
                     "",
@@ -832,11 +832,11 @@ class TestUpdateMyIp:
         result = _run(UPDATE_IP, env)
         assert result.returncode == 0, result.stderr
         assert "198.51.100.20" in result.stdout
-        assert "184.193.214.44/32" in result.stdout
+        assert "198.51.100.10/32" in result.stdout
         assert "No AWS call was made" in result.stdout
         assert not marker.exists()
         written = (tf_dir / "terraform.tfvars").read_text()
-        assert '184.193.214.44/32", # box' in written
+        assert '198.51.100.10/32", # box' in written
         assert '198.51.100.20/32", # mac-home' in written
         assert "203.0.113.10/32" not in written
 
@@ -846,7 +846,7 @@ class TestUpdateMyIp:
         tf_dir = tmp_path / "infra"
         tf_dir.mkdir()
         (tf_dir / "terraform.tfvars").write_text(
-            '  "203.0.113.10/32", # mac-home\n  "184.193.214.44/32", # box\n'
+            '  "203.0.113.10/32", # mac-home\n  "198.51.100.10/32", # box\n'
         )
         log = tmp_path / "tf-log"
         _write_executable(bindir / "curl", "#!/bin/sh\necho 198.51.100.21\n")
@@ -867,6 +867,6 @@ exit 0
         assert result.returncode == 0, result.stderr
         text = log.read_text()
         assert "apply" in text
-        assert "184.193.214.44/32" in text
+        assert "198.51.100.10/32" in text
         assert "198.51.100.21/32" in text
         assert "203.0.113.10" not in (tf_dir / "terraform.tfvars").read_text()

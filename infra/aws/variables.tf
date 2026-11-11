@@ -31,7 +31,7 @@ variable "tags" {
 
 variable "allowed_cidrs" {
   type        = list(string)
-  description = "IPv4 /32 CIDRs allowed to open TCP 5432. No default. Use the box 184.193.214.44/32 and the Mac's current public IP/32 until the EC2 backend exists. Set to [] to remove those CIDR rules. An empty list is allowed. Every set entry must be an IPv4 /32. 0.0.0.0/0, 0.0.0.0/32, duplicates, and every IPv6 CIDR are rejected."
+  description = "IPv4 /32 CIDRs allowed to open TCP 5432. No default. Until the EC2 backend exists, use the real box /32 and the Mac's current public IP/32, and put the real box address only in the gitignored terraform.tfvars. The tracked example uses 198.51.100.10/32. Set to [] to remove those CIDR rules. An empty list is allowed. Every set entry must be an IPv4 /32. 0.0.0.0/0, 0.0.0.0/32, duplicates, and every IPv6 CIDR are rejected."
 
   validation {
     condition = (

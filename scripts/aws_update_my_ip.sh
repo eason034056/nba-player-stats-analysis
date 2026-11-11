@@ -4,7 +4,6 @@
 # printed for you to run, unless you pass --apply.
 set -euo pipefail
 
-BOX_CIDR="184.193.214.44/32"
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 TF_DIR="${TF_DIR:-${ROOT}/infra/aws}"
 CURL_BIN="${CURL:-curl}"
@@ -18,8 +17,9 @@ Usage:
 
 Reads the current public IP from https://checkip.amazonaws.com (no AWS
 credentials, no resource API). Prints that IP. Rewrites the gitignored
-file \${TF_DIR}/terraform.tfvars so allowed_cidrs keeps ${BOX_CIDR} and
-replaces the line marked "# mac-home".
+file \${TF_DIR}/terraform.tfvars: the "# mac-home" line is replaced, and
+the "# box" line is left as it is. That line is where the real box /32
+belongs. The tracked example uses a documentation address only.
 
 By default it then prints the terraform apply command and exits. It does
 not run terraform, so it makes no AWS call.
@@ -67,7 +67,6 @@ if [[ ! "$ip" =~ ^${octet}\.${octet}\.${octet}\.${octet}$ || "$ip" == "0.0.0.0" 
 fi
 
 echo "Current public IP: ${ip}"
-echo "Box CIDR kept: ${BOX_CIDR}"
 
 example="${TF_DIR}/terraform.tfvars.example"
 target="${TF_DIR}/terraform.tfvars"
@@ -98,13 +97,19 @@ done < "$target" > "$tmp"
 mv "$tmp" "$target"
 
 echo "Updated ${target} (gitignored). The Mac CIDR is now ${ip}/32."
+box_cidr="$(sed -n 's/.*"\([0-9][0-9.]*\/32\)".*# box.*/\1/p' "$target" | head -n 1)"
+if [[ -z "$box_cidr" ]]; then
+  echo "error: ${target} has no \"# box\" IPv4 /32. The mac-home line was updated. terraform was not started." >&2
+  exit 1
+fi
+echo "Box CIDR kept: ${box_cidr}"
 echo "No AWS call was made by this script."
 echo "When you are ready, run:"
-echo "  ${TERRAFORM_BIN} -chdir=${TF_DIR} apply -var-file=terraform.tfvars -var 'allowed_cidrs=[\"${BOX_CIDR}\",\"${ip}/32\"]'"
+echo "  ${TERRAFORM_BIN} -chdir=${TF_DIR} apply -var-file=terraform.tfvars -var 'allowed_cidrs=[\"${box_cidr}\",\"${ip}/32\"]'"
 
 if [[ "$apply" -eq 1 ]]; then
   echo "Starting terraform apply because --apply was passed."
   "$TERRAFORM_BIN" -chdir="$TF_DIR" apply \
     -var-file=terraform.tfvars \
-    -var "allowed_cidrs=[\"${BOX_CIDR}\",\"${ip}/32\"]"
+    -var "allowed_cidrs=[\"${box_cidr}\",\"${ip}/32\"]"
 fi

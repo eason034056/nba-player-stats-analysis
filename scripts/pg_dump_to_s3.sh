@@ -110,18 +110,21 @@ export_libpq() {
       esac
     done
   fi
-  export PGHOST="$host"
-  export PGPORT="$port"
-  export PGUSER="$(urldecode "$user")"
-  export PGPASSWORD="$(urldecode "$pass")"
-  export PGDATABASE="$db"
+  PGHOST="$host"
+  PGPORT="$port"
+  PGUSER="$(urldecode "$user")"
+  PGPASSWORD="$(urldecode "$pass")"
+  PGDATABASE="$db"
+  export PGHOST PGPORT PGUSER PGPASSWORD PGDATABASE
   if [[ -n "$sslmode" ]]; then
-    export PGSSLMODE="$sslmode"
+    PGSSLMODE="$sslmode"
+    export PGSSLMODE
   else
     unset PGSSLMODE
   fi
   if [[ -n "$sslrootcert" ]]; then
-    export PGSSLROOTCERT="$(urldecode "$sslrootcert")"
+    PGSSLROOTCERT="$(urldecode "$sslrootcert")"
+    export PGSSLROOTCERT
   else
     unset PGSSLROOTCERT
   fi
