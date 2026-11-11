@@ -308,6 +308,66 @@ def team_from_game_logs(
     return dated[-1][2]
 
 
+def _club_code(name: str, league: str = "nba") -> str:
+    """League team code for a CSV nickname, a full name, or an abbreviation."""
+    from app.services.daily_analysis import canonical_team_code
+
+    return canonical_team_code(name or "", league=league)
+
+
+def team_on_event(
+    game_logs: Optional[List[Dict[str, Any]]],
+    event_day: Any = None,
+    home_team: str = "",
+    away_team: str = "",
+    candidate: str = "",
+    league: str = "nba",
+) -> str:
+    """Club to label a player with for one event.
+
+    ``team_from_game_logs`` is the club on the US game date, or the latest
+    club on or before that day. The shipped game log stops on 2026-05-11,
+    so for a November 2026 tip that club is last season's club. Bulls is
+    the right label for Anfernee Simons on 2026-02-21 and the wrong label
+    on Celtics at 76ers (2026-11-11): that game's clubs are Boston and
+    Philadelphia, and the file has no later row.
+
+    When both event clubs are known:
+
+    1. ``candidate`` (a projection abbreviation or name) is kept when its
+       code is home or away. That value is the in-season source.
+    2. Otherwise the ``team_from_game_logs`` club is kept when its code is
+       home or away.
+    3. Otherwise return ``""``. An older stint with one of the two clubs
+       is not substituted. Simons' last Celtics game is before the Bulls
+       stint; labeling him Boston would put a player on the other side
+       of this game onto the opponent.
+
+    When either event club is missing, behavior matches the previous
+    callers: ``candidate`` when it is non-empty, otherwise
+    ``team_from_game_logs``.
+    """
+    home = (home_team or "").strip()
+    away = (away_team or "").strip()
+    proposed = (candidate or "").strip()
+    if not home or not away:
+        if proposed:
+            return proposed
+        return team_from_game_logs(game_logs, event_day)
+
+    sides = {
+        code
+        for code in (_club_code(home, league), _club_code(away, league))
+        if code
+    }
+    if proposed and _club_code(proposed, league) in sides:
+        return proposed
+    latest = team_from_game_logs(game_logs, event_day)
+    if latest and _club_code(latest, league) in sides:
+        return latest
+    return ""
+
+
 # ⚠ Legacy module-level constant. Kept ONLY for backward compatibility
 # with tests that monkeypatch `app.services.csv_player_history.CSV_PATH`
 # (e.g. `test_csv_player_history.py`'s `patch("...CSV_PATH", csv_path)`).
@@ -718,17 +778,25 @@ class CSVPlayerHistoryService:
         player_name: str,
         include_playoffs: bool = False,
         include_play_in: bool = False,
+        only_team: str | None = None,
     ) -> List[str]:
         """
-        Get all teammates who have played for the same team as the player
+        Get teammates who have played for the same team as the player.
 
-        Traverses all game logs of the player and collects teammates from _lineup_cache.
+        Traverses the player's game logs and collects teammates from
+        ``_lineup_cache``. ``only_team`` limits that walk to one club
+        (CSV nickname or abbreviation; matched by league team code).
+        ``only_team=""`` matches no club and returns an empty list, which
+        is what an event view uses when the log club is not in the game.
+        ``only_team=None`` keeps every stint. That is the player-page
+        history list.
 
         Args:
             player_name: player name
+            only_team: club to keep, or None for every club in the log
 
         Returns:
-            List[str]: list of teammate names (deduplicated and sorted, excluding the player themself)
+            List[str]: teammate names (deduplicated and sorted, excluding the player)
         """
         self.load_csv()
 
@@ -738,6 +806,9 @@ class CSVPlayerHistoryService:
         player_games = self._cache.get(player_name, []) if resolved else []
 
         allowed = self._allowed_game_types(include_playoffs, include_play_in)
+        wanted = _club_code(only_team, self.league) if only_team is not None else None
+        if only_team is not None and not wanted:
+            return []
         teammates: Set[str] = set()
         for game in player_games:
             if self._game_type_of(game) not in allowed:
@@ -745,6 +816,8 @@ class CSVPlayerHistoryService:
             team = game.get("team", "")
             game_date = game.get("game_date")
             if not team or game_date is None:
+                continue
+            if wanted is not None and _club_code(team, self.league) != wanted:
                 continue
             date_key = game_date.strftime("%Y-%m-%d")
             lineup = self._lineup_cache.get((team, date_key), set())
@@ -909,6 +982,9 @@ class CSVPlayerHistoryService:
         include_playoffs: bool = False,
         include_play_in: bool = False,
         season: Optional[str] = None,
+        home_team: Optional[str] = None,
+        away_team: Optional[str] = None,
+        as_of: Any = None,
     ) -> Dict[str, Any]:
         """
         Calculate player historical statistics
@@ -987,11 +1063,28 @@ class CSVPlayerHistoryService:
             include_playoffs=include_playoffs,
             include_play_in=include_play_in,
         )
-        # Get all teammates (for star teammate selector, only those on the same team)
+        # Event views pass both clubs. The selector then lists teammates
+        # from the club that is actually in the game. A log club that is
+        # neither home nor away contributes nobody: the Bulls names from
+        # a finished stint are not this game's teammates. Omitting either
+        # club keeps the full list (player page, undated tools).
+        event_scoped = bool((home_team or "").strip() and (away_team or "").strip())
+        event_team = (
+            team_on_event(
+                player_games,
+                as_of,
+                home_team or "",
+                away_team or "",
+                league=self.league,
+            )
+            if event_scoped
+            else None
+        )
         all_teammates = self.get_teammates(
             player_name,
             include_playoffs=include_playoffs,
             include_play_in=include_play_in,
+            only_team=event_team if event_scoped else None,
         )
         allowed_game_types = self._allowed_game_types(include_playoffs, include_play_in)
 

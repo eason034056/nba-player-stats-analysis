@@ -48,6 +48,7 @@ import {
 } from "recharts";
 import { PlayerDDTile } from "@/components/PlayerDDTile";
 import { getWNBAPlayerHistory } from "@/lib/api";
+import { formatPercent } from "@/lib/player-dd";
 
 // Continuous metrics (Phase 1) — must stay in lockstep with the backend's
 // `CONTINUOUS_METRIC_EXTRACTORS`. Adding/removing one here without the
@@ -252,9 +253,7 @@ export default function WNBAPlayerPage() {
                   P(Over)
                 </div>
                 <p className="mt-3 text-4xl font-semibold text-dark">
-                  {data.p_over != null
-                    ? `${(data.p_over * 100).toFixed(1)}%`
-                    : "—"}
+                  {formatPercent(data.p_over)}
                 </p>
                 <p className="mt-1 text-xs text-gray">
                   value &gt; {data.threshold}
@@ -267,9 +266,7 @@ export default function WNBAPlayerPage() {
                   P(Under)
                 </div>
                 <p className="mt-3 text-4xl font-semibold text-dark">
-                  {data.p_under != null
-                    ? `${(data.p_under * 100).toFixed(1)}%`
-                    : "—"}
+                  {formatPercent(data.p_under)}
                 </p>
                 <p className="mt-1 text-xs text-gray">
                   value &lt; {data.threshold}

@@ -129,7 +129,7 @@ Each Settings must explicitly declare every key it accesses via `settings.X`; `g
     - `decisions/<epic>/` — decision logs
     - `research/<epic>/` — research reports
     - `task-summaries/` — flat dir, file per ticket: `<TICKET>-<kebab-slug>.md` (e.g., `SPO-12-odds-cache-ttl.md`). NO epic subdir — ticket key is the index. The engineer writes it with the PR; QA and the owner read it.
-    - `progress.md` — single file at `docs/` root. The engineer updates their ticket's row in the PR that changes that ticket's state.
+    - `progress.md` — single file at `docs/` root. Feature PRs do not change `docs/progress.md`. Put the progress note in the PR body under `## Progress notes (for the docs PR)`. After each merge batch, one engineer opens a small docs PR that updates `docs/progress.md`. Changes under `docs/decisions/` are still fine in a feature PR.
   - **Pre-existing project docs (keep as historical reference, do not migrate)**:
     - `dev-doc.md`, `multi-agent-dev.md`, `new-function-dev-doc.md`, `player-stats-projection-api.md`, `team-logos-implementation.md` — early project docs; treat as background reading, do not append.
   - **Archive**:

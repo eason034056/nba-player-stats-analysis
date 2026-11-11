@@ -50,6 +50,30 @@ const config: Config = {
           // Light ink for text that sits on a dark code block.
           light: "#D9CEF0",
         },
+        // Names follow the No-Vig token list. `neutral` is not used:
+        // Tailwind already owns that scale, so the chevron gray is tone-neutral.
+        surface: "#FFFFFF",
+        "ink-2": "#4A4458",
+        faint: "#8A8496",
+        eyebrow: "#7B4FC4",
+        against: "#B4436C",
+        "under-text": "#5B3A99",
+        "line-strong": "#D3CCDF",
+        divider: "#EEEBF2",
+        seg: "#F3F1F6",
+        panel: "#F7F6F9",
+        grid: "#F1EEF4",
+        "list-gap": "#E6E2EC",
+        "under-bar": "#C9B4EE",
+        "chart-line": "#B3A63A",
+        lean: "#E3DAF3",
+        pass: "#E2E2E2",
+        "tone-neutral": "#B9B3C4",
+        "agent-border": "#E3DFE9",
+        "tag-against": "#F6E3EA",
+        "tag-against-ink": "#8E2C50",
+        "tag-neutral": "#F1F0F3",
+        "card-footer": "#BFAEE3",
       },
 
       fontFamily: {
@@ -85,6 +109,35 @@ const config: Config = {
         lg: "20px",
         xl: "24px",
         "2xl": "28px",
+        badge: "6px",
+        "mark-sm": "9px",
+        mark: "10px",
+        control: "12px",
+        tile: "16px",
+        row: "18px",
+        card: "20px",
+        game: "22px",
+        sheet: "24px",
+        hero: "28px",
+      },
+
+      fontSize: {
+        hero: ["clamp(34px, 6cqi, 60px)", { lineHeight: "1", letterSpacing: "-0.035em" }],
+        "hero-mobile": ["30px", { lineHeight: "1.05", letterSpacing: "-0.03em" }],
+        "page-title": ["clamp(32px, 5cqi, 52px)", { lineHeight: "1", letterSpacing: "-0.035em" }],
+        "event-title": ["clamp(24px, 3.6cqi, 36px)", { lineHeight: "1.05", letterSpacing: "-0.03em" }],
+        "read-title": ["clamp(30px, 5cqi, 48px)", { lineHeight: "1.05", letterSpacing: "-0.035em" }],
+        eyebrow: ["12px", { lineHeight: "1.2", letterSpacing: "0.12em" }],
+        "eyebrow-mobile": ["11px", { lineHeight: "1.2", letterSpacing: "0.12em" }],
+        prob: ["30px", { lineHeight: "1" }],
+      },
+
+      maxWidth: {
+        page: "1200px",
+      },
+
+      height: {
+        header: "68px",
       },
 
       borderWidth: {
@@ -97,6 +150,8 @@ const config: Config = {
       boxShadow: {
         glow: "0 24px 70px rgba(2, 8, 20, 0.35)",
         panel: "0 28px 90px rgba(2, 8, 20, 0.4)",
+        // The only shadow in the redesign. Cards use a 1px border.
+        drawer: "-20px 0 60px rgba(29, 21, 48, 0.18)",
       },
     },
   },

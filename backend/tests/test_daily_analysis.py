@@ -412,8 +412,8 @@ class TestAnalyzeSingleEvent:
         picks, _, _ = asyncio.run(
             service._analyze_single_event(
                 event_id="evt-1",
-                home_team="Team A",
-                away_team="Team B",
+                home_team="Los Angeles Lakers",
+                away_team="Golden State Warriors",
                 commence_time="2026-03-30T02:00:00Z",
                 projections={},
             )

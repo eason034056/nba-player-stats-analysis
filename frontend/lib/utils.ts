@@ -10,7 +10,7 @@
 import { clsx, type ClassValue } from "clsx";
 import { twMerge } from "tailwind-merge";
 import { format, parseISO } from "date-fns";
-import { formatPercent } from "@/lib/player-dd";
+import { formatPercent, roundHalfAwayFromZero } from "@/lib/player-dd";
 import { zhTW } from "date-fns/locale";
 
 /**
@@ -154,19 +154,17 @@ export function formatGameTime(dateString: string): string {
 /**
  * 格式化機率為百分比
  * 
- * @param probability - 機率（0-1 之間的小數）
- * @param decimals - 小數位數，預設 1
- * @returns 百分比字串
+ * @param probability - 機率（0-1 之間的小數）。缺值或非有限數回 em dash。
+ * @returns 整數百分比字串，與 formatPercent 相同
  * 
  * @example
  * formatProbability(0.5238)
- * // 結果: "52.4%"
+ * // 結果: "52%"
  */
 export function formatProbability(
-  probability: number,
-  decimals: number = 1
+  probability: number | null | undefined,
 ): string {
-  return `${(probability * 100).toFixed(decimals)}%`;
+  return formatPercent(probability);
 }
 
 
@@ -198,12 +196,17 @@ export function formatAmericanOdds(odds: number): string {
  * @param vig - 水錢（小數）
  * @returns 百分比字串
  * 
+ * One decimal, matching the design and the ResultsTable color bands
+ * (below 4% green, above 6% red). A whole percent would show 0.055 as 6%
+ * while the band still treats it as the middle.
+ *
  * @example
  * formatVig(0.0476)
  * // 結果: "4.8%"
  */
-export function formatVig(vig: number): string {
-  return formatPercent(vig);
+export function formatVig(vig: number | null | undefined): string {
+  if (typeof vig !== "number" || !Number.isFinite(vig)) return "—";
+  return `${roundHalfAwayFromZero(vig * 100, 1).toFixed(1)}%`;
 }
 
 
