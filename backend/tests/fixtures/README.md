@@ -19,6 +19,10 @@ Naming follows `<provider>_<endpoint>__<variant>.json`.
 
 `tests/fixtures/odds_api/load_odds_fixture(name)` reads these files. Tests copy a loaded body when they need a smaller case (one bookmaker, one side removed, a player relabeled). They do not type a new response.
 
+## BALLDONTLIE client captures (SPO-130a)
+
+`bdl/` holds the SPO-130a captures unchanged. Each file is `{request, status, elapsed_s, rate_headers, response}`. The API key is not in these files. `response._raw` on the 429 file is the response text, not a JSON object. No second injuries page was recorded. The only 429 capture is `GET /nba/v1/lineups`, which the client does not call. This section stands alone. Other tickets may add their own files and their own heading in this directory.
+
 ## Expanded NBA markets
 
 Recorded 2026-11-10T19:02:40Z. The body is committed unchanged. `odds_api_event_odds__nba_expanded_markets.meta.json` sits beside it and holds the request and the quota headers. The key is not in either file.
