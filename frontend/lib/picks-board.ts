@@ -8,6 +8,7 @@
 
 import { buildEventDetailHref, type LeagueSegment } from "./event-detail-link";
 import { metricToMarket } from "./metric-to-market";
+import { boardRate, nbaTierFace } from "./nba-card";
 import { formatPercent } from "./player-dd";
 import type { DailyPick } from "./schemas";
 import { teamAbbr } from "./team-abbr";
@@ -150,16 +151,21 @@ export function pickMatchup(pick: DailyPick, league: LeagueSegment): string {
   return time ? `${teams} · ${time}` : teams;
 }
 
-export function sortPicks(picks: DailyPick[]): DailyPick[] {
+export function sortPicks(picks: DailyPick[], league: LeagueSegment): DailyPick[] {
   return [...picks].sort((left, right) => {
-    const leftRank = Number.isFinite(left.probability) ? left.probability : -1;
-    const rightRank = Number.isFinite(right.probability) ? right.probability : -1;
+    const leftRate = boardRate(left, league);
+    const rightRate = boardRate(right, league);
+    const leftRank = Number.isFinite(leftRate) ? leftRate : -1;
+    const rightRank = Number.isFinite(rightRate) ? rightRate : -1;
     return rightRank - leftRank;
   });
 }
 
-export function countStrong(picks: DailyPick[]): number {
-  return picks.filter((pick) => Number.isFinite(pick.probability) && pick.probability >= 0.7).length;
+export function countStrong(picks: DailyPick[], league: LeagueSegment): number {
+  return picks.filter((pick) => {
+    const rate = boardRate(pick, league);
+    return Number.isFinite(rate) && rate >= 0.7;
+  }).length;
 }
 
 export function buildPickRows(
@@ -167,11 +173,12 @@ export function buildPickRows(
   league: LeagueSegment,
   date: string,
 ): PickRowModel[] {
-  return sortPicks(picks).map((pick, index) => {
-    const tier = readTier(pick.probability);
-    const bar = Number.isFinite(pick.probability)
-      ? Math.max(0, Math.min(100, pick.probability * 100))
-      : 0;
+  return sortPicks(picks, league).map((pick, index) => {
+    const face = league === "nba" ? nbaTierFace(pick) : null;
+    const tier = face ? face.tier : readTier(pick.probability);
+    const probabilityText = face ? face.probabilityText : formatPercent(pick.probability);
+    const barRate = boardRate(pick, league);
+    const bar = Number.isFinite(barRate) ? Math.max(0, Math.min(100, barRate * 100)) : 0;
     return {
       key: `${pick.event_id}-${pick.player_name}-${pick.metric}-${pick.direction}`,
       rank: String(index + 1).padStart(2, "0"),
@@ -179,9 +186,9 @@ export function buildPickRows(
       player: pick.player_name,
       matchup: pickMatchup(pick, league),
       propText: propPhrase(pick),
-      probabilityText: formatPercent(pick.probability),
+      probabilityText,
       barPercent: bar,
-      tierShort: tier ? TIER_SHORT[tier.name] : null,
+      tierShort: tier ? (league === "nba" ? tier.label : TIER_SHORT[tier.name]) : null,
       tierName: tier?.name ?? null,
       tags: pickTags(pick),
       href: buildEventDetailHref({

@@ -9,13 +9,13 @@
 import { format, parseISO } from "date-fns";
 import { enUS } from "date-fns/locale";
 
+import { nbaTierFace, tierFromBackend, tierProbability } from "./nba-card";
 import { formatPercent, formatTierPercent } from "./player-dd";
 import {
   etWallClock,
   formatThreshold,
   playerLastName,
   readTier,
-  tierFromApi,
   type ReadTier,
 } from "./today-board";
 import { marketToProjectionCard, projectionCardValue } from "./projection-metric";
@@ -23,12 +23,14 @@ import { METRIC_TO_MARKET, type MetricKey } from "./metric-to-market";
 import type { LeagueSegment } from "./event-detail-link";
 import { teamAbbr } from "./team-abbr";
 import type {
+  BulkPropPlayer,
   DailyPick,
   EventLineupStatus,
   GameLog,
   NBAEvent,
   PlayerHistoryResponse,
   PlayerProjection,
+  PropRead,
   TeamLineup,
 } from "./schemas";
 
@@ -298,7 +300,7 @@ export interface SignalInput {
     p_no_fair?: number | null;
   } | null;
   last10: GameLog[];
-  history: Pick<PlayerHistoryResponse, "p_over" | "p_under" | "n_games"> | null;
+  history: Pick<PlayerHistoryResponse, "p_over" | "p_under" | "n_games" | "season_mean"> | null;
   projection: PlayerProjection | null;
   pick: DailyPick | null;
   market: string;
@@ -389,10 +391,15 @@ function historySignal(input: SignalInput): Omit<ReadSignal, "verdict"> {
   }
   const games = input.history?.n_games;
   const sample = finite(games) ? `${games} games` : "the returned games";
+  const seasonMean = input.history?.season_mean;
+  const seasonSentence =
+    typeof seasonMean === "number" && Number.isFinite(seasonMean)
+      ? ` Season mean ${seasonMean.toFixed(1)}.`
+      : "";
   return {
     key: "history",
     label: "All-game hit rate",
-    detail: `Over ${formatPercent(over)} · under ${formatPercent(under)} across ${sample}. Not a season filter.`,
+    detail: `Over ${formatPercent(over)} · under ${formatPercent(under)} across ${sample}. Not a season filter.${seasonSentence}`,
     value: formatPercent(over),
     meter: over,
   };
@@ -498,15 +505,16 @@ export interface SlipSeed {
   direction: string;
   probability: number;
   n_games: number;
+  tier?: string | null;
+  combined_probability?: number | null;
 }
 
 export interface EventPlayerRow {
   name: string;
   team: string | null;
-  /** Blank when the pick has no position. Bulk props do not carry one yet. */
-  position?: string | null;
+  position: string | null;
   /** Backend tier for this row. Null when the pick has no tier. */
-  tier?: ReadTier | null;
+  tier: ReadTier | null;
   lineText: string;
   leanText: string;
   hasLean: boolean;
@@ -556,6 +564,63 @@ function onRoster(name: string, lineup: TeamLineup | null | undefined): boolean 
   return players.some((player) => namesMatch(player, name));
 }
 
+function samePlayer(left: string, right: string): boolean {
+  return left.trim().toLowerCase() === right.trim().toLowerCase();
+}
+
+function readForPlayer(reads: PropRead[] | undefined, name: string): PropRead | null {
+  return reads?.find((read) => samePlayer(read.player, name)) ?? null;
+}
+
+function bulkForPlayer(players: BulkPropPlayer[] | undefined, name: string): BulkPropPlayer | null {
+  return players?.find((player) => samePlayer(player.player, name)) ?? null;
+}
+
+export type ReadsStatus = "loading" | "error" | "ready";
+
+export function nbaReadsStatus(isLoading: boolean, isError: boolean): ReadsStatus {
+  if (isLoading) return "loading";
+  if (isError) return "error";
+  return "ready";
+}
+
+export function nbaRequestNote(kind: "reads" | "props", status: ReadsStatus): string | null {
+  if (status === "loading") return kind === "reads" ? "Loading reads." : "Loading props.";
+  if (status === "error") return kind === "reads" ? "Reads failed." : "Props failed.";
+  return null;
+}
+
+function leanLetter(side: string | null | undefined): "U" | "O" | null {
+  if (side === "under") return "U";
+  if (side === "over") return "O";
+  return null;
+}
+
+function leanLine(letter: "U" | "O" | null, face: { probabilityText: string; tier: { label: string } | null }, rate: number | null) {
+  const label = face.tier ? ` ${face.tier.label}` : "";
+  if (!letter) return { text: "—", rate };
+  return { text: `${letter} ${face.probabilityText}${label}`, rate };
+}
+
+/** Line, side, probability, and tier from the daily pick alone. */
+function nbaLeanFromPick(pick: DailyPick): { text: string; rate: number | null } {
+  const face = nbaTierFace(pick);
+  return leanLine(leanLetter(pick.direction), face, tierProbability(pick));
+}
+
+/** Line, side, probability, and tier from the reads entry alone. */
+function nbaLeanFromRead(read: PropRead): { text: string; rate: number | null } {
+  const face = nbaTierFace({
+    combined_probability: read.combined_probability,
+    tier: read.tier,
+  });
+  const rate =
+    typeof read.combined_probability === "number" && Number.isFinite(read.combined_probability)
+      ? read.combined_probability
+      : null;
+  return leanLine(leanLetter(read.side), face, rate);
+}
+
 export function eventPlayerRows(args: {
   suggested: string[];
   picks: DailyPick[];
@@ -568,6 +633,9 @@ export function eventPlayerRows(args: {
   awayAbbr: string;
   homeAbbr: string;
   league: LeagueSegment;
+  reads?: PropRead[];
+  readsStatus?: ReadsStatus;
+  bulkPlayers?: BulkPropPlayer[];
 }): EventPlayerRow[] {
   const metric = marketToMetric(args.metric);
   const picks = args.picks.filter(
@@ -588,44 +656,72 @@ export function eventPlayerRows(args: {
     names.push(name.trim());
   };
   for (const pick of picks) push(pick.player_name);
+  for (const read of args.reads ?? []) push(read.player);
   for (const name of args.suggested) push(name);
   if (args.selectedName) push(args.selectedName);
 
   const rows = names.map((name) => {
     const pick = byName.get(name.toLowerCase()) ?? null;
-    const teamFromPick = pick
-      ? pick.player_team_code || teamAbbr(pick.player_team, args.league) || null
-      : null;
+    const read = args.league === "nba" ? readForPlayer(args.reads, name) : null;
+    const bulk = args.league === "nba" ? bulkForPlayer(args.bulkPlayers, name) : null;
+    const teamFromPick = pick?.player_team_code?.trim()
+      ? pick.player_team_code
+      : pick
+        ? teamAbbr(pick.player_team, args.league) || null
+        : null;
     const onAway = onRoster(name, args.awayLineup);
     const onHome = onRoster(name, args.homeLineup);
     const lineupTeam =
       onAway && !onHome ? args.awayAbbr : onHome && !onAway ? args.homeAbbr : null;
-    const pickInGame =
-      teamFromPick && (teamFromPick === args.awayAbbr || teamFromPick === args.homeAbbr)
-        ? teamFromPick
-        : null;
+    const inGame = (code: string | null | undefined) =>
+      code && (code === args.awayAbbr || code === args.homeAbbr) ? code : null;
     // Tonight's lineup beats a CSV or projection club. A code that is
-    // neither home nor away (CHI on BOS@PHI) is not shown.
-    const team = lineupTeam || pickInGame;
+    // neither home nor away (CHI on BOS@PHI) is not shown. The snapshot
+    // team_code is held to the same rule.
+    const team = lineupTeam || inGame(teamFromPick) || inGame(bulk?.team_code?.trim());
     const selected = namesMatch(name, args.selectedName);
+    const readsStatus = args.league === "nba" ? args.readsStatus ?? "ready" : "ready";
+    const sourcePick = args.league === "nba" ? pick : null;
+    const sourceRead = args.league === "nba" && sourcePick == null ? read : null;
     const line =
-      pick != null
-        ? pick.threshold
-        : selected && args.postedLine != null
-          ? args.postedLine
+      sourcePick != null
+        ? sourcePick.threshold
+        : sourceRead != null
+          ? sourceRead.line
+          : pick != null
+            ? pick.threshold
+            : selected && args.postedLine != null
+              ? args.postedLine
+              : null;
+    const nba =
+      sourcePick != null
+        ? nbaLeanFromPick(sourcePick)
+        : sourceRead != null
+          ? nbaLeanFromRead(sourceRead)
+          : args.league === "nba" && readsStatus === "loading"
+            ? { text: "Loading", rate: null }
+            : args.league === "nba" && readsStatus === "error"
+              ? { text: "Unavailable", rate: null }
+              : null;
+    const tier =
+      args.league === "nba" && sourcePick
+        ? tierFromBackend(sourcePick.tier)
+        : args.league === "nba" && sourceRead
+          ? tierFromBackend(sourceRead.tier)
           : null;
-    const tier = args.league === "nba" && pick ? tierFromApi(pick.tier) : null;
     return {
       name,
       team: team || null,
-      position: pick?.position?.trim() || null,
+      position: pick?.position?.trim() || bulk?.position?.trim() || null,
       tier,
       lineText: line == null ? "—" : formatThreshold(line),
-      leanText: pick
-        ? `${pick.direction === "under" ? "U" : "O"} ${percentBesideTier(pick.probability, tier)}`
-        : "No read",
-      hasLean: pick != null,
-      probability: pick?.probability ?? null,
+      leanText: nba
+        ? nba.text
+        : pick
+          ? `${pick.direction === "under" ? "U" : "O"} ${formatPercent(pick.probability)}`
+          : "No read",
+      hasLean: nba != null || pick != null,
+      probability: nba?.rate ?? pick?.probability ?? null,
     };
   });
 
@@ -979,6 +1075,7 @@ function buildNbaRead(args: {
   line: number | null;
   pick: DailyPick | null;
   history: PlayerHistoryResponse | null;
+  read?: PropRead | null;
 }): OurReadModel {
   const meta = joinMeta(args.position, args.team, ", ");
   const headlineMarket = readMarketName(args.market, args.marketName);
@@ -992,7 +1089,24 @@ function buildNbaRead(args: {
     metric: marketToMetric(args.market),
   };
   const pick = args.pick;
+  const postedRead = args.read;
   if (!pick) {
+    if (postedRead && (postedRead.side === "over" || postedRead.side === "under")) {
+      const face = nbaTierFace(postedRead);
+      return {
+        player: args.player,
+        meta,
+        headlineLead: `${postedRead.side === "under" ? "Under" : "Over"} ${formatThreshold(postedRead.line)}`,
+        headlineMarket,
+        caption: `Combined probability ${face.probabilityText}.`,
+        tier: face.tier,
+        bar: null,
+        signals: [],
+        primary: null,
+        other: null,
+        leanProbability: null,
+      };
+    }
     return {
       player: args.player,
       meta,
@@ -1009,13 +1123,17 @@ function buildNbaRead(args: {
   }
   const direction = pick.direction === "under" ? "under" : "over";
   const otherDirection = direction === "over" ? "under" : "over";
-  const tier = tierFromApi(pick.tier);
+  const tier = tierFromBackend(pick.tier);
   const signals = signalsFromPick(pick, args.homeTeam, args.awayTeam, "nba");
   const sideWord = direction;
-  const caption =
+  const signalSentence =
     signals == null
       ? "Signal verdicts are not on this response."
       : `${signals.filter((signal) => signal.verdict === "supports").length} of ${signals.length} signals support the ${sideWord}.`;
+  const combinedText = finite(pick.combined_probability)
+    ? formatTierPercent(pick.combined_probability)
+    : "—";
+  const caption = `Combined probability ${combinedText}. Historical hit rate ${formatPercent(pick.probability)} over ${pick.n_games} games. ${signalSentence}`;
   const primary: SlipSeed = {
     ...base,
     player_team: pick.player_team || base.player_team,
@@ -1023,17 +1141,17 @@ function buildNbaRead(args: {
     direction,
     probability: pick.probability,
     n_games: pick.n_games,
+    tier: pick.tier ?? null,
+    combined_probability: pick.combined_probability ?? null,
   };
-  // Both Bet Slip sides are the historical pick. They do not mix in the model.
-  // Primary stores pick.probability. The rail and the action bar print that
-  // number, floored with formatTierPercent only when a backend tier is shown.
-  // The other side stores the pick's own opposite field: p_under when this
-  // pick is over, p_over when it is under. That field is the complement from
-  // the same historical source. Do not subtract probability, and do not
-  // subtract combined_probability. If the field is missing, use the /history
-  // rate for that side. The other side has no tier, so its button uses
-  // half-away formatPercent. The model bar is combined_probability only,
-  // labeled Model, and is not stored on either side.
+  // Both Bet Slip sides store the historical pick. They do not store the blend.
+  // Primary stores pick.probability. The number printed beside a tier is
+  // tierProbability, floored. The other side stores the pick's own opposite
+  // field: p_under when this pick is over, p_over when it is under. Do not
+  // subtract probability, and do not subtract combined_probability. If the
+  // field is missing, use the /history rate for that side. That button is
+  // labeled History and uses half-away formatPercent. The model bar is
+  // combined_probability only, labeled Model.
   let other: SlipSeed | null = null;
   const oppositeField = otherDirection === "over" ? pick.p_over : pick.p_under;
   if (finite(oppositeField)) {
@@ -1041,6 +1159,8 @@ function buildNbaRead(args: {
       ...primary,
       direction: otherDirection,
       probability: clamp01(oppositeField),
+      tier: null,
+      combined_probability: null,
     };
   } else {
     const otherSide = historySide(args.history, pick.threshold, otherDirection);
@@ -1050,6 +1170,8 @@ function buildNbaRead(args: {
         direction: otherDirection,
         probability: otherSide.probability,
         n_games: otherSide.nGames,
+        tier: null,
+        combined_probability: null,
       };
     }
   }
@@ -1091,8 +1213,9 @@ export function buildOurRead(args: {
   projection: PlayerProjection | null;
   /** NBA uses stored signals and the backend tier. WNBA keeps the previous read. */
   league?: LeagueSegment;
+  read?: PropRead | null;
 }): OurReadModel {
-  if ((args.league ?? "wnba") === "nba") return buildNbaRead(args);
+  if (args.league === "nba") return buildNbaRead(args);
   const signals = buildReadSignals({
     binary: args.binary,
     supportsProjection: args.supportsProjection,
@@ -1244,10 +1367,26 @@ export function mobileOtherCopy(seed: SlipSeed): string {
   return `${side} ${formatPercent(seed.probability)}`;
 }
 
+/** Percent on the NBA action bar, beside the tier. WNBA keeps its short label. */
+export function actionBarPercent(
+  seed: {
+    probability?: number | null;
+    combined_probability?: number | null;
+    tier?: string | null;
+  } | null,
+  league: LeagueSegment,
+): string | null {
+  if (league !== "nba" || !seed || !tierFromBackend(seed.tier)) return null;
+  return formatTierPercent(tierProbability(seed));
+}
+
 export function slipButtonLabel(seed: SlipSeed, inSlip: boolean): string {
   const side = seed.direction === "under" ? "U" : "O";
   if (inSlip) return `In slip · ${playerLastName(seed.player_name)} ${side} ${formatThreshold(seed.threshold)}`;
-  return `Add ${playerLastName(seed.player_name)} ${side} ${formatThreshold(seed.threshold)} ${formatPercent(seed.probability)}`;
+  const percent = seed.tier
+    ? formatTierPercent(tierProbability(seed))
+    : formatPercent(seed.probability);
+  return `Add ${playerLastName(seed.player_name)} ${side} ${formatThreshold(seed.threshold)} ${percent}`;
 }
 
 export function errorText(error: unknown): string {

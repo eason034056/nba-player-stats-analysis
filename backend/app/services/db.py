@@ -31,6 +31,11 @@ from app.settings import settings
 # ==================== Table Creation SQL ====================
 
 SCHEMA_SQL = """
+-- One lock for this whole script. A simple-query batch runs as one
+-- transaction, so two processes starting together take turns instead of
+-- deadlocking on the same ALTER TABLE.
+SELECT pg_advisory_xact_lock(1170117);
+
 -- Player Projections Table
 -- Stores daily player game projections from SportsDataIO
 -- Each row is (date, player_name, game_id) unique
@@ -118,7 +123,8 @@ CREATE TABLE IF NOT EXISTS projection_fetch_logs (
 
 -- Odds Line Snapshots Table
 -- Stores no-vig calculation results for each bookmaker on every scheduled snapshot
--- Each row = 1 snapshot time + 1 game + 1 player + 1 market + 1 bookmaker
+-- Each row = 1 snapshot time + 1 game + 1 player + 1 market + 1 bookmaker + 1 line
+-- A book that posts a ladder keeps the main total and every alternate.
 -- Used to track line movement over time (opening → closing lines)
 CREATE TABLE IF NOT EXISTS odds_line_snapshots (
     id SERIAL PRIMARY KEY,
@@ -151,8 +157,10 @@ CREATE TABLE IF NOT EXISTS odds_line_snapshots (
     over_fair_prob NUMERIC,              -- Over fair prob (e.g., 0.5000)
     under_fair_prob NUMERIC,             -- Under fair prob (e.g., 0.5000)
 
-    -- Unique: snapshot time + game + player + market + bookmaker must be unique
-    UNIQUE(snapshot_at, event_id, player_name, market, bookmaker)
+    -- Unique: one row per posted total. The line is part of the key so an
+    -- alternate does not replace the main total for the same book.
+    CONSTRAINT odds_line_snapshots_book_line_key
+        UNIQUE (snapshot_at, event_id, player_name, market, bookmaker, line)
 );
 
 -- Indexes for common query patterns
@@ -268,6 +276,83 @@ ALTER TABLE lineup_fetch_logs
 
 ALTER TABLE odds_snapshot_logs
     ADD COLUMN IF NOT EXISTS league TEXT NOT NULL DEFAULT 'nba';
+
+-- ==================== SPO-117: keep alternate lines ====================
+--
+-- The original unique key was (snapshot_at, event_id, player_name, market,
+-- bookmaker). A second total for that book updated the same row, so the
+-- last alternate replaced the main line. Adding ``line`` makes the key
+-- wider: every row that already satisfied the old key still satisfies the
+-- new one, and two different totals can now coexist. No row is rewritten
+-- or deleted. CREATE TABLE above names the new key for a fresh database.
+-- This block is for a database created before that change. It drops every
+-- unique constraint on this table that does not include ``line``, and every
+-- unique index that does not include ``line``. The primary key is left
+-- alone. A hand-built UNIQUE INDEX is not a constraint, so the index loop
+-- is what removes it. The named key is added when it is missing. Running
+-- the block again does nothing.
+
+DO $spo117_line_unique$
+DECLARE
+    old_name text;
+    old_index record;
+BEGIN
+    FOR old_name IN
+        SELECT con.conname
+        FROM pg_constraint con
+        WHERE con.conrelid = 'odds_line_snapshots'::regclass
+          AND con.contype = 'u'
+          AND NOT EXISTS (
+              SELECT 1
+              FROM unnest(con.conkey) AS col(attnum)
+              JOIN pg_attribute att
+                ON att.attrelid = con.conrelid
+               AND att.attnum = col.attnum
+              WHERE att.attname = 'line'
+          )
+    LOOP
+        EXECUTE format(
+            'ALTER TABLE odds_line_snapshots DROP CONSTRAINT %I',
+            old_name
+        );
+    END LOOP;
+
+    FOR old_index IN
+        SELECT n.nspname AS schema_name, ic.relname AS index_name
+        FROM pg_index ix
+        JOIN pg_class ic ON ic.oid = ix.indexrelid
+        JOIN pg_namespace n ON n.oid = ic.relnamespace
+        WHERE ix.indrelid = 'odds_line_snapshots'::regclass
+          AND ix.indisunique
+          AND NOT ix.indisprimary
+          AND NOT EXISTS (
+              SELECT 1
+              FROM unnest(ix.indkey) AS col(attnum)
+              JOIN pg_attribute att
+                ON att.attrelid = ix.indrelid
+               AND att.attnum = col.attnum
+              WHERE att.attname = 'line'
+          )
+    LOOP
+        EXECUTE format(
+            'DROP INDEX IF EXISTS %I.%I',
+            old_index.schema_name,
+            old_index.index_name
+        );
+    END LOOP;
+
+    IF NOT EXISTS (
+        SELECT 1
+        FROM pg_constraint
+        WHERE conrelid = 'odds_line_snapshots'::regclass
+          AND conname = 'odds_line_snapshots_book_line_key'
+    ) THEN
+        ALTER TABLE odds_line_snapshots
+            ADD CONSTRAINT odds_line_snapshots_book_line_key
+            UNIQUE (snapshot_at, event_id, player_name, market, bookmaker, line);
+    END IF;
+END
+$spo117_line_unique$;
 """
 
 

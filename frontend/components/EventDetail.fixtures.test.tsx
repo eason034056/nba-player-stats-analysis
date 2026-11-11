@@ -92,6 +92,8 @@ const apiMocks = vi.hoisted(() => ({
   getWNBACSVPlayers: vi.fn(),
   getPlayerDDHistory: vi.fn(),
   getWNBAPlayerDDHistory: vi.fn(),
+  useEventReads: vi.fn(),
+  useEventBulkProps: vi.fn(),
 }));
 
 vi.mock("next/navigation", () => ({
@@ -142,6 +144,8 @@ describe("EventDetail fixtures", () => {
     apiMocks.getWNBACSVPlayers.mockResolvedValue(emptyCsv);
     apiMocks.getPlayerDDHistory.mockResolvedValue(nbaDdEmpty);
     apiMocks.getWNBAPlayerDDHistory.mockResolvedValue(wnbaDdEmpty);
+    apiMocks.useEventReads.mockReturnValue({ data: undefined });
+    apiMocks.useEventBulkProps.mockReturnValue({ data: undefined });
   });
 
   it("reads the NBA game from the fixture payloads and opens the agent", async () => {
@@ -154,12 +158,14 @@ describe("EventDetail fixtures", () => {
     expect(screen.queryByRole("heading", { name: /boston celtics @ miami heat/i })).not.toBeInTheDocument();
     expect(await screen.findByText("BOS lineup confirmed")).toBeInTheDocument();
     expect(screen.getByText("MIA lineup projected")).toBeInTheDocument();
-    expect(screen.getByText("Strong play")).toBeInTheDocument();
-    expect(screen.getByText("O 72%")).toBeInTheDocument();
+    expect(screen.getAllByText("Strong play").length).toBeGreaterThan(0);
+    expect(screen.getByText(/O 72%/)).toBeInTheDocument();
     expect(screen.getByText("C · MIA")).toBeInTheDocument();
+    expect(screen.getByText(/Historical hit rate 72%/)).toBeInTheDocument();
+    expect(screen.getByText(/Combined probability/)).toBeInTheDocument();
     expect(screen.getAllByText("No read").length).toBeGreaterThan(0);
     expect(screen.getAllByText(/7:30 PM ET/).length).toBeGreaterThan(0);
-    expect(screen.getByText("3 of 5 signals support the over.")).toBeInTheDocument();
+    expect(screen.getByText(/3 of 5 signals support the over\./)).toBeInTheDocument();
     expect(screen.getAllByText("Supports").length).toBeGreaterThan(0);
     expect(screen.getAllByText("Neutral").length).toBeGreaterThan(0);
     expect(screen.queryByRole("button", { name: /ask the board/i })).not.toBeInTheDocument();
@@ -182,6 +188,48 @@ describe("EventDetail fixtures", () => {
         probability: 0.72,
       });
     });
+  });
+
+  it("keeps a loading NBA read distinct from a player who has no read", async () => {
+    apiMocks.useEventReads.mockReturnValue({
+      data: undefined,
+      isLoading: true,
+      isError: false,
+      error: null,
+      refetch: vi.fn(),
+    });
+    renderWithProviders(<EventDetail league="nba" />);
+    const herro = await screen.findByTestId("player-row-Tyler Herro");
+    expect(herro).toHaveTextContent("Loading");
+    expect(herro).not.toHaveTextContent("No read");
+    expect(screen.getByText("Loading reads.")).toBeInTheDocument();
+    expect(screen.queryByText("No read")).not.toBeInTheDocument();
+  });
+
+  it("keeps a failed NBA read distinct from a player who has no read", async () => {
+    const refetch = vi.fn();
+    apiMocks.useEventReads.mockReturnValue({
+      data: undefined,
+      isLoading: false,
+      isError: true,
+      error: new Error("reads down"),
+      refetch,
+    });
+    apiMocks.useEventBulkProps.mockReturnValue({
+      data: undefined,
+      isLoading: false,
+      isError: true,
+      error: new Error("props down"),
+      refetch: vi.fn(),
+    });
+    const user = userEvent.setup();
+    renderWithProviders(<EventDetail league="nba" />);
+    expect(await screen.findByText("Reads failed.")).toBeInTheDocument();
+    expect(screen.getByText("Props failed.")).toBeInTheDocument();
+    expect(screen.getAllByText("Unavailable").length).toBeGreaterThan(0);
+    expect(screen.queryByText("No read")).not.toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Retry reads" }));
+    expect(refetch).toHaveBeenCalled();
   });
 
   it("reads the WNBA game from the WNBA fixtures", async () => {

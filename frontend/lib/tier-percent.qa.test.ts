@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import { formatSignedPct } from "@/components/agent-widget/presentation";
-import { formatPercent, formatTierPercent } from "@/lib/player-dd";
+import { formatTierPercent } from "@/lib/player-dd";
 import { dailyPicksResponseSchema, eventsResponseSchema } from "@/lib/schemas";
 import { readTier, todayGames } from "@/lib/today-board";
 import { formatVig } from "@/lib/utils";
@@ -60,20 +60,26 @@ describe("formatTierPercent stays inside the tier it sits next to", () => {
 describe("Today game cards use the floor only when a tier is shown", () => {
   it("floors the fallback daily pick when it carries a tier", () => {
     const picks = nbaPicks.picks.map((pick) =>
-      pick.player_name === "Bam Adebayo" ? { ...pick, probability: 0.697, tier: "Playable" as const } : pick,
+      pick.player_name === "Bam Adebayo"
+        ? { ...pick, probability: 0.697, combined_probability: 0.697, tier: "Playable" as const }
+        : pick,
     );
-    const [game] = todayGames(nbaEvents.events, picks, "nba", nbaEvents.date);
-    expect(game.topSource).toBe("picks");
-    expect(game.tier?.name).toBe("playable");
-    expect(game.topProbabilityText).toBe("69%");
-    expect(game.topProbabilityText).not.toBe("70%");
+    const game = todayGames(nbaEvents.events, picks, "nba", nbaEvents.date).find(
+      (card) => card.eventId === "heat-bucks",
+    );
+    expect(game?.topSource).toBe("picks");
+    expect(game?.tier?.name).toBe("playable");
+    expect(game?.topProbabilityText).toBe("69%");
+    expect(game?.topProbabilityText).not.toBe("70%");
   });
 
   it("floors a top_read that borrows a matching pick's tier, and rounds one without a tier", () => {
     const embiid = nbaPicks.picks.find((pick) => pick.player_name === "Joel Embiid");
     expect(embiid).toBeDefined();
     const picks = nbaPicks.picks.map((pick) =>
-      pick.player_name === "Joel Embiid" ? { ...pick, probability: 0.697, tier: "Playable" as const } : pick,
+      pick.player_name === "Joel Embiid"
+        ? { ...pick, probability: 0.59, combined_probability: 0.697, tier: "Playable" as const }
+        : pick,
     );
     const topRead = {
       player: embiid!.player_name,
@@ -89,8 +95,9 @@ describe("Today game cards use the floor only when a tier is shown", () => {
       ),
     });
     const matched = todayGames(events.events, picks, "nba", events.date).find(
-      (game) => game.topSource === "event",
+      (game) => game.eventId === embiid!.event_id,
     );
+    expect(matched?.topSource).toBe("picks");
     expect(matched?.tier?.label).toBe("Playable");
     expect(matched?.topProbabilityText).toBe("69%");
 
@@ -101,11 +108,20 @@ describe("Today game cards use the floor only when a tier is shown", () => {
       ),
     });
     const unmatched = todayGames(unmatchedEvents.events, picks, "nba", unmatchedEvents.date).find(
-      (game) => game.topSource === "event",
+      (game) => game.eventId === embiid!.event_id,
     );
-    expect(unmatched?.tier).toBeNull();
-    expect(unmatched?.topProbabilityText).toBe(formatPercent(0.697));
-    expect(unmatched?.topProbabilityText).toBe("70%");
+    expect(unmatched?.topSource).toBe("picks");
+    expect(unmatched?.tier?.label).toBe("Playable");
+    expect(unmatched?.topProbabilityText).toBe("69%");
+    const onlyRead = todayGames(
+      unmatchedEvents.events,
+      picks.filter((pick) => pick.event_id !== embiid!.event_id),
+      "nba",
+      unmatchedEvents.date,
+    ).find((game) => game.eventId === embiid!.event_id);
+    expect(onlyRead?.topSource).toBe("event");
+    expect(onlyRead?.tier).toBeNull();
+    expect(onlyRead?.topProbabilityText).toBeNull();
   });
 });
 

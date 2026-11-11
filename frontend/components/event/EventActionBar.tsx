@@ -1,6 +1,7 @@
 "use client";
 
 import {
+  actionBarPercent,
   mobileOtherCopy,
   mobilePrimaryCopy,
   type OurReadModel,
@@ -10,7 +11,8 @@ import { cn } from "@/lib/utils";
 
 /**
  * Sticky mobile bar above the tab bar.
- * NBA prints the last name, the side, the line, and the tiered percent.
+ * NBA prints the last name, the side, the line, and the floored blend beside a tier.
+ * The other side is the historical rate and is the only control labeled History.
  * WNBA keeps the short "Add over" / "Under" labels.
  */
 export function EventActionBar({
@@ -32,7 +34,8 @@ export function EventActionBar({
 }) {
   const nba = league === "nba";
   const primary = model.primary;
-  const mobile = primary ? mobilePrimaryCopy(primary, primaryInSlip, nba ? model.tier : null, model.leanProbability) : null;
+  const mobile = primary ? mobilePrimaryCopy(primary, primaryInSlip, null, null) : null;
+  const blend = actionBarPercent(primary, league);
   return (
     <div
       data-testid="event-action-bar"
@@ -41,9 +44,6 @@ export function EventActionBar({
         nba ? "flex flex-col gap-1" : "flex gap-2",
       )}
     >
-      {nba && (primary || model.other) ? (
-        <div className="text-[10px] font-semibold uppercase tracking-[0.08em] text-muted">History</div>
-      ) : null}
       <div className="flex gap-2">
       {primary && mobile ? (
         <button
@@ -57,7 +57,7 @@ export function EventActionBar({
           {nba ? (
             <>
               <span>{mobile.label}</span>
-              {mobile.prob ? <span className="font-mono">{mobile.prob}</span> : null}
+              {blend ? <span className="font-mono">{blend}</span> : null}
             </>
           ) : (
             <span>
@@ -72,13 +72,20 @@ export function EventActionBar({
           onClick={onAddOther}
           className="min-h-12 rounded-[14px] border border-line-strong bg-white px-3 text-[13px] font-semibold text-ink"
         >
-          {nba
-            ? otherInSlip
-              ? `✓ ${model.other.direction === "under" ? "Under" : "Over"} in slip`
-              : mobileOtherCopy(model.other)
-            : model.other.direction === "under"
-              ? "Under"
-              : "Over"}
+          {nba ? (
+            <span className="flex flex-col items-center leading-tight">
+              <span className="text-[9px] font-semibold uppercase tracking-[0.06em] text-muted">History</span>
+              <span>
+                {otherInSlip
+                  ? `✓ ${model.other.direction === "under" ? "Under" : "Over"} in slip`
+                  : mobileOtherCopy(model.other)}
+              </span>
+            </span>
+          ) : model.other.direction === "under" ? (
+            "Under"
+          ) : (
+            "Over"
+          )}
         </button>
       ) : null}
       <button

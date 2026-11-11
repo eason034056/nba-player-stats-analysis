@@ -3,7 +3,8 @@ import { describe, expect, it } from "vitest";
 import { formatPct, formatSignedPct } from "@/components/agent-widget/presentation";
 import { formatPercent, formatTierPercent } from "@/lib/player-dd";
 import { dailyPicksResponseSchema, eventsResponseSchema } from "@/lib/schemas";
-import { tierFromApi, todayGames, todayReads } from "@/lib/today-board";
+import { tierFromBackend } from "@/lib/nba-card";
+import { todayGames, todayReads } from "@/lib/today-board";
 import { formatProbability, formatVig } from "@/lib/utils";
 import nbaEventsFixture from "@/test/fixtures/today/nba-events.json";
 import nbaPicksFixture from "@/test/fixtures/today/nba-daily-picks.json";
@@ -141,7 +142,7 @@ describe("Today keeps the backend tier next to the whole percent", () => {
       for (const read of reads) {
         const source = picks.picks.find((pick) => read.key.startsWith(`${pick.event_id}-${pick.player_name}-`));
         expect(source).toBeDefined();
-        expect(read.tier).toEqual(tierFromApi(source?.tier));
+        expect(read.tier).toEqual(tierFromBackend(source?.tier));
         expect(read.probabilityText).toBe(
           read.tier ? formatTierPercent(source?.probability) : formatPercent(source?.probability),
         );

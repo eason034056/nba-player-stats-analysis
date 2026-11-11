@@ -34,10 +34,14 @@ import {
   getWNBAPlayerSuggestions,
   getWNBATeamLineup,
   getWnbaDailyPicks,
+  useEventBulkProps,
+  useEventReads,
 } from "@/lib/api";
 import { createAgentPickContextFromDailyPick } from "@/lib/agent-chat";
 import {
   buildOurRead,
+  nbaReadsStatus,
+  nbaRequestNote,
   chartLine,
   errorText,
   eventClock,
@@ -247,6 +251,16 @@ export function EventDetail({ league }: { league: League }) {
   const eventAway = currentEvent?.away_team ?? "";
   const eventAsOf = currentEvent?.commence_time ?? "";
 
+  const readsQuery = useEventReads({
+    eventId,
+    market: selectedMarket,
+    enabled: league === "nba",
+  });
+  const propsQuery = useEventBulkProps({
+    eventId,
+    market: selectedMarket,
+    enabled: league === "nba",
+  });
   const picksQuery = useQuery({
     queryKey: [cfg.picksQueryKey, picksDate],
     queryFn: () => cfg.getPicks(picksDate),
@@ -366,11 +380,20 @@ export function EventDetail({ league }: { league: League }) {
     awayAbbr,
     homeAbbr,
     league,
+    reads: readsQuery.data?.reads,
+    readsStatus: league === "nba" ? nbaReadsStatus(readsQuery.isLoading, readsQuery.isError) : "ready",
+    bulkPlayers: propsQuery.data?.markets.find((market) => market.market === selectedMarket)?.players,
   });
   const selectedRow = rows.find((row) => row.name === playerName) ?? null;
+  const selectedRead =
+    league === "nba"
+      ? readsQuery.data?.reads.find(
+          (read) => read.player.trim().toLowerCase() === playerName.trim().toLowerCase(),
+        ) ?? null
+      : null;
   const position =
     league === "nba"
-      ? pick?.position?.trim() || null
+      ? pick?.position?.trim() || selectedRow?.position || null
       : projectionQuery.data?.position?.trim() || null;
   const model = buildOurRead({
     player: playerName.trim(),
@@ -391,7 +414,13 @@ export function EventDetail({ league }: { league: League }) {
     history: sampleQuery.data ?? null,
     projection: projectionQuery.data ?? null,
     league,
+    read: selectedRead,
   });
+  const readsNote =
+    league === "nba" ? nbaRequestNote("reads", nbaReadsStatus(readsQuery.isLoading, readsQuery.isError)) : null;
+  const propsNote =
+    league === "nba" ? nbaRequestNote("props", nbaReadsStatus(propsQuery.isLoading, propsQuery.isError)) : null;
+  const shownModel = readsNote && !pick ? { ...model, caption: readsNote, tier: null } : model;
   const chart = chartQuery.data ? gameLogChart(chartQuery.data.game_logs ?? [], activeLine) : null;
   const projectionMetric = marketToProjectionCard(selectedMarket);
   const firstResult = result?.results?.[0];
@@ -540,6 +569,34 @@ export function EventDetail({ league }: { league: League }) {
             onChange={setSelectedMarket}
             disabled={mutation.isPending}
           />
+          {readsNote ? (
+            <div className="flex flex-wrap items-center gap-3">
+              <p className="text-sm text-ink">{readsNote}</p>
+              {readsQuery.isError ? (
+                <button
+                  type="button"
+                  onClick={() => readsQuery.refetch()}
+                  className="text-sm font-semibold text-brand underline"
+                >
+                  Retry reads
+                </button>
+              ) : null}
+            </div>
+          ) : null}
+          {propsNote ? (
+            <div className="flex flex-wrap items-center gap-3">
+              <p className="text-sm text-ink">{propsNote}</p>
+              {propsQuery.isError ? (
+                <button
+                  type="button"
+                  onClick={() => propsQuery.refetch()}
+                  className="text-sm font-semibold text-brand underline"
+                >
+                  Retry props
+                </button>
+              ) : null}
+            </div>
+          ) : null}
           <PlayerRail
             league={league}
             rows={rows}
@@ -561,7 +618,7 @@ export function EventDetail({ league }: { league: League }) {
         <div className={cn("order-2 min-w-0 md:col-start-2", show("read"))}>
             <OurRead
               league={league}
-              model={model}
+              model={shownModel}
               isLoading={Boolean(playerName) && mutation.isPending && !pick && !result}
               isError={mutation.isError}
               errorText={errorText(mutation.error)}

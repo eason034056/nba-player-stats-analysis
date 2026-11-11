@@ -19,7 +19,7 @@ import {
   type DailyPick,
   type PlayerHistoryResponse,
 } from "@/lib/schemas";
-import { tierFromApi } from "@/lib/today-board";
+import { tierFromBackend } from "@/lib/nba-card";
 import nbaPicksFixture from "@/test/fixtures/event/nba-daily-picks.json";
 import nbaEventsFixture from "@/test/fixtures/event/nba-events.json";
 import nbaHistoryFixture from "@/test/fixtures/event/nba-history-bam.json";
@@ -159,7 +159,7 @@ describe("QA: stored signal meters", () => {
     expect(byKey.history.meter).toBeNull();
     expect(byKey.history.verdict).toBeNull();
     expect(byKey.defense.meter).toBeNull();
-    expect(model.caption).toBe("1 of 4 signals support the over.");
+    expect(model.caption).toContain("1 of 4 signals support the over.");
   });
 
   it("does not name an opponent when the pick's team is blank", () => {
@@ -228,7 +228,7 @@ describe("QA: blank team never falls back to the home team", () => {
       league: "nba",
     });
     expect(rows[0].tier?.label).toBe("Playable");
-    expect(rows[0].leanText).toBe("O 69%");
+    expect(rows[0].leanText).toBe("O 69% Playable");
   });
 
   it("trims whitespace-only position and team", () => {
@@ -239,7 +239,7 @@ describe("QA: blank team never falls back to the home team", () => {
 });
 
 describe("QA: percentBesideTier", () => {
-  const playable = tierFromApi("Playable");
+  const playable = tierFromBackend("Playable");
   it("floors with a tier and rounds half-away without one", () => {
     expect(percentBesideTier(0.6999, playable)).toBe("69%");
     expect(percentBesideTier(0.65, playable)).toBe("65%");
@@ -258,7 +258,7 @@ describe("QA: DailyPick schema tolerates new and broken fields", () => {
       combined_probability: "0.7",
     });
     expect(parsed.tier).toBe("Pass");
-    expect(tierFromApi(parsed.tier)).toBeNull();
+    expect(tierFromBackend(parsed.tier)).toBeNull();
     expect(parsed.signals).toBeNull();
     expect(parsed.combined_probability).toBeNull();
   });

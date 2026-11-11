@@ -109,7 +109,7 @@ describe("tier percent on the game page", () => {
         </>,
       );
 
-      expect(screen.getByText(`O ${text}`)).toBeInTheDocument();
+      expect(screen.getByText(`O ${text} ${tier}`)).toBeInTheDocument();
       expect(screen.getByText(tier)).toBeInTheDocument();
       expect(screen.getByTestId("read-bar")).toHaveTextContent(`Over ${text}`);
       expect(screen.getByTestId("event-action-bar")).toHaveTextContent(text);
@@ -143,7 +143,7 @@ describe("tier percent on the game page", () => {
         onRetry={noop}
       />,
     );
-    expect(screen.getByText("O —")).toBeInTheDocument();
+    expect(screen.getByText("O — Lean")).toBeInTheDocument();
     expect(screen.queryByText("O 0%")).not.toBeInTheDocument();
   });
 
@@ -207,8 +207,10 @@ describe("tier percent on the game page", () => {
     expect(screen.getAllByText("History").length).toBeGreaterThan(0);
     expect(screen.getByRole("button", { name: "Under instead (41%)" })).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /Under instead \(33%\)/ })).not.toBeInTheDocument();
-    expect(screen.getByTestId("event-action-bar")).toHaveTextContent("59%");
-    expect(screen.getByTestId("event-action-bar")).toHaveTextContent("Under 41%");
+    expect(screen.getByRole("button", { name: /Add Adebayo O 18\.5/ })).toHaveTextContent("67%");
+    expect(screen.getByRole("button", { name: /Add Adebayo O 18\.5/ })).not.toHaveTextContent("History");
+    expect(screen.getByRole("button", { name: /History/ })).toHaveTextContent("Under 41%");
+    expect(screen.getByTestId("event-action-bar")).not.toHaveTextContent("59%");
     expect(screen.getByTestId("event-action-bar")).not.toHaveTextContent("Under 33%");
   });
 });

@@ -135,7 +135,7 @@ describe("player rows and lines", () => {
     });
     const bam = rows.find((row) => row.name === "Bam Adebayo");
     const herro = rows.find((row) => row.name === "Tyler Herro");
-    expect(bam?.leanText).toBe("O 72%");
+    expect(bam?.leanText).toBe("O 72% Strong play");
     expect(bam?.lineText).toBe("18.5");
     expect(herro?.leanText).toBe("No read");
     expect(herro?.lineText).toBe("16.5");
@@ -333,13 +333,15 @@ describe("our read", () => {
       last10: [],
       history: null,
       projection: null,
+      league: "nba",
     });
     expect(model.tier?.label).toBe("Strong play");
     expect(model.headlineLead).toBe("Over 18.5");
+    expect(model.caption).toMatch(/Combined probability —/);
     expect(model.caption).toMatch(/Historical hit rate 72%/);
     expect(model.primary?.probability).toBe(0.72);
     expect(model.other).toBeNull();
-    expect(model.bar?.sourceLabel).toBe("No-vig consensus");
+    expect(model.bar).toBeNull();
     expect(consensusSplit(null, false)).toBeNull();
   });
 
@@ -362,11 +364,12 @@ describe("our read", () => {
       last10: [],
       history: bamHistory,
       projection: null,
+      league: "nba",
     });
     expect(model.other?.direction).toBe("under");
     expect(model.other?.probability).toBe(0.35);
     expect(model.other?.probability).not.toBeCloseTo(0.28);
-    expect(model.bar?.sourceLabel).toBe("Hit rate");
+    expect(model.bar).toBeNull();
   });
 
   it("hides the tier when there is no stored pick", () => {
@@ -388,6 +391,7 @@ describe("our read", () => {
       last10: [],
       history: null,
       projection: null,
+      league: "nba",
     });
     expect(model.tier).toBeNull();
     expect(model.headlineLead).toBe("No posted line");
@@ -490,7 +494,7 @@ describe("NBA read uses the backend tier", () => {
         homeAbbr: "MIA",
         league: "nba",
       });
-      expect(rows[0]?.leanText).toBe(`O ${text}`);
+      expect(rows[0]?.leanText).toBe(`O ${text} ${tier}`);
       const model = buildOurRead({
         ...base,
         pick: pick({
@@ -506,10 +510,10 @@ describe("NBA read uses the backend tier", () => {
     }
   });
 
-  it("keeps half-away rounding when the pick has no tier", () => {
+  it("prints an em dash when an NBA pick has no tier and no blend", () => {
     const rows = eventPlayerRows({
       suggested: [],
-      picks: [pick({ probability: 0.699, tier: null, signals: null })],
+      picks: [pick({ probability: 0.699, tier: null, signals: null, combined_probability: null })],
       metric: "player_points",
       eventId: "evt-mia-bos",
       selectedName: "Bam Adebayo",
@@ -521,7 +525,7 @@ describe("NBA read uses the backend tier", () => {
       league: "nba",
     });
     expect(rows[0]?.tier).toBeNull();
-    expect(rows[0]?.leanText).toBe("O 70%");
+    expect(rows[0]?.leanText).toBe("O —");
   });
 
   it("does not flip an under signal into an over sentence", () => {
@@ -539,7 +543,7 @@ describe("NBA read uses the backend tier", () => {
         ],
       }),
     });
-    expect(model.caption).toBe("1 of 2 signals support the under.");
+    expect(model.caption).toContain("1 of 2 signals support the under.");
     expect(model.signals[0]?.detail).toBe("Went under 18.5 in 7 of 10");
     expect(model.signals[1]?.value).toBe("54.0%");
     expect(model.bar?.underText).toBe("69%");

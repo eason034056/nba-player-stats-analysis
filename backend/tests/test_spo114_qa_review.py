@@ -467,10 +467,11 @@ def test_latest_sql_keeps_only_the_max_snapshot_for_that_event():
     assert LATEST_EVENT_SNAPSHOT_SQL.count("event_id = $1") == 2
     assert "league" not in LATEST_EVENT_SNAPSHOT_SQL.lower()
     schema = (_BACKEND / "app" / "services" / "db.py").read_text(encoding="utf-8")
-    assert "UNIQUE(snapshot_at, event_id, player_name, market, bookmaker)" in schema
+    assert "odds_line_snapshots_book_line_key" in schema
+    assert "UNIQUE (snapshot_at, event_id, player_name, market, bookmaker, line)" in schema
 
 
-def test_rows_from_bookmakers_matches_the_dev_inline_parser(service, points_payload):
+def test_rows_from_bookmakers_keeps_every_two_sided_point(service, points_payload):
     kwargs = dict(
         event_id=points_payload["id"],
         home_team=points_payload["home_team"],
@@ -478,30 +479,44 @@ def test_rows_from_bookmakers_matches_the_dev_inline_parser(service, points_payl
         date=_DATE,
         snapshot_at=_SNAPSHOT_AT,
     )
-    moved = service.rows_from_bookmakers(points_payload["bookmakers"], **kwargs)
-    dev_rows = _origin_dev_inline_rows(service, points_payload["bookmakers"], **kwargs)
-    assert moved == dev_rows
-    assert moved
+    stored_rows = service.rows_from_bookmakers(points_payload["bookmakers"], **kwargs)
+    legacy_rows = _origin_dev_inline_rows(service, points_payload["bookmakers"], **kwargs)
+    assert stored_rows
+    # The pre-SPO-117 parser kept one row per book. The ladder is longer.
+    assert len(stored_rows) > len(legacy_rows)
 
     bovada = next(book for book in points_payload["bookmakers"] if book["key"] == "bovada")
-    last_over = None
-    for outcome in bovada["markets"][0]["outcomes"]:
-        if outcome["description"] == "Luka Doncic" and outcome["name"] == "Over":
-            last_over = outcome
-    stored = next(
+    luka_outcomes = [
+        outcome
+        for outcome in bovada["markets"][0]["outcomes"]
+        if outcome["description"] == "Luka Doncic"
+    ]
+    sides: dict[float, dict[str, dict]] = {}
+    for outcome in luka_outcomes:
+        point = round(float(outcome["point"]), 1)
+        sides.setdefault(point, {})[outcome["name"]] = outcome
+    two_sided = {
+        point
+        for point, pair in sides.items()
+        if "Over" in pair and "Under" in pair
+    }
+    luka_rows = [
         row
-        for row in _as_dicts(moved)
+        for row in _as_dicts(stored_rows)
         if row["bookmaker"] == "bovada" and row["player_name"] == "Luka Doncic"
+    ]
+    assert {row["line"] for row in luka_rows} == two_sided
+    assert len(luka_rows) == len(two_sided) > 1
+    main_point = _spo115_main_book_line(_outcomes_by_player(bovada)["Luka Doncic"])
+    main = next(row for row in luka_rows if row["line"] == pytest.approx(main_point))
+    assert main["over_odds"] == int(sides[main_point]["Over"]["price"])
+    assert main["under_odds"] == int(sides[main_point]["Under"]["price"])
+    last_over = next(
+        outcome for outcome in reversed(luka_outcomes) if outcome["name"] == "Over"
     )
-    assert stored["line"] == float(last_over["point"])
-    assert stored["over_odds"] == int(last_over["price"])
-    assert len(
-        [
-            row
-            for row in _as_dicts(moved)
-            if row["bookmaker"] == "bovada" and row["player_name"] == "Luka Doncic"
-        ]
-    ) == 1
+    alt = next(row for row in luka_rows if row["line"] == pytest.approx(float(last_over["point"])))
+    assert alt["line"] != pytest.approx(main_point)
+    assert alt["over_odds"] == int(last_over["price"])
 
 
 def test_recorded_rows_use_multiplicative_devig_and_drop_one_sided_pairs(service, points_payload):
@@ -816,22 +831,29 @@ def test_spliced_rung_takes_the_rung_prices_not_the_first_rows_vig(points_payloa
     assert "under_fair_prob" not in chosen
 
 
-def test_writer_stores_the_last_rung_so_the_read_collapse_never_sees_it(service, points_payload):
+def test_writer_keeps_the_ladder_and_the_vote_uses_the_main_line(service, points_payload):
     rows = _parse(service, points_payload, _SNAPSHOT_AT)
     payload = assemble_bulk_props(points_payload["id"], rows, now=_SNAPSHOT_AT)
     market = payload.markets[0]
     assert market.market == "player_points"
+    bovada = next(book for book in points_payload["bookmakers"] if book["key"] == "bovada")
     for player_name in ("Luka Doncic", "Aaron Wiggins", "Austin Reaves"):
-        bovada = next(book for book in points_payload["bookmakers"] if book["key"] == "bovada")
         last_over = None
         for outcome in bovada["markets"][0]["outcomes"]:
             if outcome["description"] == player_name and outcome["name"] == "Over":
                 last_over = outcome
+        stored = [
+            row
+            for row in rows
+            if row["bookmaker"] == "bovada" and row["player_name"] == player_name
+        ]
+        assert len(stored) > 1
+        assert any(row["line"] == pytest.approx(float(last_over["point"])) for row in stored)
         player = next(item for item in market.players if item.player == player_name)
         book = next(item for item in player.books if item.bookmaker == "bovada")
         main = _spo115_main_book_line(_outcomes_by_player(bovada)[player_name])
-        assert book.line == pytest.approx(float(last_over["point"]))
-        assert book.line != pytest.approx(main)
+        assert book.line == pytest.approx(main)
+        assert book.line != pytest.approx(float(last_over["point"]))
         assert player.bookmakers_count == len(player.books) == 6
 
 

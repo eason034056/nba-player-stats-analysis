@@ -44,8 +44,8 @@ describe("picks board view model", () => {
       "Joel Embiid",
       "Tyrese Haliburton",
     ]);
-    expect(rows[0].probabilityText).toBe("72%");
-    expect(rows[2].tierShort).toBe("Playable");
+    expect(rows[0].probabilityText).toBe("—");
+    expect(rows[2].tierShort).toBeNull();
     expect(rows[0].href).toContain("/event/evt-mia-bos?");
     expect(rows[0].href).toContain("player=Bam+Adebayo");
   });
@@ -73,7 +73,7 @@ describe("picks board view model", () => {
 describe("picks board sort, filter, and market grouping", () => {
   it("sorts an unsorted fixture by hit rate and keeps equal rates in input order", () => {
     const names = board.map((pick) => pick.player_name);
-    const sorted = sortPicks(board);
+    const sorted = sortPicks(board, "nba");
 
     expect(board.map((pick) => pick.player_name)).toEqual(names);
     expect(sorted.map((pick) => pick.player_name)).toEqual([
@@ -88,7 +88,7 @@ describe("picks board sort, filter, and market grouping", () => {
     ]);
 
     const broken = { ...board[0], probability: Number.NaN };
-    const withGap = sortPicks([broken, ...board]);
+    const withGap = sortPicks([broken, ...board], "nba");
     expect(withGap.at(-1)?.probability).toBeNaN();
     expect(withGap[0]?.player_name).toBe("Bam Adebayo");
   });
@@ -118,7 +118,7 @@ describe("picks board sort, filter, and market grouping", () => {
     expect(matchesConfidence(Number.NaN, "strong")).toBe(false);
     expect(matchesConfidence(Number.POSITIVE_INFINITY, "playable")).toBe(false);
     expect(matchesConfidence(Number.NaN, "all")).toBe(true);
-    expect(countStrong(board)).toBe(3);
+    expect(countStrong(board, "nba")).toBe(3);
   });
 
   it("groups prototype market chips before extra markets, including chips with no rows", () => {

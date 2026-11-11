@@ -74,7 +74,7 @@ export function PlayerRail({
                 onClick={() => onSelect(row.name)}
                 data-testid={`player-row-${row.name}`}
                 className={cn(
-                  "flex min-w-[118px] shrink-0 flex-col gap-1.5 rounded-2xl border px-3 py-2.5 text-left md:grid md:min-w-0 md:grid-cols-[minmax(0,1fr)_44px_76px] md:items-center md:gap-2.5 md:px-3.5 md:py-3",
+                  "flex min-w-[118px] shrink-0 flex-col gap-1.5 rounded-2xl border px-3 py-2.5 text-left md:grid md:min-w-0 md:grid-cols-[minmax(0,1fr)_44px_148px] md:items-center md:gap-2.5 md:px-3.5 md:py-3",
                   nba && active && "max-md:order-first",
                   active
                     ? "border-brand bg-brand-tint"
@@ -94,18 +94,11 @@ export function PlayerRail({
                   {row.lineText}
                 </span>
                 <span
-                  aria-label={nba && row.hasLean ? `History ${row.leanText}` : undefined}
                   className={cn(
-                    "w-fit rounded-[6px] px-1.5 py-0.5 font-mono text-[11px] font-bold md:w-full md:rounded-lg md:px-0 md:py-1.5 md:text-center md:text-xs",
-                    nba && row.hasLean && "flex flex-col items-center gap-0.5",
+                    "w-fit whitespace-nowrap rounded-[6px] px-1.5 py-0.5 font-mono text-[11px] font-bold md:w-full md:rounded-lg md:px-1 md:py-1.5 md:text-center md:text-xs",
                     pill,
                   )}
                 >
-                  {nba && row.hasLean ? (
-                    <span className="text-[9px] font-semibold uppercase leading-none tracking-[0.04em]">
-                      History
-                    </span>
-                  ) : null}
                   {row.leanText}
                 </span>
               </button>

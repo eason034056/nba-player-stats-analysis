@@ -17,7 +17,7 @@ import { useBetSlip } from "@/contexts/BetSlipContext";
 import { getDailyPicks, getLineups, triggerDailyAnalysis } from "@/lib/api";
 import { createAgentPickContextFromDailyPick } from "@/lib/agent-chat";
 import type { DailyPick } from "@/lib/schemas";
-import { complementHitRateLabel } from "@/lib/bet-slip-board";
+import { complementHitRateLabel, sameSideSlipRead } from "@/lib/bet-slip-board";
 import { getCanonicalTeamCode } from "@/lib/team-logos";
 import { getTodayString } from "@/lib/utils";
 
@@ -187,6 +187,7 @@ export default function PicksPage() {
     probability,
     n_games: pick.n_games,
     rate_basis: rateBasis,
+    ...sameSideSlipRead(pick, direction),
   });
 
   const handleToggleSlip = useCallback(

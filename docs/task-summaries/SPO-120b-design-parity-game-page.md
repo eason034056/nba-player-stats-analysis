@@ -106,3 +106,9 @@ Design files are `docs/design/redesign-2026-11/screenshots/web-02-event.png` and
 | `position` or `team` null | The other part shows. No stray separator. |
 | `lineup_status` null | "lineup status unavailable". A lineup snapshot is not promoted to confirmed. |
 | `commence_time_et` missing | `eventWhen(commence_time)`, no zone suffix. |
+
+## Merge of origin/dev at 4bfb2ec
+
+`origin/dev` (`4bfb2ec`, including #52, #56, and #57) is merged with an ordinary merge. The game page keeps `eventClock`, `eventTeammates`, and `renderFilters`. Tier display uses `tierFromBackend` only. One row uses either the daily pick or the reads entry, not a mix of the two.
+
+The number beside a tier is `tierProbability`: `combined_probability`, or `probability` when the blend is missing, floored with the single `formatTierPercent`. `nbaTierFace` floors that blend when there is no tier as well. A missing blend is still `—`. A History label sits only on a historical hit rate. The rail lean and the action-bar blend do not carry one. The other slip button does, and it still prints `formatPercent` of `p_under` / `p_over`, then the history rate. The model bar stays labeled Model. WNBA still uses `readTier` and `formatPercent`.

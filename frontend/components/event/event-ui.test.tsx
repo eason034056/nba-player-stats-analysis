@@ -107,18 +107,22 @@ describe("PlayerRail", () => {
     {
       name: "Bam Adebayo",
       team: "MIA",
+      position: null,
       lineText: "18.5",
       leanText: "O 72.0%",
       hasLean: true,
       probability: 0.72,
+      tier: null,
     },
     {
       name: "Tyler Herro",
       team: "MIA",
+      position: null,
       lineText: "—",
       leanText: "No read",
       hasLean: false,
       probability: null,
+      tier: null,
     },
   ];
 
@@ -140,7 +144,7 @@ describe("PlayerRail", () => {
     expect(screen.queryByText("Jalen Brunson")).not.toBeInTheDocument();
   });
 
-  it("labels an NBA lean as History and leaves a missing read unlabeled", () => {
+  it("does not label an NBA lean History, because that number is the blend", () => {
     renderWithProviders(
       <PlayerRail
         league="nba"
@@ -153,9 +157,9 @@ describe("PlayerRail", () => {
         onRetry={noop}
       />,
     );
-    const bam = screen.getByRole("button", { name: /History O 72\.0%/ });
-    expect(bam).toHaveTextContent("History");
+    const bam = screen.getByRole("button", { name: /O 72\.0%/ });
     expect(bam).toHaveTextContent("O 72.0%");
+    expect(bam).not.toHaveTextContent("History");
     const herro = screen.getByRole("button", { name: /Tyler Herro/ });
     expect(herro).toHaveTextContent("No read");
     expect(herro).not.toHaveTextContent("History");
@@ -204,6 +208,7 @@ describe("OurRead", () => {
     last10: [],
     history: null,
     projection: null,
+    league: "wnba",
   });
 
   it("renders a WNBA read with the projection gap and no verdict", () => {

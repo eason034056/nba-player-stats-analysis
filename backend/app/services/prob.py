@@ -259,75 +259,71 @@ def calculate_consensus_weighted(
     return (weighted_over / total_weight, weighted_under / total_weight)
 
 
-def calculate_mode_threshold(lines: List[float]) -> Optional[float]:
-    """
-    Calculate the mode (most common value) among all bookmaker lines.
-    
-    The mode is the value that appears most often, and is used as the consensus threshold for the market.
-    
-    Calculation rules:
-    1. If there is a clear mode (one value appears most), use it.
-    2. If there are multiple modes (multiple values appear the same number of times),
-       keep a posted value: the middle tied value, or the lower of the two
-       central tied values when the count is even. Do not average them into
-       a line nobody posted.
-    3. If every value appears only once (no mode), use the median value.
-    
+def calculate_mode_threshold(
+    lines: List[float],
+    distances: Optional[List[float]] = None,
+) -> Optional[float]:
+    """Consensus line: the mode, then the even-money tie, then the lower line.
+
+    Each entry in ``lines`` is one bookmaker's main total. The value that
+    appears most often is the consensus. A tie is every line that shares
+    that count, including the case where every line appears once.
+
+    A tie is not averaged. Averaging 24.5 and 25.5 produces 25.0, which
+    nobody posted. The same refusal applies inside one book
+    (``_main_book_line``): two different points are not blended.
+
+    Tie order, matching that within-book picker:
+
+    1. The tied line whose votes sit closest to even money. ``distances``
+       is one vig-free distance per vote, the same units as
+       ``_even_money_distance`` (lower is closer to a coin flip). A line's
+       distance is the smallest distance among the books that voted it.
+    2. If those distances are equal, or ``distances`` is omitted, the
+       lower posted line.
+
     Args:
-        lines: List of line values from all bookmakers,
-               e.g. [24.5, 24.5, 24.5, 25.5, 25.5]
-    
+        lines: One main line per bookmaker, for example
+            ``[24.5, 24.5, 25.5, 25.5]``.
+        distances: Optional even-money distance for each entry of
+            ``lines``. None when the caller has no prices. A mismatch in
+            length raises ``ValueError``.
+
     Returns:
-        Optional[float]: Consensus threshold, or None if input list is empty.
-    
+        The consensus total, or None when ``lines`` is empty.
+
     Example:
         >>> calculate_mode_threshold([24.5, 24.5, 24.5, 25.5])
-        24.5  # 24.5 appears 3 times, so it's the mode.
-        
+        24.5  # 24.5 appears 3 times.
+
         >>> calculate_mode_threshold([24.5, 24.5, 25.5, 25.5])
-        24.5  # 24.5 and 25.5 each appear twice. The lower central value is kept.
-        
-        >>> calculate_mode_threshold([24.5, 25.0, 25.5, 26.0])
-        25.25  # Each value occurs once, so median is used.
+        24.5  # Tied. No prices, so the lower line is kept. Not 25.0.
+
+        >>> calculate_mode_threshold([24.5, 25.5], [0.02, 0.0])
+        25.5  # Tied, and 25.5 is closer to even money.
     """
     if not lines:
         return None
-    
-    # Use Counter to count occurrences of each value
+    if distances is not None and len(distances) != len(lines):
+        raise ValueError("distances must have one value per line")
+
     from collections import Counter
-    
-    # Round values to 1 decimal to avoid floating point precision errors.
-    # For example, 24.5000001 and 24.5 should be considered the same.
-    rounded_lines = [round(line, 1) for line in lines]
+
+    # Round to 1 decimal so 24.5000001 and 24.5 are the same posted total.
+    rounded_lines = [round(float(line), 1) for line in lines]
     counter = Counter(rounded_lines)
-    
-    # Find the maximum occurrence count
     max_count = max(counter.values())
-    
-    # Retrieve all values that appear exactly max_count times (the modes)
     modes = [value for value, count in counter.items() if count == max_count]
-    
-    if max_count == 1:
-        # All values appear once, no mode
-        # Use the median as representative value
-        sorted_lines = sorted(rounded_lines)
-        n = len(sorted_lines)
-        if n % 2 == 1:
-            # Odd count: take the middle value
-            return sorted_lines[n // 2]
-        else:
-            # Even count: average of the two middle values
-            return (sorted_lines[n // 2 - 1] + sorted_lines[n // 2]) / 2
-    
+
     if len(modes) == 1:
-        # Only one mode
-        return modes[0]
-    
-    # Multiple modes: stay on a posted point. Same tie-break as the
-    # main-line picker: sort the tied values, take the middle when the
-    # count is odd, and the lower of the two central values when it is even.
-    ordered = sorted(modes)
-    if len(ordered) % 2 == 1:
-        return float(ordered[len(ordered) // 2])
-    return float(ordered[(len(ordered) // 2) - 1])
+        return float(modes[0])
+
+    if distances is None:
+        return float(min(modes))
+
+    best: dict[float, float] = {}
+    for line, distance in zip(rounded_lines, distances):
+        if line not in best or distance < best[line]:
+            best[line] = distance
+    return float(min(modes, key=lambda line: (best[line], line)))
 

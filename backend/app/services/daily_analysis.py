@@ -225,10 +225,14 @@ STORED_MIN_SAMPLE_GAMES = 5
 
 
 def read_tier(probability: float | None) -> str | None:
-    """Map a pick probability onto a read tier.
+    """Map a probability onto a read tier.
+
+    NBA passes ``combined_probability``. WNBA passes the historical
+    rate, because a WNBA pick has no combined probability. The cutoffs
+    are the same either way.
 
     Args:
-        probability: Chosen-side historical rate, or None.
+        probability: The probability the tier is based on, or None.
 
     Returns:
         ``"Strong play"`` when probability >= 0.70, ``"Playable"`` when
@@ -298,21 +302,87 @@ def daily_picks_cache_key(league: str, date: str, tz_offset_minutes: int) -> str
     return f"{DAILY_PICKS_CACHE_KEY}:{league.lower()}:{date}:tz{tz_offset_minutes}"
 
 
+def _optional_stat(value: Any) -> float | None:
+    """A finite stat, or None. Used for fields a test double may omit."""
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        return None
+    number = float(value)
+    if not math.isfinite(number):
+        return None
+    return number
+
+
+def board_score(pick: DailyPick, league: str = "nba") -> float | None:
+    """Probability the daily-picks floor is applied to.
+
+    NBA uses ``combined_probability``. A missing or non-finite combined
+    score does not fall back to the historical rate, so that row leaves
+    the board. WNBA has no combined probability and keeps the historical
+    rate.
+
+    Args:
+        pick: One stored pick.
+        league: ``nba`` or ``wnba``. Anything else uses the NBA score.
+
+    Returns:
+        A finite probability, or None when the score cannot be used.
+    """
+    raw = pick.probability if league.lower() == "wnba" else pick.combined_probability
+    if raw is None or isinstance(raw, bool) or not isinstance(raw, (int, float)):
+        return None
+    number = float(raw)
+    if not math.isfinite(number):
+        return None
+    return number
+
+
+def sort_stored_picks(picks: List[DailyPick], league: str = "nba") -> None:
+    """Order a stored list by the score that board uses.
+
+    NBA orders by ``combined_probability``. WNBA orders by the historical
+    rate. A missing or non-finite score sorts last, so a row that cannot
+    reach the board does not sit above one that can. Equal scores keep
+    the order analysis produced them in.
+
+    ``best_top_reads`` still picks the highest historical probability.
+    On a tie it keeps the earlier row of this list, so an NBA tie keeps
+    the higher blend.
+
+    Args:
+        picks: Stored candidates. Sorted in place.
+        league: ``nba`` or ``wnba``. Passed to ``board_score``.
+    """
+
+    def key(pick: DailyPick) -> tuple[bool, float]:
+        score = board_score(pick, league)
+        if score is None:
+            return (False, 0.0)
+        return (True, score)
+
+    picks.sort(key=key, reverse=True)
+
+
 def select_daily_picks(
     picks: List[DailyPick],
     min_probability: float = HIGH_PROBABILITY_THRESHOLD,
     min_games: int = MIN_SAMPLE_GAMES,
+    *,
+    league: str = "nba",
 ) -> List[DailyPick]:
     """Keep picks that clear the query floors.
 
     The stored list can include Lean rows and short NBA samples. This is
-    the filter the daily-picks route applies. Defaults are the published
-    board: probability 0.65 and 10 games.
+    the filter the NBA daily-picks route applies. Defaults are the
+    published board: combined probability 0.65 and 10 games. WNBA passes
+    ``league="wnba"`` and is filtered on the historical rate instead.
 
     Args:
-        picks: Stored picks, highest probability first.
-        min_probability: Inclusive probability floor.
+        picks: Stored picks. An NBA list is ordered by combined
+            probability (``board_score``). A WNBA list is ordered by the
+            historical rate.
+        min_probability: Inclusive floor on ``board_score``.
         min_games: Inclusive sample floor.
+        league: ``nba`` (combined probability) or ``wnba`` (historical).
 
     Returns:
         Picks that meet both floors, in the original order.
@@ -320,7 +390,9 @@ def select_daily_picks(
     return [
         pick
         for pick in picks
-        if pick.probability >= min_probability and pick.n_games >= min_games
+        if (score := board_score(pick, league)) is not None
+        and score >= min_probability
+        and pick.n_games >= min_games
     ]
 
 
@@ -328,23 +400,28 @@ def present_daily_picks(
     result: DailyPicksResponse,
     min_probability: float = HIGH_PROBABILITY_THRESHOLD,
     min_games: int = MIN_SAMPLE_GAMES,
+    *,
+    league: str = "nba",
 ) -> DailyPicksResponse:
     """Return a copy of ``result`` whose picks match the query floors.
 
     ``stats.high_prob_count`` stays the published-board count written at
     analysis time. ``total_picks`` becomes the filtered length. The stored
     object is not mutated, so a later lower ``min_probability`` still sees
-    the Lean rows that were cached.
+    the rows that were cached. NBA compares ``combined_probability``.
 
     Args:
         result: Stored analysis, including candidates below the board.
-        min_probability: Inclusive probability floor.
+        min_probability: Inclusive floor on ``board_score``.
         min_games: Inclusive sample floor.
+        league: Passed through to ``select_daily_picks``.
 
     Returns:
         Response the route can send.
     """
-    filtered = select_daily_picks(result.picks, min_probability, min_games)
+    filtered = select_daily_picks(
+        result.picks, min_probability, min_games, league=league
+    )
     return result.model_copy(update={"picks": filtered, "total_picks": len(filtered)})
 
 TEAM_CODE_ALIASES: Dict[str, str] = {
@@ -554,34 +631,21 @@ def _posted_point(points: list[float]) -> float:
     return float(modes[(len(modes) // 2) - 1])
 
 
-def _main_book_line(outcomes: list[dict[str, Any]]) -> float | None:
-    """The one line a book votes with for one player on one market.
+def _main_line_vote(outcomes: list[dict[str, Any]]) -> tuple[float, float] | None:
+    """The main line and how far that rung sits from even money.
 
-    Each distinct ``point`` is a rung. Over and Under at that point are
-    the two sides of the rung, not two lines. Use this when reducing a
-    book's outcomes to the single float that ``_group_props_by_player``
-    appends.
-
-    Choice, in order:
-
-    1. A two-sided rung beats a one-sided rung. The main line is a
-       number the book will take on both sides.
-    2. Among those rungs, the one closest to a coin flip
-       (``_even_money_distance``) is the main line. The other rungs are
-       alternates. They do not get their own vote, so one book's ladder
-       cannot outvote the rest of the market.
-    3. An equal distance keeps the lower posted point.
-    4. With no usable prices, ``_posted_point`` returns a posted number.
-       It does not average two different points.
+    The point is the same one ``_main_book_line`` returns. The distance is
+    ``_even_money_distance`` of that rung, so a cross-book tie can prefer
+    the vote closest to a coin flip. When the book posted no usable price,
+    the distance is ``1.0``, which is farther than any priced rung. The
+    point in that case is still ``_posted_point``.
 
     Args:
         outcomes: Outcome objects for one player from one book and one
-            market. ``point`` is the line. ``name`` is ``Over`` or
-            ``Under``. ``price`` is American odds.
+            market.
 
     Returns:
-        The main line rounded to one decimal, or None when no outcome
-        has a numeric ``point``.
+        ``(point, distance)``, or None when no outcome has a numeric point.
     """
     rungs: dict[float, dict[str, float | None]] = {}
     bare_points: list[float] = []
@@ -621,13 +685,49 @@ def _main_book_line(outcomes: list[dict[str, Any]]) -> float | None:
     ]
     candidates = two_sided or priced
     if not candidates:
-        return _posted_point(bare_points)
+        return _posted_point(bare_points), 1.0
 
     def _sort_key(point: float) -> tuple[float, float]:
         rung = rungs[point]
         return (_even_money_distance(rung["over"], rung["under"]), point)
 
-    return float(min(candidates, key=_sort_key))
+    chosen = min(candidates, key=_sort_key)
+    return float(chosen), float(_sort_key(chosen)[0])
+
+
+def _main_book_line(outcomes: list[dict[str, Any]]) -> float | None:
+    """The one line a book votes with for one player on one market.
+
+    Each distinct ``point`` is a rung. Over and Under at that point are
+    the two sides of the rung, not two lines. Use this when reducing a
+    book's outcomes to the single float that ``_group_props_by_player``
+    appends.
+
+    Choice, in order:
+
+    1. A two-sided rung beats a one-sided rung. The main line is a
+       number the book will take on both sides.
+    2. Among those rungs, the one closest to a coin flip
+       (``_even_money_distance``) is the main line. The other rungs are
+       alternates. They do not get their own vote, so one book's ladder
+       cannot outvote the rest of the market.
+    3. An equal distance keeps the lower posted point.
+    4. With no usable prices, ``_posted_point`` returns a posted number.
+       It does not average two different points.
+
+    Args:
+        outcomes: Outcome objects for one player from one book and one
+            market. ``point`` is the line. ``name`` is ``Over`` or
+            ``Under``. ``price`` is American odds.
+
+    Returns:
+        The main line rounded to one decimal, or None when no outcome
+        has a numeric ``point``.
+    """
+    vote = _main_line_vote(outcomes)
+    if vote is None:
+        return None
+    return vote[0]
 
 
 class DailyAnalysisService:
@@ -872,15 +972,20 @@ class DailyAnalysisService:
                 print(f"⚠️ Failed to analyze event {event_id}: {e}")
                 continue
 
-        # 4. Sort picks by probability (descending)
-        all_picks.sort(key=lambda x: x.probability, reverse=True)
+        # 4. Order the stored list by the score the board uses.
+        # NBA: combined_probability. WNBA: the historical rate. A missing
+        # score sorts last. Equal scores keep analysis order.
+        sort_stored_picks(all_picks, league_normalized)
 
         # 5. Calculate statistics. high_prob_count stays the published
         # board (0.65 and 10 games) even when NBA storage also kept Lean
-        # rows and shorter samples. The default query then reports the
-        # same total_picks as this count.
+        # rows and shorter samples. NBA scores that board on
+        # combined_probability. WNBA scores it on the historical rate.
+        # The default query then reports the same total_picks as this count.
         duration = time.time() - start_time
-        published_count = len(select_daily_picks(all_picks))
+        published_count = len(
+            select_daily_picks(all_picks, league=league_normalized)
+        )
         stats = AnalysisStats(
             total_events=len(events),
             total_players=total_players,
@@ -1066,15 +1171,18 @@ class DailyAnalysisService:
                 if not props_data:
                     continue
 
-                # Group by player
-                player_props = self._group_props_by_player(props_data)
+                # Group by player. Each vote is the book's main line and
+                # that rung's distance from even money, so a tied mode can
+                # prefer the sharper quote instead of averaging.
+                player_votes = self._group_main_votes(props_data)
 
-                for player_name, lines in player_props.items():
+                for player_name, votes in player_votes.items():
+                    lines = [line for line, _distance in votes]
+                    distances = [distance for _line, distance in votes]
                     all_players.add(player_name)
                     total_props += 1
 
-                    # Calculate mode threshold
-                    mode_threshold = calculate_mode_threshold(lines)
+                    mode_threshold = calculate_mode_threshold(lines, distances)
 
                     if mode_threshold is None:
                         continue
@@ -1194,9 +1302,19 @@ class DailyAnalysisService:
                         opponent_position_rank_note=opponent_position_rank_note,
                         injury_status=injury_status,
                         lineup_confirmed=lineup_confirmed,
-                        tier=read_tier(side_probability),
+                        # NBA tier is filled after the signal step. Starting
+                        # at None means a raised signal call cannot leave
+                        # the historical label on a row whose blend is null.
+                        # WNBA never runs that step, so it keeps the
+                        # historical label here.
+                        tier=(
+                            None
+                            if league.lower() == "nba"
+                            else read_tier(side_probability)
+                        ),
                         p_over=round(p_over, 4) if p_over is not None else None,
                         p_under=round(p_under, 4) if p_under is not None else None,
+                        season_mean=_optional_stat(history_stats.get("season_mean")),
                     )
                     picks.append(pick)
                     pick = _with_nba_signal_verdicts(
@@ -1263,6 +1381,53 @@ class DailyAnalysisService:
                 return []
             raise
 
+    def _group_main_votes(
+        self,
+        bookmakers_data: List[Dict[str, Any]],
+    ) -> Dict[str, List[Tuple[float, float]]]:
+        """One ``(main line, even-money distance)`` per bookmaker.
+
+        Same grouping as ``_group_props_by_player``. The distance is the
+        second half of the cross-book tie in ``calculate_mode_threshold``.
+
+        Args:
+            bookmakers_data: ``bookmakers`` array from an event-odds response.
+
+        Returns:
+            Player name to one pair per bookmaker per market, in the order
+            the books appear in ``bookmakers_data``.
+        """
+        buckets: Dict[Tuple[str, str, str], List[Dict[str, Any]]] = {}
+        order: List[Tuple[str, str, str]] = []
+
+        for index, bookmaker in enumerate(bookmakers_data):
+            book_id = _book_id(bookmaker, index)
+            markets = bookmaker.get("markets") or []
+            for market_index, market in enumerate(markets):
+                market_key = market.get("key")
+                if not isinstance(market_key, str) or not market_key.strip():
+                    market_key = f"#{market_index}"
+                else:
+                    market_key = market_key.strip()
+                for outcome in market.get("outcomes") or []:
+                    player_name = outcome.get("description", "")
+                    if not isinstance(player_name, str) or not player_name:
+                        continue
+                    if outcome.get("point") is None:
+                        continue
+                    slot = (player_name, book_id, market_key)
+                    if slot not in buckets:
+                        buckets[slot] = []
+                        order.append(slot)
+                    buckets[slot].append(outcome)
+
+        player_votes: Dict[str, List[Tuple[float, float]]] = defaultdict(list)
+        for player_name, slot_book, slot_market in order:
+            vote = _main_line_vote(buckets[(player_name, slot_book, slot_market)])
+            if vote is not None:
+                player_votes[player_name].append(vote)
+        return dict(player_votes)
+
     def _group_props_by_player(
         self,
         bookmakers_data: List[Dict[str, Any]]
@@ -1298,39 +1463,11 @@ class DailyAnalysisService:
             ``[24.5]``, not ``[24.5, 24.5]``. A second book at 25.5
             makes ``[24.5, 25.5]``.
         """
-        # (player, book id, market key) -> that book's outcomes.
-        # Insertion order is the vote order.
-        buckets: Dict[Tuple[str, str, str], List[Dict[str, Any]]] = {}
-        order: List[Tuple[str, str, str]] = []
-
-        for index, bookmaker in enumerate(bookmakers_data):
-            book_id = _book_id(bookmaker, index)
-            markets = bookmaker.get("markets") or []
-            for market_index, market in enumerate(markets):
-                market_key = market.get("key")
-                if not isinstance(market_key, str) or not market_key.strip():
-                    # Two market objects with no key are still two markets.
-                    market_key = f"#{market_index}"
-                else:
-                    market_key = market_key.strip()
-                for outcome in market.get("outcomes") or []:
-                    player_name = outcome.get("description", "")
-                    if not isinstance(player_name, str) or not player_name:
-                        continue
-                    if outcome.get("point") is None:
-                        continue
-                    slot = (player_name, book_id, market_key)
-                    if slot not in buckets:
-                        buckets[slot] = []
-                        order.append(slot)
-                    buckets[slot].append(outcome)
-
-        player_lines: Dict[str, List[float]] = defaultdict(list)
-        for player_name, slot_book, slot_market in order:
-            line = _main_book_line(buckets[(player_name, slot_book, slot_market)])
-            if line is not None:
-                player_lines[player_name].append(line)
-        return dict(player_lines)
+        votes = self._group_main_votes(bookmakers_data)
+        return {
+            player: [line for line, _distance in pairs]
+            for player, pairs in votes.items()
+        }
 
 
 def _recent_stat_values(game_logs: List[Dict[str, Any]]) -> List[float]:
@@ -1384,6 +1521,10 @@ def _with_nba_signal_verdicts(
     # would leave the list holding the pre-signal object.
     pick.signals = signals
     pick.combined_probability = combined
+    # NBA tier follows the calibrated probability. The historical label
+    # set on the constructor is what WNBA keeps, because this function
+    # returns before this assignment when the league is not NBA.
+    pick.tier = read_tier(combined)
     return pick
 
 
@@ -1391,8 +1532,9 @@ def best_top_reads(cached: Any) -> Dict[str, TopRead]:
     """Pick the highest-probability stored pick for each event.
 
     The cache payload is the JSON written by ``run_daily_analysis``.
-    Equal probabilities keep the earlier row. Analysis sorts by
-    probability descending, so a tie keeps the row that was stored first.
+    Equal historical probabilities keep the earlier row. The stored
+    list is ordered by ``sort_stored_picks`` (the blend for NBA, the
+    historical rate for WNBA), so an NBA tie keeps the higher blend.
 
     Args:
         cached: Daily-picks cache document, or anything that is not one.

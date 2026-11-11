@@ -14,7 +14,7 @@ from __future__ import annotations
 import logging
 import math
 import re
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 from typing import Any
 
 from pydantic import ValidationError
@@ -54,6 +54,9 @@ _EVENT_ID_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_-]{0,127}$")
 LATEST_EVENT_SNAPSHOT_SQL = """
 SELECT
     snapshot_at,
+    date,
+    home_team,
+    away_team,
     player_name,
     market,
     bookmaker,
@@ -355,6 +358,29 @@ def _main_book_line(rows: list[dict[str, Any]]) -> dict[str, Any]:
     return _row_for_rung(rung)
 
 
+def _consensus_distance(book: BulkPropBook) -> float:
+    """Even-money distance of the prices this book votes with.
+
+    Over/Under markets use ``over_odds`` and ``under_odds``. Binary
+    markets store Yes and No on ``yes_odds`` and ``no_odds``. A missing
+    side is left out. The number is the same distance
+    ``daily_analysis._even_money_distance`` uses, so a tied mode can
+    prefer the book closer to a coin flip.
+
+    Args:
+        book: One bookmaker's chosen row, already mapped to the response.
+
+    Returns:
+        Absolute distance from 0.5. ``1.0`` when neither side has a price.
+    """
+    over = book.over_odds if book.over_odds is not None else book.yes_odds
+    under = book.under_odds if book.under_odds is not None else book.no_odds
+    return _even_money_distance(
+        None if over is None else float(over),
+        None if under is None else float(under),
+    )
+
+
 def _age_seconds(snapshot_at: datetime, now: datetime) -> int:
     """Whole seconds from ``snapshot_at`` to ``now``, never negative."""
     stamp = _as_datetime(snapshot_at)
@@ -427,10 +453,13 @@ def assemble_bulk_props(
     snapshot was taken. No rows at all means ``snapshot_at`` and
     ``data_age_seconds`` are null and ``markets`` is empty.
 
-    Each bookmaker votes once (``_main_book_line``). The player's ``line``
-    is ``calculate_mode_threshold`` of those votes, the same modal rule
-    daily picks use. ``bookmakers_count`` is the number of distinct books
-    after that collapse, which is also ``len(books)``.
+    Each bookmaker votes once (``_main_book_line``). Alternate rungs on
+    that book do not get a vote. The player's ``line`` is
+    ``calculate_mode_threshold`` of those main lines. A tie prefers the
+    line whose books are closest to even money, then the lower line.
+    It is not the average of the tied lines. ``bookmakers_count`` is the
+    number of distinct books after that collapse, which is also
+    ``len(books)``.
 
     Args:
         event_id: Event id echoed on the response.
@@ -493,7 +522,8 @@ def assemble_bulk_props(
         for player_name in sorted(by_market[market], key=str.casefold):
             books = sorted(by_market[market][player_name], key=lambda item: item.bookmaker.casefold())
             voted_lines = [item.line for item in books]
-            mode = calculate_mode_threshold(voted_lines)
+            voted_distances = [_consensus_distance(item) for item in books]
+            mode = calculate_mode_threshold(voted_lines, voted_distances)
             if mode is None:
                 continue
             players.append(
@@ -514,6 +544,188 @@ def assemble_bulk_props(
         source="snapshot",
         markets=market_models,
     )
+
+
+# Stored beside the cached props document. Not a response field: the
+# public body stays event_id, snapshot_at, data_age_seconds, source, markets.
+_ROSTER_EVENT_KEY = "roster_event"
+
+
+def _snapshot_event(rows: list[dict[str, Any]]) -> tuple[str, str, Any]:
+    """Home, away, and slate date from snapshot rows that already carry them.
+
+    ``rows_from_bookmakers`` writes those three columns. The props query
+    selects them. The first non-blank value wins. Missing clubs stay
+    empty strings so ``team_on_event`` can fall back to the log club.
+    """
+    home = ""
+    away = ""
+    event_day: Any = None
+    for row in rows:
+        if not home:
+            home = str(row.get("home_team") or "").strip()
+        if not away:
+            away = str(row.get("away_team") or "").strip()
+        if event_day is None and row.get("date") not in (None, ""):
+            event_day = row.get("date")
+        if home and away and event_day is not None:
+            break
+    return home, away, event_day
+
+
+def _event_day_text(value: Any) -> str | None:
+    """ISO day or timestamp text for the cache document."""
+    if value is None or value == "":
+        return None
+    if isinstance(value, datetime):
+        return value.date().isoformat()
+    if isinstance(value, date):
+        return value.isoformat()
+    text = str(value).strip()
+    return text or None
+
+
+def _cache_document(
+    payload: BulkPropsResponse,
+    home_team: str,
+    away_team: str,
+    event_day: Any,
+) -> dict[str, Any]:
+    """Props JSON plus the event clubs the roster lookup needs on a hit."""
+    document = payload.model_dump(mode="json")
+    document[_ROSTER_EVENT_KEY] = {
+        "home_team": home_team,
+        "away_team": away_team,
+        "event_day": _event_day_text(event_day),
+    }
+    return document
+
+
+def _clubs_from_cache(cached: Any) -> tuple[str, str, Any]:
+    """Event clubs stored next to a cached props document."""
+    if not isinstance(cached, dict):
+        return "", "", None
+    meta = cached.get(_ROSTER_EVENT_KEY)
+    if not isinstance(meta, dict):
+        return "", "", None
+    return (
+        str(meta.get("home_team") or "").strip(),
+        str(meta.get("away_team") or "").strip(),
+        meta.get("event_day"),
+    )
+
+
+def roster_fields(
+    player_name: str,
+    csv_service: Any | None = None,
+    *,
+    home_team: str = "",
+    away_team: str = "",
+    event_day: Any = None,
+) -> tuple[str | None, str | None]:
+    """Position from the latest log, team code from ``team_on_event``.
+
+    ``position`` is still ``Pos`` on the newest loaded game. ``team_code``
+    is the canonical code of the club ``team_on_event`` returns for this
+    event's home and away clubs. A log club that is not playing is ``""``
+    from that helper, and the code is then null. Omitting either club
+    keeps the previous fallback: the log club on ``event_day``. This
+    reads the CSV already used by player history. It does not call the
+    Odds API.
+
+    Args:
+        player_name: Name stored on the snapshot.
+        csv_service: History service. Defaults to the NBA singleton.
+        home_team: Home club on the snapshot row.
+        away_team: Away club on the snapshot row.
+        event_day: Slate date or tip time from that same row.
+
+    Returns:
+        ``(position, team_code)``. Either element may be None.
+    """
+    from app.services.csv_player_history import team_on_event
+    from app.services.daily_analysis import canonical_team_code
+
+    if csv_service is None:
+        from app.services.csv_player_history import csv_player_service
+
+        csv_service = csv_player_service
+    position = csv_service.latest_position(player_name)
+    if not isinstance(position, str) or not position.strip():
+        position = None
+    else:
+        position = position.strip()
+    logs: list[Any] = []
+    if hasattr(csv_service, "load_csv"):
+        csv_service.load_csv()
+    resolved = None
+    if hasattr(csv_service, "resolve_player_name"):
+        resolved = csv_service.resolve_player_name(player_name)
+    cache = getattr(csv_service, "_cache", None)
+    if resolved and isinstance(cache, dict):
+        logs = list(cache.get(resolved) or [])
+    team = team_on_event(
+        logs,
+        event_day,
+        home_team or "",
+        away_team or "",
+        league="nba",
+    )
+    code = canonical_team_code(team, league="nba") if team else ""
+    team_code = code or None
+    return position, team_code
+
+
+def attach_roster_fields(
+    payload: BulkPropsResponse,
+    csv_service: Any | None = None,
+    *,
+    home_team: str = "",
+    away_team: str = "",
+    event_day: Any = None,
+) -> BulkPropsResponse:
+    """Copy ``payload`` with position and team code filled from the game log.
+
+    A lookup failure leaves both fields null and still returns the lines.
+    The props cache stores the lines without these fields so a roster
+    correction is visible on the next read. The caller attaches them on
+    the way out, including a cache hit, and passes the snapshot's home
+    club, away club, and slate date. The lookup is synchronous on the
+    event loop. Moving it off the loop is a follow-up; the current game
+    log is small enough that the response does not wait on it.
+
+    Args:
+        payload: Assembled bulk props.
+        csv_service: History service. Defaults to the NBA singleton.
+        home_team: Home club from the snapshot rows.
+        away_team: Away club from the snapshot rows.
+        event_day: Slate date or tip time from those rows.
+
+    Returns:
+        The same lines, with ``position`` and ``team_code`` set per player.
+    """
+    markets: list[BulkPropMarket] = []
+    for market in payload.markets:
+        players: list[BulkPropPlayer] = []
+        for player in market.players:
+            try:
+                position, team_code = roster_fields(
+                    player.player,
+                    csv_service,
+                    home_team=home_team,
+                    away_team=away_team,
+                    event_day=event_day,
+                )
+            except Exception:
+                logger.exception("Roster lookup failed for %s", player.player)
+                position, team_code = None, None
+            players.append(
+                player.model_copy(
+                    update={"position": position, "team_code": team_code}
+                )
+            )
+        markets.append(market.model_copy(update={"players": players}))
+    return payload.model_copy(update={"markets": markets})
 
 
 def _with_fresh_age(payload: BulkPropsResponse, now: datetime) -> BulkPropsResponse:
@@ -574,7 +786,13 @@ async def get_event_bulk_props(
         except ValidationError:
             logger.warning("Ignoring unreadable bulk-props cache entry %s", key)
         else:
-            return _with_fresh_age(payload, clock)
+            home_team, away_team, event_day = _clubs_from_cache(cached)
+            return attach_roster_fields(
+                _with_fresh_age(payload, clock),
+                home_team=home_team,
+                away_team=away_team,
+                event_day=event_day,
+            )
 
     if not db_service.is_connected:
         raise BulkPropsStoreUnavailable(
@@ -587,6 +805,7 @@ async def get_event_bulk_props(
         logger.exception("Bulk props query failed for event %s", event_id)
         raise BulkPropsQueryFailed("Failed to read odds snapshots") from exc
 
+    home_team, away_team, event_day = _snapshot_event(rows)
     payload = assemble_bulk_props(
         event_id,
         rows,
@@ -603,7 +822,12 @@ async def get_event_bulk_props(
         )
     await cache_service.set(
         key,
-        payload.model_dump(mode="json"),
+        _cache_document(payload, home_team, away_team, event_day),
         BULK_PROPS_CACHE_TTL_SECONDS,
     )
-    return payload
+    return attach_roster_fields(
+        payload,
+        home_team=home_team,
+        away_team=away_team,
+        event_day=event_day,
+    )

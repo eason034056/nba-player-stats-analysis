@@ -12,13 +12,12 @@ import { getLineups } from "@/lib/api";
 import {
   complementHitRateLabel,
   slipDetailHref,
+  slipCardFace,
   slipMatchup,
   slipPropText,
-  slipSummary,
+  slipTotals,
   slipTeamCode,
-  slipTierLabel,
 } from "@/lib/bet-slip-board";
-import { formatPercent } from "@/lib/player-dd";
 import { getCanonicalTeamCode } from "@/lib/team-logos";
 import { getLocalDateString } from "@/lib/utils";
 
@@ -81,7 +80,7 @@ function ShareCard({
             ) : null}
           </div>
           <div style={{ fontFamily: SHARE_FONT_MONO, fontWeight: 700, fontSize: 16, color: "#E4DA72" }}>
-            {formatPercent(pick.probability)}
+            {slipCardFace(pick).probabilityText}
           </div>
         </div>
       ))}
@@ -99,10 +98,8 @@ export function BetSlipScreen() {
   const [copySuccess, setCopySuccess] = useState(false);
   const shareImageRef = useRef<HTMLDivElement>(null);
   const picksHref = "/picks";
-  const summary = useMemo(
-    () => slipSummary(picks.map((pick) => pick.probability)),
-    [picks],
-  );
+  const totals = useMemo(() => slipTotals(picks), [picks]);
+  const summary = totals.summary;
 
   const lineupDates = useMemo(() => {
     return Array.from(
@@ -275,7 +272,7 @@ export function BetSlipScreen() {
           <div className="flex min-w-0 flex-[3_1_420px] flex-col gap-2.5">
             <h2 className="sr-only">Your picks</h2>
             {picks.map((pick) => {
-              const tier = slipTierLabel(pick.probability);
+              const face = slipCardFace(pick);
               const lineup =
                 lineupsByDateAndTeam.get(
                   `${getLocalDateString(pick.commence_time)}:${getCanonicalTeamCode(pick.player_team)}`,
@@ -312,9 +309,9 @@ export function BetSlipScreen() {
                   </div>
                   <div className="text-right">
                     <div className="font-mono text-xl font-bold text-brand">
-                      {formatPercent(pick.probability)}
+                      {face.probabilityText}
                     </div>
-                    {tier ? <div className="text-[11px] font-semibold text-muted">{tier}</div> : null}
+                    {face.tier ? <div className="text-[11px] font-semibold text-muted">{face.tier.label}</div> : null}
                   </div>
                   <button
                     type="button"
@@ -353,17 +350,19 @@ export function BetSlipScreen() {
               </div>
               <div>
                 <div className="font-mono text-[22px] font-bold">{summary.averageText}</div>
-                <div className="text-xs text-muted">avg. probability</div>
+                <div className="text-xs text-muted">{totals.averageLabel}</div>
               </div>
               <div>
                 <div className="font-mono text-[22px] font-bold text-brand">{summary.allHitText}</div>
-                <div className="text-xs text-muted">all hit</div>
+                <div className="text-xs text-muted">{totals.allHitLabel}</div>
               </div>
             </div>
             <p className="text-xs leading-5 text-muted">
-              Avg and all hit use the stored hit rates. A reverse add stores the complement of the
-              other side&apos;s hit rate, not a de-vigged price. All hit is the product of those stored
-              rates. It is not a joint probability from the API.
+              {totals.basis === "blend"
+                ? "Avg and all hit use the combined probability on each same-side leg. All hit is the product of those blends. It is not a joint probability from the API."
+                : totals.basis === "history"
+                  ? "History: a leg has no blend, so avg and all hit use the historical rate on every leg. A reverse add stores the complement of the other side's hit rate, not a de-vigged price."
+                  : "Avg and all hit use the stored hit rates. A reverse add stores the complement of the other side's hit rate, not a de-vigged price. All hit is the product of those stored rates. It is not a joint probability from the API."}
             </p>
             <ShareCard picks={picks} forwardedRef={shareImageRef} />
             <div className="flex flex-wrap gap-2">

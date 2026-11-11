@@ -85,6 +85,9 @@ describe("complement hit-rate label", () => {
     expect(
       complementHitRateLabel({ direction: "under", probability: 0.28 }),
     ).toBeNull();
+    expect(
+      complementHitRateLabel({ direction: "under", probability: 0.6755, rate_basis: "complement" }),
+    ).toBe("Under hit rate 67% (1 − Over 32%)");
   });
 
   it("shows the caption on the slip and keeps avg and all-hit as stored hit rates", async () => {

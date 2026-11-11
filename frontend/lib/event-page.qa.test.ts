@@ -14,7 +14,6 @@ import {
   noVigResponseSchema,
   playerHistoryResponseSchema,
 } from "@/lib/schemas";
-import { readTier } from "@/lib/today-board";
 import edgesFixture from "@/test/fixtures/event/nba-history-threshold-edges.json";
 import nbaPicksFixture from "@/test/fixtures/event/nba-daily-picks.json";
 import mathFixture from "@/test/fixtures/event/nba-no-vig-math.json";
@@ -28,7 +27,10 @@ function implied(odds: number): number {
   return 100 / (odds + 100);
 }
 
-function readFor(probability: number | null) {
+function readFor(
+  probability: number | null,
+  extra: { tier?: "Lean" | "Playable" | "Strong play" | null; combined_probability?: number | null } = {},
+) {
   return buildOurRead({
     player: "Bam Adebayo",
     marketName: "Points",
@@ -42,11 +44,12 @@ function readFor(probability: number | null) {
     team: "MIA",
     position: "C",
     line: 18.5,
-    pick: probability == null ? null : { ...bamPick, probability },
+    pick: probability == null ? null : { ...bamPick, probability, ...extra },
     consensus: math.consensus ?? null,
     last10: edges.game_logs,
     history: edges,
     projection: null,
+    league: "nba",
   });
 }
 
@@ -60,25 +63,25 @@ describe("game clock in America/Chicago", () => {
 });
 
 describe("stored read, once", () => {
-  it("keeps the pick probability and buckets it with readTier", () => {
-    const model = readFor(0.72);
-    expect(model.primary?.probability).toBe(0.72);
-    expect(model.tier).toEqual(readTier(0.72));
-    expect(model.caption).toContain(formatPercent(0.72));
-    expect(model.bar?.overText).toBe(formatPercent(math.consensus?.p_over_fair));
-    expect(model.bar?.overText).not.toBe(formatPercent(0.72));
-    expect(model.bar).toEqual(consensusSplit(math.consensus, false));
+  it("keeps the pick probability and the backend tier", () => {
+    const model = readFor(0.99, { tier: "Lean", combined_probability: 0.58 });
+    expect(model.primary?.probability).toBe(0.99);
+    expect(model.tier).toEqual({ name: "lean", label: "Lean" });
+    expect(model.caption).toContain("58%");
+    expect(model.caption).toContain(formatPercent(0.99));
+    expect(model.bar?.sourceLabel).toBe("Model");
+    expect(model.bar?.overText).toBe("58%");
+    expect(model.bar).not.toEqual(consensusSplit(math.consensus, false));
   });
 
-  it("uses the same tier boundaries as readTier", () => {
-    expect(readFor(0.7).tier).toEqual(readTier(0.7));
-    expect(readFor(0.699).tier?.name).toBe("playable");
-    expect(readFor(0.65).tier?.name).toBe("playable");
-    expect(readFor(0.649).tier?.name).toBe("lean");
-    expect(readFor(0.56).tier?.name).toBe("lean");
-    expect(readFor(0.559).tier?.name).toBe("pass");
+  it("does not derive an NBA tier from the probability", () => {
+    const blank = { tier: null, combined_probability: null } as const;
+    expect(readFor(0.99, blank).tier).toBeNull();
+    expect(readFor(0.7, blank).tier).toBeNull();
+    expect(readFor(0.65, blank).tier).toBeNull();
+    expect(readFor(0.56, blank).tier).toBeNull();
     expect(readFor(null).tier).toBeNull();
-    expect(readFor(Number.NaN).tier).toBeNull();
+    expect(readFor(Number.NaN, blank).tier).toBeNull();
   });
 
   it("does not de-vig the stored rate into the other side", () => {

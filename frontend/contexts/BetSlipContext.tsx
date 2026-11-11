@@ -60,6 +60,10 @@ export interface BetSlipPick {
   direction: string;
   /** 歷史機率 */
   probability: number;
+  /** Backend tier label. Absent on a leg saved before the blend shipped. */
+  tier?: string | null;
+  /** Calibrated probability for this side. Null when the API omitted the blend. */
+  combined_probability?: number | null;
   /**
    * `complement` means this rate is 1 − the other side's stored hit rate.
    * It is not a de-vigged price. SPO-111 owns a real other side.
