@@ -16,6 +16,7 @@ import { useAgentWidget } from "@/contexts/AgentWidgetContext";
 import { useBetSlip } from "@/contexts/BetSlipContext";
 import { getDailyPicks, getLineups, triggerDailyAnalysis } from "@/lib/api";
 import { createAgentPickContextFromDailyPick } from "@/lib/agent-chat";
+import { isOutPick } from "@/lib/picks-board";
 import type { DailyPick } from "@/lib/schemas";
 import { complementHitRateLabel, sameSideSlipRead } from "@/lib/bet-slip-board";
 import { getCanonicalTeamCode } from "@/lib/team-logos";
@@ -192,6 +193,7 @@ export default function PicksPage() {
 
   const handleToggleSlip = useCallback(
     (pick: DailyPick) => {
+      if (isOutPick(pick)) return;
       const id = `${pick.player_name}-${pick.metric}`;
       const existing = slipPicks.find(
         (item) => item.player_name === pick.player_name && item.metric === pick.metric,
@@ -209,6 +211,7 @@ export default function PicksPage() {
 
   const handleAddReverse = useCallback(
     (pick: DailyPick) => {
+      if (isOutPick(pick)) return;
       const reverse = pick.direction === "over" ? "under" : "over";
       removePick(`${pick.player_name}-${pick.metric}`);
       addPick(buildSlipPick(pick, reverse, 1 - pick.probability, "complement"));
@@ -218,6 +221,7 @@ export default function PicksPage() {
 
   const handleAsk = useCallback(
     async (pick: DailyPick) => {
+      if (isOutPick(pick)) return;
       const pickContext = createAgentPickContextFromDailyPick(pick);
       setSelectedPickContext(pickContext);
       await submitAction({
@@ -234,7 +238,10 @@ export default function PicksPage() {
       action: "review_board",
       message: "Review this board and identify the cleanest bet.",
       contextPatch: {
-        visible_picks: picks.slice(0, 6).map((pick) => createAgentPickContextFromDailyPick(pick)),
+        visible_picks: picks
+          .filter((pick) => !isOutPick(pick))
+          .slice(0, 6)
+          .map((pick) => createAgentPickContextFromDailyPick(pick)),
       },
     });
   }, [picks, submitAction]);
