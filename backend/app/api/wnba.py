@@ -106,6 +106,7 @@ WNBA_SPORT_KEY = "basketball_wnba"
 # responses for DD agree with any future snapshot-stored rows.
 _BINARY_LINE_SENTINEL = 0.5
 from app.services.lineup_service import wnba_lineup_service
+from app.services.slate_date import nba_slate_date
 
 
 router = APIRouter(prefix="/api/wnba", tags=["wnba"])
@@ -531,7 +532,7 @@ async def get_events(
     (``sport_key`` discriminates).
     """
     if date is None:
-        date = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+        date = nba_slate_date()[0]
 
     offset_minutes = tz_offset if tz_offset is not None else 0
 
@@ -869,7 +870,7 @@ async def get_wnba_daily_picks(
 ) -> DailyPicksResponse:
     """WNBA mirror of `GET /api/nba/daily-picks`."""
     if date is None:
-        date = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+        date = nba_slate_date()[0]
 
     offset_minutes = tz_offset if tz_offset is not None else 480
 
@@ -921,7 +922,7 @@ async def trigger_wnba_daily_analysis(
 ) -> DailyPicksResponse:
     """WNBA mirror of `POST /api/nba/daily-picks/trigger`."""
     if date is None:
-        date = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+        date = nba_slate_date()[0]
 
     offset_minutes = tz_offset if tz_offset is not None else 480
 
@@ -975,9 +976,9 @@ async def clear_wnba_daily_picks_cache() -> dict:
     summary="Get WNBA lineup consensus for a specified date",
 )
 async def get_wnba_lineups(
-    date: Optional[str] = Query(default=None, description="Query date (YYYY-MM-DD), defaults to today UTC"),
+    date: Optional[str] = Query(default=None, description="Query date (YYYY-MM-DD), defaults to the US slate date (America/New_York)"),
 ) -> LineupsResponse:
-    target_date = date or datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    target_date = date or nba_slate_date()[0]
     try:
         result = await wnba_lineup_service.get_lineups(target_date)
     except Exception as exc:
@@ -1002,9 +1003,9 @@ async def get_wnba_lineups(
 )
 async def get_wnba_team_lineup(
     team: str,
-    date: Optional[str] = Query(default=None, description="Query date (YYYY-MM-DD), defaults to today UTC"),
+    date: Optional[str] = Query(default=None, description="Query date (YYYY-MM-DD), defaults to the US slate date (America/New_York)"),
 ) -> TeamLineup:
-    target_date = date or datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    target_date = date or nba_slate_date()[0]
     try:
         lineup, _cache_state, _fetched_at = await wnba_lineup_service.get_team_lineup(target_date, team)
     except Exception as exc:
@@ -1022,9 +1023,9 @@ async def get_wnba_team_lineup(
     summary="Manually refresh WNBA lineup consensus data",
 )
 async def refresh_wnba_lineups(
-    date: Optional[str] = Query(default=None, description="Refresh date (YYYY-MM-DD), defaults to today UTC"),
+    date: Optional[str] = Query(default=None, description="Refresh date (YYYY-MM-DD), defaults to the US slate date (America/New_York)"),
 ) -> LineupRefreshResponse:
-    target_date = date or datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    target_date = date or nba_slate_date()[0]
     try:
         lineups = await wnba_lineup_service.fetch_and_store(target_date)
     except Exception as exc:

@@ -11,8 +11,8 @@ test_daily_analysis.py - 手動測試每日分析功能
 """
 
 import asyncio
-from datetime import datetime, timezone
 from app.services.daily_analysis import daily_analysis_service
+from app.services.slate_date import nba_slate_date
 
 
 async def main():
@@ -25,7 +25,7 @@ async def main():
     print()
     
     # 執行分析（使用今天的日期）
-    today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    today = nba_slate_date()[0]
     print(f"📅 分析日期: {today}")
     print()
     

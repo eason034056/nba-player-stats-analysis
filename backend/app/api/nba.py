@@ -36,6 +36,7 @@ from app.models.schemas import (
     BulkPropsResponse,
     EventReadsResponse,
 )
+from app.services.slate_date import nba_slate_date
 from app.services.bulk_props import (
     BulkPropsQueryFailed,
     BulkPropsStoreUnavailable,
@@ -415,10 +416,11 @@ async def get_events(
             ]
         }
     """
-    # Handle date param: defaults to today UTC. The detail route computes
-    # its own local date before calling here. This default stays UTC.
+    # Omitted date is the America/New_York slate date. The detail route
+    # computes the caller's local date from tz_offset and passes that
+    # date in, so this default applies to the list.
     if date is None:
-        date = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+        date = nba_slate_date()[0]
 
     # Omitted tz_offset uses 480 (UTC+8), the same default as
     # GET /api/nba/daily-picks. top_read is loaded with
@@ -556,7 +558,7 @@ async def get_events(
     values are what the list stored under, so the cache key matches.
     If date is omitted, the default is the caller's local date: UTC now
     plus tz_offset minutes. Omitted tz_offset is 480. regions defaults
-    to us. The list route still treats an omitted date as today UTC.
+    to us. The list route treats an omitted date as the America/New_York slate date.
 
     A malformed event_id is HTTP 404 and the list is not read. The id
     rule is the same as GET /api/nba/events/{event_id}/props: 1–128
@@ -602,7 +604,7 @@ async def get_event(
     share one cache key. When ``date`` is omitted, the default is the
     caller's local date from ``tz_offset`` (UTC now plus that many
     minutes; omitted offset is 480). The list route's omitted date
-    stays today UTC.
+    is the America/New_York slate date.
 
     The handler checks the id with ``event_id_is_well_formed``, then
     calls ``get_events`` once. That function reads Redis and, on a miss,
@@ -633,7 +635,9 @@ async def get_event(
     if not event_id_is_well_formed(event_id):
         raise HTTPException(status_code=404, detail="Malformed event_id")
 
-    # Detail-only. get_events still treats an omitted date as today UTC.
+    # Detail-only. get_events treats an omitted date as the
+    # America/New_York slate date. This handler passes an explicit
+    # local date, so that default is unused here.
     # One local date, then one list read. No next-day fallback.
     if date is None:
         offset_minutes = tz_offset if tz_offset is not None else 480
