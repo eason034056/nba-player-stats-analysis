@@ -45,7 +45,7 @@ The home disc is `#9564DD`. White on that purple is about 4.08:1, under 4.5. The
 
 ## Tests / Verification
 
-- Frontend `npm test` (`TZ=America/Chicago vitest run`): 51 files, 393 tests, passed.
+- Frontend `npm test` (`TZ=America/Chicago vitest run`) after the `4bfb2ec` merge: 61 files, 455 tests, passed.
 - `./node_modules/.bin/tsc --noEmit`: passed.
 - `npm run lint`: passed, 0 warnings.
 - `npm run build`: passed.
