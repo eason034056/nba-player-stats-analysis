@@ -205,7 +205,7 @@ describe("DailyPicksBoard", () => {
     expect(card.textContent ?? "").not.toMatch(/Proj|Edge|\bmin\b|NaN|—|Questionable|Lineup|Projection|Injury/);
   });
 
-  it("renders injury status and lineup confirmation when they are present", () => {
+  it("renders an Out or Questionable tag and no lineup-confirmed tag", () => {
     const marked = {
       ...picks.picks[0],
       tier: "Strong play" as const,
@@ -219,6 +219,27 @@ describe("DailyPicksBoard", () => {
     };
     renderBoard({ picks: [marked], teams: ["MIA"], showLineup: false });
     expect(screen.getByText("Questionable")).toBeInTheDocument();
-    expect(screen.getByText("Lineup confirmed")).toBeInTheDocument();
+    expect(screen.queryByText("Lineup confirmed")).not.toBeInTheDocument();
+  });
+
+  it("renders an Out pick with a null blend as an em dash, not NaN or 0%", () => {
+    const out = {
+      ...picks.picks[0],
+      tier: null,
+      combined_probability: null,
+      has_projection: false,
+      projected_value: null,
+      projected_minutes: null,
+      edge: null,
+      injury_status: "Out",
+      lineup_confirmed: null,
+    };
+    renderBoard({ picks: [out], teams: ["MIA"], showLineup: false });
+    const card = screen.getByRole("article");
+    expect(card).toHaveTextContent("Out");
+    expect(card).toHaveTextContent("—");
+    expect(card.textContent ?? "").not.toMatch(/NaN/);
+    expect(card.textContent ?? "").not.toMatch(/(^|[^0-9])0%/);
+    expect(screen.queryByText("Lineup confirmed")).not.toBeInTheDocument();
   });
 });

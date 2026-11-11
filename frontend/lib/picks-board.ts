@@ -107,6 +107,18 @@ function finite(value: number | null | undefined): value is number {
   return typeof value === "number" && Number.isFinite(value);
 }
 
+/** Board tags for Out and Questionable. A literal Doubtful is shown as Questionable. */
+const INJURY_TAG_TEXT: Record<string, string> = {
+  out: "Out",
+  questionable: "Questionable",
+  doubtful: "Questionable",
+};
+
+function injuryTagText(status: string | null | undefined): string | null {
+  const key = status?.trim().toLowerCase() ?? "";
+  return INJURY_TAG_TEXT[key] ?? null;
+}
+
 /**
  * Tags that quote stored fields. A missing projection or rank is omitted.
  * There is no last-10 hit count on DailyPick, so no "L10" tag.
@@ -126,9 +138,8 @@ export function pickTags(pick: DailyPick): PickTag[] {
   if (finite(pick.projected_minutes)) {
     tags.push({ text: `${Math.round(pick.projected_minutes)} min` });
   }
-  const injury = pick.injury_status?.trim();
+  const injury = injuryTagText(pick.injury_status);
   if (injury) tags.push({ text: injury });
-  if (pick.lineup_confirmed === true) tags.push({ text: "Lineup confirmed" });
   if (pick.lineup_confirmed === false) tags.push({ text: "Lineup unconfirmed" });
   const rank = finite(pick.opponent_position_rank)
     ? pick.opponent_position_rank
