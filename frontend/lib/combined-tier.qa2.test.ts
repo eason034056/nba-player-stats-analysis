@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import { sameSideSlipRead, slipTotals } from "@/lib/bet-slip-board";
 import { eventPlayerRows } from "@/lib/event-page";
-import { formatPercent } from "@/lib/player-dd";
+import { formatPercent, formatTierPercent } from "@/lib/player-dd";
 import { dailyPickSchema } from "@/lib/schemas";
 import { createBetSlipPick } from "@/test/test-utils";
 import qa from "@/test/fixtures/spo-121b/qa-review.json";
@@ -34,8 +34,8 @@ describe("QA: slip totals use the side-correct blend on under legs", () => {
     expect(totals.basis).toBe("blend");
     expect(totals.averageLabel).toBe("avg. blend");
     expect(totals.allHitLabel).toBe("all hit");
-    expect(totals.summary.averageText).toBe(formatPercent((0.71 + 0.66) / 2));
-    expect(totals.summary.allHitText).toBe(formatPercent(0.71 * 0.66));
+    expect(totals.summary.averageText).toBe(formatTierPercent((0.71 + 0.66) / 2));
+    expect(totals.summary.allHitText).toBe(formatTierPercent(0.71 * 0.66));
     expect(totals.summary.averageText).not.toBe(formatPercent((0.55 + 0.59) / 2));
     expect(totals.summary.averageText).not.toBe(formatPercent((1 - 0.71 + 0.66) / 2));
   });
