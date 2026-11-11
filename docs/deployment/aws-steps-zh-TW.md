@@ -74,13 +74,55 @@ terraform plan
 terraform apply
 ```
 
-`plan` 裡不該出現 `0.0.0.0/0`。apply 結束後記下 `db_endpoint`、`master_user_secret_arn`、`bucket_name`，以及 `app_security_group_id`。
+`plan` 裡不該出現 `0.0.0.0/0`。如果 plan 停在 `no matching EC2 VPC found`，先看下一節，改完再 plan。apply 結束後記下 `db_endpoint`、`master_user_secret_arn`、`bucket_name`、`app_security_group_id`、`vpc_id`，以及 `public_subnet_ids`。
 
 `app_security_group_id` 是 `sportslab-app` 這個安全群組。它現在沒有任何進站規則，是留給之後的 EC2 後端（SPO-133）掛上去用的。RDS 已經用安全群組 id 放行這個群組的 TCP 5432，也放行 `rds_allowed_security_group_ids` 裡的每一個 id（預設是空清單）。
 
 EC2 後端上線、而且實例已經掛在 `sportslab-app` 之後，把 gitignore 的 `terraform.tfvars` 改成 `allowed_cidrs = []` 再 `terraform apply`。這樣 Mac 和 box 的 IP 規則會消失。RDS 仍然允許 `sportslab-app`。之後不要再跑 `./scripts/aws_update_my_ip.sh --apply`，因為 `--apply` 會把那兩個 `/32` 再傳回去。`0.0.0.0/0` 和 `::/0` 仍然會被拒絕。空清單是允許的。
 
 `infra/aws/README.md` 裡的 provisioner IAM JSON 是舊計畫的對照清單。不要照它去建立另一把金鑰。
+
+## If your account has no default VPC
+
+帳號沒有 default VPC 時，`vpc_id` 沒寫，`terraform plan` 會停在這個錯誤：
+
+```text
+Error: no matching EC2 VPC found
+```
+
+這表示 Terraform 在這個 region 找不到 default VPC。先列出 VPC。指令印出的 id 不要 commit。
+
+```bash
+aws ec2 describe-vpcs --query 'Vpcs[].{id:VpcId,cidr:CidrBlock,default:IsDefault,name:Tags[?Key==`Name`]|[0].Value}' --output table
+```
+
+選一個 VPC，確認兩件事。下面的 `vpc-0123456789abcdef0` 只是佔位，換成上一行印出的 id。
+
+主路由表要有一條 `0.0.0.0/0`，目標是 `igw-` 開頭的網際網路閘道：
+
+```bash
+aws ec2 describe-route-tables \
+  --filters Name=vpc-id,Values=vpc-0123456789abcdef0 \
+  --query 'RouteTables[?Associations[?Main]].{id:RouteTableId,defaultRoute:Routes[?DestinationCidrBlock==`0.0.0.0/0`].GatewayId}' \
+  --output table
+```
+
+子網的 `MapPublicIpOnLaunch` 要是 true。RDS 的 subnet group 仍使用該 VPC 的全部子網。`public_subnet_ids` 是其中會自動配發公開 IPv4 的子網，SPO-133 會用來放 EC2。
+
+```bash
+aws ec2 describe-subnets \
+  --filters Name=vpc-id,Values=vpc-0123456789abcdef0 \
+  --query 'Subnets[].{id:SubnetId,az:AvailabilityZone,public:MapPublicIpOnLaunch,cidr:CidrBlock}' \
+  --output table
+```
+
+在 gitignore 的 `terraform.tfvars` 加上（換成你的 id）：
+
+```hcl
+vpc_id = "vpc-0123456789abcdef0"
+```
+
+再跑一次 `terraform plan`。不要 commit `terraform.tfvars`。帳號有 default VPC 時，不要寫 `vpc_id`。空字串不是「沒設定」，驗證會拒絕 `""`。
 
 ## 5. 家裡 IP 變了就更新允許清單
 

@@ -59,7 +59,7 @@ The AWS account already exists. Check its plan and billing, set a monthly $25 bu
 
 1. On the Mac, `aws configure` with Eason's own keys. Those keys stay in `~/.aws`. They do not go in the repo or in chat.
 2. `cd infra/aws && cp terraform.tfvars.example terraform.tfvars`. Set the bucket name. Replace the example box line `198.51.100.10/32` with the real box `/32` in that gitignored file, and set the `# mac-home` line to the Mac's current public `/32`. `./scripts/aws_update_my_ip.sh` rewrites the Mac line and prints `terraform apply`; it does not call AWS unless `--apply` is passed.
-3. `terraform init`, `terraform plan`, `terraform apply`. Read `db_endpoint`, `master_user_secret_arn`, `bucket_name`, and `app_security_group_id`. The migration and dump scripts do not call Secrets Manager. They read `RDS_DATABASE_URL`, which you build. `SecretString` is JSON. Take only the password field:
+3. `terraform init`, `terraform plan`, `terraform apply`. If plan reports `no matching EC2 VPC found`, the account has no default VPC. Follow [If your account has no default VPC](#if-your-account-has-no-default-vpc), then plan again. Read `db_endpoint`, `master_user_secret_arn`, `bucket_name`, `app_security_group_id`, `vpc_id`, and `public_subnet_ids`. The migration and dump scripts do not call Secrets Manager. They read `RDS_DATABASE_URL`, which you build. `SecretString` is JSON. Take only the password field:
 
 ```bash
 aws secretsmanager get-secret-value \
@@ -102,6 +102,44 @@ The default is `docker exec no-vig-nba-postgres`. In that container, `localhost:
 When the home IP changes, run `scripts/aws_update_my_ip.sh` and then the printed `terraform apply`. Until that apply finishes, the Mac cannot open 5432.
 
 Apply also creates security group `sportslab-app` (output `app_security_group_id`). It has no ingress rules. It exists so a later EC2 instance (SPO-133) can attach to it. RDS already allows TCP 5432 from that group, by security group id, and from any id in `rds_allowed_security_group_ids` (default empty). Once that EC2 backend is live and attached to `sportslab-app`, set `allowed_cidrs = []` in the gitignored `terraform.tfvars` and apply again. That removes the Mac and box CIDR rules. Do not run `scripts/aws_update_my_ip.sh --apply` after that, because `--apply` passes those two CIDRs back in. `0.0.0.0/0` and `::/0` stay rejected.
+
+## If your account has no default VPC
+
+`terraform plan` looks up the region's default VPC when `vpc_id` is unset. An account with no default VPC stops there:
+
+```text
+Error: no matching EC2 VPC found
+```
+
+List the VPCs. Do not commit the ids this prints.
+
+```bash
+aws ec2 describe-vpcs --query 'Vpcs[].{id:VpcId,cidr:CidrBlock,default:IsDefault,name:Tags[?Key==`Name`]|[0].Value}' --output table
+```
+
+Pick the VPC whose main route table sends `0.0.0.0/0` to an `igw-` gateway, and whose subnets have `MapPublicIpOnLaunch` true. `vpc-0123456789abcdef0` below is a placeholder. Replace it with the id from the table.
+
+```bash
+aws ec2 describe-route-tables \
+  --filters Name=vpc-id,Values=vpc-0123456789abcdef0 \
+  --query 'RouteTables[?Associations[?Main]].{id:RouteTableId,defaultRoute:Routes[?DestinationCidrBlock==`0.0.0.0/0`].GatewayId}' \
+  --output table
+```
+
+```bash
+aws ec2 describe-subnets \
+  --filters Name=vpc-id,Values=vpc-0123456789abcdef0 \
+  --query 'Subnets[].{id:SubnetId,az:AvailabilityZone,public:MapPublicIpOnLaunch,cidr:CidrBlock}' \
+  --output table
+```
+
+Add the id to the gitignored `terraform.tfvars`:
+
+```hcl
+vpc_id = "vpc-0123456789abcdef0"
+```
+
+Run `terraform plan` again. Leave the variable unset to keep the default VPC. An empty string is rejected. It does not mean "use the default".
 
 ## Rollback
 

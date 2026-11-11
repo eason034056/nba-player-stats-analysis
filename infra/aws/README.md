@@ -32,7 +32,7 @@ aws rds describe-db-engine-versions --engine postgres --engine-version 16 --regi
 
 If the newest available 16.x is not `16.15`, set `engine_version` in `terraform.tfvars`.
 
-5. Copy the example variables and replace the placeholders. The example `# box` line is `198.51.100.10/32`, a documentation address. In the gitignored `terraform.tfvars`, replace it with the real box `/32`, and put the Mac's current public IP on the `# mac-home` line. Never `0.0.0.0/0`. Do not commit `terraform.tfvars`.
+5. Copy the example variables and replace the placeholders. The example `# box` line is `198.51.100.10/32`, a documentation address. In the gitignored `terraform.tfvars`, replace it with the real box `/32`, and put the Mac's current public IP on the `# mac-home` line. Never `0.0.0.0/0`. Do not commit `terraform.tfvars`. Leave `vpc_id` unset unless the account has no default VPC. See below.
 
 ```bash
 cd infra/aws
@@ -63,6 +63,8 @@ terraform output master_user_secret_arn
 terraform output bucket_name
 terraform output runtime_s3_policy_json
 terraform output app_security_group_id
+terraform output vpc_id
+terraform output public_subnet_ids
 ```
 
 Then:
@@ -75,12 +77,52 @@ To change the allowlist later, edit `allowed_cidrs` and apply again. After the E
 
 Tearing the stack down is a separate decision. The provisioner policy below has no `rds:DeleteDBInstance` and no `s3:DeleteBucket`. Deletion protection is on. Eason turns those off with his own admin login if he ever wants them gone.
 
+## If your account has no default VPC
+
+`terraform plan` looks up the region's default VPC when `vpc_id` is unset. An account with no default VPC stops there:
+
+```text
+Error: no matching EC2 VPC found
+```
+
+List the VPCs in the region. Do not commit the ids this prints.
+
+```bash
+aws ec2 describe-vpcs --query 'Vpcs[].{id:VpcId,cidr:CidrBlock,default:IsDefault,name:Tags[?Key==`Name`]|[0].Value}' --output table
+```
+
+Pick the VPC whose main route table sends `0.0.0.0/0` to an `igw-` gateway, and whose subnets have `MapPublicIpOnLaunch` true. The id below is the placeholder from `terraform.tfvars.example`. Replace it with the id from the table. Check the main route table:
+
+```bash
+aws ec2 describe-route-tables \
+  --filters Name=vpc-id,Values=vpc-0123456789abcdef0 \
+  --query 'RouteTables[?Associations[?Main]].{id:RouteTableId,defaultRoute:Routes[?DestinationCidrBlock==`0.0.0.0/0`].GatewayId}' \
+  --output table
+```
+
+And the subnets:
+
+```bash
+aws ec2 describe-subnets \
+  --filters Name=vpc-id,Values=vpc-0123456789abcdef0 \
+  --query 'Subnets[].{id:SubnetId,az:AvailabilityZone,public:MapPublicIpOnLaunch,cidr:CidrBlock}' \
+  --output table
+```
+
+Add the id to the gitignored `terraform.tfvars` (this line is commented in the example):
+
+```hcl
+vpc_id = "vpc-0123456789abcdef0"
+```
+
+Run `terraform plan` again. The security groups and the DB subnet group use that VPC. `public_subnet_ids` is the subset with `MapPublicIpOnLaunch` true; SPO-133 uses it for the backend instance. The subnet group still takes every subnet in the VPC. Leave `vpc_id` unset to keep using the default VPC. An empty string is rejected. It does not mean "use the default".
+
 ## Console fallback
 
 Use this if you would rather click than run Terraform. Names match the module.
 
 1. RDS → Parameter groups → Create. Family `postgres16`, name `sportslab-pg16`. Edit `rds.force_ssl` to `1`.
-2. EC2 → Security groups → Create `sportslab-app` in the default VPC. No inbound rules. Leave the default outbound allow-all. This is the group the future EC2 instance attaches to. Then create `sportslab-rds` in the same VPC. Inbound: PostgreSQL 5432 from `sportslab-app`, from the real box `/32` (the tracked example writes `198.51.100.10/32`), and from the Mac's current public `/32`. No other inbound. Do not add `0.0.0.0/0`. When the home IP changes, edit the CIDR rule; `scripts/aws_update_my_ip.sh` does the same thing for the Terraform path. After the EC2 instance is attached to `sportslab-app`, delete the two CIDR rules and leave the `sportslab-app` rule.
+2. EC2 → Security groups → Create `sportslab-app` in the VPC this stack uses (the default VPC, or the `vpc_id` from `terraform.tfvars` when the account has no default VPC). No inbound rules. Leave the default outbound allow-all. This is the group the future EC2 instance attaches to. Then create `sportslab-rds` in the same VPC. Inbound: PostgreSQL 5432 from `sportslab-app`, from the real box `/32` (the tracked example writes `198.51.100.10/32`), and from the Mac's current public `/32`. No other inbound. Do not add `0.0.0.0/0`. When the home IP changes, edit the CIDR rule; `scripts/aws_update_my_ip.sh` does the same thing for the Terraform path. After the EC2 instance is attached to `sportslab-app`, delete the two CIDR rules and leave the `sportslab-app` rule.
 3. RDS → Create database → Standard create → PostgreSQL → the current 16.x (16.15 unless step 4 above shows a newer minor) → Dev/Test template → Single-AZ → `db.t4g.micro` → gp3 20 GB, autoscaling max 50 → master username `sportslab_admin` → Managed in AWS Secrets Manager → Public access Yes → security group `sportslab-rds` (remove default) → parameter group `sportslab-pg16` → backups 7 days → encryption on (aws/rds) → deletion protection on → initial database name `novig_nba` → Create.
 4. S3 → Create bucket in the same region. ACLs disabled. Block all public access. Versioning enabled. Default encryption SSE-S3. Then Management → Lifecycle:
    - Objects larger than 128 KB: Standard-IA at 30 days, Glacier Instant Retrieval at 90 days.

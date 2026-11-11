@@ -1,18 +1,43 @@
-data "aws_vpc" "default" {
-  default = true
+# vpc_id null selects the region's default VPC (default = true). A set id
+# selects that VPC and leaves default unset. The provider omits a null
+# argument. Setting both would require the id to also be the default VPC,
+# which fails in an account that has none.
+data "aws_vpc" "selected" {
+  id      = var.vpc_id
+  default = var.vpc_id == null ? true : null
 }
 
-data "aws_subnets" "default" {
+data "aws_subnets" "selected" {
   filter {
     name   = "vpc-id"
-    values = [data.aws_vpc.default.id]
+    values = [data.aws_vpc.selected.id]
   }
+}
+
+# SPO-133 places the backend EC2 instance in one of these. The RDS subnet
+# group still uses every subnet in the VPC (local.subnet_ids).
+data "aws_subnets" "public" {
+  filter {
+    name   = "vpc-id"
+    values = [data.aws_vpc.selected.id]
+  }
+
+  filter {
+    name   = "map-public-ip-on-launch"
+    values = ["true"]
+  }
+}
+
+locals {
+  vpc_id            = data.aws_vpc.selected.id
+  subnet_ids        = data.aws_subnets.selected.ids
+  public_subnet_ids = data.aws_subnets.public.ids
 }
 
 resource "aws_db_subnet_group" "this" {
   name        = "${local.name_prefix}-rds"
-  description = "Default VPC subnets for ${local.name_prefix} RDS"
-  subnet_ids  = data.aws_subnets.default.ids
+  description = "Subnets for ${local.name_prefix} RDS"
+  subnet_ids  = local.subnet_ids
 }
 
 # sportslab-app when project is sportslab. No ingress yet. SPO-133 attaches
@@ -20,7 +45,7 @@ resource "aws_db_subnet_group" "this" {
 resource "aws_security_group" "app" {
   name        = "${local.name_prefix}-app"
   description = "Future EC2 backend. No ingress. SPO-133 attaches the instance."
-  vpc_id      = data.aws_vpc.default.id
+  vpc_id      = local.vpc_id
 
   egress {
     description = "Outbound from the future instance, including to RDS"
@@ -34,7 +59,7 @@ resource "aws_security_group" "app" {
 resource "aws_security_group" "rds" {
   name        = "${local.name_prefix}-rds"
   description = "PostgreSQL 5432 from the app group and optional CIDRs"
-  vpc_id      = data.aws_vpc.default.id
+  vpc_id      = local.vpc_id
 
   ingress {
     description     = "PostgreSQL from the app security group"
