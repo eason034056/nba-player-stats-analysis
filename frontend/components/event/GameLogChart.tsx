@@ -12,6 +12,7 @@ export function GameLogChart({
   isError,
   errorText,
   emptyMessage,
+  heading = true,
 }: {
   model: ChartModel | null;
   note: string;
@@ -21,14 +22,17 @@ export function GameLogChart({
   isError: boolean;
   errorText: string | null;
   emptyMessage: string | null;
+  heading?: boolean;
 }) {
   const selected = model?.bars.find((bar) => bar.key === selectedKey) ?? model?.bars.at(-1) ?? null;
   return (
     <div data-testid="game-log-chart" className="flex flex-col gap-4">
-      <div className="flex flex-wrap items-baseline justify-between gap-2">
-        <h3 className="text-lg font-bold text-ink">Game log</h3>
-        <p className="text-[13px] text-muted">{note}</p>
-      </div>
+      {heading ? (
+        <div className="flex flex-wrap items-baseline justify-between gap-2">
+          <h3 className="text-lg font-bold text-ink">Game log</h3>
+          <p className="text-[13px] text-muted">{note}</p>
+        </div>
+      ) : null}
       {isLoading ? <p className="text-sm text-muted">Loading the game log.</p> : null}
       {isError ? <p className="text-sm font-semibold text-red">{errorText ?? "The game log failed."}</p> : null}
       {emptyMessage ? (

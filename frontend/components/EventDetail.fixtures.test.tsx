@@ -333,15 +333,22 @@ describe("EventDetail fixtures", () => {
     expect(odds?.className).not.toContain("max-md:hidden");
     expect(screen.getByTestId("our-read").parentElement?.className).toContain("max-md:hidden");
     expect(screen.queryByRole("tab", { name: "Filters" })).not.toBeInTheDocument();
-    await user.click(screen.getByRole("button", { name: "Filters" }));
-    const filters = screen.getByRole("dialog", { name: "Filter games" });
-    await user.click(within(filters).getByRole("button", { name: "Raise line" }));
-    expect(within(filters).getByText("19")).toBeInTheDocument();
     await user.click(screen.getByRole("tab", { name: "Game log" }));
+    const log = screen.getByTestId("game-log");
+    const lineValue = () => within(log).getByRole("button", { name: "reset" }).parentElement;
+    await user.click(within(log).getByRole("button", { name: "Raise line" }));
+    expect(lineValue()).toHaveTextContent("19");
+    await waitFor(() =>
+      expect(apiMocks.getPlayerHistory).toHaveBeenCalledWith(expect.objectContaining({ threshold: 19 })),
+    );
+    await user.click(within(log).getByRole("button", { name: "Filters" }));
+    const sheet = screen.getByRole("dialog", { name: "Filter games" });
+    await user.click(within(sheet).getByRole("button", { name: "Bench" }));
+    expect(within(log).getByRole("button", { name: "Filters · 1" })).toBeInTheDocument();
     await user.click(screen.getByRole("tab", { name: "Our read" }));
     expect(screen.getByRole("button", { name: "REB" })).toHaveAttribute("aria-pressed", "true");
     expect(screen.getByTestId("our-read").parentElement?.className).not.toContain("max-md:hidden");
-    expect(within(screen.getByRole("dialog", { name: "Filter games" })).getByText("19")).toBeInTheDocument();
+    expect(lineValue()).toHaveTextContent("19");
   });
 
   it("asks history for the same line, range, and opponent the chart shows", async () => {
@@ -357,10 +364,10 @@ describe("EventDetail fixtures", () => {
     });
     const user = userEvent.setup();
     renderWithProviders(<EventDetail league="nba" />);
-    const chart = await screen.findByTestId("game-log-chart");
+    const chart = await screen.findByTestId("game-log");
     expect(await within(chart).findByText("Points · 40 games")).toBeInTheDocument();
     const filters = screen.getByTestId("game-filters");
-    await user.click(within(filters).getByRole("button", { name: "Last 20" }));
+    await user.click(within(filters).getByRole("button", { name: "L20" }));
     expect(await within(chart).findByText("Points · 7 games")).toBeInTheDocument();
     expect(apiMocks.getPlayerHistory).toHaveBeenCalledWith(
       expect.objectContaining({ n: 20, threshold: 18.5, player: "Bam Adebayo", metric: "points" }),
@@ -385,17 +392,15 @@ describe("EventDetail fixtures", () => {
     const user = userEvent.setup();
     renderWithProviders(<EventDetail league="nba" />);
     await user.click(await screen.findByRole("button", { name: "DD" }));
-    const caption = await screen.findByText(/No-vig consensus yes/);
-    expect(caption).toHaveTextContent(`No-vig consensus yes ${formatPercent(0.6755)}`);
+    expect(await screen.findByText(`No-vig consensus ${formatPercent(0.6755)} yes`)).toBeInTheDocument();
   });
 
   it("prints the history rate with formatPercent on the log tiles", async () => {
     apiMocks.getPlayerHistory.mockResolvedValue(halfHistory);
     renderWithProviders(<EventDetail league="nba" />);
-    expect((await screen.findAllByText(formatPercent(0.6755))).length).toBeGreaterThan(0);
-    const tiles = Array.from(document.querySelectorAll(".font-mono.text-2xl")).map((node) => node.textContent);
-    expect(tiles).toContain(formatPercent(0.6755));
-    expect(tiles).not.toContain("67.5%");
+    const over = await screen.findByTestId("log-tile-over");
+    expect(over).toHaveTextContent(formatPercent(0.6755));
+    expect(over).not.toHaveTextContent("67.5%");
   });
 
   it("labels the fourteen empty fields without a fake percent", async () => {
@@ -408,7 +413,7 @@ describe("EventDetail fixtures", () => {
     expect((await screen.findAllByText(/No posted line/)).length).toBeGreaterThan(0);
     expect(screen.getAllByText("No read").length).toBeGreaterThan(0);
     expect(screen.getByText("No stored read for this player.")).toBeInTheDocument();
-    expect(screen.getAllByText(/No-vig consensus is not on this response/).length).toBeGreaterThan(0);
+    expect(screen.queryByText(/No-vig consensus \d/)).not.toBeInTheDocument();
     expect(screen.queryByText(/Last-10 hit rate needs a posted line/)).not.toBeInTheDocument();
     expect(screen.queryByText(/3 of 5 signals/)).not.toBeInTheDocument();
     expect(screen.getAllByText(/No bookmaker line right now/).length).toBeGreaterThan(0);

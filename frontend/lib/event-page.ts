@@ -1460,3 +1460,38 @@ export function errorText(error: unknown): string {
   if (error instanceof Error && error.message) return error.message;
   return "The request failed.";
 }
+
+export type GameLogTileKey = "over" | "under" | "average" | "games";
+
+export interface GameLogTile {
+  key: GameLogTileKey;
+  label: string;
+  value: string;
+  sub: string | null;
+}
+
+function sideCount(rate: number | null | undefined, games: number): string | null {
+  if (typeof rate !== "number" || !Number.isFinite(rate) || games <= 0) return null;
+  return `${Math.round(rate * games)} of ${games} ${games === 1 ? "game" : "games"}`;
+}
+
+export function gameLogTiles(
+  history: Pick<PlayerHistoryResponse, "n_games" | "p_over" | "p_under" | "mean">,
+  line: number | null,
+): GameLogTile[] {
+  const games = history.n_games;
+  const lineLabel = line == null ? "" : ` ${formatThreshold(line)}`;
+  const mean = typeof history.mean === "number" && Number.isFinite(history.mean) ? history.mean : null;
+  const diff = mean != null && line != null ? Math.round((mean - line) * 10) / 10 : null;
+  return [
+    { key: "over", label: `Over${lineLabel}`, value: formatPercent(history.p_over), sub: sideCount(history.p_over, games) },
+    { key: "under", label: `Under${lineLabel}`, value: formatPercent(history.p_under), sub: sideCount(history.p_under, games) },
+    {
+      key: "average",
+      label: "Average",
+      value: mean == null ? "—" : mean.toFixed(1),
+      sub: diff == null ? null : `${diff >= 0 ? "+" : ""}${diff.toFixed(1)} vs line`,
+    },
+    { key: "games", label: "Games", value: String(games), sub: null },
+  ];
+}

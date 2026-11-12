@@ -438,6 +438,7 @@ describe("GameFilters", () => {
   it("disables venue because home and away are not on the game log", () => {
     renderWithProviders(
       <GameFilters
+        league="wnba"
         range={10}
         onRange={noop}
         lineText="18.5"
