@@ -13,10 +13,10 @@ import { AppShell } from "@/components/AppShell";
 
 const sans = localFont({
   src: [
-    { path: "./fonts/InstrumentSans[wdth,wght].woff2", weight: "400", style: "normal" },
-    { path: "./fonts/InstrumentSans[wdth,wght].woff2", weight: "500", style: "normal" },
-    { path: "./fonts/InstrumentSans[wdth,wght].woff2", weight: "600", style: "normal" },
-    { path: "./fonts/InstrumentSans[wdth,wght].woff2", weight: "700", style: "normal" },
+    { path: "./fonts/InstrumentSans[wght].woff2", weight: "400", style: "normal" },
+    { path: "./fonts/InstrumentSans[wght].woff2", weight: "500", style: "normal" },
+    { path: "./fonts/InstrumentSans[wght].woff2", weight: "600", style: "normal" },
+    { path: "./fonts/InstrumentSans[wght].woff2", weight: "700", style: "normal" },
   ],
   display: "swap",
   adjustFontFallback: "Arial",
