@@ -192,7 +192,9 @@ describe("injury tag style", () => {
       const chip = label.closest("[data-injury-tone]");
       if (!chip) throw new Error("chip missing");
       expect(chip).toHaveAttribute("data-injury-tone", word.tone);
-      expect(within(chip as HTMLElement).getByText("Injury:")).toHaveClass("sr-only");
+      const prefix = chip.firstElementChild;
+      expect(prefix?.textContent).toContain("Injury:");
+      expect(prefix?.classList.contains("sr-only")).toBe(true);
       const colors = chipColors(chip);
       const pair = `${colors.fg}/${colors.bg}`;
       expect(seen.has(pair)).toBe(false);
