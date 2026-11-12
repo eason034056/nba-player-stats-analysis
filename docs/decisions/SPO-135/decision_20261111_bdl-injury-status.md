@@ -4,6 +4,8 @@
 - **Date:** 2026-11-11
 - **Status:** Accepted
 
+> Superseded in part by SPO-135e (2026-11-11): `/reads` loads this snapshot. Injury names keep the suffix. Startup refills a stale key inside the slate window. `misfire_grace_time` is 25 minutes. Doubtful blocking is unchanged.
+
 ## Context
 
 SPO-135 stopped copying `injury_status` off the projection row, so every NBA `DailyPick.injury_status` is null. `pick_signals.injury_blocks_combined` never fires, and an Out player still gets a `combined_probability`.

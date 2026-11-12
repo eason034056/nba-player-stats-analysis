@@ -50,7 +50,7 @@ Recorded fixtures only. No live BALLDONTLIE or Odds API call.
 
 ## Follow-ups
 
-- [ ] Event reads still pass `injury_status=None`, so `/reads` can still blend an Out player.
+- [x] Event reads still passed `injury_status=None`. Closed by SPO-135e: `/reads` loads the same snapshot.
 - [ ] The filtered board drops a cache Doubtful (status Questionable, blend null) because the filter does not see `raw_status`.
 - [ ] SPO-130d: a production team-id map. This PR reads the recorded standings fixture.
 - [ ] Paired frontend PR: `injury_status` is non-null again for a matched NBA player. `lineup_confirmed` stays null.

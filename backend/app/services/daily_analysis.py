@@ -1276,6 +1276,8 @@ class DailyAnalysisService:
                     # No projection source. The line is not a stand-in.
                     # lineup_confirmed stays null until projected lineups.
                     # NBA injury_status comes from the cached snapshot.
+                    # The Odds API description has no bdl_player_id, so
+                    # the match is the full name with the suffix kept.
                     # A missing or ambiguous name stays null. WNBA stays null.
                     has_projection = False
                     projected_value = None

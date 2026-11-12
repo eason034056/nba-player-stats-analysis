@@ -40,6 +40,7 @@ from app.services.lineup_service import lineup_service, wnba_lineup_service
 from app.services.slate_date import nba_slate_date
 from app.services.nba_injuries import (
     NBA_INJURIES_CACHE_KEY,
+    injury_snapshot_is_fresh,
     refresh_nba_injuries_from_bdl,
 )
 from app.settings import settings
@@ -67,6 +68,12 @@ NBA_INJURY_REFRESH_HOURS = frozenset(
 )
 NBA_INJURY_REFRESH_CRON_HOUR = "11-23,0"
 NBA_INJURY_REFRESH_CRON_MINUTE = "7,37"
+# A restart that misses :07 or :37 by less than 25 minutes runs that
+# tick once. coalesce is set on the job, so several missed ticks become
+# one run and the job does not burst. One second dropped a tick the
+# process had just missed. 25 minutes is inside the 30-minute gap, so
+# the next scheduled tick is not also due.
+NBA_INJURY_REFRESH_MISFIRE_GRACE_SECONDS = 25 * 60
 
 
 def nba_injury_refresh_in_window(now: datetime | None = None) -> bool:
@@ -136,9 +143,10 @@ class SchedulerService:
         """
         self._scheduler: Optional[AsyncIOScheduler] = None
         self._is_running = False
-        # The startup fill runs at most once per process, and only when
-        # the injury key is missing. A later start() on the same
-        # instance does not schedule it again.
+        # The startup fill runs at most once per process. It refreshes a
+        # missing key, and a stale key when the process is inside the
+        # slate window. A later start() on the same instance does not
+        # schedule it again.
         self._injury_startup_fill_done = False
     
     def start(self):
@@ -336,8 +344,9 @@ class SchedulerService:
 
         # NBA injury snapshot. Cron only fires inside the slate window,
         # at :07 and :37 Chicago (every 30 minutes). misfire_grace_time
-        # is 1 second so a process that boots later does not catch up
-        # a missed tick. The one startup fill is a separate date job.
+        # is 25 minutes and coalesce is true, so a restart that just
+        # missed :07 or :37 runs that tick once and does not burst.
+        # The one startup fill is a separate date job.
         self._scheduler.add_job(
             self._run_nba_injuries_refresh_job,
             trigger=CronTrigger(
@@ -348,7 +357,7 @@ class SchedulerService:
             id='nba_injuries_refresh',
             name='NBA Injury Snapshot Refresh',
             replace_existing=True,
-            misfire_grace_time=1,
+            misfire_grace_time=NBA_INJURY_REFRESH_MISFIRE_GRACE_SECONDS,
             max_instances=1,
             coalesce=True,
         )
@@ -391,12 +400,20 @@ class SchedulerService:
             print(f"      Next run: {job.next_run_time}")
     
     async def _fill_nba_injuries_if_missing(self) -> None:
-        """Refresh once when ``injuries:nba:latest`` is absent.
+        """Refresh once when the key is missing, or stale inside the window.
 
-        A present key, including a stale one, does not call. The
-        scheduled cron covers the stale case inside the slate window.
-        This is the only path that may call outside that window, and
-        it runs at most once per process.
+        A missing key refreshes even outside the slate window, so a
+        cold process is not blind. A present key that readers would
+        reject (older than six hours, or not an entries list) refreshes
+        only while ``nba_injury_refresh_in_window`` is true. Outside
+        the window that stale key is left in place. ``injury_status``
+        then stays null until the next in-window :07 or :37, which is
+        11:07 America/Chicago after an overnight restart. A tick missed
+        by less than 25 minutes still runs once, because the cron grace
+        was raised and coalesce is on. This is not called from the
+        HTTP daily-picks or /reads path. It runs at most once per
+        process. The 429 rule is unchanged: one retry, a wait of at
+        most 60 seconds, and the previous snapshot stays.
         """
         from app.services.cache import cache_service
 
@@ -408,7 +425,12 @@ class SchedulerService:
                 type(exc).__name__,
             )
             return
-        if raw is not None:
+        if raw is None:
+            await self._run_nba_injuries_refresh_job(force=True)
+            return
+        if not nba_injury_refresh_in_window():
+            return
+        if injury_snapshot_is_fresh(raw):
             return
         await self._run_nba_injuries_refresh_job(force=True)
 
@@ -422,7 +444,8 @@ class SchedulerService:
 
         The cron passes no arguments, so ``force`` is false and a tick
         outside the slate window returns before any HTTP client is
-        built. ``force`` is only the one startup fill for a missing key.
+        built. ``force`` is the one startup fill, for a missing key or
+        for a stale key inside the slate window.
         A snapshot younger than ``nba_injuries_refresh_minutes`` (30)
         is left in place so two ticks cannot land inside that gap.
         No API key means no call. Failures log the exception type only.
@@ -435,7 +458,9 @@ class SchedulerService:
 
         Args:
             now: Clock for the window check. None is the current time.
-            force: True only for the missing-key startup fill.
+            force: True only for the startup fill. The caller has
+                already decided the key is missing, or stale inside
+                the slate window.
 
         Returns:
             The stored body, or None when nothing was written.

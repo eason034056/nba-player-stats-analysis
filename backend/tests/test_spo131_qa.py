@@ -241,13 +241,27 @@ def test_unrecognized_status_is_kept_and_logged(caplog):
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.parametrize("query", ["Jaren Jackson Jr", "Jaren Jackson Jr.", "jaren jackson"])
+@pytest.mark.parametrize("query", ["Jaren Jackson Jr", "Jaren Jackson Jr."])
 def test_suffix_spellings_match_the_bdl_row(monkeypatch, query):
+    """Punctuation and case fold. The recorded row is Jaren Jackson Jr."""
     service = _seed({"fetched_at": _now_iso(), "entries": _fresh_entries()})
     historical = _agent_path(monkeypatch, service)
     availability = historical.get_availability_context(query, league="nba")
     assert availability["signal"] == "caution"
     assert availability["details"]["status"] == "Out"
+
+
+def test_stem_without_the_suffix_does_not_match_the_jr_row(monkeypatch):
+    """'jaren jackson' is not the recorded 'Jaren Jackson Jr.' row.
+
+    The old key dropped the suffix and this query came back Out. The
+    suffix stays, so the lookup is Healthy.
+    """
+    service = _seed({"fetched_at": _now_iso(), "entries": _fresh_entries()})
+    historical = _agent_path(monkeypatch, service)
+    availability = historical.get_availability_context("jaren jackson", league="nba")
+    assert availability["signal"] == "neutral"
+    assert availability["details"]["status"] == "Healthy"
 
 
 def test_accented_bdl_name_matches_the_ascii_query(monkeypatch):
