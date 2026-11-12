@@ -1,0 +1,123 @@
+# SPO-137b — BDL raw injury status tags
+
+- Ticket: SPO-137b
+- Branch: `feature/SPO-137b-raw-injury-tags`
+- Stacked on #78. This PR's base is `feature/SPO-135f-out-followups` @ `0a21f4e`.
+- Frontend only. WNBA screens and WNBA tests are unchanged. `/wnba` routes still build.
+
+## Summary
+
+The tag shows BDL's original injury word. `injury_status` is unchanged, so a Doubtful player still arrives there as Questionable. The displayed word is `injury_status_raw ?? injury_status`. Out exclusion still reads `injury_status` only, so Doubtful never blocks.
+
+`injury_status_raw` is on `DailyPick` only. The daily board, the event page, and Today already load those rows. Event reads, lineups, and the events `top_read` object do not grow an injury field.
+
+## Design
+
+Three ways the five words could read at a glance.
+
+1. One chip shape, a hue ramp from rose to green. Fast if you see hue. A colorblind reader cannot separate Out from Probable. Rejected.
+2. A structure ladder. Out is the only solid dark chip with white text. Doubtful and Questionable are tinted chips with a solid border, rose then amber. Day-To-Day is the neutral chip with a dashed border. Probable is a blue chip with a dotted border, so it does not sit next to the pale green LINEUP ALIGNED pill. The word is the label. Fill, border, and dash stay distinct without relying on hue alone. Picked.
+3. One neutral chip plus one to five severity ticks. The order is visible even if the words are new. The ticks are too wide beside "Questionable" and "24 games" at 390px. Rejected.
+
+Doubtful and Questionable share a bordered tint because every Tailwind border width in this app is 1px, so thickness cannot carry the step. Opaque chip fills stay readable on a white card and on the brand Today hero.
+
+Measured contrast for 11px text, all at least 4.5:1.
+
+| Word | Text | Fill | Ratio |
+|---|---|---|---|
+| Out | `#FFFFFF` | `#6E1E34` | 11.06 |
+| Doubtful | `#6E1E34` | `#F6E3EA` | 9.01 |
+| Questionable | `#5A5310` | `#F6F2D2` | 6.92 |
+| Day-To-Day | `#1D1530` | `#F1F0F3` | 15.39 |
+| Probable | `#12355B` | `#E7F2FB` | 10.97 |
+| Unknown | `#4A4458` | `#F1F0F3` | 8.19 |
+
+The Out card still dims the name and the prop. The chip is not inside that fade. A 60% opacity on white text over the dark fill drops the flattened contrast under 4.5, and the word disappeared in the first screenshots. The slip does the same. The name and the line fade. The Out chip and Remove stay full strength.
+
+The chip carries a screen-reader-only `Injury:` prefix. The visible word is unchanged.
+
+## Unknown words
+
+A word that is not one of the five is shown trimmed, in the casing BDL sent, on the neutral chip. Null, a blank raw with a null status, and Active show nothing. Active means available. A blank or whitespace-only raw falls back to the stored `injury_status` chip, so a blank raw beside Questionable shows Questionable.
+
+Matching casefolds and treats `-` and `_` as spaces, then collapses whitespace. `Day To Day`, `day_to_day`, and `day-to-day` are the Day-To-Day chip. An unknown word still keeps the casing BDL sent.
+
+## Changes
+
+| Area | File | Change |
+|---|---|---|
+| Type | `frontend/lib/schemas.ts` | `DailyPick.injury_status_raw` is `string \| null` and optional. Reads, lineups, and `top_read` are untouched. `api.ts` parses this schema. |
+| Words | `frontend/lib/injury-tag.ts` | One registry for the five words, the paint, and the display rule. |
+| Chip | `frontend/components/InjuryStatusTag.tsx` | The shared chip. `data-injury-tone` carries the tone. |
+| Styles | `frontend/tailwind.config.ts` | Content includes `lib`, so the chip classes in the registry are generated. |
+| Board | `frontend/lib/picks-board.ts`, `frontend/components/picks/DailyPicksBoard.tsx` | The tag uses the display word. Out still drops the bar, the percent, and the slip actions. The chip sits outside the dim. |
+| Event | `frontend/lib/event-page.ts`, `frontend/components/event/PlayerRail.tsx`, `frontend/components/event/OurRead.tsx` | The rail and the read take the word from the DailyPick already on the page. WNBA rows stay without a chip. |
+| Today | `frontend/lib/today-board.ts`, `frontend/components/TodayBoard.tsx` | Hero and game top read use the same DailyPick word. A top read with no matching pick looks the player up in the loaded picks. |
+| Slip | `frontend/lib/bet-slip-board.ts`, `frontend/components/betslip/BetSlipScreen.tsx` | The leg and the share card use the chip. The caption adds `Avg and all hit leave out Out legs.` only when an Out leg is excluded. |
+
+## Exclusion
+
+`isOutPick` and `isPlayerOutInGame` still key off `injury_status`. The raw word is not read. Doubtful with status Questionable keeps a percent, Add to Bet Slip, and Ask.
+
+The Doubtful sample is `injury_status: "Questionable"`, `injury_status_raw: "Doubtful"`, `combined_probability: 0.6095`. The card floors a combined probability, so it prints 60%. Half-away rounding of the same number is 61%. This ticket does not change that floor. The Out sample has both fields `"Out"` and `combined_probability: null`. Both rows are NBA picks in `frontend/test/fixtures/picks/nba-daily-picks-raw-injury.json`, with the DailyPick keys from backend `550b810`, including `position`, the opponent source fields, `p_over`, `p_under`, `season_mean`, and four signals. They are parsed with `dailyPickSchema`. A raw `out` beside a stored Questionable is not in that file. The backend casefolds that word into stored Out. The guard test builds that pair inline and labels it synthetic. A WNBA null pair is an inline case, not a player inside the NBA response.
+
+## QA patch
+
+`uploads/pr78_qa_tests1.patch` applied with `git am` and no edits. That commit is `43fa47c`. No assertion in the new file conflicted with this ticket.
+
+Two older tests were updated after that commit. The Ask assertion looked for `ask the agent`, and the button is labelled `Ask Agent about …`, so the assertion could not fail. It now matches `ask agent about`. The picks response helper spreads the parsed today fixture instead of hand-typing the wrapper. A board assertion that expected a Doubtful status with no raw field to render as Questionable now expects Doubtful, because the display word is the status itself when raw is missing.
+
+## Tests
+
+- `npx vitest run` from `frontend/`: 70 files, 594 tests, passed.
+- `npx tsc --noEmit`: passed.
+- `npm run lint`: passed, 0 warnings.
+- `npm run build`: passed. `/wnba`, `/wnba/event/[eventId]`, `/wnba/picks`, `/wnba/betslip`, and `/wnba/player/[name]` are in the route table.
+
+## QA follow-up
+
+A raw word of `out` can sit next to a stored status of Questionable, because the backend match for Out is case-sensitive. That pick is not excluded. The share card takes the same `outIds` set the slip average uses. The rail uses `listedOut`, which comes from `injury_status`. The chip word and style still come from the tag. A leg that is not excluded shows the tag beside the percent and the lean.
+
+`Out For Season` is stored as Out, so the row stays excluded. The chip keeps the raw words `Out For Season` on the board, the rail, the read, and the slip. A stored Out with no raw word still says Out.
+
+`uploads/pr85_qa_tests1.patch` applied with `git am` and no edits. That commit is `8b23034`. Its seven tests pass, including the share-card percent and the rail lean.
+
+Probable uses a dotted blue chip (`#12355B` on `#E7F2FB`) so it is not the pale green LINEUP ALIGNED pill. The chip has a screen-reader-only `Injury:` prefix, clipped inside the chip so the prefix does not widen the page.
+
+The contrast check reads the colours off the rendered chip. A few tests still look at implementation details. The colour check matches `bg-[#…]` and `text-[#…]`, the Probable check looks for `border-dotted`, and the prefix check looks for `sr-only`.
+
+`npx vitest run` is 71 files and 601 tests. `npx tsc --noEmit`, `npm run lint`, and `npm run build` passed. `/wnba` routes stay in the route table.
+
+`uploads/pr85_qa_tests2.patch` applied with `git am` and no edits. That commit is `230a99f`. The file reads four picks from the raw injury fixture. Picks three and four were the WNBA row and the raw `out` row, and this follow-up removed both. The file was not edited. Three of its tests then fail because those picks are undefined. The other four still pass. `npx vitest run` is 72 files and 610 tests, with those 3 failures. `npx tsc --noEmit`, `npm run lint`, and `npm run build` passed. `/wnba` routes stay in the route table.
+
+## Screenshots
+
+`next start` against a local mock. Five Heat props on one game. Herro is Questionable, Adebayo is Doubtful (status Questionable), Martin is Probable, Lowry is Day-To-Day, Butler is Out. The slip was seeded with Butler and Adebayo. No dev overlay. The mobile tab bar is in normal flow at the bottom of the 390 shots so it does not sit on the cards.
+
+Before, on `43fa47c`, Adebayo's tag is Questionable, Probable and Day-To-Day are hidden, and the slip caption does not mention Out legs.
+
+After, the board shows all five words, the event rail and the read show Adebayo as Doubtful, and the slip caption ends with `Avg and all hit leave out Out legs.` The picks and event shots were retaken after Probable moved to the dotted blue chip.
+
+![Picks before, 1440](assets/SPO-137b/picks-before-1440.png)
+
+![Picks before, 390](assets/SPO-137b/picks-before-390.png)
+
+![Picks after, 1440](assets/SPO-137b/picks-after-1440.png)
+
+![Picks after, 390](assets/SPO-137b/picks-after-390.png)
+
+![Event before, 1440](assets/SPO-137b/event-before-1440.png)
+
+![Event before, 390](assets/SPO-137b/event-before-390.png)
+
+![Event after, 1440](assets/SPO-137b/event-after-1440.png)
+
+![Event after, 390](assets/SPO-137b/event-after-390.png)
+
+![Slip before, 1440](assets/SPO-137b/slip-before-1440.png)
+
+![Slip before, 390](assets/SPO-137b/slip-before-390.png)
+
+![Slip after, 1440](assets/SPO-137b/slip-after-1440.png)
+
+![Slip after, 390](assets/SPO-137b/slip-after-390.png)
