@@ -736,8 +736,12 @@ case "$joined" in
       prev="$arg"
     done
     # sh -c is also a -c argument and is not the query. Stdin carries the
-    # query when psql is not given its own -c.
-    if ! printf '%s' "$sql" | grep -q 'SELECT'; then
+    # query when psql is not given its own -c. A real `docker exec -i` /
+    # `docker run -i` still reads stdin for a -c query and would drop the
+    # rest of a caller's name list, so this fake drains that stdin too.
+    if printf '%s' "$sql" | grep -q 'SELECT'; then
+      cat >/dev/null || true
+    else
       incoming=$(cat)
       if [ -n "$incoming" ]; then
         sql="$incoming"
@@ -753,7 +757,7 @@ case "$joined" in
     case "$sql" in
       *last_value*) echo 9 ;;
       *sequencename*) echo player_projections_id_seq ;;
-      *information_schema.tables*) echo player_projections ;;
+      *information_schema.tables*) printf '%s\n' player_projections second_table ;;
       *quote_ident*) echo '"player_projections"' ;;
       *information_schema.columns*) echo t ;;
       *'count(*)'*) echo 4 ;;
