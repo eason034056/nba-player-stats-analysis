@@ -478,7 +478,7 @@ export function EventDetail({ league }: { league: League }) {
   );
 
   return (
-    <div className="mx-auto flex max-w-[1200px] flex-col gap-5 px-4 py-6 md:px-8">
+    <div className="mx-auto flex w-full min-w-0 max-w-[1200px] flex-col gap-5 px-4 py-6 md:px-8">
       <EventHeader
         league={league}
         awayName={
@@ -673,7 +673,13 @@ export function EventDetail({ league }: { league: League }) {
             <div className={nba ? "max-md:hidden" : show("filters")}>{renderFilters()}</div>
           </section>
 
-          <section className={cn("order-5 rounded-[24px] border border-line bg-white p-4 md:col-start-2 md:p-7", show("odds"))}>
+          <section
+            data-testid="odds-panel"
+            className={cn(
+              "order-5 min-w-0 max-w-full rounded-[24px] border border-line bg-white p-4 md:col-start-2 md:p-7",
+              show("odds"),
+            )}
+          >
             <div className="mb-4 flex flex-wrap items-baseline justify-between gap-2">
               <h3 className="text-lg font-bold text-ink">Sportsbook prices</h3>
               <p className="text-[13px] text-muted">
