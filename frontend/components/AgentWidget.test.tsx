@@ -153,7 +153,7 @@ describe("AgentWidget", () => {
     expect(send.className).not.toContain("text-on-dark");
     expect(dialog).toHaveAttribute("data-layout", "drawer");
     expect(
-      within(dialog).getByText(/checks market, form, projection and matchup/i),
+      within(dialog).getByText(/checks market, form, matchup and defense rank, and rest/i),
     ).toBeInTheDocument();
     expect(dialog.querySelector('[class*="fff7e5"]')).not.toBeInTheDocument();
 

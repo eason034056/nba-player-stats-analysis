@@ -723,13 +723,13 @@ export function EventDetail({ league }: { league: League }) {
           ) : null}
 
           {league === "wnba" && playerName ? (
-          <div className={cn("order-7 md:col-start-2", show("read"))}>
-            <SectionUnavailable
-              eyebrow="Today's Projection"
-              title="Player projection"
-              message="Projection modeling is not available for WNBA yet. This panel will populate once the WNBA projection source ships."
-            />
-          </div>
+            <div className={cn("order-7 md:col-start-2", show("read"))}>
+              <SectionUnavailable
+                eyebrow="Today's Projection"
+                title="Player projection"
+                message="Projection modeling is not available for WNBA yet. This panel will populate once the WNBA projection source ships."
+              />
+            </div>
           ) : null}
       </div>
 

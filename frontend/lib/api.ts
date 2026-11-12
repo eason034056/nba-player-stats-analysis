@@ -418,7 +418,7 @@ export async function getPlayerDDHistory(
 // 💡 WNBA 端點為 NBA 的姊妹路由：相同 schema、相同回應格式。
 // 之所以不參數化 getCSVPlayers/getPlayerHistory 加 league 參數，是因為
 // Phase 2-6 還會引入 /api/wnba/events、/api/wnba/props 等更多端點，
-// 而 NBA 端點已有 daily-picks/projections 等不在 WNBA 範疇的調用，
+// 而 NBA 端點已有 daily-picks、lineups 等不在 WNBA 範疇的調用，
 // 強行統一介面會 leak 出兩邊都沒實作的功能。並列函式比假裝對稱乾淨。
 
 /**
@@ -528,7 +528,7 @@ export async function getWNBAPlayerDDHistory(
 // 💡 Mirrors the NBA odds endpoints. Response shapes are sport-agnostic
 // (we reuse `eventsResponseSchema`, `noVigResponseSchema`, `playerSuggestResponseSchema`).
 // Three separate exports rather than a league-parameterized helper, matching
-// SPO-32's decision: NBA has daily-picks / projections / lineups that do
+// SPO-32's decision: NBA has daily-picks / lineups that do
 // not exist on WNBA, so a unified API would lie about the surface.
 
 /**

@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import { screen } from "@testing-library/react";
+import { screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 
@@ -217,7 +217,7 @@ describe("DailyPicksBoard", () => {
     expect(card.textContent ?? "").not.toMatch(/Proj|Edge|\bmin\b|NaN|—|Questionable|Lineup|Projection|Injury/);
   });
 
-  it("renders injury status and lineup confirmation when they are present", () => {
+  it("renders an Out or Questionable tag and no lineup-confirmed tag", () => {
     const marked = {
       ...picks.picks[0],
       tier: "Strong play" as const,
@@ -231,6 +231,67 @@ describe("DailyPicksBoard", () => {
     };
     renderBoard({ picks: [marked], teams: ["MIA"], showLineup: false });
     expect(screen.getByText("Questionable")).toBeInTheDocument();
-    expect(screen.getByText("Lineup confirmed")).toBeInTheDocument();
+    expect(screen.queryByText("Lineup confirmed")).not.toBeInTheDocument();
+  });
+
+  it("dims an Out pick at the end with no bar, percent, or slip, and leaves Questionable unchanged", async () => {
+    const user = userEvent.setup();
+    const base = picks.picks[0];
+    const out = {
+      ...base,
+      player_name: "Jimmy Butler",
+      tier: null,
+      combined_probability: null,
+      probability: 0.91,
+      has_projection: false,
+      projected_value: null,
+      projected_minutes: null,
+      edge: null,
+      injury_status: "Out",
+      lineup_confirmed: null,
+    };
+    const questionable = {
+      ...base,
+      injury_status: "Questionable",
+      tier: "Playable" as const,
+      combined_probability: 0.74,
+      probability: 0.66,
+      lineup_confirmed: true as const,
+    };
+    const onToggleSlip = vi.fn();
+    renderBoard({
+      picks: [out, questionable],
+      teams: ["MIA"],
+      showLineup: true,
+      onToggleSlip,
+      onAddReverse: vi.fn(),
+      onAsk: vi.fn(),
+    });
+
+    expect(screen.getByText("picks").previousElementSibling).toHaveTextContent("1");
+    expect(screen.getByText("strong").previousElementSibling).toHaveTextContent("1");
+
+    const cards = screen.getAllByRole("article");
+    expect(cards).toHaveLength(2);
+    expect(cards[0]).toHaveTextContent("Bam Adebayo");
+    expect(cards[0]).toHaveTextContent("74%");
+    expect(cards[0]).toHaveTextContent("Questionable");
+    expect(cards[0].className).not.toContain("opacity-60");
+    expect(within(cards[0]).getByRole("button", { name: "Add to Bet Slip" })).toBeInTheDocument();
+
+    expect(cards[1]).toHaveTextContent("Jimmy Butler");
+    expect(cards[1]).toHaveTextContent("Out");
+    expect(cards[1].className).toContain("opacity-60");
+    expect(cards[1]).not.toHaveTextContent("%");
+    expect(cards[1]).not.toHaveTextContent("—");
+    expect(cards[1]).not.toHaveTextContent("Lineup");
+    expect(cards[1]).not.toHaveTextContent("Def");
+    expect(cards[1].querySelector("a")).toHaveAttribute("href", expect.stringContaining("/event/"));
+    expect(within(cards[1]).queryByRole("button")).not.toBeInTheDocument();
+    expect(onToggleSlip).not.toHaveBeenCalled();
+
+    await user.click(screen.getByRole("button", { name: "Strong ≥70%" }));
+    expect(screen.queryByText("Jimmy Butler")).not.toBeInTheDocument();
+    expect(screen.getByText("Bam Adebayo")).toBeInTheDocument();
   });
 });

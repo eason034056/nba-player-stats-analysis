@@ -12,6 +12,7 @@ import {
   getWnbaDailyPicks,
 } from "@/lib/api";
 import type { LeagueSegment } from "@/lib/event-detail-link";
+import { isOutPick } from "@/lib/picks-board";
 import {
   slateEyebrow,
   todayGames,
@@ -28,6 +29,16 @@ const TIER_CLASS = {
   lean: "bg-lean text-brand",
   pass: "bg-pass text-ink-2",
 } as const;
+
+function picksShownCount(data: {
+  total_picks?: number | null;
+  picks?: { injury_status?: string | null }[];
+}): number | null {
+  const total = data.total_picks;
+  if (typeof total !== "number" || !Number.isFinite(total)) return null;
+  const out = (data.picks ?? []).filter((pick) => isOutPick(pick)).length;
+  return Math.max(0, total - out);
+}
 
 function errorText(error: unknown): string {
   if (error instanceof Error && error.message) return error.message;
@@ -461,7 +472,7 @@ export function TodayBoard({ league }: { league: LeagueSegment }) {
     slateDate,
   );
   const picksHref = league === "wnba" ? "/wnba/picks" : "/picks";
-  const picksCount = picksQuery.isSuccess ? picksQuery.data.total_picks : null;
+  const picksCount = picksQuery.isSuccess ? picksShownCount(picksQuery.data) : null;
   const picksLabel = picksQuery.isLoading
     ? "Loading reads"
     : picksQuery.isError
@@ -486,7 +497,7 @@ export function TodayBoard({ league }: { league: LeagueSegment }) {
     picksLabel,
     blurb:
       league === "nba"
-        ? "Each prop gets one probability, built from market prices, recent form, projection and matchup. Start with the strongest calls, or open any game."
+        ? "Each prop gets one probability, built from market prices, recent form, all-game history, and matchup. Start with the strongest calls, or open any game."
         : "Each card is a historical hit rate from tonight's board. Start with the strongest calls, or open any game.",
   };
 
