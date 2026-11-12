@@ -1,5 +1,6 @@
 "use client";
 
+import { InjuryStatusTag } from "@/components/InjuryStatusTag";
 import type { LeagueSegment } from "@/lib/event-detail-link";
 import { joinMeta, type EventPlayerRow } from "@/lib/event-page";
 import { playerLastName } from "@/lib/today-board";
@@ -88,18 +89,27 @@ export function PlayerRail({
                     <span className="hidden md:inline">{row.name}</span>
                   </span>
                   {meta ? <span className="hidden text-xs text-muted md:block">{meta}</span> : null}
+                  {row.injury && row.injury.tone !== "out" ? (
+                    <span className="mt-1 block">
+                      <InjuryStatusTag tag={row.injury} />
+                    </span>
+                  ) : null}
                 </span>
                 <span className="font-mono text-xs font-semibold text-muted md:text-right md:text-[13px]">
                   {row.lineText}
                 </span>
-                <span
-                  className={cn(
-                    "w-fit whitespace-nowrap rounded-[6px] px-1.5 py-0.5 font-mono text-[11px] font-bold md:w-full md:rounded-lg md:px-1 md:py-1.5 md:text-center md:text-xs",
-                    pill,
-                  )}
-                >
-                  {row.leanText}
-                </span>
+                {row.injury?.tone === "out" ? (
+                  <InjuryStatusTag tag={row.injury} />
+                ) : (
+                  <span
+                    className={cn(
+                      "w-fit whitespace-nowrap rounded-[6px] px-1.5 py-0.5 font-mono text-[11px] font-bold md:w-full md:rounded-lg md:px-1 md:py-1.5 md:text-center md:text-xs",
+                      pill,
+                    )}
+                  >
+                    {row.leanText}
+                  </span>
+                )}
               </button>
             );
           })}

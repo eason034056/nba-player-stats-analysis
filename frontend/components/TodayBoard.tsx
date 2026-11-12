@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { useQuery } from "@tanstack/react-query";
 
+import { InjuryStatusTag } from "@/components/InjuryStatusTag";
 import { useAgentWidget } from "@/contexts/AgentWidgetContext";
 import {
   getDailyPicks,
@@ -77,6 +78,11 @@ function ReadFace({
       </div>
       <div>
         <div className="text-[17px] font-bold tracking-[-0.01em]">{read.player}</div>
+        {read.injury ? (
+          <div className="mt-2">
+            <InjuryStatusTag tag={read.injury} />
+          </div>
+        ) : null}
         <div className={cn("mt-0.5 text-gray-light", tone === "flat" ? "text-xs" : "text-[13px]")}>
           {read.matchup}
         </div>
@@ -101,6 +107,11 @@ function GameTopRead({ game }: { game: TodayGameCard }) {
         <div className="mt-1 text-sm font-semibold text-ink">
           {game.topText ?? "No read on this game"}
         </div>
+        {game.injury ? (
+          <div className="mt-1.5">
+            <InjuryStatusTag tag={game.injury} />
+          </div>
+        ) : null}
       </div>
       {game.showProbability && game.topProbabilityText ? (
         <div
@@ -282,8 +293,11 @@ function GamesBlock({
                   <span className="w-9 font-mono text-xs font-bold text-brand">{game.homeAbbr}</span>
                   <span className="truncate text-[15px] font-bold">{game.homeName}</span>
                 </div>
-                <div className="mt-1 truncate text-xs text-muted">
-                  {game.topText ? `Top read · ${game.topText}` : "Top read · No read on this game"}
+                <div className="mt-1 flex items-center gap-2">
+                  <span className="truncate text-xs text-muted">
+                    {game.topText ? `Top read · ${game.topText}` : "Top read · No read on this game"}
+                  </span>
+                  {game.injury ? <InjuryStatusTag tag={game.injury} /> : null}
                 </div>
               </div>
               <div className="flex shrink-0 flex-col items-end gap-2">
@@ -478,10 +492,10 @@ export function TodayBoard({ league }: { league: LeagueSegment }) {
     games: games.map((game) => {
       if (game.topSource === "event") return game;
       if (picksQuery.isLoading) {
-        return { ...game, topText: "Loading the top read", topProbabilityText: null, showProbability: false, tier: null };
+        return { ...game, topText: "Loading the top read", topProbabilityText: null, showProbability: false, tier: null, injury: null };
       }
       if (picksQuery.isError) {
-        return { ...game, topText: "Top read unavailable", topProbabilityText: null, showProbability: false, tier: null };
+        return { ...game, topText: "Top read unavailable", topProbabilityText: null, showProbability: false, tier: null, injury: null };
       }
       return game;
     }),

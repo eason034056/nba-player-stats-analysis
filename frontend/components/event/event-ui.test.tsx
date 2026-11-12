@@ -114,6 +114,7 @@ describe("PlayerRail", () => {
       hasLean: true,
       probability: 0.72,
       tier: null,
+      injury: null,
     },
     {
       name: "Tyler Herro",
@@ -124,6 +125,7 @@ describe("PlayerRail", () => {
       hasLean: false,
       probability: null,
       tier: null,
+      injury: null,
     },
   ];
 

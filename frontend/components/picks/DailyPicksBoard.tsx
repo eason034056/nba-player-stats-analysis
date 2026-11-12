@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 
 import { DatePicker } from "@/components/DatePicker";
+import { InjuryStatusTag } from "@/components/InjuryStatusTag";
 import { LineupStatusBadge } from "@/components/LineupStatusBadge";
 import { PickContextMenu } from "@/components/PickContextMenu";
 import type { LeagueSegment } from "@/lib/event-detail-link";
@@ -18,6 +19,7 @@ import {
   picksEyebrow,
   sortPicks,
   type ConfidenceFilter,
+  type PickTag,
 } from "@/lib/picks-board";
 import type { DailyPick, TeamLineup } from "@/lib/schemas";
 import { metricShort } from "@/lib/today-board";
@@ -377,10 +379,9 @@ export function DailyPicksBoard({
                   className={cn(
                     "flex flex-col gap-3 rounded-[18px] border bg-white px-3.5 py-3.5 md:flex-row md:flex-wrap md:items-center md:gap-x-5 md:rounded-[20px] md:px-[18px] md:py-4",
                     sameSide ? "border-brand" : "border-line",
-                    row.dimmed && "opacity-60",
                   )}
                 >
-                  <div className="flex min-w-0 flex-1 items-center gap-3 md:basis-[240px]">
+                  <div className={cn("flex min-w-0 flex-1 items-center gap-3 md:basis-[240px]", row.dimmed && "opacity-60")}>
                     <div className="w-[22px] shrink-0 font-mono text-[13px] font-bold text-muted">
                       {row.rank}
                     </div>
@@ -401,7 +402,7 @@ export function DailyPicksBoard({
                       row.dimmed ? "md:flex-1 md:basis-[220px]" : "flex-1 basis-[220px]",
                     )}
                   >
-                    <div className="text-[15px] font-bold">{row.propText}</div>
+                    <div className={cn("text-[15px] font-bold", row.dimmed && "opacity-60")}>{row.propText}</div>
                     {slipCaption?.(pick) ? (
                       <p className="text-xs leading-5 text-muted">{slipCaption(pick)}</p>
                     ) : null}
@@ -528,7 +529,7 @@ function TagList({
   isLineupLoading,
   isLineupError,
 }: {
-  tags: { text: string }[];
+  tags: PickTag[];
   pick: DailyPick;
   lineupFor?: (pick: DailyPick) => TeamLineup | null | undefined;
   showLineup: boolean;
@@ -545,14 +546,18 @@ function TagList({
           isError={isLineupError}
         />
       ) : null}
-      {tags.map((tag) => (
-        <span
-          key={tag.text}
-          className="rounded-md bg-[#F1F0F3] px-2 py-0.5 text-[11px] font-semibold text-[#4A4458]"
-        >
-          {tag.text}
-        </span>
-      ))}
+      {tags.map((tag) =>
+        tag.injury ? (
+          <InjuryStatusTag key={tag.text} tag={tag.injury} />
+        ) : (
+          <span
+            key={tag.text}
+            className="rounded-md bg-[#F1F0F3] px-2 py-0.5 text-[11px] font-semibold text-[#4A4458]"
+          >
+            {tag.text}
+          </span>
+        ),
+      )}
     </div>
   );
 }

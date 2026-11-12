@@ -208,7 +208,7 @@ describe("DailyPicksBoard with an Out pick", () => {
     expect(screen.getByRole("button", { name: /view details/i })).toBeInTheDocument();
   });
 
-  it("shows a lower-case Out under All only, and a Doubtful pick under Strong with a Questionable tag", async () => {
+  it("shows a lower-case Out under All only, and a Doubtful pick under Strong with its own tag", async () => {
     const user = userEvent.setup();
     const out = withStatus({ ...boardPick, player_name: "Jimmy Butler", tier: "Strong play", combined_probability: 0.9 }, "out");
     const doubtful = withStatus(
@@ -219,9 +219,8 @@ describe("DailyPicksBoard with an Out pick", () => {
 
     const cards = screen.getAllByRole("article");
     expect(cards.map((card) => within(card).queryByText("Jimmy Butler") != null)).toEqual([false, true]);
-    expect(cards[0]).toHaveTextContent("Questionable");
+    expect(cards[0]).toHaveTextContent("Doubtful");
     expect(cards[0]).toHaveTextContent("72%");
-    expect(cards[0]).not.toHaveTextContent("Doubtful");
 
     await user.click(screen.getByRole("button", { name: "Strong ≥70%" }));
     expect(screen.queryByText("Jimmy Butler")).not.toBeInTheDocument();

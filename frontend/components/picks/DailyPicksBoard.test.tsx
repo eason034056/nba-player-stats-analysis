@@ -269,7 +269,9 @@ describe("DailyPicksBoard", () => {
 
     expect(cards[1]).toHaveTextContent("Jimmy Butler");
     expect(cards[1]).toHaveTextContent("Out");
-    expect(cards[1].className).toContain("opacity-60");
+    expect(cards[1].className).not.toContain("opacity-60");
+    expect(cards[1].querySelector(".opacity-60")).not.toBeNull();
+    expect(within(cards[1]).getByText("Out").closest(".opacity-60")).toBeNull();
     expect(cards[1]).not.toHaveTextContent("%");
     expect(cards[1]).not.toHaveTextContent("—");
     expect(cards[1]).not.toHaveTextContent("Lineup");

@@ -7,6 +7,13 @@
  */
 
 import { buildEventDetailHref, type LeagueSegment } from "./event-detail-link";
+import {
+  canonicalInjuryTag,
+  injuryKey,
+  injurySeverity,
+  injuryTag,
+  type InjuryTag,
+} from "./injury-tag";
 import { metricToMarket } from "./metric-to-market";
 import { boardRate, nbaTierFace } from "./nba-card";
 import { formatPercent } from "./player-dd";
@@ -49,6 +56,7 @@ const TIER_SHORT: Record<ReadTierName, string> = {
 
 export interface PickTag {
   text: string;
+  injury?: InjuryTag;
 }
 
 export interface PickRowModel {
@@ -109,18 +117,7 @@ function finite(value: number | null | undefined): value is number {
   return typeof value === "number" && Number.isFinite(value);
 }
 
-/** Board tags for Out and Questionable. A literal Doubtful is shown as Questionable. */
-const INJURY_TAG_TEXT: Record<string, string> = {
-  out: "Out",
-  questionable: "Questionable",
-  doubtful: "Questionable",
-};
-
-function injuryKey(status: string | null | undefined): string {
-  return status?.trim().toLowerCase() ?? "";
-}
-
-/** True when the stored status is Out. Matching ignores case and surrounding space. */
+/** True when the stored status is Out. The raw BDL word is not read, so Doubtful cannot block. */
 export function isOutPick(pick: { injury_status?: string | null }): boolean {
   return injuryKey(pick.injury_status) === "out";
 }
@@ -129,6 +126,19 @@ export function isOutPick(pick: { injury_status?: string | null }): boolean {
  * True when any loaded row for this player in this game is Out.
  * One Out line blocks every other line and market. Doubtful does not.
  */
+function samePlayerInGame(
+  pick: { event_id?: string | null; player_name?: string | null },
+  eventId: string,
+  playerName: string,
+): boolean {
+  const event = eventId.trim();
+  const name = playerName.trim().toLowerCase();
+  if (!event || !name) return false;
+  const pickEvent = pick.event_id?.trim() ?? "";
+  const pickName = pick.player_name?.trim().toLowerCase() ?? "";
+  return pickEvent === event && pickName === name;
+}
+
 export function isPlayerOutInGame(
   picks: readonly {
     event_id?: string | null;
@@ -138,18 +148,29 @@ export function isPlayerOutInGame(
   eventId: string,
   playerName: string,
 ): boolean {
-  const event = eventId.trim();
-  const name = playerName.trim().toLowerCase();
-  if (!event || !name) return false;
-  return picks.some((pick) => {
-    const pickEvent = pick.event_id?.trim() ?? "";
-    const pickName = pick.player_name?.trim().toLowerCase() ?? "";
-    return pickEvent === event && pickName === name && isOutPick(pick);
-  });
+  return picks.some((pick) => samePlayerInGame(pick, eventId, playerName) && isOutPick(pick));
 }
 
-function injuryTagText(status: string | null | undefined): string | null {
-  return INJURY_TAG_TEXT[injuryKey(status)] ?? null;
+/** Strongest tag for this player in this game. An Out row wins, and Doubtful does not. */
+export function injuryTagForPlayer(
+  picks: readonly {
+    event_id?: string | null;
+    player_name?: string | null;
+    injury_status?: string | null;
+    injury_status_raw?: string | null;
+  }[],
+  eventId: string,
+  playerName: string,
+): InjuryTag | null {
+  const rows = picks.filter((pick) => samePlayerInGame(pick, eventId, playerName));
+  if (rows.some((pick) => isOutPick(pick))) return canonicalInjuryTag("out");
+  let best: InjuryTag | null = null;
+  for (const row of rows) {
+    const tag = injuryTag(row.injury_status_raw, row.injury_status);
+    if (!tag) continue;
+    if (!best || injurySeverity(tag) < injurySeverity(best)) best = tag;
+  }
+  return best;
 }
 
 /**
@@ -171,8 +192,8 @@ export function pickTags(pick: DailyPick): PickTag[] {
   if (finite(pick.projected_minutes)) {
     tags.push({ text: `${Math.round(pick.projected_minutes)} min` });
   }
-  const injury = injuryTagText(pick.injury_status);
-  if (injury) tags.push({ text: injury });
+  const injury = injuryTag(pick.injury_status_raw, pick.injury_status);
+  if (injury) tags.push({ text: injury.text, injury });
   if (pick.lineup_confirmed === false) tags.push({ text: "Lineup unconfirmed" });
   const rank = finite(pick.opponent_position_rank)
     ? pick.opponent_position_rank
@@ -236,7 +257,7 @@ export function buildPickRows(
       tier = null;
       probabilityText = "";
       barRate = Number.NaN;
-      tags = tags.filter((tag) => tag.text === "Out");
+      tags = tags.filter((tag) => tag.injury != null);
     }
     const bar = Number.isFinite(barRate) ? Math.max(0, Math.min(100, barRate * 100)) : 0;
     return {

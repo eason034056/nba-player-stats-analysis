@@ -532,6 +532,8 @@ export const dailyPickSchema = z.object({
   opponent_rank: z.number().nullable().optional(),         // 對手整體防守排名。方向見 backend/app/models/schemas.py 第 514–516 行：1 = 最弱
   opponent_position_rank: z.number().nullable().optional(),// 對手對該位置防守排名。同一契約：1 = 最弱
   injury_status: z.string().nullable().optional(),         // 傷病狀態（Free Trial 為 null）
+  // BDL's original word. Missing on older caches. Null when injury_status is null.
+  injury_status_raw: z.string().nullable().optional(),
   lineup_confirmed: z.boolean().nullable().optional(),     // 先發是否已確認
   position: z.string().nullable().optional().catch(null),
   // Display keeps Strong play, Playable, and Lean. Pass stays on the payload

@@ -1,5 +1,6 @@
 "use client";
 
+import { InjuryStatusTag } from "@/components/InjuryStatusTag";
 import type { LeagueSegment } from "@/lib/event-detail-link";
 import {
   webOtherCopy,
@@ -165,14 +166,17 @@ export function OurRead({
           <>
             <div className="flex flex-col gap-2">
               {model.player ? (
-                <div className="text-[15px] font-semibold text-muted">
-                  {model.player}
-                  {model.meta ? (
-                    <>
-                      <span className="md:hidden">{` · ${model.meta.split(",")[0]?.trim()}`}</span>
-                      <span className="hidden md:inline">{` · ${model.meta}`}</span>
-                    </>
-                  ) : null}
+                <div className="flex flex-wrap items-center gap-2 text-[15px] font-semibold text-muted">
+                  <span>
+                    {model.player}
+                    {model.meta ? (
+                      <>
+                        <span className="md:hidden">{` · ${model.meta.split(",")[0]?.trim()}`}</span>
+                        <span className="hidden md:inline">{` · ${model.meta}`}</span>
+                      </>
+                    ) : null}
+                  </span>
+                  {model.injury ? <InjuryStatusTag tag={model.injury} /> : null}
                 </div>
               ) : null}
               <div
