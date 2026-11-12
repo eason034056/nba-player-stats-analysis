@@ -24,8 +24,9 @@ import React, { useState, useRef, useEffect, useCallback, type ReactNode } from 
 import { createPortal } from "react-dom";
 import { useRouter } from "next/navigation";
 import { Plus, Minus, ExternalLink, ClipboardList, ArrowLeftRight } from "lucide-react";
-import { useBetSlip, type BetSlipPick } from "@/contexts/BetSlipContext";
+import { useBetSlip } from "@/contexts/BetSlipContext";
 import { useWnbaBetSlip } from "@/contexts/WnbaBetSlipContext";
+import { reverseSlipPick, slipPickFromDaily } from "@/lib/bet-slip-board";
 import { buildEventDetailHref } from "@/lib/event-detail-link";
 import { metricToMarket } from "@/lib/metric-to-market";
 import { type DailyPick } from "@/lib/schemas";
@@ -176,21 +177,7 @@ export function PickContextMenu({
       // Remove
       removePick(`${pick.player_name}-${pick.metric}`);
     } else {
-      // Add
-      const betSlipPick: Omit<BetSlipPick, "id" | "added_at"> = {
-        player_name: pick.player_name,
-        player_team: pick.player_team || "",
-        event_id: pick.event_id,
-        home_team: pick.home_team,
-        away_team: pick.away_team,
-        commence_time: pick.commence_time,
-        metric: pick.metric,
-        threshold: pick.threshold,
-        direction: pick.direction,
-        probability: pick.probability,
-        n_games: pick.n_games,
-      };
-      addPick(betSlipPick);
+      addPick(slipPickFromDaily(pick, pick.direction, pick.probability));
     }
     closeMenu();
   }, [isAdded, pick, addPick, removePick, closeMenu]);
@@ -218,26 +205,10 @@ export function PickContextMenu({
   const handleAddReverseBet = useCallback(() => {
     const id = `${pick.player_name}-${pick.metric}`;
 
-    // Remove existing pick if any
     removePick(id);
-
-    // Add reverse pick
-    const betSlipPick: Omit<BetSlipPick, "id" | "added_at"> = {
-      player_name: pick.player_name,
-      player_team: pick.player_team || "",
-      event_id: pick.event_id,
-      home_team: pick.home_team,
-      away_team: pick.away_team,
-      commence_time: pick.commence_time,
-      metric: pick.metric,
-      threshold: pick.threshold,
-      direction: reverseDirection,           // Opposite direction
-      probability: reverseProbability,       // Opposite probability
-      n_games: pick.n_games,
-    };
-    addPick(betSlipPick);
+    addPick(reverseSlipPick(pick));
     closeMenu();
-  }, [pick, reverseDirection, reverseProbability, addPick, removePick, closeMenu]);
+  }, [pick, addPick, removePick, closeMenu]);
 
   /**
    * Handle viewing detailed data

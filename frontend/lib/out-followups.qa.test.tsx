@@ -292,11 +292,9 @@ describe("board Remove on an Out card already in the slip", () => {
     const user = userEvent.setup();
     const out = { ...boardPick, player_name: "Jimmy Butler", injury_status: "OUT" };
     const onToggleSlip = vi.fn();
-    const onAddReverse = vi.fn();
-    const onAsk = vi.fn();
     renderWithProviders(
       <DailyPicksBoard
-        {...boardProps({ picks: [out], slipDirection: () => out.direction, onToggleSlip, onAddReverse, onAsk })}
+        {...boardProps({ picks: [out], slipDirection: () => out.direction, onToggleSlip })}
       />,
     );
 
@@ -306,7 +304,5 @@ describe("board Remove on an Out card already in the slip", () => {
     await user.click(buttons[0]);
     expect(onToggleSlip).toHaveBeenCalledTimes(1);
     expect(onToggleSlip.mock.calls[0][0]).toMatchObject({ player_name: "Jimmy Butler", metric: out.metric });
-    expect(onAddReverse).not.toHaveBeenCalled();
-    expect(onAsk).not.toHaveBeenCalled();
   });
 });

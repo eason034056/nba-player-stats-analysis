@@ -165,7 +165,7 @@ describe("Out For Season, stored as Out", () => {
 
   it("blocks the pick and shows the BDL word on the board", () => {
     expect(isOutPick(season)).toBe(true);
-    renderWithProviders(<DailyPicksBoard {...boardProps({ picks: [season], onAsk: vi.fn() })} />);
+    renderWithProviders(<DailyPicksBoard {...boardProps({ picks: [season] })} />);
     const card = screen.getByRole("article");
     expect(within(card).getByText("Out For Season")).toBeInTheDocument();
     expect(card).not.toHaveTextContent("%");

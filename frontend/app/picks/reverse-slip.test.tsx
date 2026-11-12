@@ -82,7 +82,9 @@ function WnbaAdder() {
   );
 }
 
-function stored(key: string): Array<{ player_name?: string; direction?: string; probability?: number }> {
+function stored(
+  key: string,
+): Array<{ player_name?: string; direction?: string; probability?: number; rate_basis?: string }> {
   const raw = window.localStorage.getItem(key);
   return raw ? (JSON.parse(raw) as Array<{ player_name?: string; direction?: string; probability?: number }>) : [];
 }
@@ -118,7 +120,9 @@ describe("reverse slip and league storage keys", () => {
     const card = (await screen.findByRole("link", { name: "Bam Adebayo" })).closest("article");
     expect(card).not.toBeNull();
     if (!card) return;
-    await user.click(within(card).getByRole("button", { name: "Add Under" }));
+    expect(within(card).getAllByRole("button").map((button) => button.textContent)).toEqual(["+ Slip"]);
+    await user.pointer([{ keys: "[MouseRight]", target: card }]);
+    await user.click(await screen.findByRole("button", { name: /Bet Reverse: Under 18\.5/ }));
 
     const shown = formatPercent(1 - bam.probability);
     expect(shown).toBe("28%");
@@ -132,6 +136,7 @@ describe("reverse slip and league storage keys", () => {
       expect(legs[0]?.player_name).toBe("Bam Adebayo");
       expect(legs[0]?.direction).toBe("under");
       expect(legs[0]?.probability).toBe(1 - bam.probability);
+      expect(legs[0]?.rate_basis).toBe("complement");
     });
     expect(stored(WNBA_KEY).map((leg) => leg.player_name)).toEqual(["A'ja Wilson"]);
     expect(window.localStorage.getItem("nba_betslip_picks")).toBeNull();

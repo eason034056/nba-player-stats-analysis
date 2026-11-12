@@ -3,10 +3,11 @@
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 
-import { DatePicker } from "@/components/DatePicker";
 import { InjuryStatusTag } from "@/components/InjuryStatusTag";
 import { LineupStatusBadge } from "@/components/LineupStatusBadge";
 import { PickContextMenu } from "@/components/PickContextMenu";
+import { BoardChip } from "@/components/picks/BoardChip";
+import { PicksDateRow } from "@/components/picks/PicksDateRow";
 import type { LeagueSegment } from "@/lib/event-detail-link";
 import { boardRate } from "@/lib/nba-card";
 import {
@@ -58,37 +59,8 @@ export interface DailyPicksBoardProps {
   isLineupError: boolean;
   slipDirection: (pick: DailyPick) => string | null;
   onToggleSlip: (pick: DailyPick) => void;
-  onAddReverse?: (pick: DailyPick) => void;
   slipCaption?: (pick: DailyPick) => string | null;
-  onAsk?: (pick: DailyPick) => void;
   onReviewBoard?: () => void;
-}
-
-function Chip({
-  active,
-  onClick,
-  children,
-  mono = false,
-}: {
-  active: boolean;
-  onClick: () => void;
-  children: string;
-  mono?: boolean;
-}) {
-  return (
-    <button
-      type="button"
-      aria-pressed={active}
-      onClick={onClick}
-      className={cn(
-        "min-h-[38px] shrink-0 rounded-full border px-3.5 py-2",
-        mono ? "font-mono text-xs font-bold" : "text-[13px] font-semibold",
-        active ? "border-brand bg-brand text-white" : "border-muted bg-white text-ink",
-      )}
-    >
-      {children}
-    </button>
-  );
 }
 
 function PickSkeleton() {
@@ -130,9 +102,7 @@ export function DailyPicksBoard({
   isLineupError,
   slipDirection,
   onToggleSlip,
-  onAddReverse,
   slipCaption,
-  onAsk,
   onReviewBoard,
 }: DailyPicksBoardProps) {
   const [confidence, setConfidence] = useState<ConfidenceFilter>("all");
@@ -172,16 +142,19 @@ export function DailyPicksBoard({
           <div className="font-mono text-xs font-semibold tracking-[0.12em] text-[#7B4FC4]">
             {eyebrow}
           </div>
-          <h1 className="text-[32px] font-bold leading-none tracking-[-0.035em] md:text-[52px]">
+          <h1 className="text-[30px] font-bold leading-none tracking-[-0.03em] md:text-[52px] md:tracking-[-0.035em]">
             Daily Picks
           </h1>
-          <p className="text-[15px] leading-relaxed text-muted">
+          <p className="text-[15px] leading-relaxed text-muted max-md:hidden">
             {league === "nba"
               ? `Props whose combined probability is ${floor}% or more.`
               : `Props whose historical hit rate is ${floor}% or more, ranked by that rate.`}
           </p>
+          <p className="text-[13px] text-muted md:hidden">
+            {pickCount} props at {floor}%+ · {strongCount} strong
+          </p>
         </div>
-        <div className="flex gap-2.5">
+        <div className="flex gap-2.5 max-md:hidden">
           <div className="rounded-2xl border border-line bg-white px-4 py-2.5">
             <div className="font-mono text-[22px] font-bold leading-none">{pickCount}</div>
             <div className="mt-1 text-xs text-muted">picks</div>
@@ -193,38 +166,15 @@ export function DailyPicksBoard({
         </div>
       </div>
 
-      <div className="flex flex-col gap-3 rounded-[20px] border border-line bg-white px-4 py-4 md:px-5">
-        <DatePicker value={selectedDate} onChange={onDateChange} />
-        <div className="flex flex-wrap items-center gap-2">
-          {analyzedAt ? (
-            <span
-              className={cn(
-                "rounded-full px-2.5 py-1 text-[11px] font-bold uppercase tracking-[0.08em]",
-                isStale ? "bg-accent text-yellow" : "bg-[#E5F2EA] text-green-800",
-              )}
-            >
-              {isStale ? "Stale board" : "Fresh board"}
-            </span>
-          ) : null}
-          <button
-            type="button"
-            onClick={onReanalyze}
-            disabled={isReanalyzing}
-            className="min-h-10 rounded-full border border-muted bg-white px-4 text-sm font-semibold text-ink disabled:opacity-50"
-          >
-            {isReanalyzing ? "Analyzing..." : "Re-analyze"}
-          </button>
-          {onReviewBoard ? (
-            <button
-              type="button"
-              onClick={onReviewBoard}
-              className="min-h-10 rounded-full bg-brand-tint px-4 text-sm font-semibold text-brand"
-            >
-              Review board
-            </button>
-          ) : null}
-        </div>
-      </div>
+      <PicksDateRow
+        selectedDate={selectedDate}
+        onDateChange={onDateChange}
+        analyzedAt={analyzedAt}
+        isStale={isStale}
+        onReanalyze={onReanalyze}
+        isReanalyzing={isReanalyzing}
+        onReviewBoard={onReviewBoard}
+      />
 
       <div className="flex flex-col gap-3 md:flex-row md:flex-wrap md:items-center md:gap-x-6">
         <div
@@ -233,13 +183,13 @@ export function DailyPicksBoard({
           className="-mx-4 flex gap-1.5 overflow-x-auto px-4 md:mx-0 md:flex-wrap md:overflow-visible md:px-0"
         >
           {CONFIDENCE_FILTERS.map((filter) => (
-            <Chip
+            <BoardChip
               key={filter.id}
               active={confidence === filter.id}
               onClick={() => setConfidence(filter.id)}
             >
               {filter.label}
-            </Chip>
+            </BoardChip>
           ))}
         </div>
         <div
@@ -248,9 +198,9 @@ export function DailyPicksBoard({
           className="-mx-4 flex gap-1.5 overflow-x-auto px-4 md:mx-0 md:flex-wrap md:overflow-visible md:px-0"
         >
           {markets.map((label) => (
-            <Chip key={label} mono active={market === label} onClick={() => setMarket(label)}>
+            <BoardChip key={label} mono active={market === label} onClick={() => setMarket(label)}>
               {label}
-            </Chip>
+            </BoardChip>
           ))}
         </div>
       </div>
@@ -276,7 +226,7 @@ export function DailyPicksBoard({
               </button>
             ) : null}
           </div>
-          <div className="flex flex-wrap gap-2">
+          <div className="-mx-4 flex gap-2 overflow-x-auto px-4 md:mx-0 md:flex-wrap md:overflow-visible md:px-0">
             {teams.map((team) => {
               const selected = selectedTeams.has(team);
               return (
@@ -286,7 +236,7 @@ export function DailyPicksBoard({
                   aria-pressed={selected}
                   onClick={() => onToggleTeam(team)}
                   className={cn(
-                    "min-h-10 rounded-full border px-3 py-2 font-mono text-xs font-bold",
+                    "min-h-10 shrink-0 rounded-full border px-3 py-2 font-mono text-xs font-bold",
                     selected
                       ? "border-brand bg-brand text-white"
                       : "border-muted bg-white text-ink",
@@ -370,45 +320,55 @@ export function DailyPicksBoard({
             const pick = visiblePicks[index];
             if (!pick) return null;
             const storedDirection = slipDirection(pick);
-            const reverse = pick.direction === "over" ? "under" : "over";
             const inSlip = storedDirection != null;
-            const reversed = storedDirection === reverse;
-            const sameSide = inSlip && !reversed;
+            const sameSide = inSlip && storedDirection === pick.direction;
+            const caption = slipCaption?.(pick) ?? null;
+            const dim = row.dimmed && "opacity-60";
             const article = (
-                <article
-                  className={cn(
-                    "flex flex-col gap-3 rounded-[18px] border bg-white px-3.5 py-3.5 md:flex-row md:flex-wrap md:items-center md:gap-x-5 md:rounded-[20px] md:px-[18px] md:py-4",
-                    sameSide ? "border-brand" : "border-line",
-                  )}
-                >
-                  <div
-                    data-testid="pick-player"
-                    className="flex min-w-0 items-center gap-3 md:flex-1 md:basis-[240px]"
-                  >
-                    <div className={cn("flex min-w-0 flex-1 items-center gap-3", row.dimmed && "opacity-60")}>
-                      <div className="w-[22px] shrink-0 font-mono text-[13px] font-bold text-muted">
-                        {row.rank}
-                      </div>
-                      <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-line font-mono text-[11px] font-bold text-brand">
-                        {row.team || "—"}
-                      </div>
-                      <div className="min-w-0 flex-1">
-                        <Link href={row.href} className="block font-bold hover:text-brand">
-                          {row.player}
-                        </Link>
-                        <div className="mt-0.5 text-[13px] text-muted">{row.matchup}</div>
-                      </div>
-                    </div>
+              <article
+                className={cn(
+                  "relative grid grid-cols-[minmax(0,1fr)_auto] gap-x-3 gap-y-2.5 rounded-[18px] border bg-white p-3.5 transition-colors hover:border-brand-soft",
+                  "md:grid-cols-[22px_40px_minmax(0,1.1fr)_minmax(0,1fr)_150px_auto] md:items-center md:gap-x-4 md:gap-y-2 md:rounded-[20px] md:px-[18px] md:py-4",
+                  sameSide ? "border-brand" : "border-line",
+                )}
+              >
+                <div data-testid="pick-player" className="contents">
+                  <div className={cn("hidden font-mono text-[13px] font-bold text-muted md:col-start-1 md:row-span-2 md:row-start-1 md:block", dim)}>
+                    {row.rank}
                   </div>
-
                   <div
-                    data-testid="pick-prop"
-                    className="flex min-w-0 flex-col gap-2 md:flex-1 md:basis-[220px]"
+                    className={cn(
+                      "hidden h-10 w-10 items-center justify-center rounded-full border border-line font-mono text-[11px] font-bold text-brand md:col-start-2 md:row-span-2 md:row-start-1 md:flex",
+                      dim,
+                    )}
                   >
-                    <div className={cn("text-[15px] font-bold", row.dimmed && "opacity-60")}>{row.propText}</div>
-                    {slipCaption?.(pick) ? (
-                      <p className="text-xs leading-5 text-muted">{slipCaption(pick)}</p>
-                    ) : null}
+                    {row.team || "—"}
+                  </div>
+                  <div className={cn("col-start-1 row-start-1 flex min-w-0 flex-col md:col-start-3 md:row-span-2 md:row-start-1", dim)}>
+                    <div className="order-first truncate text-xs text-muted md:order-last md:mt-0.5 md:text-[13px]">
+                      <span className="md:hidden">{row.rank} · </span>
+                      {row.matchup}
+                    </div>
+                    <Link
+                      href={row.href}
+                      className="mt-0.5 truncate text-base font-bold after:absolute after:inset-0 after:rounded-[18px] hover:text-brand focus-visible:outline-none focus-visible:after:ring-2 focus-visible:after:ring-brand md:mt-0 md:after:rounded-[20px]"
+                    >
+                      {row.player}
+                    </Link>
+                  </div>
+                </div>
+
+                <div data-testid="pick-prop" className="contents">
+                  <div
+                    className={cn(
+                      "col-start-1 row-start-2 text-sm font-semibold text-brand md:col-start-4 md:row-start-1 md:self-end md:text-[15px] md:font-bold md:text-ink",
+                      dim,
+                    )}
+                  >
+                    {row.propText}
+                  </div>
+                  <div className="col-start-1 row-start-3 flex min-w-0 flex-col gap-1.5 md:col-start-4 md:row-start-2 md:self-start">
+                    {caption ? <p className="text-xs leading-5 text-muted">{caption}</p> : null}
                     <TagList
                       tags={row.tags}
                       pick={pick}
@@ -418,94 +378,54 @@ export function DailyPicksBoard({
                       isLineupError={isLineupError}
                     />
                   </div>
+                </div>
 
-                  {row.dimmed ? null : (
+                {row.dimmed ? null : (
                   <div
                     data-testid="pick-rate"
-                    className="flex min-w-[120px] flex-col gap-1.5 md:flex-[0_1_150px]"
+                    className="col-start-2 row-span-2 row-start-1 flex flex-col items-end gap-1 md:col-start-5 md:items-stretch md:gap-1.5"
                   >
-                    <div className="flex items-baseline justify-between gap-2">
-                      <div className="font-mono text-2xl font-bold text-brand">{row.probabilityText}</div>
+                    <div className="flex flex-col items-end gap-1 md:flex-row md:items-baseline md:justify-between md:gap-2">
+                      <div className="font-mono text-2xl font-bold leading-none text-brand">{row.probabilityText}</div>
                       {row.tierShort && row.tierName ? (
-                        <span
-                          className={cn(
-                            "rounded-full px-2 py-0.5 text-[11px] font-bold",
-                            TIER_CLASS[row.tierName],
-                          )}
-                        >
+                        <span className={cn("rounded-full px-2 py-0.5 text-[11px] font-bold", TIER_CLASS[row.tierName])}>
                           {row.tierShort}
                         </span>
                       ) : null}
                     </div>
-                    <div className="h-1.5 overflow-hidden rounded-full bg-[#EEEBF2]">
-                      <div
-                        className="h-full rounded-full bg-brand"
-                        style={{ width: `${row.barPercent}%` }}
-                      />
+                    <div className="hidden h-1.5 overflow-hidden rounded-full bg-[#EEEBF2] md:block">
+                      <div className="h-full rounded-full bg-brand" style={{ width: `${row.barPercent}%` }} />
                     </div>
                   </div>
-                  )}
+                )}
 
+                <div className="relative z-10 col-start-2 row-start-3 flex justify-end self-center md:col-start-6 md:row-span-2 md:row-start-1">
                   {row.dimmed ? (
                     inSlip ? (
-                      <div className="flex shrink-0 justify-end">
-                        <button
-                          type="button"
-                          aria-label={`Remove ${pick.player_name}`}
-                          onClick={() => onToggleSlip(pick)}
-                          className="min-h-11 rounded-full border border-line bg-white px-4 text-[13px] font-bold text-ink"
-                        >
-                          Remove
-                        </button>
-                      </div>
-                    ) : null
-                  ) : (
-                  <div className="flex shrink-0 flex-wrap justify-end gap-2">
                       <button
                         type="button"
-                        aria-label={sameSide ? "Added to Bet Slip" : "Add to Bet Slip"}
+                        aria-label={`Remove ${pick.player_name}`}
                         onClick={() => onToggleSlip(pick)}
-                        className={cn(
-                          "min-h-11 rounded-full border px-4 text-[13px] font-bold",
-                          sameSide
-                            ? "border-accent bg-accent text-brand-ink"
-                            : "border-muted bg-white text-brand",
-                        )}
+                        className="min-h-10 rounded-full border border-line bg-white px-4 text-[13px] font-bold text-ink md:min-h-11"
                       >
-                        {sameSide ? "✓ In slip" : "+ Slip"}
+                        Remove
                       </button>
-                      {onAddReverse ? (
-                        <button
-                          type="button"
-                          aria-label={
-                            reversed
-                              ? `Reverse added (${reverse})`
-                              : `Add ${reverse === "over" ? "Over" : "Under"}`
-                          }
-                          onClick={() => onAddReverse(pick)}
-                          className={cn(
-                            "min-h-11 rounded-full border px-3 text-[13px] font-semibold",
-                            reversed
-                              ? "border-brand bg-brand text-white"
-                              : "border-muted bg-white text-ink",
-                          )}
-                        >
-                          {reversed ? "Reverse added" : `Add ${reverse === "over" ? "Over" : "Under"}`}
-                        </button>
-                      ) : null}
-                      {onAsk ? (
-                        <button
-                          type="button"
-                          aria-label={`Ask Agent about ${pick.player_name}`}
-                          onClick={() => onAsk(pick)}
-                          className="min-h-11 rounded-full bg-brand-tint px-3 text-[13px] font-bold text-brand"
-                        >
-                          Ask
-                        </button>
-                      ) : null}
-                    </div>
+                    ) : null
+                  ) : (
+                    <button
+                      type="button"
+                      aria-label={sameSide ? "Added to Bet Slip" : "Add to Bet Slip"}
+                      onClick={() => onToggleSlip(pick)}
+                      className={cn(
+                        "min-h-10 whitespace-nowrap rounded-full border px-3.5 text-[13px] font-bold md:min-h-11 md:px-4",
+                        sameSide ? "border-accent bg-accent text-brand-ink" : "border-muted bg-white text-brand",
+                      )}
+                    >
+                      {sameSide ? "✓ In slip" : "+ Slip"}
+                    </button>
                   )}
-                </article>
+                </div>
+              </article>
             );
             if (row.dimmed) return <div key={row.key}>{article}</div>;
             return (
@@ -520,7 +440,7 @@ export function DailyPicksBoard({
       <p className="text-[13px] leading-6 text-muted">
         The line is the most common line across books.{" "}
         {league === "nba"
-          ? "The percent is the combined probability. Opponent rank appears only when the response includes it."
+          ? "The percent is the combined probability. Opponent rank appears only when the response includes it. Tap a pick to see every signal behind it."
           : "The percent is the historical hit rate over the stored sample. Projection, edge, minutes, and opponent rank appear only when the response includes them. A blended probability is not on this board."}
       </p>
     </div>

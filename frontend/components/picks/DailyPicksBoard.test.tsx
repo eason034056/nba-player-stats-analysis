@@ -156,25 +156,18 @@ describe("DailyPicksBoard", () => {
     expect(onRetry).toHaveBeenCalledOnce();
   });
 
-  it("keeps the playable band below 70% and stacks the card on a narrow layout", async () => {
+  it("keeps the playable band below 70% and gives each card one slip control and a game link", async () => {
     const user = userEvent.setup();
     renderBoard();
 
-    const card = screen.getByRole("link", { name: "Bam Adebayo" }).closest("article");
-    expect(card?.className).toContain("flex-col");
-    expect(card?.className).toContain("md:flex-row");
-    const prop = card?.querySelector("[data-testid='pick-prop']");
-    const player = card?.querySelector("[data-testid='pick-player']");
-    const rate = card?.querySelector("[data-testid='pick-rate']");
-    expect(prop?.className).toContain("md:basis-[220px]");
-    expect(prop?.className).toContain("md:flex-1");
-    expect(prop?.className).not.toMatch(/(?:^|\s)basis-\[220px\](?:\s|$)/);
-    expect(prop?.className).not.toMatch(/(?:^|\s)flex-1(?:\s|$)/);
-    expect(player?.className).toContain("md:basis-[240px]");
-    expect(player?.className).toContain("md:flex-1");
-    expect(player?.className).not.toMatch(/(?:^|\s)flex-1(?:\s|$)/);
-    expect(rate?.className).toContain("md:flex-[0_1_150px]");
-    expect(rate?.className).not.toMatch(/(?:^|\s)flex-\[0_1_150px\](?:\s|$)/);
+    const link = screen.getByRole("link", { name: "Bam Adebayo" });
+    const card = link.closest("article");
+    expect(card).not.toBeNull();
+    expect(link).toHaveAttribute("href", expect.stringContaining("/event/"));
+    expect(within(card!).getAllByRole("button").map((button) => button.getAttribute("aria-label"))).toEqual([
+      "Add to Bet Slip",
+    ]);
+    expect(within(card!).getByTestId("pick-rate")).toBeInTheDocument();
     const confidence = screen.getByRole("group", { name: "Confidence" });
     expect(confidence.className).toContain("overflow-x-auto");
     expect(confidence.className).toContain("md:flex-wrap");
@@ -264,8 +257,6 @@ describe("DailyPicksBoard", () => {
       teams: ["MIA"],
       showLineup: true,
       onToggleSlip,
-      onAddReverse: vi.fn(),
-      onAsk: vi.fn(),
     });
 
     expect(screen.getByText("picks").previousElementSibling).toHaveTextContent("1");
