@@ -7,13 +7,7 @@ import { BetSlipScreen } from "@/components/betslip/BetSlipScreen";
 import { DailyPicksBoard, type DailyPicksBoardProps } from "@/components/picks/DailyPicksBoard";
 import { OUT_LEGS_NOTE, slipSummaryCaption } from "@/lib/bet-slip-board";
 import { buildOurRead, eventPlayerRows } from "@/lib/event-page";
-import {
-  INJURY_WORDS,
-  NEUTRAL_PAINT,
-  canonicalInjuryTag,
-  injuryPaint,
-  injuryTag,
-} from "@/lib/injury-tag";
+import { INJURY_WORDS, canonicalInjuryTag, injuryTag } from "@/lib/injury-tag";
 import { injuryTagForPlayer, isOutPick, isPlayerOutInGame } from "@/lib/picks-board";
 import {
   dailyPickSchema,
@@ -22,7 +16,6 @@ import {
   propReadSchema,
   teamLineupSchema,
   topReadSchema,
-  type DailyPick,
 } from "@/lib/schemas";
 import { todayReads } from "@/lib/today-board";
 import {
@@ -33,6 +26,7 @@ import {
 } from "@/test/test-utils";
 import emptyLineupsFixture from "@/test/fixtures/lineups/empty.json";
 import boardFixture from "@/test/fixtures/picks/nba-daily-picks.json";
+import rawInjuryFixture from "@/test/fixtures/picks/nba-daily-picks-raw-injury.json";
 import todayPicksFixture from "@/test/fixtures/today/nba-daily-picks.json";
 
 vi.mock("next/link", () => ({
@@ -58,30 +52,38 @@ vi.mock("@/lib/api", async () => {
   return { ...actual, ...apiMocks };
 });
 
-const boardPick = dailyPicksResponseSchema.parse(boardFixture).picks[0];
 const todayPicks = dailyPicksResponseSchema.parse(todayPicksFixture);
 const emptyLineups = lineupsResponseSchema.parse(emptyLineupsFixture);
-const bam = todayPicks.picks[0];
-
-// Samples from the settled DailyPick contract. The card floors 0.6095 to 60%.
-const doubtfulSample = {
-  injury_status: "Questionable",
-  injury_status_raw: "Doubtful",
-  combined_probability: 0.6095,
-};
-const outSample = {
-  injury_status: "Out",
-  injury_status_raw: "Out",
-  combined_probability: null,
-};
-const wnbaInjurySample = {
-  injury_status: null,
-  injury_status_raw: null,
-};
+const [doubtful, listedOut, wnbaQuiet, lowerOut] = rawInjuryFixture.picks.map((pick) =>
+  dailyPickSchema.parse(pick),
+);
 
 function channel(hex: string, index: number): number {
   const raw = parseInt(hex.replace("#", "").slice(index, index + 2), 16) / 255;
   return raw <= 0.04045 ? raw / 12.92 : ((raw + 0.055) / 1.055) ** 2.4;
+}
+
+function chipColors(chip: Element): { fg: string; bg: string } {
+  const className = chip.getAttribute("class") ?? "";
+  const background = className.match(/bg-\[(#[0-9A-Fa-f]{6})\]/)?.[1];
+  const foreground = className.includes("text-white")
+    ? "#FFFFFF"
+    : className.match(/text-\[(#[0-9A-Fa-f]{6})\]/)?.[1];
+  if (!background || !foreground) {
+    throw new Error(`rendered chip has no colour classes: ${className}`);
+  }
+  return { fg: foreground, bg: background };
+}
+
+function toneOf(label: HTMLElement): string | null {
+  return label.closest("[data-injury-tone]")?.getAttribute("data-injury-tone") ?? null;
+}
+
+function isGreen(hex: string): boolean {
+  const red = parseInt(hex.slice(1, 3), 16);
+  const green = parseInt(hex.slice(3, 5), 16);
+  const blue = parseInt(hex.slice(5, 7), 16);
+  return green > red && green > blue;
 }
 
 function contrast(foreground: string, background: string): number {
@@ -146,19 +148,17 @@ describe("injury tag text", () => {
     expect(Object.hasOwn(teamLineupSchema.shape, "injury_status_raw")).toBe(false);
     expect(Object.hasOwn(topReadSchema.shape, "injury_status_raw")).toBe(false);
 
-    const doubtful = dailyPickSchema.parse({ ...boardPick, ...doubtfulSample });
-    expect(doubtful.injury_status).toBe("Questionable");
-    expect(doubtful.injury_status_raw).toBe("Doubtful");
-    expect(doubtful.combined_probability).toBe(0.6095);
-
-    const out = dailyPickSchema.parse({ ...boardPick, ...outSample });
-    expect(out.injury_status_raw).toBe("Out");
-    expect(out.combined_probability).toBeNull();
-
-    const quiet = dailyPickSchema.parse({ ...boardPick, ...wnbaInjurySample });
-    expect(quiet.injury_status).toBeNull();
-    expect(quiet.injury_status_raw).toBeNull();
-    expect(injuryTag(quiet.injury_status_raw, quiet.injury_status)).toBeNull();
+    const picks = rawInjuryFixture.picks.map((pick) => dailyPickSchema.parse(pick));
+    expect(picks.map((pick) => [pick.player_name, pick.injury_status, pick.injury_status_raw, pick.combined_probability])).toEqual([
+      ["Bam Adebayo", "Questionable", "Doubtful", 0.6095],
+      ["Jimmy Butler", "Out", "Out", null],
+      ["A'ja Wilson", null, null, null],
+      ["Tyler Herro", "Questionable", "out", 0.6095],
+    ]);
+    expect(isOutPick(lowerOut)).toBe(false);
+    expect(lowerOut.injury_status_raw).toBe("out");
+    expect(injuryTag(lowerOut.injury_status_raw, lowerOut.injury_status)).toEqual({ text: "Out", tone: "out" });
+    expect(injuryTag(wnbaQuiet.injury_status_raw, wnbaQuiet.injury_status)).toBeNull();
   });
 
   it("treats a missing raw field as null and falls back to the status", () => {
@@ -187,31 +187,33 @@ describe("injury tag style", () => {
   it("gives each status its own chip and keeps small-text contrast at 4.5:1", () => {
     const seen = new Set<string>();
     for (const word of INJURY_WORDS) {
-      const paint = injuryPaint(word.tone);
-      expect(paint.chip).not.toBe(NEUTRAL_PAINT.chip);
-      expect(seen.has(paint.chip)).toBe(false);
-      seen.add(paint.chip);
-      expect(contrast(paint.fg, paint.bg)).toBeGreaterThanOrEqual(4.5);
       const view = renderWithProviders(<InjuryStatusTag tag={canonicalInjuryTag(word.tone)} />);
-      const chip = screen.getByText(word.label);
+      const label = screen.getByText(word.label);
+      const chip = label.closest("[data-injury-tone]");
+      if (!chip) throw new Error("chip missing");
       expect(chip).toHaveAttribute("data-injury-tone", word.tone);
-      expect(chip.className).toContain(paint.bg);
+      expect(within(chip as HTMLElement).getByText("Injury:")).toHaveClass("sr-only");
+      const colors = chipColors(chip);
+      const pair = `${colors.fg}/${colors.bg}`;
+      expect(seen.has(pair)).toBe(false);
+      seen.add(pair);
+      expect(contrast(colors.fg, colors.bg)).toBeGreaterThanOrEqual(4.5);
+      if (word.tone === "probable") {
+        expect(chip.className).toContain("border-dotted");
+        expect(isGreen(colors.fg)).toBe(false);
+        expect(isGreen(colors.bg)).toBe(false);
+      }
       view.unmount();
     }
-    expect(contrast(NEUTRAL_PAINT.fg, NEUTRAL_PAINT.bg)).toBeGreaterThanOrEqual(4.5);
     renderWithProviders(<InjuryStatusTag tag={{ text: "GTD", tone: "neutral" }} />);
-    expect(screen.getByText("GTD").className).toContain(NEUTRAL_PAINT.bg);
+    const neutral = screen.getByText("GTD").closest("[data-injury-tone]");
+    if (!neutral) throw new Error("neutral chip missing");
+    const neutralColors = chipColors(neutral);
+    expect(contrast(neutralColors.fg, neutralColors.bg)).toBeGreaterThanOrEqual(4.5);
   });
 });
 
 describe("Doubtful does not block", () => {
-  const doubtful: DailyPick = {
-    ...boardPick,
-    player_name: "Bam Adebayo",
-    tier: null,
-    ...doubtfulSample,
-  };
-
   it("keeps a percent, a slip control, and Ask", () => {
     expect(isOutPick(doubtful)).toBe(false);
     expect(isPlayerOutInGame([doubtful], doubtful.event_id, doubtful.player_name)).toBe(false);
@@ -225,7 +227,7 @@ describe("Doubtful does not block", () => {
     );
     const card = screen.getByRole("article");
     const chip = within(card).getByText("Doubtful");
-    expect(chip).toHaveAttribute("data-injury-tone", "doubtful");
+    expect(toneOf(chip)).toBe("doubtful");
     expect(card).toHaveTextContent("60%");
     expect(within(card).getByRole("button", { name: "Add to Bet Slip" })).toBeInTheDocument();
     expect(within(card).getByRole("button", { name: "Ask Agent about Bam Adebayo" })).toBeInTheDocument();
@@ -279,7 +281,7 @@ describe("Doubtful does not block", () => {
   });
 
   it("does not put an injury chip on a WNBA row", () => {
-    const quiet: DailyPick = { ...doubtful, ...wnbaInjurySample };
+    const quiet = wnbaQuiet;
     const railArgs = {
       suggested: [quiet.player_name],
       picks: [quiet],
@@ -307,18 +309,33 @@ describe("slip caption", () => {
   });
 
   const leg = createBetSlipPick({
-    id: "Bam Adebayo-rebounds",
-    player_name: "Bam Adebayo",
-    event_id: bam.event_id,
-    player_team: bam.player_team,
-    home_team: bam.home_team,
-    away_team: bam.away_team,
-    commence_time: bam.commence_time,
-    metric: "rebounds",
-    threshold: 10.5,
+    id: "Bam Adebayo-points",
+    player_name: doubtful.player_name,
+    event_id: doubtful.event_id,
+    player_team: doubtful.player_team,
+    home_team: doubtful.home_team,
+    away_team: doubtful.away_team,
+    commence_time: doubtful.commence_time,
+    metric: doubtful.metric,
+    threshold: doubtful.threshold,
     probability: 0.6095,
     combined_probability: 0.6095,
     tier: "Playable",
+  });
+
+  const outLeg = createBetSlipPick({
+    id: "Jimmy Butler-points",
+    player_name: listedOut.player_name,
+    event_id: listedOut.event_id,
+    player_team: listedOut.player_team,
+    home_team: listedOut.home_team,
+    away_team: listedOut.away_team,
+    commence_time: listedOut.commence_time,
+    metric: listedOut.metric,
+    threshold: listedOut.threshold,
+    probability: 0.7,
+    combined_probability: 0.7,
+    tier: null,
   });
 
   beforeEach(() => {
@@ -331,29 +348,28 @@ describe("slip caption", () => {
   });
 
   it("prints the sentence on the slip when an Out leg is in the average's exclusion", async () => {
-    seedBetSlip([leg]);
+    seedBetSlip([outLeg]);
     apiMocks.getDailyPicks.mockResolvedValue({
       ...todayPicks,
-      picks: [{ ...bam, tier: null, ...outSample }],
+      picks: [listedOut],
     });
     renderWithProviders(<BetSlipScreen />);
     expect(await screen.findByText(/Avg and all hit leave out Out legs/)).toBeInTheDocument();
     const card = await screen.findByRole("article");
-    expect(within(card).getByText("Out")).toHaveAttribute("data-injury-tone", "out");
-    expect(within(card).getByText("Out").closest(".opacity-60")).toBeNull();
-    expect(card.querySelector(".opacity-60")).not.toBeNull();
-    expect(injuryTagForPlayer([{ ...bam, injury_status: "Out" }], bam.event_id, bam.player_name)?.tone).toBe("out");
+    expect(toneOf(within(card).getByText("Out"))).toBe("out");
+    expect(card).not.toHaveTextContent("%");
+    expect(injuryTagForPlayer([listedOut], listedOut.event_id, listedOut.player_name)?.text).toBe("Out");
   });
 
   it("omits the sentence when every leg is still in the average", async () => {
     seedBetSlip([leg]);
     apiMocks.getDailyPicks.mockResolvedValue({
       ...todayPicks,
-      picks: [{ ...bam, tier: null, ...doubtfulSample }],
+      picks: [doubtful],
     });
     renderWithProviders(<BetSlipScreen />);
     const card = await screen.findByRole("article");
-    expect(within(card).getByText("Doubtful")).toHaveAttribute("data-injury-tone", "doubtful");
+    expect(toneOf(within(card).getByText("Doubtful"))).toBe("doubtful");
     expect(card).toHaveTextContent("60%");
     await waitFor(() => expect(apiMocks.getDailyPicks).toHaveBeenCalled());
     expect(screen.queryByText(/leave out Out legs/)).not.toBeInTheDocument();

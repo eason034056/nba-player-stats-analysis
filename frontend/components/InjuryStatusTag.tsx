@@ -11,7 +11,8 @@ export function InjuryStatusTag({ tag }: { tag: InjuryTag }) {
         paint.chip,
       )}
     >
-      {tag.text}
+      <span className="sr-only">Injury: </span>
+      <span>{tag.text}</span>
     </span>
   );
 }

@@ -16,7 +16,7 @@ The tag shows BDL's original injury word. `injury_status` is unchanged, so a Dou
 Three ways the five words could read at a glance.
 
 1. One chip shape, a hue ramp from rose to green. Fast if you see hue. A colorblind reader cannot separate Out from Probable. Rejected.
-2. A structure ladder. Out is the only solid dark chip with white text. Doubtful and Questionable are tinted chips with a solid border, rose then amber. Day-To-Day is the neutral chip with a dashed border. Probable is a pale green chip with a solid green border. The word is the label. Fill, border, and dash stay distinct without hue. Picked.
+2. A structure ladder. Out is the only solid dark chip with white text. Doubtful and Questionable are tinted chips with a solid border, rose then amber. Day-To-Day is the neutral chip with a dashed border. Probable is a blue chip with a dotted border, so it does not sit next to the pale green LINEUP ALIGNED pill. The word is the label. Fill, border, and dash stay distinct without relying on hue alone. Picked.
 3. One neutral chip plus one to five severity ticks. The order is visible even if the words are new. The ticks are too wide beside "Questionable" and "24 games" at 390px. Rejected.
 
 Doubtful and Questionable share a bordered tint because every Tailwind border width in this app is 1px, so thickness cannot carry the step. Opaque chip fills stay readable on a white card and on the brand Today hero.
@@ -29,10 +29,12 @@ Measured contrast for 11px text, all at least 4.5:1.
 | Doubtful | `#6E1E34` | `#F6E3EA` | 9.01 |
 | Questionable | `#5A5310` | `#F6F2D2` | 6.92 |
 | Day-To-Day | `#1D1530` | `#F1F0F3` | 15.39 |
-| Probable | `#166534` | `#E5F2EA` | 6.19 |
+| Probable | `#12355B` | `#E7F2FB` | 10.97 |
 | Unknown | `#4A4458` | `#F1F0F3` | 8.19 |
 
 The Out card still dims the name and the prop. The chip is not inside that fade. A 60% opacity on white text over the dark fill drops the flattened contrast under 4.5, and the word disappeared in the first screenshots. The slip does the same. The name and the line fade. The Out chip and Remove stay full strength.
+
+The chip carries a screen-reader-only `Injury:` prefix. The visible word is unchanged.
 
 ## Unknown words
 
@@ -57,7 +59,7 @@ Matching ignores case and surrounding whitespace. It does not strip spaces insid
 
 `isOutPick` and `isPlayerOutInGame` still key off `injury_status`. The raw word is not read. Doubtful with status Questionable keeps a percent, Add to Bet Slip, and Ask.
 
-The Doubtful sample is `injury_status: "Questionable"`, `injury_status_raw: "Doubtful"`, `combined_probability: 0.6095`. The card floors a combined probability, so it prints 60%. Half-away rounding of the same number is 61%. This ticket does not change that floor. The Out sample has both fields `"Out"` and `combined_probability: null`. The WNBA sample is null on both fields.
+The Doubtful sample is `injury_status: "Questionable"`, `injury_status_raw: "Doubtful"`, `combined_probability: 0.6095`. The card floors a combined probability, so it prints 60%. Half-away rounding of the same number is 61%. This ticket does not change that floor. The Out sample has both fields `"Out"` and `combined_probability: null`. The WNBA sample is null on both fields. A fourth pick is Questionable with raw `out`. All four are complete picks in `frontend/test/fixtures/picks/nba-daily-picks-raw-injury.json`, parsed with `dailyPickSchema`, and they are not spread onto another pick.
 
 ## QA patch
 

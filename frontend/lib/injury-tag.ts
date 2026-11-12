@@ -47,9 +47,9 @@ export const INJURY_WORDS = [
   {
     tone: "probable",
     label: "Probable",
-    fg: "#166534",
-    bg: "#E5F2EA",
-    chip: "border border-solid border-[#166534] bg-[#E5F2EA] text-[#166534]",
+    fg: "#12355B",
+    bg: "#E7F2FB",
+    chip: "border border-dotted border-[#12355B] bg-[#E7F2FB] text-[#12355B]",
   },
 ] satisfies readonly InjuryPaint[];
 
