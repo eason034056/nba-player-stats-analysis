@@ -60,23 +60,17 @@ BALLDONTLIE_SOURCE = "balldontlie"
 
 # Status words on the recorded /v1/player_injuries page. Anything else is
 # kept and logged so a new BDL word is visible instead of dropped.
-# Comparison uses the casefolded form. The stored word is the canonical one.
+# Comparison uses the folded form. The stored word is the canonical one.
 _STATUS_OUT = "Out"
 _STATUS_AVAILABLE = "Available"
 _STATUS_DOUBTFUL = "Doubtful"
 _STATUS_QUESTIONABLE = "Questionable"
 _STATUS_DAY_TO_DAY = "Day-To-Day"
 _STATUS_PROBABLE = "Probable"
-_CANONICAL_BY_FOLDED = {
-    _STATUS_OUT.casefold(): _STATUS_OUT,
-    _STATUS_QUESTIONABLE.casefold(): _STATUS_QUESTIONABLE,
-    _STATUS_DAY_TO_DAY.casefold(): _STATUS_DAY_TO_DAY,
-    _STATUS_PROBABLE.casefold(): _STATUS_PROBABLE,
-    _STATUS_DOUBTFUL.casefold(): _STATUS_QUESTIONABLE,
-}
-_DROPPED_FOLDED = frozenset({_STATUS_AVAILABLE.casefold()})
-_KNOWN_FOLDED = frozenset(_CANONICAL_BY_FOLDED) | _DROPPED_FOLDED
-_OUT_WORD = re.compile(r"\bout\b")
+# A leading "out" is Out. "out of ..." is not: "Out of rotation" is a
+# role note, not the injury word. The check runs on the folded string.
+_LEADING_OUT = re.compile(r"^out\b")
+_LEADING_OUT_OF = re.compile(r"^out of\b")
 
 
 class BdlInjuryClient(Protocol):
@@ -144,49 +138,85 @@ def _lookup_team_code(team_id: Any, team_id_to_code: Mapping[Any, str]) -> str |
 
 
 def _folded_status(raw_status: str) -> str:
-    """Casefold one BDL status and collapse its whitespace.
+    """Fold one BDL status for comparison.
 
-    Leading and trailing whitespace go away. Internal runs of
-    whitespace become one space. The letters are casefolded, so
-    ``OUT`` and `` Out `` share a key with ``Out``.
+    Leading and trailing whitespace go away. ``-`` and ``_`` count as
+    spaces, then internal runs of whitespace become one space. The
+    letters are casefolded, so ``OUT``, `` Out ``, ``Day To Day``,
+    ``day-to-day``, and ``DAY_TO_DAY`` share keys with the canonical
+    words. The original string is not rewritten.
     """
-    return re.sub(r"\s+", " ", raw_status.strip().casefold())
+    text = re.sub(r"[-_]+", " ", raw_status.strip().casefold())
+    return re.sub(r"\s+", " ", text).strip()
+
+
+_CANONICAL_BY_FOLDED = {
+    _folded_status(_STATUS_OUT): _STATUS_OUT,
+    _folded_status(_STATUS_QUESTIONABLE): _STATUS_QUESTIONABLE,
+    _folded_status(_STATUS_DAY_TO_DAY): _STATUS_DAY_TO_DAY,
+    _folded_status(_STATUS_PROBABLE): _STATUS_PROBABLE,
+    _folded_status(_STATUS_DOUBTFUL): _STATUS_QUESTIONABLE,
+}
+_DROPPED_FOLDED = frozenset({_folded_status(_STATUS_AVAILABLE)})
+_KNOWN_FOLDED = frozenset(_CANONICAL_BY_FOLDED) | _DROPPED_FOLDED
 
 
 def _is_known_bdl_status(raw_status: Any) -> bool:
-    """True when this source word is a known status, ignoring case."""
+    """True when this source word is a known status, or blank.
+
+    Blank is missing data, not a new BDL word, so the caller does not
+    log it. ``Out For Season`` is not in the table. The caller logs
+    that on purpose, so a new phrase stays visible.
+    """
     if not isinstance(raw_status, str):
         return False
-    return _folded_status(raw_status) in _KNOWN_FOLDED
+    folded = _folded_status(raw_status)
+    if not folded:
+        return True
+    return folded in _KNOWN_FOLDED
 
 
 def _mapped_status(raw_status: Any) -> str | None:
     """Return the status stored on a normalized row, or None to drop it.
 
-    Comparison uses one folded key: strip, collapse internal
-    whitespace, then casefold. ``available`` is not an injury and is
-    dropped. ``doubtful`` is stored as ``Questionable``. Picks and
-    reads use that stored word and do not block on the source word.
-    A stored Doubtful keeps its blend. Daily picks also copy the
-    original word to ``injury_status_raw``. The original word stays
-    on ``raw_status`` for the agent payload and a later history table.
+    Comparison uses one folded key: strip, treat ``-`` and ``_`` as
+    spaces, collapse whitespace, then casefold. Only ``available`` is
+    dropped, in any case. A blank or whitespace-only status is missing
+    data, not a healthy player, so it is stored as ``Questionable``.
+    A non-string status is omitted. ``doubtful`` is stored as
+    ``Questionable``. Picks and reads use that stored word and do not
+    block on the source word. A stored Doubtful keeps its blend.
+    Daily picks also copy the original word to ``injury_status_raw``.
+    The original word stays on ``raw_status``.
 
     A known word is stored in its canonical capitalization: ``Out``,
-    ``Questionable``, ``Day-To-Day``, or ``Probable``. A phrase with
-    ``out`` as its own word (``Out For Season``) is ``Out``. A word
-    that only contains those letters (``shout``) is not. Every other
-    unknown word is stored as ``Questionable``. ``raw_status`` keeps
-    the original string, and the caller logs the unknown word.
+    ``Questionable``, ``Day-To-Day``, or ``Probable``. ``Day To Day``
+    and ``DAY_TO_DAY`` are ``Day-To-Day``. A folded string that starts
+    with ``out`` as its own word is ``Out`` (``Out For Season``,
+    ``Out (Season)``, ``Out - Personal``). ``out of`` does not: ``Out
+    of rotation`` is ``Questionable``. A later ``out`` does not either
+    (``Questionable (out last game)``). ``shout`` and ``OFS`` are not
+    ``Out``. ``OFS`` stays ``Questionable``; the recorded page does
+    not use that abbreviation. Every other unknown word is
+    ``Questionable``. ``raw_status`` keeps the original string.
+
+    The caller logs an unknown word, including ``Out For Season``.
+    That log is intentional. It is how a new BDL phrase stays visible.
+    Blank is not logged.
     """
     if not isinstance(raw_status, str):
         return None
     folded = _folded_status(raw_status)
-    if not folded or folded in _DROPPED_FOLDED:
+    if folded in _DROPPED_FOLDED:
         return None
+    if not folded:
+        return _STATUS_QUESTIONABLE
     canonical = _CANONICAL_BY_FOLDED.get(folded)
     if canonical is not None:
         return canonical
-    if _OUT_WORD.search(folded):
+    if _LEADING_OUT_OF.search(folded):
+        return _STATUS_QUESTIONABLE
+    if _LEADING_OUT.search(folded):
         return _STATUS_OUT
     return _STATUS_QUESTIONABLE
 
@@ -209,12 +239,15 @@ def normalize_bdl_injuries(
             this shape. BDL itself does not send a timestamp.
 
     Returns:
-        One dict per kept row. ``Available`` rows are omitted, in any
-        case. ``Doubtful`` is ``status="Questionable"`` and
-        ``raw_status`` keeps the original string. ``Out``,
+        One dict per kept row. Only ``Available`` is omitted, in any
+        case. A blank status is kept as ``Questionable``. A non-string
+        status is omitted. ``Doubtful`` is ``status="Questionable"``
+        and ``raw_status`` keeps the original string. ``Out``,
         ``Questionable``, ``Day-To-Day``, and ``Probable`` are stored
-        as those canonical words. A different case or extra whitespace
-        does not change the stored word and is not logged.
+        as those canonical words. A different case, hyphen, underscore,
+        or extra whitespace does not change a known word and is not
+        logged. ``Out For Season`` is stored as ``Out`` and is logged,
+        because it is not one of the known words.
     """
     entries: list[dict[str, Any]] = []
     seen_unknown: set[Any] = set()

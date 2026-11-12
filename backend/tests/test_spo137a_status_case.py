@@ -33,12 +33,22 @@ _KEPT = (
     ("out for season", "Out", True),
     ("OUT FOR SEASON", "Out", True),
     ("out  for   season", "Out", True),
+    ("Out (Season)", "Out", True),
+    ("Out - Personal", "Out", True),
+    ("", "Questionable", False),
+    ("   ", "Questionable", False),
+    ("\t", "Questionable", False),
     ("doubtful", "Questionable", False),
     ("DOUBTFUL", "Questionable", False),
     ("questionable", "Questionable", False),
+    ("Questionable (out last game)", "Questionable", True),
+    ("Out of rotation", "Questionable", True),
     ("day-to-day", "Day-To-Day", False),
+    ("Day To Day", "Day-To-Day", False),
+    ("DAY_TO_DAY", "Day-To-Day", False),
     ("probable", "Probable", False),
     ("shout", "Questionable", True),
+    ("OFS", "Questionable", True),
 )
 _DROPPED = ("available", "AVAILABLE", " Available ")
 
@@ -84,6 +94,14 @@ def test_status_variant_stores_the_canonical_word(
 def test_available_variant_is_dropped(variant: str) -> None:
     """Available is not an injury, in any case, with or without padding."""
     assert _normalize(variant) == []
+
+
+@pytest.mark.parametrize("variant", [None, 0, 1.5, ["Out"]])
+def test_non_string_status_is_dropped(variant: object) -> None:
+    """A non-string status is not a word. The row is omitted."""
+    row = _recorded_row()
+    row["status"] = variant
+    assert normalize_bdl_injuries([row], _MAPPING, fetched_at=_FETCHED_AT) == []
 
 
 def test_lowercase_out_blocks_the_pick_like_canonical_out() -> None:
