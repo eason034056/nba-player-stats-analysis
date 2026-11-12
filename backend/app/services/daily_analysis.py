@@ -28,6 +28,7 @@ from typing import List, Dict, Any, Optional, Tuple
 from collections import Counter, defaultdict
 
 from app.services.odds_gateway import odds_gateway
+from app.services.slate_date import nba_slate_date
 from app.services.odds_theoddsapi import odds_provider
 from app.services.odds_provider import OddsAPIError
 from app.services.csv_player_history import (
@@ -845,7 +846,7 @@ class DailyAnalysisService:
         5. Store in cache and return
 
         Args:
-            date: Analysis date (YYYY-MM-DD), None means today
+            date: Analysis date (YYYY-MM-DD). None means the America/New_York slate date.
             use_cache: Whether to use cache, default True
             tz_offset_minutes: Timezone offset in minutes, default 480 (UTC+8, Taipei)
             league: League key — ``"nba"`` (default) or ``"wnba"``. Controls
@@ -871,9 +872,9 @@ class DailyAnalysisService:
         league_normalized = league.lower()
         _resolve_sport_key(league_normalized)
 
-        # Determine analysis date
+        # US slate date. UTC midnight is still the previous evening in New York.
         if date is None:
-            date = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+            date = nba_slate_date()[0]
 
         # 1. Check cache (league-namespaced + timezone-scoped, SPO-35)
         # Pre-SPO-35 keys lived under f"daily_picks:{date}:tz{tz}" and would

@@ -35,6 +35,7 @@ from app.services.projection_service import projection_service
 from app.services.odds_snapshot_service import odds_snapshot_service
 from app.services.cache import cache_service
 from app.services.lineup_service import lineup_service, wnba_lineup_service
+from app.services.slate_date import nba_slate_date
 
 
 class SchedulerService:
@@ -335,8 +336,8 @@ class SchedulerService:
         print("=" * 50)
         
         try:
-            # Run today's analysis
-            today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+            # US slate date (America/New_York), including after midnight UTC.
+            today = nba_slate_date()[0]
             result = await daily_analysis_service.run_daily_analysis(
                 date=today,
                 use_cache=False  # Forced re-analysis in scheduled jobs
@@ -378,7 +379,7 @@ class SchedulerService:
         print("=" * 50)
 
         try:
-            today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+            today = nba_slate_date()[0]
             result = await daily_analysis_service.run_daily_analysis(
                 date=today,
                 use_cache=False,  # Forced re-analysis in scheduled jobs
@@ -539,7 +540,7 @@ class SchedulerService:
         print("=" * 50)
 
         try:
-            today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+            today = nba_slate_date()[0]
             lineups = await lineup_service.fetch_and_store(today)
             print(f"✅ Free lineup refresh completed! {len(lineups)} teams")
         except Exception as e:
@@ -561,7 +562,7 @@ class SchedulerService:
         print("=" * 50)
 
         try:
-            today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+            today = nba_slate_date()[0]
             lineups = await wnba_lineup_service.fetch_and_store(today)
             print(f"✅ WNBA lineup refresh completed! {len(lineups)} teams")
         except Exception as e:
@@ -604,7 +605,7 @@ class SchedulerService:
 
     async def trigger_lineup_fetch_now(self, date: Optional[str] = None) -> dict:
         if date is None:
-            date = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+            date = nba_slate_date()[0]
         return await lineup_service.fetch_and_store(date)
     
     async def trigger_now(self):
