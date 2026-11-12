@@ -114,7 +114,6 @@ jobs:
           NEXT_TELEMETRY_DISABLED: "1"
         run: |
           # ubuntu-latest rejects unshare -rn (uid_map: Operation not permitted).
-          # Point the font hosts at loopback so a fetch fails the build.
           sudo sh -c 'printf "127.0.0.1 fonts.googleapis.com\n127.0.0.1 fonts.gstatic.com\n" >> /etc/hosts'
           if curl --fail --max-time 10 -sS -o /dev/null https://fonts.googleapis.com; then
             echo "fonts.googleapis.com was reachable"
