@@ -3,8 +3,8 @@
  *
  * The board is the November 2026 layout. Date, team filter, session
  * storage, re-analyze, and lineup badges stay on this page. A reverse
- * add and ask-the-agent live on the game page and the pick context menu.
- * Numbers come from getDailyPicks.
+ * add lives on the game page and the pick context menu. Ask-the-agent
+ * lives on the game page. Numbers come from getDailyPicks.
  */
 
 "use client";
