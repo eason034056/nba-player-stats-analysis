@@ -16,7 +16,7 @@ WNBA keeps the previous game log, bookmaker picker, and results table.
 | `frontend/components/event/GameFilters.tsx` | Split into `RangeControl`, `LineControl`, `VenueControl`, `RoleControl`, `OpponentControl`, and `TeammatesControl`. `RANGE_OPTIONS` per league. `MoreFilters` is the NBA sheet. `GameFilters` is the WNBA panel, unchanged in content. Selected segments are brand-filled. Tracks use `rounded-control` (12px) around `rounded-mark-sm` (9px) buttons. Teammates is an "Add a teammate" menu, and only picked names show as removable chips. |
 | `frontend/components/event/NbaGameLog.tsx` | The NBA game log card. Filters, tiles, chart. Mobile keeps range and line on the card and opens the sheet from a Filters button that counts active filters. Desktop has Reset filters. |
 | `frontend/components/event/GameLogChart.tsx` | `heading` prop so the NBA card can own the title. The picked game is one short chip (date vs opponent, value, Over / Under / Push) with the legend on the same row. |
-| `frontend/components/EventDetail.tsx` | NBA renders `NbaGameLog` and `SportsbookPrices`. WNBA keeps the old panels. |
+| `frontend/components/EventDetail.tsx` | NBA renders `NbaGameLog` and `SportsbookPrices`. WNBA keeps the old panels. On desktop each column is its own flex stack, so the right column no longer waits for the player list. |
 | Tests | New `sportsbook-prices.test.ts`, `SportsbookPrices.test.tsx`, `game-log-tiles.test.ts`, `NbaGameLog.test.tsx`. `EventDetail.fixtures.test.tsx` locators follow the new layout. |
 | `docs/task-summaries/assets/SPO-120c/` | Before and after screenshots. |
 
@@ -33,6 +33,7 @@ Owner review round:
 - Filter radii were not concentric. This repo's Tailwind config sets `rounded-xl` to 24px, not the stock 12px, so the 42px tracks drew as pills around 9px buttons. Tracks, the opponent menu, and the mobile Filters button now use `rounded-control`, and the buttons use `rounded-mark-sm`. That is the design's 12px and 9px with the 3px padding between. The same override drew the 10px legend squares as circles (`rounded-sm` is 10px here). They are 3px now.
 - Teammates listed the whole roster as chips. It is now one menu of teammates not yet picked, with the picked names as chips beside it. The WNBA panel shares the control.
 - The picked-game strip is one chip, "Nov 9 vs BOS · 16 · Under", with the legend to its right on desktop. Minutes and starter or bench left the strip to match the owner's reference. "vs" names the opponent only. The game log has no home or away field, so it never means a home game here.
+- On desktop the game log started below the player list, not below the read card. Both columns shared grid rows, so row 1 was as tall as the player list. This predates SPO-120c. The fix is here because a separate PR would conflict on `EventDetail.tsx`. Each column is now one flex stack. On mobile both stacks are `display: contents`, so each panel keeps its `order` and the mobile order does not change. The WNBA player search moved into the left stack in the DOM, so on WNBA mobile, keyboard focus reaches it before the read card. The visual order is unchanged.
 
 ## Tests / Verification
 
@@ -44,6 +45,7 @@ Owner review round:
 - Fabrication scan: PASS. Every number in the table and the tiles comes from the no-vig or history response. No projection tile, no teammate absence counts.
 - Browser, headless Chromium with the committed event fixtures at 1440 and 390. No page errors. Mobile Odds shows the banner and the four columns, with BetMGM marked `line 19.5`. Picking Bench in the sheet turns the button into "Filters · 1".
 - Review round, same fixtures on the dev server: computed radii are 12px on every track and menu and 9px on every inner button. Picking Tyler Herro from the menu adds one chip and disables the menu (the fixture has one teammate). The strip reads "Nov 10 vs BOS 24 Over" with the legend on the same row at 1440, and wraps under it at 390 with no sideways scroll.
+- Column fix, same fixtures: with a no-read player on NBA, the read card ends at y=560 and the game log starts at 580 while the player list runs to 713. On WNBA the read card ends at 516 and the game log starts at 536 while the list runs to 744. At 390, stat chips, players, and the tab panel stay in order on every tab for both leagues.
 
 | Behavior | Test |
 |---|---|
@@ -75,6 +77,8 @@ Review round:
 | Web game log | Mobile strip | Mobile sheet |
 |---|---|---|
 | ![Web game log](assets/SPO-120c/review-web-log.png) | ![Mobile strip](assets/SPO-120c/review-mobile-strip.png) | ![Mobile sheet](assets/SPO-120c/review-mobile-sheet.png) |
+
+![Game log right under the read card](assets/SPO-120c/review-web-columns.png)
 
 ## Follow-ups
 
