@@ -237,8 +237,8 @@ class TestMissingInputs:
         assert found["defense"].value == "#8"
         assert found["defense"].verdict == "supports"
 
-    def test_out_and_doubtful_drop_the_combined_probability_only(self):
-        for status in ("Out", "out", " Doubtful ", "DOUBTFUL"):
+    def test_out_drops_the_combined_probability_only(self):
+        for status in ("Out", "out", " OUT "):
             found, combined, signals = signal_map(
                 injury_status=status, market_probability=0.55
             )
@@ -246,6 +246,19 @@ class TestMissingInputs:
             assert "projection" not in found
             assert found["market"].verdict == "supports"
             assert combined is None
+
+    def test_doubtful_keeps_the_combined_probability(self):
+        _found, plain, _signals = signal_map(
+            injury_status="Questionable", market_probability=0.55
+        )
+        for status in ("Doubtful", " Doubtful ", "DOUBTFUL"):
+            found, combined, signals = signal_map(
+                injury_status=status, market_probability=0.55
+            )
+            assert len(signals) == 4
+            assert found["market"].verdict == "supports"
+            assert combined == plain
+            assert combined is not None
 
     def test_probable_keeps_the_combined_probability(self):
         _found, combined, _signals = signal_map(

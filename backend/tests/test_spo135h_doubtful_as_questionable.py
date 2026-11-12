@@ -113,31 +113,33 @@ def test_reads_give_raw_doubtful_a_number(monkeypatch) -> None:
     """GET /api/nba/events/{id}/reads returns a number for a cache Doubtful.
 
     One recorded player_points description is relabeled to the recorded
-    Doubtful name, and another to the recorded Questionable name.
+    Doubtful name. A second call uses that same recorded row with
+    ``raw_status`` set to the stored status, so the prices stay put and
+    only the source word changes. The two numbers match.
     """
-    questionable = _entry("Questionable")
     doubtful = _entry("Questionable", raw="Doubtful")
     event_id, rows = _points_rows()
     posted = sorted({row["player_name"] for row in rows})
-    sources = [name for name in posted if name != "Dyson Daniels"]
-    assert len(sources) >= 2
-    rows = _relabel(rows, sources[0], questionable["player"])
-    rows = _relabel(rows, sources[1], doubtful["player"])
-    _install(
-        monkeypatch,
-        rows,
-        injury_body=_fresh([questionable, doubtful]),
-    )
+    source = next(name for name in posted if name != "Dyson Daniels")
+    rows = _relabel(rows, source, doubtful["player"])
+    _install(monkeypatch, rows, injury_body=_fresh([doubtful]))
 
     from app.services.event_reads import get_event_reads
 
     payload = asyncio.run(
         get_event_reads(event_id, market="player_points", csv_service=_Csv())
     )
-    q_rows = _by_player(payload, questionable["player"])
     d_rows = _by_player(payload, doubtful["player"])
-    assert all(item.combined_probability is not None for item in q_rows)
-    assert all(0.0 < item.combined_probability < 1.0 for item in q_rows)
+    assert all(item.combined_probability is not None for item in d_rows)
+    assert all(0.0 < item.combined_probability < 1.0 for item in d_rows)
+
+    plain = dict(doubtful)
+    plain["raw_status"] = plain["status"]
+    _install(monkeypatch, rows, injury_body=_fresh([plain]))
+    again = asyncio.run(
+        get_event_reads(event_id, market="player_points", csv_service=_Csv())
+    )
+    q_rows = _by_player(again, doubtful["player"])
     assert [item.combined_probability for item in d_rows] == [
         item.combined_probability for item in q_rows
     ]
