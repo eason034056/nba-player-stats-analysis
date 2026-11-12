@@ -96,7 +96,8 @@ class NBAEvent(BaseModel):
     - home_team: Name of the home team
     - away_team: Name of the away team
     - commence_time: Game start time (UTC ISO 8601 format)
-    - top_read: Highest-probability stored daily pick for this event, or null
+    - top_read: Highest-probability stored daily pick for this event that a
+      fresh injury snapshot does not mark Out, or null
     """
     event_id: str = Field(..., description="Event ID")
     sport_key: str = Field(..., description="Sport key")
@@ -119,8 +120,10 @@ class NBAEvent(BaseModel):
         default=None,
         description=(
             "Highest-probability stored daily pick for this event, or null "
-            "when that event has no stored pick. Filled on GET /api/nba/events "
-            "from the daily-picks cache."
+            "when that event has no stored pick left. A player a fresh NBA "
+            "injury snapshot marks Out is skipped. A missing or stale "
+            "snapshot does not skip. Filled on GET /api/nba/events from the "
+            "daily-picks cache. The field names and nullability are unchanged."
         ),
     )
 
