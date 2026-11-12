@@ -7,7 +7,7 @@ export function InjuryStatusTag({ tag }: { tag: InjuryTag }) {
     <span
       data-injury-tone={tag.tone}
       className={cn(
-        "inline-flex items-center rounded-md px-2 py-0.5 text-[11px] font-semibold",
+        "relative inline-flex items-center overflow-hidden rounded-md px-2 py-0.5 text-[11px] font-semibold",
         paint.chip,
       )}
     >
