@@ -189,7 +189,7 @@ describe("DailyPicksBoard with an Out pick", () => {
     expect(card).not.toHaveTextContent("%");
     expect(card).not.toHaveTextContent("In slip");
     expect(within(card).getByRole("button", { name: "Remove Jimmy Butler" })).toBeInTheDocument();
-    expect(within(card).queryByRole("button", { name: /ask the agent/i })).not.toBeInTheDocument();
+    expect(within(card).queryByRole("button", { name: /ask agent about/i })).not.toBeInTheDocument();
     expect(within(card).queryByRole("button", { name: /under|over/i })).not.toBeInTheDocument();
     expect(screen.getByText("picks").previousElementSibling).toHaveTextContent("0");
     expect(screen.getByText("strong").previousElementSibling).toHaveTextContent("0");
