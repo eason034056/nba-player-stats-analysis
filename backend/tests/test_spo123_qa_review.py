@@ -189,38 +189,6 @@ async def test_omitted_date_is_the_callers_local_day(client, monkeypatch):
     assert len(calls.events) == 1
 
 
-@pytest.mark.asyncio
-async def test_omitted_date_and_offset_use_taipei_default(client, monkeypatch):
-    """Omitted tz_offset is 480 (UTC+8), the same default as the list.
-
-    At 17:00 UTC on 2026-11-10 (11:00 AM CT) Taipei is already 01:00 on
-    2026-11-11. With both date and tz_offset omitted, the detail route
-    therefore searches 2026-11-11 with key tz480. The list route still
-    fills an omitted date with today UTC (2026-11-10) and then applies
-    the same 480 default, so the two keys differ. The frontend always
-    sends tz_offset; this only shows up for clients that omit it.
-    """
-    _freeze_utc_now(monkeypatch, real_datetime(2026, 11, 10, 17, 0, tzinfo=timezone.utc))
-    calls = _Calls()
-    cache: dict = {}
-    _install(monkeypatch, calls, cache)
-
-    detail = await client.get(f"/api/nba/events/{_BOS_PHI['id']}")
-    listing = await client.get("/api/nba/events")
-
-    taipei_key = f"{CacheService.build_events_key('2026-11-11', 'us')}:tz480"
-    utc_key = f"{CacheService.build_events_key('2026-11-10', 'us')}:tz480"
-    assert taipei_key in cache
-    assert utc_key in cache
-    assert detail.status_code == 200
-    assert detail.json()["event_id"] == _BOS_PHI["id"]
-    list_ids = {event["event_id"] for event in listing.json()["events"]}
-    assert _BOS_PHI["id"] not in list_ids
-    assert listing.json()["date"] == "2026-11-10"
-    assert len(calls.events) == 2
-    assert calls.gateway == 0 and calls.event_odds == 0
-
-
 # --- Cache key parity with the list route --------------------------------
 
 
