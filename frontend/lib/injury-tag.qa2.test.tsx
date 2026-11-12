@@ -43,9 +43,7 @@ vi.mock("@/lib/api", async () => {
 
 const todayPicks = dailyPicksResponseSchema.parse(todayPicksFixture);
 const emptyLineups = lineupsResponseSchema.parse(emptyLineupsFixture);
-const [doubtful, listedOut, wnbaQuiet, lowerOut] = rawInjuryFixture.picks.map((pick) =>
-  dailyPickSchema.parse(pick),
-);
+const [doubtful, listedOut] = rawInjuryFixture.picks.map((pick) => dailyPickSchema.parse(pick));
 
 function legFor(pick: DailyPick, probability: number) {
   return createBetSlipPick({
@@ -145,6 +143,13 @@ afterEach(() => {
 });
 
 describe("a raw out next to a stored Questionable", () => {
+  // Synthetic. The backend stores a raw "out" as Out, so this pair is not a fixture row.
+  const lowerOut: DailyPick = {
+    ...doubtful,
+    injury_status: "Questionable",
+    injury_status_raw: "out",
+  };
+
   it("shows the raw word and the percent on the slip leg and the share card", async () => {
     seedBetSlip([legFor(lowerOut, 0.6095)]);
     apiMocks.getDailyPicks.mockResolvedValue({ ...todayPicks, picks: [lowerOut] });
@@ -246,12 +251,13 @@ describe("screen-reader prefix", () => {
 
 describe("WNBA", () => {
   it("shows no injury chip or prefix on the board, the rail, or Today", () => {
+    const wnbaQuiet: DailyPick = { ...doubtful, injury_status: null, injury_status_raw: null };
     renderWithProviders(<DailyPicksBoard {...boardProps({ league: "wnba", picks: [wnbaQuiet], teams: ["LVA"] })} />);
     const card = screen.getByRole("article");
     expect(card).not.toHaveTextContent("Injury:");
-    const button = renderRail({ ...wnbaQuiet, injury_status: "Out", injury_status_raw: "Out" }, "wnba");
+    const button = renderRail(wnbaQuiet, "wnba");
     expect(button).not.toHaveTextContent("Injury:");
-    expect(todayReads([{ ...wnbaQuiet, injury_status_raw: "Doubtful" }], "wnba", "2026-11-10")[0]?.injury).toBeNull();
+    expect(todayReads([wnbaQuiet], "wnba", "2026-11-10")[0]?.injury).toBeNull();
   });
 });
 
