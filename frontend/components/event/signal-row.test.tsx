@@ -16,7 +16,6 @@ describe("NBA signal rows", () => {
       marketName: "Points",
       market: "player_points",
       binary: false,
-      supportsProjection: true,
       eventId: "evt-cle-orl",
       homeTeam: "Orlando Magic",
       awayTeam: "Cleveland Cavaliers",
@@ -42,7 +41,6 @@ describe("NBA signal rows", () => {
       consensus: null,
       last10: [],
       history: null,
-      projection: null,
       league: "nba",
     });
 
