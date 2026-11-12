@@ -21,7 +21,7 @@ export interface SlipSummary {
   allHitText: string;
 }
 
-function legHasBlend(pick: BetSlipPick): boolean {
+function legHasBlend(pick: BetSlipPick): pick is BetSlipPick & { combined_probability: number } {
   return typeof pick.combined_probability === "number" && Number.isFinite(pick.combined_probability);
 }
 
@@ -37,31 +37,36 @@ export interface SlipTotals {
  * A slip that also has a leg with no blend is labelled History and uses
  * the historical rate on every leg, so the totals are not a mixed number.
  */
-export function slipTotals(picks: BetSlipPick[]): SlipTotals {
-  const summaryOf = (values: number[], basis: SlipTotals["basis"], averageLabel: string, allHitLabel: string): SlipTotals => ({
-    summary: slipSummary(values),
-    averageLabel,
-    allHitLabel,
-    basis,
-  });
-  if (picks.length > 0 && picks.every(legHasBlend)) {
+export function slipTotals(picks: BetSlipPick[], outIds?: ReadonlySet<string>): SlipTotals {
+  const live = outIds ? picks.filter((pick) => !outIds.has(pick.id)) : picks;
+  const summaryOf = (values: number[], basis: SlipTotals["basis"], averageLabel: string, allHitLabel: string): SlipTotals => {
+    const math = slipSummary(values);
+    return {
+      summary: { count: picks.length, averageText: math.averageText, allHitText: math.allHitText },
+      averageLabel,
+      allHitLabel,
+      basis,
+    };
+  };
+  const blended = live.filter(legHasBlend);
+  if (live.length > 0 && blended.length === live.length) {
     return summaryOf(
-      picks.map((pick) => pick.combined_probability as number),
+      blended.map((pick) => pick.combined_probability),
       "blend",
       "avg. blend",
       "all hit",
     );
   }
-  if (picks.some(legHasBlend)) {
+  if (live.some(legHasBlend)) {
     return summaryOf(
-      picks.map((pick) => pick.probability),
+      live.map((pick) => pick.probability),
       "history",
       "History",
       "History",
     );
   }
   return summaryOf(
-    picks.map((pick) => pick.probability),
+    live.map((pick) => pick.probability),
     "stored",
     "avg. probability",
     "all hit",

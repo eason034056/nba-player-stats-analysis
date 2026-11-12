@@ -125,6 +125,29 @@ export function isOutPick(pick: { injury_status?: string | null }): boolean {
   return injuryKey(pick.injury_status) === "out";
 }
 
+/**
+ * True when any loaded row for this player in this game is Out.
+ * One Out line blocks every other line and market. Doubtful does not.
+ */
+export function isPlayerOutInGame(
+  picks: readonly {
+    event_id?: string | null;
+    player_name?: string | null;
+    injury_status?: string | null;
+  }[],
+  eventId: string,
+  playerName: string,
+): boolean {
+  const event = eventId.trim();
+  const name = playerName.trim().toLowerCase();
+  if (!event || !name) return false;
+  return picks.some((pick) => {
+    const pickEvent = pick.event_id?.trim() ?? "";
+    const pickName = pick.player_name?.trim().toLowerCase() ?? "";
+    return pickEvent === event && pickName === name && isOutPick(pick);
+  });
+}
+
 function injuryTagText(status: string | null | undefined): string | null {
   return INJURY_TAG_TEXT[injuryKey(status)] ?? null;
 }

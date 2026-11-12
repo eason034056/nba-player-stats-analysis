@@ -443,7 +443,20 @@ export function DailyPicksBoard({
                   </div>
                   )}
 
-                  {row.dimmed ? null : (
+                  {row.dimmed ? (
+                    inSlip ? (
+                      <div className="flex shrink-0 justify-end">
+                        <button
+                          type="button"
+                          aria-label={`Remove ${pick.player_name}`}
+                          onClick={() => onToggleSlip(pick)}
+                          className="min-h-11 rounded-full border border-line bg-white px-4 text-[13px] font-bold text-ink"
+                        >
+                          Remove
+                        </button>
+                      </div>
+                    ) : null
+                  ) : (
                   <div className="flex shrink-0 flex-wrap justify-end gap-2">
                       <button
                         type="button"

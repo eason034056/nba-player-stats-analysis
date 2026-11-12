@@ -5,9 +5,12 @@ import { describe, expect, it, vi } from "vitest";
 import { OurRead } from "@/components/event/OurRead";
 import { BetSlipScreen } from "@/components/betslip/BetSlipScreen";
 import { buildOurRead } from "@/lib/event-page";
-import { dailyPicksResponseSchema, type DailyPick } from "@/lib/schemas";
+import { dailyPicksResponseSchema, lineupsResponseSchema, type DailyPick } from "@/lib/schemas";
 import { clearBetSlip, createBetSlipPick, renderWithProviders, seedBetSlip } from "@/test/test-utils";
+import emptyLineupsFixture from "@/test/fixtures/lineups/empty.json";
 import nbaPicksFixture from "@/test/fixtures/picks/nba-daily-picks.json";
+
+const emptyLineups = lineupsResponseSchema.parse(emptyLineupsFixture);
 
 vi.mock("next/link", () => ({
   default: ({ href, children, ...props }: { href: string; children: ReactNode }) => (
@@ -21,13 +24,7 @@ vi.mock("@/lib/api", async () => {
   const actual = await vi.importActual<typeof import("@/lib/api")>("@/lib/api");
   return {
     ...actual,
-    getLineups: vi.fn(async () => ({
-      date: "2026-11-11",
-      team_count: 0,
-      fetched_at: null,
-      cache_state: "miss",
-      lineups: [],
-    })),
+    getLineups: vi.fn(async () => emptyLineups),
   };
 });
 
@@ -90,7 +87,8 @@ describe("an Out pick with a null blend", () => {
       />,
     );
     const read = screen.getByTestId("our-read");
-    expect(read).toHaveTextContent("Combined probability —.");
+    expect(read).toHaveTextContent("Listed Out. No model read.");
+    expect(screen.queryByRole("button", { name: /ask/i })).not.toBeInTheDocument();
     assertNoBrokenPercent(read.textContent ?? "");
   });
 
