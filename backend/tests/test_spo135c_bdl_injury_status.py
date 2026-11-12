@@ -576,6 +576,7 @@ def test_job_is_registered_on_the_half_hour_marks(monkeypatch) -> None:
     assert found["max_instances"] == 1
     assert found["coalesce"] is True
     assert startup is not None
+    assert startup["name"] == "NBA Injury Snapshot Startup Refill"
     assert startup["misfire_grace_time"] == 60
 
 
@@ -630,15 +631,14 @@ def test_startup_fill_runs_once_only_when_the_key_is_missing(monkeypatch) -> Non
 # ---------------------------------------------------------------------------
 
 
-def test_doubtful_raw_status_blocks_and_questionable_does_not() -> None:
-    """#60 stores Doubtful as Questionable and keeps raw_status.
+def test_doubtful_does_not_block_and_out_does() -> None:
+    """Doubtful is Questionable. Only Out blocks the blend.
 
-    injury_blocks_combined fires for Out on the normalized word, and for
-    Doubtful by reading raw_status. A real Questionable does not block.
+    The cache still stores Doubtful as Questionable and keeps raw_status.
+    The blend reads the normalized word. A literal Doubtful does not block.
     """
     assert injury_blocks_combined("Out") is True
-    assert injury_blocks_combined("Questionable", "Doubtful") is True
-    assert injury_blocks_combined("Questionable", "Questionable") is False
+    assert injury_blocks_combined("Doubtful") is False
     assert injury_blocks_combined("Questionable") is False
 
 
@@ -655,7 +655,7 @@ def test_out_pick_has_no_combined_probability() -> None:
     assert all(row.combined_probability is not None for row in open_rows)
 
 
-def test_questionable_keeps_a_probability_and_raw_doubtful_does_not() -> None:
+def test_questionable_and_raw_doubtful_keep_the_same_probability() -> None:
     questionable = _entry("Questionable")
     doubtful = _entry("Questionable", raw="Doubtful")
     picks = _picks_for(
@@ -667,7 +667,10 @@ def test_questionable_keeps_a_probability_and_raw_doubtful_does_not() -> None:
     assert {row.injury_status for row in q_rows} == {"Questionable"}
     assert all(row.combined_probability is not None for row in q_rows)
     assert {row.injury_status for row in d_rows} == {"Questionable"}
-    assert {row.combined_probability for row in d_rows} == {None}
+    assert {row.combined_probability for row in d_rows} == {
+        row.combined_probability for row in q_rows
+    }
+    assert all(row.combined_probability is not None for row in d_rows)
     assert {row.lineup_confirmed for row in d_rows} == {None}
 
 

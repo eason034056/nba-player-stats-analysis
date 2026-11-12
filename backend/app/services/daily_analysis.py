@@ -55,7 +55,13 @@ from app.models.schemas import (
     EventsResponse,
     TopRead,
 )
-from app.services.nba_injuries import load_nba_pick_injuries, match_injury_entry
+from app.services.nba_injuries import (
+    NBA_INJURIES_CACHE_KEY,
+    injury_snapshot_is_fresh,
+    load_nba_pick_injuries,
+    match_injury_entry,
+    matched_injury_words,
+)
 from app.services.pick_signals import build_nba_signals, injury_blocks_combined
 
 
@@ -262,6 +268,10 @@ def choose_daily_pick_side(
 # Cache key prefix
 DAILY_PICKS_CACHE_KEY = "daily_picks"
 
+# NBA payloads from before injury_status_raw live under the unversioned
+# key. Readers and writers use v2 only. WNBA stays unversioned.
+NBA_DAILY_PICKS_CACHE_VERSION = "v2"
+
 # Cache TTL (15 minutes)
 DAILY_PICKS_CACHE_TTL = 15 * 60
 
@@ -269,15 +279,25 @@ DAILY_PICKS_CACHE_TTL = 15 * 60
 def daily_picks_cache_key(league: str, date: str, tz_offset_minutes: int) -> str:
     """Redis key for one league, local date, and timezone offset.
 
+    NBA keys include ``v2`` so a payload stored before
+    ``injury_status_raw`` is not read. WNBA keys stay
+    ``daily_picks:wnba:{date}:tz{offset}``.
+
     Args:
         league: ``nba`` or ``wnba``.
         date: Local date YYYY-MM-DD.
         tz_offset_minutes: Minutes east of UTC. UTC+8 is 480.
 
     Returns:
-        ``daily_picks:{league}:{date}:tz{offset}``.
+        ``daily_picks:nba:v2:{date}:tz{offset}`` or the unversioned WNBA key.
     """
-    return f"{DAILY_PICKS_CACHE_KEY}:{league.lower()}:{date}:tz{tz_offset_minutes}"
+    league_key = league.lower()
+    if league_key == "nba":
+        return (
+            f"{DAILY_PICKS_CACHE_KEY}:nba:{NBA_DAILY_PICKS_CACHE_VERSION}:"
+            f"{date}:tz{tz_offset_minutes}"
+        )
+    return f"{DAILY_PICKS_CACHE_KEY}:{league_key}:{date}:tz{tz_offset_minutes}"
 
 
 def _optional_stat(value: Any) -> float | None:
@@ -324,7 +344,8 @@ def sort_stored_picks(picks: List[DailyPick], league: str = "nba") -> None:
 
     ``best_top_reads`` still picks the highest historical probability.
     On a tie it keeps the earlier row of this list, so an NBA tie keeps
-    the higher blend.
+    the higher blend. A fresh injury snapshot skips a player whose
+    normalized status is Out. A missing or stale snapshot does not.
 
     Args:
         picks: Stored candidates. Sorted in place.
@@ -364,19 +385,18 @@ def select_daily_picks(
 
     Returns:
         Picks that meet both floors, in the original order. An NBA row
-        whose ``injury_status`` is Out or Doubtful is kept when the
-        sample floor passes, even though its blend is null.
+        whose ``injury_status`` is Out is kept when the sample floor
+        passes, even though its blend is null. Doubtful is Questionable
+        and uses the blend floor.
     """
     kept: List[DailyPick] = []
     for pick in picks:
         if pick.n_games < min_games:
             continue
         # Out stays on the board with a null blend so injury_status is
-        # visible. A missing blend that is not an injury block still
-        # leaves the board. Doubtful from the cache is stored as
-        # Questionable; that row's blend is already null and this filter
-        # does not see the source word, so it leaves with the other
-        # null blends.
+        # visible. A missing blend that is not Out still leaves the
+        # board. Doubtful is stored as Questionable and follows its
+        # blend, the same as any other Questionable row.
         if league.lower() != "wnba" and injury_blocks_combined(pick.injury_status):
             kept.append(pick)
             continue
@@ -1276,25 +1296,25 @@ class DailyAnalysisService:
                     # No projection source. The line is not a stand-in.
                     # lineup_confirmed stays null until projected lineups.
                     # NBA injury_status comes from the cached snapshot.
-                    # The Odds API description has no bdl_player_id, so
-                    # the match is the full name with the suffix kept.
-                    # A missing or ambiguous name stays null. WNBA stays null.
+                    # injury_status_raw is that same row's raw_status,
+                    # copied with no case change and no trimming. The
+                    # signal builder still receives only injury_status.
+                    # Out blocks. A stored Doubtful is already Questionable
+                    # and does not. The Odds API description has no
+                    # bdl_player_id, so the match is the full name with
+                    # the suffix kept. A missing or ambiguous name stays
+                    # null on both fields. WNBA stays null on both.
                     has_projection = False
                     projected_value = None
                     projected_minutes = None
                     edge = None
                     injury_status = None
-                    injury_raw_status = None
+                    injury_status_raw = None
                     lineup_confirmed = None
                     if league.lower() == "nba" and injury_entries is not None:
-                        matched = match_injury_entry(injury_entries, player_name)
-                        if matched is not None:
-                            status = matched.get("status")
-                            raw_status = matched.get("raw_status")
-                            if isinstance(status, str):
-                                injury_status = status
-                            if isinstance(raw_status, str):
-                                injury_raw_status = raw_status
+                        injury_status, injury_status_raw = matched_injury_words(
+                            match_injury_entry(injury_entries, player_name)
+                        )
                     rank_fields = _empty_rank_fields()
                     if league.lower() == "nba":
                         opponent = _opponent_club(
@@ -1334,6 +1354,7 @@ class DailyAnalysisService:
                         opponent_position_rank_season=rank_fields["opponent_position_rank_season"],
                         opponent_position_rank_note=rank_fields["opponent_position_rank_note"],
                         injury_status=injury_status,
+                        injury_status_raw=injury_status_raw,
                         lineup_confirmed=lineup_confirmed,
                         # NBA tier is filled after the signal step. Starting
                         # at None means a raised signal call cannot leave
@@ -1355,7 +1376,6 @@ class DailyAnalysisService:
                         league=league,
                         bookmakers_data=props_data,
                         game_logs=history_stats.get("game_logs") or [],
-                        injury_raw_status=injury_raw_status,
                     )
 
                     edge_str = f" (edge: {edge:+.1f})" if edge is not None else ""
@@ -1528,7 +1548,6 @@ def _with_nba_signal_verdicts(
     league: str,
     bookmakers_data: List[Dict[str, Any]],
     game_logs: List[Dict[str, Any]],
-    injury_raw_status: str | None = None,
 ) -> DailyPick:
     """Attach the NBA signals on a pick. WNBA is returned unchanged.
 
@@ -1554,7 +1573,6 @@ def _with_nba_signal_verdicts(
         opponent_rank=pick.opponent_rank,
         opponent_position_rank=pick.opponent_position_rank,
         injury_status=pick.injury_status,
-        raw_status=injury_raw_status,
     )
     # Mutate the instance already appended to the pick list. model_copy
     # would leave the list holding the pre-signal object.
@@ -1567,7 +1585,50 @@ def _with_nba_signal_verdicts(
     return pick
 
 
-def best_top_reads(cached: Any) -> Dict[str, TopRead]:
+def _top_read_candidate_is_out(
+    player: str,
+    injury_entries: list[dict[str, Any]] | None,
+) -> bool:
+    """True when a fresh snapshot marks this candidate Out.
+
+    The name is the question the chooser asks before a row can become
+    ``top_read``: is this player Out? Call it with the stored
+    ``player_name`` and the fresh entry list. ``injury_entries`` is
+    None when ``injuries:nba:latest`` is missing, stale, malformed, or
+    unreadable. The candidate then stays, which is the same rule picks
+    use when they leave ``injury_status`` null. An empty list is a
+    fresh snapshot and matches nobody.
+
+    The match is :func:`match_injury_entry` with no ``bdl_player_id``.
+    A stored pick and a snapshot row are names. The fold is case,
+    punctuation, and accents. The suffix stays, so a row for
+    ``Gary Trent Jr.`` does not skip ``Gary Trent``. Only Out skips,
+    with the same case and whitespace fold the blend uses.
+    Questionable, including a source word of Doubtful, does not.
+    This does not log and does not call BALLDONTLIE.
+
+    Args:
+        player: ``player_name`` on one stored pick.
+        injury_entries: Fresh snapshot rows, or None.
+
+    Returns:
+        True when that player should be left out of the top read.
+    """
+    if injury_entries is None:
+        return False
+    matched = match_injury_entry(injury_entries, player)
+    if not isinstance(matched, dict):
+        return False
+    status = matched.get("status")
+    if not isinstance(status, str):
+        return False
+    return injury_blocks_combined(status)
+
+
+def best_top_reads(
+    cached: Any,
+    injury_entries: list[dict[str, Any]] | None = None,
+) -> Dict[str, TopRead]:
     """Pick the highest-probability stored pick for each event.
 
     The cache payload is the JSON written by ``run_daily_analysis``.
@@ -1575,8 +1636,22 @@ def best_top_reads(cached: Any) -> Dict[str, TopRead]:
     list is ordered by ``sort_stored_picks`` (the blend for NBA, the
     historical rate for WNBA), so an NBA tie keeps the higher blend.
 
+    Each event is chosen on its own. The game is that ``event_id``.
+    The player is the stored ``player_name``. A candidate is skipped
+    when ``injury_entries`` is a fresh snapshot and
+    :func:`match_injury_entry` matches that name to a row whose
+    normalized status is Out. The snapshot has no game id, and picks
+    do not carry a ``bdl_player_id``, so this is the same name rule
+    picks and ``/reads`` use. The next-highest finite candidate on
+    that same event is used. When every candidate is Out, that event
+    is absent and its ``top_read`` stays null. ``injury_entries``
+    left as None does not skip anyone. WNBA does not call this with
+    a snapshot.
+
     Args:
         cached: Daily-picks cache document, or anything that is not one.
+        injury_entries: Fresh NBA injury rows, or None when the
+            snapshot cannot be used. The default keeps the old choice.
 
     Returns:
         Map of event_id to ``TopRead``. Empty when nothing is stored.
@@ -1604,6 +1679,10 @@ def best_top_reads(cached: Any) -> Dict[str, TopRead]:
             continue
         market = market_key_for_metric(pick.get("metric"))
         if market is None:
+            continue
+        # The game is event_id. The player is this row. An Out match
+        # drops the row before it can replace a lower healthy one.
+        if _top_read_candidate_is_out(str(player), injury_entries):
             continue
         current = best.get(str(event_id))
         if current is not None and probability <= current["probability"]:
@@ -1650,15 +1729,43 @@ def attach_top_reads(
     return response.model_copy(update={"events": events})
 
 
+async def _read_top_read_injuries() -> list[dict[str, Any]] | None:
+    """Fresh injury rows for top_read, or None when the snapshot cannot be used.
+
+    ``_read_top_read_injuries`` is the Redis read ``load_stored_top_reads``
+    uses. Call it from that loader only. It reads
+    ``injuries:nba:latest`` and returns. It does not call BALLDONTLIE.
+    A missing key, a stale ``fetched_at``, a body that is not an
+    entries list, and a read error all return None with no log line.
+    Picks and ``/reads`` already warn once for those cases. A second
+    warning on the events request would be noise, and a Redis error
+    here must not drop every top_read: the caller still ranks the
+    stored picks. A fresh empty list returns ``[]``.
+
+    Returns:
+        The entry list, or None when top_read must not skip anyone.
+    """
+    try:
+        raw = await cache_service.get(NBA_INJURIES_CACHE_KEY)
+    except Exception:
+        return None
+    if not injury_snapshot_is_fresh(raw):
+        return None
+    return [row for row in raw["entries"] if isinstance(row, dict)]
+
+
 async def load_stored_top_reads(
     date: str,
     tz_offset_minutes: int,
 ) -> Dict[str, TopRead]:
     """Read the NBA daily-picks cache and index it by event.
 
-    This does not run analysis and does not call the Odds API. A cache
-    miss, including a Redis error that ``CacheService.get`` turns into
-    None, yields an empty map so every event's ``top_read`` stays null.
+    This does not run analysis and does not call the Odds API or
+    BALLDONTLIE. A cache miss, including a Redis error that
+    ``CacheService.get`` turns into None, yields an empty map so every
+    event's ``top_read`` stays null. A fresh injury snapshot is read
+    from the same Redis and skips Out players. A missing or stale
+    snapshot does not, and that read does not log.
 
     Args:
         date: Local date YYYY-MM-DD. Must be the same date the events
@@ -1668,12 +1775,12 @@ async def load_stored_top_reads(
             different local slate.
 
     Returns:
-        Best stored pick per event_id.
+        Best stored pick per event_id, after Out players are skipped.
     """
     cached = await cache_service.get(
         daily_picks_cache_key("nba", date, tz_offset_minutes)
     )
-    return best_top_reads(cached)
+    return best_top_reads(cached, injury_entries=await _read_top_read_injuries())
 
 
 # Create a global service instance

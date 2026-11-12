@@ -56,54 +56,65 @@ function nbaRead(p: DailyPick | null, history: PlayerHistoryResponse | null = nu
 }
 
 describe("QA: Bet Slip other side on the NBA read", () => {
-  // The first review stored 1 - combined_probability on the other side.
-  // That mixed the model into one slip button and the historical rate into
-  // the other. Both sides now stay on the historical pick: p_under / p_over
-  // first, then the history rate. combined_probability stays on the model bar.
-  it("stores the history rate, not 1 - combined, when the pick has no opposite field", () => {
+  // The other side stores 1 − combined_probability when the blend is finite.
+  // That is the same complement the model bar draws. A missing blend keeps
+  // the historical opposite field, then the history rate. No tier is derived.
+  it("stores 1 - combined, not the history rate, when the blend is finite", () => {
     const model = nbaRead(pick({ probability: 0.59, tier: "Lean", combined_probability: 0.673 }), bamHistory);
     expect(model.other?.direction).toBe("under");
-    expect(model.other?.probability).toBe(bamHistory.p_under);
-    expect(model.other?.probability).not.toBeCloseTo(0.327, 2);
+    expect(model.other?.probability).toBeCloseTo(1 - 0.673, 12);
+    expect(model.other?.combined_probability).toBeCloseTo(1 - 0.673, 12);
+    expect(model.other?.probability).not.toBe(bamHistory.p_under);
+    expect(model.other?.tier).toBeNull();
     expect(model.primary?.probability).toBe(0.59);
+    expect(model.primary?.tier).toBe("Lean");
     expect(model.other?.threshold).toBe(18.5);
   });
 
-  it("prefers the pick's own opposite field over history and over 1 - combined", () => {
+  it("prefers 1 - combined over the pick field and over history", () => {
     const model = nbaRead(
       pick({ probability: 0.59, tier: "Lean", p_under: 0.41, combined_probability: 0.673 }),
       bamHistory,
     );
-    expect(model.other?.probability).toBe(0.41);
+    expect(model.other?.probability).toBeCloseTo(1 - 0.673, 12);
+    expect(model.other?.probability).not.toBe(0.41);
     expect(model.other?.probability).not.toBe(bamHistory.p_under);
-    expect(model.other?.probability).not.toBeCloseTo(1 - 0.673, 2);
+    expect(model.other?.tier).toBeNull();
   });
 
-  it("flips an under pick onto p_over, then history, not 1 - combined", () => {
+  it("flips an under pick onto 1 - combined, not p_over or history", () => {
     const fromHistory = nbaRead(pick({ direction: "under", combined_probability: 0.61 }), bamHistory);
     expect(fromHistory.primary?.direction).toBe("under");
     expect(fromHistory.other?.direction).toBe("over");
-    expect(fromHistory.other?.probability).toBe(bamHistory.p_over);
-    expect(fromHistory.other?.probability).not.toBeCloseTo(0.39, 2);
+    expect(fromHistory.other?.probability).toBeCloseTo(0.39, 12);
+    expect(fromHistory.other?.probability).not.toBe(bamHistory.p_over);
 
     const fromPick = nbaRead(
       pick({ direction: "under", probability: 0.62, p_over: 0.38, combined_probability: 0.61 }),
       bamHistory,
     );
-    expect(fromPick.other?.probability).toBe(0.38);
-    expect(fromPick.other?.probability).not.toBe(bamHistory.p_over);
+    expect(fromPick.other?.probability).toBeCloseTo(0.39, 12);
+    expect(fromPick.other?.probability).not.toBe(0.38);
+    expect(fromPick.other?.tier).toBeNull();
   });
 
-  it("clamps the pick field into [0, 1] and does not invent a side from combined alone", () => {
-    expect(nbaRead(pick({ combined_probability: 0.673 })).other).toBeNull();
-    expect(nbaRead(pick({ p_under: 1.4, combined_probability: 0.2 })).other?.probability).toBe(1);
-    expect(nbaRead(pick({ p_under: -0.2, combined_probability: 0.2 })).other?.probability).toBe(0);
+  it("builds the other side from combined alone and clamps the complement into [0, 1]", () => {
+    expect(nbaRead(pick({ combined_probability: 0.673 })).other?.probability).toBeCloseTo(1 - 0.673, 12);
+    expect(nbaRead(pick({ combined_probability: 1.4, p_under: 0.2 })).other?.probability).toBe(0);
+    expect(nbaRead(pick({ combined_probability: -0.2, p_under: 0.2 })).other?.probability).toBe(1);
+  });
+
+  it("clamps the historical field only when combined is null", () => {
+    expect(nbaRead(pick({ combined_probability: null, p_under: 1.4 })).other?.probability).toBe(1);
+    expect(nbaRead(pick({ combined_probability: null, p_under: -0.2 })).other?.probability).toBe(0);
+    expect(nbaRead(pick({ combined_probability: null, p_under: 1.4 })).other?.combined_probability).toBeNull();
   });
 
   it("falls back to the strict history rate, never 1 - probability, when combined is null", () => {
     const model = nbaRead(pick({ probability: 0.72, combined_probability: null }), bamHistory);
     expect(model.other?.probability).toBe(bamHistory.p_under);
     expect(model.other?.n_games).toBe(bamHistory.n_games);
+    expect(model.other?.combined_probability).toBeNull();
     expect(model.other?.probability).not.toBeCloseTo(1 - 0.72, 4);
   });
 

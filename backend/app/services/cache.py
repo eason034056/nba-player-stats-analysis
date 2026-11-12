@@ -196,10 +196,11 @@ class CacheService:
         When the CSV data is updated, or fresh projections land, clear
         the picks cache so the next request parses the latest inputs.
 
-        SPO-35 added league scoping. Cache keys live under
-        ``daily_picks:{league}:{date}:tz{offset}`` so the NBA pipeline
-        (e.g. NBA final-projection refresh) can drop only its own keys
-        without nuking the WNBA cache, and vice versa.
+        SPO-35 added league scoping. WNBA keys stay
+        ``daily_picks:wnba:{date}:tz{offset}``. NBA keys are
+        ``daily_picks:nba:v2:{date}:tz{offset}``. The NBA sweep is
+        ``daily_picks:nba:*``, so v2 and the previous unversioned NBA
+        keys both match, and WNBA keys do not.
 
         Args:
             league: If provided (``"nba"`` / ``"wnba"``), restrict the
