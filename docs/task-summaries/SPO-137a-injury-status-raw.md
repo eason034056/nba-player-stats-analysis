@@ -67,9 +67,11 @@ QA test patch: `pr81_qa_tests1.patch` was applied with `git am`. The commit auth
 
 Recorded fixtures only. No live BALLDONTLIE or Odds API call. Odds shells are `odds_api_event_odds__player_points.json`. Injury words come from `player_injuries__page1.json` via `_entry`. Route samples use that odds capture with one description relabeled, a stub CSV, and a fresh in-process injury cache.
 
+`_mapped_status` folds case and whitespace before it stores a word. `out`, `OUT`, and ` Out ` are stored as `Out`. `available` is dropped. `doubtful` is still `Questionable`. `raw_status` and `injury_status_raw` keep the original string. A phrase with `out` as its own word (`Out For Season`) is `Out`. `shout` is not. Known-word casing is not logged as unrecognized. `top_read` uses the same Out check as the blend. WNBA is unchanged.
+
 `cd backend && python3 -m pytest tests -q --tb=line`
 
-1475 passed, 33 skipped, 6 xfailed, 0 failed.
+1491 passed, 33 skipped, 6 xfailed, 0 failed. The case-fold tests are `test_status_variant_stores_the_canonical_word`, `test_available_variant_is_dropped`, and `test_lowercase_out_blocks_the_pick_like_canonical_out` in `backend/tests/test_spo137a_status_case.py`. The earlier count on this branch, before that file, was 1475 passed and 33 skipped.
 
 Integration test: SKIPPED (env unset). Fabrication scan: PASS. The new tests do not invent an injury word. They read the recorded page.
 

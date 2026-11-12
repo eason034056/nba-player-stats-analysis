@@ -19,6 +19,7 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import re
 import time
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -59,10 +60,23 @@ BALLDONTLIE_SOURCE = "balldontlie"
 
 # Status words on the recorded /v1/player_injuries page. Anything else is
 # kept and logged so a new BDL word is visible instead of dropped.
+# Comparison uses the casefolded form. The stored word is the canonical one.
+_STATUS_OUT = "Out"
 _STATUS_AVAILABLE = "Available"
 _STATUS_DOUBTFUL = "Doubtful"
 _STATUS_QUESTIONABLE = "Questionable"
-_PASSTHROUGH_STATUSES = frozenset({"Out", "Questionable", "Day-To-Day", "Probable"})
+_STATUS_DAY_TO_DAY = "Day-To-Day"
+_STATUS_PROBABLE = "Probable"
+_CANONICAL_BY_FOLDED = {
+    _STATUS_OUT.casefold(): _STATUS_OUT,
+    _STATUS_QUESTIONABLE.casefold(): _STATUS_QUESTIONABLE,
+    _STATUS_DAY_TO_DAY.casefold(): _STATUS_DAY_TO_DAY,
+    _STATUS_PROBABLE.casefold(): _STATUS_PROBABLE,
+    _STATUS_DOUBTFUL.casefold(): _STATUS_QUESTIONABLE,
+}
+_DROPPED_FOLDED = frozenset({_STATUS_AVAILABLE.casefold()})
+_KNOWN_FOLDED = frozenset(_CANONICAL_BY_FOLDED) | _DROPPED_FOLDED
+_OUT_WORD = re.compile(r"\bout\b")
 
 
 class BdlInjuryClient(Protocol):
@@ -129,32 +143,51 @@ def _lookup_team_code(team_id: Any, team_id_to_code: Mapping[Any, str]) -> str |
     return team_id_to_code.get(number)
 
 
+def _folded_status(raw_status: str) -> str:
+    """Casefold one BDL status and collapse its whitespace.
+
+    Leading and trailing whitespace go away. Internal runs of
+    whitespace become one space. The letters are casefolded, so
+    ``OUT`` and `` Out `` share a key with ``Out``.
+    """
+    return re.sub(r"\s+", " ", raw_status.strip().casefold())
+
+
+def _is_known_bdl_status(raw_status: Any) -> bool:
+    """True when this source word is a known status, ignoring case."""
+    if not isinstance(raw_status, str):
+        return False
+    return _folded_status(raw_status) in _KNOWN_FOLDED
+
+
 def _mapped_status(raw_status: Any) -> str | None:
     """Return the status stored on a normalized row, or None to drop it.
 
-    ``Available`` is not an injury. ``Doubtful`` is stored as
-    ``Questionable``. Picks and reads use that stored word and do not
-    block on the source word. A stored Doubtful keeps its blend.
-    Daily picks also copy the original word to ``injury_status_raw``.
-    The original word stays on ``raw_status`` for the agent payload
-    and a later history table.
+    Comparison uses one folded key: strip, collapse internal
+    whitespace, then casefold. ``available`` is not an injury and is
+    dropped. ``doubtful`` is stored as ``Questionable``. Picks and
+    reads use that stored word and do not block on the source word.
+    A stored Doubtful keeps its blend. Daily picks also copy the
+    original word to ``injury_status_raw``. The original word stays
+    on ``raw_status`` for the agent payload and a later history table.
 
-    A word this module does not know is not left as-is. Downstream
-    treats an unknown status as healthy. A word that contains ``Out``
-    (``Out For Season``) is stored as ``Out``. Every other unknown
-    word is stored as ``Questionable``. ``raw_status`` keeps the
-    original word, and the caller logs it.
+    A known word is stored in its canonical capitalization: ``Out``,
+    ``Questionable``, ``Day-To-Day``, or ``Probable``. A phrase with
+    ``out`` as its own word (``Out For Season``) is ``Out``. A word
+    that only contains those letters (``shout``) is not. Every other
+    unknown word is stored as ``Questionable``. ``raw_status`` keeps
+    the original string, and the caller logs the unknown word.
     """
-    if raw_status == _STATUS_AVAILABLE:
-        return None
-    if raw_status == _STATUS_DOUBTFUL:
-        return _STATUS_QUESTIONABLE
     if not isinstance(raw_status, str):
         return None
-    if raw_status in _PASSTHROUGH_STATUSES:
-        return raw_status
-    if "Out" in raw_status:
-        return "Out"
+    folded = _folded_status(raw_status)
+    if not folded or folded in _DROPPED_FOLDED:
+        return None
+    canonical = _CANONICAL_BY_FOLDED.get(folded)
+    if canonical is not None:
+        return canonical
+    if _OUT_WORD.search(folded):
+        return _STATUS_OUT
     return _STATUS_QUESTIONABLE
 
 
@@ -176,10 +209,12 @@ def normalize_bdl_injuries(
             this shape. BDL itself does not send a timestamp.
 
     Returns:
-        One dict per kept row. ``Available`` rows are omitted.
-        ``Doubtful`` is ``status="Questionable"`` with
-        ``raw_status="Doubtful"``. ``Out``, ``Questionable``,
-        ``Day-To-Day``, and ``Probable`` are unchanged.
+        One dict per kept row. ``Available`` rows are omitted, in any
+        case. ``Doubtful`` is ``status="Questionable"`` and
+        ``raw_status`` keeps the original string. ``Out``,
+        ``Questionable``, ``Day-To-Day``, and ``Probable`` are stored
+        as those canonical words. A different case or extra whitespace
+        does not change the stored word and is not logged.
     """
     entries: list[dict[str, Any]] = []
     seen_unknown: set[Any] = set()
@@ -193,8 +228,7 @@ def normalize_bdl_injuries(
         if status is None:
             continue
         if (
-            raw_status not in _PASSTHROUGH_STATUSES
-            and raw_status != _STATUS_DOUBTFUL
+            not _is_known_bdl_status(raw_status)
             and raw_status not in seen_unrecognized
         ):
             logger.warning("keeping unrecognized BDL injury status=%s", raw_status)
@@ -466,7 +500,8 @@ def matched_injury_words(
 ) -> tuple[str | None, str | None]:
     """Normalized status and the source word from one matched snapshot row.
 
-    ``status`` is the word already stored for picks and reads. ``raw_status``
+    ``status`` is the canonical word already stored for picks and reads.
+    This copies it and does not compare it. ``raw_status``
     is BALLDONTLIE's ``status`` with no case change and no trimming.
     Daily picks copy both onto the response. The signal builder still
     receives only the normalized word, so only Out blocks.

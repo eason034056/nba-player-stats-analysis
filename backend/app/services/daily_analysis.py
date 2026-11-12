@@ -1602,10 +1602,10 @@ def _top_read_candidate_is_out(
     The match is :func:`match_injury_entry` with no ``bdl_player_id``.
     A stored pick and a snapshot row are names. The fold is case,
     punctuation, and accents. The suffix stays, so a row for
-    ``Gary Trent Jr.`` does not skip ``Gary Trent``. Only the
-    normalized status ``Out`` skips. Questionable, including a source
-    word of Doubtful, does not. This does not log and does not call
-    BALLDONTLIE.
+    ``Gary Trent Jr.`` does not skip ``Gary Trent``. Only Out skips,
+    with the same case and whitespace fold the blend uses.
+    Questionable, including a source word of Doubtful, does not.
+    This does not log and does not call BALLDONTLIE.
 
     Args:
         player: ``player_name`` on one stored pick.
@@ -1619,7 +1619,10 @@ def _top_read_candidate_is_out(
     matched = match_injury_entry(injury_entries, player)
     if not isinstance(matched, dict):
         return False
-    return matched.get("status") == "Out"
+    status = matched.get("status")
+    if not isinstance(status, str):
+        return False
+    return injury_blocks_combined(status)
 
 
 def best_top_reads(
