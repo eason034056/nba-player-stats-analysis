@@ -24,7 +24,7 @@ WNBA injury words come from ESPN/CBS. A literal Doubtful there is not the cache'
 
 ## Alternatives
 
-1. *Keep blocking Doubtful and teach the filter to see `raw_status`.* Rejected. Eason decided a Doubtful player stays on the board with a probability, the same as Questionable.
+1. *Keep blocking Doubtful and teach the filter to see `raw_status`.* Rejected. A Doubtful player stays on the board with a probability, the same as Questionable.
 2. *Add `raw_status` to `DailyPick`.* Rejected. The board shows the normalized word. The source word stays on the snapshot for the agent payload and a later history table.
 3. *Stop storing Doubtful as Questionable.* Rejected. The scorer's unresolved bucket is already Questionable / Day-To-Day. The cache shape stays.
 

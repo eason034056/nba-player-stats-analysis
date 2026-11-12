@@ -697,7 +697,19 @@ class DailyPick(BaseModel):
             "Out, Questionable, Probable, or Day-To-Day. Doubtful is stored "
             "as Questionable and keeps a blend, the same as any other "
             "Questionable row. Null when the snapshot is missing, stale, or "
-            "malformed, or when the name is missing or ambiguous. WNBA stays null."
+            "malformed, or when the name is missing or ambiguous. WNBA stays null. "
+            "The source word is injury_status_raw."
+        ),
+    )
+    injury_status_raw: Optional[str] = Field(
+        default=None,
+        description=(
+            "BALLDONTLIE status from the same snapshot row as injury_status. "
+            "Copied with no case change and no trimming, so Doubtful stays "
+            "Doubtful. Null when that row is missing, which is the same "
+            "cases that leave injury_status null: a missing, stale, or "
+            "malformed snapshot, or a missing or ambiguous name. WNBA stays "
+            "null. A stored payload that omits this field validates as null."
         ),
     )
     lineup_confirmed: Optional[bool] = Field(

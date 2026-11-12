@@ -424,7 +424,7 @@ async def get_events(
 
     # Omitted tz_offset uses 480 (UTC+8), the same default as
     # GET /api/nba/daily-picks. top_read is loaded with
-    # daily_picks:nba:{date}:tz{offset}, so a different default would miss
+    # daily_picks:nba:v2:{date}:tz{offset}, so a different default would miss
     # the cache and leave every top_read null. The frontend sends an
     # explicit offset; this default is only for callers who omit it.
     # JavaScript's getTimezoneOffset() returns "UTC - Local" minutes
