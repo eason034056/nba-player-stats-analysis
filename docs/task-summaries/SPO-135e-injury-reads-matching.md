@@ -7,13 +7,13 @@
 
 ## Summary
 
-NBA `/reads` loads Redis key `injuries:nba:latest` and matches posted names with `match_injury_entry`, the same helper daily picks use. Out, and a source word of Doubtful, set `combined_probability` to null. A missing or stale snapshot logs one warning and leaves the blend. The request path still only reads Redis.
+NBA `/reads` loads Redis key `injuries:nba:latest` and matches posted names with `match_injury_entry`, the same helper daily picks use. Out sets `combined_probability` to null. SPO-135h: a source word of Doubtful keeps a number. A missing or stale snapshot logs one warning and leaves the blend. The request path still only reads Redis.
 
 Injury names keep Jr/Sr/II/III/IV. The fold is case, punctuation, and accents. `Gary Trent Jr.` does not match `Gary Trent`. Picks and reads have no `bdl_player_id`; the id still wins when a caller actually has one. An ambiguous full name stays null.
 
 Startup refills a missing key once, including outside the slate window. It refills a stale or malformed key only inside the window. `misfire_grace_time` is 25 minutes with coalesce, so a missed :07 or :37 runs once and does not burst. A restart outside the window with a stale snapshot leaves `injury_status` null until 11:07 America/Chicago. A fill on the analysis run was not added, because that function is also the HTTP handler.
 
-Doubtful blocking is unchanged.
+Doubtful blocking was unchanged in this PR. SPO-135h stops it.
 
 ## Why
 
@@ -32,7 +32,7 @@ SPO-135c put the snapshot on the daily board and left three holes. `/reads` neve
 
 ## Blast radius
 
-NBA daily picks, NBA `/reads`, and the NBA agent tool share `match_injury_entry`. A query that used to match only because the suffix was stripped, such as "jaren jackson" against "Jaren Jackson Jr.", now misses. WNBA daily picks still ignore the snapshot. WNBA scrape matching of an exact name is unchanged. `player_name_key` still strips suffixes for game logs. Doubtful still blocks the blend and still leaves the filtered board, because the filter sees Questionable.
+NBA daily picks, NBA `/reads`, and the NBA agent tool share `match_injury_entry`. A query that used to match only because the suffix was stripped, such as "jaren jackson" against "Jaren Jackson Jr.", now misses. WNBA daily picks still ignore the snapshot. WNBA scrape matching of an exact name is unchanged. `player_name_key` still strips suffixes for game logs. SPO-135h: Doubtful keeps the blend and stays on the filtered board when that blend clears the floor. Out still stays on the board with a null blend.
 
 ## Tests / Verification
 
@@ -43,10 +43,10 @@ Recorded fixtures only. No live BALLDONTLIE or Odds API call. Gary Trent and Luk
 
 ## Open question
 
-Doubtful. The cache stores it as Questionable and keeps `raw_status`. `injury_blocks_combined` treats that source word like Out, so `combined_probability` is null, while `DailyPick.injury_status` stays Questionable. The filtered board then drops the row with the other null blends. Out stays on the board. This PR does not change that. Eason decides whether Doubtful should keep a probability the way Questionable does, or keep blocking the way Out does. If it keeps blocking, the filter has to see `raw_status` or the row will not stay on the board.
+Doubtful. The cache stores it as Questionable and keeps `raw_status`. This PR left the blend block in place. SPO-135h removes it: the blend matches Questionable, and the filtered board uses that number. Out stays on the board with a null blend.
 
 ## Follow-ups
 
-- [ ] Eason: Doubtful keeps a blend, or blocks and stays on the filtered board.
+- [x] Eason: Doubtful keeps a blend. Closed by SPO-135h.
 - [ ] A restart outside the slate window with a stale snapshot is blind until 11:07 America/Chicago.
 - [ ] SPO-130d: a production team-id map. This PR still reads the recorded standings fixture.

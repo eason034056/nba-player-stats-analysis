@@ -4,7 +4,9 @@
 - **Date:** 2026-11-11
 - **Status:** Accepted
 
-> Superseded in part by SPO-135e (2026-11-11): `/reads` loads this snapshot. Injury names keep the suffix. Startup refills a stale key inside the slate window. `misfire_grace_time` is 25 minutes. Doubtful blocking is unchanged.
+> Superseded in part by SPO-135e (2026-11-11): `/reads` loads this snapshot. Injury names keep the suffix. Startup refills a stale key inside the slate window. `misfire_grace_time` is 25 minutes.
+>
+> Superseded in part by SPO-135h (2026-11-11): NBA Doubtful keeps the Questionable blend and stays on the board when that blend clears the floor. Out still blocks. See `decision_20261111_doubtful-as-questionable.md`.
 
 ## Context
 
@@ -28,9 +30,9 @@ Policy (Eason, 2026-11-11): all NBA data comes from BALLDONTLIE. No new non-BALL
 
 5. Worst case, the schedule is 14 hours times 2 ticks times the 20-page cap: 560 calls a day. One cold start that finds an empty key adds one more capped walk: 580. A walk that finishes earlier uses fewer calls. The steady state of the recorded first page plus a terminal page is 2 calls per tick, 56 a day, plus at most 20 on a cold start.
 
-6. NBA `DailyPick.injury_status` is the normalized status from that snapshot (`Out`, `Questionable`, `Probable`, `Day-To-Day`). Doubtful stays Questionable on the field. `raw_status` is not a new API field. It is passed only into `build_nba_signals` / `combined_probability`. `injury_blocks_combined(status, raw_status)` blocks when either word, stripped and case-insensitive, is `out` or `doubtful`. An Out player, and a stored Doubtful, have `combined_probability` null. Name matching is `match_injury_entry`: a `bdl_player_id` wins; scraper rows and BALLDONTLIE rows that share one id use the first name match; two BALLDONTLIE rows with different ids, or the same name and no id, return no match. A miss or an ambiguous name leaves `injury_status` null. The code does not guess.
+6. NBA `DailyPick.injury_status` is the normalized status from that snapshot (`Out`, `Questionable`, `Probable`, `Day-To-Day`). Doubtful stays Questionable on the field. `raw_status` is not a response field. It stays on the Redis snapshot. Picks and reads do not pass it into the blend. `injury_blocks_combined(status)` blocks only when that word, stripped and case-insensitive, is `out`. An Out player has `combined_probability` null. A stored Doubtful, and a literal Doubtful word, keep the Questionable blend. SPO-135c passed `raw_status` into the blend so Doubtful blocked. SPO-135h removed that. Name matching is `match_injury_entry`: a `bdl_player_id` wins; scraper rows and BALLDONTLIE rows that share one id use the first name match; two BALLDONTLIE rows with different ids, or the same name and no id, return no match. A miss or an ambiguous name leaves `injury_status` null. The code does not guess.
 
-7. `select_daily_picks` keeps an NBA row whose own `injury_status` blocks (Out, or a literal Doubtful) when the sample floor passes, even though the blend is null, so the board can show the status. A cache Doubtful is stored as Questionable. Its blend is null, and the filter does not see `raw_status`, so that row leaves the board with the other null blends. A missing blend that is not an injury block still leaves the board.
+7. `select_daily_picks` keeps an NBA row whose `injury_status` is Out when the sample floor passes, even though the blend is null, so the board can show the status. A cache Doubtful is Questionable. Its blend is the Questionable blend, and the filter keeps or drops it on that number. A missing blend that is not Out still leaves the board.
 
 8. If the cache is missing, stale, malformed, or the read raises, `injury_status` stays null and one warning is logged (kind or exception type; no key, URL, or message). Analysis still returns picks. WNBA does not load the snapshot. `lineup_confirmed` stays null.
 
@@ -44,8 +46,8 @@ Policy (Eason, 2026-11-11): all NBA data comes from BALLDONTLIE. No new non-BALL
 
 1. *Leave `NBA_INJURY_SOURCE` and flip the default to `bdl`.* Rejected. The scrape path would still be a live NBA source. Deleting the flag is a clean subtraction because WNBA keeps the scraper.
 2. *Call `/v1/player_injuries` from daily analysis.* Rejected. The request path must not spend the shared 5-per-minute budget.
-3. *Add `raw_status` to `DailyPick`.* Rejected. The board needs the normalized word. The source word exists only so the blend can still block on Doubtful.
-4. *Keep a cache Doubtful on the filtered board.* Not in this change. The filter sees `injury_status` Questionable and a null blend, so the row is omitted. The stored pick still has a null blend. Showing that row would need the filter to see the source word.
+3. *Add `raw_status` to `DailyPick`.* Rejected. The board needs the normalized word. The source word stays on the snapshot. The blend does not read it.
+4. *Keep a cache Doubtful off the filtered board.* That was the SPO-135c result, because the blend was null. SPO-135h rejects it. The row stays when the blend clears the floor.
 
 ## Tradeoff
 
