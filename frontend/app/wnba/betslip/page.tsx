@@ -56,15 +56,6 @@ import {
 } from "@/lib/schemas";
 import { formatProbability } from "@/lib/utils";
 
-// 💡 Reused inline constants from NBA betslip page. Kept duplicated (rather
-// than exported from the NBA file) because these are *visual* constants for a
-// PNG export template — neither file should drag the other along when the
-// design changes.
-const SHARE_FONT_SANS =
-  "system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif";
-const SHARE_FONT_MONO =
-  "ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, monospace";
-
 function getProbabilityLevel(probability: number): "high" | "medium" {
   // 0.70 cutoff aligned with NBA so the green/yellow signal reads
   // consistently across leagues (per SPO-35 Phase 3 rationale).
@@ -237,11 +228,11 @@ function ShareImageTemplate({
   return (
     <div
       ref={forwardedRef}
+      className="[font-family:var(--font-sans)]"
       style={{
         width: 600,
         padding: 32,
         background: "#FFF2DF",
-        fontFamily: SHARE_FONT_SANS,
         fontSize: 16,
         boxSizing: "border-box",
         fontSynthesis: "none",
@@ -416,10 +407,10 @@ function ShareImageTemplate({
                 </div>
 
                 <div
+                  className="[font-family:var(--font-mono)]"
                   style={{
                     fontSize: 32,
                     fontWeight: 700,
-                    fontFamily: SHARE_FONT_MONO,
                     color: level === "high" ? "#22c55e" : "#eab308",
                     minWidth: 100,
                     textAlign: "right" as const,

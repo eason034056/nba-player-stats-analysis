@@ -97,13 +97,15 @@ export function EventActionBar({
           )}
         </button>
       ) : null}
-      <button
-        type="button"
-        onClick={onAsk}
-        className="min-h-12 rounded-[14px] bg-brand-tint px-3.5 text-[13px] font-bold text-brand"
-      >
-        Ask
-      </button>
+      {model.listedOut ? null : (
+        <button
+          type="button"
+          onClick={onAsk}
+          className="min-h-12 rounded-[14px] bg-brand-tint px-3.5 text-[13px] font-bold text-brand"
+        >
+          Ask
+        </button>
+      )}
       </div>
     </div>
   );

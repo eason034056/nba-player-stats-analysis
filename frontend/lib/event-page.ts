@@ -10,6 +10,7 @@ import { format, parseISO } from "date-fns";
 import { enUS } from "date-fns/locale";
 
 import { nbaTierFace, tierFromBackend, tierProbability } from "./nba-card";
+import { isOutPick, isPlayerOutInGame } from "./picks-board";
 import { formatPercent, formatTierPercent } from "./player-dd";
 import {
   etWallClock,
@@ -679,8 +680,11 @@ export function eventPlayerRows(args: {
             : selected && args.postedLine != null
               ? args.postedLine
               : null;
-    const nba =
-      sourcePick != null
+    const out =
+      args.league === "nba" && isPlayerOutInGame(args.picks, args.eventId, name);
+    const nba = out
+      ? { text: "Out", rate: null }
+      : sourcePick != null
         ? nbaLeanFromPick(sourcePick)
         : sourceRead != null
           ? nbaLeanFromRead(sourceRead)
@@ -689,8 +693,9 @@ export function eventPlayerRows(args: {
             : args.league === "nba" && readsStatus === "error"
               ? { text: "Unavailable", rate: null }
               : null;
-    const tier =
-      args.league === "nba" && sourcePick
+    const tier = out
+      ? null
+      : args.league === "nba" && sourcePick
         ? tierFromBackend(sourcePick.tier)
         : args.league === "nba" && sourceRead
           ? tierFromBackend(sourceRead.tier)
@@ -701,13 +706,15 @@ export function eventPlayerRows(args: {
       position: pick?.position?.trim() || bulk?.position?.trim() || null,
       tier,
       lineText: line == null ? "—" : formatThreshold(line),
-      leanText: nba
-        ? nba.text
-        : pick
-          ? `${pick.direction === "under" ? "U" : "O"} ${formatPercent(pick.probability)}`
-          : "No read",
-      hasLean: nba != null || pick != null,
-      probability: nba?.rate ?? pick?.probability ?? null,
+      leanText: out
+        ? "Out"
+        : nba
+          ? nba.text
+          : pick
+            ? `${pick.direction === "under" ? "U" : "O"} ${formatPercent(pick.probability)}`
+            : "No read",
+      hasLean: out ? false : nba != null || pick != null,
+      probability: out ? null : nba?.rate ?? pick?.probability ?? null,
     };
   });
 
@@ -882,6 +889,8 @@ export interface OurReadModel {
   other: SlipSeed | null;
   /** Probability printed next to the tier. The slip still stores `primary.probability`. */
   leanProbability: number | null;
+  /** The selected player is listed Out. Ask stays hidden. */
+  listedOut: boolean;
 }
 
 function sameLine(a: number | null | undefined, b: number | null): boolean {
@@ -1080,6 +1089,7 @@ function buildNbaRead(args: {
   pick: DailyPick | null;
   history: PlayerHistoryResponse | null;
   read?: PropRead | null;
+  listedOut?: boolean;
 }): OurReadModel {
   const meta = joinMeta(args.position, args.team, ", ");
   const headlineMarket = readMarketName(args.market, args.marketName);
@@ -1094,6 +1104,27 @@ function buildNbaRead(args: {
   };
   const pick = args.pick;
   const postedRead = args.read;
+  if (args.listedOut || (pick != null && isOutPick(pick))) {
+    const headlineLead = pick
+      ? `${pick.direction === "under" ? "Under" : "Over"} ${formatThreshold(pick.threshold)}`
+      : args.line == null
+        ? "No posted line"
+        : `Line ${formatThreshold(args.line)}`;
+    return {
+      player: args.player,
+      meta,
+      headlineLead,
+      headlineMarket,
+      caption: "Listed Out. No model read.",
+      tier: null,
+      bar: null,
+      signals: [],
+      primary: null,
+      other: null,
+      leanProbability: null,
+      listedOut: true,
+    };
+  }
   if (!pick) {
     if (postedRead && (postedRead.side === "over" || postedRead.side === "under")) {
       const face = nbaTierFace(postedRead);
@@ -1109,6 +1140,7 @@ function buildNbaRead(args: {
         primary: null,
         other: null,
         leanProbability: null,
+        listedOut: false,
       };
     }
     return {
@@ -1123,6 +1155,7 @@ function buildNbaRead(args: {
       primary: null,
       other: null,
       leanProbability: null,
+      listedOut: false,
     };
   }
   const direction = pick.direction === "under" ? "under" : "over";
@@ -1196,6 +1229,7 @@ function buildNbaRead(args: {
     primary,
     other,
     leanProbability: finite(pick.probability) ? pick.probability : null,
+    listedOut: false,
   };
 }
 
@@ -1218,6 +1252,8 @@ export function buildOurRead(args: {
   /** NBA uses stored signals and the backend tier. WNBA keeps the previous read. */
   league?: LeagueSegment;
   read?: PropRead | null;
+  /** True when any pick for this player in the game is Out, including another line. */
+  listedOut?: boolean;
 }): OurReadModel {
   if (args.league === "nba") return buildNbaRead(args);
   const signals = buildReadSignals({
@@ -1255,6 +1291,7 @@ export function buildOurRead(args: {
       primary: null,
       other: null,
       leanProbability: null,
+      listedOut: false,
     };
   }
 
@@ -1327,6 +1364,7 @@ export function buildOurRead(args: {
     primary,
     other,
     leanProbability: primary?.probability ?? null,
+    listedOut: false,
   };
 }
 

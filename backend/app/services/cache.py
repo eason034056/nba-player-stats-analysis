@@ -193,28 +193,47 @@ class CacheService:
         """
         Clear daily picks cache, optionally scoped to a single league.
 
-        When the CSV data is updated, or fresh projections land, clear
+        When the CSV data is updated, or a lineup refresh lands, clear
         the picks cache so the next request parses the latest inputs.
 
-        SPO-35 added league scoping. Cache keys live under
-        ``daily_picks:{league}:{date}:tz{offset}`` so the NBA pipeline
-        (e.g. NBA final-projection refresh) can drop only its own keys
-        without nuking the WNBA cache, and vice versa.
+        SPO-35 added league scoping. WNBA keys stay
+        ``daily_picks:wnba:{date}:tz{offset}``. NBA keys are
+        ``daily_picks:nba:v2:{date}:tz{offset}``. The NBA sweep is
+        ``daily_picks:nba:*``, so v2 and the previous unversioned NBA
+        keys both match, and WNBA keys do not.
+
+        Before SPO-35, NBA daily picks lived under
+        ``daily_picks:{date}:tz{offset}`` and ``daily_picks:{date}``
+        (no league segment). The date-scoped NBA delete route already
+        removes those keys for one date. Callers of this method did
+        not. An NBA clear therefore also scans ``daily_picks:[0-9]*``.
+        The segment after ``daily_picks:`` must start with a digit, so
+        ``daily_picks:nba:*`` and ``daily_picks:wnba:*`` do not match
+        that second pattern. ``delete_pattern`` forwards the pattern
+        as Redis ``SCAN MATCH``. The test fake matches it with
+        ``fnmatch``, which honors ``[0-9]``.
+
+        A WNBA clear stays ``daily_picks:wnba:*`` only. ``league=None``
+        stays ``daily_picks:*``, which still deletes every league and
+        every pre-league key.
 
         Args:
             league: If provided (``"nba"`` / ``"wnba"``), restrict the
-                    sweep to that league's keys. If ``None``, fall back
-                    to the legacy "clear everything" semantic which also
-                    catches any pre-SPO-35 keys lingering under
-                    ``daily_picks:{date}:tz{offset}`` (no league
-                    segment) until their 15-minute TTL expires.
+                    sweep to that league. ``"nba"`` also drops the
+                    pre-league date keys. If ``None``, clear every
+                    ``daily_picks:*`` key.
 
         Returns:
             int: number of keys deleted
         """
         if league is None:
             return await self.delete_pattern("daily_picks:*")
-        return await self.delete_pattern(f"daily_picks:{league.lower()}:*")
+        normalized = league.lower()
+        deleted = await self.delete_pattern(f"daily_picks:{normalized}:*")
+        if normalized == "nba":
+            # Digit after the prefix is a date, not a league name.
+            deleted += await self.delete_pattern("daily_picks:[0-9]*")
+        return deleted
 
     async def close(self):
         """

@@ -302,4 +302,57 @@ describe("today board event fields", () => {
     expect(game.topProbabilityText).toBe("72%");
     expect(game.tier).toEqual({ name: "strong", label: "Strong play" });
   });
+
+  it("skips an Out pick for the next read, and shows nothing when the top read is Out", () => {
+    const [bam, embiid] = nbaPicks.picks;
+    const out = {
+      ...bam,
+      injury_status: "Out",
+      tier: null,
+      combined_probability: null,
+      probability: 0.95,
+    };
+    const reads = todayReads([out, embiid], "nba", nbaPicks.date);
+    expect(reads.map((card) => card.player)).toEqual(["Joel Embiid"]);
+    expect(todayReads([out], "nba", nbaPicks.date)).toEqual([]);
+
+    const questionable = todayReads(
+      [{ ...bam, injury_status: "Questionable" }],
+      "nba",
+      nbaPicks.date,
+    );
+    expect(questionable[0]?.player).toBe("Bam Adebayo");
+    expect(questionable[0]?.probabilityText).toBe("72%");
+
+    const sameGame = {
+      ...embiid,
+      event_id: bam.event_id,
+      player_name: "Tyler Herro",
+      combined_probability: 0.66,
+      probability: 0.66,
+      tier: "Playable" as const,
+    };
+    const [next] = todayGames([heat], [out, sameGame], "nba", nbaPicks.date);
+    expect(next.topText).toBe("Herro Over 29.5 PTS");
+    expect(next.topSource).toBe("picks");
+
+    const events = eventsResponseSchema.parse({
+      date: nbaPicks.date,
+      events: [{
+        ...heat,
+        top_read: {
+          player: "Bam Adebayo",
+          market: "player_rebounds",
+          side: "over",
+          line: 10.5,
+          probability: 0.72,
+        },
+      }],
+    });
+    const [empty] = todayGames(events.events, [out], "nba", nbaPicks.date);
+    expect(empty.topText).toBeNull();
+    expect(empty.topProbabilityText).toBeNull();
+    expect(empty.tier).toBeNull();
+    expect(empty.topSource).toBe("none");
+  });
 });

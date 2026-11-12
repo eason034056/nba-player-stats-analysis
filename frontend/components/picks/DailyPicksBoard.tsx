@@ -12,6 +12,7 @@ import {
   CONFIDENCE_FILTERS,
   buildPickRows,
   countStrong,
+  isOutPick,
   marketChipList,
   matchesConfidence,
   picksEyebrow,
@@ -144,11 +145,11 @@ export function DailyPicksBoard({
   const visiblePicks = useMemo(
     () =>
       sortPicks(
-        picks.filter(
-          (pick) =>
-            matchesConfidence(boardRate(pick, league), confidence) &&
-            (market === "ALL" || metricShort(pick.metric) === market),
-        ),
+        picks.filter((pick) => {
+          if (market !== "ALL" && metricShort(pick.metric) !== market) return false;
+          if (isOutPick(pick)) return confidence === "all";
+          return matchesConfidence(boardRate(pick, league), confidence);
+        }),
         league,
       ),
     [confidence, league, market, picks],
@@ -158,6 +159,7 @@ export function DailyPicksBoard({
     [league, selectedDate, visiblePicks],
   );
   const strongCount = countStrong(visiblePicks, league);
+  const pickCount = visiblePicks.filter((pick) => !isOutPick(pick)).length;
   const floor = Math.round(minProbability * 100);
   const eyebrow = picksEyebrow(selectedDate, analyzedAt);
 
@@ -179,7 +181,7 @@ export function DailyPicksBoard({
         </div>
         <div className="flex gap-2.5">
           <div className="rounded-2xl border border-line bg-white px-4 py-2.5">
-            <div className="font-mono text-[22px] font-bold leading-none">{visiblePicks.length}</div>
+            <div className="font-mono text-[22px] font-bold leading-none">{pickCount}</div>
             <div className="mt-1 text-xs text-muted">picks</div>
           </div>
           <div className="rounded-2xl bg-accent px-4 py-2.5 text-brand-ink">
@@ -370,12 +372,12 @@ export function DailyPicksBoard({
             const inSlip = storedDirection != null;
             const reversed = storedDirection === reverse;
             const sameSide = inSlip && !reversed;
-            return (
-              <PickContextMenu key={row.key} pick={pick} league={league}>
+            const article = (
                 <article
                   className={cn(
                     "flex flex-col gap-3 rounded-[18px] border bg-white px-3.5 py-3.5 md:flex-row md:flex-wrap md:items-center md:gap-x-5 md:rounded-[20px] md:px-[18px] md:py-4",
                     sameSide ? "border-brand" : "border-line",
+                    row.dimmed && "opacity-60",
                   )}
                 >
                   <div
@@ -408,12 +410,13 @@ export function DailyPicksBoard({
                       tags={row.tags}
                       pick={pick}
                       lineupFor={lineupFor}
-                      showLineup={showLineup}
+                      showLineup={showLineup && !row.dimmed}
                       isLineupLoading={isLineupLoading}
                       isLineupError={isLineupError}
                     />
                   </div>
 
+                  {row.dimmed ? null : (
                   <div
                     data-testid="pick-rate"
                     className="flex min-w-[120px] flex-col gap-1.5 md:flex-[0_1_150px]"
@@ -438,7 +441,22 @@ export function DailyPicksBoard({
                       />
                     </div>
                   </div>
+                  )}
 
+                  {row.dimmed ? (
+                    inSlip ? (
+                      <div className="flex shrink-0 justify-end">
+                        <button
+                          type="button"
+                          aria-label={`Remove ${pick.player_name}`}
+                          onClick={() => onToggleSlip(pick)}
+                          className="min-h-11 rounded-full border border-line bg-white px-4 text-[13px] font-bold text-ink"
+                        >
+                          Remove
+                        </button>
+                      </div>
+                    ) : null
+                  ) : (
                   <div className="flex shrink-0 flex-wrap justify-end gap-2">
                       <button
                         type="button"
@@ -483,7 +501,13 @@ export function DailyPicksBoard({
                         </button>
                       ) : null}
                     </div>
+                  )}
                 </article>
+            );
+            if (row.dimmed) return <div key={row.key}>{article}</div>;
+            return (
+              <PickContextMenu key={row.key} pick={pick} league={league}>
+                {article}
               </PickContextMenu>
             );
           })}
@@ -493,7 +517,7 @@ export function DailyPicksBoard({
       <p className="text-[13px] leading-6 text-muted">
         The line is the most common line across books.{" "}
         {league === "nba"
-          ? "The percent is the combined probability. Projection, edge, minutes, and opponent rank appear only when the response includes them."
+          ? "The percent is the combined probability. Opponent rank appears only when the response includes it."
           : "The percent is the historical hit rate over the stored sample. Projection, edge, minutes, and opponent rank appear only when the response includes them. A blended probability is not on this board."}
       </p>
     </div>

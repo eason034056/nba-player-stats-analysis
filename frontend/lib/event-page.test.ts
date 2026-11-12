@@ -340,6 +340,58 @@ describe("our read", () => {
     expect(consensusSplit(null, false)).toBeNull();
   });
 
+  it("does not offer an Out player as a read or a slip", () => {
+    const out = pick({
+      injury_status: "Out",
+      tier: null,
+      combined_probability: null,
+      probability: 0.91,
+    });
+    const rows = eventPlayerRows({
+      suggested: [out.player_name],
+      picks: [out],
+      metric: "player_points",
+      eventId: out.event_id,
+      selectedName: "",
+      postedLine: null,
+      awayLineup: null,
+      homeLineup: null,
+      awayAbbr: "BOS",
+      homeAbbr: "MIA",
+      league: "nba",
+    });
+    expect(rows[0]?.leanText).toBe("Out");
+    expect(rows[0]?.hasLean).toBe(false);
+    expect(rows[0]?.probability).toBeNull();
+    expect(rows[0]?.tier).toBeNull();
+
+    const model = buildOurRead({
+      player: out.player_name,
+      marketName: "Points",
+      market: "player_points",
+      binary: false,
+      eventId: out.event_id,
+      homeTeam: out.home_team,
+      awayTeam: out.away_team,
+      commenceTime: out.commence_time,
+      team: out.player_team_code ?? null,
+      position: null,
+      line: out.threshold,
+      pick: out,
+      consensus: null,
+      last10: [],
+      history: null,
+      league: "nba",
+    });
+    expect(model.primary).toBeNull();
+    expect(model.other).toBeNull();
+    expect(model.bar).toBeNull();
+    expect(model.tier).toBeNull();
+    expect(model.caption).toBe("Listed Out. No model read.");
+    expect(model.listedOut).toBe(true);
+    expect(model.caption).not.toMatch(/%/);
+  });
+
   it("adds the other side from the history rate, not from one minus the pick", () => {
     const model = buildOurRead({
       player: "Bam Adebayo",

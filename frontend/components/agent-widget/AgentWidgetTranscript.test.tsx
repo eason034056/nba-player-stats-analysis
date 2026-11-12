@@ -199,6 +199,26 @@ describe("AgentWidgetTranscript", () => {
     expect(contrast("#5A5310", "#E4DA72")).toBeGreaterThanOrEqual(4.5);
     expect(contrast("#5A5310", "#E4DA72")).toBeCloseTo(5.44, 2);
   });
+
+  it("names matchup, defense rank, and rest in the empty transcript", () => {
+    renderWithProviders(
+      <AgentWidgetTranscript
+        transcriptRef={createRef<HTMLDivElement>()}
+        messages={[]}
+        starterActions={[]}
+        isPending={false}
+        error={null}
+        onAction={vi.fn(async () => {})}
+        onRetryLastRequest={vi.fn(async () => {})}
+        surface="light"
+      />,
+    );
+    expect(
+      screen.getByText(
+        "I check any prop against market price, recent form, matchup, defense rank, and rest. What do you want to look at?",
+      ),
+    ).toBeInTheDocument();
+  });
 });
 
 function channel(hex: string, shift: number): number {

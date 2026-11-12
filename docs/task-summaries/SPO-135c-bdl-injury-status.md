@@ -7,7 +7,7 @@
 
 ## Summary
 
-NBA `DailyPick.injury_status` is the normalized status from Redis key `injuries:nba:latest`. Out, and a source word of Doubtful, set `combined_probability` to null. Questionable, Probable, and Day-To-Day keep a blend. A missing, stale, malformed, or unreadable snapshot leaves the field null and logs one warning. Analysis still returns picks. `lineup_confirmed` stays null. WNBA picks and the WNBA agent injury scrape are unchanged.
+NBA `DailyPick.injury_status` is the normalized status from Redis key `injuries:nba:latest`. Out sets `combined_probability` to null. Questionable, Probable, and Day-To-Day keep a blend. SPO-135h: a source word of Doubtful also keeps that blend. A missing, stale, malformed, or unreadable snapshot leaves the field null and logs one warning. Analysis still returns picks. `lineup_confirmed` stays null. WNBA picks and the WNBA agent injury scrape are unchanged.
 
 `nba_injuries_refresh` runs at :07 and :37 America/Chicago during the lineup slate window (11:00 through 00:59). Pages go through `BdlClient` and a 15-second pace, so this job uses at most 4 of the shared 5 requests per minute. A startup fill runs once, and only when the key is absent.
 
@@ -23,7 +23,7 @@ After SPO-135, `injury_status` was always null, so `injury_blocks_combined` neve
 |---|---|
 | Scheduler | `nba_injuries_refresh` at :07 and :37 Chicago, hours 11-23 and 0. `misfire_grace_time` 1. `nba_injuries_startup_fill` once per process when the key is missing |
 | Client | `refresh_nba_injuries_from_bdl` wraps `BdlClient` in `PacedInjuryClient` (15s between pages) and uses the recorded standings map |
-| Daily picks | NBA loads the snapshot once. `match_injury_entry` sets `injury_status`. `raw_status` is passed only into the signal builder. Out stays on the filtered board with a null blend |
+| Daily picks | NBA loads the snapshot once. `match_injury_entry` sets `injury_status`. SPO-135c passed `raw_status` into the signal builder. SPO-135h stopped that. Out stays on the filtered board with a null blend |
 | Agents | NBA always reads the cache. `NBA_INJURY_SOURCE` is removed. WNBA still scrapes ESPN/CBS |
 | Settings | `nba_injuries_refresh_minutes` default 30. Duplicate `balldontlie_api_key` from the merge removed |
 | Docs | This summary and `docs/decisions/SPO-135/decision_20261111_bdl-injury-status.md`. SPO-131 decision gets a one-line superseded note |
@@ -34,7 +34,7 @@ After SPO-135, `injury_status` was always null, so `injury_blocks_combined` neve
 - The job is registered. The interval is 30 minutes inside the slate window, not the unused 15-minute setting.
 - HTTP goes through `BdlClient` and the shared Redis limiter, plus the 15-second page gap.
 - Team ids come from the recorded standings fixture.
-- Doubtful still maps to Questionable. Picks now block on `raw_status`.
+- Doubtful still maps to Questionable. SPO-135c blocked picks on `raw_status`. SPO-135h does not.
 - Empty, partial, and failed walks still do not overwrite. Logs are still the exception type only.
 - Request paths still only read Redis.
 
@@ -51,7 +51,7 @@ Recorded fixtures only. No live BALLDONTLIE or Odds API call.
 ## Follow-ups
 
 - [x] Event reads still passed `injury_status=None`. Closed by SPO-135e: `/reads` loads the same snapshot.
-- [ ] The filtered board drops a cache Doubtful (status Questionable, blend null) because the filter does not see `raw_status`.
+- [x] The filtered board dropped a cache Doubtful (status Questionable, blend null) because the filter did not see `raw_status`. Closed by SPO-135h: the blend is kept, so the row stays when it clears the floor.
 - [ ] SPO-130d: a production team-id map. This PR reads the recorded standings fixture.
 - [ ] Paired frontend PR: `injury_status` is non-null again for a matched NBA player. `lineup_confirmed` stays null.
 - [ ] ML integration must re-add the projection slot on NBA picks and event reads.

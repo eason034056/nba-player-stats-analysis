@@ -695,9 +695,21 @@ class DailyPick(BaseModel):
         description=(
             "Normalized NBA injury status from the BALLDONTLIE snapshot: "
             "Out, Questionable, Probable, or Day-To-Day. Doubtful is stored "
-            "as Questionable; the blend still drops when the source word is "
-            "Doubtful. Null when the snapshot is missing, stale, or malformed, "
-            "or when the name is missing or ambiguous. WNBA stays null."
+            "as Questionable and keeps a blend, the same as any other "
+            "Questionable row. Null when the snapshot is missing, stale, or "
+            "malformed, or when the name is missing or ambiguous. WNBA stays null. "
+            "The source word is injury_status_raw."
+        ),
+    )
+    injury_status_raw: Optional[str] = Field(
+        default=None,
+        description=(
+            "BALLDONTLIE status from the same snapshot row as injury_status. "
+            "Copied with no case change and no trimming, so Doubtful stays "
+            "Doubtful. Null when that row is missing, which is the same "
+            "cases that leave injury_status null: a missing, stale, or "
+            "malformed snapshot, or a missing or ambiguous name. WNBA stays "
+            "null. A stored payload that omits this field validates as null."
         ),
     )
     lineup_confirmed: Optional[bool] = Field(
@@ -751,8 +763,8 @@ class DailyPick(BaseModel):
         le=1.0,
         description=(
             "Calibrated probability for the pick's side, 0 to 1. "
-            "None when the market price is missing, the player is Out or "
-            "Doubtful, or the league is not NBA"
+            "None when the market price is missing, the player is Out, "
+            "or the league is not NBA"
         ),
     )
 
@@ -975,8 +987,8 @@ class PropRead(BaseModel):
     rates below the Lean floor. It is the no-vig favorite when the log has
     no rate. It is null for a binary market and when neither source can
     choose. ``tier`` is ``read_tier(combined_probability)``. A null
-    ``combined_probability`` (no two-sided price at the modal line, or Out
-    or Doubtful) has a null tier. The player is still present.
+    ``combined_probability`` (no two-sided price at the modal line, or Out)
+    has a null tier. Doubtful keeps a number. The player is still present.
     """
 
     player: str = Field(..., description="Player name as stored on the snapshot")
@@ -992,7 +1004,7 @@ class PropRead(BaseModel):
         le=1.0,
         description=(
             "Calibrated probability of side, from the existing signal model. "
-            "Null when the market price is missing or the player is Out or Doubtful"
+            "Null when the market price is missing or the player is Out"
         ),
     )
     tier: Optional[Literal["Strong play", "Playable", "Lean"]] = Field(

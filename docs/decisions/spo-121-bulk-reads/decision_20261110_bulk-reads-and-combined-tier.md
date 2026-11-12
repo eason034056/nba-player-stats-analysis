@@ -24,7 +24,7 @@ SPO-111 labels `DailyPick.tier` from the chosen side's historical hit rate. That
 | Latency | Props stay a snapshot read. The 60s props cache does not wait on per-player history or signal math. Reads do that work on their own request. |
 | Odds API credits | 0. Prices come from `odds_line_snapshots`. History comes from the NBA game log. A projection is used only when Redis already holds `projections:nba:{date}`. A miss does not call SportsData and does not call the Odds API. |
 | Payload size | One market tab is one request. The props body stays lines and books. Signals are not attached to every market on every props response. |
-| Caching | Independent. Props stay `60s` and still store lines without roster fields. Reads use `nba:event-reads:v1:{event_id}:m={market}` (or `m=*` when the query is omitted), also 60s. A one-market request is not sliced out of the all-markets document. |
+| Caching | Independent. Props stay `60s` and still store lines without roster fields. Reads use `nba:event-reads:v2:{event_id}:m={market}` (or `m=*` when the query is omitted), also 60s. v1 is not read. A one-market request is not sliced out of the all-markets document. |
 | Frontend | The game page is already one market at a time and joins players by name. It can request that market's reads and join them onto the props list. |
 
 `side` follows the stored daily-pick rule first (0.65, then the Lean floor 0.56, over wins a tie), then the higher historical rate, then the no-vig favorite at the modal line when the log has no rate. Binary markets are present with `side`, `combined_probability`, `tier`, and `signals` all null. A player with no two-sided price and no log is present the same way.

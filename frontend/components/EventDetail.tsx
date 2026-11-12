@@ -78,6 +78,7 @@ import {
   type PlayerHistoryRequest,
   type PlayerHistoryResponse,
 } from "@/lib/schemas";
+import { isPlayerOutInGame } from "@/lib/picks-board";
 import { formatPercent } from "@/lib/player-dd";
 import { teamAbbr, teamShortName } from "@/lib/team-abbr";
 import { getLocalDateString, getTodayString, cn } from "@/lib/utils";
@@ -379,6 +380,11 @@ export function EventDetail({ league }: { league: League }) {
       : null;
   const position =
     league === "nba" ? pick?.position?.trim() || selectedRow?.position || null : null;
+  const eventPicks = picksQuery.data?.picks ?? [];
+  const listedOut =
+    league === "nba" &&
+    playerName.trim().length > 0 &&
+    isPlayerOutInGame(eventPicks, eventId, playerName);
   const model = buildOurRead({
     player: playerName.trim(),
     marketName: getMarketDisplayName(selectedMarket),
@@ -397,12 +403,14 @@ export function EventDetail({ league }: { league: League }) {
     history: sampleQuery.data ?? null,
     league,
     read: selectedRead,
+    listedOut,
   });
   const readsNote =
     league === "nba" ? nbaRequestNote("reads", nbaReadsStatus(readsQuery.isLoading, readsQuery.isError)) : null;
   const propsNote =
     league === "nba" ? nbaRequestNote("props", nbaReadsStatus(propsQuery.isLoading, propsQuery.isError)) : null;
-  const shownModel = readsNote && !pick ? { ...model, caption: readsNote, tier: null } : model;
+  const shownModel =
+    readsNote && !pick && !model.listedOut ? { ...model, caption: readsNote, tier: null } : model;
   const chart = chartQuery.data ? gameLogChart(chartQuery.data.game_logs ?? [], activeLine) : null;
 
   const existing = slip.picks.find(
@@ -723,13 +731,13 @@ export function EventDetail({ league }: { league: League }) {
           ) : null}
 
           {league === "wnba" && playerName ? (
-          <div className={cn("order-7 md:col-start-2", show("read"))}>
-            <SectionUnavailable
-              eyebrow="Today's Projection"
-              title="Player projection"
-              message="Projection modeling is not available for WNBA yet. This panel will populate once the WNBA projection source ships."
-            />
-          </div>
+            <div className={cn("order-7 md:col-start-2", show("read"))}>
+              <SectionUnavailable
+                eyebrow="Today's Projection"
+                title="Player projection"
+                message="Projection modeling is not available for WNBA yet. This panel will populate once the WNBA projection source ships."
+              />
+            </div>
           ) : null}
       </div>
 
@@ -739,7 +747,7 @@ export function EventDetail({ league }: { league: League }) {
         </FilterSheet>
       ) : null}
 
-      {playerName ? (
+      {playerName && !model.listedOut ? (
         <EventActionBar
           league={league}
           model={model}

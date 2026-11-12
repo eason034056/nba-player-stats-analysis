@@ -284,7 +284,7 @@ export const AgentWidgetTranscript = ({
       >
         <p className={cn("text-sm leading-relaxed", surface === "light" ? "text-ink" : "text-on-dark-muted")}>
           {surface === "light"
-            ? "I check any prop against market price, recent form, projection and matchup. What do you want to look at?"
+            ? "I check any prop against market price, recent form, matchup, defense rank, and rest. What do you want to look at?"
             : "Start with a direct question about the current pick, then branch into risk, pricing, or a plain-English explanation as needed."}
         </p>
         <div className="mt-4 flex flex-wrap gap-2">

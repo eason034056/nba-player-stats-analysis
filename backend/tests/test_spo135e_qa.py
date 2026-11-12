@@ -1,6 +1,6 @@
 """SPO-135e QA: /reads parity, startup window, and recorded-name folds.
 
-Questionable and raw Doubtful on /reads must match daily picks. A
+Questionable and raw Doubtful on /reads both keep a blend. A
 malformed snapshot leaves the blend. Startup does not refill a
 malformed key outside the slate window. The recorded player_points
 capture lists C.J. McCollum; punctuation folds to a CJ McCollum
@@ -49,10 +49,10 @@ def _recorded_jaren_jr() -> dict:
     raise AssertionError("recorded page has no Jaren Jackson Jr. row")
 
 
-def test_reads_questionable_keeps_a_blend_and_raw_doubtful_does_not(
+def test_reads_questionable_and_raw_doubtful_keep_the_same_blend(
     monkeypatch,
 ) -> None:
-    """Parity with daily picks: Questionable keeps a number; raw Doubtful does not."""
+    """Parity with daily picks: Questionable and raw Doubtful keep a number."""
     questionable = _entry("Questionable")
     doubtful = _entry("Questionable", raw="Doubtful")
     event_id, rows = _points_rows()
@@ -76,7 +76,8 @@ def test_reads_questionable_keeps_a_blend_and_raw_doubtful_does_not(
     d_rows = _by_player(payload, doubtful["player"])
     assert all(item.combined_probability is not None for item in q_rows)
     assert all(0.0 < item.combined_probability < 1.0 for item in q_rows)
-    assert {item.combined_probability for item in d_rows} == {None}
+    assert all(item.combined_probability is not None for item in d_rows)
+    assert all(0.0 < item.combined_probability < 1.0 for item in d_rows)
 
 
 def test_malformed_snapshot_warns_once_and_reads_keep_a_blend(

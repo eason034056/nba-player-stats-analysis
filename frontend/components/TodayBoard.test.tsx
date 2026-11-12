@@ -113,7 +113,7 @@ describe("TodayBoard", () => {
     expect(bam.className).toContain("bg-white/[0.08]");
     expect(bam.className).toContain("border-white/[0.16]");
     expect(bam.className).toContain("hover:bg-white/[0.14]");
-    expect(within(web).getByText(/built from market prices, recent form, projection and matchup/i)).toBeInTheDocument();
+    expect(within(web).getByText(/built from market prices, recent form, all-game history, and matchup/i)).toBeInTheDocument();
     expect(within(web).getByText("Tap a game to check any player prop")).toBeInTheDocument();
     expect(within(web).queryByText(/open a game to check any player prop/i)).not.toBeInTheDocument();
     expect(bam).not.toHaveTextContent("1:00 AM");
@@ -248,6 +248,32 @@ describe("TodayBoard", () => {
     expect(web).not.toHaveTextContent("Pass");
     expect(web).not.toHaveTextContent("0.0%");
     expect(dailyPicksResponseSchema.safeParse(nbaPicksPartialFixture).success).toBe(false);
+  });
+
+  it("drops an Out pick from the count and from tonight's top read", async () => {
+    const [bam, ...rest] = nbaPicks.picks;
+    apiMocks.getEvents.mockResolvedValue(nbaEvents);
+    apiMocks.getDailyPicks.mockResolvedValue({
+      ...nbaPicks,
+      picks: [
+        {
+          ...bam,
+          injury_status: "Out",
+          tier: null,
+          combined_probability: null,
+          probability: 0.91,
+        },
+        ...rest,
+      ],
+    });
+
+    renderWithProviders(<TodayBoard league="nba" />);
+
+    const web = await screen.findByTestId("today-web");
+    expect(within(web).getByRole("link", { name: /all 2 picks/i })).toHaveAttribute("href", "/picks");
+    expect(within(web).queryByRole("link", { name: /bam adebayo/i })).not.toBeInTheDocument();
+    expect(within(web).getByRole("link", { name: /joel embiid/i })).toBeInTheDocument();
+    expect(within(web).queryByText("Adebayo Over 10.5 REB")).not.toBeInTheDocument();
   });
 
   it("omits the count when total_picks is missing and still prints zero", async () => {

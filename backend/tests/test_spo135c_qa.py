@@ -236,17 +236,17 @@ def test_omitting_the_projection_slot_does_not_change_combined_probability() -> 
     )
     assert missing_p is not None
     assert 0.0 < missing_p < 1.0
-    # A source-word Doubtful still blocks; a stored Questionable does not.
-    assert injury_blocks_combined("Questionable", "Doubtful") is True
-    assert injury_blocks_combined("Questionable", "Questionable") is False
+    # Doubtful does not block. Questionable does not block.
+    assert injury_blocks_combined("Doubtful") is False
+    assert injury_blocks_combined("Questionable") is False
 
 
 def test_signal_helper_blends_when_no_injury_word_is_passed() -> None:
     """build_nba_signals blends when the caller passes no injury word.
 
     /reads used to do that. It now passes the cache status. A missing
-    snapshot is what still leaves the word unset. Out and a raw Out
-    still block when the caller passes them.
+    snapshot is what still leaves the word unset. Out still blocks.
+    Doubtful does not.
     """
     _signals, combined, _total = build_nba_signals(
         side="over",
@@ -255,8 +255,7 @@ def test_signal_helper_blends_when_no_injury_word_is_passed() -> None:
         market_probability=0.6,
         injury_status=None,
     )
-    # The helper would block if /reads passed the cache words; it does not.
     assert injury_blocks_combined("Out") is True
-    assert injury_blocks_combined(None, "Out") is True
+    assert injury_blocks_combined("Doubtful") is False
     assert combined is not None
     assert 0.0 < combined < 1.0
