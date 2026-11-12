@@ -4,10 +4,12 @@
 props. The lines stay on the props route, which is a snapshot read. A
 read also starts from that snapshot: the modal line, the book prices at
 that line, and nothing from The Odds API. History comes from the NBA
-game log. A projection is used only when it is already in Redis.
+game log. The projection signal is missing.
 
 ``combined_probability`` is ``build_nba_signals``. This module does not
-change that math.
+change that math. There is no projection cache read. The projection
+signal stays missing. Defense ranks, when the player's club is in the
+event, come from the NBA game log.
 """
 
 from __future__ import annotations
@@ -15,7 +17,6 @@ from __future__ import annotations
 import asyncio
 import logging
 import math
-from datetime import date, datetime, timezone
 from typing import Any
 
 from pydantic import ValidationError
@@ -35,21 +36,20 @@ from app.services.cache import cache_service
 from app.services.daily_analysis import (
     HIGH_PROBABILITY_THRESHOLD,
     LEAN_PROBABILITY_FLOOR,
-    PROJECTION_FIELD_ALIASES,
     SUPPORTED_MARKETS,
+    _empty_rank_fields,
+    _opponent_club,
     _recent_stat_values,
     choose_daily_pick_side,
     read_tier,
 )
 from app.services.db import db_service
-from app.services.defense_ranks import fill_null_defense_ranks
+from app.services.defense_ranks import defense_fields
 from app.services.pick_signals import (
     american_pairs_at_line,
     build_nba_signals,
     no_vig_consensus,
 )
-from app.services.projection_service import _build_projections_key
-
 logger = logging.getLogger(__name__)
 
 # Same window as the props cache. A new snapshot is visible on the next
@@ -60,10 +60,8 @@ _MARKET_TO_METRIC: dict[str, str] = {
     market: metric for market, metric in SUPPORTED_MARKETS
 }
 
-# Latest capture, plus the columns a read needs that the props query
-# does not select: the slate date (projection cache key) is enough.
-# home_team and away_team are selected so a later reader can see which
-# game the rows belong to. The read itself keys off the player name.
+# Latest capture. home_team and away_team name the game so a defense
+# rank can use the other club. The read itself keys off the player name.
 LATEST_EVENT_READ_SQL = """
 SELECT
     snapshot_at,
@@ -220,23 +218,50 @@ def _market_favorite(bookmakers: list[dict[str, Any]], player_name: str, line: f
     return "under"
 
 
-def _projection_for(projections: dict[str, Any] | None, player_name: str) -> dict[str, Any]:
-    """One player's cached projection, with null ranks filled from the log.
+def _text_or_none(value: Any) -> str | None:
+    """A non-empty string, or None. A mock or a blank is None."""
+    if isinstance(value, str) and value.strip():
+        return value.strip()
+    return None
 
-    A missing row is ``{}``. ``fill_null_defense_ranks`` reads the local
-    game log. It does not call SportsData.
+
+def _event_sides(rows: list[dict[str, Any]]) -> tuple[str | None, str | None]:
+    """Home and away from the first snapshot row that has both."""
+    for row in rows:
+        home = _text_or_none(row.get("home_team"))
+        away = _text_or_none(row.get("away_team"))
+        if home and away:
+            return home, away
+    return None, None
+
+
+def _ranks_for_player(
+    player_name: str,
+    home_team: str | None,
+    away_team: str | None,
+    csv_service: Any,
+) -> dict[str, Any]:
+    """CSV defense ranks when the player's latest club is in this event.
+
+    ``latest_team`` and ``latest_position`` are the game-log fields.
+    A service that does not have them leaves the ranks null. Injury
+    status is not read from a lineup snapshot here.
     """
-    if not projections:
-        return {}
-    row = projections.get(player_name)
-    if not isinstance(row, dict):
-        return {}
+    empty = _empty_rank_fields()
+    latest_team = getattr(csv_service, "latest_team", None)
+    latest_position = getattr(csv_service, "latest_position", None)
+    team = _text_or_none(latest_team(player_name) if callable(latest_team) else None)
+    position = _text_or_none(
+        latest_position(player_name) if callable(latest_position) else None
+    )
+    if not team or not home_team or not away_team:
+        return empty
     try:
-        filled = fill_null_defense_ranks(row)
+        opponent = _opponent_club(team, home_team, away_team, "nba")
+        return defense_fields(opponent, position)
     except Exception:
         logger.exception("Defense-rank fill failed for %s", player_name)
-        return row
-    return filled if isinstance(filled, dict) else row
+        return empty
 
 
 def _read_for_player(
@@ -244,7 +269,8 @@ def _read_for_player(
     market: str,
     player: BulkPropPlayer,
     csv_service: Any,
-    projections: dict[str, Any] | None,
+    home_team: str | None,
+    away_team: str | None,
 ) -> PropRead:
     """Build one read. The player is returned even when every score is null."""
     metric = _MARKET_TO_METRIC.get(market)
@@ -282,9 +308,7 @@ def _read_for_player(
         )
     values = _recent_stat_values(stats.get("game_logs") or [])
     last10 = values[-10:] if len(values) >= 10 else None
-    projection = _projection_for(projections, player.player)
-    field = PROJECTION_FIELD_ALIASES.get(metric, metric)
-    projected = projection.get(field) if projection else None
+    ranks = _ranks_for_player(player.player, home_team, away_team, csv_service)
     signals, combined, _adjustment = build_nba_signals(
         side=side,
         line=player.line,
@@ -292,12 +316,10 @@ def _read_for_player(
         bookmakers=bookmakers,
         last10_values=last10,
         history_rate=rate,
-        projected_value=projected,
-        opponent_rank=projection.get("opponent_rank") if projection else None,
-        opponent_position_rank=(
-            projection.get("opponent_position_rank") if projection else None
-        ),
-        injury_status=projection.get("injury_status") if projection else None,
+        projected_value=None,
+        opponent_rank=ranks["opponent_rank"],
+        opponent_position_rank=ranks["opponent_position_rank"],
+        injury_status=None,
     )
     return PropRead(
         player=player.player,
@@ -316,21 +338,20 @@ def assemble_event_reads(
     *,
     market: str | None = None,
     csv_service: Any | None = None,
-    projections: dict[str, Any] | None = None,
 ) -> EventReadsResponse:
     """Build one read per posted player. No I/O of its own besides the CSV service.
 
     ``rows`` are snapshot rows. ``assemble_bulk_props`` picks the newest
     capture, one vote per book, and the modal line. This function then
     scores that line. A binary market is included with a null side.
+    The projection signal is missing. Defense ranks use the game log
+    when the player's latest club is home or away on these rows.
 
     Args:
         event_id: Event id echoed on the response.
         rows: Snapshot rows for the event. Older captures are ignored.
         market: One market key, or None for every stored market.
         csv_service: NBA history service. Defaults to the process singleton.
-        projections: Optional map of player name to a projection dict.
-            None means the projection and defense signals are missing.
 
     Returns:
         The reads payload. ``source`` is ``"snapshot"``.
@@ -339,6 +360,7 @@ def assemble_event_reads(
         from app.services.csv_player_history import csv_player_service
 
         csv_service = csv_player_service
+    home_team, away_team = _event_sides(rows)
     markets = frozenset({market}) if market else None
     props = assemble_bulk_props(event_id, rows, markets=markets)
     reads: list[PropRead] = []
@@ -349,7 +371,8 @@ def assemble_event_reads(
                     market=item.market,
                     player=player,
                     csv_service=csv_service,
-                    projections=projections,
+                    home_team=home_team,
+                    away_team=away_team,
                 )
             )
     return EventReadsResponse(
@@ -361,63 +384,24 @@ def assemble_event_reads(
     )
 
 
-def _as_date_text(value: Any) -> str | None:
-    """Calendar date ``YYYY-MM-DD`` from a snapshot ``date`` column."""
-    if value is None:
-        return None
-    if isinstance(value, datetime):
-        return value.date().isoformat()
-    if isinstance(value, date):
-        return value.isoformat()
-    text = str(value).strip()
-    if len(text) >= 10 and text[4] == "-" and text[7] == "-":
-        return text[:10]
-    return None
-
-
-async def _cached_projections(rows: list[dict[str, Any]]) -> dict[str, Any]:
-    """Projection dict already in Redis, or ``{}``.
-
-    This does not call ``projection_service.get_projections``, because
-    that fetches SportsData on a cache miss. A missing cache is "no
-    projection", which the signal model already treats as no information.
-    """
-    slate_date: str | None = None
-    for row in rows:
-        slate_date = _as_date_text(row.get("date"))
-        if slate_date:
-            break
-    if slate_date is None:
-        return {}
-    try:
-        cached = await cache_service.get(_build_projections_key(slate_date))
-    except Exception:
-        logger.exception("Projection cache read failed for %s", slate_date)
-        return {}
-    if isinstance(cached, dict):
-        return cached
-    return {}
-
-
 async def get_event_reads(
     event_id: str,
     *,
     market: str | None = None,
     csv_service: Any | None = None,
-    projections: dict[str, Any] | None = None,
 ) -> EventReadsResponse:
     """Return a read for every posted player on one NBA event.
 
     Redis first, for 60 seconds. On a miss, read the latest
     ``odds_line_snapshots`` capture. Do not call the Odds API on a hit,
     a miss, a cache failure, or a database failure. An empty capture is
-    cached too, so a cold event cannot become a live quote.
+    cached too, so a cold event cannot become a live quote. This does
+    not read a projection cache.
 
     Args:
         event_id: Well-formed event id. The route checks the shape.
         market: One snapshot market key, or None for every stored market.
         csv_service: History service override, used by tests.
-        projections: Projection override. None reads the Redis cache only.
 
     Returns:
         Reads payload. ``source`` is ``"snapshot"``.
@@ -446,16 +430,12 @@ async def get_event_reads(
         logger.exception("Event reads query failed for event %s", event_id)
         raise BulkPropsQueryFailed("Failed to read odds snapshots") from exc
 
-    if projections is None:
-        projections = await _cached_projections(rows)
-
     payload = await asyncio.to_thread(
         assemble_event_reads,
         event_id,
         rows,
         market=market,
         csv_service=csv_service,
-        projections=projections,
     )
     await cache_service.set(
         key,

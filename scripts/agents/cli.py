@@ -125,7 +125,7 @@ async def run_query(query: str, app=None, verbose: bool = False, log_data: bool 
                 print(f"  [Stats]      Ran {n_tools} historical/context tools")
 
             elif node_name == "projection_agent":
-                print(f"  [Projection] Unavailable (SportsDataIO dummy feed excluded)")
+                print("  [Projection] Unavailable (no projection source; ML model pending)")
 
             elif node_name == "market_agent":
                 ms = update.get("market_signals", {})

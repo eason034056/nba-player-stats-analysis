@@ -1,5 +1,7 @@
 # Decision — WNBA rollout Phase 3 DB schema audit (SPO-35 Step 1)
 
+> Superseded in part by SPO-135 (2026-11-11): nothing reads or writes `player_projections`, and `projection_service` is gone. The audit below is the 2026-05-14 record.
+
 - Date: 2026-05-14
 - Author: Forge (agent `d5d67ab1-...`)
 - Ticket: [SPO-35](/SPO/issues/SPO-35)

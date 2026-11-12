@@ -15,7 +15,6 @@ from zoneinfo import ZoneInfo
 
 import pytest
 
-from app.api.projections import get_player_projection, get_projections
 from app.models.schemas import NBAEvent
 from app.services.csv_player_history import (
     CSVPlayerHistoryService,
@@ -30,8 +29,6 @@ from app.services.defense_ranks import (
 from app.services.event_fields import enrich_nba_event
 from app.services.lineup_service import confirmation_status
 from app.services.nba_season import recorded_nba_season_label
-from app.services.projection_provider import SportsDataProjectionError
-from app.services.projection_service import ProjectionService
 
 _SEASONS = (
     Path(__file__).resolve().parents[2] / "tests" / "fixtures" / "espn" / "seasons"
@@ -271,7 +268,7 @@ class TestDefenseRankScale:
             assert filled["opponent_position_rank"] is not None
             assert 1 <= filled["opponent_position_rank"] <= 30
 
-    def test_existing_rank_outside_1_to_30_clears_the_row_as_sportsdata_invalid(self):
+    def test_an_out_of_range_input_is_replaced_from_the_csv(self):
         table = build_defense_rank_table([_game("Lakers", "Celtics", 20)])
         kept = fill_null_defense_ranks(
             {
@@ -282,9 +279,9 @@ class TestDefenseRankScale:
             },
             table,
         )
-        assert kept["opponent_rank"] is None
-        assert kept["opponent_position_rank"] is None
-        assert kept["opponent_rank_source"] == "sportsdata_invalid"
+        assert kept["opponent_rank"] == table.overall["BOS"]
+        assert kept["opponent_position_rank"] == table.by_position[("BOS", "PG")]
+        assert kept["opponent_rank_source"] == "csv"
 
     def test_preseason_and_zero_point_rows_do_not_invent_a_defense(self):
         table = build_defense_rank_table(
@@ -522,124 +519,6 @@ class TestHistorySample:
             assert item["without_mean"] is None
 
 
-class TestProjectionRankStorage:
-    @pytest.mark.asyncio
-    async def test_fetch_and_store_writes_the_unfilled_rank(self, monkeypatch):
-        stored: dict[str, object] = {}
-
-        async def fake_fetch(date: str) -> list[dict]:
-            return [
-                {
-                    "player_name": "Stephen Curry",
-                    "opponent": "LAL",
-                    "position": "PG",
-                    "points": 29.0,
-                    "opponent_rank": None,
-                    "opponent_position_rank": None,
-                }
-            ]
-
-        async def fake_set(key: str, value: object, ttl: int | None = None) -> bool:
-            stored[key] = value
-            return True
-
-        async def noop(*args: object, **kwargs: object) -> None:
-            return None
-
-        monkeypatch.setattr(
-            "app.services.projection_service.projection_provider.fetch_projections_by_date",
-            fake_fetch,
-        )
-        monkeypatch.setattr(
-            "app.services.projection_service.cache_service.set",
-            fake_set,
-        )
-        service = ProjectionService()
-        monkeypatch.setattr(service, "_write_to_postgres", noop)
-        monkeypatch.setattr(service, "_log_fetch", noop)
-
-        result = await service.fetch_and_store("2026-02-08")
-        assert result["Stephen Curry"]["opponent_rank"] is not None
-        payload = stored["projections:nba:2026-02-08"]
-        assert isinstance(payload, dict)
-        assert payload["Stephen Curry"]["opponent_rank"] is None
-        assert payload["Stephen Curry"]["opponent_position_rank"] is None
-
-    @pytest.mark.asyncio
-    async def test_postgres_fallback_does_not_store_the_filled_rank(self, monkeypatch):
-        stored: dict[str, object] = {}
-
-        async def fake_get(key: str) -> None:
-            return None
-
-        async def fake_fetch(date: str) -> dict:
-            raise SportsDataProjectionError(0, "offline")
-
-        async def fake_postgres(date: str) -> dict:
-            return {
-                "Stephen Curry": {
-                    "player_name": "Stephen Curry",
-                    "opponent": "LAL",
-                    "position": "PG",
-                    "points": 29.0,
-                    "opponent_rank": None,
-                    "opponent_position_rank": None,
-                }
-            }
-
-        async def fake_write(date: str, projections: dict) -> None:
-            stored["projections"] = projections
-
-        monkeypatch.setattr(
-            "app.services.projection_service.cache_service.get",
-            fake_get,
-        )
-        service = ProjectionService()
-        monkeypatch.setattr(service, "fetch_and_store", fake_fetch)
-        monkeypatch.setattr(service, "_read_from_postgres", fake_postgres)
-        monkeypatch.setattr(service, "_write_to_redis", fake_write)
-
-        result = await service.get_projections("2026-02-08")
-        assert result["Stephen Curry"]["opponent_rank"] is not None
-        payload = stored["projections"]
-        assert isinstance(payload, dict)
-        assert payload["Stephen Curry"]["opponent_rank"] is None
-        assert payload["Stephen Curry"]["opponent_position_rank"] is None
-
-    @pytest.mark.asyncio
-    async def test_cache_hit_does_not_write_the_filled_rank(self, monkeypatch):
-        writes: list[str] = []
-
-        async def fake_get(key: str):
-            if key.endswith(":meta"):
-                return {"fetched_at": datetime.now(timezone.utc).isoformat()}
-            return {
-                "Stephen Curry": {
-                    "player_name": "Stephen Curry",
-                    "opponent": "LAL",
-                    "position": "PG",
-                    "opponent_rank": None,
-                    "opponent_position_rank": None,
-                }
-            }
-
-        async def fake_set(key: str, value: object, ttl: int | None = None) -> bool:
-            writes.append(key)
-            return True
-
-        monkeypatch.setattr(
-            "app.services.projection_service.cache_service.get",
-            fake_get,
-        )
-        monkeypatch.setattr(
-            "app.services.projection_service.cache_service.set",
-            fake_set,
-        )
-        result = await ProjectionService().get_projections("2026-02-08")
-        assert result["Stephen Curry"]["opponent_rank_source"] == "csv"
-        assert writes == []
-
-
 class TestRankBoundsAndLabels:
     def test_fewer_than_thirty_teams_are_numbered_from_one(self):
         table = build_defense_rank_table(
@@ -723,7 +602,7 @@ class TestRankBoundsAndLabels:
         assert 1 <= filled["opponent_rank"] <= 30
         assert 1 <= filled["opponent_position_rank"] <= 30
 
-    def test_an_in_range_sportsdata_rank_keeps_its_source(self):
+    def test_an_in_range_input_is_replaced_by_the_csv(self):
         kept = fill_null_defense_ranks(
             {
                 "opponent": "LAL",
@@ -732,94 +611,8 @@ class TestRankBoundsAndLabels:
                 "opponent_position_rank": 8,
             }
         )
-        assert kept["opponent_rank"] == 12
-        assert kept["opponent_position_rank"] == 8
-        assert kept["opponent_rank_source"] == "sportsdata"
-        assert kept.get("opponent_rank_season") is None
-        assert kept.get("opponent_rank_note") is None
-
-
-def _cached_projections(rows: dict[str, dict]) -> object:
-    """Cache reader for mapped projection rows. Not a SportsData HTTP body."""
-
-    async def fake_get(key: str):
-        if key.endswith(":meta"):
-            return {
-                "fetched_at": datetime.now(timezone.utc).isoformat(),
-                "player_count": len(rows),
-            }
-        return rows
-
-    return fake_get
-
-
-def _stored_row(name: str, overall: int | None, positional: int | None) -> dict:
-    return {
-        "player_name": name,
-        "opponent": "LAL",
-        "position": "PG",
-        "points": 20.0,
-        "opponent_rank": overall,
-        "opponent_position_rank": positional,
-    }
-
-
-class TestSportsDataRankBounds:
-    """No recorded SportsData projection body exists in this repo.
-
-    The decision for this ticket says no SportsData key was available, so
-    there is nothing to deepcopy. These rows are the mapped cache shape
-    ``FIELD_MAPPING`` writes (``OpponentRank`` → ``opponent_rank``).
-    """
-
-    @pytest.mark.asyncio
-    async def test_null_sportsdata_rank_is_filled_and_returned(self, monkeypatch):
-        monkeypatch.setattr(
-            "app.services.projection_service.cache_service.get",
-            _cached_projections({"Null Rank": _stored_row("Null Rank", None, None)}),
-        )
-        response = await get_projections(date="2026-02-08")
-        assert response.player_count == 1
-        player = response.projections[0]
-        assert player.player_name == "Null Rank"
-        assert player.opponent_rank_source == "csv"
-        assert player.opponent_rank_season == "2025-2026"
-        assert player.opponent_rank_note == _CSV_RANK_NOTE
-        assert player.opponent_rank is not None
-        assert 1 <= player.opponent_rank <= 30
-
-    @pytest.mark.asyncio
-    async def test_out_of_range_sportsdata_rank_stays_on_the_list(self, monkeypatch):
-        # OpponentRank 0 and 31 are outside Field(ge=1, le=30). The player
-        # has to stay on the list with the rank cleared and the source
-        # marked sportsdata_invalid. Dropping the player hides the row.
-        monkeypatch.setattr(
-            "app.services.projection_service.cache_service.get",
-            _cached_projections(
-                {
-                    "Zero Rank": _stored_row("Zero Rank", 0, 8),
-                    "High Rank": _stored_row("High Rank", 31, 31),
-                    "Null Rank": _stored_row("Null Rank", None, None),
-                }
-            ),
-        )
-        response = await get_projections(date="2026-02-08")
-        by_name = {player.player_name: player for player in response.projections}
-        assert set(by_name) == {"Zero Rank", "High Rank", "Null Rank"}
-        for name in ("Zero Rank", "High Rank"):
-            assert by_name[name].opponent_rank is None
-            assert by_name[name].opponent_position_rank is None
-            assert by_name[name].opponent_rank_source == "sportsdata_invalid"
-
-    @pytest.mark.asyncio
-    async def test_out_of_range_sportsdata_rank_does_not_500_one_player(
-        self, monkeypatch
-    ):
-        monkeypatch.setattr(
-            "app.services.projection_service.cache_service.get",
-            _cached_projections({"Zero Rank": _stored_row("Zero Rank", 0, 31)}),
-        )
-        player = await get_player_projection("Zero Rank", date="2026-02-08")
-        assert player.opponent_rank is None
-        assert player.opponent_position_rank is None
-        assert player.opponent_rank_source == "sportsdata_invalid"
+        assert kept["opponent_rank_source"] == "csv"
+        assert kept["opponent_position_rank_source"] == "csv"
+        assert kept["opponent_rank_note"] == _CSV_RANK_NOTE
+        assert 1 <= kept["opponent_rank"] <= 30
+        assert 1 <= kept["opponent_position_rank"] <= 30

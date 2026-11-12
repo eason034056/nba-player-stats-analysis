@@ -17,7 +17,7 @@ Usage:
     await db_service.init()
 
     # Query
-    rows = await db_service.fetch("SELECT * FROM player_projections WHERE date = $1", date)
+    rows = await db_service.fetch("SELECT * FROM odds_line_snapshots WHERE date = $1", date)
 
     # Cleanup when closing
     await db_service.close()
@@ -43,7 +43,9 @@ SCHEMA_SQL = """
 SELECT pg_advisory_xact_lock(1170117);
 
 -- Player Projections Table
--- Stores daily player game projections from SportsDataIO
+-- Retained so an existing database is not dropped on boot.
+-- No module reads or writes this table. A later change drops it
+-- after a grep shows the name only in this schema block.
 -- Each row is (date, player_name, game_id) unique
 CREATE TABLE IF NOT EXISTS player_projections (
     id SERIAL PRIMARY KEY,
@@ -52,7 +54,7 @@ CREATE TABLE IF NOT EXISTS player_projections (
     date DATE NOT NULL,
 
     -- Player basic info
-    player_id INTEGER,               -- SportsDataIO player ID
+    player_id INTEGER,               -- Vendor player id, unused
     player_name TEXT NOT NULL,       -- Player name
     team TEXT,                       -- Team abbreviation (e.g., GS, LAL)
     position TEXT,                   -- Position (PG/SG/SF/PF/C)
@@ -60,7 +62,7 @@ CREATE TABLE IF NOT EXISTS player_projections (
     -- Matchup info
     opponent TEXT,                   -- Opponent team abbreviation
     home_or_away TEXT,               -- HOME or AWAY
-    game_id INTEGER,                 -- SportsDataIO game ID
+    game_id INTEGER,                 -- Vendor game id, unused
 
     -- Core projection stats (available in Free Trial)
     minutes REAL,                    -- Projected minutes
@@ -113,7 +115,7 @@ CREATE INDEX IF NOT EXISTS idx_proj_player ON player_projections(player_name);
 CREATE INDEX IF NOT EXISTS idx_proj_date_player ON player_projections(date, player_name);
 
 -- Projection Fetch Logs Table
--- Records each API call status for monitoring and debugging
+-- Retained with player_projections. Nothing writes a row.
 CREATE TABLE IF NOT EXISTS projection_fetch_logs (
     id SERIAL PRIMARY KEY,
     date DATE NOT NULL,                              -- Game date queried
@@ -138,7 +140,7 @@ CREATE TABLE IF NOT EXISTS odds_line_snapshots (
     -- Snapshot time: when this data was captured
     snapshot_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
 
-    -- Game date (EST, same as player_projections)
+    -- Game date (US slate date)
     date DATE NOT NULL,
 
     -- Game info (from The Odds API)
@@ -486,7 +488,7 @@ class DatabaseService:
 
         Example:
             rows = await db.fetch(
-                "SELECT * FROM player_projections WHERE date = $1",
+                "SELECT * FROM odds_line_snapshots WHERE date = $1",
                 datetime.date(2026, 2, 8)
             )
         """
@@ -510,7 +512,7 @@ class DatabaseService:
 
         Example:
             row = await db.fetchrow(
-                "SELECT * FROM player_projections WHERE date = $1 AND player_name = $2",
+                "SELECT * FROM odds_line_snapshots WHERE date = $1 AND player_name = $2",
                 datetime.date(2026, 2, 8), "Stephen Curry"
             )
         """

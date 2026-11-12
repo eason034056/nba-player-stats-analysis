@@ -30,11 +30,7 @@ class Settings(BaseSettings):
     # bdl_rate_limit_per_min 對應 BDL_RATE_LIMIT_PER_MIN。試用 key 是 5，付費 GOAT 是 600。
     # 真正送出請求後，如果回應帶 x-ratelimit-limit，共用預算改跟那個標頭。
     bdl_rate_limit_per_min: int = 5
-    
-    # SportsDataIO 設定（球員投影數據）
-    sportsdata_api_key: str = ""  # SportsDataIO API 金鑰
-    sportsdata_base_url: str = "https://api.sportsdata.io"  # SportsDataIO API 基礎 URL
-    
+
     # PostgreSQL 設定
     database_url: str = "postgresql://novig:novig@localhost:5432/novig_nba"  # PostgreSQL 連線 URL
     # False locally so tests and dev without Postgres still boot.
@@ -48,7 +44,6 @@ class Settings(BaseSettings):
     cache_ttl_events: int = 300  # 賽事列表快取時間（5分鐘）
     cache_ttl_props: int = 60    # Props 資料快取時間（1分鐘）
     cache_ttl_players: int = 300 # 球員建議快取時間（5分鐘）
-    cache_ttl_projections: int = 7200  # 投影資料快取時間（2小時）
     cache_ttl_lineups: int = 3600
     cache_ttl_market_fresh: int = 600
     cache_ttl_market_stale: int = 900
