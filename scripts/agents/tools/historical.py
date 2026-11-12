@@ -39,6 +39,7 @@ for _p in (_BACKEND_DIR, _RAG_DIR):
         sys.path.insert(0, _p)
 
 from app.services.game_log_hygiene import coalesce_game_type
+from app.services.slate_date import nba_slate_date
 from app.services.csv_player_history import (
     CSVPlayerHistoryService,
     _coerce_date,
@@ -541,7 +542,13 @@ def _team_code_from_name(team_name: str, league: str = "nba") -> str:
 
 
 def _today_date_string() -> str:
-    return datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    """America/New_York slate date for an omitted lineup date.
+
+    ``get_projected_lineup_consensus`` calls this when the planner did not
+    pass a date. The instant is read here so a test can freeze
+    ``datetime`` on this module, then converted with ``nba_slate_date``.
+    """
+    return nba_slate_date(datetime.now(timezone.utc))[0]
 
 
 _LEAGUE_TO_SPORT_KEY: Dict[str, str] = {
