@@ -133,10 +133,12 @@ def _mapped_status(raw_status: Any) -> str | None:
     """Return the status stored on a normalized row, or None to drop it.
 
     ``Available`` is not an injury. ``Doubtful`` is stored as
-    ``Questionable`` because the scorer's unresolved bucket is
-    ``Questionable`` / ``Day-To-Day`` and has no ``Doubtful`` label.
-    The original word stays on ``raw_status``. Eason chose this
-    mapping in the Sports Lab Lead chat on 2026-11-10 (~10:34 PM CT).
+    ``Questionable``. Picks and reads use that stored word and do not
+    block on the source word. The original word stays on
+    ``raw_status`` for the agent payload and a later history table.
+    Eason chose the mapping in the Sports Lab Lead chat on 2026-11-10
+    (~10:34 PM CT), and on 2026-11-11 that a stored Doubtful keeps
+    its blend.
 
     A word this module does not know is not left as-is. Downstream
     treats an unknown status as healthy. A word that contains ``Out``

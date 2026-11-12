@@ -69,7 +69,7 @@ def test_missing_projection_adds_zero_and_stays_in_unit_interval():
     assert 0.0 < missing_p < 1.0
     assert 0.0 < with_p < 1.0
     assert read_tier(missing_p) is not None
-    # Null injury no longer trips the Out/Doubtful gate used on DailyPick.
+    # Null injury does not trip the Out gate used on DailyPick.
     assert (
         combined_probability(
             side="over",

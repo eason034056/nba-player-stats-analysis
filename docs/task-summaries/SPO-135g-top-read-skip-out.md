@@ -9,7 +9,7 @@
 
 `best_top_reads` skips a stored candidate whose player matches an Out row in a fresh `injuries:nba:latest` snapshot. The match is `match_injury_entry`, the same helper daily picks and `/reads` use: case, punctuation, and accents fold, and the suffix stays. The choice is per game. The next-highest historical probability on that game is the top read. When every candidate is Out, that game's `top_read` is null.
 
-A missing, stale, malformed, or unreadable snapshot does not skip, and this path does not log that. The events request only reads Redis. It does not call BALLDONTLIE. Raw Doubtful is unchanged: the row stays Questionable, and top_read does not look at `raw_status`. WNBA does not load this snapshot.
+A missing, stale, malformed, or unreadable snapshot does not skip, and this path does not log that. The events request only reads Redis. It does not call BALLDONTLIE. Raw Doubtful stays Questionable, and top_read does not look at `raw_status`. SPO-135h keeps that player's blend. WNBA does not load this snapshot.
 
 The startup job's display name is `NBA Injury Snapshot Startup Refill`. The job id is still `nba_injuries_startup_fill`.
 
@@ -58,9 +58,9 @@ Lakers at Hawks (`07361a8381206817e27bd2697fad7479`) came back as Matisse Thybul
 
 ## Open question
 
-Doubtful. The cache stores it as Questionable and keeps `raw_status`. `injury_blocks_combined` still treats that source word like Out, so `combined_probability` is null, while `DailyPick.injury_status` stays Questionable. This PR does not skip a Doubtful player when choosing a top read, and it does not change the blend. Eason decides whether Doubtful should keep a probability the way Questionable does, or keep blocking the way Out does.
+Doubtful. The cache stores it as Questionable and keeps `raw_status`. This PR does not skip a Doubtful player when choosing a top read. SPO-135h keeps the blend, the same as Questionable. Out still blocks the blend and is still skipped here.
 
 ## Follow-ups
 
-- [ ] Eason: Doubtful keeps a blend, or blocks and stays on the filtered board.
+- [x] Eason: Doubtful keeps a blend. Closed by SPO-135h.
 - [ ] A same-slate Odds API capture paired with a same-slate BALLDONTLIE injury page. That needs live calls and waits on the key upgrade. This PR does not record it.

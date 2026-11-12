@@ -370,19 +370,18 @@ def select_daily_picks(
 
     Returns:
         Picks that meet both floors, in the original order. An NBA row
-        whose ``injury_status`` is Out or Doubtful is kept when the
-        sample floor passes, even though its blend is null.
+        whose ``injury_status`` is Out is kept when the sample floor
+        passes, even though its blend is null. Doubtful is Questionable
+        and uses the blend floor.
     """
     kept: List[DailyPick] = []
     for pick in picks:
         if pick.n_games < min_games:
             continue
         # Out stays on the board with a null blend so injury_status is
-        # visible. A missing blend that is not an injury block still
-        # leaves the board. Doubtful from the cache is stored as
-        # Questionable; that row's blend is already null and this filter
-        # does not see the source word, so it leaves with the other
-        # null blends.
+        # visible. A missing blend that is not Out still leaves the
+        # board. Doubtful is stored as Questionable and follows its
+        # blend, the same as any other Questionable row.
         if league.lower() != "wnba" and injury_blocks_combined(pick.injury_status):
             kept.append(pick)
             continue
@@ -1290,17 +1289,13 @@ class DailyAnalysisService:
                     projected_minutes = None
                     edge = None
                     injury_status = None
-                    injury_raw_status = None
                     lineup_confirmed = None
                     if league.lower() == "nba" and injury_entries is not None:
                         matched = match_injury_entry(injury_entries, player_name)
                         if matched is not None:
                             status = matched.get("status")
-                            raw_status = matched.get("raw_status")
                             if isinstance(status, str):
                                 injury_status = status
-                            if isinstance(raw_status, str):
-                                injury_raw_status = raw_status
                     rank_fields = _empty_rank_fields()
                     if league.lower() == "nba":
                         opponent = _opponent_club(
@@ -1361,7 +1356,6 @@ class DailyAnalysisService:
                         league=league,
                         bookmakers_data=props_data,
                         game_logs=history_stats.get("game_logs") or [],
-                        injury_raw_status=injury_raw_status,
                     )
 
                     edge_str = f" (edge: {edge:+.1f})" if edge is not None else ""
@@ -1534,7 +1528,6 @@ def _with_nba_signal_verdicts(
     league: str,
     bookmakers_data: List[Dict[str, Any]],
     game_logs: List[Dict[str, Any]],
-    injury_raw_status: str | None = None,
 ) -> DailyPick:
     """Attach the NBA signals on a pick. WNBA is returned unchanged.
 
@@ -1560,7 +1553,6 @@ def _with_nba_signal_verdicts(
         opponent_rank=pick.opponent_rank,
         opponent_position_rank=pick.opponent_position_rank,
         injury_status=pick.injury_status,
-        raw_status=injury_raw_status,
     )
     # Mutate the instance already appended to the pick list. model_copy
     # would leave the list holding the pre-signal object.

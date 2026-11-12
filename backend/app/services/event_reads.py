@@ -15,9 +15,9 @@ NBA injury status comes from Redis key ``injuries:nba:latest``. The
 lookup uses ``match_injury_entry``, the same helper daily picks use.
 This module reads that key and does not call BALLDONTLIE. A snapshot
 row has a player name and no BALLDONTLIE id, so the id argument stays
-unset. Out, and a source word of Doubtful, set ``combined_probability``
-to null. A missing or stale snapshot leaves the blend in place and the
-loader logs one warning.
+unset. Out sets ``combined_probability`` to null. Doubtful is stored
+as Questionable and keeps a number. A missing or stale snapshot leaves
+the blend in place and the loader logs one warning.
 """
 
 from __future__ import annotations
@@ -273,36 +273,33 @@ def _ranks_for_player(
         return empty
 
 
-def _injury_words(
+def _injury_status(
     entries: list[dict[str, Any]] | None,
     player_name: str,
-) -> tuple[str | None, str | None]:
-    """Return ``(status, raw_status)`` for one posted name.
+) -> str | None:
+    """Return the normalized status for one posted name.
 
     ``entries`` is None when the snapshot is missing, stale, or
-    malformed. Both words are then None, so the blend is not blocked.
+    malformed. The status is then None, so the blend is not blocked.
     The snapshot row and the Odds API description are a name only.
     Daily picks leave ``bdl_player_id`` unset for the same reason, and
-    this calls the same helper.
+    this calls the same helper. Doubtful is already Questionable on
+    the snapshot, and this returns that word.
 
     Args:
         entries: Fresh injury rows, or None.
         player_name: Name stored on the odds snapshot.
 
     Returns:
-        The normalized status and the source word. Either can be None.
+        The normalized status, or None.
     """
     if not entries:
-        return None, None
+        return None
     matched = match_injury_entry(entries, player_name)
     if matched is None:
-        return None, None
+        return None
     status = matched.get("status")
-    raw_status = matched.get("raw_status")
-    return (
-        status if isinstance(status, str) else None,
-        raw_status if isinstance(raw_status, str) else None,
-    )
+    return status if isinstance(status, str) else None
 
 
 def _read_for_player(
@@ -351,7 +348,7 @@ def _read_for_player(
     values = _recent_stat_values(stats.get("game_logs") or [])
     last10 = values[-10:] if len(values) >= 10 else None
     ranks = _ranks_for_player(player.player, home_team, away_team, csv_service)
-    injury_status, raw_status = _injury_words(injury_entries, player.player)
+    injury_status = _injury_status(injury_entries, player.player)
     signals, combined, _adjustment = build_nba_signals(
         side=side,
         line=player.line,
@@ -363,7 +360,6 @@ def _read_for_player(
         opponent_rank=ranks["opponent_rank"],
         opponent_position_rank=ranks["opponent_position_rank"],
         injury_status=injury_status,
-        raw_status=raw_status,
     )
     return PropRead(
         player=player.player,
