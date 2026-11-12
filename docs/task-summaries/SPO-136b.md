@@ -6,7 +6,7 @@
 
 ## Summary
 
-The two self-hosted webfonts are Latin subsets. Instrument Sans is pinned to width 100 and keeps the weight axis. The share card uses `var(--font-sans)` and `var(--font-mono)`. The frontend workflow runs `next build` with no network, so a build that asks Google Fonts for a file fails.
+The two self-hosted webfonts are Latin subsets. Instrument Sans is pinned to width 100 and keeps the weight axis. The share card uses `var(--font-sans)` and `var(--font-mono)`. The frontend workflow builds with `fonts.googleapis.com` and `fonts.gstatic.com` pointed at loopback, so a build that asks Google Fonts for a file fails. `unshare -rn` is not allowed on the GitHub runner.
 
 ## Sizes
 
@@ -31,7 +31,7 @@ A wider set, Latin-1 plus Latin Extended-A and Latin Extended-B, measured 89,392
 | `frontend/app/fonts/*-OFL.txt` | Unchanged. |
 | `frontend/app/layout.tsx` | The four Instrument Sans `src` paths use the new file name. Weights, `display: "swap"`, `adjustFontFallback: "Arial"`, and `font-stretch: 100%` stay. |
 | `frontend/components/betslip/BetSlipScreen.tsx` | `ShareCard` sets the face with Tailwind `[font-family:var(--font-sans)]` and `[font-family:var(--font-mono)]`. |
-| `.github/workflows/ci.yml` | `frontend-lint` runs `unshare -rn npm run build`, then rejects built CSS that names a Google Fonts host. |
+| `.github/workflows/ci.yml` | `frontend-lint` blocks `fonts.googleapis.com` and `fonts.gstatic.com` in `/etc/hosts`, then runs `npm run build`. |
 | `docs/task-summaries/assets/SPO-136b/` | Screenshots. |
 
 `docs/progress.md` is not changed.
@@ -93,13 +93,15 @@ On `next start`, after `document.fonts.ready`.
 
 `frontend-lint` already runs `npx next build` with the Vercel env set. The new step runs with `NEXT_TELEMETRY_DISABLED=1` and no Vercel env.
 
-```yaml
-unshare -rn npm run build
+The first push ran `unshare -rn npm run build` on `ubuntu-latest`. The runner rejected it.
+
+```
+unshare: write failed /proc/self/uid_map: Operation not permitted
 ```
 
-`unshare -rn` gives the build a user namespace and a network namespace with no interfaces. A request to `fonts.googleapis.com` or `fonts.gstatic.com` fails, and `next build` fails with it. The step then searches `.next/static/css` for those hosts. Next's own runtime JS mentions the hosts because it detects a Google Fonts `<link>`. That JS is not a download, so the search is limited to built CSS.
+That job is [run 43135923499](https://github.com/eason034056/nba-player-stats-analysis/actions/runs/43135923499). The other jobs in that run passed. `unshare -rn true` had exited 0 on the machine that prepared the branch. The GitHub runner does not allow the user namespace.
 
-`unshare -rn true` exited 0 on the machine that produced this branch. The GitHub-hosted run is the proof that the same command is allowed on `ubuntu-latest`. The run URL is added after that job finishes. If the runner rejects `unshare`, the step will be replaced with a hosts-file block of `fonts.googleapis.com` and `fonts.gstatic.com`.
+The step now appends both hosts to `/etc/hosts` as `127.0.0.1`, then checks that `curl --fail` cannot reach `https://fonts.googleapis.com` or `https://fonts.gstatic.com`. `npm run build` runs after that check. A font download connects to loopback, fails, and fails the build. The step then searches `.next/static/css` for those hosts. Next's own runtime JS mentions the hosts because it detects a Google Fonts `<link>`. That JS is not a download, so the search is limited to built CSS.
 
 ## Screenshots
 
@@ -157,5 +159,5 @@ No new TypeScript logic was added, so no new vitest file was added.
 
 ## Follow-ups
 
-- Record the GitHub Actions run that executes `unshare -rn npm run build`.
+- Record the Actions run that builds with the hosts-file block.
 - The WNBA share template still uses a system font stack.
