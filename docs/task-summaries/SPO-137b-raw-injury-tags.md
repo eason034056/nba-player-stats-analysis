@@ -72,6 +72,14 @@ Two older tests were updated after that commit. The Ask assertion looked for `as
 - `npm run lint`: passed, 0 warnings.
 - `npm run build`: passed. `/wnba`, `/wnba/event/[eventId]`, `/wnba/picks`, `/wnba/betslip`, and `/wnba/player/[name]` are in the route table.
 
+## QA follow-up
+
+A raw word of `out` can sit next to a stored status of Questionable, because the backend match for Out is case-sensitive. That pick is not excluded. The share card and the event rail were treating a tag tone of `out` as exclusion, so the share card dropped the percent and the rail dropped the lean. Both now use the stored-status check (`outIds` on the share card, `listedOut` on the rail). The chip still shows the display word.
+
+`Out For Season` is stored as Out, so the row stays excluded. The chip keeps the raw words `Out For Season` on the board, the rail, the read, and the slip. A stored Out with no raw word still says Out.
+
+The review named `pr85_qa_tests1.patch`, and that file was not attached. `frontend/lib/injury-tag.qa.test.tsx` covers the seven cases the review listed, including the two that failed before this fix. `npx vitest run` is 71 files and 601 tests. `npx tsc --noEmit`, `npm run lint`, and `npm run build` passed. `/wnba` routes stay in the route table.
+
 ## Screenshots
 
 `next start` against a local mock. Five Heat props on one game. Herro is Questionable, Adebayo is Doubtful (status Questionable), Martin is Probable, Lowry is Day-To-Day, Butler is Out. The slip was seeded with Butler and Adebayo. No dev overlay. The mobile tab bar is in normal flow at the bottom of the 390 shots so it does not sit on the cards.
