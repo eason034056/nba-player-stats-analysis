@@ -380,7 +380,10 @@ export function DailyPicksBoard({
                     row.dimmed && "opacity-60",
                   )}
                 >
-                  <div className="flex min-w-0 flex-1 items-center gap-3 md:basis-[240px]">
+                  <div
+                    data-testid="pick-player"
+                    className="flex min-w-0 items-center gap-3 md:flex-1 md:basis-[240px]"
+                  >
                     <div className="w-[22px] shrink-0 font-mono text-[13px] font-bold text-muted">
                       {row.rank}
                     </div>
@@ -395,7 +398,10 @@ export function DailyPicksBoard({
                     </div>
                   </div>
 
-                  <div className="flex min-w-0 flex-1 basis-[220px] flex-col gap-2">
+                  <div
+                    data-testid="pick-prop"
+                    className="flex min-w-0 flex-col gap-2 md:flex-1 md:basis-[220px]"
+                  >
                     <div className="text-[15px] font-bold">{row.propText}</div>
                     {slipCaption?.(pick) ? (
                       <p className="text-xs leading-5 text-muted">{slipCaption(pick)}</p>
@@ -411,7 +417,10 @@ export function DailyPicksBoard({
                   </div>
 
                   {row.dimmed ? null : (
-                  <div className="flex min-w-[120px] flex-[0_1_150px] flex-col gap-1.5">
+                  <div
+                    data-testid="pick-rate"
+                    className="flex min-w-[120px] flex-col gap-1.5 md:flex-[0_1_150px]"
+                  >
                     <div className="flex items-baseline justify-between gap-2">
                       <div className="font-mono text-2xl font-bold text-brand">{row.probabilityText}</div>
                       {row.tierShort && row.tierName ? (
