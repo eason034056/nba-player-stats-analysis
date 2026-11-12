@@ -20,6 +20,7 @@ Dependencies:
 """
 
 import asyncio
+import logging
 import math
 import re
 import time
@@ -28,6 +29,8 @@ from typing import List, Dict, Any, Optional, Tuple
 from collections import Counter, defaultdict
 
 from pydantic import ValidationError
+
+logger = logging.getLogger(__name__)
 
 from app.services.odds_gateway import odds_gateway
 from app.services.slate_date import nba_slate_date
@@ -52,7 +55,8 @@ from app.models.schemas import (
     EventsResponse,
     TopRead,
 )
-from app.services.pick_signals import build_nba_signals
+from app.services.nba_injuries import load_nba_pick_injuries, match_injury_entry
+from app.services.pick_signals import build_nba_signals, injury_blocks_combined
 
 
 # ==================== League routing (SPO-35) ====================
@@ -359,15 +363,27 @@ def select_daily_picks(
         league: ``nba`` (combined probability) or ``wnba`` (historical).
 
     Returns:
-        Picks that meet both floors, in the original order.
+        Picks that meet both floors, in the original order. An NBA row
+        whose ``injury_status`` is Out or Doubtful is kept when the
+        sample floor passes, even though its blend is null.
     """
-    return [
-        pick
-        for pick in picks
-        if (score := board_score(pick, league)) is not None
-        and score >= min_probability
-        and pick.n_games >= min_games
-    ]
+    kept: List[DailyPick] = []
+    for pick in picks:
+        if pick.n_games < min_games:
+            continue
+        # Out stays on the board with a null blend so injury_status is
+        # visible. A missing blend that is not an injury block still
+        # leaves the board. Doubtful from the cache is stored as
+        # Questionable; that row's blend is already null and this filter
+        # does not see the source word, so it leaves with the other
+        # null blends.
+        if league.lower() != "wnba" and injury_blocks_combined(pick.injury_status):
+            kept.append(pick)
+            continue
+        score = board_score(pick, league)
+        if score is not None and score >= min_probability:
+            kept.append(pick)
+    return kept
 
 
 def present_daily_picks(
@@ -946,6 +962,21 @@ class DailyAnalysisService:
 
         print(f"📅 [{league_normalized.upper()}] Found {len(events)} events")
 
+        # NBA injury rows come from Redis. A miss, a stale body, or a
+        # read error logs once inside the loader and leaves every
+        # injury_status null. This does not call BALLDONTLIE, and a
+        # failure here must not abort the board. WNBA does not read it.
+        injury_entries: list[dict[str, Any]] | None = None
+        if league_normalized == "nba":
+            try:
+                injury_entries = await load_nba_pick_injuries(cache=cache_service)
+            except Exception as exc:
+                logger.warning(
+                    "NBA pick injury read failed (%s); injury_status left null",
+                    type(exc).__name__,
+                )
+                injury_entries = None
+
         # 3. Analyze all events
         all_picks: List[DailyPick] = []
         total_players = 0
@@ -966,6 +997,7 @@ class DailyAnalysisService:
                     away_team=away_team,
                     commence_time=commence_time,
                     league=league_normalized,
+                    injury_entries=injury_entries,
                 )
                 all_picks.extend(event_picks)
                 total_players += players_count
@@ -1117,6 +1149,7 @@ class DailyAnalysisService:
         commence_time: str,
         projections: Optional[Dict[str, Dict]] = None,
         league: str = "nba",
+        injury_entries: list[dict[str, Any]] | None = None,
     ) -> Tuple[List[DailyPick], int, int]:
         """
         Analyze a single event
@@ -1241,14 +1274,25 @@ class DailyAnalysisService:
                                 position = raw_position.strip()
 
                     # No projection source. The line is not a stand-in.
-                    # injury_status and lineup_confirmed are not copied from
-                    # lineup snapshots in this path; they stay null.
+                    # lineup_confirmed stays null until projected lineups.
+                    # NBA injury_status comes from the cached snapshot.
+                    # A missing or ambiguous name stays null. WNBA stays null.
                     has_projection = False
                     projected_value = None
                     projected_minutes = None
                     edge = None
                     injury_status = None
+                    injury_raw_status = None
                     lineup_confirmed = None
+                    if league.lower() == "nba" and injury_entries is not None:
+                        matched = match_injury_entry(injury_entries, player_name)
+                        if matched is not None:
+                            status = matched.get("status")
+                            raw_status = matched.get("raw_status")
+                            if isinstance(status, str):
+                                injury_status = status
+                            if isinstance(raw_status, str):
+                                injury_raw_status = raw_status
                     rank_fields = _empty_rank_fields()
                     if league.lower() == "nba":
                         opponent = _opponent_club(
@@ -1309,6 +1353,7 @@ class DailyAnalysisService:
                         league=league,
                         bookmakers_data=props_data,
                         game_logs=history_stats.get("game_logs") or [],
+                        injury_raw_status=injury_raw_status,
                     )
 
                     edge_str = f" (edge: {edge:+.1f})" if edge is not None else ""
@@ -1481,8 +1526,12 @@ def _with_nba_signal_verdicts(
     league: str,
     bookmakers_data: List[Dict[str, Any]],
     game_logs: List[Dict[str, Any]],
+    injury_raw_status: str | None = None,
 ) -> DailyPick:
-    """Attach the five signals on an NBA pick. WNBA is returned unchanged.
+    """Attach the NBA signals on a pick. WNBA is returned unchanged.
+
+    The projection slot is omitted. A market, last-10, history, or
+    defense input that fails still serializes as null.
 
     Both new fields stay None for WNBA. The bookmaker list is the snapshot
     already fetched for this market; this does not request odds again and
@@ -1503,6 +1552,7 @@ def _with_nba_signal_verdicts(
         opponent_rank=pick.opponent_rank,
         opponent_position_rank=pick.opponent_position_rank,
         injury_status=pick.injury_status,
+        raw_status=injury_raw_status,
     )
     # Mutate the instance already appended to the pick list. model_copy
     # would leave the list holding the pre-signal object.

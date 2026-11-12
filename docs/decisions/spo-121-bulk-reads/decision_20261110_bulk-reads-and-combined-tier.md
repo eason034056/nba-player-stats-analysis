@@ -5,6 +5,7 @@
 - **Status:** Accepted
 
 > Superseded in part by SPO-135 (2026-11-11): event reads do not look up `projections:nba:{date}`. The projection signal is missing. Defense ranks come from the game log.
+> Superseded in part by SPO-135c (2026-11-11): event reads omit the projection signal. The slot returns when the ML model ships.
 
 ## Context
 

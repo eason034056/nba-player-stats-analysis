@@ -29,7 +29,9 @@ from app.services.pick_signals import (
     history_adjustment,
     last10_adjustment,
     no_vig_consensus,
+    directional_edge,
     projection_adjustment,
+    projection_signal,
 )
 from app.services.prob import american_to_prob, calculate_mode_threshold, devig
 from tests.fixtures.odds_api import load_odds_fixture
@@ -133,39 +135,25 @@ class TestVerdictBoundaries:
 
     @pytest.mark.parametrize("side", ["over", "under"])
     def test_projection_cuts_use_the_side_direction(self, side):
-        # Stored edge is projection - line. Under flips it.
+        # The slot is not emitted. These cuts stay on the function the
+        # model integration will put back on the list.
         line = 20.0
-        assert (
-            _verdict(
-                "projection",
-                side=side,
-                line=line,
-                projected_value=20.5 if side == "over" else 19.5,
-            )
-            == "supports"
-        )
-        assert (
-            _verdict(
-                "projection",
-                side=side,
-                line=line,
-                projected_value=20.499 if side == "over" else 19.501,
-            )
-            == "neutral"
-        )
-        assert (
-            _verdict(
-                "projection",
-                side=side,
-                line=line,
-                projected_value=19.5 if side == "over" else 20.5,
-            )
-            == "against"
-        )
-        found, _combined, _signals = signal_map(
+
+        def verdict(projected: float) -> str | None:
+            return projection_signal(
+                projected, directional_edge(projected, line, side)
+            ).verdict
+
+        assert verdict(20.5 if side == "over" else 19.5) == "supports"
+        assert verdict(20.499 if side == "over" else 19.501) == "neutral"
+        assert verdict(19.5 if side == "over" else 20.5) == "against"
+        shown = projection_signal(21.25, directional_edge(21.25, line, side))
+        assert shown.value == "21.3"
+        found, _combined, signals = signal_map(
             side=side, line=line, projected_value=21.25
         )
-        assert found["projection"].value == "21.3"
+        assert "projection" not in found
+        assert [signal.key for signal in signals] == KEYS
 
     @pytest.mark.parametrize(
         ("rank", "over_verdict", "under_verdict"),
@@ -237,7 +225,8 @@ class TestMissingInputs:
         )
         assert found["history"].verdict == "supports"
         assert found["history"].value == "70.0%"
-        for key in ("market", "last10", "projection", "defense"):
+        assert "projection" not in found
+        for key in ("market", "last10", "defense"):
             assert found[key].value is None
             assert found[key].verdict is None
 
@@ -253,7 +242,8 @@ class TestMissingInputs:
             found, combined, signals = signal_map(
                 injury_status=status, market_probability=0.55
             )
-            assert len(signals) == 5
+            assert len(signals) == 4
+            assert "projection" not in found
             assert found["market"].verdict == "supports"
             assert combined is None
 
@@ -488,7 +478,7 @@ class TestLeagueWiring:
         assert pick.signals is None
         assert pick.combined_probability is None
 
-    def test_nba_analyze_attaches_five_signals_from_the_fetched_books(self):
+    def test_nba_analyze_omits_projection_and_keeps_the_other_signals(self):
         payload = load_odds_fixture(RECORDED)
         books = _filtered_books(
             payload,
@@ -538,14 +528,14 @@ class TestLeagueWiring:
         assert len(points) == 1
         pick = points[0]
         assert [signal.key for signal in pick.signals] == KEYS
+        assert "projection" not in {signal.key for signal in pick.signals}
         assert pick.signals[0].verdict == "neutral"  # recorded -113/-113 de-vigs to 0.50
         assert pick.signals[1].value == "6/10"
         assert pick.signals[2].value == "72.0%"
         assert pick.signals[2].verdict == "supports"
+        assert pick.signals[3].key == "defense"
         assert pick.signals[3].value is None
         assert pick.signals[3].verdict is None
-        assert pick.signals[4].value is None
-        assert pick.signals[4].verdict is None
         assert pick.has_projection is False
         assert pick.projected_value is None
         assert pick.edge is None
@@ -558,3 +548,123 @@ class TestLeagueWiring:
         assert pick.position == "PG"
         # One book, both sides. SPO-115 counts the book once.
         assert pick.bookmakers_count == 1
+
+    def test_wnba_analyze_output_stays_free_of_nba_signals(self, monkeypatch):
+        payload = load_odds_fixture(RECORDED)
+        books = _filtered_books(
+            payload,
+            lambda book, outcome: (
+                book.get("key") == "draftkings"
+                and outcome.get("description") == LUKA
+                and outcome.get("point") == 36.5
+            ),
+        )
+        service = DailyAnalysisService()
+        service._get_props_for_market = AsyncMock(return_value=books)
+        history = MagicMock()
+        history.latest_position = MagicMock(return_value="F")
+        history.get_player_stats = MagicMock(
+            return_value={
+                "p_over": 0.74,
+                "p_under": 0.19,
+                "n_games": 18,
+                "game_logs": [{"team": "Aces", "value": 20}] * 12,
+            }
+        )
+        monkeypatch.setattr(
+            "app.services.daily_analysis._resolve_csv_service",
+            lambda _league: history,
+        )
+        picks, _players, _props = asyncio.run(
+            service._analyze_single_event(
+                event_id="wnba-evt-1",
+                home_team="Toronto Tempo",
+                away_team="Seattle Storm",
+                commence_time="2026-05-14T23:00:00Z",
+                league="wnba",
+            )
+        )
+        assert picks
+        for pick in picks:
+            dumped = pick.model_dump()
+            assert dumped["signals"] is None
+            assert dumped["combined_probability"] is None
+            assert dumped["probability"] == pytest.approx(0.74)
+            assert dumped["has_projection"] is False
+            assert dumped["projected_value"] is None
+            assert dumped["tier"] == read_tier(0.74)
+            assert "projection" not in {
+                row["key"] for row in (dumped["signals"] or [])
+            }
+        points = next(pick for pick in picks if pick.metric == "points")
+        assert points.player_name == LUKA
+
+
+def test_nba_picks_and_reads_omit_the_projection_key():
+    """The projection slot is absent. A failed input that still has a source is null.
+
+    ``combined_probability`` matches the blend that already adds zero for
+    a missing projection.
+    """
+    from app.services.event_reads import assemble_event_reads
+    from tests.test_spo121_bulk_reads import _points_rows
+
+    signals, combined, total = build_nba_signals(
+        side="over",
+        line=20.5,
+        player_name=LUKA,
+        market_probability=0.55,
+        last10_values=None,
+        history_rate=0.70,
+        projected_value=None,
+        opponent_rank=None,
+        opponent_position_rank=None,
+    )
+    assert [signal.key for signal in signals] == KEYS
+    assert "projection" not in {signal.key for signal in signals}
+    by_key = {signal.key: signal for signal in signals}
+    assert by_key["market"].value == "55.0%"
+    assert by_key["last10"].value is None
+    assert by_key["last10"].verdict is None
+    assert by_key["defense"].value is None
+    assert by_key["defense"].verdict is None
+    assert projection_adjustment(None) == 0.0
+    assert total == adjustment_total(
+        last10_hits=None,
+        history_rate=0.70,
+        defense_rank_value=None,
+        edge_for_side=None,
+        side="over",
+    )
+    assert combined == combined_probability(
+        side="over",
+        market_probability=0.55,
+        adjustment=total,
+    )
+    dumped = DailyPick(
+        player_name=LUKA,
+        event_id="evt",
+        home_team="Atlanta Hawks",
+        away_team="Los Angeles Lakers",
+        commence_time="2026-11-10T00:10:00Z",
+        metric="points",
+        threshold=20.5,
+        direction="over",
+        probability=0.70,
+        n_games=20,
+        bookmakers_count=1,
+        signals=signals,
+        combined_probability=combined,
+    ).model_dump()
+    assert [row["key"] for row in dumped["signals"]] == KEYS
+    assert all(row["key"] != "projection" for row in dumped["signals"])
+
+    event_id, rows = _points_rows()
+    payload = assemble_event_reads(event_id, rows, market="player_points")
+    scored = [item for item in payload.reads if item.signals]
+    assert scored
+    for item in scored:
+        body = item.model_dump()
+        assert [row["key"] for row in body["signals"]] == KEYS
+        assert all(row["key"] != "projection" for row in body["signals"])
+        assert item.combined_probability is not None

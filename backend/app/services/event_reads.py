@@ -4,11 +4,11 @@
 props. The lines stay on the props route, which is a snapshot read. A
 read also starts from that snapshot: the modal line, the book prices at
 that line, and nothing from The Odds API. History comes from the NBA
-game log. The projection signal is missing.
+game log. The projection signal is omitted.
 
 ``combined_probability`` is ``build_nba_signals``. This module does not
 change that math. There is no projection cache read. The projection
-signal stays missing. Defense ranks, when the player's club is in the
+signal is omitted. Defense ranks, when the player's club is in the
 event, come from the NBA game log.
 """
 
@@ -344,7 +344,7 @@ def assemble_event_reads(
     ``rows`` are snapshot rows. ``assemble_bulk_props`` picks the newest
     capture, one vote per book, and the modal line. This function then
     scores that line. A binary market is included with a null side.
-    The projection signal is missing. Defense ranks use the game log
+    The projection signal is omitted. Defense ranks use the game log
     when the player's latest club is home or away on these rows.
 
     Args:
