@@ -204,7 +204,7 @@ set +a
 ./scripts/db_migrate_to_rds.sh
 ```
 
-若 restore 之後的檢查失敗，用 `--verify-only` 再跑一次。它不會再 dump 或 restore，只比較資料表筆數、`max(id)` 和 sequence 的 `last_value`。
+若 restore 之後的檢查失敗，用 `--verify-only` 再跑一次。它不會再 dump 或 restore，只比較資料表筆數、`max(id)` 和 sequence 的 `last_value`。任一邊的 public 資料表是 0 張時，腳本 exit 1，不印 `ok:`。錯誤訊息只有兩邊的張數。sequence 兩邊都是 0 才算通過，因為資料庫可以沒有 sequence。
 
 或兩條都用 `read -s` 輸入，不要把網址寫在指令上：
 

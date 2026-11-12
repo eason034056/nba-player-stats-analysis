@@ -126,6 +126,10 @@ export function pickTags(pick: DailyPick): PickTag[] {
   if (finite(pick.projected_minutes)) {
     tags.push({ text: `${Math.round(pick.projected_minutes)} min` });
   }
+  const injury = pick.injury_status?.trim();
+  if (injury) tags.push({ text: injury });
+  if (pick.lineup_confirmed === true) tags.push({ text: "Lineup confirmed" });
+  if (pick.lineup_confirmed === false) tags.push({ text: "Lineup unconfirmed" });
   const rank = finite(pick.opponent_position_rank)
     ? pick.opponent_position_rank
     : finite(pick.opponent_rank)

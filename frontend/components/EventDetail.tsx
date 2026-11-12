@@ -2,7 +2,7 @@
  * EventDetail — NBA and WNBA game page.
  *
  * One layout for both leagues. Numbers come from the events, odds,
- * daily-picks, history, projection, and lineup routes. A missing field
+ * daily-picks, history, and lineup routes. A missing field
  * is a labeled empty state.
  */
 
@@ -24,7 +24,6 @@ import {
   getEvents,
   getPlayerDDHistory,
   getPlayerHistory,
-  getPlayerProjection,
   getPlayerSuggestions,
   getTeamLineup,
   getWNBACSVPlayers,
@@ -66,12 +65,10 @@ import { StatChips } from "@/components/event/StatChips";
 import { BookmakerSelect } from "@/components/BookmakerSelect";
 import { PlayerHistoryStats } from "@/components/PlayerHistoryStats";
 import { PlayerInput, type PlayerSuggestFn } from "@/components/PlayerInput";
-import { PlayerProjectionPanel } from "@/components/PlayerProjectionPanel";
 import { ResultsTable } from "@/components/ResultsTable";
 import { SectionUnavailable } from "@/components/SectionUnavailable";
 import { TeamLineupPanel } from "@/components/TeamLineupPanel";
 import { isBinaryMarket, getMarketDisplayName, type MarketKey } from "@/components/MarketSelect";
-import { lineForProjectionEdge, marketToProjectionCard } from "@/lib/projection-metric";
 import {
   calculatorFormSchema,
   type CalculatorFormData,
@@ -99,7 +96,6 @@ interface LeagueEventConfig {
   getCSVPlayersFn: typeof getCSVPlayers;
   getPlayerHistoryFn: (request: PlayerHistoryRequest) => Promise<PlayerHistoryResponse>;
   getPlayerDDHistoryFn: typeof getPlayerDDHistory;
-  supportsProjection: boolean;
 }
 
 const LEAGUE_CONFIG: Record<League, LeagueEventConfig> = {
@@ -115,7 +111,6 @@ const LEAGUE_CONFIG: Record<League, LeagueEventConfig> = {
     getCSVPlayersFn: getCSVPlayers,
     getPlayerHistoryFn: getPlayerHistory,
     getPlayerDDHistoryFn: getPlayerDDHistory,
-    supportsProjection: true,
   },
   wnba: {
     eventsQueryKey: "wnba-events",
@@ -129,7 +124,6 @@ const LEAGUE_CONFIG: Record<League, LeagueEventConfig> = {
     getCSVPlayersFn: getWNBACSVPlayers,
     getPlayerHistoryFn: getWNBAPlayerHistory,
     getPlayerDDHistoryFn: getWNBAPlayerDDHistory,
-    supportsProjection: false,
   },
 };
 
@@ -288,14 +282,6 @@ export function EventDetail({ league }: { league: League }) {
     staleTime: 60 * 1000,
     retry: false,
   });
-  const projectionQuery = useQuery({
-    queryKey: ["playerProjection", cfg.cacheNamespace, playerName, gameDate],
-    queryFn: () => getPlayerProjection(playerName, gameDate),
-    enabled: cfg.supportsProjection && !!playerName && !!gameDate,
-    staleTime: 5 * 60 * 1000,
-    retry: false,
-  });
-
   const binary = isBinaryMarket(selectedMarket);
   const metric = marketToMetric(selectedMarket);
   const pick =
@@ -392,15 +378,12 @@ export function EventDetail({ league }: { league: League }) {
         ) ?? null
       : null;
   const position =
-    league === "nba"
-      ? pick?.position?.trim() || selectedRow?.position || null
-      : projectionQuery.data?.position?.trim() || null;
+    league === "nba" ? pick?.position?.trim() || selectedRow?.position || null : null;
   const model = buildOurRead({
     player: playerName.trim(),
     marketName: getMarketDisplayName(selectedMarket),
     market: selectedMarket,
     binary,
-    supportsProjection: cfg.supportsProjection,
     eventId,
     homeTeam: currentEvent?.home_team ?? "",
     awayTeam: currentEvent?.away_team ?? "",
@@ -412,7 +395,6 @@ export function EventDetail({ league }: { league: League }) {
     consensus: result?.consensus ?? null,
     last10: last10Query.data?.game_logs ?? [],
     history: sampleQuery.data ?? null,
-    projection: projectionQuery.data ?? null,
     league,
     read: selectedRead,
   });
@@ -422,14 +404,6 @@ export function EventDetail({ league }: { league: League }) {
     league === "nba" ? nbaRequestNote("props", nbaReadsStatus(propsQuery.isLoading, propsQuery.isError)) : null;
   const shownModel = readsNote && !pick ? { ...model, caption: readsNote, tier: null } : model;
   const chart = chartQuery.data ? gameLogChart(chartQuery.data.game_logs ?? [], activeLine) : null;
-  const projectionMetric = marketToProjectionCard(selectedMarket);
-  const firstResult = result?.results?.[0];
-  const currentThreshold = lineForProjectionEdge({
-    market: result?.market ?? selectedMarket,
-    line: firstResult?.line ?? null,
-    lineIsSynthetic: firstResult?.line_is_synthetic,
-    marketKind: firstResult?.market_kind,
-  });
 
   const existing = slip.picks.find(
     (item) => item.player_name === model.primary?.player_name && item.metric === model.primary?.metric,
@@ -504,7 +478,7 @@ export function EventDetail({ league }: { league: League }) {
   );
 
   return (
-    <div className="mx-auto flex max-w-[1200px] flex-col gap-5 px-4 py-6 md:px-8">
+    <div className="mx-auto flex w-full min-w-0 max-w-[1200px] flex-col gap-5 px-4 py-6 md:px-8">
       <EventHeader
         league={league}
         awayName={
@@ -699,7 +673,13 @@ export function EventDetail({ league }: { league: League }) {
             <div className={nba ? "max-md:hidden" : show("filters")}>{renderFilters()}</div>
           </section>
 
-          <section className={cn("order-5 rounded-[24px] border border-line bg-white p-4 md:col-start-2 md:p-7", show("odds"))}>
+          <section
+            data-testid="odds-panel"
+            className={cn(
+              "order-5 min-w-0 max-w-full rounded-[24px] border border-line bg-white p-4 md:col-start-2 md:p-7",
+              show("odds"),
+            )}
+          >
             <div className="mb-4 flex flex-wrap items-baseline justify-between gap-2">
               <h3 className="text-lg font-bold text-ink">Sportsbook prices</h3>
               <p className="text-[13px] text-muted">
@@ -730,7 +710,6 @@ export function EventDetail({ league }: { league: League }) {
               initialMarket={selectedMarket}
               initialThreshold={line == null ? initialThreshold : String(line)}
               onPlayerSelect={(name) => setValue("player_name", name)}
-              projection={projectionQuery.data ?? undefined}
               getCSVPlayersFn={cfg.getCSVPlayersFn}
               getPlayerHistoryFn={cfg.getPlayerHistoryFn}
               getPlayerDDHistoryFn={cfg.getPlayerDDHistoryFn}
@@ -743,24 +722,15 @@ export function EventDetail({ league }: { league: League }) {
           </div>
           ) : null}
 
+          {league === "wnba" && playerName ? (
           <div className={cn("order-7 md:col-start-2", show("read"))}>
-            {playerName ? (
-              cfg.supportsProjection ? (
-                <PlayerProjectionPanel
-                  projection={projectionQuery.data ?? null}
-                  metric={projectionMetric}
-                  threshold={currentThreshold}
-                  isLoading={projectionQuery.isLoading}
-                />
-              ) : (
-                <SectionUnavailable
-                  eyebrow="Today's Projection"
-                  title="Player projection"
-                  message="Projection modeling is not available for WNBA yet. This panel will populate once the WNBA projection source ships."
-                />
-              )
-            ) : null}
+            <SectionUnavailable
+              eyebrow="Today's Projection"
+              title="Player projection"
+              message="Projection modeling is not available for WNBA yet. This panel will populate once the WNBA projection source ships."
+            />
           </div>
+          ) : null}
       </div>
 
       {nba ? (

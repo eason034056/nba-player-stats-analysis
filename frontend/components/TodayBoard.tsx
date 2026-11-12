@@ -131,7 +131,10 @@ function WebBoard({
       <section className="flex flex-col gap-7 rounded-hero bg-brand p-[clamp(22px,4cqi,44px)] text-white">
         <div className="flex flex-wrap items-end justify-between gap-5">
           <div className="flex max-w-[620px] flex-col gap-3">
-            <div className="font-mono text-eyebrow font-semibold uppercase text-accent">
+            <div
+              data-testid="today-hero-eyebrow"
+              className="font-mono text-[12px] font-semibold uppercase leading-[1.2] tracking-[0.12em] text-accent"
+            >
               {eyebrow}
             </div>
             <h1 className="font-bold text-hero text-white">

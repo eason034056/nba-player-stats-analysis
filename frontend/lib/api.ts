@@ -22,15 +22,11 @@ import {
   dailyPicksResponseSchema,
   lineupRefreshResponseSchema,
   lineupsResponseSchema,
-  playerProjectionSchema,
-  projectionsResponseSchema,
-  projectionRefreshResponseSchema,
   teamLineupSchema,
   bulkPropsResponseSchema,
   eventReadsResponseSchema,
   type BulkPropsResponse,
   type EventReadsResponse,
-  type PlayerProjection,
   type EventsResponse,
   type NoVigRequest,
   type NoVigResponse,
@@ -44,8 +40,6 @@ import {
   type DailyPicksRequest,
   type LineupRefreshResponse,
   type LineupsResponse,
-  type ProjectionsResponse,
-  type ProjectionRefreshResponse,
   type TeamLineup,
 } from "./schemas";
 import {
@@ -726,9 +720,7 @@ export async function triggerDailyAnalysis(
  * response uses the same `DailyPicksResponse` shape so it renders in
  * the same UI components as NBA picks.
  *
- * Note: `has_projection` will be False / `edge` will be null on every
- * WNBA pick — SportsDataIO projections are not wired for WNBA today
- * (see SPO-35 task summary).
+ * Note: `has_projection` is false and `edge` is null on every WNBA pick.
  */
 export async function getWnbaDailyPicks(
   request?: DailyPicksRequest
@@ -876,130 +868,6 @@ export async function refreshLineups(
   return lineupRefreshResponseSchema.parse(data);
 }
 
-
-// ==================== 球員投影資料 API ====================
-
-/**
- * 取得球員投影資料
- * 
- * GET /api/nba/projections
- * 
- * 取得指定日期所有球員的 SportsDataIO 投影數據。
- * 使用混合取得策略：Redis 快取 → 背景刷新 → 同步呼叫 API。
- * 
- * 投影資料包含：
- * - 預計得分、籃板、助攻等核心數據
- * - 預計上場分鐘數
- * - 對手防守排名
- * - DFS 薪資和 Fantasy 分數
- * 
- * @param date - 查詢日期（YYYY-MM-DD），不提供則使用今天
- * @returns Promise<ProjectionsResponse> - 投影資料列表
- * 
- * @example
- * const projections = await getProjections("2026-02-08");
- * console.log(`取得 ${projections.player_count} 筆投影資料`);
- */
-export async function getProjections(
-  date?: string
-): Promise<ProjectionsResponse> {
-  const params = new URLSearchParams();
-  
-  if (date) {
-    params.set("date", date);
-  }
-  
-  const queryString = params.toString();
-  const url = queryString
-    ? `/api/nba/projections?${queryString}`
-    : "/api/nba/projections";
-  
-  const data = await fetchApi<ProjectionsResponse>(url);
-  return projectionsResponseSchema.parse(data);
-}
-
-/**
- * 手動刷新投影資料
- * 
- * POST /api/nba/projections/refresh
- * 
- * 強制重新呼叫 SportsDataIO API，更新 Redis 快取和 PostgreSQL。
- * 通常在以下情況使用：
- * - 需要最新的陣容確認資訊
- * - 排程器之外的手動更新
- * 
- * @param date - 刷新日期（YYYY-MM-DD），不提供則使用今天
- * @returns Promise<ProjectionRefreshResponse> - 刷新結果
- * 
- * @example
- * const result = await refreshProjections("2026-02-08");
- * console.log(result.message); // "成功刷新 250 筆投影資料"
- */
-/**
- * 取得單一球員投影資料
- * 
- * GET /api/nba/projections/{player_name}
- * 
- * 取得指定球員在指定日期的投影資料。
- * 用於球員詳細頁面（Event Detail Page）顯示投影數據。
- * 
- * 後端使用 projection_service.get_player_projection() 取得：
- * 先查 Redis → 若過期觸發背景刷新 → 未命中則查 PostgreSQL 或同步呼叫 API。
- * 
- * @param playerName - 球員全名（如 "Stephen Curry"），會被 URL encode
- * @param date - 查詢日期（YYYY-MM-DD），不提供則使用 UTC 今天
- * @returns Promise<PlayerProjection> - 單一球員的投影資料
- * @throws ApiError 404 - 找不到該球員的投影資料
- * 
- * @example
- * const proj = await getPlayerProjection("Stephen Curry", "2026-02-08");
- * console.log(`預計得分: ${proj.points}, 預計分鐘: ${proj.minutes}`);
- */
-export async function getPlayerProjection(
-  playerName: string,
-  date?: string
-): Promise<PlayerProjection> {
-  // encodeURIComponent: 將球員名稱編碼為 URL 安全格式
-  // 例如 "Stephen Curry" → "Stephen%20Curry"
-  const encodedName = encodeURIComponent(playerName);
-  
-  const params = new URLSearchParams();
-  
-  if (date) {
-    params.set("date", date);
-  }
-  
-  const queryString = params.toString();
-  const url = queryString
-    ? `/api/nba/projections/${encodedName}?${queryString}`
-    : `/api/nba/projections/${encodedName}`;
-  
-  const data = await fetchApi<PlayerProjection>(url);
-  // 使用 playerProjectionSchema 驗證回應格式
-  return playerProjectionSchema.parse(data);
-}
-
-
-export async function refreshProjections(
-  date?: string
-): Promise<ProjectionRefreshResponse> {
-  const params = new URLSearchParams();
-  
-  if (date) {
-    params.set("date", date);
-  }
-  
-  const queryString = params.toString();
-  const url = queryString
-    ? `/api/nba/projections/refresh?${queryString}`
-    : "/api/nba/projections/refresh";
-  
-  const data = await fetchApi<ProjectionRefreshResponse>(url, {
-    method: "POST",
-  });
-  
-  return projectionRefreshResponseSchema.parse(data);
-}
 
 export async function getEventReads(
   eventId: string,

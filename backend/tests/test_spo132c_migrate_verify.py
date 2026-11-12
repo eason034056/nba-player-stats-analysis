@@ -7,6 +7,7 @@ server is not reachable. CI installs the client and provides Postgres.
 
 from __future__ import annotations
 
+import json
 import os
 import re
 import subprocess
@@ -75,6 +76,12 @@ def _redact(text: str, secrets: list[str]) -> str:
     return re.sub(r"[a-zA-Z][a-zA-Z0-9+.-]*://\S+", "<url>", redacted)
 
 
+# Bound every client call. A hung psql or docker exec must fail the test
+# instead of waiting on the CI job's own clock.
+_SUBPROCESS_TIMEOUT_S = 120
+_READY_TIMEOUT_S = 15
+
+
 def _psql(psql: str, url: str, sql: str) -> subprocess.CompletedProcess[str]:
     return subprocess.run(
         [psql, url, "-v", "ON_ERROR_STOP=1", "-A", "-t"],
@@ -82,6 +89,7 @@ def _psql(psql: str, url: str, sql: str) -> subprocess.CompletedProcess[str]:
         capture_output=True,
         text=True,
         check=False,
+        timeout=_SUBPROCESS_TIMEOUT_S,
         env={
             "PATH": os.environ.get("PATH", ""),
             "HOME": os.environ.get("HOME", ""),
@@ -184,6 +192,7 @@ def _verify(
         capture_output=True,
         text=True,
         check=False,
+        timeout=_SUBPROCESS_TIMEOUT_S,
         env=env,
     )
 
@@ -363,24 +372,63 @@ SELECT nextval('extra_seq');
 def _docker_ready() -> bool:
     if which("docker") is None:
         return False
-    probe = subprocess.run(
-        ["docker", "info"],
-        capture_output=True,
-        text=True,
-        check=False,
-    )
-    return probe.returncode == 0
-
-
-def _wait_postgres(container: str) -> None:
-    for _ in range(40):
-        ready = subprocess.run(
-            ["docker", "exec", container, "pg_isready", "-U", "novig", "-d", "novig"],
+    try:
+        probe = subprocess.run(
+            ["docker", "info"],
             capture_output=True,
             text=True,
             check=False,
+            timeout=_SUBPROCESS_TIMEOUT_S,
         )
-        if ready.returncode == 0:
+    except subprocess.TimeoutExpired:
+        return False
+    return probe.returncode == 0
+
+
+def _need_docker() -> None:
+    """Run the real-docker cases, or skip them.
+
+    REQUIRE_DOCKER_TESTS=1, set on the CI backend job, turns a missing
+    docker client into a failure. A developer machine without docker
+    still skips, and the host-mode cases still run.
+    """
+    if _docker_ready():
+        return
+    detail = "docker is not available; docker verify against Postgres was not run"
+    if os.environ.get("REQUIRE_DOCKER_TESTS") == "1":
+        pytest.fail(detail)
+    pytest.skip(detail)
+
+
+def _wait_postgres(container: str) -> None:
+    # -h 127.0.0.1 uses TCP. Without it, pg_isready uses the unix socket
+    # and can report ready against the temporary server postgres:16
+    # starts during init, before the real postmaster is listening.
+    for _ in range(40):
+        try:
+            ready = subprocess.run(
+                [
+                    "docker",
+                    "exec",
+                    container,
+                    "pg_isready",
+                    "-h",
+                    "127.0.0.1",
+                    "-p",
+                    "5432",
+                    "-U",
+                    "novig",
+                    "-d",
+                    "novig",
+                ],
+                capture_output=True,
+                text=True,
+                check=False,
+                timeout=_READY_TIMEOUT_S,
+            )
+        except subprocess.TimeoutExpired:
+            ready = None
+        if ready is not None and ready.returncode == 0:
             return
         time.sleep(0.5)
     raise AssertionError(f"{container} did not become ready")
@@ -405,37 +453,91 @@ def _docker_psql(container: str, sql: str) -> subprocess.CompletedProcess[str]:
         capture_output=True,
         text=True,
         check=False,
+        timeout=_SUBPROCESS_TIMEOUT_S,
     )
 
 
-def test_verify_only_real_docker_exec_compares_every_table() -> None:
-    """docker exec into Postgres 16 must compare every public table.
+def _bridge_ipv4(container: str) -> str:
+    inspected = subprocess.run(
+        [
+            "docker",
+            "inspect",
+            "-f",
+            "{{.NetworkSettings.Networks.bridge.IPAddress}}",
+            container,
+        ],
+        capture_output=True,
+        text=True,
+        check=False,
+        timeout=_SUBPROCESS_TIMEOUT_S,
+    )
+    ip = inspected.stdout.strip()
+    if inspected.returncode != 0 or re.fullmatch(r"[0-9]+(?:\.[0-9]+){3}", ip) is None:
+        detail = inspected.stderr.strip() or "target has no bridge address"
+        raise AssertionError(detail)
+    return ip
+
+
+def _assert_docker_verify(
+    source: str,
+    target: str,
+    password: str,
+    *,
+    mode: str,
+    container: str,
+    expect_ok: bool,
+) -> None:
+    result = _verify(
+        source,
+        target,
+        extra_env={"PG_CLIENT": mode, "LOCAL_PG_CONTAINER": container},
+    )
+    combined = result.stdout + result.stderr
+    shown = _redact(combined, [source, target, password])
+    if expect_ok:
+        assert result.returncode == 0, shown
+        assert "MISMATCH" not in result.stdout
+        assert "ok:" in result.stdout
+    else:
+        assert result.returncode != 0, shown
+        assert "beta_table|count|2|1|MISMATCH" in result.stdout
+        assert "ok:" not in result.stdout
+    assert "alpha_table|count|1|1|OK" in result.stdout
+    assert "gamma_table|count|1|1|OK" in result.stdout
+    assert "extra_seq|last_value|5|5|OK" in result.stdout
+    if expect_ok:
+        assert "beta_table|count|2|2|OK" in result.stdout
+    _assert_no_secrets(combined, [source, target], password)
+
+
+def test_missing_docker_skips_unless_required(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(
+        "tests.test_spo132c_migrate_verify._docker_ready",
+        lambda: False,
+    )
+    monkeypatch.delenv("REQUIRE_DOCKER_TESTS", raising=False)
+    with pytest.raises(pytest.skip.Exception):
+        _need_docker()
+    monkeypatch.setenv("REQUIRE_DOCKER_TESTS", "1")
+    with pytest.raises(pytest.fail.Exception):
+        _need_docker()
+
+
+def test_verify_only_real_docker_compares_every_table() -> None:
+    """docker-exec and docker-run into Postgres 16 compare every table.
 
     Host mode is covered separately and does not skip when docker is
-    missing. This case skips only when the docker client cannot run.
+    missing. This case skips only when the docker client cannot run,
+    unless REQUIRE_DOCKER_TESTS=1, which CI sets.
     """
-    if not _docker_ready():
-        pytest.skip(
-            "docker is not available; docker-exec verify against Postgres was not run"
-        )
+    _need_docker()
 
     password = "spo132d-docker-pw"
     suffix = os.urandom(3).hex()
-    network = f"spo132d{suffix}"
     source_name = f"spo132dsrc{suffix}"
     target_name = f"spo132ddst{suffix}"
     created: list[str] = []
-    network_created = False
     try:
-        made = subprocess.run(
-            ["docker", "network", "create", network],
-            capture_output=True,
-            text=True,
-            check=False,
-        )
-        if made.returncode != 0:
-            raise AssertionError(made.stderr.strip() or "docker network create failed")
-        network_created = True
         for name in (source_name, target_name):
             started = subprocess.run(
                 [
@@ -444,8 +546,6 @@ def test_verify_only_real_docker_exec_compares_every_table() -> None:
                     "-d",
                     "--name",
                     name,
-                    "--network",
-                    network,
                     "-e",
                     "POSTGRES_USER=novig",
                     "-e",
@@ -457,6 +557,7 @@ def test_verify_only_real_docker_exec_compares_every_table() -> None:
                 capture_output=True,
                 text=True,
                 check=False,
+                timeout=_SUBPROCESS_TIMEOUT_S,
             )
             if started.returncode != 0:
                 detail = started.stderr.replace(password, "***")
@@ -468,27 +569,31 @@ def test_verify_only_real_docker_exec_compares_every_table() -> None:
             if loaded.returncode != 0:
                 raise AssertionError(loaded.stderr.replace(password, "***"))
 
+        # Both containers sit on the default bridge. docker-exec talks to
+        # the target by that bridge address from inside the source
+        # container. docker-run's throwaway client for the target uses
+        # the same address from the default bridge. The source URL stays
+        # on 127.0.0.1, which is the source postmaster in both modes
+        # (docker-exec shares the container; docker-run joins its netns).
+        target_ip = _bridge_ipv4(target_name)
         source = f"postgresql://novig:{password}@127.0.0.1:5432/novig?sslmode=disable"
-        target = (
-            f"postgresql://novig:{password}@{target_name}:5432/novig?sslmode=disable"
-        )
-        matched = _verify(
+        target = f"postgresql://novig:{password}@{target_ip}:5432/novig?sslmode=disable"
+        _assert_docker_verify(
             source,
             target,
-            extra_env={
-                "PG_CLIENT": "docker-exec",
-                "LOCAL_PG_CONTAINER": source_name,
-            },
+            password,
+            mode="docker-exec",
+            container=source_name,
+            expect_ok=True,
         )
-        combined = matched.stdout + matched.stderr
-        assert matched.returncode == 0, _redact(combined, [source, target], password)
-        assert "MISMATCH" not in matched.stdout
-        assert "alpha_table|count|1|1|OK" in matched.stdout
-        assert "beta_table|count|2|2|OK" in matched.stdout
-        assert "gamma_table|count|1|1|OK" in matched.stdout
-        assert "extra_seq|last_value|5|5|OK" in matched.stdout
-        assert "ok:" in matched.stdout
-        _assert_no_secrets(combined, [source, target], password)
+        _assert_docker_verify(
+            source,
+            target,
+            password,
+            mode="docker-run",
+            container=source_name,
+            expect_ok=True,
+        )
 
         deleted = _docker_psql(
             target_name,
@@ -496,33 +601,113 @@ def test_verify_only_real_docker_exec_compares_every_table() -> None:
         )
         if deleted.returncode != 0:
             raise AssertionError(deleted.stderr.replace(password, "***"))
-        mismatched = _verify(
+        _assert_docker_verify(
             source,
             target,
-            extra_env={
-                "PG_CLIENT": "docker-exec",
-                "LOCAL_PG_CONTAINER": source_name,
-            },
+            password,
+            mode="docker-exec",
+            container=source_name,
+            expect_ok=False,
         )
-        mismatched_text = mismatched.stdout + mismatched.stderr
-        assert mismatched.returncode != 0, _redact(
-            mismatched_text, [source, target], password
+        _assert_docker_verify(
+            source,
+            target,
+            password,
+            mode="docker-run",
+            container=source_name,
+            expect_ok=False,
         )
-        assert "alpha_table|count|1|1|OK" in mismatched.stdout
-        assert "beta_table|count|2|1|MISMATCH" in mismatched.stdout
-        assert "gamma_table|count|1|1|OK" in mismatched.stdout
-        assert "extra_seq|last_value|5|5|OK" in mismatched.stdout
-        _assert_no_secrets(mismatched_text, [source, target], password)
     finally:
         if created:
             subprocess.run(
                 ["docker", "rm", "-f", *created],
                 capture_output=True,
                 check=False,
+                timeout=_SUBPROCESS_TIMEOUT_S,
             )
-        if network_created:
-            subprocess.run(
-                ["docker", "network", "rm", network],
-                capture_output=True,
-                check=False,
-            )
+
+
+_DOCKER_TCP_READY_SHIM = r"""#!/usr/bin/env python3
+import json
+import os
+import sys
+from pathlib import Path
+
+
+def _targets_tcp(argv: list[str]) -> bool:
+    for index, arg in enumerate(argv):
+        if arg == "-h" and index + 1 < len(argv) and argv[index + 1] == "127.0.0.1":
+            return True
+        if arg.startswith("-h") and arg[2:] == "127.0.0.1":
+            return True
+    return False
+
+
+def main(argv: list[str]) -> int:
+    state_path = Path(os.environ["SPO132F_STATE"])
+    ready_on = int(os.environ["SPO132F_TCP_READY_ON"])
+    state = json.loads(state_path.read_text())
+    if "pg_isready" not in argv:
+        sys.stderr.write("unsupported docker command\n")
+        return 2
+    if _targets_tcp(argv):
+        state["tcp_calls"] = int(state.get("tcp_calls", 0)) + 1
+        state["tcp_ready"] = state["tcp_calls"] >= ready_on
+        state_path.write_text(json.dumps(state))
+        return 0 if state["tcp_ready"] else 1
+    state["socket_calls"] = int(state.get("socket_calls", 0)) + 1
+    state_path.write_text(json.dumps(state))
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main(sys.argv[1:]))
+"""
+
+
+def _install_tcp_ready_shim(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    *,
+    ready_on: int,
+) -> Path:
+    docker = tmp_path / "docker"
+    docker.write_text(_DOCKER_TCP_READY_SHIM)
+    docker.chmod(0o755)
+    state = tmp_path / "pg-ready.json"
+    state.write_text(
+        json.dumps({"tcp_calls": 0, "socket_calls": 0, "tcp_ready": False})
+    )
+    monkeypatch.setenv("SPO132F_STATE", str(state))
+    monkeypatch.setenv("SPO132F_TCP_READY_ON", str(ready_on))
+    monkeypatch.setenv(
+        "PATH",
+        f"{tmp_path}{os.pathsep}{os.environ.get('PATH', '')}",
+    )
+    monkeypatch.setattr(time, "sleep", lambda _seconds: None)
+    return state
+
+
+def test_wait_postgres_does_not_return_until_tcp_is_ready(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Socket pg_isready is already ready. Return only after TCP is ready."""
+    state_path = _install_tcp_ready_shim(tmp_path, monkeypatch, ready_on=3)
+    _wait_postgres("pg-tcp")
+    state = json.loads(state_path.read_text())
+    assert state["tcp_ready"] is True
+    assert state["tcp_calls"] == 3
+
+
+def test_wait_postgres_raises_when_tcp_never_becomes_ready(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A ready Unix socket does not cancel the timeout while TCP stays down."""
+    state_path = _install_tcp_ready_shim(tmp_path, monkeypatch, ready_on=10_000)
+    with pytest.raises(AssertionError, match="pg-tcp did not become ready"):
+        _wait_postgres("pg-tcp")
+    state = json.loads(state_path.read_text())
+    assert state["tcp_ready"] is False
+    assert state["tcp_calls"] == 40

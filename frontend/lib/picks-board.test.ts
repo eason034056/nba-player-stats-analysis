@@ -154,4 +154,37 @@ describe("picks board sort, filter, and market grouping", () => {
       "Under 2.5 free throws",
     );
   });
+
+  it("omits projection, edge, minutes, injury, and lineup when those fields are null", () => {
+    const blank = {
+      ...board[0],
+      has_projection: false,
+      projected_value: null,
+      projected_minutes: null,
+      edge: null,
+      injury_status: null,
+      lineup_confirmed: null,
+    };
+    const text = pickTags(blank).map((tag) => tag.text).join(" ");
+    expect(text).not.toMatch(/Proj|Edge|min|NaN|—|Lineup|Questionable|Out/);
+  });
+
+  it("quotes injury status and lineup confirmation when they are present", () => {
+    const marked = {
+      ...board[0],
+      has_projection: false,
+      projected_value: null,
+      projected_minutes: null,
+      edge: null,
+      injury_status: "Questionable",
+      lineup_confirmed: true as const,
+    };
+    expect(pickTags(marked).map((tag) => tag.text)).toEqual(
+      expect.arrayContaining(["Questionable", "Lineup confirmed"]),
+    );
+    expect(pickTags({ ...marked, lineup_confirmed: false }).map((tag) => tag.text)).toContain(
+      "Lineup unconfirmed",
+    );
+    expect(pickTags({ ...marked, injury_status: "   " }).map((tag) => tag.text)).not.toContain("   ");
+  });
 });

@@ -41,7 +41,6 @@ describe("review: one source per rail row", () => {
       marketName: "Points",
       market: "player_points",
       binary: false,
-      supportsProjection: true,
       eventId: movedPick.event_id,
       homeTeam: movedPick.home_team,
       awayTeam: movedPick.away_team,
@@ -53,7 +52,6 @@ describe("review: one source per rail row", () => {
       consensus: null,
       last10: [],
       history: null,
-      projection: null,
       league: "nba",
       read: movedRead,
     });
@@ -70,7 +68,6 @@ describe("review: one source per rail row", () => {
       marketName: "Points",
       market: "player_points",
       binary: false,
-      supportsProjection: true,
       eventId: "evt-min-den",
       homeTeam: "Denver Nuggets",
       awayTeam: "Minnesota Timberwolves",
@@ -82,7 +79,6 @@ describe("review: one source per rail row", () => {
       consensus: null,
       last10: [],
       history: null,
-      projection: null,
       league: "nba",
       read: movedRead,
     });
