@@ -109,6 +109,15 @@ jobs:
           VERCEL_PROXY_SECRET: ci-build-placeholder
           NEXT_TELEMETRY_DISABLED: "1"
         run: npx next build
+      - name: Next build with no network
+        env:
+          NEXT_TELEMETRY_DISABLED: "1"
+        run: |
+          unshare -rn npm run build
+          if grep -R -E -l 'fonts\.(googleapis|gstatic)\.com' .next/static/css; then
+            echo "built CSS still names a Google Fonts host"
+            exit 1
+          fi
 
   frontend-test:
     name: Frontend Tests
