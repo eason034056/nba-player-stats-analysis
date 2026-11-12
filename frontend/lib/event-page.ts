@@ -830,6 +830,7 @@ export interface ChartBar {
   over: boolean | null;
   date: string;
   dateFull: string;
+  dateLabel: string;
   minutes: number;
   starter: boolean;
   heightPct: number;
@@ -853,6 +854,14 @@ function tickLabel(value: number): string {
   return value.toFixed(1);
 }
 
+const SHORT_GAME_DATE = new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric", timeZone: "UTC" });
+
+export function shortGameDate(dateFull: string, fallback: string): string {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(dateFull)) return fallback;
+  const parsed = new Date(`${dateFull}T00:00:00Z`);
+  return Number.isNaN(parsed.getTime()) ? fallback : SHORT_GAME_DATE.format(parsed);
+}
+
 export function gameLogChart(logs: GameLog[], line: number | null): ChartModel {
   const ordered = [...logs].sort((a, b) => {
     if (a.date_full && b.date_full && a.date_full !== b.date_full) {
@@ -873,6 +882,7 @@ export function gameLogChart(logs: GameLog[], line: number | null): ChartModel {
     over: line == null ? null : game.value > line,
     date: game.date,
     dateFull: game.date_full,
+    dateLabel: shortGameDate(game.date_full, game.date),
     minutes: game.minutes,
     starter: game.is_starter,
     heightPct: Math.max(2, (game.value / max) * 100),
@@ -1459,4 +1469,39 @@ export function slipButtonLabel(seed: SlipSeed, inSlip: boolean): string {
 export function errorText(error: unknown): string {
   if (error instanceof Error && error.message) return error.message;
   return "The request failed.";
+}
+
+export type GameLogTileKey = "over" | "under" | "average" | "games";
+
+export interface GameLogTile {
+  key: GameLogTileKey;
+  label: string;
+  value: string;
+  sub: string | null;
+}
+
+function sideCount(rate: number | null | undefined, games: number): string | null {
+  if (typeof rate !== "number" || !Number.isFinite(rate) || games <= 0) return null;
+  return `${Math.round(rate * games)} of ${games} ${games === 1 ? "game" : "games"}`;
+}
+
+export function gameLogTiles(
+  history: Pick<PlayerHistoryResponse, "n_games" | "p_over" | "p_under" | "mean">,
+  line: number | null,
+): GameLogTile[] {
+  const games = history.n_games;
+  const lineLabel = line == null ? "" : ` ${formatThreshold(line)}`;
+  const mean = typeof history.mean === "number" && Number.isFinite(history.mean) ? history.mean : null;
+  const diff = mean != null && line != null ? Math.round((mean - line) * 10) / 10 : null;
+  return [
+    { key: "over", label: `Over${lineLabel}`, value: formatPercent(history.p_over), sub: sideCount(history.p_over, games) },
+    { key: "under", label: `Under${lineLabel}`, value: formatPercent(history.p_under), sub: sideCount(history.p_under, games) },
+    {
+      key: "average",
+      label: "Average",
+      value: mean == null ? "—" : mean.toFixed(1),
+      sub: diff == null ? null : `${diff >= 0 ? "+" : ""}${diff.toFixed(1)} vs line`,
+    },
+    { key: "games", label: "Games", value: String(games), sub: null },
+  ];
 }

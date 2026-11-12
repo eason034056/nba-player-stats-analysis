@@ -48,6 +48,7 @@ import {
   eventPlayerRows,
   eventTeammates,
   gameLogChart,
+  gameLogTiles,
   marketToMetric,
   NBA_EVENT_TABS,
   postedLine,
@@ -57,10 +58,20 @@ import { EventActionBar } from "@/components/event/EventActionBar";
 import { EventHeader } from "@/components/event/EventHeader";
 import { EventTabs } from "@/components/event/EventTabs";
 import { FilterSheet } from "@/components/event/FilterSheet";
-import { GameFilters, type LogRange, type LogRole, type MateMode } from "@/components/event/GameFilters";
+import {
+  activeFilterCount,
+  GameFilters,
+  MoreFilters,
+  type FilterState,
+  type LogRange,
+  type LogRole,
+  type MateMode,
+} from "@/components/event/GameFilters";
 import { GameLogChart } from "@/components/event/GameLogChart";
+import { NbaGameLog } from "@/components/event/NbaGameLog";
 import { OurRead } from "@/components/event/OurRead";
 import { PlayerRail } from "@/components/event/PlayerRail";
+import { SportsbookPrices } from "@/components/event/SportsbookPrices";
 import { StatChips } from "@/components/event/StatChips";
 import { BookmakerSelect } from "@/components/BookmakerSelect";
 import { PlayerHistoryStats } from "@/components/PlayerHistoryStats";
@@ -452,38 +463,57 @@ export function EventDetail({ league }: { league: League }) {
     .map((chip) => `${chip.abbr} ${chip.tone}`)
     .join(" · ");
   const mobileWhen = [clock.mobile, mobileLineup].filter(Boolean).join(" · ");
-  const renderFilters = () => (
-    <GameFilters
-      range={range}
-      onRange={setRange}
-      lineText={activeLine == null ? null : String(activeLine)}
-      lineChanged={lineSteps !== 0}
-      lineDisabled={line == null}
-      onMinus={() => setLineSteps((steps) => steps - 1)}
-      onPlus={() => setLineSteps((steps) => steps + 1)}
-      onResetLine={() => setLineSteps(0)}
-      role={role}
-      onRole={setRole}
-      opponent={opponent}
-      opponents={sampleQuery.data?.opponents ?? []}
-      onOpponent={setOpponent}
-      teammates={eventTeammates({
-        player: playerName,
-        awayLineup: awayLineupQuery.data ?? null,
-        homeLineup: homeLineupQuery.data ?? null,
-        historyTeammates: sampleQuery.data?.teammates ?? [],
-      })}
-      selectedMates={mates}
-      onToggleMate={(name) =>
-        setMates((current) =>
-          current.includes(name) ? current.filter((item) => item !== name) : [...current, name],
-        )
-      }
-      mateMode={mateMode}
-      onMateMode={setMateMode}
-      gameCount={chartQuery.data?.n_games ?? null}
-    />
-  );
+  const filters: FilterState = {
+    range,
+    onRange: setRange,
+    lineText: activeLine == null ? null : String(activeLine),
+    lineChanged: lineSteps !== 0,
+    lineDisabled: line == null,
+    onMinus: () => setLineSteps((steps) => steps - 1),
+    onPlus: () => setLineSteps((steps) => steps + 1),
+    onResetLine: () => setLineSteps(0),
+    role,
+    onRole: setRole,
+    opponent,
+    opponents: sampleQuery.data?.opponents ?? [],
+    onOpponent: setOpponent,
+    teammates: eventTeammates({
+      player: playerName,
+      awayLineup: awayLineupQuery.data ?? null,
+      homeLineup: homeLineupQuery.data ?? null,
+      historyTeammates: sampleQuery.data?.teammates ?? [],
+    }),
+    selectedMates: mates,
+    onToggleMate: (name) =>
+      setMates((current) =>
+        current.includes(name) ? current.filter((item) => item !== name) : [...current, name],
+      ),
+    mateMode,
+    onMateMode: setMateMode,
+  };
+  const activeFilters = activeFilterCount(filters);
+  const resetFilters = () => {
+    setLineSteps(0);
+    setRole("all");
+    setOpponent("");
+    setMates([]);
+    setMateMode("all");
+    setSelectedBar(null);
+  };
+  const logNote = chartQuery.data
+    ? `${getMarketDisplayName(selectedMarket)} · ${chartQuery.data.n_games} ${
+        chartQuery.data.n_games === 1 ? "game" : "games"
+      }`
+    : getMarketDisplayName(selectedMarket);
+  const chartProps = {
+    model: chart,
+    selectedKey: selectedBar,
+    onSelect: setSelectedBar,
+    isLoading: chartQuery.isLoading && historyEnabled,
+    isError: chartQuery.isError,
+    errorText: errorText(chartQuery.error),
+    emptyMessage: chartEmpty,
+  };
 
   return (
     <div className="mx-auto flex w-full min-w-0 max-w-[1200px] flex-col gap-5 px-4 py-6 md:px-8">
@@ -537,67 +567,95 @@ export function EventDetail({ league }: { league: League }) {
           </details>
         ) : null}
 
-        <aside
-          className={cn(
-            nba
-              ? "order-1 max-md:contents md:col-start-1 md:flex md:flex-col md:gap-5 md:rounded-[24px] md:border md:border-line md:bg-white md:p-5"
-              : "order-1 flex flex-col gap-5 rounded-[24px] border border-line bg-white p-4 md:col-start-1 md:p-5",
-            !nba && tab !== "read" && "max-md:hidden",
-          )}
-        >
-          <StatChips
-            league={league}
-            value={selectedMarket}
-            onChange={setSelectedMarket}
-            disabled={mutation.isPending}
-          />
-          {readsNote ? (
-            <div className="flex flex-wrap items-center gap-3">
-              <p className="text-sm text-ink">{readsNote}</p>
-              {readsQuery.isError ? (
-                <button
-                  type="button"
-                  onClick={() => readsQuery.refetch()}
-                  className="text-sm font-semibold text-brand underline"
-                >
-                  Retry reads
-                </button>
-              ) : null}
+        <div className="max-md:contents md:col-start-1 md:flex md:min-w-0 md:flex-col md:gap-5">
+          <aside
+            className={cn(
+              nba
+                ? "order-1 max-md:contents md:flex md:flex-col md:gap-5 md:rounded-[24px] md:border md:border-line md:bg-white md:p-5"
+                : "order-1 flex flex-col gap-5 rounded-[24px] border border-line bg-white p-4 md:p-5",
+              !nba && tab !== "read" && "max-md:hidden",
+            )}
+          >
+            <StatChips
+              league={league}
+              value={selectedMarket}
+              onChange={setSelectedMarket}
+              disabled={mutation.isPending}
+            />
+            {readsNote ? (
+              <div className="flex flex-wrap items-center gap-3">
+                <p className="text-sm text-ink">{readsNote}</p>
+                {readsQuery.isError ? (
+                  <button
+                    type="button"
+                    onClick={() => readsQuery.refetch()}
+                    className="text-sm font-semibold text-brand underline"
+                  >
+                    Retry reads
+                  </button>
+                ) : null}
+              </div>
+            ) : null}
+            {propsNote ? (
+              <div className="flex flex-wrap items-center gap-3">
+                <p className="text-sm text-ink">{propsNote}</p>
+                {propsQuery.isError ? (
+                  <button
+                    type="button"
+                    onClick={() => propsQuery.refetch()}
+                    className="text-sm font-semibold text-brand underline"
+                  >
+                    Retry props
+                  </button>
+                ) : null}
+              </div>
+            ) : null}
+            <PlayerRail
+              league={league}
+              rows={rows}
+              selected={playerName}
+              onSelect={(name) => setValue("player_name", name)}
+              isLoading={suggestQuery.isLoading && rows.length === 0}
+              isError={suggestQuery.isError && rows.length === 0}
+              errorText={errorText(suggestQuery.error)}
+              onRetry={() => suggestQuery.refetch()}
+            />
+          </aside>
+
+          {!nba ? (
+            <div
+              className={cn(
+                "order-3 rounded-[24px] border border-line bg-white p-4 md:p-5",
+                tab !== "read" && "max-md:hidden",
+              )}
+            >
+              <Controller
+                name="player_name"
+                control={control}
+                render={({ field }) => (
+                  <PlayerInput
+                    eventId={eventId}
+                    market={selectedMarket}
+                    value={field.value}
+                    onChange={field.onChange}
+                    disabled={mutation.isPending}
+                    suggestFn={cfg.suggestFn}
+                    cacheNamespace={cfg.cacheNamespace}
+                  />
+                )}
+              />
             </div>
           ) : null}
-          {propsNote ? (
-            <div className="flex flex-wrap items-center gap-3">
-              <p className="text-sm text-ink">{propsNote}</p>
-              {propsQuery.isError ? (
-                <button
-                  type="button"
-                  onClick={() => propsQuery.refetch()}
-                  className="text-sm font-semibold text-brand underline"
-                >
-                  Retry props
-                </button>
-              ) : null}
+        </div>
+
+        <div className="max-md:contents md:col-start-2 md:flex md:min-w-0 md:flex-col md:gap-5">
+          {nba ? (
+            <div className="order-1 md:hidden">
+              <EventTabs value={tab} onChange={setTab} tabs={NBA_EVENT_TABS} />
             </div>
           ) : null}
-          <PlayerRail
-            league={league}
-            rows={rows}
-            selected={playerName}
-            onSelect={(name) => setValue("player_name", name)}
-            isLoading={suggestQuery.isLoading && rows.length === 0}
-            isError={suggestQuery.isError && rows.length === 0}
-            errorText={errorText(suggestQuery.error)}
-            onRetry={() => suggestQuery.refetch()}
-          />
-        </aside>
 
-        {nba ? (
-          <div className="order-1 md:hidden">
-            <EventTabs value={tab} onChange={setTab} tabs={NBA_EVENT_TABS} />
-          </div>
-        ) : null}
-
-        <div className={cn("order-2 min-w-0 md:col-start-2", show("read"))}>
+          <div className={cn("order-2 min-w-0", show("read"))}>
             <OurRead
               league={league}
               model={shownModel}
@@ -615,123 +673,97 @@ export function EventDetail({ league }: { league: League }) {
             />
           </div>
 
-          {!nba ? (
-          <div
-            className={cn(
-              "order-3 rounded-[24px] border border-line bg-white p-4 md:col-start-1 md:p-5",
-              tab !== "read" && "max-md:hidden",
-            )}
-          >
-            <Controller
-              name="player_name"
-              control={control}
-              render={({ field }) => (
-                <PlayerInput
-                  eventId={eventId}
-                  market={selectedMarket}
-                  value={field.value}
-                  onChange={field.onChange}
-                  disabled={mutation.isPending}
-                  suggestFn={cfg.suggestFn}
-                  cacheNamespace={cfg.cacheNamespace}
-                />
-              )}
+          {nba ? (
+            <NbaGameLog
+              className={cn("order-4", show("log"))}
+              filters={filters}
+              note={logNote}
+              tiles={chartQuery.data && chartQuery.data.n_games > 0 ? gameLogTiles(chartQuery.data, activeLine) : null}
+              chart={chartProps}
+              activeFilters={activeFilters}
+              onOpenFilters={() => setFiltersOpen(true)}
+              onReset={activeFilters > 0 || lineSteps !== 0 ? resetFilters : null}
             />
-          </div>
-          ) : null}
+          ) : (
+            <section className={cn("order-4 flex flex-col gap-5 rounded-[24px] border border-line bg-white p-4 md:p-7", show(["log", "filters"]))}>
+              <div className={show("log")}>
+                <GameLogChart {...chartProps} note={logNote} />
+                {chartQuery.data && chartQuery.data.n_games > 0 ? (
+                  <div className="mt-4 grid grid-cols-2 gap-2 md:grid-cols-4">
+                    <StatTile label="Over" value={formatPercent(chartQuery.data.p_over)} />
+                    <StatTile label="Under" value={formatPercent(chartQuery.data.p_under)} />
+                    <StatTile label="Average" value={chartQuery.data.mean == null ? "—" : chartQuery.data.mean.toFixed(1)} />
+                    <StatTile label="Games" value={String(chartQuery.data.n_games)} />
+                  </div>
+                ) : null}
+              </div>
+              <div className={show("filters")}>
+                <GameFilters {...filters} league={league} gameCount={chartQuery.data?.n_games ?? null} />
+              </div>
+            </section>
+          )}
 
-          <section className={cn("order-4 flex flex-col gap-5 rounded-[24px] border border-line bg-white p-4 md:col-start-2 md:p-7", nba ? show("log") : show(["log", "filters"]))}>
-            <div className={show("log")}>
-              {nba ? (
-                <div className="mb-3 flex justify-end md:hidden">
-                  <button
-                    type="button"
-                    onClick={() => setFiltersOpen(true)}
-                    className="min-h-11 rounded-control border border-line-strong bg-white px-4 text-sm font-semibold text-ink"
-                  >
-                    Filters
-                  </button>
-                </div>
-              ) : null}
-              <GameLogChart
-                model={chart}
-                note={
-                  chartQuery.data
-                    ? `${getMarketDisplayName(selectedMarket)} · ${chartQuery.data.n_games} ${
-                        chartQuery.data.n_games === 1 ? "game" : "games"
-                      }`
-                    : getMarketDisplayName(selectedMarket)
-                }
-                selectedKey={selectedBar}
-                onSelect={setSelectedBar}
-                isLoading={chartQuery.isLoading && historyEnabled}
-                isError={chartQuery.isError}
-                errorText={errorText(chartQuery.error)}
-                emptyMessage={chartEmpty}
+          {nba ? (
+            <SportsbookPrices
+              className={cn("order-5", show("odds"))}
+              data={result}
+              isLoading={mutation.isPending}
+              isError={mutation.isError}
+              errorText={errorText(mutation.error)}
+            />
+          ) : (
+            <section
+              data-testid="odds-panel"
+              className={cn(
+                "order-5 min-w-0 max-w-full rounded-[24px] border border-line bg-white p-4 md:p-7",
+                show("odds"),
+              )}
+            >
+              <div className="mb-4 flex flex-wrap items-baseline justify-between gap-2">
+                <h3 className="text-lg font-bold text-ink">Sportsbook prices</h3>
+                <p className="text-[13px] text-muted">
+                  {result?.consensus
+                    ? `No-vig consensus ${binary ? "yes" : "over"} ${formatPercent(
+                        binary ? result.consensus.p_yes_fair : result.consensus.p_over_fair,
+                      )}`
+                    : "No-vig consensus is not on this response."}
+                </p>
+              </div>
+              <Controller
+                name="bookmakers"
+                control={control}
+                render={({ field }) => (
+                  <BookmakerSelect value={field.value} onChange={field.onChange} disabled={mutation.isPending} />
+                )}
               />
-              {chartQuery.data && chartQuery.data.n_games > 0 ? (
-                <div className="mt-4 grid grid-cols-2 gap-2 md:grid-cols-4">
-                  <StatTile label="Over" value={formatPercent(chartQuery.data.p_over)} />
-                  <StatTile label="Under" value={formatPercent(chartQuery.data.p_under)} />
-                  <StatTile label="Average" value={chartQuery.data.mean == null ? "—" : chartQuery.data.mean.toFixed(1)} />
-                  <StatTile label="Games" value={String(chartQuery.data.n_games)} />
-                </div>
-              ) : null}
-            </div>
-            <div className={nba ? "max-md:hidden" : show("filters")}>{renderFilters()}</div>
-          </section>
-
-          <section
-            data-testid="odds-panel"
-            className={cn(
-              "order-5 min-w-0 max-w-full rounded-[24px] border border-line bg-white p-4 md:col-start-2 md:p-7",
-              show("odds"),
-            )}
-          >
-            <div className="mb-4 flex flex-wrap items-baseline justify-between gap-2">
-              <h3 className="text-lg font-bold text-ink">Sportsbook prices</h3>
-              <p className="text-[13px] text-muted">
-                {result?.consensus
-                  ? `No-vig consensus ${binary ? "yes" : "over"} ${formatPercent(
-                      binary ? result.consensus.p_yes_fair : result.consensus.p_over_fair,
-                    )}`
-                  : "No-vig consensus is not on this response."}
-              </p>
-            </div>
-            <Controller
-              name="bookmakers"
-              control={control}
-              render={({ field }) => (
-                <BookmakerSelect value={field.value} onChange={field.onChange} disabled={mutation.isPending} />
-              )}
-            />
-            <div className="mt-4">
-              <ResultsTable data={result} isLoading={mutation.isPending} />
-            </div>
-          </section>
+              <div className="mt-4">
+                <ResultsTable data={result} isLoading={mutation.isPending} />
+              </div>
+            </section>
+          )}
 
           {!nba ? (
-          <div className={cn("order-6 md:col-start-2", show("log"))}>
-            <PlayerHistoryStats
-              eventId={eventId}
-              initialPlayer={playerName}
-              initialMarket={selectedMarket}
-              initialThreshold={line == null ? initialThreshold : String(line)}
-              onPlayerSelect={(name) => setValue("player_name", name)}
-              getCSVPlayersFn={cfg.getCSVPlayersFn}
-              getPlayerHistoryFn={cfg.getPlayerHistoryFn}
-              getPlayerDDHistoryFn={cfg.getPlayerDDHistoryFn}
-              calculateNoVigFn={cfg.calculateNoVig}
-              eventHome={eventHome}
-              eventAway={eventAway}
-              eventAsOf={eventAsOf}
-              cacheNamespace={cfg.cacheNamespace}
-            />
-          </div>
+            <div className={cn("order-6", show("log"))}>
+              <PlayerHistoryStats
+                eventId={eventId}
+                initialPlayer={playerName}
+                initialMarket={selectedMarket}
+                initialThreshold={line == null ? initialThreshold : String(line)}
+                onPlayerSelect={(name) => setValue("player_name", name)}
+                getCSVPlayersFn={cfg.getCSVPlayersFn}
+                getPlayerHistoryFn={cfg.getPlayerHistoryFn}
+                getPlayerDDHistoryFn={cfg.getPlayerDDHistoryFn}
+                calculateNoVigFn={cfg.calculateNoVig}
+                eventHome={eventHome}
+                eventAway={eventAway}
+                eventAsOf={eventAsOf}
+                cacheNamespace={cfg.cacheNamespace}
+              />
+            </div>
           ) : null}
 
           {league === "wnba" && playerName ? (
-            <div className={cn("order-7 md:col-start-2", show("read"))}>
+            <div className={cn("order-7", show("read"))}>
               <SectionUnavailable
                 eyebrow="Today's Projection"
                 title="Player projection"
@@ -739,11 +771,12 @@ export function EventDetail({ league }: { league: League }) {
               />
             </div>
           ) : null}
+        </div>
       </div>
 
       {nba ? (
         <FilterSheet open={filtersOpen} onClose={() => setFiltersOpen(false)}>
-          {renderFilters()}
+          <MoreFilters {...filters} />
         </FilterSheet>
       ) : null}
 
