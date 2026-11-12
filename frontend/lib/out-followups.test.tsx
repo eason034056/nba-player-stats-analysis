@@ -52,6 +52,10 @@ const boardPick = dailyPicksResponseSchema.parse(boardFixture).picks[0];
 const [bam] = todayPicks.picks;
 const heat = todayEvents.events[0];
 
+function picksResponse(picks: DailyPick[]) {
+  return { ...todayPicks, total_picks: picks.length, picks };
+}
+
 function withStatus(pick: DailyPick, status: string | null): DailyPick {
   return { ...pick, injury_status: status };
 }
@@ -196,12 +200,7 @@ describe("top read fallback when picks are missing", () => {
     vi.useFakeTimers({ toFake: ["Date"] });
     vi.setSystemTime(new Date("2026-11-10T18:00:00-06:00"));
     const client = createTestQueryClient();
-    const payload = {
-      date: "2026-11-10",
-      analyzed_at: "2026-11-10T18:00:00Z",
-      total_picks: 1,
-      picks: [jimmyReboundsOut()],
-    };
+    const payload = picksResponse([jimmyReboundsOut()]);
     apiMocks.getEvents.mockResolvedValue({
       date: "2026-11-10",
       events: heatWithButlerRead(),
@@ -295,12 +294,9 @@ describe("slip average leaves an Out leg out", () => {
   beforeEach(() => {
     clearBetSlip();
     apiMocks.getLineups.mockResolvedValue(emptyLineups);
-    apiMocks.getDailyPicks.mockResolvedValue({
-      date: "2026-11-10",
-      analyzed_at: "2026-11-10T18:00:00Z",
-      total_picks: 2,
-      picks: [jimmyReboundsOut(), withStatus(bam, "Questionable")],
-    });
+    apiMocks.getDailyPicks.mockResolvedValue(
+      picksResponse([jimmyReboundsOut(), withStatus(bam, "Questionable")]),
+    );
   });
 
   afterEach(() => {

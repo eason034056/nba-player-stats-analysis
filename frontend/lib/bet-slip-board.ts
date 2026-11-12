@@ -32,6 +32,18 @@ export interface SlipTotals {
   basis: "blend" | "history" | "stored";
 }
 
+export const OUT_LEGS_NOTE = "Avg and all hit leave out Out legs.";
+
+export function slipSummaryCaption(basis: SlipTotals["basis"], omitsOutLegs: boolean): string {
+  const body =
+    basis === "blend"
+      ? "Avg and all hit use the combined probability on each same-side leg. All hit is the product of those blends. It is not a joint probability from the API."
+      : basis === "history"
+        ? "History: a leg has no blend, so avg and all hit use the historical rate on every leg. A reverse add stores the complement of the other side's hit rate, not a de-vigged price."
+        : "Avg and all hit use the stored hit rates. A reverse add stores the complement of the other side's hit rate, not a de-vigged price. All hit is the product of those stored rates. It is not a joint probability from the API.";
+  return omitsOutLegs ? `${body} ${OUT_LEGS_NOTE}` : body;
+}
+
 /**
  * Same-side legs with a blend contribute that blend.
  * A slip that also has a leg with no blend is labelled History and uses

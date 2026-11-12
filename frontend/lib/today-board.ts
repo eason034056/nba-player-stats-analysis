@@ -12,7 +12,8 @@ import { enUS } from "date-fns/locale";
 import { buildEventDetailHref, type LeagueSegment } from "./event-detail-link";
 import { METRIC_TO_MARKET, type MetricKey } from "./metric-to-market";
 import { boardRate, nbaTierFace, tierFromBackend } from "./nba-card";
-import { isOutPick, isPlayerOutInGame } from "./picks-board";
+import { injuryTag, type InjuryTag } from "./injury-tag";
+import { injuryTagForPlayer, isOutPick, isPlayerOutInGame } from "./picks-board";
 import { formatPercent, formatTierPercent } from "./player-dd";
 import {
   DIRECTION_DISPLAY_NAMES,
@@ -218,6 +219,7 @@ export interface TodayReadCard {
   probabilityText: string;
   tier: ReadTier | null;
   href: string;
+  injury: InjuryTag | null;
 }
 
 export function todayReads(
@@ -256,6 +258,7 @@ export function todayReads(
         probabilityText,
         tier,
         href: readHref(pick, league, date),
+        injury: league === "nba" ? injuryTag(pick.injury_status_raw, pick.injury_status) : null,
       };
     });
 }
@@ -276,6 +279,7 @@ export interface TodayGameCard {
   /** `event` means `NBAEvent.top_read`. `picks` is the client fallback. */
   topSource: TodayTopSource;
   href: string;
+  injury: InjuryTag | null;
 }
 
 function topReadText(read: TopRead): string {
@@ -396,6 +400,14 @@ export function todayGames(
       tier,
       topSource: useApi ? "event" : pick ? "picks" : "none",
       href,
+      injury:
+        league === "nba"
+          ? pick
+            ? injuryTag(pick.injury_status_raw, pick.injury_status)
+            : useApi && apiRead
+              ? injuryTagForPlayer(injuryPicks, event.event_id, apiRead.player)
+              : null
+          : null,
     };
   });
 }

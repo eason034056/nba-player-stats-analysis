@@ -10,7 +10,8 @@ import { format, parseISO } from "date-fns";
 import { enUS } from "date-fns/locale";
 
 import { nbaTierFace, tierFromBackend, tierProbability } from "./nba-card";
-import { isOutPick, isPlayerOutInGame } from "./picks-board";
+import { canonicalInjuryTag, injuryTag, type InjuryTag } from "./injury-tag";
+import { injuryTagForPlayer, isOutPick, isPlayerOutInGame } from "./picks-board";
 import { formatPercent, formatTierPercent } from "./player-dd";
 import {
   etWallClock,
@@ -506,6 +507,10 @@ export interface EventPlayerRow {
   leanText: string;
   hasLean: boolean;
   probability: number | null;
+  /** True only when injury_status is Out. A raw word of "out" does not set this. */
+  listedOut: boolean;
+  /** NBA injury chip. Null on WNBA and when the player has no status word. */
+  injury: InjuryTag | null;
 }
 
 /** Fold a name so CSV and lineup spellings compare as the same person. */
@@ -715,6 +720,15 @@ export function eventPlayerRows(args: {
             : "No read",
       hasLean: out ? false : nba != null || pick != null,
       probability: out ? null : nba?.rate ?? pick?.probability ?? null,
+      listedOut: out,
+      injury:
+        args.league === "nba"
+          ? out
+            ? injuryTagForPlayer(args.picks, args.eventId, name)
+            : pick
+              ? injuryTag(pick.injury_status_raw, pick.injury_status)
+              : null
+          : null,
     };
   });
 
@@ -891,6 +905,8 @@ export interface OurReadModel {
   leanProbability: number | null;
   /** The selected player is listed Out. Ask stays hidden. */
   listedOut: boolean;
+  /** NBA injury chip for this read. Null on WNBA. */
+  injury: InjuryTag | null;
 }
 
 function sameLine(a: number | null | undefined, b: number | null): boolean {
@@ -1123,6 +1139,10 @@ function buildNbaRead(args: {
       other: null,
       leanProbability: null,
       listedOut: true,
+      injury:
+        pick != null && isOutPick(pick)
+          ? injuryTag(pick.injury_status_raw, pick.injury_status) ?? canonicalInjuryTag("out")
+          : canonicalInjuryTag("out"),
     };
   }
   if (!pick) {
@@ -1141,6 +1161,7 @@ function buildNbaRead(args: {
         other: null,
         leanProbability: null,
         listedOut: false,
+        injury: null,
       };
     }
     return {
@@ -1156,6 +1177,7 @@ function buildNbaRead(args: {
       other: null,
       leanProbability: null,
       listedOut: false,
+      injury: null,
     };
   }
   const direction = pick.direction === "under" ? "under" : "over";
@@ -1230,6 +1252,7 @@ function buildNbaRead(args: {
     other,
     leanProbability: finite(pick.probability) ? pick.probability : null,
     listedOut: false,
+    injury: injuryTag(pick.injury_status_raw, pick.injury_status),
   };
 }
 
@@ -1292,6 +1315,7 @@ export function buildOurRead(args: {
       other: null,
       leanProbability: null,
       listedOut: false,
+      injury: null,
     };
   }
 
@@ -1365,6 +1389,7 @@ export function buildOurRead(args: {
     other,
     leanProbability: primary?.probability ?? null,
     listedOut: false,
+    injury: null,
   };
 }
 
