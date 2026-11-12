@@ -400,6 +400,8 @@ class TestMigrateScript:
         assert "LOCAL_DATABASE_URL" in result.stdout
         assert "transaction_timeout" in result.stdout
         assert "--verify-only" in result.stdout
+        assert "zero public tables" in result.stdout
+        assert "Zero sequences is allowed only when both sides list zero." in result.stdout
 
     def test_bound_queries_are_not_passed_with_dash_c(self) -> None:
         for line in MIGRATE.read_text().splitlines():

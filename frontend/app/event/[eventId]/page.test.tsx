@@ -18,7 +18,6 @@ const navigationMocks = vi.hoisted(() => ({
 const apiMocks = vi.hoisted(() => ({
   getEvents: vi.fn(),
   calculateNoVig: vi.fn(),
-  getPlayerProjection: vi.fn(),
   getTeamLineup: vi.fn(),
 }));
 
@@ -29,7 +28,6 @@ vi.mock("@/lib/api", async () => {
     ...actual,
     getEvents: apiMocks.getEvents,
     calculateNoVig: apiMocks.calculateNoVig,
-    getPlayerProjection: apiMocks.getPlayerProjection,
     getTeamLineup: apiMocks.getTeamLineup,
   };
 });
@@ -64,10 +62,6 @@ vi.mock("@/components/PlayerHistoryStats", () => ({
   PlayerHistoryStats: () => <div>player history stats</div>,
 }));
 
-vi.mock("@/components/PlayerProjectionPanel", () => ({
-  PlayerProjectionPanel: () => <div>player projection panel</div>,
-}));
-
 vi.mock("@/components/TeamLineupPanel", () => ({
   TeamLineupPanel: () => <div>team lineup panel</div>,
 }));
@@ -89,7 +83,6 @@ describe("EventPage", () => {
 
     apiMocks.getEvents.mockResolvedValue(routeEvents);
     apiMocks.getTeamLineup.mockResolvedValue(null);
-    apiMocks.getPlayerProjection.mockResolvedValue(null);
     apiMocks.calculateNoVig.mockResolvedValue(null);
   });
 

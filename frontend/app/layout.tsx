@@ -6,20 +6,32 @@
  */
 
 import type { Metadata, Viewport } from "next";
-import { Instrument_Sans, JetBrains_Mono } from "next/font/google";
+import localFont from "next/font/local";
 import "./globals.css";
 import { Providers } from "./providers";
 import { AppShell } from "@/components/AppShell";
 
-const sans = Instrument_Sans({
-  subsets: ["latin"],
-  weight: ["400", "500", "600", "700"],
+const sans = localFont({
+  src: [
+    { path: "./fonts/InstrumentSans[wdth,wght].woff2", weight: "400", style: "normal" },
+    { path: "./fonts/InstrumentSans[wdth,wght].woff2", weight: "500", style: "normal" },
+    { path: "./fonts/InstrumentSans[wdth,wght].woff2", weight: "600", style: "normal" },
+    { path: "./fonts/InstrumentSans[wdth,wght].woff2", weight: "700", style: "normal" },
+  ],
+  display: "swap",
+  adjustFontFallback: "Arial",
   variable: "--font-sans",
+  declarations: [{ prop: "font-stretch", value: "100%" }],
 });
 
-const mono = JetBrains_Mono({
-  subsets: ["latin"],
-  weight: ["500", "600", "700"],
+const mono = localFont({
+  src: [
+    { path: "./fonts/JetBrainsMono[wght].woff2", weight: "500", style: "normal" },
+    { path: "./fonts/JetBrainsMono[wght].woff2", weight: "600", style: "normal" },
+    { path: "./fonts/JetBrainsMono[wght].woff2", weight: "700", style: "normal" },
+  ],
+  display: "swap",
+  adjustFontFallback: "Arial",
   variable: "--font-mono",
 });
 

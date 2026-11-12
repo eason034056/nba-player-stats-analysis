@@ -35,6 +35,10 @@ export function BookmakerSelect({
 }: BookmakerSelectProps) {
   const isAllSelected = value.length === 0;
   const [showOthers, setShowOthers] = useState(false);
+  const [mobileOpen, setMobileOpen] = useState(false);
+  const mobileSummary = isAllSelected
+    ? `All ${BOOKMAKERS.length} bookmakers`
+    : `${value.length} of ${BOOKMAKERS.length} bookmakers`;
 
   const toggleSelectAll = () => {
     if (isAllSelected) {
@@ -65,77 +69,47 @@ export function BookmakerSelect({
 
   return (
     <div className={cn(disabled && "opacity-50 pointer-events-none")}>
-      {/* Label */}
-      <label className="control-label mb-3">
-        <Building2 className="h-4 w-4 text-red" />
-        Bookmakers
-      </label>
-
-      {/* Select all button */}
       <button
         type="button"
-        onClick={toggleSelectAll}
-        className={cn(
-          "mb-4 w-full rounded-full px-4 py-3",
-          "flex items-center justify-between",
-          "border transition-all duration-150 font-semibold",
-          isAllSelected
-            ? "control-segment-active"
-            : "control-segment"
-        )}
+        data-testid="bookmaker-mobile-toggle"
+        aria-expanded={mobileOpen}
+        onClick={() => setMobileOpen((open) => !open)}
+        className="flex min-h-11 w-full items-center justify-between gap-3 rounded-full border border-line bg-white px-4 text-left text-sm font-semibold text-ink md:hidden"
       >
-        <span>{isAllSelected ? "✓ All Selected" : "Select All"}</span>
-        {isAllSelected && <Check className="w-5 h-5" />}
+        <span className="min-w-0 truncate">Bookmakers · {mobileSummary}</span>
+        <ChevronDown className={cn("h-4 w-4 shrink-0", mobileOpen && "rotate-180")} />
       </button>
+      <div data-testid="bookmaker-picker" className={cn(!mobileOpen && "max-md:hidden")}>
+        {/* Label */}
+        <label className="control-label mb-3">
+          <Building2 className="h-4 w-4 text-red" />
+          Bookmakers
+        </label>
 
-      {/* Featured bookmakers */}
-      <div className="mb-4">
-        <h4 className="mb-2 text-xs font-bold uppercase tracking-wider text-light">
-          Featured Platforms
-        </h4>
-        <div className="grid grid-cols-2 gap-2">
-          {featuredBooks.map((bookmaker) => {
-            const selected = isSelected(bookmaker.key);
-
-            return (
-              <button
-                key={bookmaker.key}
-                type="button"
-                onClick={() => toggleBookmaker(bookmaker.key)}
-                className={cn(
-                  selected ? "control-chip-active" : "control-chip",
-                  "px-3 py-2.5 text-sm font-medium",
-                  "flex items-center justify-between",
-                )}
-              >
-                <span className="truncate text-inherit">{bookmaker.name}</span>
-                {selected && (
-                  <Check className="ml-2 h-4 w-4 shrink-0 text-green-300" />
-                )}
-              </button>
-            );
-          })}
-        </div>
-      </div>
-
-      {/* Other bookmakers (collapsible) */}
-      <div>
+        {/* Select all button */}
         <button
           type="button"
-          onClick={() => setShowOthers(!showOthers)}
-          className="mb-2 flex w-full items-center justify-between text-xs font-bold uppercase tracking-wider text-light transition-colors hover:text-dark"
-        >
-          <span>Other Bookmakers ({otherBooks.length})</span>
-          {showOthers ? (
-            <ChevronUp className="w-4 h-4" />
-          ) : (
-            <ChevronDown className="w-4 h-4" />
+          onClick={toggleSelectAll}
+          className={cn(
+            "mb-4 w-full rounded-full px-4 py-3",
+            "flex items-center justify-between",
+            "border transition-all duration-150 font-semibold",
+            isAllSelected
+              ? "control-segment-active"
+              : "control-segment"
           )}
+        >
+          <span>{isAllSelected ? "✓ All Selected" : "Select All"}</span>
+          {isAllSelected && <Check className="w-5 h-5" />}
         </button>
-        
-        {showOthers && (
-          <div className="grid grid-cols-2 gap-2 animate-fade-in">
-            {otherBooks.map((bookmaker) => {
+
+        {/* Featured bookmakers */}
+        <div className="mb-4">
+          <h4 className="mb-2 text-xs font-bold uppercase tracking-wider text-light">
+            Featured Platforms
+          </h4>
+          <div className="grid grid-cols-2 gap-2">
+            {featuredBooks.map((bookmaker) => {
               const selected = isSelected(bookmaker.key);
 
               return (
@@ -145,29 +119,71 @@ export function BookmakerSelect({
                   onClick={() => toggleBookmaker(bookmaker.key)}
                   className={cn(
                     selected ? "control-chip-active" : "control-chip",
-                    "px-3 py-2 text-xs",
+                    "px-3 py-2.5 text-sm font-medium",
                     "flex items-center justify-between",
                   )}
                 >
                   <span className="truncate text-inherit">{bookmaker.name}</span>
                   {selected && (
-                    <Check className="ml-1.5 h-3.5 w-3.5 shrink-0 text-green-300" />
+                    <Check className="ml-2 h-4 w-4 shrink-0 text-green-300" />
                   )}
                 </button>
               );
             })}
           </div>
-        )}
-      </div>
+        </div>
 
-      {/* Selected count */}
-      <p className="control-hint mt-4">
-        {isAllSelected ? (
-          <>Will query all {BOOKMAKERS.length} bookmakers</>
-        ) : (
-          <>Selected <span className="text-dark font-bold">{value.length}</span> / {BOOKMAKERS.length}</>
-        )}
-      </p>
+        {/* Other bookmakers (collapsible) */}
+        <div>
+          <button
+            type="button"
+            onClick={() => setShowOthers(!showOthers)}
+            className="mb-2 flex w-full items-center justify-between text-xs font-bold uppercase tracking-wider text-light transition-colors hover:text-dark"
+          >
+            <span>Other Bookmakers ({otherBooks.length})</span>
+            {showOthers ? (
+              <ChevronUp className="w-4 h-4" />
+            ) : (
+              <ChevronDown className="w-4 h-4" />
+            )}
+          </button>
+        
+          {showOthers && (
+            <div className="grid grid-cols-2 gap-2 animate-fade-in">
+              {otherBooks.map((bookmaker) => {
+                const selected = isSelected(bookmaker.key);
+
+                return (
+                  <button
+                    key={bookmaker.key}
+                    type="button"
+                    onClick={() => toggleBookmaker(bookmaker.key)}
+                    className={cn(
+                      selected ? "control-chip-active" : "control-chip",
+                      "px-3 py-2 text-xs",
+                      "flex items-center justify-between",
+                    )}
+                  >
+                    <span className="truncate text-inherit">{bookmaker.name}</span>
+                    {selected && (
+                      <Check className="ml-1.5 h-3.5 w-3.5 shrink-0 text-green-300" />
+                    )}
+                  </button>
+                );
+              })}
+            </div>
+          )}
+        </div>
+
+        {/* Selected count */}
+        <p className="control-hint mt-4">
+          {isAllSelected ? (
+            <>Will query all {BOOKMAKERS.length} bookmakers</>
+          ) : (
+            <>Selected <span className="text-dark font-bold">{value.length}</span> / {BOOKMAKERS.length}</>
+          )}
+        </p>
+      </div>
     </div>
   );
 }

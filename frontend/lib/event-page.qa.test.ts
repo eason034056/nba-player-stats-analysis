@@ -36,7 +36,6 @@ function readFor(
     marketName: "Points",
     market: "player_points",
     binary: false,
-    supportsProjection: true,
     eventId: "evt-mia-bos",
     homeTeam: "Miami Heat",
     awayTeam: "Boston Celtics",
@@ -48,7 +47,6 @@ function readFor(
     consensus: math.consensus ?? null,
     last10: edges.game_logs,
     history: edges,
-    projection: null,
     league: "nba",
   });
 }
@@ -104,12 +102,10 @@ describe("last-10 hits are strictly above the line", () => {
     expect(model.linePct).toBeGreaterThan(0);
     const signal = buildReadSignals({
       binary: false,
-      supportsProjection: true,
       line: 18.5,
       consensus: null,
       last10: edges.game_logs,
       history: edges,
-      projection: null,
       pick: null,
       market: "player_points",
     }).find((row) => row.key === "last10");
