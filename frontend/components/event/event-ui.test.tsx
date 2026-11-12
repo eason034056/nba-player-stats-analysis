@@ -428,8 +428,7 @@ describe("GameLogChart", () => {
         emptyMessage={null}
       />,
     );
-    expect(screen.getByText("Push")).toBeInTheDocument();
-    expect(screen.getAllByText(/Minutes not on this row/).length).toBeGreaterThan(0);
+    expect(screen.getByTestId("selected-game")).toHaveTextContent("Nov 3 vs BOS18.5Push");
     expect(screen.getByRole("button", { name: "11/03 BOS 18.5" })).toBeInTheDocument();
   });
 });

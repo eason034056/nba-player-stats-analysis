@@ -1,7 +1,22 @@
 "use client";
 
-import type { ChartModel } from "@/lib/event-page";
+import type { ChartBar, ChartModel } from "@/lib/event-page";
 import { cn } from "@/lib/utils";
+
+type GameResult = "over" | "under" | "push" | "none";
+
+const RESULT_PILL: Record<GameResult, { label: string; className: string }> = {
+  over: { label: "Over", className: "bg-brand text-white" },
+  under: { label: "Under", className: "bg-[#C9B4EE] text-brand-ink" },
+  push: { label: "Push", className: "bg-accent text-brand-ink" },
+  none: { label: "No line", className: "bg-[#E2E2E2] text-[#4A4458]" },
+};
+
+function gameResult(bar: ChartBar, lineText: string | null): GameResult {
+  if (bar.over === null) return "none";
+  if (bar.over) return "over";
+  return bar.value === Number(lineText) ? "push" : "under";
+}
 
 export function GameLogChart({
   model,
@@ -25,6 +40,7 @@ export function GameLogChart({
   heading?: boolean;
 }) {
   const selected = model?.bars.find((bar) => bar.key === selectedKey) ?? model?.bars.at(-1) ?? null;
+  const pill = selected ? RESULT_PILL[gameResult(selected, model?.lineText ?? null)] : null;
   return (
     <div data-testid="game-log-chart" className="flex flex-col gap-4">
       {heading ? (
@@ -36,7 +52,7 @@ export function GameLogChart({
       {isLoading ? <p className="text-sm text-muted">Loading the game log.</p> : null}
       {isError ? <p className="text-sm font-semibold text-red">{errorText ?? "The game log failed."}</p> : null}
       {emptyMessage ? (
-        <p className="rounded-2xl bg-[#F7F6F9] px-4 py-9 text-center text-sm text-muted">{emptyMessage}</p>
+        <p className="rounded-[14px] bg-[#F7F6F9] px-4 py-9 text-center text-sm text-muted">{emptyMessage}</p>
       ) : null}
       {model && !model.empty ? (
         <>
@@ -116,41 +132,33 @@ export function GameLogChart({
               ))}
             </div>
           </div>
-          {selected ? (
-            <div className="flex flex-wrap items-center gap-x-4 gap-y-2 rounded-[14px] bg-[#F7F6F9] px-3.5 py-2.5 text-[13px]">
-              <span className="font-bold text-ink">
-                {selected.date} · Opponent {selected.opponent || "—"}
-              </span>
-              <span className="font-mono text-[15px] font-bold">{selected.valueText}</span>
-              <span
-                className={cn(
-                  "rounded-full px-2 py-0.5 text-[11px] font-bold",
-                  selected.over === null
-                    ? "bg-[#E2E2E2] text-[#4A4458]"
-                    : selected.over
-                      ? "bg-brand text-white"
-                      : "bg-[#E3DAF3] text-brand",
-                )}
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            {selected && pill ? (
+              <div
+                data-testid="selected-game"
+                className="flex flex-wrap items-center gap-x-4 gap-y-2 rounded-[14px] bg-[#F7F6F9] px-3.5 py-2.5 text-[13px]"
               >
-                {selected.over === null ? "No line" : selected.value === Number(model.lineText) ? "Push" : selected.over ? "Over the line" : "Under the line"}
+                <span className="font-bold text-ink">
+                  {selected.dateLabel}
+                  {selected.opponent ? ` vs ${selected.opponent}` : ""}
+                </span>
+                <span className="font-mono text-[15px] font-bold text-ink">{selected.valueText}</span>
+                <span className={cn("rounded-full px-2 py-[3px] text-[11px] font-bold", pill.className)}>
+                  {pill.label}
+                </span>
+              </div>
+            ) : null}
+            <div className="flex flex-wrap gap-3.5 text-xs text-muted">
+              <span className="inline-flex items-center gap-1.5">
+                <span className="h-2.5 w-2.5 rounded-[3px] bg-brand" /> Over
               </span>
-              <span className="text-muted">
-                {selected.minutes > 0 ? `${selected.minutes} min` : "Minutes not on this row"}
-                {" · "}
-                {selected.starter ? "Starter" : "Bench"}
+              <span className="inline-flex items-center gap-1.5">
+                <span className="h-2.5 w-2.5 rounded-[3px] bg-[#C9B4EE]" /> Under
+              </span>
+              <span className="inline-flex items-center gap-1.5">
+                <span className="w-3.5 border-t-2 border-dashed border-[#B3A63A]" /> Line
               </span>
             </div>
-          ) : null}
-          <div className="flex flex-wrap gap-4 text-xs text-muted">
-            <span className="inline-flex items-center gap-1.5">
-              <span className="h-2.5 w-2.5 rounded-sm bg-brand" /> Over the line
-            </span>
-            <span className="inline-flex items-center gap-1.5">
-              <span className="h-2.5 w-2.5 rounded-sm bg-[#C9B4EE]" /> Under the line
-            </span>
-            <span className="inline-flex items-center gap-1.5">
-              <span className="w-3.5 border-t-2 border-dashed border-[#B3A63A]" /> Line
-            </span>
           </div>
         </>
       ) : null}

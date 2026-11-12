@@ -120,6 +120,51 @@ describe("NbaGameLog", () => {
   });
 });
 
+describe("TeammatesControl", () => {
+  it("lists unpicked teammates in the menu and shows only picked ones as chips", async () => {
+    const onToggleMate = vi.fn();
+    renderLog({
+      filters: filterState({
+        teammates: ["Tyler Herro", "Bam Adebayo", "Andrew Wiggins"],
+        selectedMates: ["Bam Adebayo"],
+        onToggleMate,
+      }),
+    });
+
+    const menu = screen.getByRole("combobox", { name: "Add a teammate" });
+    expect(within(menu).getAllByRole("option").map((option) => option.textContent)).toEqual([
+      "Add a teammate",
+      "Tyler Herro",
+      "Andrew Wiggins",
+    ]);
+    expect(screen.queryByRole("button", { name: /Tyler Herro/ })).not.toBeInTheDocument();
+
+    await userEvent.selectOptions(menu, "Tyler Herro");
+    expect(onToggleMate).toHaveBeenCalledWith("Tyler Herro");
+
+    await userEvent.click(screen.getByRole("button", { name: "Remove Bam Adebayo" }));
+    expect(onToggleMate).toHaveBeenCalledWith("Bam Adebayo");
+  });
+
+  it("disables the menu once every teammate is picked", () => {
+    renderLog({ filters: filterState({ teammates: ["Tyler Herro"], selectedMates: ["Tyler Herro"] }) });
+    expect(screen.getByRole("combobox", { name: "Add a teammate" })).toBeDisabled();
+    expect(screen.getByRole("option", { name: "Every teammate added" })).toBeInTheDocument();
+  });
+});
+
+describe("GameLogChart selected game", () => {
+  it("shows the date, opponent, value, and result in one chip beside the legend", () => {
+    renderLog();
+
+    const chip = screen.getByTestId("selected-game");
+    expect(chip).toHaveTextContent("Nov 3 vs BOS14Under");
+    expect(chip.textContent).not.toMatch(/min|Starter|Bench/);
+    const legend = chip.nextElementSibling;
+    expect(legend?.textContent?.replace(/\s+/g, " ").trim()).toBe("Over Under Line");
+  });
+});
+
 describe("activeFilterCount", () => {
   it("counts role, opponent, and a teammate split, and ignores teammates with mode All", () => {
     expect(activeFilterCount(filterState())).toBe(0);

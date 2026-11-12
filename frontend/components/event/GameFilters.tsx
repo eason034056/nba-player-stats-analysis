@@ -72,7 +72,7 @@ function Segment<T extends string | number>({
   return (
     <div className={cn("flex min-w-0 flex-col gap-2", className)}>
       <FilterLabel className={labelClassName}>{label}</FilterLabel>
-      <div className="flex gap-0.5 rounded-xl bg-[#F3F1F6] p-[3px]">
+      <div className="flex gap-0.5 rounded-control bg-[#F3F1F6] p-[3px]">
         {options.map((option) => {
           const selected = option.value === value;
           return (
@@ -82,7 +82,7 @@ function Segment<T extends string | number>({
               aria-pressed={selected}
               onClick={() => onChange(option.value)}
               className={cn(
-                "min-h-9 flex-1 rounded-[9px] px-2 text-[13px] font-semibold",
+                "min-h-9 flex-1 rounded-mark-sm px-2 text-[13px] font-semibold",
                 selected ? "bg-brand text-white" : "text-[#4A4458]",
               )}
             >
@@ -136,13 +136,13 @@ export function LineControl({
   return (
     <div className={cn("flex min-w-0 flex-col gap-2", className)}>
       <FilterLabel className={cn(inlineLabel && "max-md:hidden")}>Line</FilterLabel>
-      <div className="grid grid-cols-[42px_minmax(0,1fr)_42px] gap-0.5 rounded-xl bg-[#F3F1F6] p-[3px]">
+      <div className="grid grid-cols-[42px_minmax(0,1fr)_42px] gap-0.5 rounded-control bg-[#F3F1F6] p-[3px]">
         <button
           type="button"
           aria-label="Lower line"
           disabled={lineDisabled}
           onClick={onMinus}
-          className="min-h-9 rounded-[9px] bg-white text-base font-semibold text-brand disabled:opacity-40"
+          className="min-h-9 rounded-mark-sm bg-white text-base font-semibold text-brand disabled:opacity-40"
         >
           −
         </button>
@@ -166,7 +166,7 @@ export function LineControl({
           aria-label="Raise line"
           disabled={lineDisabled}
           onClick={onPlus}
-          className="min-h-9 rounded-[9px] bg-white text-base font-semibold text-brand disabled:opacity-40"
+          className="min-h-9 rounded-mark-sm bg-white text-base font-semibold text-brand disabled:opacity-40"
         >
           +
         </button>
@@ -179,7 +179,7 @@ export function VenueControl({ className }: { className?: string }) {
   return (
     <div className={cn("flex min-w-0 flex-col gap-2", className)}>
       <FilterLabel>Venue</FilterLabel>
-      <div className="flex gap-0.5 rounded-xl bg-[#F3F1F6] p-[3px]" aria-disabled="true">
+      <div className="flex gap-0.5 rounded-control bg-[#F3F1F6] p-[3px]" aria-disabled="true">
         {["All", "Home", "Away"].map((label) => (
           <button
             key={label}
@@ -188,7 +188,7 @@ export function VenueControl({ className }: { className?: string }) {
             aria-disabled="true"
             aria-pressed={label === "All"}
             className={cn(
-              "min-h-9 flex-1 rounded-[9px] text-[13px] font-semibold",
+              "min-h-9 flex-1 rounded-mark-sm text-[13px] font-semibold",
               label === "All" ? "bg-brand text-white" : "text-muted",
             )}
           >
@@ -243,7 +243,7 @@ export function OpponentControl({
         aria-label="Opponent"
         value={value}
         onChange={(event) => onChange(event.target.value)}
-        className="min-h-11 rounded-xl bg-[#F3F1F6] px-3 text-sm font-semibold text-ink"
+        className="min-h-11 rounded-control bg-[#F3F1F6] px-3 text-sm font-semibold text-ink"
       >
         <option value="">All opponents</option>
         {options.map((name) => (
@@ -266,6 +266,7 @@ export function TeammatesControl({
 }: Pick<FilterState, "teammates" | "selectedMates" | "onToggleMate" | "mateMode" | "onMateMode"> & {
   className?: string;
 }) {
+  const addable = teammates.filter((name) => !selectedMates.includes(name));
   return (
     <div className={cn("flex flex-col gap-3 border-t border-[#EEEBF2] pt-4", className)}>
       <div className="flex flex-wrap items-baseline justify-between gap-3">
@@ -276,24 +277,37 @@ export function TeammatesControl({
         {teammates.length === 0 ? (
           <p className="min-w-0 flex-[1_1_320px] text-sm text-muted">No teammates on this history response.</p>
         ) : (
-          <div className="flex min-w-0 flex-[1_1_320px] flex-wrap gap-1.5">
-            {teammates.map((name) => {
-              const selected = selectedMates.includes(name);
-              return (
-                <button
-                  key={name}
-                  type="button"
-                  aria-pressed={selected}
-                  onClick={() => onToggleMate(name)}
-                  className={cn(
-                    "min-h-[38px] rounded-full border px-3 text-[13px] font-semibold",
-                    selected ? "border-brand bg-brand text-white" : "border-line-strong bg-white text-ink",
-                  )}
-                >
+          <div className="flex min-w-0 flex-[1_1_320px] flex-wrap items-center gap-1.5">
+            <select
+              aria-label="Add a teammate"
+              value=""
+              disabled={addable.length === 0}
+              onChange={(event) => {
+                if (event.target.value) onToggleMate(event.target.value);
+              }}
+              className="min-h-11 min-w-0 max-w-full rounded-control bg-[#F3F1F6] px-3 text-sm font-semibold text-ink disabled:text-muted"
+            >
+              <option value="">{addable.length === 0 ? "Every teammate added" : "Add a teammate"}</option>
+              {addable.map((name) => (
+                <option key={name} value={name}>
                   {name}
-                </button>
-              );
-            })}
+                </option>
+              ))}
+            </select>
+            {selectedMates.map((name) => (
+              <button
+                key={name}
+                type="button"
+                aria-label={`Remove ${name}`}
+                onClick={() => onToggleMate(name)}
+                className="inline-flex min-h-[38px] items-center gap-1.5 rounded-full bg-brand pl-3 pr-2.5 text-[13px] font-semibold text-white"
+              >
+                {name}
+                <span aria-hidden="true" className="text-base leading-none text-white/70">
+                  ×
+                </span>
+              </button>
+            ))}
           </div>
         )}
         <div className={cn("min-w-[240px] flex-[0_1_300px]", selectedMates.length === 0 && "pointer-events-none opacity-40")}>

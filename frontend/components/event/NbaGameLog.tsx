@@ -74,7 +74,7 @@ export function NbaGameLog({
               type="button"
               onClick={onOpenFilters}
               className={cn(
-                "min-h-11 shrink-0 rounded-xl border px-4 text-[13px] font-bold md:hidden",
+                "min-h-11 shrink-0 rounded-control border px-4 text-[13px] font-bold md:hidden",
                 activeFilters > 0 ? "border-brand bg-brand text-white" : "border-line-strong bg-white text-ink",
               )}
             >
@@ -99,7 +99,7 @@ export function NbaGameLog({
             <div
               key={tile.key}
               data-testid={`log-tile-${tile.key}`}
-              className={cn("flex flex-col gap-1 rounded-[14px] p-3 md:rounded-2xl md:p-3.5", TILE_TONE[tile.key])}
+              className={cn("flex flex-col gap-1 rounded-[14px] p-3 md:rounded-tile md:p-3.5", TILE_TONE[tile.key])}
             >
               <div className="text-[11px] font-semibold text-[#4A4458] md:text-xs">{tile.label}</div>
               <div className="font-mono text-[21px] font-bold leading-tight md:text-2xl">{tile.value}</div>

@@ -830,6 +830,7 @@ export interface ChartBar {
   over: boolean | null;
   date: string;
   dateFull: string;
+  dateLabel: string;
   minutes: number;
   starter: boolean;
   heightPct: number;
@@ -853,6 +854,14 @@ function tickLabel(value: number): string {
   return value.toFixed(1);
 }
 
+const SHORT_GAME_DATE = new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric", timeZone: "UTC" });
+
+export function shortGameDate(dateFull: string, fallback: string): string {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(dateFull)) return fallback;
+  const parsed = new Date(`${dateFull}T00:00:00Z`);
+  return Number.isNaN(parsed.getTime()) ? fallback : SHORT_GAME_DATE.format(parsed);
+}
+
 export function gameLogChart(logs: GameLog[], line: number | null): ChartModel {
   const ordered = [...logs].sort((a, b) => {
     if (a.date_full && b.date_full && a.date_full !== b.date_full) {
@@ -873,6 +882,7 @@ export function gameLogChart(logs: GameLog[], line: number | null): ChartModel {
     over: line == null ? null : game.value > line,
     date: game.date,
     dateFull: game.date_full,
+    dateLabel: shortGameDate(game.date_full, game.date),
     minutes: game.minutes,
     starter: game.is_starter,
     heightPct: Math.max(2, (game.value / max) * 100),

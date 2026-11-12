@@ -10,6 +10,7 @@ import {
   eventTeammates,
   eventWhen,
   gameLogChart,
+  shortGameDate,
   joinMeta,
   lineupChip,
   postedLine,
@@ -302,6 +303,13 @@ describe("game log chart", () => {
     expect(model.bars[1]?.over).toBe(true);
     expect(model.lineText).toBe("18.5");
     expect(model.linePct).not.toBeNull();
+  });
+
+  it("labels each game with its calendar day, not the day before in Chicago", () => {
+    expect(shortGameDate("2026-04-01", "04/01")).toBe("Apr 1");
+    expect(shortGameDate("2026-11-10", "11/10")).toBe("Nov 10");
+    expect(shortGameDate("", "04/10")).toBe("04/10");
+    expect(gameLogChart([logOn("2026-11-01")], 18.5).bars[0]?.dateLabel).toBe("Nov 1");
   });
 
   it("stays empty when the log is empty", () => {
