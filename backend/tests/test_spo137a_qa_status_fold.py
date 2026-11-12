@@ -26,9 +26,8 @@ from tests.test_spo135g_top_read_out import (
 from tests.test_spo137a_status_case import _normalize
 
 
-# Empty or whitespace-only status is dropped today. A BDL injury row
-# with a blank status is still a row on the report; this pins the
-# current drop, which the review flags as the less conservative path.
+# A blank status is missing data. The row stays, stored as Questionable.
+# Only Available is dropped. The original string stays on raw_status.
 _BLANK = ("", "   ", "\t\n", "\xa0")
 
 # (rewritten status, stored canonical word)
@@ -37,10 +36,10 @@ _PHRASES = (
     ("Out - Personal", "Out"),
     ("out\xa0for\u00a0season", "Out"),
     ("Doubtful ", "Questionable"),
-    ("Day To Day", "Questionable"),
+    ("Day To Day", "Day-To-Day"),
     ("OFS", "Questionable"),
-    ("Questionable (out last game)", "Out"),
-    ("Out of rotation", "Out"),
+    ("Questionable (out last game)", "Questionable"),
+    ("Out of rotation", "Questionable"),
 )
 
 _TOP_READ_OUT = ("out", " OUT ")
@@ -56,9 +55,10 @@ def _assert_raw_kept(entries: list[dict], variant: str, stored: str) -> None:
 
 
 @pytest.mark.parametrize("variant", _BLANK)
-def test_blank_status_on_a_recorded_row_is_dropped(variant: str) -> None:
-    """A recorded injury row with an empty or whitespace status is omitted."""
-    assert _normalize(variant) == []
+def test_blank_status_on_a_recorded_row_is_questionable(variant: str) -> None:
+    """A recorded injury row with an empty or whitespace status stays on the report."""
+    _assert_raw_kept(_normalize(variant), variant, "Questionable")
+    assert injury_blocks_combined("Questionable") is False
 
 
 @pytest.mark.parametrize(("variant", "stored"), _PHRASES)

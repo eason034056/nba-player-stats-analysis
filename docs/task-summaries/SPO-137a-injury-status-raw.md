@@ -71,7 +71,7 @@ Recorded fixtures only. No live BALLDONTLIE or Odds API call. Odds shells are `o
 
 `cd backend && python3 -m pytest tests -q --tb=line`
 
-1505 passed, 33 skipped, 6 xfailed, 0 failed. The case-fold tests are `test_status_variant_stores_the_canonical_word`, `test_available_variant_is_dropped`, `test_non_string_status_is_dropped`, and `test_lowercase_out_blocks_the_pick_like_canonical_out` in `backend/tests/test_spo137a_status_case.py`. The earlier count on this branch, before that file, was 1475 passed and 33 skipped. The count before the blank-status and leading-`out` rules was 1491 passed and 33 skipped.
+1519 passed, 33 skipped, 6 xfailed, 0 failed. The case-fold tests are `test_status_variant_stores_the_canonical_word`, `test_available_variant_is_dropped`, `test_non_string_status_is_dropped`, and `test_lowercase_out_blocks_the_pick_like_canonical_out` in `backend/tests/test_spo137a_status_case.py`. The earlier count on this branch, before that file, was 1475 passed and 33 skipped. The count before the blank-status and leading-`out` rules was 1491 passed and 33 skipped. `test_spo137a_qa_status_fold.py` came in with `git am`. Four of its expectations were then aligned with the stored rules: blank status stays as Questionable, `Day To Day` is `Day-To-Day`, and `Questionable (out last game)` and `Out of rotation` are Questionable.
 
 Integration test: SKIPPED (env unset). Fabrication scan: PASS. The new tests do not invent an injury word. They read the recorded page.
 
