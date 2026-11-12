@@ -76,11 +76,15 @@ Two older tests were updated after that commit. The Ask assertion looked for `as
 
 ## QA follow-up
 
-A raw word of `out` can sit next to a stored status of Questionable, because the backend match for Out is case-sensitive. That pick is not excluded. The share card and the event rail were treating a tag tone of `out` as exclusion, so the share card dropped the percent and the rail dropped the lean. Both now use the stored-status check (`outIds` on the share card, `listedOut` on the rail). The chip still shows the display word.
+A raw word of `out` can sit next to a stored status of Questionable, because the backend match for Out is case-sensitive. That pick is not excluded. The share card takes the same `outIds` set the slip average uses. The rail uses `listedOut`, which comes from `injury_status`. The chip word and style still come from the tag. A leg that is not excluded shows the tag beside the percent and the lean.
 
 `Out For Season` is stored as Out, so the row stays excluded. The chip keeps the raw words `Out For Season` on the board, the rail, the read, and the slip. A stored Out with no raw word still says Out.
 
-The review named `pr85_qa_tests1.patch`, and that file was not attached. `frontend/lib/injury-tag.qa.test.tsx` covers the seven cases the review listed, including the two that failed before this fix. `npx vitest run` is 71 files and 601 tests. `npx tsc --noEmit`, `npm run lint`, and `npm run build` passed. `/wnba` routes stay in the route table.
+`uploads/pr85_qa_tests1.patch` applied with `git am` and no edits. That commit is `8b23034`. Its seven tests pass, including the share-card percent and the rail lean.
+
+Probable uses a dotted blue chip (`#12355B` on `#E7F2FB`) so it is not the pale green LINEUP ALIGNED pill. The chip has a screen-reader-only `Injury:` prefix, clipped inside the chip so the prefix does not widen the page.
+
+`npx vitest run` is 71 files and 601 tests. `npx tsc --noEmit`, `npm run lint`, and `npm run build` passed. `/wnba` routes stay in the route table.
 
 ## Screenshots
 
@@ -88,7 +92,7 @@ The review named `pr85_qa_tests1.patch`, and that file was not attached. `fronte
 
 Before, on `43fa47c`, Adebayo's tag is Questionable, Probable and Day-To-Day are hidden, and the slip caption does not mention Out legs.
 
-After, the board shows all five words, the event rail and the read show Adebayo as Doubtful, and the slip caption ends with `Avg and all hit leave out Out legs.`
+After, the board shows all five words, the event rail and the read show Adebayo as Doubtful, and the slip caption ends with `Avg and all hit leave out Out legs.` The picks and event shots were retaken after Probable moved to the dotted blue chip.
 
 ![Picks before, 1440](assets/SPO-137b/picks-before-1440.png)
 
