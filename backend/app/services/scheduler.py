@@ -22,19 +22,100 @@ Scheduling strategy:
 """
 
 import asyncio
-from datetime import datetime, timezone
+import logging
+from datetime import datetime, timedelta, timezone
 from typing import Optional
+from zoneinfo import ZoneInfo
+
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.cron import CronTrigger
+from apscheduler.triggers.date import DateTrigger
 from apscheduler.triggers.interval import IntervalTrigger
 
 from app.services.daily_analysis import daily_analysis_service
 from app.services.csv_downloader import csv_downloader_service
 from app.services.odds_gateway import odds_gateway
-from app.services.projection_service import projection_service
 from app.services.odds_snapshot_service import odds_snapshot_service
-from app.services.cache import cache_service
 from app.services.lineup_service import lineup_service, wnba_lineup_service
+from app.services.slate_date import nba_slate_date
+from app.services.nba_injuries import (
+    NBA_INJURIES_CACHE_KEY,
+    injury_snapshot_is_fresh,
+    refresh_nba_injuries_from_bdl,
+)
+from app.settings import settings
+
+logger = logging.getLogger(__name__)
+
+# NBA injury refresh shares the Chicago hours already used by the NBA
+# lineup jobs in this file:
+#   lineup_fetch_active_window  hour 11-21
+#   lineup_fetch_pre_tipoff     hour 22, 23, and 0
+# Together that is 11:00 through 00:59 America/Chicago.
+# nba_slate_date uses America/New_York. Chicago stays one hour behind
+# Eastern in both standard and daylight time, so the same window is
+# 12:00 through 01:59 America/New_York.
+# Minutes are :07 and :37 so the job does not land on :00, :05, :15,
+# :30, :35, or :45, which the other jobs already use. Two ticks an hour
+# is one refresh every 30 minutes, which is the cap. Those marks stay.
+# A daily snapshot on another machine uses the same key, cannot see this
+# Redis limiter, and runs once between 4:45 and 5:30 PM CT. It makes at
+# most 5 calls, 20 seconds apart, and can land on :07. The injury client
+# answers that 429 with one bounded retry. See BdlClient rate_limit_policy.
+NBA_INJURY_REFRESH_TZ = ZoneInfo("America/Chicago")
+NBA_INJURY_REFRESH_HOURS = frozenset(
+    {0, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23}
+)
+NBA_INJURY_REFRESH_CRON_HOUR = "11-23,0"
+NBA_INJURY_REFRESH_CRON_MINUTE = "7,37"
+# A restart that misses :07 or :37 by less than 25 minutes runs that
+# tick once. coalesce is set on the job, so several missed ticks become
+# one run and the job does not burst. One second dropped a tick the
+# process had just missed. 25 minutes is inside the 30-minute gap, so
+# the next scheduled tick is not also due.
+NBA_INJURY_REFRESH_MISFIRE_GRACE_SECONDS = 25 * 60
+
+
+def nba_injury_refresh_in_window(now: datetime | None = None) -> bool:
+    """True when ``now`` falls in the NBA injury slate window.
+
+    ``now`` defaults to the current time. A naive datetime is read as
+    UTC. The window is the Chicago hours of the existing NBA lineup
+    crons (11:00 through 00:59 America/Chicago). Outside that window
+    the scheduled job must not call BALLDONTLIE.
+
+    Args:
+        now: Instant to test. None means the current time.
+
+    Returns:
+        True during the slate window, including 11:00 and 00:59 Chicago.
+    """
+    moment = now if now is not None else datetime.now(timezone.utc)
+    if moment.tzinfo is None:
+        moment = moment.replace(tzinfo=timezone.utc)
+    local = moment.astimezone(NBA_INJURY_REFRESH_TZ)
+    return local.hour in NBA_INJURY_REFRESH_HOURS
+
+
+def _snapshot_is_younger_than(raw: object, minutes: int) -> bool:
+    """True when ``raw`` is a snapshot stored less than ``minutes`` ago.
+
+    A missing body, a body without an ``entries`` list, and an unreadable
+    ``fetched_at`` are not young, so the refresh is allowed to replace them.
+    """
+    if not isinstance(raw, dict) or not isinstance(raw.get("entries"), list):
+        return False
+    fetched_at = raw.get("fetched_at")
+    if not isinstance(fetched_at, str) or not fetched_at.strip():
+        return False
+    try:
+        parsed = datetime.fromisoformat(fetched_at.replace("Z", "+00:00"))
+    except ValueError:
+        return False
+    if parsed.tzinfo is None:
+        parsed = parsed.replace(tzinfo=timezone.utc)
+    age = datetime.now(timezone.utc) - parsed.astimezone(timezone.utc)
+    return age < timedelta(minutes=minutes)
 
 
 class SchedulerService:
@@ -62,6 +143,11 @@ class SchedulerService:
         """
         self._scheduler: Optional[AsyncIOScheduler] = None
         self._is_running = False
+        # The startup fill runs at most once per process. It refreshes a
+        # missing key, and a stale key when the process is inside the
+        # slate window. A later start() on the same instance does not
+        # schedule it again.
+        self._injury_startup_fill_done = False
     
     def start(self):
         """
@@ -103,47 +189,13 @@ class SchedulerService:
         # tracks instances separately, different handler so a WNBA crash
         # is caught locally and never reaches the NBA job (and vice
         # versa). Same UTC 12:00 cron cadence; each call writes to its
-        # own cache namespace (`daily_picks:nba:...` vs
+        # own cache namespace (`daily_picks:nba:v2:...` vs
         # `daily_picks:wnba:...`), no shared mutable state.
         self._scheduler.add_job(
             self._run_wnba_daily_analysis_job,
             trigger=CronTrigger(hour=12, minute=0),
             id='wnba_daily_analysis_job',
             name='Daily High Probability Player Analysis (WNBA)',
-            replace_existing=True
-        )
-        
-        # Add projection data prefetch jobs (3 times a day)
-        # 
-        # Projection fetch strategy:
-        # - Early (UTC 16:00 ≈ US Eastern 11AM): Initial projections, ~8 hours before games
-        # - Mid (UTC 22:00 ≈ US Eastern 5PM): Updated projections, after most starters confirmed
-        # - Final (UTC 23:30 ≈ US Eastern 6:30PM): Final projections, right before games
-        #
-        # SportsDataIO's Projection API is a bulk endpoint,
-        # a single call returns projection data for all players of the day,
-        # so calling 3 times covers all needs.
-        self._scheduler.add_job(
-            self._run_projection_fetch_job,
-            trigger=CronTrigger(hour=16, minute=0),
-            id='projection_fetch_early',
-            name='Projection Data Prefetch (Early - Initial)',
-            replace_existing=True
-        )
-        
-        self._scheduler.add_job(
-            self._run_projection_fetch_job,
-            trigger=CronTrigger(hour=22, minute=0),
-            id='projection_fetch_mid',
-            name='Projection Data Prefetch (Mid - After Starters Confirmed)',
-            replace_existing=True
-        )
-        
-        self._scheduler.add_job(
-            self._run_projection_fetch_final_job,
-            trigger=CronTrigger(hour=23, minute=30),
-            id='projection_fetch_final',
-            name='Projection Data Prefetch (Final + Clear Daily Picks Cache)',
             replace_existing=True
         )
         
@@ -165,7 +217,7 @@ class SchedulerService:
             replace_existing=True
         )
         
-        # Add odds snapshot jobs (3 times, same times as projection prefetch)
+        # Add odds snapshot jobs (3 times a day)
         #
         # Odds snapshot strategy (Line Movement Tracking):
         # - Early (UTC 16:00 ≈ US Eastern 11AM): Early line, after injury reports
@@ -174,7 +226,7 @@ class SchedulerService:
         #
         # Each snapshot calls odds API once per event for 4 markets,
         # calculates no-vig for all bookmaker/player/market, and batch writes to PostgreSQL.
-        # Failure does not affect projection prefetch or daily analysis.
+        # Failure does not affect daily analysis.
         self._scheduler.add_job(
             self._run_odds_snapshot_job,
             trigger=CronTrigger(hour=16, minute=5),
@@ -289,7 +341,43 @@ class SchedulerService:
             name='WNBA Lineup Refresh (every 5 minutes, pre-tipoff)',
             replace_existing=True
         )
-        
+
+        # NBA injury snapshot. Cron only fires inside the slate window,
+        # at :07 and :37 Chicago (every 30 minutes). misfire_grace_time
+        # is 25 minutes and coalesce is true, so a restart that just
+        # missed :07 or :37 runs that tick once and does not burst.
+        # The one startup fill is a separate date job.
+        self._scheduler.add_job(
+            self._run_nba_injuries_refresh_job,
+            trigger=CronTrigger(
+                hour=NBA_INJURY_REFRESH_CRON_HOUR,
+                minute=NBA_INJURY_REFRESH_CRON_MINUTE,
+                timezone=NBA_INJURY_REFRESH_TZ,
+            ),
+            id='nba_injuries_refresh',
+            name='NBA Injury Snapshot Refresh',
+            replace_existing=True,
+            misfire_grace_time=NBA_INJURY_REFRESH_MISFIRE_GRACE_SECONDS,
+            max_instances=1,
+            coalesce=True,
+        )
+        if not self._injury_startup_fill_done:
+            self._injury_startup_fill_done = True
+            self._scheduler.add_job(
+                self._fill_nba_injuries_if_missing,
+                trigger=DateTrigger(
+                    run_date=datetime.now(timezone.utc) + timedelta(seconds=1)
+                ),
+                id='nba_injuries_startup_fill',
+                # The job fills a missing key, and a stale key inside
+                # the slate window. The id stays the same job.
+                name='NBA Injury Snapshot Startup Refill',
+                replace_existing=True,
+                misfire_grace_time=60,
+                max_instances=1,
+                coalesce=True,
+            )
+
         # Start the scheduler
         self._scheduler.start()
         self._is_running = True
@@ -303,6 +391,9 @@ class SchedulerService:
         print("   - Daily Analysis (NBA): Daily UTC 12:00")
         print("   - Daily Analysis (WNBA): Daily UTC 12:00 (independent of NBA)")
         print("   - CSV Download: Daily 10:00 Chicago time")
+        print(
+            "   - NBA Injury Refresh: Chicago 11:00-00:59 at :07 and :37"
+        )
         
         # List all scheduled jobs
         jobs = self._scheduler.get_jobs()
@@ -310,6 +401,110 @@ class SchedulerService:
             print(f"   📌 {job.id}: {job.name}")
             print(f"      Next run: {job.next_run_time}")
     
+    async def _fill_nba_injuries_if_missing(self) -> None:
+        """Refresh once when the key is missing, or stale inside the window.
+
+        A missing key refreshes even outside the slate window, so a
+        cold process is not blind. A present key that readers would
+        reject (older than six hours, or not an entries list) refreshes
+        only while ``nba_injury_refresh_in_window`` is true. Outside
+        the window that stale key is left in place. ``injury_status``
+        then stays null until the next in-window :07 or :37, which is
+        11:07 America/Chicago after an overnight restart. A tick missed
+        by less than 25 minutes still runs once, because the cron grace
+        was raised and coalesce is on. This is not called from the
+        HTTP daily-picks or /reads path. It runs at most once per
+        process. The 429 rule is unchanged: one retry, a wait of at
+        most 60 seconds, and the previous snapshot stays.
+        """
+        from app.services.cache import cache_service
+
+        try:
+            raw = await cache_service.get(NBA_INJURIES_CACHE_KEY)
+        except Exception as exc:
+            logger.warning(
+                "NBA injury startup read failed (%s); no refresh",
+                type(exc).__name__,
+            )
+            return
+        if raw is None:
+            await self._run_nba_injuries_refresh_job(force=True)
+            return
+        if not nba_injury_refresh_in_window():
+            return
+        if injury_snapshot_is_fresh(raw):
+            return
+        await self._run_nba_injuries_refresh_job(force=True)
+
+    async def _run_nba_injuries_refresh_job(
+        self,
+        *,
+        now: datetime | None = None,
+        force: bool = False,
+    ) -> dict | None:
+        """Refresh the NBA injury snapshot, or skip without calling.
+
+        The cron passes no arguments, so ``force`` is false and a tick
+        outside the slate window returns before any HTTP client is
+        built. ``force`` is the one startup fill, for a missing key or
+        for a stale key inside the slate window.
+        A snapshot younger than ``nba_injuries_refresh_minutes`` (30)
+        is left in place so two ticks cannot land inside that gap.
+        No API key means no call. Failures log the exception type only.
+        The client uses the injury rate-limit policy: one 429 is retried
+        after Retry-After, a future reset, or 30 to 59 seconds, and that
+        wait is at most 60 seconds. A second 429 raises, the refresh
+        writes nothing, and the previous snapshot stays. There is no
+        second retry loop around the client, so this job cannot sleep
+        through the next 30-minute tick.
+
+        Args:
+            now: Clock for the window check. None is the current time.
+            force: True only for the startup fill. The caller has
+                already decided the key is missing, or stale inside
+                the slate window.
+
+        Returns:
+            The stored body, or None when nothing was written.
+        """
+        moment = now if now is not None else datetime.now(timezone.utc)
+        if not force and not nba_injury_refresh_in_window(moment):
+            logger.info("nba_injuries_refresh skipped outside the slate window")
+            return None
+        key = settings.balldontlie_api_key.get_secret_value().strip()
+        if not key:
+            logger.warning("nba_injuries_refresh skipped; BALLDONTLIE_API_KEY is unset")
+            return None
+        from app.services.bdl_client import BdlClient
+        from app.services.cache import cache_service
+
+        if not force:
+            try:
+                current = await cache_service.get(NBA_INJURIES_CACHE_KEY)
+            except Exception as exc:
+                logger.warning(
+                    "NBA injury refresh read failed (%s); previous cache left in place",
+                    type(exc).__name__,
+                )
+                return None
+            if _snapshot_is_younger_than(current, settings.nba_injuries_refresh_minutes):
+                logger.info("nba_injuries_refresh skipped; snapshot is inside the interval")
+                return None
+        # rate_limit_policy="injury": one 429 retry, wait at most 60s.
+        # The other machine's daily snapshot cannot see this Redis limiter
+        # and can land on :07. A second 429 keeps the previous snapshot.
+        client = BdlClient(api_key=key, rate_limit_policy="injury")
+        try:
+            return await refresh_nba_injuries_from_bdl(client, cache_service)
+        except Exception as exc:
+            logger.warning(
+                "nba_injuries_refresh failed (%s); previous cache left in place",
+                type(exc).__name__,
+            )
+            return None
+        finally:
+            await client.aclose()
+
     def stop(self):
         """
         Stop the scheduler
@@ -335,8 +530,8 @@ class SchedulerService:
         print("=" * 50)
         
         try:
-            # Run today's analysis
-            today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+            # US slate date (America/New_York), including after midnight UTC.
+            today = nba_slate_date()[0]
             result = await daily_analysis_service.run_daily_analysis(
                 date=today,
                 use_cache=False  # Forced re-analysis in scheduled jobs
@@ -378,7 +573,7 @@ class SchedulerService:
         print("=" * 50)
 
         try:
-            today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+            today = nba_slate_date()[0]
             result = await daily_analysis_service.run_daily_analysis(
                 date=today,
                 use_cache=False,  # Forced re-analysis in scheduled jobs
@@ -435,62 +630,6 @@ class SchedulerService:
         
         print("=" * 50 + "\n")
     
-    async def _run_projection_fetch_job(self):
-        """
-        Run projection data prefetch job
-        
-        Calls projection_service.fetch_and_store() to get today's projections.
-        Data is written to Redis and PostgreSQL.
-        """
-        print("\n" + "=" * 50)
-        print(f"📊 Starting projection data prefetch: {datetime.now(timezone.utc).isoformat()}")
-        print("=" * 50)
-        
-        try:
-            today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
-            projections = await projection_service.fetch_and_store(today)
-            
-            print(f"✅ Projection data prefetch completed! {len(projections)} players")
-        
-        except Exception as e:
-            print(f"❌ Projection data prefetch failed: {e}")
-            import traceback
-            traceback.print_exc()
-        
-        print("=" * 50 + "\n")
-    
-    async def _run_projection_fetch_final_job(self):
-        """
-        Run final projection data prefetch
-        
-        Same as _run_projection_fetch_job, but also clears daily picks cache,
-        so the next request for daily picks will use the latest projections.
-        """
-        print("\n" + "=" * 50)
-        print(f"📊 Starting final projection data prefetch: {datetime.now(timezone.utc).isoformat()}")
-        print("=" * 50)
-        
-        try:
-            today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
-            projections = await projection_service.fetch_and_store(today)
-            
-            print(f"✅ Final projection data prefetch completed! {len(projections)} players")
-            
-            # SPO-35: scope to NBA — projection prefetch only writes
-            # NBA projections (no SportsDataIO WNBA wrapper today, see
-            # daily_analysis._LEAGUES_WITH_PROJECTIONS), so the WNBA
-            # picks cache must NOT be invalidated here.
-            deleted = await cache_service.clear_daily_picks_cache(league="nba")
-            if deleted > 0:
-                print(f"🗑️ Cleared {deleted} daily picks cache")
-        
-        except Exception as e:
-            print(f"❌ Final projection data prefetch failed: {e}")
-            import traceback
-            traceback.print_exc()
-        
-        print("=" * 50 + "\n")
-    
     async def _run_odds_snapshot_job(self):
         """
         Run odds snapshot job
@@ -539,7 +678,7 @@ class SchedulerService:
         print("=" * 50)
 
         try:
-            today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+            today = nba_slate_date()[0]
             lineups = await lineup_service.fetch_and_store(today)
             print(f"✅ Free lineup refresh completed! {len(lineups)} teams")
         except Exception as e:
@@ -561,7 +700,7 @@ class SchedulerService:
         print("=" * 50)
 
         try:
-            today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+            today = nba_slate_date()[0]
             lineups = await wnba_lineup_service.fetch_and_store(today)
             print(f"✅ WNBA lineup refresh completed! {len(lineups)} teams")
         except Exception as e:
@@ -588,23 +727,9 @@ class SchedulerService:
             return await odds_snapshot_service.take_snapshot()
         return await odds_snapshot_service.take_snapshot(date)
 
-    async def trigger_projection_fetch_now(self, date: Optional[str] = None) -> dict:
-        """
-        Manually trigger projection data prefetch
-        
-        Args:
-            date: Date (YYYY-MM-DD), None means today
-        
-        Returns:
-            Projections dict
-        """
-        if date is None:
-            date = datetime.now(timezone.utc).strftime("%Y-%m-%d")
-        return await projection_service.fetch_and_store(date)
-
     async def trigger_lineup_fetch_now(self, date: Optional[str] = None) -> dict:
         if date is None:
-            date = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+            date = nba_slate_date()[0]
         return await lineup_service.fetch_and_store(date)
     
     async def trigger_now(self):

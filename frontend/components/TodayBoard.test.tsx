@@ -96,7 +96,12 @@ describe("TodayBoard", () => {
     renderWithProviders(<TodayBoard league="nba" />);
 
     const web = await screen.findByTestId("today-web");
-    expect(within(web).getByText("TUE · NOV 10 · 3 GAMES")).toBeInTheDocument();
+    const eyebrow = within(web).getByTestId("today-hero-eyebrow");
+    expect(eyebrow).toHaveTextContent("TUE · NOV 10 · 3 GAMES");
+    expect(eyebrow.className).toContain("text-accent");
+    expect(eyebrow.className).not.toMatch(/(?:^|\s)text-eyebrow(?:\s|$)/);
+    expect(eyebrow.className).not.toContain("#7B4FC4");
+    expect(eyebrow.className).not.toContain("#7b4fc4");
     expect(within(web).queryByText(/NOV 11/)).not.toBeInTheDocument();
     expect(within(web).getByRole("link", { name: /all 3 picks/i })).toHaveAttribute("href", "/picks");
 

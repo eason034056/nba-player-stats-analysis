@@ -30,6 +30,7 @@ from app.services.daily_analysis import (
     attach_top_reads,
     best_top_reads,
     board_score,
+    daily_picks_cache_key,
     market_key_for_metric,
     present_daily_picks,
     read_tier,
@@ -309,10 +310,6 @@ class TestStoredCandidates:
             "app.services.daily_analysis.cache_service.set",
             AsyncMock(),
         )
-        monkeypatch.setattr(
-            "app.services.daily_analysis.projection_service.get_projections",
-            AsyncMock(return_value={}),
-        )
         service._get_events_for_date = AsyncMock(return_value=[_recorded_event()])
 
         async def props(event_id, market_key, league="nba"):
@@ -559,7 +556,7 @@ class TestTopRead:
             raise AssertionError("top_read must not request props")
 
         store: dict = {
-            "daily_picks:nba:2026-11-10:tz480": {
+            daily_picks_cache_key("nba", "2026-11-10", 480): {
                 "picks": [
                     {
                         "event_id": _EVENT_ID,

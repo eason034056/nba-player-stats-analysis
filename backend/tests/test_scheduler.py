@@ -33,9 +33,7 @@ SERVICES_TO_PATCH = [
     "app.services.scheduler.daily_analysis_service",
     "app.services.scheduler.csv_downloader_service",
     "app.services.scheduler.odds_gateway",
-    "app.services.scheduler.projection_service",
     "app.services.scheduler.odds_snapshot_service",
-    "app.services.scheduler.cache_service",
     "app.services.scheduler.lineup_service",
 ]
 
@@ -115,9 +113,6 @@ class TestStartStop:
 
             expected_ids = {
                 "daily_analysis_job",
-                "projection_fetch_early",
-                "projection_fetch_mid",
-                "projection_fetch_final",
                 "csv_download_job",
                 "odds_snapshot_early",
                 "odds_snapshot_mid",
@@ -368,29 +363,6 @@ class TestManualTriggers:
         mock_csv.download.assert_awaited_once()
 
     @pytest.mark.asyncio
-    async def test_trigger_projection_fetch_now_default_date(
-        self, scheduler_cls, mock_services
-    ):
-        svc = scheduler_cls()
-        mock_proj = mock_services["app.services.scheduler.projection_service"]
-        mock_proj.fetch_and_store = AsyncMock(return_value={"players": []})
-        result = await svc.trigger_projection_fetch_now()
-        mock_proj.fetch_and_store.assert_awaited_once()
-        # Verify it was called with today's date
-        call_date = mock_proj.fetch_and_store.call_args[0][0]
-        assert call_date == datetime.now(timezone.utc).strftime("%Y-%m-%d")
-
-    @pytest.mark.asyncio
-    async def test_trigger_projection_fetch_now_custom_date(
-        self, scheduler_cls, mock_services
-    ):
-        svc = scheduler_cls()
-        mock_proj = mock_services["app.services.scheduler.projection_service"]
-        mock_proj.fetch_and_store = AsyncMock(return_value={"players": []})
-        await svc.trigger_projection_fetch_now(date="2025-01-01")
-        mock_proj.fetch_and_store.assert_awaited_once_with("2025-01-01")
-
-    @pytest.mark.asyncio
     async def test_trigger_odds_snapshot_now_default_date(
         self, scheduler_cls, mock_services
     ):
@@ -467,26 +439,6 @@ class TestJobErrorHandling:
         mock_csv.download = AsyncMock(side_effect=RuntimeError("network error"))
         # Should not raise
         await svc._run_csv_download_job()
-
-    @pytest.mark.asyncio
-    async def test_projection_fetch_job_handles_exception(
-        self, scheduler_cls, mock_services
-    ):
-        svc = scheduler_cls()
-        mock_proj = mock_services["app.services.scheduler.projection_service"]
-        mock_proj.fetch_and_store = AsyncMock(side_effect=RuntimeError("API down"))
-        # Should not raise
-        await svc._run_projection_fetch_job()
-
-    @pytest.mark.asyncio
-    async def test_projection_fetch_final_job_handles_exception(
-        self, scheduler_cls, mock_services
-    ):
-        svc = scheduler_cls()
-        mock_proj = mock_services["app.services.scheduler.projection_service"]
-        mock_proj.fetch_and_store = AsyncMock(side_effect=RuntimeError("fail"))
-        # Should not raise
-        await svc._run_projection_fetch_final_job()
 
     @pytest.mark.asyncio
     async def test_odds_snapshot_job_handles_exception(
@@ -580,21 +532,6 @@ class TestJobSuccessPaths:
         assert "CSV download job did not report success" in out
         assert "network" not in out.lower()
         assert "please check" not in out.lower()
-
-    @pytest.mark.asyncio
-    async def test_projection_fetch_final_clears_cache(
-        self, scheduler_cls, mock_services
-    ):
-        svc = scheduler_cls()
-        mock_proj = mock_services["app.services.scheduler.projection_service"]
-        mock_proj.fetch_and_store = AsyncMock(return_value=[{"player": "A"}])
-        mock_cache = mock_services["app.services.scheduler.cache_service"]
-        mock_cache.clear_daily_picks_cache = AsyncMock(return_value=3)
-
-        await svc._run_projection_fetch_final_job()
-
-        mock_proj.fetch_and_store.assert_awaited_once()
-        mock_cache.clear_daily_picks_cache.assert_awaited_once()
 
     @pytest.mark.asyncio
     async def test_hot_key_prewarm_success_nonzero(

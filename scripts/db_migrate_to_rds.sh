@@ -20,6 +20,15 @@ sslmode=require. An existing sslmode (including verify-full) is kept.
 Then, for every table in schema public, compares row count and max(id)
 (when an id column exists). For every sequence in schema public, compares
 last_value. Prints name|metric|local|rds|status and exits 1 on any mismatch.
+Exits 1 when the number of tables compared is not the number listed on
+the local side or not the number listed on the RDS side. Exits 1 when
+either side lists zero public tables. The error line is the two counts.
+It does not include a URL or a password. An empty public schema is not
+a successful verify.
+Exits 1 when the number of sequences compared is not the number listed
+on the local side or not the number listed on the RDS side.
+Zero sequences is allowed only when both sides list zero.
+Sequences can legitimately be absent.
 
 --verify-only skips pg_dump and pg_restore (and the pg_restore 16 gate).
 It still checks the URLs, sslmode, and client mode, then runs only the
@@ -306,31 +315,51 @@ cleanup() {
 }
 trap cleanup EXIT
 
+# -c carries the query in an argument. docker exec -i and docker run -i
+# still read the caller's stdin, which would consume a name list the
+# caller is reading. Those calls use /dev/null. run_psql_stdin keeps the
+# pipe, because that SQL has to arrive on stdin.
+run_with_stdin_mode() {
+  local mode="$1"
+  shift
+  if [[ "$mode" == "nullstdin" ]]; then
+    "$@" </dev/null
+  else
+    "$@"
+  fi
+}
+
 run_psql() {
   local url="$1"
   shift
   local err
   err="$(mktemp)"
   tmp_files+=("$err")
-  local out status
+  local out status arg stdin_mode="keep"
+  for arg in "$@"; do
+    if [[ "$arg" == "-c" ]]; then
+      stdin_mode="nullstdin"
+      break
+    fi
+  done
   set +e
   case "$PG_CLIENT" in
     host)
       export_libpq "$url"
-      out="$("$PSQL" "$@" 2>"$err")"
+      out="$(run_with_stdin_mode "$stdin_mode" "$PSQL" "$@" 2>"$err")"
       status=$?
       ;;
     docker-exec)
       export PSQL_TARGET="$url"
-      out="$(docker exec -e PSQL_TARGET -i "$LOCAL_PG_CONTAINER" sh -c 'exec psql "$PSQL_TARGET" "$@"' psql "$@" 2>"$err")"
+      out="$(run_with_stdin_mode "$stdin_mode" docker exec -e PSQL_TARGET -i "$LOCAL_PG_CONTAINER" sh -c 'exec psql "$PSQL_TARGET" "$@"' psql "$@" 2>"$err")"
       status=$?
       ;;
     docker-run)
       export PSQL_TARGET="$url"
       if [[ "$url" == "$local_url" ]]; then
-        out="$(docker run --rm --network "container:${LOCAL_PG_CONTAINER}" -e PSQL_TARGET -i "$PG_DOCKER_IMAGE" sh -c 'exec psql "$PSQL_TARGET" "$@"' psql "$@" 2>"$err")"
+        out="$(run_with_stdin_mode "$stdin_mode" docker run --rm --network "container:${LOCAL_PG_CONTAINER}" -e PSQL_TARGET -i "$PG_DOCKER_IMAGE" sh -c 'exec psql "$PSQL_TARGET" "$@"' psql "$@" 2>"$err")"
       else
-        out="$(docker run --rm -e PSQL_TARGET -i "$PG_DOCKER_IMAGE" sh -c 'exec psql "$PSQL_TARGET" "$@"' psql "$@" 2>"$err")"
+        out="$(run_with_stdin_mode "$stdin_mode" docker run --rm -e PSQL_TARGET -i "$PG_DOCKER_IMAGE" sh -c 'exec psql "$PSQL_TARGET" "$@"' psql "$@" 2>"$err")"
       fi
       status=$?
       ;;
@@ -448,6 +477,12 @@ contains_line() {
   printf '%s\n' "$haystack" | grep -Fxq -- "$needle"
 }
 
+# Count non-empty lines in an argument. Callers pass the text, so this
+# does not read the list a surrounding loop is walking.
+line_count() {
+  printf '%s\n' "$1" | sed '/^$/d' | wc -l | tr -d '[:space:]'
+}
+
 mismatch=0
 report() {
   local name="$1"
@@ -464,12 +499,26 @@ report() {
 
 local_tables="$(list_tables "$local_url")"
 rds_tables="$(list_tables "$rds_url")"
+local_table_n="$(line_count "$local_tables")"
+rds_table_n="$(line_count "$rds_tables")"
+
+# Wrong database, wrong schema, or an empty target. Counts only: a URL
+# or a password must not appear in this line.
+if [[ "$local_table_n" -eq 0 || "$rds_table_n" -eq 0 ]]; then
+  echo "error: local lists ${local_table_n} public tables and rds lists ${rds_table_n} public tables." >&2
+  exit 1
+fi
+
 all_tables="$(printf '%s\n%s\n' "$local_tables" "$rds_tables" | sed '/^$/d' | sort -u)"
 
 echo "name|metric|local|rds|status"
 
-while IFS= read -r table; do
+# fd 3 holds the name list. A docker -i client inside the loop cannot
+# read it. The sequence loop below uses the same split.
+tables_compared=0
+while IFS= read -r -u 3 table; do
   [[ -z "$table" ]] && continue
+  tables_compared=$((tables_compared + 1))
   local_count="MISSING"
   rds_count="MISSING"
   local_ident=""
@@ -503,16 +552,22 @@ while IFS= read -r table; do
     rds_max="$(run_psql "$rds_url" -v ON_ERROR_STOP=1 -A -t -c "SELECT COALESCE(max(id)::text, '') FROM public.${rds_ident}")"
   fi
   report "$table" "max_id" "$local_max" "$rds_max"
-done <<EOF
+done 3<<EOF
 $all_tables
 EOF
 
 local_seqs="$(list_sequences "$local_url")"
 rds_seqs="$(list_sequences "$rds_url")"
 all_seqs="$(printf '%s\n%s\n' "$local_seqs" "$rds_seqs" | sed '/^$/d' | sort -u)"
+local_seq_n="$(line_count "$local_seqs")"
+rds_seq_n="$(line_count "$rds_seqs")"
 
-while IFS= read -r seq; do
+# Same split as the table loop: fd 3, so a docker -i client cannot eat
+# the next name. seqs_compared is the backstop for a short read.
+seqs_compared=0
+while IFS= read -r -u 3 seq; do
   [[ -z "$seq" ]] && continue
+  seqs_compared=$((seqs_compared + 1))
   local_value="MISSING"
   rds_value="MISSING"
   if contains_line "$local_seqs" "$seq"; then
@@ -522,9 +577,22 @@ while IFS= read -r seq; do
     rds_value="$(run_psql_stdin "$rds_url" "SELECT COALESCE(last_value::text, '') FROM pg_sequences WHERE schemaname = 'public' AND sequencename = :'seq'" -v ON_ERROR_STOP=1 -v seq="$seq" -A -t)"
   fi
   report "$seq" "last_value" "$local_value" "$rds_value"
-done <<EOF
+done 3<<EOF
 $all_seqs
 EOF
+
+if [[ "$tables_compared" -ne "$local_table_n" || "$tables_compared" -ne "$rds_table_n" ]]; then
+  echo "error: compared ${tables_compared} public tables; local lists ${local_table_n} and rds lists ${rds_table_n}." >&2
+  exit 1
+fi
+
+# Zero sequences is a match only when both sides list zero. A database
+# can legitimately have no sequences. A one-sided list fails here,
+# because compared would not equal both counts.
+if [[ "$seqs_compared" -ne "$local_seq_n" || "$seqs_compared" -ne "$rds_seq_n" ]]; then
+  echo "error: compared ${seqs_compared} public sequences; local lists ${local_seq_n} and rds lists ${rds_seq_n}." >&2
+  exit 1
+fi
 
 if [[ "$mismatch" -ne 0 ]]; then
   echo "error: at least one public table or sequence does not match." >&2

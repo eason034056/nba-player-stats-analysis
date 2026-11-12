@@ -632,6 +632,7 @@ async def test_log_snapshot_writes_to_db(monkeypatch):
     assert call_args[5] == "success"
     assert call_args[6] is None
     assert call_args[7] == 1500
+    assert call_args[8] == "nba"
 
 
 @pytest.mark.asyncio

@@ -20,6 +20,7 @@ Dependencies:
 """
 
 import asyncio
+import logging
 import math
 import re
 import time
@@ -27,7 +28,12 @@ from datetime import datetime, timezone, timedelta
 from typing import List, Dict, Any, Optional, Tuple
 from collections import Counter, defaultdict
 
+from pydantic import ValidationError
+
+logger = logging.getLogger(__name__)
+
 from app.services.odds_gateway import odds_gateway
+from app.services.slate_date import nba_slate_date
 from app.services.odds_theoddsapi import odds_provider
 from app.services.odds_provider import OddsAPIError
 from app.services.csv_player_history import (
@@ -41,7 +47,7 @@ from app.services.prob import (
     posted_american_odds,
 )
 from app.services.cache import cache_service
-from app.services.projection_service import projection_service
+from app.services.defense_ranks import defense_fields
 from app.models.schemas import (
     AnalysisStats,
     DailyPick,
@@ -49,7 +55,14 @@ from app.models.schemas import (
     EventsResponse,
     TopRead,
 )
-from app.services.pick_signals import build_nba_signals
+from app.services.nba_injuries import (
+    NBA_INJURIES_CACHE_KEY,
+    injury_snapshot_is_fresh,
+    load_nba_pick_injuries,
+    match_injury_entry,
+    matched_injury_words,
+)
+from app.services.pick_signals import build_nba_signals, injury_blocks_combined
 
 
 # ==================== League routing (SPO-35) ====================
@@ -78,15 +91,6 @@ _CSV_SERVICE_BY_LEAGUE: Dict[str, Any] = {
     "nba": csv_player_service,
     "wnba": wnba_csv_player_service,
 }
-
-# Leagues with wired projections (SportsDataIO Projection API).
-# WNBA is intentionally absent here: the wrapper hasn't been ported and
-# SPO-35 explicitly defers it (graceful-degrade to history-only, see
-# decision_20260514_db-schema-audit.md §6 step 1). When WNBA projections
-# land, add "wnba" here and the pre-fetch loop below will pick it up
-# without other changes.
-_LEAGUES_WITH_PROJECTIONS: set[str] = {"nba"}
-
 
 def _resolve_sport_key(league: str) -> str:
     """Look up The Odds API sport key for a league, raising on unknown."""
@@ -173,26 +177,6 @@ def market_key_for_metric(metric: str | None) -> str | None:
         return None
     return _METRIC_TO_MARKET_KEY.get(metric)
 
-
-# Alias map: CSV metric key -> SportsDataIO projection field name.
-# Most metrics use the same key in both places (points, rebounds, etc.) but
-# a handful diverge — chiefly the SPO-16 additions where the CSV key is the
-# concise frontend label (`threes_made`) but the projection field follows the
-# SportsDataIO API convention (`three_pointers_made`). Without this map, the
-# `edge` column on new-metric picks would be permanently None even when a
-# projection exists.
-# ⚠ ra/pr/pa: projection_provider.normalize_projection() writes these combos
-# as r_a / p_r / p_a (underscored). Forgetting the alias here silently nulls
-# `edge` and `projected_value` on every R+A / P+R / P+A pick — the SPO-17
-# regression. Keep these three rows in sync with normalize_projection.
-PROJECTION_FIELD_ALIASES: Dict[str, str] = {
-    "threes_made": "three_pointers_made",
-    "ftm": "free_throws_made",
-    "fgm": "field_goals_made",
-    "ra": "r_a",
-    "pr": "p_r",
-    "pa": "p_a",
-}
 
 # High probability threshold
 HIGH_PROBABILITY_THRESHOLD = 0.65
@@ -284,6 +268,10 @@ def choose_daily_pick_side(
 # Cache key prefix
 DAILY_PICKS_CACHE_KEY = "daily_picks"
 
+# NBA payloads from before injury_status_raw live under the unversioned
+# key. Readers and writers use v2 only. WNBA stays unversioned.
+NBA_DAILY_PICKS_CACHE_VERSION = "v2"
+
 # Cache TTL (15 minutes)
 DAILY_PICKS_CACHE_TTL = 15 * 60
 
@@ -291,15 +279,25 @@ DAILY_PICKS_CACHE_TTL = 15 * 60
 def daily_picks_cache_key(league: str, date: str, tz_offset_minutes: int) -> str:
     """Redis key for one league, local date, and timezone offset.
 
+    NBA keys include ``v2`` so a payload stored before
+    ``injury_status_raw`` is not read. WNBA keys stay
+    ``daily_picks:wnba:{date}:tz{offset}``.
+
     Args:
         league: ``nba`` or ``wnba``.
         date: Local date YYYY-MM-DD.
         tz_offset_minutes: Minutes east of UTC. UTC+8 is 480.
 
     Returns:
-        ``daily_picks:{league}:{date}:tz{offset}``.
+        ``daily_picks:nba:v2:{date}:tz{offset}`` or the unversioned WNBA key.
     """
-    return f"{DAILY_PICKS_CACHE_KEY}:{league.lower()}:{date}:tz{tz_offset_minutes}"
+    league_key = league.lower()
+    if league_key == "nba":
+        return (
+            f"{DAILY_PICKS_CACHE_KEY}:nba:{NBA_DAILY_PICKS_CACHE_VERSION}:"
+            f"{date}:tz{tz_offset_minutes}"
+        )
+    return f"{DAILY_PICKS_CACHE_KEY}:{league_key}:{date}:tz{tz_offset_minutes}"
 
 
 def _optional_stat(value: Any) -> float | None:
@@ -346,7 +344,8 @@ def sort_stored_picks(picks: List[DailyPick], league: str = "nba") -> None:
 
     ``best_top_reads`` still picks the highest historical probability.
     On a tie it keeps the earlier row of this list, so an NBA tie keeps
-    the higher blend.
+    the higher blend. A fresh injury snapshot skips a player whose
+    normalized status is Out. A missing or stale snapshot does not.
 
     Args:
         picks: Stored candidates. Sorted in place.
@@ -385,15 +384,26 @@ def select_daily_picks(
         league: ``nba`` (combined probability) or ``wnba`` (historical).
 
     Returns:
-        Picks that meet both floors, in the original order.
+        Picks that meet both floors, in the original order. An NBA row
+        whose ``injury_status`` is Out is kept when the sample floor
+        passes, even though its blend is null. Doubtful is Questionable
+        and uses the blend floor.
     """
-    return [
-        pick
-        for pick in picks
-        if (score := board_score(pick, league)) is not None
-        and score >= min_probability
-        and pick.n_games >= min_games
-    ]
+    kept: List[DailyPick] = []
+    for pick in picks:
+        if pick.n_games < min_games:
+            continue
+        # Out stays on the board with a null blend so injury_status is
+        # visible. A missing blend that is not Out still leaves the
+        # board. Doubtful is stored as Questionable and follows its
+        # blend, the same as any other Questionable row.
+        if league.lower() != "wnba" and injury_blocks_combined(pick.injury_status):
+            kept.append(pick)
+            continue
+        score = board_score(pick, league)
+        if score is not None and score >= min_probability:
+            kept.append(pick)
+    return kept
 
 
 def present_daily_picks(
@@ -554,6 +564,48 @@ def canonical_team_code(team_name: str, league: str = "nba") -> str:
     if league_key == "wnba":
         return normalized
     return TEAM_CODE_ALIASES.get(normalized, normalized)
+
+
+def _empty_rank_fields() -> Dict[str, Any]:
+    """Null defense-rank fields. Used when the fill does not run."""
+    return {
+        "opponent_rank": None,
+        "opponent_position_rank": None,
+        "opponent_rank_source": None,
+        "opponent_position_rank_source": None,
+        "opponent_rank_season": None,
+        "opponent_position_rank_season": None,
+        "opponent_rank_note": None,
+        "opponent_position_rank_note": None,
+    }
+
+
+def _opponent_club(
+    player_team: str,
+    home_team: str,
+    away_team: str,
+    league: str,
+) -> str | None:
+    """The other club in the event when ``player_team`` is one of the two.
+
+    Args:
+        player_team: Club label already limited to a team in this game.
+        home_team: Event home name.
+        away_team: Event away name.
+        league: ``nba`` or ``wnba``. The code table depends on it.
+
+    Returns:
+        The opponent name from the event, or None when the player's club
+        is blank or is not home and not away.
+    """
+    player_code = canonical_team_code(player_team, league=league)
+    if not player_code:
+        return None
+    if player_code == canonical_team_code(home_team, league=league) and away_team:
+        return away_team
+    if player_code == canonical_team_code(away_team, league=league) and home_team:
+        return home_team
+    return None
 
 
 def _book_id(bookmaker: Dict[str, Any], index: int) -> str:
@@ -845,7 +897,7 @@ class DailyAnalysisService:
         5. Store in cache and return
 
         Args:
-            date: Analysis date (YYYY-MM-DD), None means today
+            date: Analysis date (YYYY-MM-DD). None means the America/New_York slate date.
             use_cache: Whether to use cache, default True
             tz_offset_minutes: Timezone offset in minutes, default 480 (UTC+8, Taipei)
             league: League key — ``"nba"`` (default) or ``"wnba"``. Controls
@@ -871,9 +923,9 @@ class DailyAnalysisService:
         league_normalized = league.lower()
         _resolve_sport_key(league_normalized)
 
-        # Determine analysis date
+        # US slate date. UTC midnight is still the previous evening in New York.
         if date is None:
-            date = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+            date = nba_slate_date()[0]
 
         # 1. Check cache (league-namespaced + timezone-scoped, SPO-35)
         # Pre-SPO-35 keys lived under f"daily_picks:{date}:tz{tz}" and would
@@ -885,11 +937,19 @@ class DailyAnalysisService:
             )
             cached_data = await cache_service.get(cache_key)
             if cached_data:
-                print(
-                    f"✅ [{league_normalized.upper()}] Using cached analysis result: "
-                    f"{date} (tz={tz_offset_minutes})"
-                )
-                return DailyPicksResponse(**cached_data)
+                try:
+                    cached = DailyPicksResponse.model_validate(cached_data)
+                except ValidationError:
+                    print(
+                        f"⚠️ [{league_normalized.upper()}] Ignoring unreadable "
+                        f"daily-picks cache for {date}"
+                    )
+                else:
+                    print(
+                        f"✅ [{league_normalized.upper()}] Using cached analysis result: "
+                        f"{date} (tz={tz_offset_minutes})"
+                    )
+                    return cached
 
         print(f"🚀 [{league_normalized.upper()}] Starting daily analysis: {date}")
 
@@ -922,28 +982,20 @@ class DailyAnalysisService:
 
         print(f"📅 [{league_normalized.upper()}] Found {len(events)} events")
 
-        # 2.5. Pre-fetch player projections (SportsDataIO).
-        # Only NBA has the projection wrapper wired today (see
-        # _LEAGUES_WITH_PROJECTIONS). For WNBA we skip the network call
-        # entirely and let the per-pick projection lookup degrade
-        # gracefully — `proj.get(...)` returns None, `edge` stays None,
-        # `has_projection` stays False, opponent_rank/injury_status all
-        # null. Tile-side UX already handles this empty state (SPO-26).
-        projections: Dict[str, Dict] = {}
-        if league_normalized in _LEAGUES_WITH_PROJECTIONS:
+        # NBA injury rows come from Redis. A miss, a stale body, or a
+        # read error logs once inside the loader and leaves every
+        # injury_status null. This does not call BALLDONTLIE, and a
+        # failure here must not abort the board. WNBA does not read it.
+        injury_entries: list[dict[str, Any]] | None = None
+        if league_normalized == "nba":
             try:
-                projections = await projection_service.get_projections(date)
-                if projections:
-                    print(f"📊 Retrieved {len(projections)} projection records")
-                else:
-                    print(f"ℹ️ No projection data available, will use only historical probabilities")
-            except Exception as e:
-                print(f"⚠️ Failed to get projection data (doesn't affect main analysis): {e}")
-        else:
-            print(
-                f"ℹ️ [{league_normalized.upper()}] Projections not wired for this "
-                f"league; running history-only (edge / opponent_rank stay None)"
-            )
+                injury_entries = await load_nba_pick_injuries(cache=cache_service)
+            except Exception as exc:
+                logger.warning(
+                    "NBA pick injury read failed (%s); injury_status left null",
+                    type(exc).__name__,
+                )
+                injury_entries = None
 
         # 3. Analyze all events
         all_picks: List[DailyPick] = []
@@ -964,8 +1016,8 @@ class DailyAnalysisService:
                     home_team=home_team,
                     away_team=away_team,
                     commence_time=commence_time,
-                    projections=projections,
                     league=league_normalized,
+                    injury_entries=injury_entries,
                 )
                 all_picks.extend(event_picks)
                 total_players += players_count
@@ -1117,20 +1169,23 @@ class DailyAnalysisService:
         commence_time: str,
         projections: Optional[Dict[str, Dict]] = None,
         league: str = "nba",
+        injury_entries: list[dict[str, Any]] | None = None,
     ) -> Tuple[List[DailyPick], int, int]:
         """
         Analyze a single event
 
-        For all players in the event, analyze probabilities for the 4 metrics,
-        and incorporate projection data to compute Value Edge.
+        For all players in the event, analyze probabilities for the
+        supported metrics. There is no projection input. ``projected_value``,
+        ``edge``, and ``projected_minutes`` stay null. NBA defense ranks
+        come from the game log.
 
         Args:
             event_id: Event ID
             home_team: Home team
             away_team: Away team
             commence_time: Event start time
-            projections: Projection dict (keyed by player_name),
-                         obtained up front in run_daily_analysis
+            projections: Ignored. Older callers passed a projection map.
+                The betting line is not used in its place.
             league: League key — picks the CSV history service to query
                     (``csv_player_service`` for NBA,
                     ``wnba_csv_player_service`` for WNBA). The market
@@ -1145,9 +1200,8 @@ class DailyAnalysisService:
         picks: List[DailyPick] = []
         all_players: set = set()
         total_props = 0
-
-        if projections is None:
-            projections = {}
+        # Older callers still pass this keyword. It is not a projection source.
+        _ = projections
 
         # Resolve the league-specific CSV history service once per event.
         # For the NBA path we keep reading through `self.csv_service` so
@@ -1218,61 +1272,58 @@ class DailyAnalysisService:
                     if side is None or side_probability is None:
                         continue
 
-                    # === Integrate projection data (Value Edge Detection) ===
-                    # Lookup pre-fetched projection for player
-                    proj = projections.get(player_name, {})
-                    has_projection = bool(proj)
-
-                    # A projection abbreviation is kept only when that club
-                    # is home or away. The CSV fallback is the log club on
-                    # the US game date, and only when that club is in the
-                    # game. A last-season club that is not playing (Bulls
-                    # on Celtics at 76ers) is left blank rather than tagged
-                    # onto the player. Chart logs are oldest-first;
+                    # The CSV club on the US game date is kept only when
+                    # that club is home or away. A last-season club that is
+                    # not playing is left blank. Chart logs are oldest-first;
                     # ``team_on_event`` dates them and ignores list order.
                     game_logs = history_stats.get("game_logs", [])
-                    projected_team = ""
-                    if proj and proj.get("team"):
-                        projected_team = str(proj.get("team") or "")
                     player_team = team_on_event(
                         game_logs,
                         commence_time,
                         home_team,
                         away_team,
-                        candidate=projected_team,
                         league=league,
                     )
                     player_team_code = canonical_team_code(player_team, league=league)
                     position = None
                     if league.lower() == "nba":
-                        raw_position = csv_service.latest_position(player_name)
-                        if isinstance(raw_position, str) and raw_position.strip():
-                            position = raw_position.strip()
+                        latest_position = getattr(csv_service, "latest_position", None)
+                        if callable(latest_position):
+                            raw_position = latest_position(player_name)
+                            if isinstance(raw_position, str) and raw_position.strip():
+                                position = raw_position.strip()
 
-                    # Get projection value for this metric.
-                    # 💡 Translate via PROJECTION_FIELD_ALIASES because the
-                    # CSV/frontend metric key isn't always the projection-API
-                    # field name (e.g. `threes_made` ↔ `three_pointers_made`).
-                    projection_field = PROJECTION_FIELD_ALIASES.get(metric_key, metric_key)
-                    projected_value = proj.get(projection_field) if proj else None
-                    projected_minutes = proj.get("minutes") if proj else None
-                    opponent_rank = proj.get("opponent_rank") if proj else None
-                    opponent_position_rank = proj.get("opponent_position_rank") if proj else None
-                    opponent_rank_source = proj.get("opponent_rank_source") if proj else None
-                    opponent_rank_season = proj.get("opponent_rank_season") if proj else None
-                    opponent_rank_note = proj.get("opponent_rank_note") if proj else None
-                    opponent_position_rank_source = proj.get("opponent_position_rank_source") if proj else None
-                    opponent_position_rank_season = proj.get("opponent_position_rank_season") if proj else None
-                    opponent_position_rank_note = proj.get("opponent_position_rank_note") if proj else None
-                    injury_status = proj.get("injury_status") if proj else None
-                    lineup_confirmed = proj.get("lineup_confirmed") if proj else None
-
-                    # Calculate Edge (projection - line)
-                    # Positive: projection above line (favors Over)
-                    # Negative: projection below line (favors Under)
+                    # No projection source. The line is not a stand-in.
+                    # lineup_confirmed stays null until projected lineups.
+                    # NBA injury_status comes from the cached snapshot.
+                    # injury_status_raw is that same row's raw_status,
+                    # copied with no case change and no trimming. The
+                    # signal builder still receives only injury_status.
+                    # Out blocks. A stored Doubtful is already Questionable
+                    # and does not. The Odds API description has no
+                    # bdl_player_id, so the match is the full name with
+                    # the suffix kept. A missing or ambiguous name stays
+                    # null on both fields. WNBA stays null on both.
+                    has_projection = False
+                    projected_value = None
+                    projected_minutes = None
                     edge = None
-                    if projected_value is not None and mode_threshold is not None:
-                        edge = round(projected_value - mode_threshold, 2)
+                    injury_status = None
+                    injury_status_raw = None
+                    lineup_confirmed = None
+                    if league.lower() == "nba" and injury_entries is not None:
+                        injury_status, injury_status_raw = matched_injury_words(
+                            match_injury_entry(injury_entries, player_name)
+                        )
+                    rank_fields = _empty_rank_fields()
+                    if league.lower() == "nba":
+                        opponent = _opponent_club(
+                            player_team, home_team, away_team, league
+                        )
+                        try:
+                            rank_fields = defense_fields(opponent, position)
+                        except Exception as exc:
+                            print(f"  ⚠️ Defense rank fill failed for {player_name}: {exc}")
 
                     pick = DailyPick(
                         player_name=player_name,
@@ -1290,19 +1341,20 @@ class DailyAnalysisService:
                         bookmakers_count=len(lines),
                         all_lines=sorted(lines),
                         has_projection=has_projection,
-                        projected_value=round(projected_value, 2) if projected_value is not None else None,
-                        projected_minutes=round(projected_minutes, 1) if projected_minutes is not None else None,
+                        projected_value=projected_value,
+                        projected_minutes=projected_minutes,
                         edge=edge,
                         position=position,
-                        opponent_rank=opponent_rank,
-                        opponent_position_rank=opponent_position_rank,
-                        opponent_rank_source=opponent_rank_source,
-                        opponent_rank_season=opponent_rank_season,
-                        opponent_rank_note=opponent_rank_note,
-                        opponent_position_rank_source=opponent_position_rank_source,
-                        opponent_position_rank_season=opponent_position_rank_season,
-                        opponent_position_rank_note=opponent_position_rank_note,
+                        opponent_rank=rank_fields["opponent_rank"],
+                        opponent_position_rank=rank_fields["opponent_position_rank"],
+                        opponent_rank_source=rank_fields["opponent_rank_source"],
+                        opponent_rank_season=rank_fields["opponent_rank_season"],
+                        opponent_rank_note=rank_fields["opponent_rank_note"],
+                        opponent_position_rank_source=rank_fields["opponent_position_rank_source"],
+                        opponent_position_rank_season=rank_fields["opponent_position_rank_season"],
+                        opponent_position_rank_note=rank_fields["opponent_position_rank_note"],
                         injury_status=injury_status,
+                        injury_status_raw=injury_status_raw,
                         lineup_confirmed=lineup_confirmed,
                         # NBA tier is filled after the signal step. Starting
                         # at None means a raised signal call cannot leave
@@ -1497,7 +1549,10 @@ def _with_nba_signal_verdicts(
     bookmakers_data: List[Dict[str, Any]],
     game_logs: List[Dict[str, Any]],
 ) -> DailyPick:
-    """Attach the five signals on an NBA pick. WNBA is returned unchanged.
+    """Attach the NBA signals on a pick. WNBA is returned unchanged.
+
+    The projection slot is omitted. A market, last-10, history, or
+    defense input that fails still serializes as null.
 
     Both new fields stay None for WNBA. The bookmaker list is the snapshot
     already fetched for this market; this does not request odds again and
@@ -1530,7 +1585,50 @@ def _with_nba_signal_verdicts(
     return pick
 
 
-def best_top_reads(cached: Any) -> Dict[str, TopRead]:
+def _top_read_candidate_is_out(
+    player: str,
+    injury_entries: list[dict[str, Any]] | None,
+) -> bool:
+    """True when a fresh snapshot marks this candidate Out.
+
+    The name is the question the chooser asks before a row can become
+    ``top_read``: is this player Out? Call it with the stored
+    ``player_name`` and the fresh entry list. ``injury_entries`` is
+    None when ``injuries:nba:latest`` is missing, stale, malformed, or
+    unreadable. The candidate then stays, which is the same rule picks
+    use when they leave ``injury_status`` null. An empty list is a
+    fresh snapshot and matches nobody.
+
+    The match is :func:`match_injury_entry` with no ``bdl_player_id``.
+    A stored pick and a snapshot row are names. The fold is case,
+    punctuation, and accents. The suffix stays, so a row for
+    ``Gary Trent Jr.`` does not skip ``Gary Trent``. Only Out skips,
+    with the same case and whitespace fold the blend uses.
+    Questionable, including a source word of Doubtful, does not.
+    This does not log and does not call BALLDONTLIE.
+
+    Args:
+        player: ``player_name`` on one stored pick.
+        injury_entries: Fresh snapshot rows, or None.
+
+    Returns:
+        True when that player should be left out of the top read.
+    """
+    if injury_entries is None:
+        return False
+    matched = match_injury_entry(injury_entries, player)
+    if not isinstance(matched, dict):
+        return False
+    status = matched.get("status")
+    if not isinstance(status, str):
+        return False
+    return injury_blocks_combined(status)
+
+
+def best_top_reads(
+    cached: Any,
+    injury_entries: list[dict[str, Any]] | None = None,
+) -> Dict[str, TopRead]:
     """Pick the highest-probability stored pick for each event.
 
     The cache payload is the JSON written by ``run_daily_analysis``.
@@ -1538,8 +1636,22 @@ def best_top_reads(cached: Any) -> Dict[str, TopRead]:
     list is ordered by ``sort_stored_picks`` (the blend for NBA, the
     historical rate for WNBA), so an NBA tie keeps the higher blend.
 
+    Each event is chosen on its own. The game is that ``event_id``.
+    The player is the stored ``player_name``. A candidate is skipped
+    when ``injury_entries`` is a fresh snapshot and
+    :func:`match_injury_entry` matches that name to a row whose
+    normalized status is Out. The snapshot has no game id, and picks
+    do not carry a ``bdl_player_id``, so this is the same name rule
+    picks and ``/reads`` use. The next-highest finite candidate on
+    that same event is used. When every candidate is Out, that event
+    is absent and its ``top_read`` stays null. ``injury_entries``
+    left as None does not skip anyone. WNBA does not call this with
+    a snapshot.
+
     Args:
         cached: Daily-picks cache document, or anything that is not one.
+        injury_entries: Fresh NBA injury rows, or None when the
+            snapshot cannot be used. The default keeps the old choice.
 
     Returns:
         Map of event_id to ``TopRead``. Empty when nothing is stored.
@@ -1567,6 +1679,10 @@ def best_top_reads(cached: Any) -> Dict[str, TopRead]:
             continue
         market = market_key_for_metric(pick.get("metric"))
         if market is None:
+            continue
+        # The game is event_id. The player is this row. An Out match
+        # drops the row before it can replace a lower healthy one.
+        if _top_read_candidate_is_out(str(player), injury_entries):
             continue
         current = best.get(str(event_id))
         if current is not None and probability <= current["probability"]:
@@ -1613,15 +1729,43 @@ def attach_top_reads(
     return response.model_copy(update={"events": events})
 
 
+async def _read_top_read_injuries() -> list[dict[str, Any]] | None:
+    """Fresh injury rows for top_read, or None when the snapshot cannot be used.
+
+    ``_read_top_read_injuries`` is the Redis read ``load_stored_top_reads``
+    uses. Call it from that loader only. It reads
+    ``injuries:nba:latest`` and returns. It does not call BALLDONTLIE.
+    A missing key, a stale ``fetched_at``, a body that is not an
+    entries list, and a read error all return None with no log line.
+    Picks and ``/reads`` already warn once for those cases. A second
+    warning on the events request would be noise, and a Redis error
+    here must not drop every top_read: the caller still ranks the
+    stored picks. A fresh empty list returns ``[]``.
+
+    Returns:
+        The entry list, or None when top_read must not skip anyone.
+    """
+    try:
+        raw = await cache_service.get(NBA_INJURIES_CACHE_KEY)
+    except Exception:
+        return None
+    if not injury_snapshot_is_fresh(raw):
+        return None
+    return [row for row in raw["entries"] if isinstance(row, dict)]
+
+
 async def load_stored_top_reads(
     date: str,
     tz_offset_minutes: int,
 ) -> Dict[str, TopRead]:
     """Read the NBA daily-picks cache and index it by event.
 
-    This does not run analysis and does not call the Odds API. A cache
-    miss, including a Redis error that ``CacheService.get`` turns into
-    None, yields an empty map so every event's ``top_read`` stays null.
+    This does not run analysis and does not call the Odds API or
+    BALLDONTLIE. A cache miss, including a Redis error that
+    ``CacheService.get`` turns into None, yields an empty map so every
+    event's ``top_read`` stays null. A fresh injury snapshot is read
+    from the same Redis and skips Out players. A missing or stale
+    snapshot does not, and that read does not log.
 
     Args:
         date: Local date YYYY-MM-DD. Must be the same date the events
@@ -1631,12 +1775,12 @@ async def load_stored_top_reads(
             different local slate.
 
     Returns:
-        Best stored pick per event_id.
+        Best stored pick per event_id, after Out players are skipped.
     """
     cached = await cache_service.get(
         daily_picks_cache_key("nba", date, tz_offset_minutes)
     )
-    return best_top_reads(cached)
+    return best_top_reads(cached, injury_entries=await _read_top_read_injuries())
 
 
 # Create a global service instance

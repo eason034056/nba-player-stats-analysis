@@ -1,12 +1,12 @@
 from __future__ import annotations
 
-from datetime import datetime, timezone
 from typing import Optional
 
 from fastapi import APIRouter, HTTPException, Query
 
 from app.models.schemas import LineupRefreshResponse, LineupsResponse, TeamLineup
 from app.services.lineup_service import confirmation_status, lineup_service
+from app.services.slate_date import nba_slate_date
 
 
 def _with_confirmation(lineup: dict) -> TeamLineup:
@@ -31,7 +31,7 @@ router = APIRouter(
 async def get_lineups(
     date: Optional[str] = Query(default=None, description="Query date (YYYY-MM-DD), defaults to today"),
 ) -> LineupsResponse:
-    target_date = date or datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    target_date = date or nba_slate_date()[0]
     try:
         result = await lineup_service.get_lineups(target_date)
     except Exception as exc:
@@ -54,7 +54,7 @@ async def get_team_lineup(
     team: str,
     date: Optional[str] = Query(default=None, description="Query date (YYYY-MM-DD), defaults to today"),
 ) -> TeamLineup:
-    target_date = date or datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    target_date = date or nba_slate_date()[0]
     try:
         lineup, _cache_state, _fetched_at = await lineup_service.get_team_lineup(target_date, team)
     except Exception as exc:
@@ -70,7 +70,7 @@ async def get_team_lineup(
 async def refresh_lineups(
     date: Optional[str] = Query(default=None, description="Refresh date (YYYY-MM-DD), defaults to today"),
 ) -> LineupRefreshResponse:
-    target_date = date or datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    target_date = date or nba_slate_date()[0]
     try:
         lineups = await lineup_service.fetch_and_store(target_date)
     except Exception as exc:

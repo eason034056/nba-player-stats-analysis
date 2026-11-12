@@ -2,10 +2,9 @@
 
 Rank 1 allowed the most of that stat in games dated strictly before the
 target date. That is the weak end, the same direction ``DailyPick`` stores:
-SportsDataIO's ``OpponentRank`` is copied through with no inversion, and
-the schema says 1 = weakest defense.
+1 = weakest defense.
 
-This is a replay proxy. It is not the SportsDataIO fantasy-points rank.
+This is a replay proxy computed from the game log. It is not a fantasy-points rank.
 Position rank is preferred when the target player's position has enough
 prior player-games against that opponent. Otherwise the overall rank is
 used. Below the sample floor the rank is missing.

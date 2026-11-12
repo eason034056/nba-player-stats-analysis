@@ -356,8 +356,8 @@ export function ResultsTable({ data, isLoading }: ResultsTableProps) {
         </p>
       )}
 
-      <div className="table-container overflow-hint">
-        <table className="table">
+      <div data-testid="odds-table-scroll" className="table-container overflow-hint max-w-full overflow-x-auto">
+        <table className="table max-md:min-w-[760px]">
           <thead>
             <tr>
               <th>Bookmaker</th>

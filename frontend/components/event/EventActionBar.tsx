@@ -12,7 +12,8 @@ import { cn } from "@/lib/utils";
 /**
  * Sticky mobile bar above the tab bar.
  * NBA prints the last name, the side, the line, and the floored blend beside a tier.
- * The other side is the historical rate and is the only control labeled History.
+ * The other side prints 1 − combined_probability when that blend is on the seed.
+ * History is only the label when the blend was missing and the rate is historical.
  * WNBA keeps the short "Add over" / "Under" labels.
  */
 export function EventActionBar({
@@ -36,6 +37,10 @@ export function EventActionBar({
   const primary = model.primary;
   const mobile = primary ? mobilePrimaryCopy(primary, primaryInSlip, null, null) : null;
   const blend = actionBarPercent(primary, league);
+  const other = model.other;
+  const otherIsModel =
+    typeof other?.combined_probability === "number" && Number.isFinite(other.combined_probability);
+  const otherSide = other?.direction === "under" ? "Under" : "Over";
   return (
     <div
       data-testid="event-action-bar"
@@ -66,22 +71,26 @@ export function EventActionBar({
           )}
         </button>
       ) : null}
-      {model.other ? (
+      {other ? (
         <button
           type="button"
           onClick={onAddOther}
           className="min-h-12 rounded-[14px] border border-line-strong bg-white px-3 text-[13px] font-semibold text-ink"
         >
           {nba ? (
-            <span className="flex flex-col items-center leading-tight">
-              <span className="text-[9px] font-semibold uppercase tracking-[0.06em] text-muted">History</span>
+            otherIsModel ? (
               <span>
-                {otherInSlip
-                  ? `✓ ${model.other.direction === "under" ? "Under" : "Over"} in slip`
-                  : mobileOtherCopy(model.other)}
+                {otherInSlip ? `✓ ${otherSide} in slip` : mobileOtherCopy(other)}
               </span>
-            </span>
-          ) : model.other.direction === "under" ? (
+            ) : (
+              <span className="flex flex-col items-center leading-tight">
+                <span className="text-[9px] font-semibold uppercase tracking-[0.06em] text-muted">History</span>
+                <span>
+                  {otherInSlip ? `✓ ${otherSide} in slip` : mobileOtherCopy(other)}
+                </span>
+              </span>
+            )
+          ) : other.direction === "under" ? (
             "Under"
           ) : (
             "Over"

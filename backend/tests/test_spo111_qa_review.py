@@ -283,23 +283,23 @@ class TestTierBoundariesMatchReadTier:
 
         strong = by_name[_ROLES["exact_strong"]]
         assert strong.probability == pytest.approx(0.70)
-        assert strong.combined_probability == pytest.approx(0.5904)
+        assert strong.combined_probability == pytest.approx(0.5659)
         assert strong.tier == "Lean"
         below_strong = by_name[_ROLES["just_below_strong"]]
         assert below_strong.probability == pytest.approx(0.6999)
-        assert below_strong.combined_probability == pytest.approx(0.6048)
+        assert below_strong.combined_probability == pytest.approx(0.5805)
         assert below_strong.tier == "Lean"
         playable = by_name[_ROLES["exact_playable"]]
         assert playable.probability == pytest.approx(0.65)
         assert playable.n_games == 10
-        assert playable.combined_probability == pytest.approx(0.6051)
+        assert playable.combined_probability == pytest.approx(0.5809)
         assert playable.tier == "Lean"
         lean = by_name[_ROLES["exact_lean"]]
         assert lean.probability == pytest.approx(0.56)
-        assert lean.combined_probability == pytest.approx(0.5594)
+        assert lean.combined_probability == pytest.approx(0.5345)
         assert lean.tier is None
         below_playable = by_name[_ROLES["just_below_playable"]]
-        assert below_playable.combined_probability == pytest.approx(0.6167)
+        assert below_playable.combined_probability == pytest.approx(0.5927)
         assert below_playable.tier == "Lean"
         assert _ROLES["just_below_lean"] not in by_name
         assert _ROLES["too_few"] not in by_name

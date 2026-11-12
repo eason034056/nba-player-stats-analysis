@@ -18,6 +18,7 @@ from pydantic import BaseModel, Field
 
 from app.middleware.rate_limit import limiter
 from app.services.daily_analysis import MIN_SAMPLE_GAMES, daily_analysis_service
+from app.services.slate_date import nba_slate_date
 from app.settings import settings
 
 
@@ -158,7 +159,7 @@ async def get_picks_today(
     """
     premium = _is_premium(api_key)
     offset_minutes = tz_offset if tz_offset is not None else 480
-    today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    today = nba_slate_date()[0]
 
     try:
         result = await daily_analysis_service.run_daily_analysis(

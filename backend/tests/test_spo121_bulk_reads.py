@@ -507,7 +507,6 @@ class TestEventReads:
             event_id,
             rows,
             market="player_points",
-            projections={},
         )
         from app.services.bulk_props import assemble_bulk_props
 
@@ -529,9 +528,9 @@ class TestEventReads:
                 "market",
                 "last10",
                 "history",
-                "projection",
                 "defense",
             ]
+            assert all(signal.key != "projection" for signal in item.signals)
             assert item.tier == read_tier(item.combined_probability)
 
     def test_binary_market_is_present_with_a_null_read(self):
@@ -540,7 +539,6 @@ class TestEventReads:
             event_id,
             rows + _binary_rows(event_id),
             market="player_double_double",
-            projections={},
         )
         assert payload.reads
         assert all(item.side is None for item in payload.reads)
@@ -560,12 +558,11 @@ class TestEventReads:
             event_id,
             rows,
             market="player_points",
-            projections={name: {"injury_status": "Out", "points": 30.0}},
         )
         row = next(item for item in payload.reads if item.player == name)
         assert row.signals is not None
-        assert row.combined_probability is None
-        assert row.tier is None
+        assert all(signal.key != "projection" for signal in row.signals)
+        assert row.combined_probability is not None
 
     def test_route_does_not_call_the_odds_api(self, monkeypatch):
         event_id, rows = _points_rows()
@@ -628,8 +625,8 @@ class TestEventReads:
         cache = _FakeCache()
         monkeypatch.setattr("app.services.event_reads.db_service", db)
         monkeypatch.setattr("app.services.event_reads.cache_service", cache)
-        first = asyncio.run(get_event_reads(event_id, market="player_points", projections={}))
-        second = asyncio.run(get_event_reads(event_id, market="player_points", projections={}))
+        first = asyncio.run(get_event_reads(event_id, market="player_points"))
+        second = asyncio.run(get_event_reads(event_id, market="player_points"))
         assert len(db.calls) == 1
         assert db.calls[0][0] == LATEST_EVENT_READ_SQL
         assert [item.player for item in second.reads] == [item.player for item in first.reads]
@@ -651,8 +648,9 @@ class TestEventReads:
 def recorded_points_shift() -> dict:
     """Board shift for the recorded player_points capture and the shipped log.
 
-    Projections are omitted, so the projection and defense adjustments are
-    zero. The signal function is the production one. No Odds API call.
+    The projection signal is missing. Defense ranks come from the game log
+    when the player's club is on the event. The signal function is the
+    production one. No Odds API call.
     """
     payload = load_odds_fixture("odds_api_event_odds__player_points.json")
     service = DailyAnalysisService()
@@ -703,7 +701,7 @@ class TestRecordedBoardShift:
 # Locked against data/nba_player_game_logs.csv and
 # tests/fixtures/odds_api_event_odds__player_points.json
 # (event 07361a8381206817e27bd2697fad7479, tip 2026-11-10T00:10:00Z).
-# Projections omitted. One market, not a full slate.
+# Projection signal missing. One market, not a full slate.
 _RECORDED_SHIFT = {
     "stored": 11,
     "old_board": 4,

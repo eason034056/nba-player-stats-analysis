@@ -92,6 +92,11 @@ describe("ResultsTable double-double rows", () => {
     expect(screen.getByTestId("result-line")).toHaveTextContent("24.5");
     expect(screen.getByRole("columnheader", { name: "Over Odds" })).toBeInTheDocument();
     expect(screen.getByRole("columnheader", { name: "Under Odds" })).toBeInTheDocument();
+    const scroll = screen.getByTestId("odds-table-scroll");
+    expect(scroll.className).toContain("overflow-x-auto");
+    expect(scroll.className).toContain("max-w-full");
+    expect(scroll.querySelector("table")?.className).toContain("max-md:min-w-[760px]");
+    expect(screen.getByRole("columnheader", { name: "Under Probability" })).toBeInTheDocument();
     expect(screen.getByTestId("result-yes-price")).toHaveTextContent("-110");
     expect(screen.getByTestId("result-no-price")).toHaveTextContent("-110");
     expect(screen.queryByText("Yes/No")).not.toBeInTheDocument();

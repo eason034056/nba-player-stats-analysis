@@ -381,26 +381,29 @@ export function DailyPicksBoard({
                     sameSide ? "border-brand" : "border-line",
                   )}
                 >
-                  <div className={cn("flex min-w-0 flex-1 items-center gap-3 md:basis-[240px]", row.dimmed && "opacity-60")}>
-                    <div className="w-[22px] shrink-0 font-mono text-[13px] font-bold text-muted">
-                      {row.rank}
-                    </div>
-                    <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-line font-mono text-[11px] font-bold text-brand">
-                      {row.team || "—"}
-                    </div>
-                    <div className="min-w-0 flex-1">
-                      <Link href={row.href} className="block font-bold hover:text-brand">
-                        {row.player}
-                      </Link>
-                      <div className="mt-0.5 text-[13px] text-muted">{row.matchup}</div>
+                  <div
+                    data-testid="pick-player"
+                    className="flex min-w-0 items-center gap-3 md:flex-1 md:basis-[240px]"
+                  >
+                    <div className={cn("flex min-w-0 flex-1 items-center gap-3", row.dimmed && "opacity-60")}>
+                      <div className="w-[22px] shrink-0 font-mono text-[13px] font-bold text-muted">
+                        {row.rank}
+                      </div>
+                      <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-line font-mono text-[11px] font-bold text-brand">
+                        {row.team || "—"}
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <Link href={row.href} className="block font-bold hover:text-brand">
+                          {row.player}
+                        </Link>
+                        <div className="mt-0.5 text-[13px] text-muted">{row.matchup}</div>
+                      </div>
                     </div>
                   </div>
 
                   <div
-                    className={cn(
-                      "flex min-w-0 flex-col gap-2",
-                      row.dimmed ? "md:flex-1 md:basis-[220px]" : "flex-1 basis-[220px]",
-                    )}
+                    data-testid="pick-prop"
+                    className="flex min-w-0 flex-col gap-2 md:flex-1 md:basis-[220px]"
                   >
                     <div className={cn("text-[15px] font-bold", row.dimmed && "opacity-60")}>{row.propText}</div>
                     {slipCaption?.(pick) ? (
@@ -417,7 +420,10 @@ export function DailyPicksBoard({
                   </div>
 
                   {row.dimmed ? null : (
-                  <div className="flex min-w-[120px] flex-[0_1_150px] flex-col gap-1.5">
+                  <div
+                    data-testid="pick-rate"
+                    className="flex min-w-[120px] flex-col gap-1.5 md:flex-[0_1_150px]"
+                  >
                     <div className="flex items-baseline justify-between gap-2">
                       <div className="font-mono text-2xl font-bold text-brand">{row.probabilityText}</div>
                       {row.tierShort && row.tierName ? (

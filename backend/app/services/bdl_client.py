@@ -57,6 +57,14 @@ _PATH_PROJECTED_LINEUPS = "/nba/v1/projected_lineups"
 _MAX_ATTEMPTS = 3
 _FALLBACK_BACKOFF_SECONDS = 60.0
 _MAX_WAIT_SECONDS = 65.0
+# Injury refresh only. One retry, and the wait stays inside 30-60 seconds
+# unless the server names a shorter Retry-After or reset. The cap is 60
+# so one refresh cannot still be sleeping when the next 30-minute tick fires.
+_INJURY_MAX_ATTEMPTS = 2
+_INJURY_MAX_RETRIES = 1
+_INJURY_BACKOFF_MIN_SECONDS = 30.0
+_INJURY_BACKOFF_MAX_SECONDS = 60.0
+_INJURY_RATE_LIMIT_POLICY = "injury"
 _WINDOW_TTL_SECONDS = 120
 _OBSERVED_LIMIT_TTL_SECONDS = 86400
 _MAX_PLAYER_IDS_PER_CALL = 100
@@ -110,6 +118,36 @@ def _parse_header_int(value: str | None) -> int | None:
         return int(value)
     except (TypeError, ValueError):
         return None
+
+
+def _retry_after_delay(value: str | None, now: float) -> float | None:
+    """Seconds to wait for a ``Retry-After`` header, or ``None`` when it is unusable.
+
+    A positive number is a delay in seconds. An HTTP date is the instant
+    to wait until. Zero, a past date, and a value that is neither are
+    ignored so the caller can use ``x-ratelimit-reset`` instead.
+    """
+    if value is None:
+        return None
+    text = value.strip()
+    if not text:
+        return None
+    try:
+        seconds = float(text)
+    except ValueError:
+        seconds = None
+    else:
+        return seconds if seconds > 0 else None
+    from email.utils import parsedate_to_datetime
+
+    try:
+        moment = parsedate_to_datetime(text)
+    except (TypeError, ValueError, IndexError, OverflowError):
+        return None
+    if moment.tzinfo is None:
+        return None
+    delay = moment.timestamp() - now
+    return delay if delay > 0 else None
 
 
 def _window_key(window_start: int) -> str:
@@ -179,6 +217,7 @@ class BdlClient:
         sleep: SleepFn | None = None,
         clock: ClockFn | None = None,
         timeout: float = 30.0,
+        rate_limit_policy: str = "default",
     ) -> None:
         if api_key is None:
             # SecretStr stays out of repr. The header needs a plain str.
@@ -188,8 +227,21 @@ class BdlClient:
         if rate_limit_per_min < 1:
             raise BdlError("BDL_RATE_LIMIT_PER_MIN must be at least 1")
 
+        if rate_limit_policy not in {"default", _INJURY_RATE_LIMIT_POLICY}:
+            raise BdlError("unknown BALLDONTLIE rate limit policy")
         self._api_key = api_key
         self._configured_limit = rate_limit_per_min
+        self._rate_limit_policy = rate_limit_policy
+        # The injury job shares a key with a process that cannot see this
+        # Redis limiter. That policy is two HTTP tries and one wait, not
+        # the default three tries. A higher attempt count must not stack
+        # on top of that one retry.
+        self._max_attempts = (
+            _INJURY_MAX_ATTEMPTS
+            if rate_limit_policy == _INJURY_RATE_LIMIT_POLICY
+            else _MAX_ATTEMPTS
+        )
+        self._retries_used = 0
         self._sleep = sleep or _default_sleep
         self._clock = clock or time.time
         self._last_limit: int | None = None
@@ -366,7 +418,7 @@ class BdlClient:
     async def _get(self, path: str, params: list[tuple[str, str]]) -> dict[str, Any]:
         """GET ``path`` inside the shared budget, retrying 429 and 5xx.
 
-        Three HTTP responses are the maximum. A 429 sleeps until
+        The default policy allows three HTTP responses. A 429 sleeps until
         ``x-ratelimit-reset`` (or 60 seconds when that header is missing
         or already past) and then tries again. That wait, and the
         ``remaining == 0`` pause, never exceed 65 seconds. A 5xx uses
@@ -374,13 +426,23 @@ class BdlClient:
         immediately. A transport error waits 60 seconds and tries again.
         The wait is ``self._sleep``, so a test clock can skip the real delay.
 
-        Retry backoff is at most 2 times 65 seconds: two waits between the
-        three attempts. Each attempt may also wait for a budget slot, up
-        to 8 waits, and each of those is capped at 65 seconds. The real
-        bound is ``3 * 8 * 65 + 2 * 65`` = 1690 seconds.
+        Default retry backoff is at most 2 times 65 seconds: two waits
+        between the three attempts. Each attempt may also wait for a
+        budget slot, up to 8 waits, and each of those is capped at 65
+        seconds. The real default bound is ``3 * 8 * 65 + 2 * 65`` = 1690
+        seconds.
+
+        ``rate_limit_policy="injury"`` is the NBA injury refresh. It
+        allows two HTTP responses and one wait. The wait is ``Retry-After``
+        when that header is a positive delay, otherwise the seconds until
+        ``x-ratelimit-reset`` when that instant is still ahead, otherwise
+        30 to 59 seconds. Every one of those waits is capped at 60
+        seconds. A second 429 in the same client raises without another
+        wait, so a 20-page walk cannot spend 20 minutes backing off.
+        The refresh does not add a retry of its own on top of this one.
         """
         last_status: int | None = None
-        for attempt in range(_MAX_ATTEMPTS):
+        for attempt in range(self._max_attempts):
             await self._acquire_budget()
             try:
                 response = await self._http.get(path, params=params)
@@ -390,11 +452,12 @@ class BdlClient:
                     path,
                     type(exc).__name__,
                 )
-                if attempt == _MAX_ATTEMPTS - 1:
+                if attempt == self._max_attempts - 1 or not self._retry_budget_left():
                     raise BdlError(
                         f"BALLDONTLIE request failed for {path}: {type(exc).__name__}"
                     ) from exc
-                await self._sleep_for(_FALLBACK_BACKOFF_SECONDS)
+                self._consume_retry()
+                await self._sleep_for(self._transport_backoff_seconds())
                 continue
 
             await self._record_rate_headers(response)
@@ -409,8 +472,9 @@ class BdlClient:
                     f"BALLDONTLIE returned HTTP {status} for {path}",
                     status,
                 )
-            if attempt == _MAX_ATTEMPTS - 1:
+            if attempt == self._max_attempts - 1 or not self._retry_budget_left():
                 break
+            self._consume_retry()
             self._mark_waited_for(_parse_header_int(response.headers.get("x-ratelimit-reset")))
             await self._sleep_for(self._backoff_seconds(response))
 
@@ -449,6 +513,21 @@ class BdlClient:
             self._last_reset,
         )
 
+    def _retry_budget_left(self) -> bool:
+        """True when this client may still sleep and try one more time.
+
+        The default policy does not count retries. The injury policy
+        allows one sleep for the whole client, which is one refresh.
+        """
+        if self._rate_limit_policy != _INJURY_RATE_LIMIT_POLICY:
+            return True
+        return self._retries_used < _INJURY_MAX_RETRIES
+
+    def _consume_retry(self) -> None:
+        """Record one injury-policy sleep. The default policy ignores it."""
+        if self._rate_limit_policy == _INJURY_RATE_LIMIT_POLICY:
+            self._retries_used += 1
+
     def _backoff_seconds(self, response: httpx.Response) -> float:
         """How long to wait before another try of this response.
 
@@ -456,7 +535,13 @@ class BdlClient:
         wait ends there, but never later than 65 seconds. A missing header,
         or a reset that is not still in the future, waits 60 seconds. Zero
         is never returned: a tight retry loop would burn the shared key.
+
+        The injury policy prefers ``Retry-After``, then a future
+        ``x-ratelimit-reset``, then 30 to 59 seconds, and caps that wait
+        at 60 seconds.
         """
+        if self._rate_limit_policy == _INJURY_RATE_LIMIT_POLICY:
+            return self._injury_backoff_seconds(response)
         reset = _parse_header_int(response.headers.get("x-ratelimit-reset"))
         if reset is None:
             return _FALLBACK_BACKOFF_SECONDS
@@ -464,6 +549,35 @@ class BdlClient:
         if delay <= 0:
             return _FALLBACK_BACKOFF_SECONDS
         return self._clamp_wait(delay)
+
+    def _injury_backoff_seconds(self, response: httpx.Response) -> float:
+        """One injury-refresh wait. Never longer than 60 seconds.
+
+        ``Retry-After`` wins when it is a positive number of seconds or
+        a future HTTP date. Otherwise a future ``x-ratelimit-reset`` is
+        the wait. Otherwise the wait is 30 seconds plus the clock second
+        modulo 30, which lands in 30 through 59. A server delay above 60
+        seconds is cut to 60 so the 30-minute job cannot still be asleep
+        at the next tick.
+        """
+        retry_after = _retry_after_delay(
+            response.headers.get("retry-after"),
+            self._clock(),
+        )
+        if retry_after is not None:
+            return min(retry_after, _INJURY_BACKOFF_MAX_SECONDS)
+        reset = _parse_header_int(response.headers.get("x-ratelimit-reset"))
+        if reset is not None:
+            delay = float(reset) - self._clock()
+            if delay > 0:
+                return min(delay, _INJURY_BACKOFF_MAX_SECONDS)
+        return _INJURY_BACKOFF_MIN_SECONDS + (int(self._clock()) % 30)
+
+    def _transport_backoff_seconds(self) -> float:
+        """Wait after a transport error. Injury stays inside the same 60 second cap."""
+        if self._rate_limit_policy == _INJURY_RATE_LIMIT_POLICY:
+            return _INJURY_BACKOFF_MIN_SECONDS + (int(self._clock()) % 30)
+        return _FALLBACK_BACKOFF_SECONDS
 
     def _clamp_wait(self, delay: float) -> float:
         """Cap a server-window wait at 65 seconds.

@@ -365,9 +365,9 @@ case "$sql" in
   *last_value*)
     if [ "$side" = local ]; then echo "${FAKE_LOCAL_SEQ:-9}"; else echo "${FAKE_RDS_SEQ:-9}"; fi
     ;;
-  *sequencename*) echo player_projections_id_seq ;;
-  *information_schema.tables*) echo player_projections ;;
-  *quote_ident*) echo '"player_projections"' ;;
+  *sequencename*) echo odds_line_snapshots_id_seq ;;
+  *information_schema.tables*) echo odds_line_snapshots ;;
+  *quote_ident*) echo '"odds_line_snapshots"' ;;
   *information_schema.columns*) echo t ;;
   *'count(*)'*)
     if [ "$side" = local ]; then echo "${FAKE_LOCAL_COUNT:-4}"; else echo "${FAKE_RDS_COUNT:-4}"; fi
@@ -400,6 +400,8 @@ class TestMigrateScript:
         assert "LOCAL_DATABASE_URL" in result.stdout
         assert "transaction_timeout" in result.stdout
         assert "--verify-only" in result.stdout
+        assert "zero public tables" in result.stdout
+        assert "Zero sequences is allowed only when both sides list zero." in result.stdout
 
     def test_bound_queries_are_not_passed_with_dash_c(self) -> None:
         for line in MIGRATE.read_text().splitlines():
@@ -443,9 +445,9 @@ class TestMigrateScript:
         result = _run(MIGRATE, env)
         assert result.returncode == 1
         assert "MISMATCH" in result.stdout
-        assert "player_projections|count|4|4|OK" in result.stdout
-        assert "player_projections|max_id|9|8|MISMATCH" in result.stdout
-        assert "player_projections_id_seq|last_value|9|9|OK" in result.stdout
+        assert "odds_line_snapshots|count|4|4|OK" in result.stdout
+        assert "odds_line_snapshots|max_id|9|8|MISMATCH" in result.stdout
+        assert "odds_line_snapshots_id_seq|last_value|9|9|OK" in result.stdout
         assert SECRET not in result.stdout + result.stderr
 
     def test_match_exits_zero(self, tmp_path: Path) -> None:
@@ -736,8 +738,12 @@ case "$joined" in
       prev="$arg"
     done
     # sh -c is also a -c argument and is not the query. Stdin carries the
-    # query when psql is not given its own -c.
-    if ! printf '%s' "$sql" | grep -q 'SELECT'; then
+    # query when psql is not given its own -c. A real `docker exec -i` /
+    # `docker run -i` still reads stdin for a -c query and would drop the
+    # rest of a caller's name list, so this fake drains that stdin too.
+    if printf '%s' "$sql" | grep -q 'SELECT'; then
+      cat >/dev/null || true
+    else
       incoming=$(cat)
       if [ -n "$incoming" ]; then
         sql="$incoming"
@@ -752,9 +758,9 @@ case "$joined" in
     esac
     case "$sql" in
       *last_value*) echo 9 ;;
-      *sequencename*) echo player_projections_id_seq ;;
-      *information_schema.tables*) echo player_projections ;;
-      *quote_ident*) echo '"player_projections"' ;;
+      *sequencename*) echo odds_line_snapshots_id_seq ;;
+      *information_schema.tables*) printf '%s\n' odds_line_snapshots second_table ;;
+      *quote_ident*) echo '"odds_line_snapshots"' ;;
       *information_schema.columns*) echo t ;;
       *'count(*)'*) echo 4 ;;
       *'max(id)'*) echo 9 ;;

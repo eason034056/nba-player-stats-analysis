@@ -1053,6 +1053,29 @@ function clamp01(value: number): number {
   return Math.min(1, Math.max(0, value));
 }
 
+export type OtherSideSource = "model" | "history";
+
+/**
+ * Rate for the opposite-side slip button.
+ * A finite `combined_probability` stores `1 − combined_probability`, clamped
+ * to [0, 1], matching the model bar. Null, NaN, and non-finite values keep
+ * the historical opposite field when that field is finite. A null result
+ * means the caller should try the history response, then hide the button.
+ * This does not choose a tier.
+ */
+export function nbaOtherSideProbability(
+  combined: number | null | undefined,
+  historical: number | null | undefined,
+): { probability: number; source: OtherSideSource } | null {
+  if (finite(combined)) {
+    return { probability: clamp01(1 - combined), source: "model" };
+  }
+  if (finite(historical)) {
+    return { probability: clamp01(historical), source: "history" };
+  }
+  return null;
+}
+
 function modelSplit(combined: number, side: "over" | "under", binary: boolean): FairSplit {
   const lean = clamp01(combined);
   const over = side === "over" ? lean : 1 - lean;
@@ -1061,8 +1084,8 @@ function modelSplit(combined: number, side: "over" | "under", binary: boolean): 
     sourceLabel: "Model",
     overLabel: binary ? "Yes" : "Over",
     underLabel: binary ? "No" : "Under",
-    overText: side === "over" ? formatTierPercent(over) : formatPercent(over),
-    underText: side === "under" ? formatTierPercent(under) : formatPercent(under),
+    overText: formatTierPercent(over),
+    underText: formatTierPercent(under),
     overWidth: over * 100,
   };
 }
@@ -1180,23 +1203,25 @@ function buildNbaRead(args: {
     tier: pick.tier ?? null,
     combined_probability: pick.combined_probability ?? null,
   };
-  // Both Bet Slip sides store the historical pick. They do not store the blend.
-  // Primary stores pick.probability. The number printed beside a tier is
-  // tierProbability, floored. The other side stores the pick's own opposite
-  // field: p_under when this pick is over, p_over when it is under. Do not
-  // subtract probability, and do not subtract combined_probability. If the
-  // field is missing, use the /history rate for that side. That button is
-  // labeled History and uses half-away formatPercent. The model bar is
-  // combined_probability only, labeled Model.
+  // Primary stores pick.probability. The number beside a tier is
+  // tierProbability, floored. The other side stores 1 − combined_probability
+  // when that blend is finite, on both `probability` and
+  // `combined_probability`, so the slip saves the same complement the model
+  // bar draws. The tier stays null. When the blend is missing, fall back to
+  // the pick's opposite field (p_under / p_over), then the /history rate for
+  // that side and line. That fallback leaves combined_probability null and
+  // the button says History. The printed percent is formatTierPercent, the
+  // same floor the slip card uses. This does not choose a tier.
   let other: SlipSeed | null = null;
   const oppositeField = otherDirection === "over" ? pick.p_over : pick.p_under;
-  if (finite(oppositeField)) {
+  const decided = nbaOtherSideProbability(pick.combined_probability, oppositeField);
+  if (decided) {
     other = {
       ...primary,
       direction: otherDirection,
-      probability: clamp01(oppositeField),
+      probability: decided.probability,
       tier: null,
-      combined_probability: null,
+      combined_probability: decided.source === "model" ? decided.probability : null,
     };
   } else {
     const otherSide = historySide(args.history, pick.threshold, otherDirection);
@@ -1381,7 +1406,9 @@ export function webOtherCopy(seed: SlipSeed, inSlip: boolean, league: LeagueSegm
   const side = seed.direction === "under" ? "Under" : "Over";
   const line = formatThreshold(seed.threshold);
   if (league === "nba") {
-    return inSlip ? `✓ ${side} in slip` : `${side} instead (${formatPercent(seed.probability)})`;
+    // seed.probability is 1 − combined_probability when the blend exists,
+    // otherwise the historical fallback. Whole percent, floored, matching the slip card.
+    return inSlip ? `✓ ${side} in slip` : `${side} instead (${formatTierPercent(seed.probability)})`;
   }
   return inSlip ? "Other side in slip" : `${side} ${line}`;
 }
@@ -1404,7 +1431,7 @@ export function mobilePrimaryCopy(
 
 export function mobileOtherCopy(seed: SlipSeed): string {
   const side = seed.direction === "under" ? "Under" : "Over";
-  return `${side} ${formatPercent(seed.probability)}`;
+  return `${side} ${formatTierPercent(seed.probability)}`;
 }
 
 /** Percent on the NBA action bar, beside the tier. WNBA keeps its short label. */

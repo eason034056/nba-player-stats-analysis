@@ -199,14 +199,15 @@ describe("tier percent on the game page", () => {
 
     expect(screen.getByTestId("read-bar")).toHaveTextContent("Model");
     expect(screen.getByTestId("read-bar")).toHaveTextContent("Over 67%");
-    expect(screen.getByTestId("read-bar")).toHaveTextContent("Under 33%");
-    expect(screen.getAllByText("History").length).toBeGreaterThan(0);
-    expect(screen.getByRole("button", { name: "Under instead (41%)" })).toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: /Under instead \(33%\)/ })).not.toBeInTheDocument();
+    expect(screen.getByTestId("read-bar")).toHaveTextContent("Under 32%");
+    expect(screen.queryByText("History")).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Under instead (32%)" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Under instead (41%)" })).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: /Add Adebayo O 18\.5/ })).toHaveTextContent("67%");
     expect(screen.getByRole("button", { name: /Add Adebayo O 18\.5/ })).not.toHaveTextContent("History");
-    expect(screen.getByRole("button", { name: /History/ })).toHaveTextContent("Under 41%");
+    expect(screen.getByRole("button", { name: "Under 32%" })).toBeInTheDocument();
+    expect(screen.getByTestId("event-action-bar")).not.toHaveTextContent("History");
     expect(screen.getByTestId("event-action-bar")).not.toHaveTextContent("59%");
-    expect(screen.getByTestId("event-action-bar")).not.toHaveTextContent("Under 33%");
+    expect(screen.getByTestId("event-action-bar")).not.toHaveTextContent("Under 41%");
   });
 });
