@@ -297,7 +297,7 @@ class TestRunDailyAnalysisLeagueRouting:
             )
         )
 
-        assert captured == ["daily_picks:nba:2026-05-14:tz480"]
+        assert captured == ["daily_picks:nba:v2:2026-05-14:tz480"]
 
     # ---- 2.4 No projection client for either league ----------------------
 

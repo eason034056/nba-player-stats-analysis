@@ -107,10 +107,10 @@ def event_reads_cache_key(event_id: str, market: str | None) -> str:
         market: One snapshot market key, or None.
 
     Returns:
-        Redis key under ``nba:event-reads:v1``.
+        Redis key under ``nba:event-reads:v2``. v1 payloads are not read.
     """
     market_part = "*" if not market else market
-    return f"nba:event-reads:v1:{event_id}:m={market_part}"
+    return f"nba:event-reads:v2:{event_id}:m={market_part}"
 
 
 def choose_read_side(

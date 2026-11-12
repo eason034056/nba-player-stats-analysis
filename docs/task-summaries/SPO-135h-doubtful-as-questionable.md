@@ -15,7 +15,7 @@ WNBA is unchanged. A literal Doubtful word still leaves `injury_status` and `com
 
 ## Why
 
-Eason decided that, for NBA, Doubtful keeps its combined probability and stays on the board. The stack through #79 did the opposite: `injury_blocks_combined` treated the source word like Out, so the blend was null and the filter dropped the row with the other null blends. Only top read already ignored Doubtful.
+For NBA, Doubtful keeps its combined probability and stays on the board. The stack through #79 did the opposite: `injury_blocks_combined` treated the source word like Out, so the blend was null and the filter dropped the row with the other null blends. Only top read already ignored Doubtful.
 
 ## Changes
 

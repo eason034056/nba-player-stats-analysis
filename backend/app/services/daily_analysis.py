@@ -60,6 +60,7 @@ from app.services.nba_injuries import (
     injury_snapshot_is_fresh,
     load_nba_pick_injuries,
     match_injury_entry,
+    matched_injury_words,
 )
 from app.services.pick_signals import build_nba_signals, injury_blocks_combined
 
@@ -267,6 +268,10 @@ def choose_daily_pick_side(
 # Cache key prefix
 DAILY_PICKS_CACHE_KEY = "daily_picks"
 
+# NBA payloads from before injury_status_raw live under the unversioned
+# key. Readers and writers use v2 only. WNBA stays unversioned.
+NBA_DAILY_PICKS_CACHE_VERSION = "v2"
+
 # Cache TTL (15 minutes)
 DAILY_PICKS_CACHE_TTL = 15 * 60
 
@@ -274,15 +279,25 @@ DAILY_PICKS_CACHE_TTL = 15 * 60
 def daily_picks_cache_key(league: str, date: str, tz_offset_minutes: int) -> str:
     """Redis key for one league, local date, and timezone offset.
 
+    NBA keys include ``v2`` so a payload stored before
+    ``injury_status_raw`` is not read. WNBA keys stay
+    ``daily_picks:wnba:{date}:tz{offset}``.
+
     Args:
         league: ``nba`` or ``wnba``.
         date: Local date YYYY-MM-DD.
         tz_offset_minutes: Minutes east of UTC. UTC+8 is 480.
 
     Returns:
-        ``daily_picks:{league}:{date}:tz{offset}``.
+        ``daily_picks:nba:v2:{date}:tz{offset}`` or the unversioned WNBA key.
     """
-    return f"{DAILY_PICKS_CACHE_KEY}:{league.lower()}:{date}:tz{tz_offset_minutes}"
+    league_key = league.lower()
+    if league_key == "nba":
+        return (
+            f"{DAILY_PICKS_CACHE_KEY}:nba:{NBA_DAILY_PICKS_CACHE_VERSION}:"
+            f"{date}:tz{tz_offset_minutes}"
+        )
+    return f"{DAILY_PICKS_CACHE_KEY}:{league_key}:{date}:tz{tz_offset_minutes}"
 
 
 def _optional_stat(value: Any) -> float | None:
@@ -1281,21 +1296,25 @@ class DailyAnalysisService:
                     # No projection source. The line is not a stand-in.
                     # lineup_confirmed stays null until projected lineups.
                     # NBA injury_status comes from the cached snapshot.
-                    # The Odds API description has no bdl_player_id, so
-                    # the match is the full name with the suffix kept.
-                    # A missing or ambiguous name stays null. WNBA stays null.
+                    # injury_status_raw is that same row's raw_status,
+                    # copied with no case change and no trimming. The
+                    # signal builder still receives only injury_status.
+                    # Out blocks. A stored Doubtful is already Questionable
+                    # and does not. The Odds API description has no
+                    # bdl_player_id, so the match is the full name with
+                    # the suffix kept. A missing or ambiguous name stays
+                    # null on both fields. WNBA stays null on both.
                     has_projection = False
                     projected_value = None
                     projected_minutes = None
                     edge = None
                     injury_status = None
+                    injury_status_raw = None
                     lineup_confirmed = None
                     if league.lower() == "nba" and injury_entries is not None:
-                        matched = match_injury_entry(injury_entries, player_name)
-                        if matched is not None:
-                            status = matched.get("status")
-                            if isinstance(status, str):
-                                injury_status = status
+                        injury_status, injury_status_raw = matched_injury_words(
+                            match_injury_entry(injury_entries, player_name)
+                        )
                     rank_fields = _empty_rank_fields()
                     if league.lower() == "nba":
                         opponent = _opponent_club(
@@ -1335,6 +1354,7 @@ class DailyAnalysisService:
                         opponent_position_rank_season=rank_fields["opponent_position_rank_season"],
                         opponent_position_rank_note=rank_fields["opponent_position_rank_note"],
                         injury_status=injury_status,
+                        injury_status_raw=injury_status_raw,
                         lineup_confirmed=lineup_confirmed,
                         # NBA tier is filled after the signal step. Starting
                         # at None means a raised signal call cannot leave

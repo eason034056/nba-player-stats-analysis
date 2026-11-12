@@ -189,7 +189,7 @@ class SchedulerService:
         # tracks instances separately, different handler so a WNBA crash
         # is caught locally and never reaches the NBA job (and vice
         # versa). Same UTC 12:00 cron cadence; each call writes to its
-        # own cache namespace (`daily_picks:nba:...` vs
+        # own cache namespace (`daily_picks:nba:v2:...` vs
         # `daily_picks:wnba:...`), no shared mutable state.
         self._scheduler.add_job(
             self._run_wnba_daily_analysis_job,

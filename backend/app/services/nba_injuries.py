@@ -134,11 +134,10 @@ def _mapped_status(raw_status: Any) -> str | None:
 
     ``Available`` is not an injury. ``Doubtful`` is stored as
     ``Questionable``. Picks and reads use that stored word and do not
-    block on the source word. The original word stays on
-    ``raw_status`` for the agent payload and a later history table.
-    Eason chose the mapping in the Sports Lab Lead chat on 2026-11-10
-    (~10:34 PM CT), and on 2026-11-11 that a stored Doubtful keeps
-    its blend.
+    block on the source word. A stored Doubtful keeps its blend.
+    Daily picks also copy the original word to ``injury_status_raw``.
+    The original word stays on ``raw_status`` for the agent payload
+    and a later history table.
 
     A word this module does not know is not left as-is. Downstream
     treats an unknown status as healthy. A word that contains ``Out``
@@ -460,6 +459,39 @@ def _injury_name_key(name: str | None) -> str:
     if not name:
         return ""
     return normalize_name(str(name))
+
+
+def matched_injury_words(
+    entry: dict[str, Any] | None,
+) -> tuple[str | None, str | None]:
+    """Normalized status and the source word from one matched snapshot row.
+
+    ``status`` is the word already stored for picks and reads. ``raw_status``
+    is BALLDONTLIE's ``status`` with no case change and no trimming.
+    Daily picks copy both onto the response. The signal builder still
+    receives only the normalized word, so only Out blocks.
+
+    A missing row, or a ``status`` that is not a string, returns
+    ``(None, None)``. A source word is never returned alone. A string
+    ``status`` whose ``raw_status`` is not a string still returns that
+    status, and None for the source word, so ``injury_status`` does
+    not change when the snapshot row has no source string.
+
+    Args:
+        entry: One row from ``match_injury_entry``, or None.
+
+    Returns:
+        ``(injury_status, injury_status_raw)``.
+    """
+    if not isinstance(entry, dict):
+        return None, None
+    status = entry.get("status")
+    if not isinstance(status, str):
+        return None, None
+    raw = entry.get("raw_status")
+    if not isinstance(raw, str):
+        return status, None
+    return status, raw
 
 
 def match_injury_entry(
