@@ -57,9 +57,27 @@ Eason decided that, for NBA, Doubtful keeps its combined probability and stays o
 
 ## Tests / Verification
 
-Recorded fixtures only. No live BALLDONTLIE or Odds API call. Where a recorded injury name has to be the posted player, only the odds `description` changes. The Redis check sets one recorded Questionable row (Jaylon Tyson) to Doubtful and uses the recorded Out row for Dominick Barlow.
+Recorded fixtures only. No live BALLDONTLIE or Odds API call. The odds capture is `odds_api_event_odds__player_points.json` (event `07361a8381206817e27bd2697fad7479`). Only two descriptions change: Matisse Thybulle becomes Jaylon Tyson, Walker Kessler becomes Dominick Barlow. The injury page is the recorded `player_injuries` page. One recorded Questionable row, Jaylon Tyson, is set to Doubtful. Dominick Barlow stays the recorded Out row. The refresh uses a mocked transport and writes `injuries:nba:latest` in Redis. The second page is empty so the walk stops. Postgres is not running. The reads query is stubbed with the relabeled capture.
 
-Counts are filled after the QA patch and the full suite.
+`cd backend && python -m pytest tests -q --tb=line`
+
+1415 passed, 33 skipped, 6 xfailed, 0 failed.
+
+Redis check, trimmed. Jaylon stays on the board with a number and `injury_status` Questionable. Barlow stays on the board with a null blend. Dyson, who is not on the injury page, keeps a number and a null status. `top_read` is Jaylon, because Barlow is Out and is skipped.
+
+```
+SEEDED {"Dominick Barlow": {"raw_status": "Out", "status": "Out"}, "Jaylon Tyson": {"raw_status": "Doubtful", "status": "Questionable"}}
+points_picks:
+  Dyson Daniels    injury_status=null          combined_probability=0.743  over 10.5
+  Jaylon Tyson     injury_status=Questionable  combined_probability=0.7022 over 6.5
+  Dominick Barlow  injury_status=Out           combined_probability=null   under 14.5
+reads:
+  Dominick Barlow  combined_probability=null
+  Dyson Daniels    combined_probability=0.743
+  Jaylon Tyson     combined_probability=0.7022
+top_read: Jaylon Tyson player_points over 6.5 probability 0.8485
+detail top_read: same
+```
 
 ## Follow-ups
 
