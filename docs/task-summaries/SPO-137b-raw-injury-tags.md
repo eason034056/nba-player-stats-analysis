@@ -38,9 +38,9 @@ The chip carries a screen-reader-only `Injury:` prefix. The visible word is unch
 
 ## Unknown words
 
-A word that is not one of the five is shown trimmed, in the casing BDL sent, on the neutral chip. Hiding it would make a new BDL status look like a healthy player. Null, a blank string, and Active show nothing. Active means available. A blank raw does not fall through to `injury_status`, because `??` only replaces null and undefined.
+A word that is not one of the five is shown trimmed, in the casing BDL sent, on the neutral chip. Null, a blank raw with a null status, and Active show nothing. Active means available. A blank or whitespace-only raw falls back to the stored `injury_status` chip, so a blank raw beside Questionable shows Questionable.
 
-Matching ignores case and surrounding whitespace. It does not strip spaces inside the word and it does not treat spaces as hyphens. `day to day` is unknown and is shown as sent. `Day-To-Day` is the known word.
+Matching casefolds and treats `-` and `_` as spaces, then collapses whitespace. `Day To Day`, `day_to_day`, and `day-to-day` are the Day-To-Day chip. An unknown word still keeps the casing BDL sent.
 
 ## Changes
 
@@ -59,7 +59,7 @@ Matching ignores case and surrounding whitespace. It does not strip spaces insid
 
 `isOutPick` and `isPlayerOutInGame` still key off `injury_status`. The raw word is not read. Doubtful with status Questionable keeps a percent, Add to Bet Slip, and Ask.
 
-The Doubtful sample is `injury_status: "Questionable"`, `injury_status_raw: "Doubtful"`, `combined_probability: 0.6095`. The card floors a combined probability, so it prints 60%. Half-away rounding of the same number is 61%. This ticket does not change that floor. The Out sample has both fields `"Out"` and `combined_probability: null`. The WNBA sample is null on both fields. A fourth pick is Questionable with raw `out`. All four are complete picks in `frontend/test/fixtures/picks/nba-daily-picks-raw-injury.json`, parsed with `dailyPickSchema`, and they are not spread onto another pick.
+The Doubtful sample is `injury_status: "Questionable"`, `injury_status_raw: "Doubtful"`, `combined_probability: 0.6095`. The card floors a combined probability, so it prints 60%. Half-away rounding of the same number is 61%. This ticket does not change that floor. The Out sample has both fields `"Out"` and `combined_probability: null`. Both rows are NBA picks in `frontend/test/fixtures/picks/nba-daily-picks-raw-injury.json`, with the DailyPick keys from backend `550b810`, including `position`, the opponent source fields, `p_over`, `p_under`, `season_mean`, and four signals. They are parsed with `dailyPickSchema`. A raw `out` beside a stored Questionable is not in that file. The backend casefolds that word into stored Out. The guard test builds that pair inline and labels it synthetic. A WNBA null pair is an inline case, not a player inside the NBA response.
 
 ## QA patch
 
@@ -84,7 +84,11 @@ A raw word of `out` can sit next to a stored status of Questionable, because the
 
 Probable uses a dotted blue chip (`#12355B` on `#E7F2FB`) so it is not the pale green LINEUP ALIGNED pill. The chip has a screen-reader-only `Injury:` prefix, clipped inside the chip so the prefix does not widen the page.
 
+The contrast check reads the colours off the rendered chip. A few tests still look at implementation details. The colour check matches `bg-[#…]` and `text-[#…]`, the Probable check looks for `border-dotted`, and the prefix check looks for `sr-only`.
+
 `npx vitest run` is 71 files and 601 tests. `npx tsc --noEmit`, `npm run lint`, and `npm run build` passed. `/wnba` routes stay in the route table.
+
+`uploads/pr85_qa_tests2.patch` applied with `git am` and no edits. That commit is `230a99f`. The file reads four picks from the raw injury fixture. Picks three and four were the WNBA row and the raw `out` row, and this follow-up removed both. The file was not edited. Three of its tests then fail because those picks are undefined. The other four still pass. `npx vitest run` is 72 files and 610 tests, with those 3 failures. `npx tsc --noEmit`, `npm run lint`, and `npm run build` passed. `/wnba` routes stay in the route table.
 
 ## Screenshots
 

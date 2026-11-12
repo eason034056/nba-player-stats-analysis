@@ -54,9 +54,46 @@ vi.mock("@/lib/api", async () => {
 
 const todayPicks = dailyPicksResponseSchema.parse(todayPicksFixture);
 const emptyLineups = lineupsResponseSchema.parse(emptyLineupsFixture);
-const [doubtful, listedOut, wnbaQuiet, lowerOut] = rawInjuryFixture.picks.map((pick) =>
-  dailyPickSchema.parse(pick),
-);
+const [doubtful, listedOut] = rawInjuryFixture.picks.map((pick) => dailyPickSchema.parse(pick));
+
+const DAILY_PICK_KEYS = [
+  "player_name",
+  "player_team",
+  "player_team_code",
+  "position",
+  "event_id",
+  "home_team",
+  "away_team",
+  "commence_time",
+  "metric",
+  "threshold",
+  "direction",
+  "probability",
+  "n_games",
+  "bookmakers_count",
+  "all_lines",
+  "has_projection",
+  "projected_value",
+  "projected_minutes",
+  "edge",
+  "opponent_rank",
+  "opponent_position_rank",
+  "opponent_rank_source",
+  "opponent_rank_season",
+  "opponent_rank_note",
+  "opponent_position_rank_source",
+  "opponent_position_rank_season",
+  "opponent_position_rank_note",
+  "injury_status",
+  "injury_status_raw",
+  "lineup_confirmed",
+  "tier",
+  "p_over",
+  "p_under",
+  "season_mean",
+  "signals",
+  "combined_probability",
+] as const;
 
 function channel(hex: string, index: number): number {
   const raw = parseInt(hex.replace("#", "").slice(index, index + 2), 16) / 255;
@@ -148,17 +185,26 @@ describe("injury tag text", () => {
     expect(Object.hasOwn(teamLineupSchema.shape, "injury_status_raw")).toBe(false);
     expect(Object.hasOwn(topReadSchema.shape, "injury_status_raw")).toBe(false);
 
+    for (const pick of rawInjuryFixture.picks) {
+      for (const key of DAILY_PICK_KEYS) expect(Object.hasOwn(pick, key)).toBe(true);
+    }
     const picks = rawInjuryFixture.picks.map((pick) => dailyPickSchema.parse(pick));
     expect(picks.map((pick) => [pick.player_name, pick.injury_status, pick.injury_status_raw, pick.combined_probability])).toEqual([
       ["Bam Adebayo", "Questionable", "Doubtful", 0.6095],
       ["Jimmy Butler", "Out", "Out", null],
-      ["A'ja Wilson", null, null, null],
-      ["Tyler Herro", "Questionable", "out", 0.6095],
     ]);
-    expect(isOutPick(lowerOut)).toBe(false);
-    expect(lowerOut.injury_status_raw).toBe("out");
-    expect(injuryTag(lowerOut.injury_status_raw, lowerOut.injury_status)).toEqual({ text: "Out", tone: "out" });
-    expect(injuryTag(wnbaQuiet.injury_status_raw, wnbaQuiet.injury_status)).toBeNull();
+    expect(picks[0]?.signals?.map((signal) => signal.key)).toEqual(["market", "last10", "history", "defense"]);
+  });
+
+  it("does not block a synthetic raw out when the stored status is Questionable", () => {
+    const synthetic = {
+      ...doubtful,
+      player_name: "Tyler Herro",
+      injury_status: "Questionable",
+      injury_status_raw: "out",
+    };
+    expect(isOutPick(synthetic)).toBe(false);
+    expect(injuryTag(synthetic.injury_status_raw, synthetic.injury_status)).toEqual({ text: "Out", tone: "out" });
   });
 
   it("treats a missing raw field as null and falls back to the status", () => {
@@ -170,14 +216,24 @@ describe("injury tag text", () => {
     });
   });
 
-  it("shows an unknown word trimmed, and nothing for null, blank, or Active", () => {
+  it("folds Day-To-Day across spaces, hyphens, and underscores", () => {
+    const dashed = { text: "Day-To-Day", tone: "day-to-day" as const };
+    expect(injuryTag("Day To Day", "Questionable")).toEqual(dashed);
+    expect(injuryTag("day_to_day", null)).toEqual(dashed);
+    expect(injuryTag("day-to-day", null)).toEqual(dashed);
+    expect(injuryTag("  DAY-TO-DAY  ", null)).toEqual(dashed);
+  });
+
+  it("shows an unknown word trimmed, and falls back when the raw word is blank", () => {
     expect(injuryTag("  GTD  ", "Questionable")).toEqual({ text: "GTD", tone: "neutral" });
     expect(injuryTag(null, "Out (knee)")).toEqual({ text: "Out (knee)", tone: "neutral" });
-    expect(injuryTag("day to day", null)).toEqual({ text: "day to day", tone: "neutral" });
+    expect(injuryTag("   ", "Out")).toEqual({ text: "Out", tone: "out" });
+    expect(injuryTag("", "Questionable")).toEqual({ text: "Questionable", tone: "questionable" });
+    expect(injuryTag(" \t ", "Day To Day")).toEqual({ text: "Day-To-Day", tone: "day-to-day" });
     expect(injuryTag(null, null)).toBeNull();
     expect(injuryTag(undefined, undefined)).toBeNull();
-    expect(injuryTag("   ", "Out")).toBeNull();
-    expect(injuryTag("", "Questionable")).toBeNull();
+    expect(injuryTag("", null)).toBeNull();
+    expect(injuryTag("   ", null)).toBeNull();
     expect(injuryTag(" Active ", "Out")).toBeNull();
     expect(injuryTag(null, "active")).toBeNull();
   });
@@ -283,7 +339,7 @@ describe("Doubtful does not block", () => {
   });
 
   it("does not put an injury chip on a WNBA row", () => {
-    const quiet = wnbaQuiet;
+    const quiet = { ...doubtful, injury_status: null, injury_status_raw: null };
     const railArgs = {
       suggested: [quiet.player_name],
       picks: [quiet],

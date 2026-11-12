@@ -3,7 +3,7 @@
  *
  * The BDL injury word shown on a card. `injury_status` stays the stored
  * status (Doubtful still arrives there as Questionable). The tag text is
- * `injury_status_raw` when that field is present, otherwise `injury_status`.
+ * the raw word when it has a non-blank value, otherwise the stored status.
  * Out exclusion does not read this module.
  */
 
@@ -68,8 +68,20 @@ export interface InjuryTag {
   tone: InjuryTone;
 }
 
+/**
+ * Fold a status the way the backend compares the five known words.
+ * Trim, lowercase, treat "-" and "_" as spaces, then collapse whitespace.
+ * `isOutPick` uses this on `injury_status` only, and only the exact key "out" blocks.
+ */
 export function injuryKey(status: string | null | undefined): string {
-  return status?.trim().toLowerCase() ?? "";
+  const folded = (status ?? "").trim().toLowerCase().replace(/[-_]+/g, " ");
+  return folded.replace(/\s+/g, " ").trim();
+}
+
+function presentWord(value: string | null | undefined): string | null {
+  if (typeof value !== "string") return null;
+  if (value.trim() === "") return null;
+  return value;
 }
 
 export function injuryPaint(tone: InjuryTone): { fg: string; bg: string; chip: string } {
@@ -91,17 +103,18 @@ export function injurySeverity(tag: InjuryTag): number {
 }
 
 /**
- * Tag for `raw ?? status`.
- * Null, a blank string, and Active draw nothing.
- * The five known words use the canonical label. Any other word is shown
- * trimmed, in the casing BDL sent, on the neutral chip.
+ * Tag for the raw word, or the stored status when raw is null or blank.
+ * Null, a blank value with a null status, and Active draw nothing.
+ * The five known words use the canonical label. `Day To Day`, `day_to_day`,
+ * and `day-to-day` are Day-To-Day. Any other word is shown trimmed, in the
+ * casing BDL sent, on the neutral chip.
  */
 export function injuryTag(
   raw: string | null | undefined,
   status: string | null | undefined,
 ): InjuryTag | null {
-  const display = raw ?? status;
-  if (typeof display !== "string") return null;
+  const display = presentWord(raw) ?? presentWord(status);
+  if (display == null) return null;
   const key = injuryKey(display);
   if (key === "" || key === "active") return null;
   const known = INJURY_WORDS.find((word) => injuryKey(word.label) === key);
