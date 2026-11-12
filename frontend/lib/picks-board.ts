@@ -151,7 +151,11 @@ export function isPlayerOutInGame(
   return picks.some((pick) => samePlayerInGame(pick, eventId, playerName) && isOutPick(pick));
 }
 
-/** Strongest tag for this player in this game. An Out row wins, and Doubtful does not. */
+/**
+ * Strongest tag for this player in this game.
+ * A stored Out wins, and the chip keeps that row's raw word.
+ * Doubtful does not win over a stored Out, and it does not block.
+ */
 export function injuryTagForPlayer(
   picks: readonly {
     event_id?: string | null;
@@ -163,7 +167,8 @@ export function injuryTagForPlayer(
   playerName: string,
 ): InjuryTag | null {
   const rows = picks.filter((pick) => samePlayerInGame(pick, eventId, playerName));
-  if (rows.some((pick) => isOutPick(pick))) return canonicalInjuryTag("out");
+  const outRow = rows.find((pick) => isOutPick(pick));
+  if (outRow) return injuryTag(outRow.injury_status_raw, outRow.injury_status) ?? canonicalInjuryTag("out");
   let best: InjuryTag | null = null;
   for (const row of rows) {
     const tag = injuryTag(row.injury_status_raw, row.injury_status);

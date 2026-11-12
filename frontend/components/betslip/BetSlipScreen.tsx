@@ -31,10 +31,12 @@ const SHARE_FONT_MONO = "JetBrains Mono, ui-monospace, monospace";
 function ShareCard({
   picks,
   tags,
+  outIds,
   forwardedRef,
 }: {
   picks: BetSlipPick[];
   tags: ReadonlyMap<string, InjuryTag | null>;
+  outIds: ReadonlySet<string>;
   forwardedRef: React.RefObject<HTMLDivElement>;
 }) {
   const stamp = picks[0]?.commence_time
@@ -67,7 +69,7 @@ function ShareCard({
       </div>
       {picks.map((pick) => {
         const tag = tags.get(pick.id) ?? null;
-        const listedOut = tag?.tone === "out";
+        const listedOut = outIds.has(pick.id);
         return (
         <div
           key={pick.id}
@@ -94,7 +96,11 @@ function ShareCard({
             ) : null}
           </div>
           <div style={{ fontFamily: SHARE_FONT_MONO, fontWeight: 700, fontSize: 16, color: "#E4DA72" }}>
-            {listedOut && tag ? <InjuryStatusTag tag={tag} /> : slipCardFace(pick).probabilityText}
+            {listedOut ? (
+              <InjuryStatusTag tag={tag ?? canonicalInjuryTag("out")} />
+            ) : (
+              slipCardFace(pick).probabilityText
+            )}
           </div>
         </div>
         );
@@ -336,7 +342,7 @@ export function BetSlipScreen() {
                         Details
                       </Link>
                     </div>
-                    {tag && tag.tone !== "out" ? (
+                    {tag && !listedOut ? (
                       <div className="mt-2">
                         <InjuryStatusTag tag={tag} />
                       </div>
@@ -413,7 +419,7 @@ export function BetSlipScreen() {
             <p className="text-xs leading-5 text-muted">
               {slipSummaryCaption(totals.basis, outIds.size > 0)}
             </p>
-            <ShareCard picks={picks} tags={legTags} forwardedRef={shareImageRef} />
+            <ShareCard picks={picks} tags={legTags} outIds={outIds} forwardedRef={shareImageRef} />
             <div className="flex flex-wrap gap-2">
               <button
                 type="button"

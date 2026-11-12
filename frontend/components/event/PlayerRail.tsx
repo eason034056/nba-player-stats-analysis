@@ -3,6 +3,7 @@
 import { InjuryStatusTag } from "@/components/InjuryStatusTag";
 import type { LeagueSegment } from "@/lib/event-detail-link";
 import { joinMeta, type EventPlayerRow } from "@/lib/event-page";
+import { canonicalInjuryTag } from "@/lib/injury-tag";
 import { playerLastName } from "@/lib/today-board";
 import { cn } from "@/lib/utils";
 
@@ -89,7 +90,7 @@ export function PlayerRail({
                     <span className="hidden md:inline">{row.name}</span>
                   </span>
                   {meta ? <span className="hidden text-xs text-muted md:block">{meta}</span> : null}
-                  {row.injury && row.injury.tone !== "out" ? (
+                  {row.injury && !row.listedOut ? (
                     <span className="mt-1 block">
                       <InjuryStatusTag tag={row.injury} />
                     </span>
@@ -98,8 +99,8 @@ export function PlayerRail({
                 <span className="font-mono text-xs font-semibold text-muted md:text-right md:text-[13px]">
                   {row.lineText}
                 </span>
-                {row.injury?.tone === "out" ? (
-                  <InjuryStatusTag tag={row.injury} />
+                {row.listedOut ? (
+                  <InjuryStatusTag tag={row.injury ?? canonicalInjuryTag("out")} />
                 ) : (
                   <span
                     className={cn(

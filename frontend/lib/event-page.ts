@@ -11,7 +11,7 @@ import { enUS } from "date-fns/locale";
 
 import { nbaTierFace, tierFromBackend, tierProbability } from "./nba-card";
 import { canonicalInjuryTag, injuryTag, type InjuryTag } from "./injury-tag";
-import { isOutPick, isPlayerOutInGame } from "./picks-board";
+import { injuryTagForPlayer, isOutPick, isPlayerOutInGame } from "./picks-board";
 import { formatPercent, formatTierPercent } from "./player-dd";
 import {
   etWallClock,
@@ -507,6 +507,8 @@ export interface EventPlayerRow {
   leanText: string;
   hasLean: boolean;
   probability: number | null;
+  /** True only when injury_status is Out. A raw word of "out" does not set this. */
+  listedOut: boolean;
   /** NBA injury chip. Null on WNBA and when the player has no status word. */
   injury: InjuryTag | null;
 }
@@ -718,10 +720,11 @@ export function eventPlayerRows(args: {
             : "No read",
       hasLean: out ? false : nba != null || pick != null,
       probability: out ? null : nba?.rate ?? pick?.probability ?? null,
+      listedOut: out,
       injury:
         args.league === "nba"
           ? out
-            ? canonicalInjuryTag("out")
+            ? injuryTagForPlayer(args.picks, args.eventId, name)
             : pick
               ? injuryTag(pick.injury_status_raw, pick.injury_status)
               : null
@@ -1113,7 +1116,10 @@ function buildNbaRead(args: {
       other: null,
       leanProbability: null,
       listedOut: true,
-      injury: canonicalInjuryTag("out"),
+      injury:
+        pick != null && isOutPick(pick)
+          ? injuryTag(pick.injury_status_raw, pick.injury_status) ?? canonicalInjuryTag("out")
+          : canonicalInjuryTag("out"),
     };
   }
   if (!pick) {
