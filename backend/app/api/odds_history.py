@@ -30,8 +30,8 @@ from app.services.odds_snapshot_service import (
     odds_snapshot_service,
     BINARY_MARKET_KEYS,
     OVER_UNDER_MARKET_KEYS,
-    nba_slate_date,
 )
+from app.services.slate_date import nba_slate_date
 from app.models.schemas import (
     OddsLineSnapshot,
     OddsConsensus,

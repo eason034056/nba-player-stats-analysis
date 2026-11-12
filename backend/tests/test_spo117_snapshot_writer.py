@@ -655,7 +655,6 @@ async def test_history_consensus_averages_one_main_line_per_book(monkeypatch):
 
 @pytest.mark.asyncio
 async def test_omitted_history_date_follows_the_eastern_slate(monkeypatch):
-    import app.services.odds_snapshot_service as snap
     from app.api.odds_history import get_odds_history
 
     class FrozenDateTime(datetime):
@@ -666,7 +665,9 @@ async def test_omitted_history_date_follows_the_eastern_slate(monkeypatch):
                 return moment.astimezone(tz)
             return moment
 
-    monkeypatch.setattr(snap, "datetime", FrozenDateTime)
+    import app.services.slate_date as slate_date
+
+    monkeypatch.setattr(slate_date, "datetime", FrozenDateTime)
     seen: dict[str, object] = {}
 
     class FakeDB:

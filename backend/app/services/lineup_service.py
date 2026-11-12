@@ -62,8 +62,8 @@ DO UPDATE SET
 
 INSERT_FETCH_LOG_SQL = """
 INSERT INTO lineup_fetch_logs (
-    date, fetched_at, team_count, status, error_message, duration_ms, source_statuses
-) VALUES ($1, $2, $3, $4, $5, $6, $7::jsonb)
+    date, fetched_at, team_count, status, error_message, duration_ms, source_statuses, league
+) VALUES ($1, $2, $3, $4, $5, $6, $7::jsonb, $8)
 """
 
 
@@ -375,10 +375,10 @@ class LineupConsensusService:
                 raise RuntimeError("Both free lineup sources returned no usable data")
 
             await self._write_to_redis(date, lineups)
-            # WNBA writes are Redis-only for SPO-34. The PG table is
-            # `(date, team)` keyed; NBA + WNBA share several codes (CHI,
-            # IND, TOR, …) so persistence would collide. Migration adding
-            # a `league` column is a follow-up.
+            # WNBA team rows stay out of Postgres. The unique key is
+            # already (date, team, league), and WNBA is paused, so this
+            # writer still stores NBA snapshots only. The fetch log below
+            # records self.league for both leagues.
             if self.league == "nba":
                 try:
                     await self._write_to_postgres(date, lineups)
@@ -477,10 +477,9 @@ class LineupConsensusService:
     async def _read_from_postgres(self, date: str) -> dict[str, dict[str, Any]]:
         if not db_service.is_connected:
             return {}
-        # WNBA does not persist to PG yet (no `league` column on the PK —
-        # tracked as a follow-up migration). Skip the read; WNBA fallback
-        # path becomes "empty result if Redis miss + RotoWire failure",
-        # which is the correct degraded state for SPO-34.
+        # WNBA snapshots are unread. The unique key includes league, and
+        # WNBA persistence stays paused, so a Redis miss returns an empty
+        # slate when the scrape also fails.
         if self.league != "nba":
             return {}
         rows = await db_service.fetch(
@@ -533,6 +532,7 @@ class LineupConsensusService:
                 error_message,
                 duration_ms,
                 json.dumps(source_statuses),
+                self.league,
             )
         except Exception as exc:
             print(f"⚠️ 寫入 lineup fetch log 失敗: {exc}")

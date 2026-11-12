@@ -46,5 +46,5 @@ These stay pending the owner's decision. This change does not add either path, a
 
 ## Deferred, not this change
 
-- The snapshot writer keeps only the last Over and the last Under per book (`odds_snapshot_service.py`, the assignment into `player_outcomes[player][direction]`). The unique key has no line (`db.py`: `UNIQUE(snapshot_at, event_id, player_name, market, bookmaker)`). Alternate rungs cannot all be stored. The read path collapses extra rows when a capture already contains them. The writer and the key are unchanged.
+- Since SPO-117 the writer stores every two-sided total. `_process_event` pairs Over and Under on `(player_name, point)` and writes one row per rung (`odds_snapshot_service.py`). The unique key is `UNIQUE (snapshot_at, event_id, player_name, market, bookmaker, line)` (`db.py`, constraint `odds_line_snapshots_book_line_key`; the startup block widens a database created with the older key). A book that posts a ladder keeps the main total and every alternate. The read path still picks one main line per book when it votes.
 - No `league` column. WNBA is paused.
