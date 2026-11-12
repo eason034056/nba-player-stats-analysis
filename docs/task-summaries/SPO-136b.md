@@ -103,6 +103,8 @@ That job is [run 43135923499](https://github.com/eason034056/nba-player-stats-an
 
 The step now appends both hosts to `/etc/hosts` as `127.0.0.1`, then checks that `curl --fail` cannot reach `https://fonts.googleapis.com` or `https://fonts.gstatic.com`. `npm run build` runs after that check. A font download connects to loopback, fails, and fails the build. The step then searches `.next/static/css` for those hosts. Next's own runtime JS mentions the hosts because it detects a Google Fonts `<link>`. That JS is not a download, so the search is limited to built CSS.
 
+The hosts-file build is [run 43136389635](https://github.com/eason034056/nba-player-stats-analysis/actions/runs/43136389635). `curl` printed `Failed to connect to fonts.googleapis.com port 443 after 1 ms: Could not connect to server` and the same failure for `fonts.gstatic.com` after 0 ms. `next build` compiled and generated 10 static pages. Frontend Lint & Type Check succeeded on that run.
+
 ## Screenshots
 
 Playwright drove system Chrome against `next start` on port 3010. A local fixture server on port 8000 answered the NBA routes. Animations were disabled. The React Query devtools container was hidden. Viewports were 1440×900 and 390×844, full page.
@@ -159,5 +161,4 @@ No new TypeScript logic was added, so no new vitest file was added.
 
 ## Follow-ups
 
-- Record the Actions run that builds with the hosts-file block.
 - The WNBA share template still uses a system font stack.
