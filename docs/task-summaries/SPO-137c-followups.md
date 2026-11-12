@@ -10,7 +10,7 @@
 
 `DELETE /api/nba/daily-picks/cache` is unchanged. It still deletes four keys for one date and one offset. The service sweep deletes every NBA key and every pre-league key, which is a wider observable result, and the existing route test patches `cache_service.delete`.
 
-Five deferred QA patches landed. Three were reverted after their tests failed against behavior that has already changed, or against a request the stub does not intercept.
+Six deferred QA patches are in the tree. pr54 and pr68 were reverted. pr83 landed: its flush test was renamed and now pins this sweep, and its other three tests are the patch text.
 
 ## Changes
 
@@ -21,7 +21,7 @@ Five deferred QA patches landed. Three were reverted after their tests failed ag
 | No league | Still `daily_picks:*`. |
 | Docstring | Describes the digit pattern, why it does not overlap WNBA, and that `delete_pattern` forwards the pattern as Redis `SCAN MATCH`. |
 | DELETE route | Left as the four explicit keys. A full NBA sweep would also drop other dates, and `test_nba_cache_route_deletes_the_versioned_key` asserts `cache_service.delete`. |
-| Tests | `backend/tests/test_cache.py` seeds the five keys and checks NBA, WNBA, and the no-league clear. |
+| Tests | `backend/tests/test_cache.py` seeds the five keys and checks NBA, WNBA, and the no-league clear. `backend/tests/test_spo137a_qa.py` is the pr83 file, with the flush test updated for this sweep. |
 | QA patches | See Tests. Product code was not edited to make an old assertion pass. |
 
 ## Why
@@ -73,7 +73,7 @@ Seeded keys: `daily_picks:2026-11-11:tz-360`, `daily_picks:2026-11-11`, `daily_p
 
 `test_nba_flush_clears_versioned_keys_and_leaves_wnba` still passes. It does not seed pre-league keys, so the NBA clear still reports 2.
 
-QA patches, applied with `git am` in this order. `pr47`, `pr68`, and `pr73` were plain diffs with no `From` or `Subject`. Those three were wrapped in a mailbox header so `git am` could keep an author of eason034056. The other five already had subjects, and those subjects were kept. A failing file was reverted with `git revert`, not amended.
+QA patches, applied with `git am` in this order. `pr47`, `pr68`, and `pr73` were plain diffs with no `From` or `Subject`. Those three were wrapped in a mailbox header so `git am` could keep an author of eason034056. The other five already had subjects, and those subjects were kept. A failing file was reverted with `git revert`, not amended. pr83's file was restored after that revert, with the flush test updated for this sweep.
 
 | Patch | Result |
 |---|---|
@@ -84,7 +84,7 @@ QA patches, applied with `git am` in this order. `pr47`, `pr68`, and `pr73` were
 | pr65 `test_spo132b_optional_vpc.py` | Landed. 8 passed, 3 skipped. Terraform is not on PATH, so `TestVpcIdConsole` skipped. It did not fail. |
 | pr68 `test_spo135a_slate_date.py` | Dropped. `test_event_detail_omitted_date_is_the_callers_local_day` got 200 from the detail route and the local date `2026-11-10`, then `GET /api/nba/events` returned 401. Patching `app.api.nba.get_events` replaces the name the detail handler calls. FastAPI already bound the list route to the original function, so the list request reached The Odds API. Product code was not changed to make that stub apply. Revert: `d699d80`. |
 | pr73 `test_spo132e_qa_verify_edges.py` | Landed. 4 skipped. Postgres is not reachable, so the existing helper skips. It did not fail. |
-| pr83 `test_spo137a_qa.py` | Dropped. `test_nba_flush_leaves_pre_league_and_wnba_keys` asserts `clear_daily_picks_cache("nba")` deletes 2 and leaves the pre-league keys. This ticket deletes those keys on purpose (`assert 4 == 2`). The other three tests in the file passed (glob, DELETE's four keys, event-reads v1). The whole commit was reverted so the old flush pin is not in the suite. Revert: `7181ac6`. |
+| pr83 `test_spo137a_qa.py` | Landed. The file is back from the patch. `test_nba_flush_leaves_pre_league_and_wnba_keys` is renamed `test_nba_flush_drops_pre_league_keys_and_leaves_wnba`: the same five seeded keys, and the NBA flush now deletes the four NBA and pre-league keys and leaves the WNBA key. The glob, the four DELETE keys, and the event-reads v1 miss are unchanged. File: 4 passed. The earlier whole-file revert (`7181ac6`) stays in history. |
 
 Test names added and kept:
 
@@ -97,10 +97,16 @@ Test names added and kept:
 - `test_every_nba_spelling_resolves_to_one_code`, `test_compact_forms_still_resolve`, `test_bare_city_is_not_guessed`, `test_g_league_affiliates_do_not_borrow_the_parent_code`, `test_wnba_full_names_never_land_on_an_nba_code`, `test_recorded_sparks_stay_wnba`, `test_unknown_league_still_raises`, `test_concrete_providers_accept_the_abstract_parameters`, `test_the_odds_api_provider_still_constructs`, `test_frozen_defaults_and_derived_values`
 - `test_unset_is_null_and_does_not_error`, `test_valid_ids_are_accepted`, `test_invalid_ids_are_rejected` (skipped here; terraform is not on PATH)
 - `test_uuid_id_table_never_reports_ok_after_a_query_error`, `test_uuid_id_table_with_zero_sequences_verifies` (skipped here; Postgres is not reachable)
+- `test_nba_glob_matches_v2_and_the_legacy_league_key_only`
+- `test_nba_flush_drops_pre_league_keys_and_leaves_wnba` (renamed from `test_nba_flush_leaves_pre_league_and_wnba_keys`; asserts this sweep)
+- `test_nba_cache_route_deletes_v2_and_three_legacy_keys`
+- `test_event_reads_does_not_read_a_v1_body`
+
+`tests/test_spo137a_qa.py`: 4 passed.
 
 `cd backend && python -m pytest tests -q`
 
-1556 passed, 68 skipped, 6 xfailed, 0 failed.
+1560 passed, 68 skipped, 6 xfailed, 0 failed.
 
 Integration test: SKIPPED (env unset). Fabrication scan: PASS. The new cache test writes string markers into an in-memory fake. It does not invent an external API body. The landed QA files use recorded fixtures or local schema and script checks.
 
@@ -108,7 +114,6 @@ No OpenAPI change. No schema added or removed. No path added or removed.
 
 ## Follow-ups
 
-- Re-apply the three pr83 tests that still match the code (the `daily_picks:nba:*` glob, the four DELETE keys, and the event-reads v1 miss) without `test_nba_flush_leaves_pre_league_and_wnba_keys`.
 - `fetch_and_store` on `wnba_lineup_service` still calls `clear_daily_picks_cache(league="nba")`. It now also drops pre-league keys. It still does not drop WNBA keys. Do not switch that argument to `self.league` without deciding that a WNBA lineup refresh should clear WNBA boards.
 - Run `TestVpcIdConsole` where `terraform` is on PATH. Run `test_spo132e_qa_verify_edges.py` where Postgres is reachable.
 - `docs/progress.md` still says the #52 QA cases and the SPO-118 QA file are unapplied, and that the events list fills an omitted date with today UTC. This ticket does not edit that file. The replacement notes are in the PR body.
