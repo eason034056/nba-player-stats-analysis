@@ -7,7 +7,12 @@ do not call AWS.
 from __future__ import annotations
 
 import re
+import shutil
+import subprocess
+import tempfile
 from pathlib import Path
+
+import pytest
 
 ROOT = Path(__file__).resolve().parents[2]
 TF = ROOT / "infra" / "aws"
@@ -142,3 +147,61 @@ class TestDocs:
             assert "no matching EC2 VPC found" in text
             assert PLACEHOLDER in text
             assert "terraform plan" in text
+
+
+TERRAFORM = shutil.which("terraform")
+
+
+def _console(vpc_assignment: str | None, expression: str = "var.vpc_id") -> subprocess.CompletedProcess[str]:
+    """Evaluate an expression in terraform console. Does not call AWS.
+
+    Terraform 1.9 still exits 0 when variable validation fails, and it may
+    print the rejected value on stdout. Callers must look at stderr.
+    """
+    with tempfile.TemporaryDirectory() as tmp:
+        tfvars = Path(tmp) / "console.tfvars"
+        lines = [
+            'bucket_name   = "sportslab-data-example-us-east-2"',
+            'allowed_cidrs = ["198.51.100.10/32"]',
+        ]
+        if vpc_assignment is not None:
+            lines.append(vpc_assignment)
+        tfvars.write_text("\n".join(lines) + "\n", encoding="utf-8")
+        return subprocess.run(
+            [TERRAFORM, "console", "-no-color", f"-var-file={tfvars}"],
+            input=expression + "\n",
+            cwd=TF,
+            check=False,
+            capture_output=True,
+            text=True,
+        )
+
+
+@pytest.mark.skipif(TERRAFORM is None, reason="terraform is not on PATH")
+class TestVpcIdConsole:
+    def test_unset_is_null_and_does_not_error(self) -> None:
+        result = _console(None)
+        combined = result.stdout + result.stderr
+        assert "Error: Invalid value for variable" not in combined
+        assert "tostring(null)" in result.stdout
+
+    def test_valid_ids_are_accepted(self) -> None:
+        for value in ("vpc-01234567", "vpc-0123456789abcdef0"):
+            result = _console(f'vpc_id = "{value}"')
+            combined = result.stdout + result.stderr
+            assert "Error: Invalid value for variable" not in combined, combined
+            assert f'"{value}"' in result.stdout
+
+    def test_invalid_ids_are_rejected(self) -> None:
+        rejected = (
+            'vpc_id = ""',
+            'vpc_id = "subnet-123"',
+            'vpc_id = "vpc-XYZ"',
+            'vpc_id = "vpc-0123456"',
+            'vpc_id = "vpc-0123456789abcdef01"',
+            'vpc_id = "vpc-ABCDEF01234567890"',
+        )
+        for assignment in rejected:
+            result = _console(assignment)
+            assert "Error: Invalid value for variable" in result.stderr
+            assert "empty string is not null" in result.stderr
