@@ -1,0 +1,161 @@
+# SPO-136b. Subset the self-hosted fonts
+
+- Ticket: SPO-136b
+- Branch: `feature/SPO-136b-font-subset`
+- Base: `dev`
+
+## Summary
+
+The two self-hosted webfonts are Latin subsets. Instrument Sans is pinned to width 100 and keeps the weight axis. The share card uses `var(--font-sans)` and `var(--font-mono)`. The frontend workflow runs `next build` with no network, so a build that asks Google Fonts for a file fails.
+
+## Sizes
+
+| File | Before | After |
+|---|---:|---:|
+| Instrument Sans | 88,784 bytes `InstrumentSans[wdth,wght].woff2` | 37,584 bytes `InstrumentSans[wght].woff2` |
+| JetBrains Mono | 71,660 bytes | 41,216 bytes |
+| Total | 160,444 bytes | 78,800 bytes |
+
+78,800 bytes is 78.8 KB. The target was about 79 KB. Each size is one `stat` of the woff2 on disk after fontTools 4.68 wrote it. The same inputs produce the same bytes.
+
+The total is not about 40 KB because both files still carry a weight axis. Instrument Sans keeps `wght` 400 to 700. JetBrains Mono keeps `wght` 100 to 800. `layout.tsx` registers weights 400, 500, 600, and 700 for Instrument Sans and 500, 600, and 700 for JetBrains Mono. A single-weight instance would drop those faces.
+
+A wider set, Latin-1 plus Latin Extended-A and Latin Extended-B, measured 89,392 bytes. The UI source adds one code point outside Latin-1 and general punctuation that both fonts already had, U+0107. That code point is in the 78,800-byte set. The wider set was not used.
+
+## What changed
+
+| File | Change |
+|---|---|
+| `frontend/app/fonts/InstrumentSans[wght].woff2` | Instrument Sans with `wdth` instanced at 100. The `wght` axis remains. Replaces `InstrumentSans[wdth,wght].woff2`. |
+| `frontend/app/fonts/JetBrainsMono[wght].woff2` | Same file name. Latin subset. The `wght` axis remains. |
+| `frontend/app/fonts/*-OFL.txt` | Unchanged. |
+| `frontend/app/layout.tsx` | The four Instrument Sans `src` paths use the new file name. Weights, `display: "swap"`, `adjustFontFallback: "Arial"`, and `font-stretch: 100%` stay. |
+| `frontend/components/betslip/BetSlipScreen.tsx` | `ShareCard` sets the face with Tailwind `[font-family:var(--font-sans)]` and `[font-family:var(--font-mono)]`. |
+| `.github/workflows/ci.yml` | `frontend-lint` runs `unshare -rn npm run build`, then rejects built CSS that names a Google Fonts host. |
+| `docs/task-summaries/assets/SPO-136b/` | Screenshots. |
+
+`docs/progress.md` is not changed.
+
+`frontend/tailwind.config.ts` and `frontend/app/globals.css` still list `"Instrument Sans"` and `"JetBrains Mono"` after the CSS variables. Those are fallbacks for the rest of the UI. The WNBA share template in `frontend/app/wnba/betslip/page.tsx` still uses a system stack. It does not name these two families.
+
+## Glyphs
+
+Both files keep U+0000 through U+00FF and U+2000 through U+206F, plus these code points when the source font had a glyph.
+
+| Code point | Glyph | Where the UI prints it | Instrument Sans | JetBrains Mono |
+|---|---|---|---|---|
+| U+00B7 | · | clocks, matchups, share-card footer | kept | kept |
+| U+00D7 | × | bet slip remove control | kept | kept |
+| U+0107 | ć | name folding in `event-page` tests | kept | kept |
+| U+2013 | – | "Playable 65–<70%" | kept | kept |
+| U+2014 | — | missing values | kept | kept |
+| U+2018 U+2019 | ‘ ’ | general punctuation, kept with the block | kept | kept |
+| U+201C U+201D | “ ” | general punctuation, kept with the block | kept | kept |
+| U+2022 | • | general punctuation, kept with the block | kept | kept |
+| U+2026 | … | loading copy | kept | kept |
+| U+203A | › | today game row | kept | kept |
+| U+2190 | ← | event back control | kept | kept |
+| U+2192 | → | "All picks →" | kept | kept |
+| U+2212 | − | line stepper, complement caption | kept | kept |
+| U+2264 | ≤ | not in the UI source. Kept because the ticket asked | absent in the source font | kept |
+| U+2265 | ≥ | "Strong ≥70%" | absent in the source font | kept |
+| U+2713 | ✓ | slip buttons | absent in the source font | absent in the source font |
+| U+03BC U+03C3 | μ σ | WNBA sample line | absent in the source font | kept |
+| U+2248 | ≈ | WNBA chart label | absent in the source font | kept |
+| U+26A0 | ⚠ | history warning | absent in the source font | kept |
+
+U+00B7, U+00D7, U+2013, U+2014, U+2018, U+2019, U+201C, U+201D, U+2022, U+2026, and U+203A sit inside the two ranges above. They are listed because the ticket named them.
+
+`≥` on the confidence chip uses the sans stack. Instrument Sans has never contained U+2265, so that chip already paints the glyph from the Arial fallback `next/font` builds with `adjustFontFallback: "Arial"`. `✓` is the same. Emoji and Chinese text in comments or a few strings are not in either source font, so the browser keeps using the system fallback for those characters. Subsetting does not remove a glyph the file never had.
+
+After the subset, the `←`, `≥`, `–`, and `−` crops at 1440 are the same pixels as the crops taken before the subset. The event page at 1440 is the same pixels. The picks pages differ in the "UPDATED" minute because the clock moved between shots.
+
+## License
+
+Subsetting and instancing `wdth` make a Modified Version under OFL 1.1. Condition 3 says a Modified Version may not use a Reserved Font Name. The license defines that name as one "specified as such after the copyright statement(s)."
+
+The Instrument Sans copyright line is "Copyright 2022 The Instrument Sans Project Authors" and then the license. The JetBrains Mono copyright line is "Copyright 2020 The JetBrains Mono Project Authors" and then the license. Neither line specifies a Reserved Font Name. Condition 3 does not require a rename.
+
+Name ID 1 stays "Instrument Sans" and "JetBrains Mono". Name ID 4 stays "Instrument Sans Regular" and "JetBrains Mono Regular". Name ID 6 stays `InstrumentSans-Regular` and `JetBrainsMono-Regular`. The OFL text files stay beside the fonts.
+
+The Instrument Sans file name changed from `InstrumentSans[wdth,wght].woff2` to `InstrumentSans[wght].woff2` because the file no longer has a `wdth` axis. That rename is not an OFL requirement.
+
+## Share card
+
+`html-to-image` reads `element.style.fontFamily` before the computed value. An inline `font-family: var(--font-sans)` would be stored as the literal `var(--font-sans)`, and the PNG embedder would look for a face with that name. The class `[font-family:var(--font-sans)]` leaves the inline style empty. The computed family is the face `next/font` generated.
+
+On `next start`, after `document.fonts.ready`.
+
+- Before, the card computed family was `"Instrument Sans", system-ui, sans-serif`. The mono lines were `"JetBrains Mono", ui-monospace, monospace`. Those names are not the self-hosted faces.
+- After, the card computed family was `__sans_f84d8a, __sans_Fallback_f84d8a`. The mono lines were `__mono_9f5d58, __mono_Fallback_9f5d58`. The body stack was `__sans_f84d8a, __sans_Fallback_f84d8a, "Instrument Sans", system-ui, sans-serif`. Loaded faces included `__sans_f84d8a` at 400, 500, 600, and 700.
+
+## CI
+
+`frontend-lint` already runs `npx next build` with the Vercel env set. The new step runs with `NEXT_TELEMETRY_DISABLED=1` and no Vercel env.
+
+```yaml
+unshare -rn npm run build
+```
+
+`unshare -rn` gives the build a user namespace and a network namespace with no interfaces. A request to `fonts.googleapis.com` or `fonts.gstatic.com` fails, and `next build` fails with it. The step then searches `.next/static/css` for those hosts. Next's own runtime JS mentions the hosts because it detects a Google Fonts `<link>`. That JS is not a download, so the search is limited to built CSS.
+
+`unshare -rn true` exited 0 on the machine that produced this branch. The GitHub-hosted run is the proof that the same command is allowed on `ubuntu-latest`. The run URL is added after that job finishes. If the runner rejects `unshare`, the step will be replaced with a hosts-file block of `fonts.googleapis.com` and `fonts.gstatic.com`.
+
+## Screenshots
+
+Playwright drove system Chrome against `next start` on port 3010. A local fixture server on port 8000 answered the NBA routes. Animations were disabled. The React Query devtools container was hidden. Viewports were 1440×900 and 390×844, full page.
+
+- `docs/task-summaries/assets/SPO-136b/before-picks-1440.png`
+- `docs/task-summaries/assets/SPO-136b/before-picks-390.png`
+- `docs/task-summaries/assets/SPO-136b/after-picks-1440.png`
+- `docs/task-summaries/assets/SPO-136b/after-picks-390.png`
+- `docs/task-summaries/assets/SPO-136b/before-event-1440.png`
+- `docs/task-summaries/assets/SPO-136b/before-event-390.png`
+- `docs/task-summaries/assets/SPO-136b/after-event-1440.png`
+- `docs/task-summaries/assets/SPO-136b/after-event-390.png`
+- `docs/task-summaries/assets/SPO-136b/before-betslip-1440.png`
+- `docs/task-summaries/assets/SPO-136b/before-betslip-390.png`
+- `docs/task-summaries/assets/SPO-136b/after-betslip-1440.png`
+- `docs/task-summaries/assets/SPO-136b/after-betslip-390.png`
+- `docs/task-summaries/assets/SPO-136b/before-share-card-1440.png`
+- `docs/task-summaries/assets/SPO-136b/before-share-card-390.png`
+- `docs/task-summaries/assets/SPO-136b/after-share-card-1440.png`
+- `docs/task-summaries/assets/SPO-136b/after-share-card-390.png`
+- `docs/task-summaries/assets/SPO-136b/before-glyph-ge-1440.png`
+- `docs/task-summaries/assets/SPO-136b/after-glyph-ge-1440.png`
+- `docs/task-summaries/assets/SPO-136b/before-glyph-endash-1440.png`
+- `docs/task-summaries/assets/SPO-136b/after-glyph-endash-1440.png`
+- `docs/task-summaries/assets/SPO-136b/before-glyph-arrow-1440.png`
+- `docs/task-summaries/assets/SPO-136b/after-glyph-arrow-1440.png`
+- `docs/task-summaries/assets/SPO-136b/before-glyph-arrow-390.png`
+- `docs/task-summaries/assets/SPO-136b/after-glyph-arrow-390.png`
+- `docs/task-summaries/assets/SPO-136b/before-glyph-minus-1440.png`
+- `docs/task-summaries/assets/SPO-136b/after-glyph-minus-1440.png`
+
+![Strong ≥70% before the subset](assets/SPO-136b/before-glyph-ge-1440.png)
+
+![Strong ≥70% after the subset](assets/SPO-136b/after-glyph-ge-1440.png)
+
+![Back control before the subset](assets/SPO-136b/before-glyph-arrow-1440.png)
+
+![Back control after the subset](assets/SPO-136b/after-glyph-arrow-1440.png)
+
+![Share card before](assets/SPO-136b/before-share-card-1440.png)
+
+![Share card after](assets/SPO-136b/after-share-card-1440.png)
+
+## Tests
+
+From `frontend/`.
+
+- `npx vitest run`. 69 files, 537 tests, passed.
+- `npx tsc --noEmit`. Exit 0.
+- `npm run lint`. No ESLint warnings or errors.
+- `NEXT_TELEMETRY_DISABLED=1 npx next build`. Exit 0. Built CSS does not name `fonts.googleapis.com` or `fonts.gstatic.com`.
+
+No new TypeScript logic was added, so no new vitest file was added.
+
+## Follow-ups
+
+- Record the GitHub Actions run that executes `unshare -rn npm run build`.
+- The WNBA share template still uses a system font stack.
