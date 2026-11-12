@@ -32,7 +32,6 @@ Usage:
 import time
 from datetime import datetime, timezone, timedelta
 from typing import List, Dict, Any, Optional, Tuple
-from zoneinfo import ZoneInfo
 
 from app.services.odds_gateway import odds_gateway
 from app.services.odds_theoddsapi import odds_provider
@@ -46,6 +45,7 @@ from app.services.prob import (
     DEFAULT_BINARY_VIG,
 )
 from app.services.db import db_service
+from app.services.slate_date import nba_slate_date, offset_for_us_game_date
 
 
 # Supported market types for the periodic odds snapshot job.
@@ -114,54 +114,10 @@ BINARY_MARKET_KEYS = frozenset({
     "player_double_double",
 })
 
-# US slate clock. The odds_line_snapshots.date column is the Eastern game
-# date. Taipei (UTC+8) is a different calendar day for a 7pm Eastern tip.
-NBA_SLATE_TZ = ZoneInfo("America/New_York")
-
-
-def nba_slate_date(now: datetime | None = None) -> tuple[str, int]:
-    """US game date and the Eastern UTC offset in minutes at ``now``.
-
-    ``now`` defaults to the current UTC time. A naive datetime is read as
-    UTC. The returned date is the calendar date in America/New_York. The
-    offset is minutes east of UTC, so Eastern Standard Time is -300 and
-    Eastern Daylight Time is -240. ``take_snapshot`` uses both so the
-    events query covers that Eastern day.
-
-    Args:
-        now: Instant to convert. None means the current time.
-
-    Returns:
-        ``(YYYY-MM-DD, offset_minutes)``.
-    """
-    moment = now if now is not None else datetime.now(timezone.utc)
-    if moment.tzinfo is None:
-        moment = moment.replace(tzinfo=timezone.utc)
-    eastern = moment.astimezone(NBA_SLATE_TZ)
-    offset = eastern.utcoffset()
-    if offset is None:
-        raise RuntimeError("America/New_York did not provide a UTC offset")
-    return eastern.date().isoformat(), int(offset.total_seconds() // 60)
-
-
-def offset_for_us_game_date(date: str) -> int:
-    """Eastern offset in minutes at noon on a US game date.
-
-    Noon is after the 02:00 DST transition, which is when NBA games are
-    played. A date string is not itself a timezone. This picks the offset
-    that ``_get_events`` needs to turn that Eastern date into a UTC window.
-
-    Args:
-        date: ``YYYY-MM-DD`` US game date.
-
-    Returns:
-        Minutes east of UTC. -300 in January, -240 in July.
-    """
-    day = datetime.strptime(date, "%Y-%m-%d").date()
-    noon = datetime(day.year, day.month, day.day, 12, tzinfo=NBA_SLATE_TZ)
-    _slate_date, offset = nba_slate_date(noon)
-    return offset
-
+# nba_slate_date and offset_for_us_game_date live in slate_date and are
+# imported above. This module re-exports them so existing
+# ``from app.services.odds_snapshot_service import nba_slate_date``
+# imports keep working. There is one implementation.
 
 # UPSERT SQL: insert a posted total, or refresh that same total.
 # The conflict target matches odds_line_snapshots_book_line_key, which
@@ -190,8 +146,8 @@ DO UPDATE SET
 # Snapshot log INSERT SQL
 INSERT_LOG_SQL = """
 INSERT INTO odds_snapshot_logs (
-    date, snapshot_at, event_count, total_lines, status, error_message, duration_ms
-) VALUES ($1, $2, $3, $4, $5, $6, $7)
+    date, snapshot_at, event_count, total_lines, status, error_message, duration_ms, league
+) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
 """
 
 
@@ -768,6 +724,7 @@ class OddsSnapshotService:
                 status,
                 error_message,
                 duration_ms,
+                "nba",
             )
         except Exception as e:
             print(f"⚠️ [OddsSnapshot] Failed writing snapshot log: {e}")
