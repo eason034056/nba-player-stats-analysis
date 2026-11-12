@@ -124,9 +124,14 @@ jobs:
             echo "fonts.gstatic.com was reachable"
             exit 1
           fi
+          # The networked build above leaves .next/cache. Reusing it would
+          # skip the Google Fonts fetch and this step would pass.
+          rm -rf .next
           npm run build
+          # Secondary check. next/font downloads the file and self-hosts it,
+          # so a next/font/google import does not leave these hosts in the CSS.
           if grep -R -E -l 'fonts\.(googleapis|gstatic)\.com' .next/static/css; then
-            echo "built CSS still names a Google Fonts host"
+            echo "built CSS names a Google Fonts host"
             exit 1
           fi
 
