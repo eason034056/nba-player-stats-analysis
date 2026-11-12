@@ -25,9 +25,6 @@ import {
 import { getCanonicalTeamCode } from "@/lib/team-logos";
 import { cn, getLocalDateString } from "@/lib/utils";
 
-const SHARE_FONT_SANS = "Instrument Sans, system-ui, sans-serif";
-const SHARE_FONT_MONO = "JetBrains Mono, ui-monospace, monospace";
-
 function ShareCard({
   picks,
   tags,
@@ -50,12 +47,12 @@ function ShareCard({
   return (
     <div
       ref={forwardedRef}
+      className="[font-family:var(--font-sans)]"
       style={{
         background: "#3E0F8D",
         borderRadius: 24,
         padding: 22,
         color: "#FFFFFF",
-        fontFamily: SHARE_FONT_SANS,
         display: "flex",
         flexDirection: "column",
         gap: 4,
@@ -63,7 +60,7 @@ function ShareCard({
     >
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
         <div style={{ fontWeight: 700, fontSize: 18 }}>{title}</div>
-        <div style={{ fontFamily: SHARE_FONT_MONO, fontWeight: 600, fontSize: 11, color: "#E4DA72" }}>
+        <div className="[font-family:var(--font-mono)]" style={{ fontWeight: 600, fontSize: 11, color: "#E4DA72" }}>
           {stamp.toUpperCase()}
         </div>
       </div>
@@ -95,7 +92,7 @@ function ShareCard({
               </div>
             ) : null}
           </div>
-          <div style={{ fontFamily: SHARE_FONT_MONO, fontWeight: 700, fontSize: 16, color: "#E4DA72" }}>
+          <div className="[font-family:var(--font-mono)]" style={{ fontWeight: 700, fontSize: 16, color: "#E4DA72" }}>
             {listedOut ? (
               <InjuryStatusTag tag={tag ?? canonicalInjuryTag("out")} />
             ) : (
@@ -105,7 +102,7 @@ function ShareCard({
         </div>
         );
       })}
-      <div style={{ fontFamily: SHARE_FONT_MONO, fontWeight: 500, fontSize: 10, color: "#BFAEE3" }}>
+      <div className="[font-family:var(--font-mono)]" style={{ fontWeight: 500, fontSize: 10, color: "#BFAEE3" }}>
         novig · for research only
       </div>
     </div>

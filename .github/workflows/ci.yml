@@ -109,6 +109,30 @@ jobs:
           VERCEL_PROXY_SECRET: ci-build-placeholder
           NEXT_TELEMETRY_DISABLED: "1"
         run: npx next build
+      - name: Next build with Google Fonts blocked
+        env:
+          NEXT_TELEMETRY_DISABLED: "1"
+        run: |
+          # ubuntu-latest rejects unshare -rn (uid_map: Operation not permitted).
+          sudo sh -c 'printf "127.0.0.1 fonts.googleapis.com\n127.0.0.1 fonts.gstatic.com\n" >> /etc/hosts'
+          if curl --fail --max-time 10 -sS -o /dev/null https://fonts.googleapis.com; then
+            echo "fonts.googleapis.com was reachable"
+            exit 1
+          fi
+          if curl --fail --max-time 10 -sS -o /dev/null https://fonts.gstatic.com; then
+            echo "fonts.gstatic.com was reachable"
+            exit 1
+          fi
+          # The networked build above leaves .next/cache. Reusing it would
+          # skip the Google Fonts fetch and this step would pass.
+          rm -rf .next
+          npm run build
+          # Secondary check. next/font downloads the file and self-hosts it,
+          # so a next/font/google import does not leave these hosts in the CSS.
+          if grep -R -E -l 'fonts\.(googleapis|gstatic)\.com' .next/static/css; then
+            echo "built CSS names a Google Fonts host"
+            exit 1
+          fi
 
   frontend-test:
     name: Frontend Tests
