@@ -12,6 +12,7 @@ import { buildOurRead, buildReadSignals, gameLogChart, lineupChip } from "@/lib/
 import { dailyPicksResponseSchema, playerHistoryResponseSchema } from "@/lib/schemas";
 import edgesFixture from "@/test/fixtures/event/nba-history-threshold-edges.json";
 import nbaHistoryFixture from "@/test/fixtures/event/nba-history-bam.json";
+import nbaPicksFixture from "@/test/fixtures/event/nba-daily-picks.json";
 import wnbaPicksFixture from "@/test/fixtures/event/wnba-daily-picks.json";
 import { renderWithProviders } from "@/test/test-utils";
 
@@ -195,7 +196,6 @@ describe("OurRead", () => {
     marketName: "Points",
     market: "player_points",
     binary: false,
-    supportsProjection: false,
     eventId: "wnba-1",
     homeTeam: "Las Vegas Aces",
     awayTeam: "New York Liberty",
@@ -207,7 +207,6 @@ describe("OurRead", () => {
     consensus: null,
     last10: [],
     history: null,
-    projection: null,
     league: "wnba",
   });
 
@@ -284,15 +283,66 @@ describe("OurRead", () => {
     expect(onAsk).toHaveBeenCalled();
     expect(buildReadSignals({
       binary: false,
-      supportsProjection: false,
       line: null,
       consensus: null,
       last10: [],
       history: null,
-      projection: null,
       pick: null,
       market: "player_points",
     }).every((signal) => signal.value === null)).toBe(true);
+  });
+
+  it("hides an NBA projection signal when its value is null", () => {
+    const bam = dailyPicksResponseSchema.parse(nbaPicksFixture).picks[0];
+    const pick = {
+      ...bam,
+      has_projection: false,
+      projected_value: null,
+      projected_minutes: null,
+      edge: null,
+      injury_status: null,
+      lineup_confirmed: null,
+      signals: bam.signals?.map((signal) =>
+        signal.key === "projection" ? { ...signal, value: null, verdict: null } : signal,
+      ),
+    };
+    const hidden = buildOurRead({
+      player: "Bam Adebayo",
+      marketName: "Points",
+      market: "player_points",
+      binary: false,
+      eventId: "evt-mia-bos",
+      homeTeam: "Miami Heat",
+      awayTeam: "Boston Celtics",
+      commenceTime: "2026-11-11T00:30:00Z",
+      team: "MIA",
+      position: "C",
+      line: 18.5,
+      pick,
+      consensus: null,
+      last10: [],
+      history: null,
+      league: "nba",
+    });
+    renderWithProviders(
+      <OurRead
+        model={hidden}
+        isLoading={false}
+        isError={false}
+        errorText={null}
+        primaryInSlip={false}
+        otherInSlip={false}
+        onAddPrimary={noop}
+        onAddOther={noop}
+        onAsk={noop}
+        league="nba"
+      />,
+    );
+    expect(screen.getByText("Market price")).toBeInTheDocument();
+    expect(screen.queryByTestId("signal-projection")).not.toBeInTheDocument();
+    expect(screen.queryByText("Projection")).not.toBeInTheDocument();
+    expect(screen.queryByText("Projected value is not on this response.")).not.toBeInTheDocument();
+    expect(screen.getByTestId("our-read").textContent ?? "").not.toMatch(/Proj |Edge |NaN/);
   });
 });
 

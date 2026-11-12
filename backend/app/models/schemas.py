@@ -498,144 +498,6 @@ class PlayerDDHistoryResponse(BaseModel):
     message: Optional[str] = Field(default=None, description="Explanatory message; None on success")
 
 
-# ==================== Player Projection Data ====================
-
-class PlayerProjection(BaseModel):
-    """
-    Projection data for a single player
-
-    Corresponds to SportsDataIO Projected Player Game Stats API data.
-    This is a predicted value, not actual game results.
-
-    Field categories:
-    - Basic info: player name, team, position
-    - Core projections: expected points, rebounds, assists, etc (Free Trial available)
-    - Matchup difficulty: opponent defense rank
-    - Starter/injury: starter status, injury info (Free Trial will be scrambled)
-    - DFS: DraftKings / FanDuel salary and fantasy points
-    """
-    # Basic info
-    player_id: Optional[int] = Field(default=None, description="SportsDataIO player ID")
-    player_name: str = Field(..., description="Player name")
-    team: Optional[str] = Field(default=None, description="Team abbreviation (e.g. GS, LAL)")
-    position: Optional[str] = Field(default=None, description="Position (PG/SG/SF/PF/C)")
-    opponent: Optional[str] = Field(default=None, description="Opponent team abbreviation")
-    home_or_away: Optional[str] = Field(default=None, description="HOME or AWAY")
-
-    # Core projections (Free Trial available)
-    minutes: Optional[float] = Field(default=None, description="Projected minutes played")
-    points: Optional[float] = Field(default=None, description="Projected points")
-    rebounds: Optional[float] = Field(default=None, description="Projected rebounds")
-    assists: Optional[float] = Field(default=None, description="Projected assists")
-    steals: Optional[float] = Field(default=None, description="Projected steals")
-    blocked_shots: Optional[float] = Field(default=None, description="Projected blocks")
-    turnovers: Optional[float] = Field(default=None, description="Projected turnovers")
-    pra: Optional[float] = Field(default=None, description="Projected PRA (Points + Rebounds + Assists)")
-
-    # Shooting stats
-    field_goals_made: Optional[float] = Field(default=None, description="Field goals made")
-    field_goals_attempted: Optional[float] = Field(default=None, description="Field goals attempted")
-    three_pointers_made: Optional[float] = Field(default=None, description="3PT made")
-    three_pointers_attempted: Optional[float] = Field(default=None, description="3PT attempted")
-    free_throws_made: Optional[float] = Field(default=None, description="Free throws made")
-    free_throws_attempted: Optional[float] = Field(default=None, description="Free throws attempted")
-
-    # Starter / injury (Free Trial will be scrambled, shown as None)
-    started: Optional[int] = Field(default=None, description="Starter (1=Yes, 0=No)")
-    lineup_confirmed: Optional[bool] = Field(default=None, description="Lineup confirmed")
-    injury_status: Optional[str] = Field(default=None, description="Injury status (Free Trial: None)")
-    injury_body_part: Optional[str] = Field(default=None, description="Injured body part")
-
-    # Matchup difficulty. 1 is the most points allowed (weakest defense).
-    opponent_rank: Optional[int] = Field(
-        default=None,
-        ge=1,
-        le=30,
-        description="Opponent overall defense rank. 1-30, 1 = most points allowed (weakest).",
-    )
-    opponent_position_rank: Optional[int] = Field(
-        default=None,
-        ge=1,
-        le=30,
-        description="Opponent defense vs this position. Ranked inside that position only, 1-30.",
-    )
-    opponent_rank_source: Optional[Literal["csv", "sportsdata", "sportsdata_invalid"]] = Field(
-        default=None,
-        description=(
-            "Source of opponent_rank only. csv when that null was filled "
-            "from the game log. sportsdata when the row already carried "
-            "an integer in 1..30. sportsdata_invalid means the whole row "
-            "is invalidated: the vendor value was not an integer in 1..30, "
-            "so both ranks are null and neither is filled from the CSV."
-        ),
-    )
-    opponent_rank_season: Optional[str] = Field(
-        default=None,
-        description=(
-            "Game-log season for opponent_rank when its source is csv, "
-            "e.g. 2025-2026 (the 2025-26 season). Null otherwise."
-        ),
-    )
-    opponent_rank_note: Optional[str] = Field(
-        default=None,
-        description=(
-            "Present when opponent_rank_source is csv: computed from real "
-            "points allowed, not fantasy points."
-        ),
-    )
-    opponent_position_rank_source: Optional[Literal["csv", "sportsdata", "sportsdata_invalid"]] = Field(
-        default=None,
-        description=(
-            "Source of opponent_position_rank only. csv and sportsdata are "
-            "labeled independently of the overall rank. sportsdata_invalid "
-            "means the whole row is invalidated: both ranks are null and "
-            "neither is filled from the CSV."
-        ),
-    )
-    opponent_position_rank_season: Optional[str] = Field(
-        default=None,
-        description="Game-log season for the position rank when its source is csv. Null otherwise.",
-    )
-    opponent_position_rank_note: Optional[str] = Field(
-        default=None,
-        description="Present when the position rank source is csv: real points allowed, not fantasy points.",
-    )
-
-    # DFS related
-    draftkings_salary: Optional[float] = Field(default=None, description="DraftKings DFS salary")
-    fanduel_salary: Optional[float] = Field(default=None, description="FanDuel DFS salary")
-    fantasy_points_dk: Optional[float] = Field(default=None, description="DraftKings Fantasy points")
-    fantasy_points_fd: Optional[float] = Field(default=None, description="FanDuel Fantasy points")
-
-    # Advanced stats
-    usage_rate_percentage: Optional[float] = Field(default=None, description="Usage rate %")
-    player_efficiency_rating: Optional[float] = Field(default=None, description="Player Efficiency Rating (PER)")
-
-
-class ProjectionsResponse(BaseModel):
-    """
-    Player projection data API response model
-
-    For GET /api/nba/projections endpoint
-    Returns projection data for all players on given date
-    """
-    date: str = Field(..., description="Query date (YYYY-MM-DD)")
-    player_count: int = Field(..., description="Player count")
-    fetched_at: Optional[str] = Field(default=None, description="Data fetch time")
-    projections: List[PlayerProjection] = Field(default_factory=list, description="Player projections")
-
-
-class ProjectionRefreshResponse(BaseModel):
-    """
-    Projection data refresh API response model
-
-    For POST /api/nba/projections/refresh endpoint
-    """
-    date: str = Field(..., description="Refresh date")
-    player_count: int = Field(..., description="Fetched player count")
-    message: str = Field(..., description="Operation message")
-
-
 class TeamLineup(BaseModel):
     """One team's lineup for a date.
 
@@ -709,7 +571,13 @@ class PickSignal(BaseModel):
     missing, which is not the same as neutral.
     """
 
-    key: str = Field(..., description="Stable key: market, last10, history, projection, defense")
+    key: str = Field(
+        ...,
+        description=(
+            "Stable key: market, last10, history, or defense. "
+            "The projection key is omitted until a model writes one."
+        ),
+    )
     label: str = Field(..., description="Display label")
     value: str | None = Field(
         default=None,
@@ -768,19 +636,20 @@ class DailyPick(BaseModel):
         description="One main line per bookmaker",
     )
 
-    # === Projection fields (from SportsDataIO Projection API) ===
-    has_projection: bool = Field(default=False, description="Has projection data")
+    # Projection fields stay optional. Nothing writes them until a model does.
+    # The betting line is not stored here.
+    has_projection: bool = Field(default=False, description="True only when a projection value is present")
     projected_value: Optional[float] = Field(
         default=None,
-        description="Projected value (e.g. projected points = 29.3)"
+        description="Projected stat for this metric. Null when no model has written one."
     )
     projected_minutes: Optional[float] = Field(
         default=None,
-        description="Projected minutes played"
+        description="Projected minutes. Null when no model has written one."
     )
     edge: Optional[float] = Field(
         default=None,
-        description="Difference between projection and line (projected_value - threshold), positive favors Over"
+        description="projected_value minus the line. Null when projected_value is null."
     )
     opponent_rank: Optional[int] = Field(
         default=None,
@@ -794,14 +663,9 @@ class DailyPick(BaseModel):
         le=30,
         description="Opponent defense vs position rank, ranked inside that position (1-30)"
     )
-    opponent_rank_source: Optional[Literal["csv", "sportsdata", "sportsdata_invalid"]] = Field(
+    opponent_rank_source: Optional[Literal["csv"]] = Field(
         default=None,
-        description=(
-            "Source of opponent_rank only: csv, sportsdata, or "
-            "sportsdata_invalid. sportsdata_invalid means the whole row "
-            "is invalidated: both ranks are null and neither is filled "
-            "from the CSV."
-        ),
+        description="Source of opponent_rank. csv when the game log filled it. Null when the rank is null.",
     )
     opponent_rank_season: Optional[str] = Field(
         default=None,
@@ -811,14 +675,9 @@ class DailyPick(BaseModel):
         default=None,
         description="On a csv overall rank: computed from real points allowed, not fantasy points.",
     )
-    opponent_position_rank_source: Optional[Literal["csv", "sportsdata", "sportsdata_invalid"]] = Field(
+    opponent_position_rank_source: Optional[Literal["csv"]] = Field(
         default=None,
-        description=(
-            "Source of opponent_position_rank only: csv, sportsdata, or "
-            "sportsdata_invalid. sportsdata_invalid means the whole row "
-            "is invalidated: both ranks are null and neither is filled "
-            "from the CSV."
-        ),
+        description="Source of opponent_position_rank. csv when the game log filled it. Null when the rank is null.",
     )
     opponent_position_rank_season: Optional[str] = Field(
         default=None,
@@ -830,11 +689,17 @@ class DailyPick(BaseModel):
     )
     injury_status: Optional[str] = Field(
         default=None,
-        description="Injury status (Free Trial: None)"
+        description=(
+            "Normalized NBA injury status from the BALLDONTLIE snapshot: "
+            "Out, Questionable, Probable, or Day-To-Day. Doubtful is stored "
+            "as Questionable; the blend still drops when the source word is "
+            "Doubtful. Null when the snapshot is missing, stale, or malformed, "
+            "or when the name is missing or ambiguous. WNBA stays null."
+        ),
     )
     lineup_confirmed: Optional[bool] = Field(
         default=None,
-        description="Is lineup confirmed"
+        description="Whether the lineup is confirmed. Null until a lineup source writes it onto the pick."
     )
     # Additive read fields. Older cached payloads omit them and validate
     # as null. Later tickets can add verdict fields beside these.
@@ -868,10 +733,14 @@ class DailyPick(BaseModel):
 
     # --- SPO-112 signal verdicts (self-contained; leave this block intact) ---
     # Separate from `probability` and from `tier`, `p_over`, and `p_under`.
-    # NBA picks carry five signals. WNBA leaves both fields null.
+    # NBA picks carry four signals. The projection slot is omitted.
+    # WNBA leaves both fields null.
     signals: list[PickSignal] | None = Field(
         default=None,
-        description="Five NBA signal verdicts in a fixed order. None for WNBA",
+        description=(
+            "NBA signal verdicts in a fixed order. The projection slot is "
+            "omitted until a model writes one. None for WNBA"
+        ),
     )
     combined_probability: float | None = Field(
         default=None,
@@ -1132,7 +1001,10 @@ class PropRead(BaseModel):
     )
     signals: Optional[List[PickSignal]] = Field(
         default=None,
-        description="Five signals for side. Null when side is null",
+        description=(
+            "Signals for side. The projection slot is omitted. "
+            "Null when side is null"
+        ),
     )
 
 

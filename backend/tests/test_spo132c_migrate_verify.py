@@ -7,6 +7,7 @@ server is not reachable. CI installs the client and provides Postgres.
 
 from __future__ import annotations
 
+import json
 import os
 import re
 import subprocess
@@ -413,6 +414,8 @@ def _wait_postgres(container: str) -> None:
                     "pg_isready",
                     "-h",
                     "127.0.0.1",
+                    "-p",
+                    "5432",
                     "-U",
                     "novig",
                     "-d",
@@ -622,3 +625,89 @@ def test_verify_only_real_docker_compares_every_table() -> None:
                 check=False,
                 timeout=_SUBPROCESS_TIMEOUT_S,
             )
+
+
+_DOCKER_TCP_READY_SHIM = r"""#!/usr/bin/env python3
+import json
+import os
+import sys
+from pathlib import Path
+
+
+def _targets_tcp(argv: list[str]) -> bool:
+    for index, arg in enumerate(argv):
+        if arg == "-h" and index + 1 < len(argv) and argv[index + 1] == "127.0.0.1":
+            return True
+        if arg.startswith("-h") and arg[2:] == "127.0.0.1":
+            return True
+    return False
+
+
+def main(argv: list[str]) -> int:
+    state_path = Path(os.environ["SPO132F_STATE"])
+    ready_on = int(os.environ["SPO132F_TCP_READY_ON"])
+    state = json.loads(state_path.read_text())
+    if "pg_isready" not in argv:
+        sys.stderr.write("unsupported docker command\n")
+        return 2
+    if _targets_tcp(argv):
+        state["tcp_calls"] = int(state.get("tcp_calls", 0)) + 1
+        state["tcp_ready"] = state["tcp_calls"] >= ready_on
+        state_path.write_text(json.dumps(state))
+        return 0 if state["tcp_ready"] else 1
+    state["socket_calls"] = int(state.get("socket_calls", 0)) + 1
+    state_path.write_text(json.dumps(state))
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main(sys.argv[1:]))
+"""
+
+
+def _install_tcp_ready_shim(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    *,
+    ready_on: int,
+) -> Path:
+    docker = tmp_path / "docker"
+    docker.write_text(_DOCKER_TCP_READY_SHIM)
+    docker.chmod(0o755)
+    state = tmp_path / "pg-ready.json"
+    state.write_text(
+        json.dumps({"tcp_calls": 0, "socket_calls": 0, "tcp_ready": False})
+    )
+    monkeypatch.setenv("SPO132F_STATE", str(state))
+    monkeypatch.setenv("SPO132F_TCP_READY_ON", str(ready_on))
+    monkeypatch.setenv(
+        "PATH",
+        f"{tmp_path}{os.pathsep}{os.environ.get('PATH', '')}",
+    )
+    monkeypatch.setattr(time, "sleep", lambda _seconds: None)
+    return state
+
+
+def test_wait_postgres_does_not_return_until_tcp_is_ready(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Socket pg_isready is already ready. Return only after TCP is ready."""
+    state_path = _install_tcp_ready_shim(tmp_path, monkeypatch, ready_on=3)
+    _wait_postgres("pg-tcp")
+    state = json.loads(state_path.read_text())
+    assert state["tcp_ready"] is True
+    assert state["tcp_calls"] == 3
+
+
+def test_wait_postgres_raises_when_tcp_never_becomes_ready(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A ready Unix socket does not cancel the timeout while TCP stays down."""
+    state_path = _install_tcp_ready_shim(tmp_path, monkeypatch, ready_on=10_000)
+    with pytest.raises(AssertionError, match="pg-tcp did not become ready"):
+        _wait_postgres("pg-tcp")
+    state = json.loads(state_path.read_text())
+    assert state["tcp_ready"] is False
+    assert state["tcp_calls"] == 40

@@ -80,7 +80,7 @@ export default function AboutPage() {
           />
           <Signal
             label="Projection"
-            detail="NBA only, when the projection route returns projected_value, edge, and minutes. WNBA has no projection route, so those tags stay hidden."
+            detail="Projected value, edge, and minutes stay hidden while those fields are null. WNBA picks leave them null, so those tags stay hidden."
           />
           <Signal
             label="Opponent rank"

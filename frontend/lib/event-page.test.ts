@@ -69,12 +69,10 @@ describe("lineup chips", () => {
 describe("read signals", () => {
   const base = {
     binary: false,
-    supportsProjection: true,
     line: 18.5,
     consensus: bamConsensus,
     last10: [logOn("2026-11-08"), logOn("2026-11-03")],
     history: bamHistory,
-    projection: null,
     pick: pick(),
     market: "player_points",
   };
@@ -110,7 +108,6 @@ describe("read signals", () => {
   it("says WNBA has no projection instead of a stand-in number", () => {
     const projection = buildReadSignals({
       ...base,
-      supportsProjection: false,
       pick: pick({ projected_value: null, opponent_rank: null, opponent_position_rank: null }),
     }).find((signal) => signal.key === "projection");
     expect(projection?.value).toBeNull();
@@ -320,7 +317,6 @@ describe("our read", () => {
       marketName: "Points",
       market: "player_points",
       binary: false,
-      supportsProjection: true,
       eventId: "evt-mia",
       homeTeam: "Miami Heat",
       awayTeam: "Boston Celtics",
@@ -332,7 +328,6 @@ describe("our read", () => {
       consensus: bamConsensus,
       last10: [],
       history: null,
-      projection: null,
       league: "nba",
     });
     expect(model.tier?.label).toBe("Strong play");
@@ -351,7 +346,6 @@ describe("our read", () => {
       marketName: "Points",
       market: "player_points",
       binary: false,
-      supportsProjection: true,
       eventId: "evt-mia",
       homeTeam: "Miami Heat",
       awayTeam: "Boston Celtics",
@@ -363,7 +357,6 @@ describe("our read", () => {
       consensus: null,
       last10: [],
       history: bamHistory,
-      projection: null,
       league: "nba",
     });
     expect(model.other?.direction).toBe("under");
@@ -378,7 +371,6 @@ describe("our read", () => {
       marketName: "Assists",
       market: "player_assists",
       binary: false,
-      supportsProjection: true,
       eventId: "evt-mia",
       homeTeam: "Miami Heat",
       awayTeam: "Boston Celtics",
@@ -390,7 +382,6 @@ describe("our read", () => {
       consensus: null,
       last10: [],
       history: null,
-      projection: null,
       league: "nba",
     });
     expect(model.tier).toBeNull();
@@ -441,7 +432,6 @@ describe("NBA read uses the backend tier", () => {
     marketName: "Points",
     market: "player_points",
     binary: false,
-    supportsProjection: true,
     eventId: "evt-mia-bos",
     homeTeam: "Miami Heat",
     awayTeam: "Boston Celtics",
@@ -452,7 +442,6 @@ describe("NBA read uses the backend tier", () => {
     consensus: null,
     last10: [],
     history: null,
-    projection: null,
     league: "nba" as const,
   };
 
@@ -548,12 +537,13 @@ describe("NBA read uses the backend tier", () => {
     expect(model.signals[1]?.value).toBe("54.0%");
     expect(model.bar?.underText).toBe("69%");
     expect(model.bar?.overText).toBe("30%");
-    expect(model.other?.probability).toBe(0.28);
-    expect(model.other?.probability).not.toBeCloseTo(0.303);
+    expect(model.other?.probability).toBeCloseTo(1 - 0.697, 12);
+    expect(model.other?.probability).not.toBe(0.28);
+    expect(model.other?.tier).toBeNull();
     expect(model.primary?.probability).toBe(0.697);
   });
 
-  it("keeps both slip sides on the historical pick when the model disagrees", () => {
+  it("stores 1 - combined on the other side when the model disagrees with history", () => {
     const model = buildOurRead({
       ...base,
       history: bamHistory,
@@ -568,15 +558,17 @@ describe("NBA read uses the backend tier", () => {
     expect(model.primary?.probability).toBe(0.59);
     expect(model.leanProbability).toBe(0.59);
     expect(model.other?.direction).toBe("under");
-    expect(model.other?.probability).toBe(0.41);
-    expect(model.other?.probability).not.toBeCloseTo(1 - 0.673, 2);
+    expect(model.other?.probability).toBeCloseTo(1 - 0.673, 12);
+    expect(model.other?.combined_probability).toBeCloseTo(1 - 0.673, 12);
+    expect(model.other?.probability).not.toBe(0.41);
     expect(model.other?.probability).not.toBe(bamHistory.p_under);
+    expect(model.other?.tier).toBeNull();
     expect(model.bar?.sourceLabel).toBe("Model");
     expect(model.bar?.overText).toBe("67%");
-    expect(model.bar?.underText).toBe("33%");
+    expect(model.bar?.underText).toBe("32%");
   });
 
-  it("uses the pick's opposite field for an under before history or the model", () => {
+  it("uses 1 - combined for an under pick before p_over or history", () => {
     const model = buildOurRead({
       ...base,
       history: bamHistory,
@@ -590,26 +582,28 @@ describe("NBA read uses the backend tier", () => {
     });
     expect(model.primary?.probability).toBe(0.62);
     expect(model.other?.direction).toBe("over");
-    expect(model.other?.probability).toBe(0.38);
-    expect(model.other?.probability).not.toBeCloseTo(0.3, 2);
+    expect(model.other?.probability).toBeCloseTo(0.3, 12);
+    expect(model.other?.probability).not.toBe(0.38);
     expect(model.other?.probability).not.toBe(bamHistory.p_over);
+    expect(model.other?.tier).toBeNull();
   });
 
-  it("falls back to history when the pick has no opposite field, even if combined is set", () => {
+  it("uses 1 - combined even when the pick has no opposite field", () => {
     const model = buildOurRead({
       ...base,
       history: bamHistory,
       pick: pick({
         probability: 0.59,
+        n_games: 12,
         p_over: null,
         p_under: null,
         combined_probability: 0.673,
         signals: null,
       }),
     });
-    expect(model.other?.probability).toBe(bamHistory.p_under);
-    expect(model.other?.n_games).toBe(bamHistory.n_games);
-    expect(model.other?.probability).not.toBeCloseTo(1 - 0.673, 2);
+    expect(model.other?.probability).toBeCloseTo(1 - 0.673, 12);
+    expect(model.other?.n_games).toBe(12);
+    expect(model.other?.probability).not.toBe(bamHistory.p_under);
     expect(model.other?.probability).not.toBeCloseTo(1 - 0.59, 2);
   });
 

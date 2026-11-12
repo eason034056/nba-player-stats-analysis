@@ -1,21 +1,14 @@
 """Opponent defense ranks from the NBA game log.
 
-``PlayerGameProjectionStatsByDate`` is mapped in
-``projection_provider.FIELD_MAPPING``. ``OpponentRank`` and
-``OpponentPositionRank`` are copied when present and left null when the
-row does not carry them. Nothing else in the repo writes those two
-fields, so a null on the projection stays null on ``DailyPick`` and on
-``GET /api/nba/projections``.
+Rank 1 is the most points allowed per game (the weakest defense). That
+is the scale the picks page already documents: 1–10 Easy, 11–20 Average,
+21–30 Hard. The only source is the game log (``csv``). A number that
+arrived on an old row is not kept.
 
-This module fills a null from the game log. Rank 1 is the most points
-allowed per game (the weakest defense). That is the scale the picks
-page already documents: 1–10 Easy, 11–20 Average, 21–30 Hard.
-
-The lookup goes through ``canonical_team_code``. SportsData writes
-``GS``, ``NO``, ``NY``, ``SA``, ``PHO``, and ``UTAH``. The game log and
-the lineup table use ``GSW``, ``NOP``, ``NYK``, ``SAS``, ``PHX``, and
-``UTA``. Reading the raw abbreviation against a canonical table is why
-those clubs stay null even after a rank table exists.
+The lookup goes through ``canonical_team_code``. Some abbreviation sets
+write ``GS``, ``NO``, ``NY``, ``SA``, ``PHO``, and ``UTAH``. The game
+log and the lineup table use ``GSW``, ``NOP``, ``NYK``, ``SAS``,
+``PHX``, and ``UTA``.
 
 The season is the recorded current NBA season when the log has
 regular-season games for it. Otherwise it is the latest season label
@@ -98,8 +91,18 @@ def _counts_toward_points(game: dict[str, Any]) -> bool:
 
 _RANK_LIMIT = 30
 CSV_RANK_SOURCE = "csv"
-SPORTSDATA_RANK_SOURCE = "sportsdata"
 CSV_RANK_NOTE = "Computed from real points allowed, not fantasy points."
+
+_EMPTY_RANK_FIELDS: dict[str, Any] = {
+    "opponent_rank": None,
+    "opponent_position_rank": None,
+    "opponent_rank_source": None,
+    "opponent_position_rank_source": None,
+    "opponent_rank_season": None,
+    "opponent_position_rank_season": None,
+    "opponent_rank_note": None,
+    "opponent_position_rank_note": None,
+}
 
 
 def _rank_descending(ppg: dict[str, float]) -> dict[str, int]:
@@ -219,117 +222,62 @@ def nba_defense_table() -> DefenseRankTable:
     return table
 
 
-def _vendor_rank_kind(value: Any) -> str:
-    """``missing``, ``sportsdata``, or ``invalid``.
+def defense_fields(
+    opponent: Any,
+    position: Any,
+    table: DefenseRankTable | None = None,
+) -> dict[str, Any]:
+    """Ranks for one opponent and position. Source is ``csv`` or null.
 
-    ``None`` is missing and may be filled from the game log. An int in
-    1..30 is a SportsData rank and is kept. Anything else, including 0,
-    31, a float, or a bool, is invalid. An invalid rank is not a cue to
-    fill that slot from the CSV.
+    ``opponent`` is canonicalized before the lookup, so ``GS`` and
+    ``GSW`` hit the same row. An opponent that is not in the table, or
+    a missing position, leaves that rank null. A number already stored
+    on a caller is not an input here.
+
+    Args:
+        opponent: Team name or abbreviation. Empty when the club is unknown.
+        position: Logged position. The first token must be PG, SG, SF, PF, or C.
+        table: Rank table. None loads the NBA game log.
+
+    Returns:
+        The eight rank fields a ``DailyPick`` stores. Missing ranks are None.
     """
-    if value is None:
-        return "missing"
-    if isinstance(value, bool) or not isinstance(value, int):
-        return "invalid"
-    if 1 <= value <= _RANK_LIMIT:
-        return "sportsdata"
-    return "invalid"
+    if table is None:
+        table = nba_defense_table()
+    code = _team_code(opponent)
+    spot = _primary_position(position)
+    overall = table.overall.get(code) if code else None
+    positional = table.by_position.get((code, spot)) if code and spot else None
+    fields = dict(_EMPTY_RANK_FIELDS)
+    if overall is not None:
+        fields["opponent_rank"] = overall
+        fields["opponent_rank_source"] = CSV_RANK_SOURCE
+        fields["opponent_rank_season"] = table.season
+        fields["opponent_rank_note"] = CSV_RANK_NOTE
+    if positional is not None:
+        fields["opponent_position_rank"] = positional
+        fields["opponent_position_rank_source"] = CSV_RANK_SOURCE
+        fields["opponent_position_rank_season"] = table.season
+        fields["opponent_position_rank_note"] = CSV_RANK_NOTE
+    return fields
 
 
 def fill_null_defense_ranks(
     projection: dict[str, Any],
     table: DefenseRankTable | None = None,
 ) -> dict[str, Any]:
-    """Copy ``projection`` and fill whichever rank is null.
+    """Copy ``projection`` and replace both ranks from the game log.
 
-    Each rank is labeled on its own. A null overall rank can come from
-    the game log while a position rank that SportsData already sent
-    stays ``sportsdata``. An opponent that is not in the table stays
-    null. ``opponent`` is canonicalized before the lookup, so ``GS``
-    and ``GSW`` hit the same row.
-
-    A SportsData rank that is not an int in 1..30 becomes null with
-    source ``sportsdata_invalid``. That slot is not filled from the
-    CSV. If either rank on the row is invalid, both ranks are cleared
-    so a 0 sitting next to an in-range 8 is not published as a half
-    vendor rank.
+    ``opponent`` and ``position`` on the dict choose the row. Any
+    ``opponent_rank`` already on the dict is ignored. An unknown
+    opponent stays null.
     """
-    if table is None:
-        table = nba_defense_table()
-    overall_raw = projection.get("opponent_rank")
-    positional_raw = projection.get("opponent_position_rank")
-    overall_kind = _vendor_rank_kind(overall_raw)
-    positional_kind = _vendor_rank_kind(positional_raw)
     updated = dict(projection)
-    if overall_kind == "invalid" or positional_kind == "invalid":
-        updated["opponent_rank"] = None
-        updated["opponent_position_rank"] = None
-        updated["opponent_rank_source"] = "sportsdata_invalid"
-        updated["opponent_position_rank_source"] = "sportsdata_invalid"
-        updated["opponent_rank_season"] = None
-        updated["opponent_position_rank_season"] = None
-        updated["opponent_rank_note"] = None
-        updated["opponent_position_rank_note"] = None
-        return updated
-
-    code = _team_code(projection.get("opponent"))
-    position = _primary_position(projection.get("position"))
-
-    def _one(
-        kind: str,
-        raw: Any,
-        filled: int | None,
-        rank_key: str,
-        source_key: str,
-        season_key: str,
-        note_key: str,
-    ) -> None:
-        if kind == "sportsdata":
-            updated[rank_key] = raw
-            updated[source_key] = SPORTSDATA_RANK_SOURCE
-            updated[season_key] = None
-            updated[note_key] = None
-            return
-        updated[rank_key] = filled
-        if filled is None:
-            updated[source_key] = None
-            updated[season_key] = None
-            updated[note_key] = None
-            return
-        updated[source_key] = CSV_RANK_SOURCE
-        updated[season_key] = table.season
-        updated[note_key] = CSV_RANK_NOTE
-
-    _one(
-        overall_kind,
-        overall_raw,
-        table.overall.get(code) if code else None,
-        "opponent_rank",
-        "opponent_rank_source",
-        "opponent_rank_season",
-        "opponent_rank_note",
-    )
-    _one(
-        positional_kind,
-        positional_raw,
-        table.by_position.get((code, position)) if code and position else None,
-        "opponent_position_rank",
-        "opponent_position_rank_source",
-        "opponent_position_rank_season",
-        "opponent_position_rank_note",
+    updated.update(
+        defense_fields(
+            projection.get("opponent"),
+            projection.get("position"),
+            table,
+        )
     )
     return updated
-
-
-def fill_projection_map(projections: dict[str, Any]) -> dict[str, Any]:
-    """Fill null ranks on a ``player_name → projection`` map. NBA only."""
-    if not projections:
-        return projections
-    table = nba_defense_table()
-    filled: dict[str, Any] = {}
-    for name, projection in projections.items():
-        if isinstance(projection, dict):
-            filled[name] = fill_null_defense_ranks(projection, table)
-        else:
-            filled[name] = projection
-    return filled

@@ -5,6 +5,8 @@
 **Epic:** spo-113-field-enrichment
 **Status:** accepted for the PR into `dev`
 
+> Superseded in part by SPO-135 (2026-11-11): `GET /api/nba/projections` is removed. Defense ranks are `csv` only. A number already on a row is not kept.
+
 ## Context
 
 The No-Vig redesign (frontend PRs #39 and #40) reads fields the NBA API does not return. PR #40's data-gap table is the list: an Eastern tip time, a per-team lineup confirmation, a season hit rate, opponent defense ranks that are often null, home or away on a game log, games a listed teammate missed, and a position. WNBA work is paused. New optional fields on shared models may serialize as null there. Existing WNBA routes are not extended.
