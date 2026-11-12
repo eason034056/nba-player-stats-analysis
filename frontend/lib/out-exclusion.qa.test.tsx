@@ -170,16 +170,12 @@ describe("DailyPicksBoard with an Out pick", () => {
   it("offers a remove control, and no reverse or Ask, for an Out pick that is already in the slip", () => {
     const out = withStatus({ ...boardPick, player_name: "Jimmy Butler" }, "out");
     const onToggleSlip = vi.fn();
-    const onAddReverse = vi.fn();
-    const onAsk = vi.fn();
     renderWithProviders(
       <DailyPicksBoard
         {...boardProps({
           picks: [out],
           slipDirection: () => out.direction,
           onToggleSlip,
-          onAddReverse,
-          onAsk,
         })}
       />,
     );

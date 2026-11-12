@@ -14,6 +14,7 @@ import { formatTierPercent } from "./player-dd";
 import { teamAbbr } from "./team-abbr";
 import { boardClock } from "./today-board";
 import { propPhrase } from "./picks-board";
+import type { DailyPick } from "./schemas";
 
 export interface SlipSummary {
   count: number;
@@ -141,6 +142,36 @@ export function sameSideSlipRead(
     tier: pick.tier ?? null,
     combined_probability: pick.combined_probability ?? null,
   };
+}
+
+export type SlipPickInput = Omit<BetSlipPick, "id" | "added_at">;
+
+export function slipPickFromDaily(
+  pick: DailyPick,
+  direction: string,
+  probability: number,
+  rateBasis?: "complement",
+): SlipPickInput {
+  return {
+    player_name: pick.player_name,
+    player_team: pick.player_team || "",
+    event_id: pick.event_id,
+    home_team: pick.home_team,
+    away_team: pick.away_team,
+    commence_time: pick.commence_time,
+    metric: pick.metric,
+    threshold: pick.threshold,
+    direction,
+    probability,
+    n_games: pick.n_games,
+    rate_basis: rateBasis,
+    ...sameSideSlipRead(pick, direction),
+  };
+}
+
+export function reverseSlipPick(pick: DailyPick): SlipPickInput {
+  const reverse = pick.direction === "over" ? "under" : "over";
+  return slipPickFromDaily(pick, reverse, 1 - pick.probability, "complement");
 }
 
 export function slipDetailHref(pick: BetSlipPick, league: LeagueSegment): string {

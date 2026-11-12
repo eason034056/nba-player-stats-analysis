@@ -272,14 +272,13 @@ describe("injury tag style", () => {
 });
 
 describe("Doubtful does not block", () => {
-  it("keeps a percent, a slip control, and Ask", () => {
+  it("keeps a percent and a slip control", () => {
     expect(isOutPick(doubtful)).toBe(false);
     expect(isPlayerOutInGame([doubtful], doubtful.event_id, doubtful.player_name)).toBe(false);
     renderWithProviders(
       <DailyPicksBoard
         {...boardProps({
           picks: [doubtful],
-          onAsk: vi.fn(),
         })}
       />,
     );
@@ -288,7 +287,6 @@ describe("Doubtful does not block", () => {
     expect(toneOf(chip)).toBe("doubtful");
     expect(card).toHaveTextContent("60%");
     expect(within(card).getByRole("button", { name: "Add to Bet Slip" })).toBeInTheDocument();
-    expect(within(card).getByRole("button", { name: "Ask Agent about Bam Adebayo" })).toBeInTheDocument();
     expect(card).not.toHaveTextContent("Questionable");
   });
 

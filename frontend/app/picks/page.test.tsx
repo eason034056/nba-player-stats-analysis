@@ -161,23 +161,22 @@ describe("PicksPage", () => {
     expect(screen.getByText(/lineup aligned/i)).toBeInTheDocument();
   });
 
-  it("opens the widget from a pick card and sends the selected pick context", async () => {
+  it("keeps Ask off the pick card and sends the visible board from Review board", async () => {
     const user = userEvent.setup();
 
     renderWithProviders(<PicksPage />, { withAgentWidget: true });
 
     expect(await screen.findByText("Stephen Curry")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /ask agent about/i })).not.toBeInTheDocument();
 
-    await user.click(screen.getByRole("button", { name: /ask agent about stephen curry/i }));
+    await user.click(screen.getByRole("button", { name: "Review board" }));
 
     expect(await screen.findByRole("dialog", { name: /betting agent/i })).toBeInTheDocument();
     expect(apiMocks.sendAgentChat).toHaveBeenCalledWith(
       expect.objectContaining({
-        action: "analyze_pick",
+        action: "review_board",
         context: expect.objectContaining({
-          selected_pick: expect.objectContaining({
-            player_name: "Stephen Curry",
-          }),
+          visible_picks: expect.arrayContaining([expect.objectContaining({ player_name: "Stephen Curry" })]),
         }),
       }),
     );

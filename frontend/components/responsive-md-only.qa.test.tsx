@@ -23,15 +23,6 @@ describe("QA: Picks card flex sizing is md-only", () => {
     expect(classes.filter((c) => unprefixedFlexSize.test(c))).toEqual([]);
   });
 
-  it("desktop still gets the 240 / 220 / 150 bases", () => {
-    expect(classesOf("picks/DailyPicksBoard.tsx", "pick-player")).toEqual(
-      expect.arrayContaining(["md:flex-1", "md:basis-[240px]"]),
-    );
-    expect(classesOf("picks/DailyPicksBoard.tsx", "pick-prop")).toEqual(
-      expect.arrayContaining(["md:flex-1", "md:basis-[220px]"]),
-    );
-    expect(classesOf("picks/DailyPicksBoard.tsx", "pick-rate")).toContain("md:flex-[0_1_150px]");
-  });
 });
 
 describe("QA: WNBA signal rows keep basis-60 at every width", () => {

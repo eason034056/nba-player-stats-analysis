@@ -330,14 +330,12 @@ describe("picks board remove control for an Out pick already in the slip", () =>
     const user = userEvent.setup();
     const out = withStatus({ ...boardPick, player_name: "Jimmy Butler" }, "out");
     const onToggleSlip = vi.fn();
-    const onAsk = vi.fn();
     renderWithProviders(
       <DailyPicksBoard
         {...boardProps({
           picks: [out],
           slipDirection: () => out.direction,
           onToggleSlip,
-          onAsk,
         })}
       />,
     );
@@ -348,7 +346,6 @@ describe("picks board remove control for an Out pick already in the slip", () =>
     expect(card).not.toHaveTextContent("In slip");
     await user.click(within(card).getByRole("button", { name: "Remove Jimmy Butler" }));
     expect(onToggleSlip).toHaveBeenCalledWith(out);
-    expect(onAsk).not.toHaveBeenCalled();
   });
 
   it("shows no slip control when the Out pick is not in the slip", () => {
