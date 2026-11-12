@@ -190,23 +190,19 @@ describe("NBA combined tier", () => {
     const history = playerHistoryResponseSchema.parse(nbaHistoryFixture);
     const withMean = buildReadSignals({
       binary: false,
-      supportsProjection: true,
       line: 18.5,
       consensus: null,
       last10: [],
       history: { ...history, season_mean: 20.4 },
-      projection: null,
       pick: null,
       market: "player_points",
     }).find((signal) => signal.key === "history");
     const withoutMean = buildReadSignals({
       binary: false,
-      supportsProjection: true,
       line: 18.5,
       consensus: null,
       last10: [],
       history,
-      projection: null,
       pick: null,
       market: "player_points",
     }).find((signal) => signal.key === "history");
@@ -247,7 +243,6 @@ function ourRead(pick: DailyPick) {
     marketName: "Points",
     market: "player_points",
     binary: false,
-    supportsProjection: true,
     eventId: pick.event_id,
     homeTeam: pick.home_team,
     awayTeam: pick.away_team,
@@ -259,7 +254,6 @@ function ourRead(pick: DailyPick) {
     consensus: null,
     last10: [],
     history: null,
-    projection: null,
     league: "nba",
   });
 }

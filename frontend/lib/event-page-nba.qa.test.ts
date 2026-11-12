@@ -40,7 +40,6 @@ function nbaRead(p: DailyPick | null, history: PlayerHistoryResponse | null = nu
     marketName: "Points",
     market: "player_points",
     binary: false,
-    supportsProjection: true,
     eventId: "evt-mia-bos",
     homeTeam: "Miami Heat",
     awayTeam: "Boston Celtics",
@@ -52,7 +51,6 @@ function nbaRead(p: DailyPick | null, history: PlayerHistoryResponse | null = nu
     consensus: null,
     last10: [],
     history,
-    projection: null,
     league: "nba",
   });
 }

@@ -22,7 +22,6 @@ function read(p: DailyPick) {
     marketName: "Points",
     market: "player_points",
     binary: false,
-    supportsProjection: true,
     eventId: "evt-mia-bos",
     homeTeam: "Miami Heat",
     awayTeam: "Boston Celtics",
@@ -34,7 +33,6 @@ function read(p: DailyPick) {
     consensus: null,
     last10: [],
     history: null,
-    projection: null,
     league: "nba",
   });
 }

@@ -524,11 +524,11 @@ export const dailyPickSchema = z.object({
   bookmakers_count: z.number(),
   all_lines: z.array(z.number()).optional().default([]),
   
-  // === 投影資料欄位（來自 SportsDataIO Projection API）===
-  has_projection: z.boolean().optional().default(false),   // 是否有投影資料
-  projected_value: z.number().nullable().optional(),       // 投影值（如 projected points = 29.3）
-  projected_minutes: z.number().nullable().optional(),     // 預計上場分鐘數
-  edge: z.number().nullable().optional(),                  // 投影值與盤口差距（正數 = 有利方向）
+  // Nullable. The board omits a tag when the value is null.
+  has_projection: z.boolean().optional().default(false),
+  projected_value: z.number().nullable().optional(),
+  projected_minutes: z.number().nullable().optional(),
+  edge: z.number().nullable().optional(),
   opponent_rank: z.number().nullable().optional(),         // 對手整體防守排名。方向見 backend/app/models/schemas.py 第 514–516 行：1 = 最弱
   opponent_position_rank: z.number().nullable().optional(),// 對手對該位置防守排名。同一契約：1 = 最弱
   injury_status: z.string().nullable().optional(),         // 傷病狀態（Free Trial 為 null）
@@ -669,93 +669,6 @@ export const DIRECTION_DISPLAY_NAMES: Record<string, string> = {
   under: "Under",
 };
 
-
-// ==================== 球員投影資料 ====================
-
-/**
- * 單一球員投影資料 Schema
- * 
- * 對應後端 PlayerProjection 模型
- * 資料來源：SportsDataIO Projected Player Game Stats API
- */
-export const playerProjectionSchema = z.object({
-  player_id: z.number().nullable().optional(),
-  player_name: z.string(),
-  team: z.string().nullable().optional(),
-  position: z.string().nullable().optional(),
-  opponent: z.string().nullable().optional(),
-  home_or_away: z.string().nullable().optional(),
-  
-  // 核心投影數據
-  minutes: z.number().nullable().optional(),
-  points: z.number().nullable().optional(),
-  rebounds: z.number().nullable().optional(),
-  assists: z.number().nullable().optional(),
-  steals: z.number().nullable().optional(),
-  blocked_shots: z.number().nullable().optional(),
-  turnovers: z.number().nullable().optional(),
-  pra: z.number().nullable().optional(),
-  // SPO-16 derived combo fields emitted by `projection_provider.normalize_projection()`.
-  // ⚠ 沒有 `dd` — DD 為 binary 機率，無法從邊際投影推導（decision §4 step 4）
-  r_a: z.number().nullable().optional(),
-  p_r: z.number().nullable().optional(),
-  p_a: z.number().nullable().optional(),
-  
-  // 投籃數據
-  field_goals_made: z.number().nullable().optional(),
-  field_goals_attempted: z.number().nullable().optional(),
-  three_pointers_made: z.number().nullable().optional(),
-  three_pointers_attempted: z.number().nullable().optional(),
-  free_throws_made: z.number().nullable().optional(),
-  free_throws_attempted: z.number().nullable().optional(),
-  
-  // 先發/傷病（Free Trial 為 null）
-  started: z.number().nullable().optional(),
-  lineup_confirmed: z.boolean().nullable().optional(),
-  injury_status: z.string().nullable().optional(),
-  injury_body_part: z.string().nullable().optional(),
-  
-  // 對位難度。方向見 backend/app/models/schemas.py 第 514–516 行：1 = 最弱防守，數字愈大愈強。
-  opponent_rank: z.number().nullable().optional(),
-  opponent_position_rank: z.number().nullable().optional(),
-  
-  // DFS 相關
-  draftkings_salary: z.number().nullable().optional(),
-  fanduel_salary: z.number().nullable().optional(),
-  fantasy_points_dk: z.number().nullable().optional(),
-  fantasy_points_fd: z.number().nullable().optional(),
-  
-  // 進階指標
-  usage_rate_percentage: z.number().nullable().optional(),
-  player_efficiency_rating: z.number().nullable().optional(),
-});
-
-export type PlayerProjection = z.infer<typeof playerProjectionSchema>;
-
-/**
- * 投影資料列表回應 Schema
- * 
- * GET /api/nba/projections 的回應格式
- */
-export const projectionsResponseSchema = z.object({
-  date: z.string(),
-  player_count: z.number(),
-  fetched_at: z.string().nullable().optional(),
-  projections: z.array(playerProjectionSchema),
-});
-
-export type ProjectionsResponse = z.infer<typeof projectionsResponseSchema>;
-
-/**
- * 投影資料刷新回應 Schema
- */
-export const projectionRefreshResponseSchema = z.object({
-  date: z.string(),
-  player_count: z.number(),
-  message: z.string(),
-});
-
-export type ProjectionRefreshResponse = z.infer<typeof projectionRefreshResponseSchema>;
 
 const unitProbability = z.number().min(0).max(1);
 

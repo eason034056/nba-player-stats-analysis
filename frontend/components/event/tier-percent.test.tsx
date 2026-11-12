@@ -38,7 +38,6 @@ function modelAt(probability: number, tier: string) {
     marketName: "Points",
     market: "player_points",
     binary: false,
-    supportsProjection: true,
     eventId: "evt-mia-bos",
     homeTeam: "Miami Heat",
     awayTeam: "Boston Celtics",
@@ -50,7 +49,6 @@ function modelAt(probability: number, tier: string) {
     consensus: null,
     last10: [],
     history: null,
-    projection: null,
     league: "nba",
   });
 }
@@ -153,7 +151,6 @@ describe("tier percent on the game page", () => {
       marketName: "Points",
       market: "player_points",
       binary: false,
-      supportsProjection: true,
       eventId: "evt-mia-bos",
       homeTeam: "Miami Heat",
       awayTeam: "Boston Celtics",
@@ -172,7 +169,6 @@ describe("tier percent on the game page", () => {
       consensus: null,
       last10: [],
       history: null,
-      projection: null,
       league: "nba",
     });
     renderWithProviders(

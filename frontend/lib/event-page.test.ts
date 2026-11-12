@@ -69,12 +69,10 @@ describe("lineup chips", () => {
 describe("read signals", () => {
   const base = {
     binary: false,
-    supportsProjection: true,
     line: 18.5,
     consensus: bamConsensus,
     last10: [logOn("2026-11-08"), logOn("2026-11-03")],
     history: bamHistory,
-    projection: null,
     pick: pick(),
     market: "player_points",
   };
@@ -110,7 +108,6 @@ describe("read signals", () => {
   it("says WNBA has no projection instead of a stand-in number", () => {
     const projection = buildReadSignals({
       ...base,
-      supportsProjection: false,
       pick: pick({ projected_value: null, opponent_rank: null, opponent_position_rank: null }),
     }).find((signal) => signal.key === "projection");
     expect(projection?.value).toBeNull();
@@ -320,7 +317,6 @@ describe("our read", () => {
       marketName: "Points",
       market: "player_points",
       binary: false,
-      supportsProjection: true,
       eventId: "evt-mia",
       homeTeam: "Miami Heat",
       awayTeam: "Boston Celtics",
@@ -332,7 +328,6 @@ describe("our read", () => {
       consensus: bamConsensus,
       last10: [],
       history: null,
-      projection: null,
       league: "nba",
     });
     expect(model.tier?.label).toBe("Strong play");
@@ -351,7 +346,6 @@ describe("our read", () => {
       marketName: "Points",
       market: "player_points",
       binary: false,
-      supportsProjection: true,
       eventId: "evt-mia",
       homeTeam: "Miami Heat",
       awayTeam: "Boston Celtics",
@@ -363,7 +357,6 @@ describe("our read", () => {
       consensus: null,
       last10: [],
       history: bamHistory,
-      projection: null,
       league: "nba",
     });
     expect(model.other?.direction).toBe("under");
@@ -378,7 +371,6 @@ describe("our read", () => {
       marketName: "Assists",
       market: "player_assists",
       binary: false,
-      supportsProjection: true,
       eventId: "evt-mia",
       homeTeam: "Miami Heat",
       awayTeam: "Boston Celtics",
@@ -390,7 +382,6 @@ describe("our read", () => {
       consensus: null,
       last10: [],
       history: null,
-      projection: null,
       league: "nba",
     });
     expect(model.tier).toBeNull();
@@ -441,7 +432,6 @@ describe("NBA read uses the backend tier", () => {
     marketName: "Points",
     market: "player_points",
     binary: false,
-    supportsProjection: true,
     eventId: "evt-mia-bos",
     homeTeam: "Miami Heat",
     awayTeam: "Boston Celtics",
@@ -452,7 +442,6 @@ describe("NBA read uses the backend tier", () => {
     consensus: null,
     last10: [],
     history: null,
-    projection: null,
     league: "nba" as const,
   };
 
