@@ -21,7 +21,14 @@ Then, for every table in schema public, compares row count and max(id)
 (when an id column exists). For every sequence in schema public, compares
 last_value. Prints name|metric|local|rds|status and exits 1 on any mismatch.
 Exits 1 when the number of tables compared is not the number listed on
-the local side or not the number listed on the RDS side.
+the local side or not the number listed on the RDS side. Exits 1 when
+either side lists zero public tables. The error line is the two counts.
+It does not include a URL or a password. An empty public schema is not
+a successful verify.
+Exits 1 when the number of sequences compared is not the number listed
+on the local side or not the number listed on the RDS side.
+Zero sequences is allowed only when both sides list zero.
+Sequences can legitimately be absent.
 
 --verify-only skips pg_dump and pg_restore (and the pg_restore 16 gate).
 It still checks the URLs, sslmode, and client mode, then runs only the
@@ -492,9 +499,17 @@ report() {
 
 local_tables="$(list_tables "$local_url")"
 rds_tables="$(list_tables "$rds_url")"
-all_tables="$(printf '%s\n%s\n' "$local_tables" "$rds_tables" | sed '/^$/d' | sort -u)"
 local_table_n="$(line_count "$local_tables")"
 rds_table_n="$(line_count "$rds_tables")"
+
+# Wrong database, wrong schema, or an empty target. Counts only: a URL
+# or a password must not appear in this line.
+if [[ "$local_table_n" -eq 0 || "$rds_table_n" -eq 0 ]]; then
+  echo "error: local lists ${local_table_n} public tables and rds lists ${rds_table_n} public tables." >&2
+  exit 1
+fi
+
+all_tables="$(printf '%s\n%s\n' "$local_tables" "$rds_tables" | sed '/^$/d' | sort -u)"
 
 echo "name|metric|local|rds|status"
 
@@ -544,9 +559,15 @@ EOF
 local_seqs="$(list_sequences "$local_url")"
 rds_seqs="$(list_sequences "$rds_url")"
 all_seqs="$(printf '%s\n%s\n' "$local_seqs" "$rds_seqs" | sed '/^$/d' | sort -u)"
+local_seq_n="$(line_count "$local_seqs")"
+rds_seq_n="$(line_count "$rds_seqs")"
 
+# Same split as the table loop: fd 3, so a docker -i client cannot eat
+# the next name. seqs_compared is the backstop for a short read.
+seqs_compared=0
 while IFS= read -r -u 3 seq; do
   [[ -z "$seq" ]] && continue
+  seqs_compared=$((seqs_compared + 1))
   local_value="MISSING"
   rds_value="MISSING"
   if contains_line "$local_seqs" "$seq"; then
@@ -562,6 +583,14 @@ EOF
 
 if [[ "$tables_compared" -ne "$local_table_n" || "$tables_compared" -ne "$rds_table_n" ]]; then
   echo "error: compared ${tables_compared} public tables; local lists ${local_table_n} and rds lists ${rds_table_n}." >&2
+  exit 1
+fi
+
+# Zero sequences is a match only when both sides list zero. A database
+# can legitimately have no sequences. A one-sided list fails here,
+# because compared would not equal both counts.
+if [[ "$seqs_compared" -ne "$local_seq_n" || "$seqs_compared" -ne "$rds_seq_n" ]]; then
+  echo "error: compared ${seqs_compared} public sequences; local lists ${local_seq_n} and rds lists ${rds_seq_n}." >&2
   exit 1
 fi
 
