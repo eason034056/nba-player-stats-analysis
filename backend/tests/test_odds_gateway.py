@@ -405,3 +405,41 @@ async def test_prewarm_skips_hot_keys_that_are_still_fresh():
 
     assert warmed == 0
     assert len(provider.calls) == 1
+
+
+@pytest.mark.asyncio
+async def test_prewarm_skips_wnba_keys_when_the_flag_is_off(monkeypatch):
+    """WNBA hot keys stay in the set. The Odds API call is the part that stops."""
+    from app.settings import settings
+
+    monkeypatch.setattr(settings, "wnba_jobs_enabled", False)
+    cache = FakeCache()
+    provider = FakeProvider([_recorded_gateway_payload(), _recorded_gateway_payload()])
+    gateway = OddsMarketGateway(
+        provider=provider,
+        cache=cache,
+        fresh_ttl_seconds=45,
+        stale_ttl_seconds=120,
+        lock_ttl_seconds=10,
+        wait_for_refresh_ms=300,
+        quota_protect_percent=15,
+        hot_keys_limit=10,
+    )
+    wnba_member = (
+        '{"bookmakers": null, "event_id": "evt_wnba", "markets": "player_points", '
+        '"odds_format": "american", "regions": "us", "sport": "basketball_wnba"}'
+    )
+    nba_member = (
+        '{"bookmakers": null, "event_id": "evt_123", "markets": "player_points", '
+        '"odds_format": "american", "regions": "us", "sport": "basketball_nba"}'
+    )
+    cache.zsets[HOT_KEYS_ZSET_KEY] = {wnba_member: 9.0, nba_member: 1.0}
+    seen = datetime.now(timezone.utc).isoformat()
+    cache.values[f"odds:hot_seen:v1:{wnba_member}"] = {"seen_at": seen}
+    cache.values[f"odds:hot_seen:v1:{nba_member}"] = {"seen_at": seen}
+
+    warmed = await gateway.prewarm_hot_keys()
+
+    assert warmed == 1
+    assert [call["sport"] for call in provider.calls] == ["basketball_nba"]
+    assert wnba_member in cache.zsets[HOT_KEYS_ZSET_KEY]

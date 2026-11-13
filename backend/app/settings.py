@@ -81,6 +81,13 @@ class Settings(BaseSettings):
     # Chicago during the slate window, which is the same 30 minutes.
     # A snapshot younger than this is not refreshed again.
     nba_injuries_refresh_minutes: int = 30
+
+    # WNBA_JOBS_ENABLED。預設 true，沒設環境變數時四個 WNBA 排程照常註冊。
+    # false 時 scheduler.start() 不註冊那四個工作。
+    # WNBA 的 fetch_and_store、run_daily_analysis、兩個手動 POST，
+    # 以及 odds prewarm 裡 sport 為 basketball_wnba 的 key 也讀這個值。
+    # NBA 排程不讀這個值。
+    wnba_jobs_enabled: bool = True
     
     @property
     def allowed_origins_list(self) -> List[str]:
