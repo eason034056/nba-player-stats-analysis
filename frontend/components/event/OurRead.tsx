@@ -1,5 +1,6 @@
 "use client";
 
+import { InjuryStatusTag } from "@/components/InjuryStatusTag";
 import type { LeagueSegment } from "@/lib/event-detail-link";
 import {
   webOtherCopy,
@@ -36,6 +37,11 @@ const TIER_CLASS = {
   pass: "bg-[#E2E2E2] text-[#4A4458]",
 } as const;
 
+function visibleSignals(signals: ReadSignal[], nba: boolean): ReadSignal[] {
+  if (!nba) return signals;
+  return signals.filter((signal) => signal.key !== "projection" || Boolean(signal.value?.trim()));
+}
+
 function SignalRow({ signal, showVerdict }: { signal: ReadSignal; showVerdict: boolean }) {
   const verdict = showVerdict ? signal.verdict : null;
   const dot = verdict ? VERDICT_DOT[verdict] : signal.value ? "bg-brand" : "bg-tone-neutral";
@@ -43,9 +49,18 @@ function SignalRow({ signal, showVerdict }: { signal: ReadSignal; showVerdict: b
   return (
     <div
       data-testid={`signal-${signal.key}`}
-      className="flex flex-wrap items-center gap-x-6 gap-y-2.5 border-b border-divider py-3.5"
+      className={cn(
+        "flex flex-wrap items-center gap-x-6 gap-y-2.5 border-b border-divider py-3.5",
+        showVerdict && "max-md:flex-nowrap max-md:gap-x-3",
+      )}
     >
-      <div className="grid min-w-0 flex-1 basis-60 grid-cols-[10px_minmax(0,1fr)] gap-3">
+      <div
+        data-testid={`signal-label-${signal.key}`}
+        className={cn(
+          "grid min-w-0 flex-1 grid-cols-[10px_minmax(0,1fr)] gap-3",
+          showVerdict ? "md:basis-60" : "basis-60",
+        )}
+      >
         <span className={cn("mt-1.5 h-2.5 w-2.5 rounded-full", dot)} />
         <span className="min-w-0">
           <span className="block text-sm font-bold text-ink">{signal.label}</span>
@@ -69,7 +84,10 @@ function SignalRow({ signal, showVerdict }: { signal: ReadSignal; showVerdict: b
         ) : null}
       </div>
       {showVerdict ? (
-        <div className="flex flex-col items-end md:hidden">
+        <div
+          data-testid={`signal-value-${signal.key}`}
+          className="flex shrink-0 flex-col items-end text-right md:hidden"
+        >
           <span className="font-mono text-[15px] font-bold text-ink">{signal.value ?? "—"}</span>
           {verdict ? (
             <span className={cn("text-[11px] font-semibold", VERDICT_TEXT[verdict])}>{VERDICT_WORD[verdict]}</span>
@@ -128,6 +146,7 @@ export function OurRead({
   league?: LeagueSegment;
 }) {
   const nba = league === "nba";
+  const signals = visibleSignals(model.signals, nba);
   return (
     <section
       data-testid="our-read"
@@ -159,14 +178,17 @@ export function OurRead({
           <>
             <div className="flex flex-col gap-2">
               {model.player ? (
-                <div className="text-[15px] font-semibold text-muted">
-                  {model.player}
-                  {model.meta ? (
-                    <>
-                      <span className="md:hidden">{` · ${model.meta.split(",")[0]?.trim()}`}</span>
-                      <span className="hidden md:inline">{` · ${model.meta}`}</span>
-                    </>
-                  ) : null}
+                <div className="flex flex-wrap items-center gap-2 text-[15px] font-semibold text-muted">
+                  <span>
+                    {model.player}
+                    {model.meta ? (
+                      <>
+                        <span className="md:hidden">{` · ${model.meta.split(",")[0]?.trim()}`}</span>
+                        <span className="hidden md:inline">{` · ${model.meta}`}</span>
+                      </>
+                    ) : null}
+                  </span>
+                  {model.injury ? <InjuryStatusTag tag={model.injury} /> : null}
                 </div>
               ) : null}
               <div
@@ -183,7 +205,12 @@ export function OurRead({
             {isError ? <p className="text-sm font-semibold text-red">{errorText ?? "The odds request failed."}</p> : null}
             {model.bar ? <SplitBar bar={model.bar} showSource /> : null}
             <div className="hidden flex-wrap gap-2.5 md:flex">
-              {nba && (model.primary || model.other) ? (
+              {nba &&
+              model.other != null &&
+              !(
+                typeof model.other.combined_probability === "number" &&
+                Number.isFinite(model.other.combined_probability)
+              ) ? (
                 <div className="w-full text-xs font-semibold uppercase tracking-[0.08em] text-muted">History</div>
               ) : null}
               {model.primary ? (
@@ -211,18 +238,20 @@ export function OurRead({
                   The other side&apos;s hit rate is not on this response.
                 </p>
               ) : null}
-              <button
-                type="button"
-                onClick={onAsk}
-                className="min-h-[46px] rounded-full bg-brand-tint px-4 text-sm font-semibold text-brand"
-              >
-                Ask the agent
-              </button>
+              {model.listedOut ? null : (
+                <button
+                  type="button"
+                  onClick={onAsk}
+                  className="min-h-[46px] rounded-full bg-brand-tint px-4 text-sm font-semibold text-brand"
+                >
+                  Ask the agent
+                </button>
+              )}
             </div>
           </>
         )}
       </div>
-      {!isLoading && model.signals.length > 0 ? (
+      {!isLoading && signals.length > 0 ? (
         <div
           className={cn(
             nba
@@ -230,7 +259,7 @@ export function OurRead({
               : "border-t border-divider",
           )}
         >
-          {model.signals.map((signal) => (
+          {signals.map((signal) => (
             <SignalRow key={signal.key} signal={signal} showVerdict={nba} />
           ))}
         </div>

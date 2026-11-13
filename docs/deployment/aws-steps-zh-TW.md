@@ -208,6 +208,8 @@ set +a
 ./scripts/db_migrate_to_rds.sh
 ```
 
+若 restore 之後的檢查失敗，用 `--verify-only` 再跑一次。它不會再 dump 或 restore，只比較資料表筆數、`max(id)` 和 sequence 的 `last_value`。任一邊的 public 資料表是 0 張時，腳本 exit 1，不印 `ok:`。錯誤訊息只有兩邊的張數。sequence 兩邊都是 0 才算通過，因為資料庫可以沒有 sequence。
+
 或兩條都用 `read -s` 輸入，不要把網址寫在指令上：
 
 ```bash
@@ -334,13 +336,29 @@ openssl rand -hex 32 | aws ssm put-parameter \
 
 現在 compose 仍釘成 false，等 Vercel 上的是 #63（`88f1c66`）再打開。這份 repo 的 `frontend/lib/api.ts` 已經改打同源 `/api/backend`，由 `frontend/middleware.ts` 轉到 `BACKEND_API_URL` 並帶密鑰。沒有 `EventSource`。等 Vercel 跑的是那一版，再把 compose 那一行改成 `"true"` 然後重新部署後端。瀏覽器的 CORS preflight 留在 Next.js。後端在旗標打開時仍會對直接來的 `OPTIONS` 回 403。
 
-目前瀏覽器會打的路徑都在 `frontend/lib/api.ts` 的 `fetchApi`：`/api/health`、`/api/nba/events`、`/api/nba/props/no-vig`、`/api/nba/players/suggest`、`/api/nba/csv/players`、`/api/nba/player-history`、`/api/nba/player-dd-history`、`/api/nba/daily-picks`、`/api/nba/daily-picks/trigger`、`/api/nba/agent/chat`、`/api/nba/lineups`、`/api/nba/lineups/{team}`、`/api/nba/lineups/refresh`、`/api/nba/projections`、`/api/nba/projections/refresh`、`/api/nba/projections/{player}`、`/api/nba/events/{id}/reads`、`/api/nba/events/{id}/props`，以及 WNBA 的 events、props/no-vig、players/suggest、csv/players、player-history、player-dd-history、daily-picks、daily-picks/trigger、lineups/{team}。
+目前瀏覽器會打的路徑都在 `frontend/lib/api.ts` 的 `fetchApi`：`/api/health`、`/api/nba/events`、`/api/nba/props/no-vig`、`/api/nba/players/suggest`、`/api/nba/csv/players`、`/api/nba/player-history`、`/api/nba/player-dd-history`、`/api/nba/daily-picks`、`/api/nba/daily-picks/trigger`、`/api/nba/agent/chat`、`/api/nba/lineups`、`/api/nba/lineups/{team}`、`/api/nba/lineups/refresh`、`/api/nba/events/{id}/reads`、`/api/nba/events/{id}/props`，以及 WNBA 的 events、props/no-vig、players/suggest、csv/players、player-history、player-dd-history、daily-picks、daily-picks/trigger、lineups/{team}。沒有 projections 路徑。
 
 對不上密鑰時，限流 key 用的是 `request.client.host`。在這台主機上，uvicorn 的 `--proxy-headers` 會在進 key 函式之前，只在 TCP 對端正好是 Caddy `172.30.133.10` 時，用 `X-Forwarded-For` 改寫這個位址。Caddy 沒有 `trusted_proxies`，所以那個標頭是 Caddy 看到的 TCP 對端（Vercel 出口或直連的客戶端），不是 Caddy 容器自己的位址，客戶端也不能靠自己帶的 `X-Forwarded-For` 偽造。以後若加上 `trusted_proxies`，這條路徑要重看。不要用 Origin 標頭做登入。
 
-其他參數用同樣的方式建立，名稱對環境變數：`DATABASE_URL`、`ODDS_API_KEY`、`OPENAI_API_KEY`、`SPORTSDATA_API_KEY`、`BALLDONTLIE_API_KEY`、`BOT_API_KEYS`、`BOT_API_KEYS_PREMIUM`、`CORS_ALLOWED_ORIGINS`、`CORS_ALLOWED_ORIGIN_REGEX`。
+不要建 `SPORTSDATA_API_KEY`，也不要建任何 projection 參數。程式不讀它們。`Settings` 的 `extra=ignore` 會略過殘留名稱，行程照樣啟動，但那個值沒有作用。
 
-`DATABASE_URL` 要帶 `sslmode=verify-full`，`sslrootcert` 指到容器裡的 `/app/certs/global-bundle.pem`。主機第一次開機會把公開的 RDS CA 下載到 `/opt/sportslab/certs/global-bundle.pem`。
+`pull-ssm-env.sh` 把 `/sportslab/prod/` 底下每個參數寫進 `/etc/sportslab/backend.env`。`GHCR_PULL_USER` 和 `GHCR_PULL_TOKEN` 改寫到 `/etc/sportslab/ghcr.env`。要建的名稱：
+
+| 名稱 | 類型 | 是否必要 | 用途 |
+|---|---|---|---|
+| `DATABASE_URL` | SecureString | 必要 | RDS DSN。要帶 `sslmode=verify-full`，`sslrootcert=/app/certs/global-bundle.pem`。compose 把 `DATABASE_REQUIRED` 釘成 true，網址壞了就不會啟動。 |
+| `BALLDONTLIE_API_KEY` | SecureString | 傷兵必要 | `nba_injuries_refresh` 讀它。空的就跳過呼叫。行程仍會啟動。 |
+| `ODDS_API_KEY` | SecureString | 啟動不必 | The Odds API。WNBA 賠率讀它。NBA 的 events、props、快照、每日分析走同一個 provider，空的時候那些呼叫在 provider 失敗，不會把行程打停。健康檢查、CSV 球員、排程器不需要它。 |
+| `OPENAI_API_KEY` | SecureString | 啟動不必 | Agent chat。`ChatOpenAI` 從環境變數讀。其他路由不讀。 |
+| `VERCEL_PROXY_SECRET` | SecureString | 旗標打開前要有 | 和 Vercel rewrite 共用。compose 把 `PROXY_SECRET_REQUIRED` 釘成 false，空密鑰仍會啟動。 |
+| `CORS_ALLOWED_ORIGINS` | String | 選填 | 瀏覽器來源。空的就用 `ALLOWED_ORIGINS`。 |
+| `CORS_ALLOWED_ORIGIN_REGEX` | String | 選填 | 預覽站。空的表示沒有 regex。 |
+| `BOT_API_KEYS` | SecureString | 選填 | Discord bot 免費層。 |
+| `BOT_API_KEYS_PREMIUM` | SecureString | 選填 | Discord bot 付費層。 |
+| `GHCR_PULL_USER` | SecureString | 選填 | 只有 GHCR 套件是私有時才要。 |
+| `GHCR_PULL_TOKEN` | SecureString | 選填 | 只有 GHCR 套件是私有時才要。 |
+
+不要把 `PROXY_SECRET_REQUIRED` 放進 SSM。compose 釘死這個值，而且蓋過 env file。主機第一次開機會把公開的 RDS CA 下載到 `/opt/sportslab/certs/global-bundle.pem`，compose 掛到 `/app/certs/global-bundle.pem`。
 
 輪替 `VERCEL_PROXY_SECRET`：先在 Vercel 和 SSM 設好新值，然後再部署兩邊。主機上是 `deploy/pull-ssm-env.sh` 再 `docker compose up -d`。旗標仍是 false 時，對不上只會改速率限制的 key。等旗標改成 true，兩邊不一致的那段時間，健康檢查以外的請求會回 403。新值不要進 git 或聊天。載入時會去掉密鑰前後的空白。`x-real-ip` 優先於 `X-Forwarded-For`，因為 Caddy 會把 `X-Forwarded-For` 換成出口位址，而 #63 把瀏覽器位址放在 `x-real-ip`。
 

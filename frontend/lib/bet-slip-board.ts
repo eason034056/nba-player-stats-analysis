@@ -14,6 +14,7 @@ import { formatTierPercent } from "./player-dd";
 import { teamAbbr } from "./team-abbr";
 import { boardClock } from "./today-board";
 import { propPhrase } from "./picks-board";
+import type { DailyPick } from "./schemas";
 
 export interface SlipSummary {
   count: number;
@@ -21,7 +22,7 @@ export interface SlipSummary {
   allHitText: string;
 }
 
-function legHasBlend(pick: BetSlipPick): boolean {
+function legHasBlend(pick: BetSlipPick): pick is BetSlipPick & { combined_probability: number } {
   return typeof pick.combined_probability === "number" && Number.isFinite(pick.combined_probability);
 }
 
@@ -32,36 +33,53 @@ export interface SlipTotals {
   basis: "blend" | "history" | "stored";
 }
 
+export const OUT_LEGS_NOTE = "Avg and all hit leave out Out legs.";
+
+export function slipSummaryCaption(basis: SlipTotals["basis"], omitsOutLegs: boolean): string {
+  const body =
+    basis === "blend"
+      ? "Avg and all hit use the combined probability on each same-side leg. All hit is the product of those blends. It is not a joint probability from the API."
+      : basis === "history"
+        ? "History: a leg has no blend, so avg and all hit use the historical rate on every leg. A reverse add stores the complement of the other side's hit rate, not a de-vigged price."
+        : "Avg and all hit use the stored hit rates. A reverse add stores the complement of the other side's hit rate, not a de-vigged price. All hit is the product of those stored rates. It is not a joint probability from the API.";
+  return omitsOutLegs ? `${body} ${OUT_LEGS_NOTE}` : body;
+}
+
 /**
  * Same-side legs with a blend contribute that blend.
  * A slip that also has a leg with no blend is labelled History and uses
  * the historical rate on every leg, so the totals are not a mixed number.
  */
-export function slipTotals(picks: BetSlipPick[]): SlipTotals {
-  const summaryOf = (values: number[], basis: SlipTotals["basis"], averageLabel: string, allHitLabel: string): SlipTotals => ({
-    summary: slipSummary(values),
-    averageLabel,
-    allHitLabel,
-    basis,
-  });
-  if (picks.length > 0 && picks.every(legHasBlend)) {
+export function slipTotals(picks: BetSlipPick[], outIds?: ReadonlySet<string>): SlipTotals {
+  const live = outIds ? picks.filter((pick) => !outIds.has(pick.id)) : picks;
+  const summaryOf = (values: number[], basis: SlipTotals["basis"], averageLabel: string, allHitLabel: string): SlipTotals => {
+    const math = slipSummary(values);
+    return {
+      summary: { count: picks.length, averageText: math.averageText, allHitText: math.allHitText },
+      averageLabel,
+      allHitLabel,
+      basis,
+    };
+  };
+  const blended = live.filter(legHasBlend);
+  if (live.length > 0 && blended.length === live.length) {
     return summaryOf(
-      picks.map((pick) => pick.combined_probability as number),
+      blended.map((pick) => pick.combined_probability),
       "blend",
       "avg. blend",
       "all hit",
     );
   }
-  if (picks.some(legHasBlend)) {
+  if (live.some(legHasBlend)) {
     return summaryOf(
-      picks.map((pick) => pick.probability),
+      live.map((pick) => pick.probability),
       "history",
       "History",
       "History",
     );
   }
   return summaryOf(
-    picks.map((pick) => pick.probability),
+    live.map((pick) => pick.probability),
     "stored",
     "avg. probability",
     "all hit",
@@ -124,6 +142,36 @@ export function sameSideSlipRead(
     tier: pick.tier ?? null,
     combined_probability: pick.combined_probability ?? null,
   };
+}
+
+export type SlipPickInput = Omit<BetSlipPick, "id" | "added_at">;
+
+export function slipPickFromDaily(
+  pick: DailyPick,
+  direction: string,
+  probability: number,
+  rateBasis?: "complement",
+): SlipPickInput {
+  return {
+    player_name: pick.player_name,
+    player_team: pick.player_team || "",
+    event_id: pick.event_id,
+    home_team: pick.home_team,
+    away_team: pick.away_team,
+    commence_time: pick.commence_time,
+    metric: pick.metric,
+    threshold: pick.threshold,
+    direction,
+    probability,
+    n_games: pick.n_games,
+    rate_basis: rateBasis,
+    ...sameSideSlipRead(pick, direction),
+  };
+}
+
+export function reverseSlipPick(pick: DailyPick): SlipPickInput {
+  const reverse = pick.direction === "over" ? "under" : "over";
+  return slipPickFromDaily(pick, reverse, 1 - pick.probability, "complement");
 }
 
 export function slipDetailHref(pick: BetSlipPick, league: LeagueSegment): string {

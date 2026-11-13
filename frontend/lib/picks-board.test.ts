@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import {
   buildPickRows,
   countStrong,
+  isOutPick,
   marketChipList,
   matchesConfidence,
   pickTags,
@@ -153,5 +154,97 @@ describe("picks board sort, filter, and market grouping", () => {
     expect(rows.find((row) => row.player === "Jrue Holiday")?.propText).toBe(
       "Under 2.5 free throws",
     );
+  });
+
+  it("omits projection, edge, minutes, injury, and lineup when those fields are null", () => {
+    const blank = {
+      ...board[0],
+      has_projection: false,
+      projected_value: null,
+      projected_minutes: null,
+      edge: null,
+      injury_status: null,
+      lineup_confirmed: null,
+    };
+    const text = pickTags(blank).map((tag) => tag.text).join(" ");
+    expect(text).not.toMatch(/Proj|Edge|min|NaN|—|Lineup|Questionable|Out/);
+  });
+
+  it("tags the five injury words and skips Active, blank, and null", () => {
+    const marked = {
+      ...board[0],
+      has_projection: false,
+      projected_value: null,
+      projected_minutes: null,
+      edge: null,
+      injury_status: "Questionable",
+      lineup_confirmed: true as const,
+    };
+    const texts = (status: string | null) =>
+      pickTags({ ...marked, injury_status: status }).map((tag) => tag.text);
+
+    expect(texts("Out")).toContain("Out");
+    expect(texts("out")).toContain("Out");
+    expect(texts("Questionable")).toContain("Questionable");
+    expect(texts("Doubtful")).toContain("Doubtful");
+    expect(texts("  doubtful  ")).toContain("Doubtful");
+    expect(texts("Probable")).toContain("Probable");
+    expect(texts("Day-To-Day")).toContain("Day-To-Day");
+    for (const status of ["Active", null, "   "]) {
+      const tags = texts(status);
+      expect(tags).not.toContain("Active");
+      expect(tags).not.toContain("Out");
+      expect(tags).not.toContain("Questionable");
+    }
+    expect(texts("Unknown injury")).toContain("Unknown injury");
+    expect(texts("Questionable")).not.toContain("Lineup confirmed");
+    expect(pickTags({ ...marked, lineup_confirmed: false }).map((tag) => tag.text)).toContain(
+      "Lineup unconfirmed",
+    );
+  });
+
+  it("keeps an Out pick off the strong count, the bar, and the front of the board", () => {
+    const base = board[0];
+    const out = {
+      ...base,
+      player_name: "Jimmy Butler",
+      injury_status: " OUT ",
+      tier: "Strong play" as const,
+      combined_probability: null,
+      probability: 0.95,
+    };
+    const questionable = {
+      ...base,
+      player_name: "Bam Adebayo",
+      injury_status: "Questionable",
+      tier: "Playable" as const,
+      combined_probability: 0.74,
+      probability: 0.66,
+    };
+    expect(isOutPick(out)).toBe(true);
+    expect(isOutPick({ injury_status: "out" })).toBe(true);
+    expect(isOutPick(questionable)).toBe(false);
+    expect(isOutPick({ injury_status: "Doubtful" })).toBe(false);
+    expect(isOutPick({ injury_status: null })).toBe(false);
+
+    expect(countStrong([out, questionable], "nba")).toBe(1);
+    expect(sortPicks([out, questionable], "nba").map((pick) => pick.player_name)).toEqual([
+      "Bam Adebayo",
+      "Jimmy Butler",
+    ]);
+
+    const rows = buildPickRows([out, questionable], "nba", "2026-11-10");
+    expect(rows.map((row) => row.player)).toEqual(["Bam Adebayo", "Jimmy Butler"]);
+    const [kept, dropped] = rows;
+    expect(kept.dimmed).toBe(false);
+    expect(kept.probabilityText).toBe("74%");
+    expect(kept.tags.map((tag) => tag.text)).toContain("Questionable");
+    expect(dropped.dimmed).toBe(true);
+    expect(dropped.probabilityText).toBe("");
+    expect(dropped.barPercent).toBe(0);
+    expect(dropped.tierShort).toBeNull();
+    expect(dropped.tierName).toBeNull();
+    expect(dropped.tags.map((tag) => tag.text)).toEqual(["Out"]);
+    expect(dropped.href).toContain("/event/");
   });
 });

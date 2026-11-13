@@ -40,6 +40,8 @@ services:
     container_name: sportslab-backend
     restart: unless-stopped
     env_file:
+      # pull-ssm-env.sh writes every /sportslab/prod/* name here.
+      # No SPORTSDATA_* or projection variable is read. ODDS_API_KEY may be absent.
       - /etc/sportslab/backend.env
     environment:
       REDIS_URL: redis://redis:6379/0

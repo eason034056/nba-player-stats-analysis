@@ -80,14 +80,14 @@ TOOL_EXPLANATIONS = {
     },
     "auto_teammate_impact": {
         "name": "隊友影響 (Teammate Impact)",
-        "desc": "明星隊友在/不在場時，該球員的表現差異。結合傷兵報告判斷今日情境。",
-        "source": "csv + star_players.json + ESPN/CBS 傷兵報告",
+        "desc": "明星隊友在/不在場時，該球員的表現差異。NBA 只讀後端傷兵快取；快取缺失或超過 6 小時不把隊友標成健康。WNBA 仍用 ESPN/CBS。",
+        "source": "csv + star_players.json + BALLDONTLIE injury cache injuries:nba:latest for NBA. WNBA stays on ESPN/CBS.",
         "fields": ["teammate_chemistry", "today_scenario"],
     },
     "get_official_injury_report": {
         "name": "官方傷兵報告 (Injury Report)",
-        "desc": "對手球隊的傷兵名單（ESPN + CBS 爬取）。影響對手防守強度與輪替。",
-        "source": "nba_lineup_rag (ESPN/CBS injury pages)",
+        "desc": "球隊傷兵名單。NBA 只讀後端快取 injuries:nba:latest，不爬 ESPN 或 CBS。快取缺失或超過 6 小時回 caution（injury data unavailable），不把名單空白當成全員健康。WNBA 仍爬 ESPN + CBS。",
+        "source": "BALLDONTLIE cache injuries:nba:latest for NBA. WNBA stays on ESPN/CBS.",
         "fields": ["team", "injuries"],
     },
     "get_own_team_projected_lineup": {
@@ -142,8 +142,8 @@ TOOL_EXPLANATIONS = {
     # ========== Projection Agent (Dimension 6 - stub) ==========
     "get_full_projection": {
         "name": "完整投影 (Full Projection)",
-        "desc": "預測點數/籃板/助攻/PRA、上場時間、usage%。目前為 stub，SportsDataIO 為假資料。",
-        "source": "unavailable (SportsDataIO dummy)",
+        "desc": "預測點數/籃板/助攻/PRA、上場時間、usage%。目前為 stub，沒有投影來源，模型尚未接上。",
+        "source": "unavailable (projection stub)",
         "fields": [],
     },
     "calculate_edge": {

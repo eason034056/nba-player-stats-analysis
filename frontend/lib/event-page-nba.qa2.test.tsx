@@ -22,7 +22,6 @@ function read(p: DailyPick) {
     marketName: "Points",
     market: "player_points",
     binary: false,
-    supportsProjection: true,
     eventId: "evt-mia-bos",
     homeTeam: "Miami Heat",
     awayTeam: "Boston Celtics",
@@ -34,7 +33,6 @@ function read(p: DailyPick) {
     consensus: null,
     last10: [],
     history: null,
-    projection: null,
     league: "nba",
   });
 }
@@ -107,7 +105,7 @@ describe("QA: caption, rail, and action bar keep the two sources apart", () => {
     expect(nbaTierFace({ tier: "Pass", combined_probability: 0.697 })).toEqual({ probabilityText: "69%", tier: null });
   });
 
-  it("puts the blend on the rail and the primary button, and History only on the other side", () => {
+  it("puts the blend on the rail and the primary button, and 1 - combined on the other side", () => {
     const p = pick({ probability: 0.59, tier: "Lean", p_under: 0.41, combined_probability: 0.673 });
     const row = rail(p);
     expect(row.leanText).toBe("O 67% Lean");
@@ -137,9 +135,10 @@ describe("QA: caption, rail, and action bar keep the two sources apart", () => {
       </>,
     );
     expect(screen.getByTestId("player-row-Bam Adebayo")).not.toHaveTextContent("History");
-    const history = screen.getAllByRole("button", { name: /History/ });
-    expect(history).toHaveLength(1);
-    expect(history[0]).toHaveTextContent("Under 41%");
-    expect(history[0]).not.toHaveTextContent("67%");
+    const other = screen.getByRole("button", { name: "Under 32%" });
+    expect(other).not.toHaveTextContent("History");
+    expect(other).not.toHaveTextContent("41%");
+    expect(other).not.toHaveTextContent("67%");
+    expect(screen.queryByRole("button", { name: /History/ })).not.toBeInTheDocument();
   });
 });

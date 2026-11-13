@@ -1,0 +1,135 @@
+{
+  "date": "2026-11-10",
+  "analyzed_at": "2026-11-10T18:00:00Z",
+  "total_picks": 2,
+  "picks": [
+    {
+      "player_name": "Bam Adebayo",
+      "player_team": "Heat",
+      "player_team_code": "MIA",
+      "position": "C",
+      "event_id": "evt-mia-bos",
+      "home_team": "Miami Heat",
+      "away_team": "Boston Celtics",
+      "commence_time": "2026-11-11T00:30:00Z",
+      "metric": "points",
+      "threshold": 18.5,
+      "direction": "over",
+      "probability": 0.72,
+      "n_games": 40,
+      "bookmakers_count": 4,
+      "all_lines": [18.5],
+      "has_projection": true,
+      "projected_value": 20.4,
+      "projected_minutes": 34,
+      "edge": 1.9,
+      "opponent_rank": 22,
+      "opponent_position_rank": 9,
+      "opponent_rank_source": "csv",
+      "opponent_rank_season": "2025-2026",
+      "opponent_rank_note": "computed from real points allowed, not fantasy points.",
+      "opponent_position_rank_source": "csv",
+      "opponent_position_rank_season": "2025-2026",
+      "opponent_position_rank_note": "computed from real points allowed, not fantasy points.",
+      "injury_status": "Questionable",
+      "injury_status_raw": "Doubtful",
+      "lineup_confirmed": null,
+      "tier": null,
+      "p_over": 0.62,
+      "p_under": 0.28,
+      "season_mean": 19.4,
+      "signals": [
+        {
+          "key": "market",
+          "label": "Market price",
+          "value": "58.0%",
+          "verdict": "supports"
+        },
+        {
+          "key": "last10",
+          "label": "Last 10 games",
+          "value": "7/10",
+          "verdict": "supports"
+        },
+        {
+          "key": "history",
+          "label": "All-game hit rate",
+          "value": "72.0%",
+          "verdict": "supports"
+        },
+        {
+          "key": "defense",
+          "label": "Opponent defense",
+          "value": "#9",
+          "verdict": "supports"
+        }
+      ],
+      "combined_probability": 0.6095
+    },
+    {
+      "player_name": "Jimmy Butler",
+      "player_team": "Heat",
+      "player_team_code": "MIA",
+      "position": "F",
+      "event_id": "evt-mia-bos",
+      "home_team": "Miami Heat",
+      "away_team": "Boston Celtics",
+      "commence_time": "2026-11-11T00:30:00Z",
+      "metric": "points",
+      "threshold": 22.5,
+      "direction": "over",
+      "probability": 0.7,
+      "n_games": 12,
+      "bookmakers_count": 4,
+      "all_lines": [22.5],
+      "has_projection": false,
+      "projected_value": null,
+      "projected_minutes": null,
+      "edge": null,
+      "opponent_rank": 22,
+      "opponent_position_rank": 9,
+      "opponent_rank_source": "csv",
+      "opponent_rank_season": "2025-2026",
+      "opponent_rank_note": "computed from real points allowed, not fantasy points.",
+      "opponent_position_rank_source": "csv",
+      "opponent_position_rank_season": "2025-2026",
+      "opponent_position_rank_note": "computed from real points allowed, not fantasy points.",
+      "injury_status": "Out",
+      "injury_status_raw": "Out",
+      "lineup_confirmed": null,
+      "tier": null,
+      "p_over": null,
+      "p_under": null,
+      "season_mean": 21.8,
+      "signals": [
+        {
+          "key": "market",
+          "label": "Market price",
+          "value": null,
+          "verdict": null
+        },
+        {
+          "key": "last10",
+          "label": "Last 10 games",
+          "value": null,
+          "verdict": null
+        },
+        {
+          "key": "history",
+          "label": "All-game hit rate",
+          "value": "70.0%",
+          "verdict": "supports"
+        },
+        {
+          "key": "defense",
+          "label": "Opponent defense",
+          "value": "#9",
+          "verdict": "supports"
+        }
+      ],
+      "combined_probability": null
+    }
+  ],
+  "stats": null,
+  "message": null
+}

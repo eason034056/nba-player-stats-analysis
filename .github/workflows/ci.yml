@@ -34,6 +34,11 @@ jobs:
   backend-test:
     name: Backend Tests
     runs-on: ubuntu-latest
+    # Recent Backend Tests jobs finished in 75s, 90s, and 79s
+    # (runs 43102716772, 43106159296, 43108025796). Fifteen minutes
+    # covers the postgres:16 pull and the extra docker-run verify,
+    # and a stuck job stops here instead of at the default 360.
+    timeout-minutes: 15
     services:
       redis:
         image: redis:7-alpine
@@ -53,7 +58,7 @@ jobs:
         ports:
           - 5432:5432
         options: >-
-          --health-cmd "pg_isready -U novig -d novig_nba"
+          --health-cmd "pg_isready -h 127.0.0.1 -U novig -d novig_nba"
           --health-interval 10s
           --health-timeout 5s
           --health-retries 5
@@ -65,6 +70,9 @@ jobs:
       DATABASE_URL: postgresql://novig:novig@localhost:5432/novig_nba
       ODDS_API_KEY: test-key
       OPENAI_API_KEY: test-key
+      # The real-docker verify test fails, instead of skipping, when
+      # this is set and docker cannot run.
+      REQUIRE_DOCKER_TESTS: "1"
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -73,6 +81,8 @@ jobs:
           cache: pip
           cache-dependency-path: backend/requirements.txt
       - run: pip install -r requirements.txt
+      - name: Install PostgreSQL client
+        run: sudo apt-get update && sudo apt-get install -y postgresql-client
       - run: pytest --tb=short -q
 
   frontend-lint:
@@ -99,6 +109,30 @@ jobs:
           VERCEL_PROXY_SECRET: ci-build-placeholder
           NEXT_TELEMETRY_DISABLED: "1"
         run: npx next build
+      - name: Next build with Google Fonts blocked
+        env:
+          NEXT_TELEMETRY_DISABLED: "1"
+        run: |
+          # ubuntu-latest rejects unshare -rn (uid_map: Operation not permitted).
+          sudo sh -c 'printf "127.0.0.1 fonts.googleapis.com\n127.0.0.1 fonts.gstatic.com\n" >> /etc/hosts'
+          if curl --fail --max-time 10 -sS -o /dev/null https://fonts.googleapis.com; then
+            echo "fonts.googleapis.com was reachable"
+            exit 1
+          fi
+          if curl --fail --max-time 10 -sS -o /dev/null https://fonts.gstatic.com; then
+            echo "fonts.gstatic.com was reachable"
+            exit 1
+          fi
+          # The networked build above leaves .next/cache. Reusing it would
+          # skip the Google Fonts fetch and this step would pass.
+          rm -rf .next
+          npm run build
+          # Secondary check. next/font downloads the file and self-hosts it,
+          # so a next/font/google import does not leave these hosts in the CSS.
+          if grep -R -E -l 'fonts\.(googleapis|gstatic)\.com' .next/static/css; then
+            echo "built CSS names a Google Fonts host"
+            exit 1
+          fi
 
   frontend-test:
     name: Frontend Tests

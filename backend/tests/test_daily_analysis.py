@@ -264,7 +264,7 @@ class TestAnalyzeSingleEvent:
 
         return service
 
-    def test_returns_player_team_and_edge_with_projections(self):
+    def test_player_team_comes_from_the_log(self):
         service = self._build_service(
             csv_stats=_default_csv_stats(p_over=0.72, p_under=0.21, n_games=20, team="Warriors"),
         )
@@ -298,14 +298,13 @@ class TestAnalyzeSingleEvent:
         from app.services.daily_analysis import SUPPORTED_MARKETS
         assert prop_count == len(SUPPORTED_MARKETS) == 11
         assert len(picks) == 11
-        assert all(p.player_team == "GSW" for p in picks)
+        assert all(p.player_team == "Warriors" for p in picks)
         assert all(p.player_team_code == "GSW" for p in picks)
-        # edge should still be projected_value - mode_threshold (28.5 mode)
-        # for the 4 baseline metrics — the contract for those is unchanged.
         points_pick = [p for p in picks if p.metric == "points"][0]
-        assert points_pick.has_projection is True
-        assert points_pick.projected_value == 30.1
-        assert points_pick.edge == round(30.1 - 28.5, 2)
+        assert points_pick.has_projection is False
+        assert points_pick.projected_value is None
+        assert points_pick.edge is None
+        assert points_pick.projected_minutes is None
 
     def test_filters_out_players_below_the_stored_sample_floor(self):
         """Fewer than 5 games are not stored.
@@ -442,7 +441,8 @@ class TestAnalyzeSingleEvent:
         assert all(p.edge is None for p in picks)
         assert all(p.has_projection is False for p in picks)
 
-    def test_edge_negative_when_projection_below_line(self):
+    def test_a_passed_projection_map_does_not_fill_edge(self):
+        """A leftover projection dict is ignored. The line is not a projection."""
         service = self._build_service(
             csv_stats=_default_csv_stats(p_over=0.72, n_games=20),
         )
@@ -468,8 +468,10 @@ class TestAnalyzeSingleEvent:
         )
 
         points_pick = [p for p in picks if p.metric == "points"][0]
-        # 25.0 - 28.5 = -3.5
-        assert points_pick.edge == -3.5
+        assert points_pick.has_projection is False
+        assert points_pick.projected_value is None
+        assert points_pick.projected_minutes is None
+        assert points_pick.edge is None
 
     def test_empty_props_data_returns_no_picks(self):
         service = _make_service()
@@ -490,9 +492,11 @@ class TestAnalyzeSingleEvent:
         assert player_count == 0
         assert prop_count == 0
 
-    def test_projection_extras_passed_through(self):
-        """opponent_rank, opponent_position_rank, injury_status, lineup_confirmed
-        are set on the pick when present in projections."""
+    def test_projection_extras_are_not_copied(self):
+        """Injury and lineup are not taken from a projection map.
+
+        Team A / Team B are not NBA clubs, so the CSV rank stays null too.
+        """
         service = self._build_service(
             csv_stats=_default_csv_stats(p_over=0.72, n_games=20),
         )
@@ -523,10 +527,11 @@ class TestAnalyzeSingleEvent:
 
         assert len(picks) > 0
         pick = picks[0]
-        assert pick.opponent_rank == 5
-        assert pick.opponent_position_rank == 3
-        assert pick.injury_status == "Probable"
-        assert pick.lineup_confirmed is True
+        assert pick.opponent_rank is None
+        assert pick.opponent_position_rank is None
+        assert pick.injury_status is None
+        assert pick.lineup_confirmed is None
+        assert pick.has_projection is False
 
     def test_threshold_boundary_exactly_065(self):
         """Probability exactly at 0.65 should be included."""
@@ -680,21 +685,6 @@ class TestRunDailyAnalysis:
             mock_cache_set,
         )
 
-        # Mock projection service
-        monkeypatch.setattr(
-            "app.services.daily_analysis.projection_service.get_projections",
-            AsyncMock(return_value={
-                "Stephen Curry": {
-                    "team": "GSW",
-                    "points": 30.1,
-                    "rebounds": 6.0,
-                    "assists": 7.0,
-                    "pra": 43.1,
-                    "minutes": 35.0,
-                }
-            }),
-        )
-
         # Mock _get_events_for_date to return one event
         events = [
             {
@@ -751,11 +741,6 @@ class TestRunDailyAnalysis:
             "app.services.daily_analysis.cache_service.set", mock_cache_set
         )
 
-        monkeypatch.setattr(
-            "app.services.daily_analysis.projection_service.get_projections",
-            AsyncMock(return_value={}),
-        )
-
         service._get_events_for_date = AsyncMock(return_value=[])
 
         result = asyncio.run(
@@ -767,8 +752,8 @@ class TestRunDailyAnalysis:
         # The response for no events should still come back
         assert result.message == "No events today"
 
-    def test_projection_failure_does_not_break_analysis(self, monkeypatch):
-        """If projection_service.get_projections raises, analysis still proceeds."""
+    def test_analysis_runs_without_a_projection_client(self, monkeypatch):
+        """Daily analysis does not call a projection client."""
         service = _make_service()
 
         monkeypatch.setattr(
@@ -778,10 +763,6 @@ class TestRunDailyAnalysis:
         monkeypatch.setattr(
             "app.services.daily_analysis.cache_service.set",
             AsyncMock(),
-        )
-        monkeypatch.setattr(
-            "app.services.daily_analysis.projection_service.get_projections",
-            AsyncMock(side_effect=Exception("Projection API down")),
         )
 
         events = [
@@ -805,9 +786,12 @@ class TestRunDailyAnalysis:
             service.run_daily_analysis(date="2026-03-30", use_cache=True)
         )
 
-        # Should still succeed -- projections are optional
         assert result.total_picks > 0
         assert result.message is None
+        assert all(pick.has_projection is False for pick in result.picks)
+        assert all(pick.projected_value is None for pick in result.picks)
+        assert all(pick.edge is None for pick in result.picks)
+        assert all(pick.projected_minutes is None for pick in result.picks)
 
     def test_individual_event_failure_continues_to_next(self, monkeypatch):
         """If one event's analysis raises, others still get processed."""
@@ -820,10 +804,6 @@ class TestRunDailyAnalysis:
         monkeypatch.setattr(
             "app.services.daily_analysis.cache_service.set",
             AsyncMock(),
-        )
-        monkeypatch.setattr(
-            "app.services.daily_analysis.projection_service.get_projections",
-            AsyncMock(return_value={}),
         )
 
         events = [
@@ -844,7 +824,7 @@ class TestRunDailyAnalysis:
 
         call_count = 0
 
-        async def mock_analyze(event_id, home_team, away_team, commence_time, projections, league="nba"):
+        async def mock_analyze(event_id, home_team, away_team, commence_time, projections=None, league="nba", injury_entries=None):
             nonlocal call_count
             call_count += 1
             if event_id == "evt-bad":

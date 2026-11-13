@@ -38,8 +38,6 @@ from app.services.nba_season import (
     normalize_nba_season_label,
     recorded_nba_season_label,
 )
-from app.services.projection_service import ProjectionService
-
 _ESPN = Path(__file__).resolve().parents[2] / "tests" / "fixtures" / "espn"
 _HEADER = [
     "Player",
@@ -569,7 +567,7 @@ class TestDefenseRanks:
             },
         ]
 
-    def test_null_rank_fills_through_the_sportsdata_abbreviation(self):
+    def test_null_rank_fills_through_the_gs_abbreviation(self):
         # Warriors allowed 30, Lakers allowed 10, Heat allowed 20, Celtics allowed 5.
         # Rank 1 is the most points allowed.
         table = build_defense_rank_table(self._games())
@@ -577,7 +575,7 @@ class TestDefenseRanks:
         assert table.overall["MIA"] == 2
         assert table.overall["LAL"] == 3
         assert table.overall["BOS"] == 4
-        # SportsData writes GS. The lineup code is GSW. Both must hit.
+        # GS and GSW are the same club. Both must hit.
         warriors = {"opponent": "GS", "position": "C", "opponent_rank": None, "opponent_position_rank": None}
         filled = fill_null_defense_ranks(warriors, table)
         assert filled["opponent_rank"] == 1
@@ -589,7 +587,7 @@ class TestDefenseRanks:
         assert table.by_position[("GSW", "C")] == 1
         assert table.by_position[("GSW", "PG")] > table.by_position[("GSW", "C")]
 
-    def test_a_rank_already_on_the_row_is_kept(self):
+    def test_a_number_already_on_the_row_is_replaced_by_the_csv(self):
         table = build_defense_rank_table(self._games())
         kept = fill_null_defense_ranks(
             {
@@ -600,14 +598,14 @@ class TestDefenseRanks:
             },
             table,
         )
-        assert kept["opponent_rank"] == 9
-        assert kept["opponent_position_rank"] == 8
-        assert kept["opponent_rank_source"] == "sportsdata"
-        assert kept["opponent_position_rank_source"] == "sportsdata"
-        assert kept["opponent_rank_season"] is None
-        assert kept["opponent_position_rank_season"] is None
+        assert kept["opponent_rank"] == table.overall["GSW"]
+        assert kept["opponent_position_rank"] == table.by_position[("GSW", "PG")]
+        assert kept["opponent_rank_source"] == "csv"
+        assert kept["opponent_position_rank_source"] == "csv"
+        assert kept["opponent_rank_season"] == table.season
+        assert kept["opponent_position_rank_season"] == table.season
 
-    def test_a_null_position_rank_is_labeled_apart_from_the_vendor_overall(self):
+    def test_both_ranks_come_from_the_csv_when_one_input_is_null(self):
         table = build_defense_rank_table(self._games())
         filled = fill_null_defense_ranks(
             {
@@ -618,9 +616,9 @@ class TestDefenseRanks:
             },
             table,
         )
-        assert filled["opponent_rank"] == 9
-        assert filled["opponent_rank_source"] == "sportsdata"
-        assert filled["opponent_rank_season"] is None
+        assert filled["opponent_rank"] == table.overall["GSW"]
+        assert filled["opponent_rank_source"] == "csv"
+        assert filled["opponent_rank_season"] == table.season
         assert filled["opponent_position_rank"] == table.by_position[("GSW", "PG")]
         assert filled["opponent_position_rank_source"] == "csv"
         assert filled["opponent_position_rank_season"] == table.season
@@ -628,7 +626,7 @@ class TestDefenseRanks:
             "Computed from real points allowed, not fantasy points."
         )
 
-    def test_an_out_of_range_vendor_rank_is_not_replaced_from_the_csv(self):
+    def test_an_out_of_range_input_is_replaced_from_the_csv(self):
         table = build_defense_rank_table(self._games())
         cleared = fill_null_defense_ranks(
             {
@@ -639,10 +637,10 @@ class TestDefenseRanks:
             },
             table,
         )
-        assert cleared["opponent_rank"] is None
-        assert cleared["opponent_position_rank"] is None
-        assert cleared["opponent_rank_source"] == "sportsdata_invalid"
-        assert cleared["opponent_position_rank_source"] == "sportsdata_invalid"
+        assert cleared["opponent_rank"] == table.overall["GSW"]
+        assert cleared["opponent_position_rank"] == table.by_position[("GSW", "PG")]
+        assert cleared["opponent_rank_source"] == "csv"
+        assert cleared["opponent_position_rank_source"] == "csv"
         assert table.overall["GSW"] != 0
 
     def test_unknown_opponent_stays_null(self):
@@ -681,37 +679,6 @@ class TestDefenseRanks:
             }
         )
         assert twin["opponent_rank"] == filled["opponent_rank"]
-
-    @pytest.mark.asyncio
-    async def test_get_projections_fills_a_cached_null(self, monkeypatch):
-        cached = {
-            "Stephen Curry": {
-                "player_name": "Stephen Curry",
-                "opponent": "GS",
-                "position": "PG",
-                "points": 29.0,
-                "opponent_rank": None,
-                "opponent_position_rank": None,
-            }
-        }
-
-        async def fake_get(key):
-            if str(key).endswith(":meta"):
-                return {
-                    "fetched_at": datetime.now(timezone.utc).isoformat(),
-                    "player_count": 1,
-                }
-            return cached
-
-        monkeypatch.setattr(
-            "app.services.projection_service.cache_service.get", fake_get
-        )
-        service = ProjectionService()
-        result = await service.get_projections("2026-02-08")
-        row = result["Stephen Curry"]
-        assert row["points"] == 29.0
-        assert row["opponent_rank"] is not None
-        assert row["opponent_position_rank"] is not None
 
 
 def test_season_label_accepts_the_short_espn_form():
@@ -943,40 +910,29 @@ async def test_daily_pick_keeps_position_rank_and_read_tier(monkeypatch, tmp_pat
         home_team="Los Angeles Lakers",
         away_team="Golden State Warriors",
         commence_time="2026-01-15T01:00:00Z",
-        projections={
-            "Stephen Curry": {
-                "team": "GSW",
-                "points": 28.0,
-                "opponent_rank": 12,
-                "opponent_rank_source": "csv",
-                "opponent_rank_season": "2025-2026",
-                "opponent_rank_note": CSV_RANK_NOTE,
-                "opponent_position_rank": 7,
-                "opponent_position_rank_source": "sportsdata",
-                "opponent_position_rank_season": None,
-                "opponent_position_rank_note": None,
-            }
-        },
         league="nba",
     )
     points = next(pick for pick in picks if pick.metric == "points")
     assert points.position == "PG"
-    assert points.opponent_rank == 12
-    assert points.opponent_position_rank == 7
+    assert points.has_projection is False
+    assert points.projected_value is None
+    assert points.edge is None
+    assert points.projected_minutes is None
+    assert points.injury_status is None
+    assert points.lineup_confirmed is None
     assert points.opponent_rank_source == "csv"
-    assert points.opponent_rank_season == "2025-2026"
+    assert points.opponent_position_rank_source == "csv"
     assert points.opponent_rank_note == CSV_RANK_NOTE
-    assert points.opponent_position_rank_source == "sportsdata"
-    assert points.opponent_position_rank_season is None
-    assert points.opponent_position_rank_note is None
+    assert 1 <= points.opponent_rank <= 30
+    assert 1 <= points.opponent_position_rank <= 30
     assert points.tier == read_tier(points.combined_probability)
     assert points.p_over == pytest.approx(1.0)
     assert points.direction == "over"
 
 
 @pytest.mark.asyncio
-async def test_daily_pick_keeps_a_fully_invalidated_rank_row(monkeypatch, tmp_path):
-    """sportsdata_invalid clears both ranks. The pick still carries that source."""
+async def test_daily_pick_ranks_come_from_the_csv_not_a_projection_map(monkeypatch, tmp_path):
+    """A projection map is ignored. Ranks are the game-log fill."""
     path = tmp_path / "invalid.csv"
     _write_csv(
         path,
@@ -1000,29 +956,14 @@ async def test_daily_pick_keeps_a_fully_invalidated_rank_row(monkeypatch, tmp_pa
         home_team="Los Angeles Lakers",
         away_team="Golden State Warriors",
         commence_time="2026-01-15T01:00:00Z",
-        projections={
-            "Stephen Curry": {
-                "team": "GSW",
-                "points": 28.0,
-                "opponent_rank": None,
-                "opponent_position_rank": None,
-                "opponent_rank_source": "sportsdata_invalid",
-                "opponent_rank_season": None,
-                "opponent_rank_note": None,
-                "opponent_position_rank_source": "sportsdata_invalid",
-                "opponent_position_rank_season": None,
-                "opponent_position_rank_note": None,
-            }
-        },
         league="nba",
     )
     points = next(pick for pick in picks if pick.metric == "points")
     assert points.position == "PG"
-    assert points.opponent_rank is None
-    assert points.opponent_position_rank is None
-    assert points.opponent_rank_source == "sportsdata_invalid"
-    assert points.opponent_position_rank_source == "sportsdata_invalid"
-    assert points.opponent_rank_season is None
-    assert points.opponent_position_rank_season is None
-    assert points.opponent_rank_note is None
-    assert points.opponent_position_rank_note is None
+    assert points.has_projection is False
+    assert points.projected_value is None
+    assert points.opponent_rank_source == "csv"
+    assert points.opponent_position_rank_source == "csv"
+    assert points.opponent_rank_note == CSV_RANK_NOTE
+    assert 1 <= points.opponent_rank <= 30
+    assert 1 <= points.opponent_position_rank <= 30

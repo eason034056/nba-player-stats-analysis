@@ -21,22 +21,22 @@ class Settings(BaseSettings):
     例如: odds_api_key 對應 ODDS_API_KEY 環境變數
     """
     
-    # The Odds API 設定
-    odds_api_key: str = ""  # The Odds API 的 API 金鑰
+    # The Odds API. Empty is allowed. Startup and the scheduler do not
+    # require it. WNBA odds and the shared provider (NBA events, props,
+    # snapshots, daily analysis) read it when they call out. NBA injury
+    # refresh uses balldontlie_api_key instead.
+    odds_api_key: str = ""
     odds_api_base_url: str = "https://api.the-odds-api.com"  # API 基礎 URL
 
-    # BALLDONTLIE 設定。client 讀這兩個欄位，這張票還沒把 client 接到路由或排程。
-    # balldontlie_api_key 對應 BALLDONTLIE_API_KEY。SecretStr 讓 Settings 的 repr
-    # 不印出金鑰。client 用 get_secret_value() 取出 str，放進 Authorization，不要寫進日誌。
+    # BALLDONTLIE. balldontlie_api_key 對應 BALLDONTLIE_API_KEY。SecretStr 讓
+    # Settings 的 repr 不印出金鑰。client 用 get_secret_value() 取出 str，
+    # 放進 Authorization，不要寫進日誌。路由不呼叫這個 client。排程的
+    # nba_injuries_refresh 會。
     balldontlie_api_key: SecretStr = SecretStr("")
     # bdl_rate_limit_per_min 對應 BDL_RATE_LIMIT_PER_MIN。試用 key 是 5，付費 GOAT 是 600。
     # 真正送出請求後，如果回應帶 x-ratelimit-limit，共用預算改跟那個標頭。
     bdl_rate_limit_per_min: int = 5
-    
-    # SportsDataIO 設定（球員投影數據）
-    sportsdata_api_key: str = ""  # SportsDataIO API 金鑰
-    sportsdata_base_url: str = "https://api.sportsdata.io"  # SportsDataIO API 基礎 URL
-    
+
     # PostgreSQL 設定
     database_url: str = "postgresql://novig:novig@localhost:5432/novig_nba"  # PostgreSQL 連線 URL
     # False locally so tests and dev without Postgres still boot.
@@ -50,7 +50,6 @@ class Settings(BaseSettings):
     cache_ttl_events: int = 300  # 賽事列表快取時間（5分鐘）
     cache_ttl_props: int = 60    # Props 資料快取時間（1分鐘）
     cache_ttl_players: int = 300 # 球員建議快取時間（5分鐘）
-    cache_ttl_projections: int = 7200  # 投影資料快取時間（2小時）
     cache_ttl_lineups: int = 3600
     cache_ttl_market_fresh: int = 600
     cache_ttl_market_stale: int = 900
@@ -98,6 +97,11 @@ class Settings(BaseSettings):
     bot_api_keys_premium: str = ""  # Premium-tier bot API keys
     bot_picks_free_delay_minutes: int = 60  # Delay for free-tier picks (minutes)
     rate_limit_bot_picks: str = "12/minute"  # Rate limit for bot picks endpoint
+
+    # Minimum gap for nba_injuries_refresh. The cron is :07 and :37
+    # Chicago during the slate window, which is the same 30 minutes.
+    # A snapshot younger than this is not refreshed again.
+    nba_injuries_refresh_minutes: int = 30
 
     @field_validator("vercel_proxy_secret", mode="before")
     @classmethod

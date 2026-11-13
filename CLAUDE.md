@@ -20,7 +20,7 @@ Ticket prefix: `SPO`
 - `notebooks/` — exploratory analysis, backtest notebooks
 - `docker-compose.yml` — backend + Redis + Postgres dev stack
 
-Key existing docs: `README.md`, `docs/dev-doc.md`, `docs/multi-agent-dev.md`, `docs/new-function-dev-doc.md`, `docs/player-stats-projection-api.md`, `backtest_report.md`, `sample_outputs.md`.
+Key existing docs: `README.md`, `docs/dev-doc.md`, `docs/multi-agent-dev.md`, `docs/new-function-dev-doc.md`, `backtest_report.md`, `sample_outputs.md`. The projection API note was removed. The replacement policy is under `docs/decisions/SPO-135/`.
 
 ## Coding Conventions
 
@@ -57,7 +57,7 @@ Key existing docs: `README.md`, `docs/dev-doc.md`, `docs/multi-agent-dev.md`, `d
 
 > ⚠ This is the **authoritative anti-hallucination policy** for Sports Lab. Do not duplicate the rules elsewhere; cite this section.
 
-This codebase calls multiple live external APIs: **The Odds API**, **SportsData.io**, **RotoWire** (lineup), **RotoGrinders** (lineup / DFS), **OpenAI** (LLM). Each has rate limits, paid quotas, and a documented track record of silent schema drift. These rules exist because response shapes get assumed from memory without a call to the real endpoint, and a sports-betting product where the odds parser silently breaks is a product that loses money.
+This codebase calls multiple live external APIs: **The Odds API**, **BALLDONTLIE**, **RotoWire** (lineup), **RotoGrinders** (lineup / DFS), **OpenAI** (LLM). Each has rate limits, paid quotas, and a documented track record of silent schema drift. These rules exist because response shapes get assumed from memory without a call to the real endpoint, and a sports-betting product where the odds parser silently breaks is a product that loses money. NBA projections are not fetched. A later model may fill those fields.
 
 1. **Exploration script first (engineer).** Before implementing `backend/app/services/<provider>_gateway.py` or any new external API client, create `scripts/explore_<provider>_api.py` that calls 2–3 real endpoints and pretty-prints raw responses. Commit this script alongside the client — it is the ground-truth reference for API shape and the first place to check when the API changes (e.g., when The Odds API renames a market key).
 
@@ -92,7 +92,6 @@ class Settings(BaseSettings):
     )
     odds_api_key: str
     openai_api_key: str
-    sportsdata_api_key: str | None = None
     redis_url: str = "redis://localhost:6379/0"
     database_url: str = "postgresql+asyncpg://..."
     ...
@@ -131,7 +130,7 @@ Each Settings must explicitly declare every key it accesses via `settings.X`; `g
     - `task-summaries/` — flat dir, file per ticket: `<TICKET>-<kebab-slug>.md` (e.g., `SPO-12-odds-cache-ttl.md`). NO epic subdir — ticket key is the index. The engineer writes it with the PR; QA and the owner read it.
     - `progress.md` — single file at `docs/` root. Feature PRs do not change `docs/progress.md`. Put the progress note in the PR body under `## Progress notes (for the docs PR)`. After each merge batch, one engineer opens a small docs PR that updates `docs/progress.md`. Changes under `docs/decisions/` are still fine in a feature PR.
   - **Pre-existing project docs (keep as historical reference, do not migrate)**:
-    - `dev-doc.md`, `multi-agent-dev.md`, `new-function-dev-doc.md`, `player-stats-projection-api.md`, `team-logos-implementation.md` — early project docs; treat as background reading, do not append.
+    - `dev-doc.md`, `multi-agent-dev.md`, `new-function-dev-doc.md`, `team-logos-implementation.md` — early project docs; treat as background reading, do not append.
   - **Archive**:
     - `archive/` — retired process records. Do not add new work here.
 - **Cross-epic docs** stay at `docs/` root.

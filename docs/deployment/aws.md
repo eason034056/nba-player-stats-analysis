@@ -39,7 +39,7 @@ Mount that path into the backend container, or copy it in the image. `rds.force_
 
 `docker-compose.yml` still defaults `DATABASE_URL` to the local `postgres` service and `DATABASE_REQUIRED` to `false`. Export both before `docker compose up` when you want the container on RDS.
 
-Startup prints the database URL with the password replaced by `***`. A failed `db.init()` is logged the same way. With `DATABASE_REQUIRED=false` the process keeps running and projections fall back to Redis. With `DATABASE_REQUIRED=true` startup raises.
+Startup prints the database URL with the password replaced by `***`. A failed `db.init()` is logged the same way. With `DATABASE_REQUIRED=false` the process keeps running. With `DATABASE_REQUIRED=true` startup raises. There is no projection service and no SportsDataIO client.
 
 ## App role
 
@@ -84,6 +84,8 @@ source ~/.sportslab-migrate.env
 set +a
 ./scripts/db_migrate_to_rds.sh
 ```
+
+If verify failed after the restore, re-run with `--verify-only`. That skips the dump and the restore and compares row counts, `max(id)`, and sequence `last_value` again. If either side lists zero public tables, it exits 1 and does not print `ok:`. The error line is the two counts. Zero sequences is a match only when both sides list zero.
 
 ```bash
 read -s -p "Local URL: " LOCAL_DATABASE_URL
@@ -154,7 +156,7 @@ A `check` block cannot point this case at `vpc_id`. `data.aws_vpc.selected` fail
 
 | Script | Required environment | What it refuses to do |
 |---|---|---|
-| `scripts/db_migrate_to_rds.sh` | `LOCAL_DATABASE_URL`, `RDS_DATABASE_URL` | Print URLs or passwords. Run `pg_restore` when its major version is not 16 (override: `ALLOW_PG_RESTORE_MISMATCH=1`). Restore when the two URLs are identical. Default client is `docker exec no-vig-nba-postgres`. `PG_CLIENT=docker-run` uses `docker run --rm postgres:16`. Adds `sslmode=require` on the RDS URL when `sslmode` is absent. |
+| `scripts/db_migrate_to_rds.sh` | `LOCAL_DATABASE_URL`, `RDS_DATABASE_URL` | Print URLs or passwords. Run `pg_restore` when its major version is not 16 (override: `ALLOW_PG_RESTORE_MISMATCH=1`). Restore when the two URLs are identical. Default client is `docker exec no-vig-nba-postgres`. `PG_CLIENT=docker-run` uses `docker run --rm postgres:16`. Adds `sslmode=require` on the RDS URL when `sslmode` is absent. `--verify-only` skips the dump, the restore, and that version gate, and only compares row counts, `max(id)`, and sequence `last_value`. If verify failed after a restore, re-run with `--verify-only`. Zero public tables on either side exits 1. Zero sequences is allowed only when both sides list zero. |
 | `scripts/aws_update_my_ip.sh` | none (uses curl) | Call AWS by itself. It rewrites gitignored `terraform.tfvars` and prints `terraform apply`. `--apply` is the only way it launches terraform. |
 | `scripts/sync_raw_to_s3.sh` | `S3_BUCKET`, `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_REGION` | `--delete`. Paths default to `/workspace/bdl-cache`, `/workspace/bdl-archive`, `/workspace/bdl-eval/samples` and can be overridden with `BDL_CACHE_DIR`, `BDL_ARCHIVE_DIR`, `BDL_SAMPLES_DIR`. |
 | `scripts/pg_dump_to_s3.sh` | Those AWS variables plus `RDS_DATABASE_URL` or `DATABASE_URL` | Print the database URL. `DUMP_DATE=YYYY-MM-DD` overrides the UTC date in the object key. The bucket keeps each current dump for 90 days; this script does not delete. |
@@ -208,10 +210,27 @@ The paths `fetchApi` calls, all under `/api/backend` in the browser:
 - `GET /api/wnba/daily-picks`, `POST /api/wnba/daily-picks/trigger`
 - `POST /api/nba/agent/chat`
 - `GET /api/nba/lineups`, `GET /api/nba/lineups/{team}`, `GET /api/wnba/lineups/{team}`, `GET /api/nba/lineups/refresh`
-- `GET /api/nba/projections`, `POST /api/nba/projections/refresh`, `GET /api/nba/projections/{player}`
 - `GET /api/nba/events/{id}/reads`, `GET /api/nba/events/{id}/props`
 
-Other names the app reads, same prefix: `DATABASE_URL`, `ODDS_API_KEY`, `OPENAI_API_KEY`, `SPORTSDATA_API_KEY`, `BALLDONTLIE_API_KEY`, `BOT_API_KEYS`, `BOT_API_KEYS_PREMIUM`, `CORS_ALLOWED_ORIGINS`, `CORS_ALLOWED_ORIGIN_REGEX`. `DATABASE_URL` must use `sslmode=verify-full` and `sslrootcert=/app/certs/global-bundle.pem`. User data downloads that public bundle to `/opt/sportslab/certs/global-bundle.pem` and compose mounts it there.
+Do not create `SPORTSDATA_API_KEY` or any projection parameter. Nothing in the app reads them. `Settings` uses `extra=ignore`, so a leftover name does not stop startup, and it also does nothing.
+
+`pull-ssm-env.sh` copies every parameter under `/sportslab/prod/` into `/etc/sportslab/backend.env`. `GHCR_PULL_USER` and `GHCR_PULL_TOKEN` go to `/etc/sportslab/ghcr.env` instead. Names Eason creates:
+
+| Name | Type | Required | Purpose |
+|---|---|---|---|
+| `DATABASE_URL` | SecureString | required | RDS DSN. `sslmode=verify-full` and `sslrootcert=/app/certs/global-bundle.pem`. Compose sets `DATABASE_REQUIRED=true`, so a bad URL stops startup. |
+| `BALLDONTLIE_API_KEY` | SecureString | required for NBA injuries | `nba_injuries_refresh` reads it. Empty skips the call. The process still starts. |
+| `ODDS_API_KEY` | SecureString | optional for startup | The Odds API. WNBA odds read it. NBA events, props, snapshots, and daily analysis use the same provider, so those calls fail at the provider when it is empty. Health, CSV players, and the scheduler still start. |
+| `OPENAI_API_KEY` | SecureString | optional for startup | Agent chat. `ChatOpenAI` reads it from the environment. Other routes do not. |
+| `VERCEL_PROXY_SECRET` | SecureString | required before the flag is on | Shared with the Vercel rewrite. Compose pins `PROXY_SECRET_REQUIRED=false`, so an empty secret still starts. |
+| `CORS_ALLOWED_ORIGINS` | String | optional | Browser origins. Empty falls back to `ALLOWED_ORIGINS`. |
+| `CORS_ALLOWED_ORIGIN_REGEX` | String | optional | Preview hostnames. Empty means no regex. |
+| `BOT_API_KEYS` | SecureString | optional | Discord bot free tier. |
+| `BOT_API_KEYS_PREMIUM` | SecureString | optional | Discord bot premium tier. |
+| `GHCR_PULL_USER` | SecureString | optional | Only when the GHCR package is private. |
+| `GHCR_PULL_TOKEN` | SecureString | optional | Only when the GHCR package is private. |
+
+Do not store `PROXY_SECRET_REQUIRED` in SSM. The compose file pins it and wins. User data downloads the public RDS CA to `/opt/sportslab/certs/global-bundle.pem` and compose mounts it at `/app/certs/global-bundle.pem`.
 
 `deploy/pull-ssm-env.sh` writes `/etc/sportslab/backend.env` mode 600. It does not print values. `GHCR_PULL_USER` and `GHCR_PULL_TOKEN`, if present, go to `/etc/sportslab/ghcr.env` instead, also mode 600, and are used only when the GHCR package is private.
 

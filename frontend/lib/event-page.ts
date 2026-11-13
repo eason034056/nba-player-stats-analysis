@@ -10,6 +10,8 @@ import { format, parseISO } from "date-fns";
 import { enUS } from "date-fns/locale";
 
 import { nbaTierFace, tierFromBackend, tierProbability } from "./nba-card";
+import { canonicalInjuryTag, injuryTag, type InjuryTag } from "./injury-tag";
+import { injuryTagForPlayer, isOutPick, isPlayerOutInGame } from "./picks-board";
 import { formatPercent, formatTierPercent } from "./player-dd";
 import {
   etWallClock,
@@ -18,7 +20,6 @@ import {
   readTier,
   type ReadTier,
 } from "./today-board";
-import { marketToProjectionCard, projectionCardValue } from "./projection-metric";
 import { METRIC_TO_MARKET, type MetricKey } from "./metric-to-market";
 import type { LeagueSegment } from "./event-detail-link";
 import { teamAbbr } from "./team-abbr";
@@ -29,7 +30,6 @@ import type {
   GameLog,
   NBAEvent,
   PlayerHistoryResponse,
-  PlayerProjection,
   PropRead,
   TeamLineup,
 } from "./schemas";
@@ -291,7 +291,6 @@ export interface ReadSignal {
 
 export interface SignalInput {
   binary: boolean;
-  supportsProjection: boolean;
   line: number | null;
   consensus: {
     p_over_fair?: number | null;
@@ -301,7 +300,6 @@ export interface SignalInput {
   } | null;
   last10: GameLog[];
   history: Pick<PlayerHistoryResponse, "p_over" | "p_under" | "n_games" | "season_mean"> | null;
-  projection: PlayerProjection | null;
   pick: DailyPick | null;
   market: string;
 }
@@ -406,11 +404,6 @@ function historySignal(input: SignalInput): Omit<ReadSignal, "verdict"> {
 }
 
 function projectedNumber(input: SignalInput): number | null {
-  const card = marketToProjectionCard(input.market);
-  if (input.projection && card) {
-    const fromCard = projectionCardValue(input.projection, card);
-    if (finite(fromCard)) return fromCard;
-  }
   if (input.pick && input.pick.metric === marketToMetric(input.market) && finite(input.pick.projected_value)) {
     return input.pick.projected_value;
   }
@@ -423,9 +416,7 @@ function projectionSignal(input: SignalInput): Omit<ReadSignal, "verdict"> {
     return {
       key: "projection",
       label: "Projection",
-      detail: input.supportsProjection
-        ? "Projected value is not on this response."
-        : "Projection is not available for WNBA.",
+      detail: "Projection is not available for WNBA.",
       value: null,
       meter: null,
     };
@@ -444,11 +435,8 @@ function projectionSignal(input: SignalInput): Omit<ReadSignal, "verdict"> {
 }
 
 function defenseSignal(input: SignalInput): Omit<ReadSignal, "verdict"> {
-  const position = firstNumber(
-    input.projection?.opponent_position_rank,
-    input.pick?.opponent_position_rank,
-  );
-  const overall = firstNumber(input.projection?.opponent_rank, input.pick?.opponent_rank);
+  const position = firstNumber(input.pick?.opponent_position_rank);
+  const overall = firstNumber(input.pick?.opponent_rank);
   if (position != null) {
     return {
       key: "defense",
@@ -519,6 +507,10 @@ export interface EventPlayerRow {
   leanText: string;
   hasLean: boolean;
   probability: number | null;
+  /** True only when injury_status is Out. A raw word of "out" does not set this. */
+  listedOut: boolean;
+  /** NBA injury chip. Null on WNBA and when the player has no status word. */
+  injury: InjuryTag | null;
 }
 
 /** Fold a name so CSV and lineup spellings compare as the same person. */
@@ -693,8 +685,11 @@ export function eventPlayerRows(args: {
             : selected && args.postedLine != null
               ? args.postedLine
               : null;
-    const nba =
-      sourcePick != null
+    const out =
+      args.league === "nba" && isPlayerOutInGame(args.picks, args.eventId, name);
+    const nba = out
+      ? { text: "Out", rate: null }
+      : sourcePick != null
         ? nbaLeanFromPick(sourcePick)
         : sourceRead != null
           ? nbaLeanFromRead(sourceRead)
@@ -703,8 +698,9 @@ export function eventPlayerRows(args: {
             : args.league === "nba" && readsStatus === "error"
               ? { text: "Unavailable", rate: null }
               : null;
-    const tier =
-      args.league === "nba" && sourcePick
+    const tier = out
+      ? null
+      : args.league === "nba" && sourcePick
         ? tierFromBackend(sourcePick.tier)
         : args.league === "nba" && sourceRead
           ? tierFromBackend(sourceRead.tier)
@@ -715,13 +711,24 @@ export function eventPlayerRows(args: {
       position: pick?.position?.trim() || bulk?.position?.trim() || null,
       tier,
       lineText: line == null ? "—" : formatThreshold(line),
-      leanText: nba
-        ? nba.text
-        : pick
-          ? `${pick.direction === "under" ? "U" : "O"} ${formatPercent(pick.probability)}`
-          : "No read",
-      hasLean: nba != null || pick != null,
-      probability: nba?.rate ?? pick?.probability ?? null,
+      leanText: out
+        ? "Out"
+        : nba
+          ? nba.text
+          : pick
+            ? `${pick.direction === "under" ? "U" : "O"} ${formatPercent(pick.probability)}`
+            : "No read",
+      hasLean: out ? false : nba != null || pick != null,
+      probability: out ? null : nba?.rate ?? pick?.probability ?? null,
+      listedOut: out,
+      injury:
+        args.league === "nba"
+          ? out
+            ? injuryTagForPlayer(args.picks, args.eventId, name)
+            : pick
+              ? injuryTag(pick.injury_status_raw, pick.injury_status)
+              : null
+          : null,
     };
   });
 
@@ -823,6 +830,7 @@ export interface ChartBar {
   over: boolean | null;
   date: string;
   dateFull: string;
+  dateLabel: string;
   minutes: number;
   starter: boolean;
   heightPct: number;
@@ -846,6 +854,14 @@ function tickLabel(value: number): string {
   return value.toFixed(1);
 }
 
+const SHORT_GAME_DATE = new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric", timeZone: "UTC" });
+
+export function shortGameDate(dateFull: string, fallback: string): string {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(dateFull)) return fallback;
+  const parsed = new Date(`${dateFull}T00:00:00Z`);
+  return Number.isNaN(parsed.getTime()) ? fallback : SHORT_GAME_DATE.format(parsed);
+}
+
 export function gameLogChart(logs: GameLog[], line: number | null): ChartModel {
   const ordered = [...logs].sort((a, b) => {
     if (a.date_full && b.date_full && a.date_full !== b.date_full) {
@@ -866,6 +882,7 @@ export function gameLogChart(logs: GameLog[], line: number | null): ChartModel {
     over: line == null ? null : game.value > line,
     date: game.date,
     dateFull: game.date_full,
+    dateLabel: shortGameDate(game.date_full, game.date),
     minutes: game.minutes,
     starter: game.is_starter,
     heightPct: Math.max(2, (game.value / max) * 100),
@@ -896,6 +913,10 @@ export interface OurReadModel {
   other: SlipSeed | null;
   /** Probability printed next to the tier. The slip still stores `primary.probability`. */
   leanProbability: number | null;
+  /** The selected player is listed Out. Ask stays hidden. */
+  listedOut: boolean;
+  /** NBA injury chip for this read. Null on WNBA. */
+  injury: InjuryTag | null;
 }
 
 function sameLine(a: number | null | undefined, b: number | null): boolean {
@@ -1042,6 +1063,29 @@ function clamp01(value: number): number {
   return Math.min(1, Math.max(0, value));
 }
 
+export type OtherSideSource = "model" | "history";
+
+/**
+ * Rate for the opposite-side slip button.
+ * A finite `combined_probability` stores `1 − combined_probability`, clamped
+ * to [0, 1], matching the model bar. Null, NaN, and non-finite values keep
+ * the historical opposite field when that field is finite. A null result
+ * means the caller should try the history response, then hide the button.
+ * This does not choose a tier.
+ */
+export function nbaOtherSideProbability(
+  combined: number | null | undefined,
+  historical: number | null | undefined,
+): { probability: number; source: OtherSideSource } | null {
+  if (finite(combined)) {
+    return { probability: clamp01(1 - combined), source: "model" };
+  }
+  if (finite(historical)) {
+    return { probability: clamp01(historical), source: "history" };
+  }
+  return null;
+}
+
 function modelSplit(combined: number, side: "over" | "under", binary: boolean): FairSplit {
   const lean = clamp01(combined);
   const over = side === "over" ? lean : 1 - lean;
@@ -1050,8 +1094,8 @@ function modelSplit(combined: number, side: "over" | "under", binary: boolean): 
     sourceLabel: "Model",
     overLabel: binary ? "Yes" : "Over",
     underLabel: binary ? "No" : "Under",
-    overText: side === "over" ? formatTierPercent(over) : formatPercent(over),
-    underText: side === "under" ? formatTierPercent(under) : formatPercent(under),
+    overText: formatTierPercent(over),
+    underText: formatTierPercent(under),
     overWidth: over * 100,
   };
 }
@@ -1071,6 +1115,7 @@ function buildNbaRead(args: {
   pick: DailyPick | null;
   history: PlayerHistoryResponse | null;
   read?: PropRead | null;
+  listedOut?: boolean;
 }): OurReadModel {
   const meta = joinMeta(args.position, args.team, ", ");
   const headlineMarket = readMarketName(args.market, args.marketName);
@@ -1085,6 +1130,31 @@ function buildNbaRead(args: {
   };
   const pick = args.pick;
   const postedRead = args.read;
+  if (args.listedOut || (pick != null && isOutPick(pick))) {
+    const headlineLead = pick
+      ? `${pick.direction === "under" ? "Under" : "Over"} ${formatThreshold(pick.threshold)}`
+      : args.line == null
+        ? "No posted line"
+        : `Line ${formatThreshold(args.line)}`;
+    return {
+      player: args.player,
+      meta,
+      headlineLead,
+      headlineMarket,
+      caption: "Listed Out. No model read.",
+      tier: null,
+      bar: null,
+      signals: [],
+      primary: null,
+      other: null,
+      leanProbability: null,
+      listedOut: true,
+      injury:
+        pick != null && isOutPick(pick)
+          ? injuryTag(pick.injury_status_raw, pick.injury_status) ?? canonicalInjuryTag("out")
+          : canonicalInjuryTag("out"),
+    };
+  }
   if (!pick) {
     if (postedRead && (postedRead.side === "over" || postedRead.side === "under")) {
       const face = nbaTierFace(postedRead);
@@ -1100,6 +1170,8 @@ function buildNbaRead(args: {
         primary: null,
         other: null,
         leanProbability: null,
+        listedOut: false,
+        injury: null,
       };
     }
     return {
@@ -1114,6 +1186,8 @@ function buildNbaRead(args: {
       primary: null,
       other: null,
       leanProbability: null,
+      listedOut: false,
+      injury: null,
     };
   }
   const direction = pick.direction === "under" ? "under" : "over";
@@ -1139,23 +1213,25 @@ function buildNbaRead(args: {
     tier: pick.tier ?? null,
     combined_probability: pick.combined_probability ?? null,
   };
-  // Both Bet Slip sides store the historical pick. They do not store the blend.
-  // Primary stores pick.probability. The number printed beside a tier is
-  // tierProbability, floored. The other side stores the pick's own opposite
-  // field: p_under when this pick is over, p_over when it is under. Do not
-  // subtract probability, and do not subtract combined_probability. If the
-  // field is missing, use the /history rate for that side. That button is
-  // labeled History and uses half-away formatPercent. The model bar is
-  // combined_probability only, labeled Model.
+  // Primary stores pick.probability. The number beside a tier is
+  // tierProbability, floored. The other side stores 1 − combined_probability
+  // when that blend is finite, on both `probability` and
+  // `combined_probability`, so the slip saves the same complement the model
+  // bar draws. The tier stays null. When the blend is missing, fall back to
+  // the pick's opposite field (p_under / p_over), then the /history rate for
+  // that side and line. That fallback leaves combined_probability null and
+  // the button says History. The printed percent is formatTierPercent, the
+  // same floor the slip card uses. This does not choose a tier.
   let other: SlipSeed | null = null;
   const oppositeField = otherDirection === "over" ? pick.p_over : pick.p_under;
-  if (finite(oppositeField)) {
+  const decided = nbaOtherSideProbability(pick.combined_probability, oppositeField);
+  if (decided) {
     other = {
       ...primary,
       direction: otherDirection,
-      probability: clamp01(oppositeField),
+      probability: decided.probability,
       tier: null,
-      combined_probability: null,
+      combined_probability: decided.source === "model" ? decided.probability : null,
     };
   } else {
     const otherSide = historySide(args.history, pick.threshold, otherDirection);
@@ -1185,6 +1261,8 @@ function buildNbaRead(args: {
     primary,
     other,
     leanProbability: finite(pick.probability) ? pick.probability : null,
+    listedOut: false,
+    injury: injuryTag(pick.injury_status_raw, pick.injury_status),
   };
 }
 
@@ -1193,7 +1271,6 @@ export function buildOurRead(args: {
   marketName: string;
   market: string;
   binary: boolean;
-  supportsProjection: boolean;
   eventId: string;
   homeTeam: string;
   awayTeam: string;
@@ -1205,20 +1282,19 @@ export function buildOurRead(args: {
   consensus: SignalInput["consensus"];
   last10: GameLog[];
   history: PlayerHistoryResponse | null;
-  projection: PlayerProjection | null;
   /** NBA uses stored signals and the backend tier. WNBA keeps the previous read. */
   league?: LeagueSegment;
   read?: PropRead | null;
+  /** True when any pick for this player in the game is Out, including another line. */
+  listedOut?: boolean;
 }): OurReadModel {
   if (args.league === "nba") return buildNbaRead(args);
   const signals = buildReadSignals({
     binary: args.binary,
-    supportsProjection: args.supportsProjection,
     line: args.line,
     consensus: args.consensus,
     last10: args.last10,
     history: args.history,
-    projection: args.projection,
     pick: args.pick,
     market: args.market,
   });
@@ -1248,6 +1324,8 @@ export function buildOurRead(args: {
       primary: null,
       other: null,
       leanProbability: null,
+      listedOut: false,
+      injury: null,
     };
   }
 
@@ -1320,6 +1398,8 @@ export function buildOurRead(args: {
     primary,
     other,
     leanProbability: primary?.probability ?? null,
+    listedOut: false,
+    injury: null,
   };
 }
 
@@ -1336,7 +1416,9 @@ export function webOtherCopy(seed: SlipSeed, inSlip: boolean, league: LeagueSegm
   const side = seed.direction === "under" ? "Under" : "Over";
   const line = formatThreshold(seed.threshold);
   if (league === "nba") {
-    return inSlip ? `✓ ${side} in slip` : `${side} instead (${formatPercent(seed.probability)})`;
+    // seed.probability is 1 − combined_probability when the blend exists,
+    // otherwise the historical fallback. Whole percent, floored, matching the slip card.
+    return inSlip ? `✓ ${side} in slip` : `${side} instead (${formatTierPercent(seed.probability)})`;
   }
   return inSlip ? "Other side in slip" : `${side} ${line}`;
 }
@@ -1359,7 +1441,7 @@ export function mobilePrimaryCopy(
 
 export function mobileOtherCopy(seed: SlipSeed): string {
   const side = seed.direction === "under" ? "Under" : "Over";
-  return `${side} ${formatPercent(seed.probability)}`;
+  return `${side} ${formatTierPercent(seed.probability)}`;
 }
 
 /** Percent on the NBA action bar, beside the tier. WNBA keeps its short label. */
@@ -1387,4 +1469,39 @@ export function slipButtonLabel(seed: SlipSeed, inSlip: boolean): string {
 export function errorText(error: unknown): string {
   if (error instanceof Error && error.message) return error.message;
   return "The request failed.";
+}
+
+export type GameLogTileKey = "over" | "under" | "average" | "games";
+
+export interface GameLogTile {
+  key: GameLogTileKey;
+  label: string;
+  value: string;
+  sub: string | null;
+}
+
+function sideCount(rate: number | null | undefined, games: number): string | null {
+  if (typeof rate !== "number" || !Number.isFinite(rate) || games <= 0) return null;
+  return `${Math.round(rate * games)} of ${games} ${games === 1 ? "game" : "games"}`;
+}
+
+export function gameLogTiles(
+  history: Pick<PlayerHistoryResponse, "n_games" | "p_over" | "p_under" | "mean">,
+  line: number | null,
+): GameLogTile[] {
+  const games = history.n_games;
+  const lineLabel = line == null ? "" : ` ${formatThreshold(line)}`;
+  const mean = typeof history.mean === "number" && Number.isFinite(history.mean) ? history.mean : null;
+  const diff = mean != null && line != null ? Math.round((mean - line) * 10) / 10 : null;
+  return [
+    { key: "over", label: `Over${lineLabel}`, value: formatPercent(history.p_over), sub: sideCount(history.p_over, games) },
+    { key: "under", label: `Under${lineLabel}`, value: formatPercent(history.p_under), sub: sideCount(history.p_under, games) },
+    {
+      key: "average",
+      label: "Average",
+      value: mean == null ? "—" : mean.toFixed(1),
+      sub: diff == null ? null : `${diff >= 0 ? "+" : ""}${diff.toFixed(1)} vs line`,
+    },
+    { key: "games", label: "Games", value: String(games), sub: null },
+  ];
 }

@@ -5,6 +5,9 @@
 - **Author:** CTO
 - **Status:** Accepted
 
+> Superseded in part by SPO-135 (2026-11-11): the projection signal stays on the pick and is missing. Production does not load a vendor rank.
+> Superseded in part by SPO-135c (2026-11-11): NBA picks and event reads omit the projection signal. The slot returns when the ML model ships.
+
 ## Context
 
 Daily Pick already publishes one historical rate, `probability`, for the chosen side. The redesign wants five readable signals on that pick, each with a verdict relative to the side, plus one calibrated probability for the same side.

@@ -11,7 +11,6 @@ These endpoints allow the frontend to:
 """
 
 from fastapi import APIRouter, HTTPException, Query, BackgroundTasks
-from datetime import datetime, timezone
 from typing import Optional
 
 from app.models.schemas import DailyPicksResponse
@@ -20,9 +19,11 @@ from app.services.daily_analysis import (
     MIN_SAMPLE_GAMES,
     STORED_MIN_SAMPLE_GAMES,
     daily_analysis_service,
+    daily_picks_cache_key,
     present_daily_picks,
 )
 from app.services.cache import cache_service
+from app.services.slate_date import nba_slate_date
 
 
 # Create the router
@@ -129,7 +130,7 @@ async def get_daily_picks(
     """
     # Determine query date
     if date is None:
-        date = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+        date = nba_slate_date()[0]
     
     # Default timezone offset is UTC+8 (Taipei time)
     offset_minutes = tz_offset if tz_offset is not None else 480
@@ -193,7 +194,7 @@ async def trigger_daily_analysis(
     """
     # Determine analysis date
     if date is None:
-        date = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+        date = nba_slate_date()[0]
     
     # Default timezone offset is UTC+8 (Taipei time)
     offset_minutes = tz_offset if tz_offset is not None else 480
@@ -245,19 +246,23 @@ async def clear_daily_picks_cache(
         {"success": True, "message": "..."}
     """
     if date is None:
-        date = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+        date = nba_slate_date()[0]
     
     # Default timezone offset is UTC+8
     offset_minutes = tz_offset if tz_offset is not None else 480
     
-    # Clear new-style cache key
-    cache_key_new = f"daily_picks:{date}:tz{offset_minutes}"
-    # Also clear old-style cache key (for backward compatibility)
-    cache_key_old = f"daily_picks:{date}"
+    # The live NBA key, the previous unversioned NBA key, and the
+    # pre-league keys. Readers only use the versioned key.
+    keys = (
+        daily_picks_cache_key("nba", date, offset_minutes),
+        f"daily_picks:nba:{date}:tz{offset_minutes}",
+        f"daily_picks:{date}:tz{offset_minutes}",
+        f"daily_picks:{date}",
+    )
     
     try:
-        await cache_service.delete(cache_key_new)
-        await cache_service.delete(cache_key_old)
+        for key in keys:
+            await cache_service.delete(key)
         return {
             "success": True,
             "message": f"Cleared analysis cache for {date}"

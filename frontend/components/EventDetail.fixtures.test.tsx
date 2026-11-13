@@ -11,7 +11,6 @@ import {
   noVigResponseSchema,
   playerDDHistoryResponseSchema,
   playerHistoryResponseSchema,
-  playerProjectionSchema,
   playerSuggestResponseSchema,
   teamLineupSchema,
 } from "@/lib/schemas";
@@ -23,7 +22,6 @@ import nbaHistoryFixture from "@/test/fixtures/event/nba-history-bam.json";
 import nbaLineupFixture from "@/test/fixtures/event/nba-lineup-mixed.json";
 import nbaBosLineupFixture from "@/test/fixtures/event/nba-lineup-bos.json";
 import nbaNoVigFixture from "@/test/fixtures/event/nba-no-vig-bam.json";
-import nbaProjectionFixture from "@/test/fixtures/event/nba-projection-bam.json";
 import wnbaEventsFixture from "@/test/fixtures/event/wnba-events.json";
 import wnbaPicksFixture from "@/test/fixtures/event/wnba-daily-picks.json";
 import wnbaSuggestFixture from "@/test/fixtures/event/wnba-suggest.json";
@@ -40,7 +38,6 @@ import emptyPicksFixture from "@/test/fixtures/event/nba-daily-picks-empty.json"
 import emptySuggestFixture from "@/test/fixtures/event/nba-suggest-empty.json";
 import emptyHistoryFixture from "@/test/fixtures/event/nba-history-empty.json";
 import emptyNoVigFixture from "@/test/fixtures/event/nba-no-vig-empty.json";
-import nullProjectionFixture from "@/test/fixtures/event/nba-projection-nulls.json";
 
 const nbaEvents = eventsResponseSchema.parse(nbaEventsFixture);
 const nbaPicks = dailyPicksResponseSchema.parse(nbaPicksFixture);
@@ -49,7 +46,6 @@ const nbaHistory = playerHistoryResponseSchema.parse(nbaHistoryFixture);
 const nbaLineup = teamLineupSchema.parse(nbaLineupFixture);
 const nbaBosLineup = teamLineupSchema.parse(nbaBosLineupFixture);
 const nbaNoVig = noVigResponseSchema.parse(nbaNoVigFixture);
-const nbaProjection = playerProjectionSchema.parse(nbaProjectionFixture);
 const wnbaEvents = eventsResponseSchema.parse(wnbaEventsFixture);
 const wnbaPicks = dailyPicksResponseSchema.parse(wnbaPicksFixture);
 const wnbaSuggest = playerSuggestResponseSchema.parse(wnbaSuggestFixture);
@@ -66,7 +62,6 @@ const emptyPicks = dailyPicksResponseSchema.parse(emptyPicksFixture);
 const emptySuggest = playerSuggestResponseSchema.parse(emptySuggestFixture);
 const emptyHistory = playerHistoryResponseSchema.parse(emptyHistoryFixture);
 const emptyNoVig = noVigResponseSchema.parse(emptyNoVigFixture);
-const nullProjection = playerProjectionSchema.parse(nullProjectionFixture);
 
 const nav = vi.hoisted(() => ({
   eventId: "evt-mia-bos",
@@ -83,7 +78,6 @@ const apiMocks = vi.hoisted(() => ({
   getWNBAPlayerSuggestions: vi.fn(),
   getTeamLineup: vi.fn(),
   getWNBATeamLineup: vi.fn(),
-  getPlayerProjection: vi.fn(),
   calculateNoVig: vi.fn(),
   calculateWNBANoVig: vi.fn(),
   getPlayerHistory: vi.fn(),
@@ -135,7 +129,6 @@ describe("EventDetail fixtures", () => {
     apiMocks.getWNBATeamLineup.mockImplementation(async (team: string) =>
       team === "NYL" ? wnbaNylLineup : wnbaLvaLineup,
     );
-    apiMocks.getPlayerProjection.mockResolvedValue(nbaProjection);
     apiMocks.calculateNoVig.mockResolvedValue(nbaNoVig);
     apiMocks.calculateWNBANoVig.mockResolvedValue(wnbaNoVig);
     apiMocks.getPlayerHistory.mockResolvedValue(nbaHistory);
@@ -253,7 +246,6 @@ describe("EventDetail fixtures", () => {
     expect(apiMocks.getWNBAPlayerHistory).toHaveBeenCalled();
     expect(apiMocks.getWNBATeamLineup).toHaveBeenCalledWith("NYL", "2026-11-10");
     expect(apiMocks.getWNBATeamLineup).toHaveBeenCalledWith("LVA", "2026-11-10");
-    expect(apiMocks.getPlayerProjection).not.toHaveBeenCalled();
     expect(apiMocks.getEvents).not.toHaveBeenCalled();
     expect(apiMocks.getDailyPicks).not.toHaveBeenCalled();
     expect(apiMocks.getPlayerSuggestions).not.toHaveBeenCalled();
@@ -341,15 +333,22 @@ describe("EventDetail fixtures", () => {
     expect(odds?.className).not.toContain("max-md:hidden");
     expect(screen.getByTestId("our-read").parentElement?.className).toContain("max-md:hidden");
     expect(screen.queryByRole("tab", { name: "Filters" })).not.toBeInTheDocument();
-    await user.click(screen.getByRole("button", { name: "Filters" }));
-    const filters = screen.getByRole("dialog", { name: "Filter games" });
-    await user.click(within(filters).getByRole("button", { name: "Raise line" }));
-    expect(within(filters).getByText("19")).toBeInTheDocument();
     await user.click(screen.getByRole("tab", { name: "Game log" }));
+    const log = screen.getByTestId("game-log");
+    const lineValue = () => within(log).getByRole("button", { name: "reset" }).parentElement;
+    await user.click(within(log).getByRole("button", { name: "Raise line" }));
+    expect(lineValue()).toHaveTextContent("19");
+    await waitFor(() =>
+      expect(apiMocks.getPlayerHistory).toHaveBeenCalledWith(expect.objectContaining({ threshold: 19 })),
+    );
+    await user.click(within(log).getByRole("button", { name: "Filters" }));
+    const sheet = screen.getByRole("dialog", { name: "Filter games" });
+    await user.click(within(sheet).getByRole("button", { name: "Bench" }));
+    expect(within(log).getByRole("button", { name: "Filters · 1" })).toBeInTheDocument();
     await user.click(screen.getByRole("tab", { name: "Our read" }));
     expect(screen.getByRole("button", { name: "REB" })).toHaveAttribute("aria-pressed", "true");
     expect(screen.getByTestId("our-read").parentElement?.className).not.toContain("max-md:hidden");
-    expect(within(screen.getByRole("dialog", { name: "Filter games" })).getByText("19")).toBeInTheDocument();
+    expect(lineValue()).toHaveTextContent("19");
   });
 
   it("asks history for the same line, range, and opponent the chart shows", async () => {
@@ -365,10 +364,10 @@ describe("EventDetail fixtures", () => {
     });
     const user = userEvent.setup();
     renderWithProviders(<EventDetail league="nba" />);
-    const chart = await screen.findByTestId("game-log-chart");
+    const chart = await screen.findByTestId("game-log");
     expect(await within(chart).findByText("Points · 40 games")).toBeInTheDocument();
     const filters = screen.getByTestId("game-filters");
-    await user.click(within(filters).getByRole("button", { name: "Last 20" }));
+    await user.click(within(filters).getByRole("button", { name: "L20" }));
     expect(await within(chart).findByText("Points · 7 games")).toBeInTheDocument();
     expect(apiMocks.getPlayerHistory).toHaveBeenCalledWith(
       expect.objectContaining({ n: 20, threshold: 18.5, player: "Bam Adebayo", metric: "points" }),
@@ -393,17 +392,15 @@ describe("EventDetail fixtures", () => {
     const user = userEvent.setup();
     renderWithProviders(<EventDetail league="nba" />);
     await user.click(await screen.findByRole("button", { name: "DD" }));
-    const caption = await screen.findByText(/No-vig consensus yes/);
-    expect(caption).toHaveTextContent(`No-vig consensus yes ${formatPercent(0.6755)}`);
+    expect(await screen.findByText(`No-vig consensus ${formatPercent(0.6755)} yes`)).toBeInTheDocument();
   });
 
   it("prints the history rate with formatPercent on the log tiles", async () => {
     apiMocks.getPlayerHistory.mockResolvedValue(halfHistory);
     renderWithProviders(<EventDetail league="nba" />);
-    expect((await screen.findAllByText(formatPercent(0.6755))).length).toBeGreaterThan(0);
-    const tiles = Array.from(document.querySelectorAll(".font-mono.text-2xl")).map((node) => node.textContent);
-    expect(tiles).toContain(formatPercent(0.6755));
-    expect(tiles).not.toContain("67.5%");
+    const over = await screen.findByTestId("log-tile-over");
+    expect(over).toHaveTextContent(formatPercent(0.6755));
+    expect(over).not.toHaveTextContent("67.5%");
   });
 
   it("labels the fourteen empty fields without a fake percent", async () => {
@@ -411,13 +408,12 @@ describe("EventDetail fixtures", () => {
     apiMocks.getPlayerSuggestions.mockResolvedValue(emptySuggest);
     apiMocks.getPlayerHistory.mockResolvedValue(emptyHistory);
     apiMocks.calculateNoVig.mockResolvedValue(emptyNoVig);
-    apiMocks.getPlayerProjection.mockResolvedValue(nullProjection);
     apiMocks.getTeamLineup.mockResolvedValue(null);
     renderWithProviders(<EventDetail league="nba" />);
     expect((await screen.findAllByText(/No posted line/)).length).toBeGreaterThan(0);
     expect(screen.getAllByText("No read").length).toBeGreaterThan(0);
     expect(screen.getByText("No stored read for this player.")).toBeInTheDocument();
-    expect(screen.getAllByText(/No-vig consensus is not on this response/).length).toBeGreaterThan(0);
+    expect(screen.queryByText(/No-vig consensus \d/)).not.toBeInTheDocument();
     expect(screen.queryByText(/Last-10 hit rate needs a posted line/)).not.toBeInTheDocument();
     expect(screen.queryByText(/3 of 5 signals/)).not.toBeInTheDocument();
     expect(screen.getAllByText(/No bookmaker line right now/).length).toBeGreaterThan(0);

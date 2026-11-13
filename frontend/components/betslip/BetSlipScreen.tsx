@@ -2,33 +2,38 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
-import { useQuery } from "@tanstack/react-query";
+import { useQueries, useQuery } from "@tanstack/react-query";
 
+import { InjuryStatusTag } from "@/components/InjuryStatusTag";
 import { LineupStatusBadge } from "@/components/LineupStatusBadge";
 import { useAgentWidget } from "@/contexts/AgentWidgetContext";
 import { useBetSlip, type BetSlipPick } from "@/contexts/BetSlipContext";
 import { createAgentPickContextFromBetSlip } from "@/lib/agent-chat";
-import { getLineups } from "@/lib/api";
+import { getDailyPicks, getLineups } from "@/lib/api";
+import { canonicalInjuryTag, type InjuryTag } from "@/lib/injury-tag";
+import { injuryTagForPlayer, isPlayerOutInGame } from "@/lib/picks-board";
 import {
   complementHitRateLabel,
   slipDetailHref,
   slipCardFace,
   slipMatchup,
   slipPropText,
+  slipSummaryCaption,
   slipTotals,
   slipTeamCode,
 } from "@/lib/bet-slip-board";
 import { getCanonicalTeamCode } from "@/lib/team-logos";
-import { getLocalDateString } from "@/lib/utils";
-
-const SHARE_FONT_SANS = "Instrument Sans, system-ui, sans-serif";
-const SHARE_FONT_MONO = "JetBrains Mono, ui-monospace, monospace";
+import { cn, getLocalDateString } from "@/lib/utils";
 
 function ShareCard({
   picks,
+  tags,
+  outIds,
   forwardedRef,
 }: {
   picks: BetSlipPick[];
+  tags: ReadonlyMap<string, InjuryTag | null>;
+  outIds: ReadonlySet<string>;
   forwardedRef: React.RefObject<HTMLDivElement>;
 }) {
   const stamp = picks[0]?.commence_time
@@ -42,12 +47,12 @@ function ShareCard({
   return (
     <div
       ref={forwardedRef}
+      className="[font-family:var(--font-sans)]"
       style={{
         background: "#3E0F8D",
         borderRadius: 24,
         padding: 22,
         color: "#FFFFFF",
-        fontFamily: SHARE_FONT_SANS,
         display: "flex",
         flexDirection: "column",
         gap: 4,
@@ -55,11 +60,14 @@ function ShareCard({
     >
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
         <div style={{ fontWeight: 700, fontSize: 18 }}>{title}</div>
-        <div style={{ fontFamily: SHARE_FONT_MONO, fontWeight: 600, fontSize: 11, color: "#E4DA72" }}>
+        <div className="[font-family:var(--font-mono)]" style={{ fontWeight: 600, fontSize: 11, color: "#E4DA72" }}>
           {stamp.toUpperCase()}
         </div>
       </div>
-      {picks.map((pick) => (
+      {picks.map((pick) => {
+        const tag = tags.get(pick.id) ?? null;
+        const listedOut = outIds.has(pick.id);
+        return (
         <div
           key={pick.id}
           style={{
@@ -78,13 +86,23 @@ function ShareCard({
                 {complementHitRateLabel(pick)}
               </div>
             ) : null}
+            {tag && !listedOut ? (
+              <div style={{ marginTop: 6 }}>
+                <InjuryStatusTag tag={tag} />
+              </div>
+            ) : null}
           </div>
-          <div style={{ fontFamily: SHARE_FONT_MONO, fontWeight: 700, fontSize: 16, color: "#E4DA72" }}>
-            {slipCardFace(pick).probabilityText}
+          <div className="[font-family:var(--font-mono)]" style={{ fontWeight: 700, fontSize: 16, color: "#E4DA72" }}>
+            {listedOut ? (
+              <InjuryStatusTag tag={tag ?? canonicalInjuryTag("out")} />
+            ) : (
+              slipCardFace(pick).probabilityText
+            )}
           </div>
         </div>
-      ))}
-      <div style={{ fontFamily: SHARE_FONT_MONO, fontWeight: 500, fontSize: 10, color: "#BFAEE3" }}>
+        );
+      })}
+      <div className="[font-family:var(--font-mono)]" style={{ fontWeight: 500, fontSize: 10, color: "#BFAEE3" }}>
         novig · for research only
       </div>
     </div>
@@ -98,9 +116,6 @@ export function BetSlipScreen() {
   const [copySuccess, setCopySuccess] = useState(false);
   const shareImageRef = useRef<HTMLDivElement>(null);
   const picksHref = "/picks";
-  const totals = useMemo(() => slipTotals(picks), [picks]);
-  const summary = totals.summary;
-
   const lineupDates = useMemo(() => {
     return Array.from(
       new Set(
@@ -110,6 +125,27 @@ export function BetSlipScreen() {
       ),
     ).sort();
   }, [picks]);
+  const boardQueries = useQueries({
+    queries: lineupDates.map((date) => ({
+      queryKey: ["daily-picks", date],
+      queryFn: () => getDailyPicks({ date }),
+      staleTime: 5 * 60 * 1000,
+      retry: false,
+      refetchOnWindowFocus: false,
+    })),
+  });
+  const loadedPicks = boardQueries.flatMap((query) => query.data?.picks ?? []);
+  const legTags = new Map<string, InjuryTag | null>();
+  for (const pick of picks) {
+    legTags.set(pick.id, injuryTagForPlayer(loadedPicks, pick.event_id, pick.player_name));
+  }
+  const outIds = new Set(
+    picks
+      .filter((pick) => isPlayerOutInGame(loadedPicks, pick.event_id, pick.player_name))
+      .map((pick) => pick.id),
+  );
+  const totals = slipTotals(picks, outIds);
+  const summary = totals.summary;
 
   const {
     data: lineupResponses,
@@ -272,6 +308,8 @@ export function BetSlipScreen() {
           <div className="flex min-w-0 flex-[3_1_420px] flex-col gap-2.5">
             <h2 className="sr-only">Your picks</h2>
             {picks.map((pick) => {
+              const tag = legTags.get(pick.id) ?? null;
+              const listedOut = outIds.has(pick.id);
               const face = slipCardFace(pick);
               const lineup =
                 lineupsByDateAndTeam.get(
@@ -282,10 +320,13 @@ export function BetSlipScreen() {
                   key={pick.id}
                   className="flex items-center gap-3.5 rounded-[20px] border border-line bg-white px-4 py-4 md:px-[18px]"
                 >
-                  <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-line font-mono text-[11px] font-bold text-brand">
+                  <div className={cn(
+                    "flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-line font-mono text-[11px] font-bold text-brand",
+                    listedOut && "opacity-60",
+                  )}>
                     {slipTeamCode(pick, "nba")}
                   </div>
-                  <div className="min-w-0 flex-1">
+                  <div className={cn("min-w-0 flex-1", listedOut && "opacity-60")}>
                     <div className="text-[15px] font-bold">{pick.player_name}</div>
                     <div className="mt-0.5 text-sm font-semibold text-brand">{slipPropText(pick)}</div>
                     {complementHitRateLabel(pick) ? (
@@ -298,6 +339,11 @@ export function BetSlipScreen() {
                         Details
                       </Link>
                     </div>
+                    {tag && !listedOut ? (
+                      <div className="mt-2">
+                        <InjuryStatusTag tag={tag} />
+                      </div>
+                    ) : null}
                     <div className="mt-2">
                       <LineupStatusBadge
                         lineup={lineup}
@@ -308,18 +354,28 @@ export function BetSlipScreen() {
                     </div>
                   </div>
                   <div className="text-right">
-                    <div className="font-mono text-xl font-bold text-brand">
-                      {face.probabilityText}
-                    </div>
-                    {face.tier ? <div className="text-[11px] font-semibold text-muted">{face.tier.label}</div> : null}
+                    {listedOut ? (
+                      <InjuryStatusTag tag={tag ?? canonicalInjuryTag("out")} />
+                    ) : (
+                      <>
+                        <div className="font-mono text-xl font-bold text-brand">
+                          {face.probabilityText}
+                        </div>
+                        {face.tier ? <div className="text-[11px] font-semibold text-muted">{face.tier.label}</div> : null}
+                      </>
+                    )}
                   </div>
                   <button
                     type="button"
                     aria-label={`Remove ${pick.player_name}`}
                     onClick={() => removePick(pick.id)}
-                    className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-line bg-white text-base text-muted hover:border-red hover:text-red"
+                    className={
+                      listedOut
+                        ? "min-h-11 shrink-0 rounded-full border border-line bg-white px-4 text-[13px] font-bold text-ink"
+                        : "flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-line bg-white text-base text-muted hover:border-red hover:text-red"
+                    }
                   >
-                    ×
+                    {listedOut ? "Remove" : "×"}
                   </button>
                 </article>
               );
@@ -358,13 +414,9 @@ export function BetSlipScreen() {
               </div>
             </div>
             <p className="text-xs leading-5 text-muted">
-              {totals.basis === "blend"
-                ? "Avg and all hit use the combined probability on each same-side leg. All hit is the product of those blends. It is not a joint probability from the API."
-                : totals.basis === "history"
-                  ? "History: a leg has no blend, so avg and all hit use the historical rate on every leg. A reverse add stores the complement of the other side's hit rate, not a de-vigged price."
-                  : "Avg and all hit use the stored hit rates. A reverse add stores the complement of the other side's hit rate, not a de-vigged price. All hit is the product of those stored rates. It is not a joint probability from the API."}
+              {slipSummaryCaption(totals.basis, outIds.size > 0)}
             </p>
-            <ShareCard picks={picks} forwardedRef={shareImageRef} />
+            <ShareCard picks={picks} tags={legTags} outIds={outIds} forwardedRef={shareImageRef} />
             <div className="flex flex-wrap gap-2">
               <button
                 type="button"

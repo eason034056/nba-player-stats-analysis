@@ -7,6 +7,13 @@
  */
 
 import { buildEventDetailHref, type LeagueSegment } from "./event-detail-link";
+import {
+  canonicalInjuryTag,
+  injuryKey,
+  injurySeverity,
+  injuryTag,
+  type InjuryTag,
+} from "./injury-tag";
 import { metricToMarket } from "./metric-to-market";
 import { boardRate, nbaTierFace } from "./nba-card";
 import { formatPercent } from "./player-dd";
@@ -49,6 +56,7 @@ const TIER_SHORT: Record<ReadTierName, string> = {
 
 export interface PickTag {
   text: string;
+  injury?: InjuryTag;
 }
 
 export interface PickRowModel {
@@ -64,6 +72,8 @@ export interface PickRowModel {
   tierName: ReadTierName | null;
   tags: PickTag[];
   href: string;
+  /** Out has no model read. The card stays, dimmed, without a percent or bar. */
+  dimmed: boolean;
 }
 
 export function picksEyebrow(date: string, analyzedAt: string | null | undefined): string {
@@ -107,6 +117,67 @@ function finite(value: number | null | undefined): value is number {
   return typeof value === "number" && Number.isFinite(value);
 }
 
+/** True when the stored status is Out. The raw BDL word is not read, so Doubtful cannot block. */
+export function isOutPick(pick: { injury_status?: string | null }): boolean {
+  return injuryKey(pick.injury_status) === "out";
+}
+
+/**
+ * True when any loaded row for this player in this game is Out.
+ * One Out line blocks every other line and market. Doubtful does not.
+ */
+function samePlayerInGame(
+  pick: { event_id?: string | null; player_name?: string | null },
+  eventId: string,
+  playerName: string,
+): boolean {
+  const event = eventId.trim();
+  const name = playerName.trim().toLowerCase();
+  if (!event || !name) return false;
+  const pickEvent = pick.event_id?.trim() ?? "";
+  const pickName = pick.player_name?.trim().toLowerCase() ?? "";
+  return pickEvent === event && pickName === name;
+}
+
+export function isPlayerOutInGame(
+  picks: readonly {
+    event_id?: string | null;
+    player_name?: string | null;
+    injury_status?: string | null;
+  }[],
+  eventId: string,
+  playerName: string,
+): boolean {
+  return picks.some((pick) => samePlayerInGame(pick, eventId, playerName) && isOutPick(pick));
+}
+
+/**
+ * Strongest tag for this player in this game.
+ * A stored Out wins, and the chip keeps that row's raw word.
+ * Doubtful does not win over a stored Out, and it does not block.
+ */
+export function injuryTagForPlayer(
+  picks: readonly {
+    event_id?: string | null;
+    player_name?: string | null;
+    injury_status?: string | null;
+    injury_status_raw?: string | null;
+  }[],
+  eventId: string,
+  playerName: string,
+): InjuryTag | null {
+  const rows = picks.filter((pick) => samePlayerInGame(pick, eventId, playerName));
+  const outRow = rows.find((pick) => isOutPick(pick));
+  if (outRow) return injuryTag(outRow.injury_status_raw, outRow.injury_status) ?? canonicalInjuryTag("out");
+  let best: InjuryTag | null = null;
+  for (const row of rows) {
+    const tag = injuryTag(row.injury_status_raw, row.injury_status);
+    if (!tag) continue;
+    if (!best || injurySeverity(tag) < injurySeverity(best)) best = tag;
+  }
+  return best;
+}
+
 /**
  * Tags that quote stored fields. A missing projection or rank is omitted.
  * There is no last-10 hit count on DailyPick, so no "L10" tag.
@@ -126,6 +197,9 @@ export function pickTags(pick: DailyPick): PickTag[] {
   if (finite(pick.projected_minutes)) {
     tags.push({ text: `${Math.round(pick.projected_minutes)} min` });
   }
+  const injury = injuryTag(pick.injury_status_raw, pick.injury_status);
+  if (injury) tags.push({ text: injury.text, injury });
+  if (pick.lineup_confirmed === false) tags.push({ text: "Lineup unconfirmed" });
   const rank = finite(pick.opponent_position_rank)
     ? pick.opponent_position_rank
     : finite(pick.opponent_rank)
@@ -153,6 +227,9 @@ export function pickMatchup(pick: DailyPick, league: LeagueSegment): string {
 
 export function sortPicks(picks: DailyPick[], league: LeagueSegment): DailyPick[] {
   return [...picks].sort((left, right) => {
+    const leftOut = isOutPick(left);
+    const rightOut = isOutPick(right);
+    if (leftOut !== rightOut) return leftOut ? 1 : -1;
     const leftRate = boardRate(left, league);
     const rightRate = boardRate(right, league);
     const leftRank = Number.isFinite(leftRate) ? leftRate : -1;
@@ -163,6 +240,7 @@ export function sortPicks(picks: DailyPick[], league: LeagueSegment): DailyPick[
 
 export function countStrong(picks: DailyPick[], league: LeagueSegment): number {
   return picks.filter((pick) => {
+    if (isOutPick(pick)) return false;
     const rate = boardRate(pick, league);
     return Number.isFinite(rate) && rate >= 0.7;
   }).length;
@@ -174,10 +252,18 @@ export function buildPickRows(
   date: string,
 ): PickRowModel[] {
   return sortPicks(picks, league).map((pick, index) => {
+    const out = isOutPick(pick);
     const face = league === "nba" ? nbaTierFace(pick) : null;
-    const tier = face ? face.tier : readTier(pick.probability);
-    const probabilityText = face ? face.probabilityText : formatPercent(pick.probability);
-    const barRate = boardRate(pick, league);
+    let tier = face ? face.tier : readTier(pick.probability);
+    let probabilityText = face ? face.probabilityText : formatPercent(pick.probability);
+    let barRate = boardRate(pick, league);
+    let tags = pickTags(pick);
+    if (out) {
+      tier = null;
+      probabilityText = "";
+      barRate = Number.NaN;
+      tags = tags.filter((tag) => tag.injury != null);
+    }
     const bar = Number.isFinite(barRate) ? Math.max(0, Math.min(100, barRate * 100)) : 0;
     return {
       key: `${pick.event_id}-${pick.player_name}-${pick.metric}-${pick.direction}`,
@@ -190,7 +276,8 @@ export function buildPickRows(
       barPercent: bar,
       tierShort: tier ? (league === "nba" ? tier.label : TIER_SHORT[tier.name]) : null,
       tierName: tier?.name ?? null,
-      tags: pickTags(pick),
+      tags,
+      dimmed: out,
       href: buildEventDetailHref({
         eventId: pick.event_id,
         date,

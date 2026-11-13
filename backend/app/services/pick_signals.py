@@ -1,25 +1,29 @@
 """Per-prop signal verdicts and the combined probability for one Daily Pick.
 
-NBA picks always receive five signals, in a fixed order. A missing input
-sets that signal's ``value`` and ``verdict`` to None. It is not neutral,
-and it adds nothing to the log-odds blend.
+NBA picks receive four signals, in a fixed order. A missing input for
+one of those signals sets ``value`` and ``verdict`` to None. It is not
+neutral, and it adds nothing to the log-odds blend.
+
+There is no projection source until the ML model ships, so the
+projection slot is omitted. It is not serialized as null. A market,
+last-10, history, or defense input that exists and fails at runtime
+still serializes as null. ``combined_probability`` already treats a
+missing projection as zero, and dropping the slot does not change it.
 
 Every rule is relative to the pick's side (over or under).
 
 * ``market`` — no-vig consensus of books posted at the pick's line.
 * ``last10`` — strict hits in the last 10 non-DNP games, shown as ``k/10``.
 * ``history`` — the published historical ``probability`` for the side.
-* ``projection`` — ``projected_value``. The verdict uses the edge in the
-  side's direction. The flat ±0.5 threshold does not scale with the
-  metric's spread; that scaling is left for later.
 * ``defense`` — ``opponent_position_rank``, then ``opponent_rank``.
-  Rank 1 is the weakest defense, which is how the number is stored:
-  ``normalize_projection`` copies SportsDataIO's field with no inversion.
+  Rank 1 is the weakest defense. The game log fills that number.
 
 ``combined_probability`` starts from the market no-vig log-odds, adds
 bounded adjustments from the other four signals, and applies Platt scaling
-to the adjustment total only. No market price, or an injury status of Out
-or Doubtful, returns None. WNBA does not call this module.
+to the adjustment total only. No market price, or an injury status of Out,
+returns None. Doubtful is Questionable. The cache stores it that way, and
+a literal Doubtful word does not null the blend. WNBA does not call
+this module.
 """
 
 from __future__ import annotations
@@ -62,11 +66,12 @@ SIGNAL_SPECS: tuple[tuple[str, str], ...] = (
     ("market", "Market price"),
     ("last10", "Last 10 games"),
     ("history", "All-game hit rate"),
-    ("projection", "Projection"),
     ("defense", "Opponent defense"),
 )
+# Kept for the model that will put this slot back on the list.
+PROJECTION_SIGNAL_SPEC: tuple[str, str] = ("projection", "Projection")
 
-_INJURY_BLOCK = frozenset({"out", "doubtful"})
+_INJURY_BLOCK = frozenset({"out"})
 
 
 def _finite(value: object) -> float | None:
@@ -139,11 +144,21 @@ def rate_verdict(
     return NEUTRAL
 
 
-def injury_blocks_combined(status: str | None) -> bool:
-    """True when the player is Out or Doubtful, ignoring case and whitespace."""
+def _injury_word_blocks(status: str | None) -> bool:
+    """True when this one word is Out, ignoring case and whitespace."""
     if not isinstance(status, str):
         return False
     return status.strip().casefold() in _INJURY_BLOCK
+
+
+def injury_blocks_combined(status: str | None) -> bool:
+    """True when the player is Out, ignoring case and whitespace.
+
+    ``status`` is the word on the pick. The BALLDONTLIE cache stores
+    Doubtful as Questionable, so a cache Doubtful is not Out. A literal
+    Doubtful word is not Out either. WNBA does not call this module.
+    """
+    return _injury_word_blocks(status)
 
 
 def american_pairs_at_line(
@@ -354,7 +369,7 @@ def projection_signal(
     The ±0.5 cut is the same number of points for every metric. It should
     eventually be scaled by that metric's spread.
     """
-    key, label = SIGNAL_SPECS[3]
+    key, label = PROJECTION_SIGNAL_SPEC
     projected = _finite(projected_value)
     edge = _finite(edge_for_side)
     if projected is None or edge is None:
@@ -373,7 +388,7 @@ def projection_signal(
 
 def defense_signal(rank: float | None, side: str) -> PickSignal:
     """``#rank`` using position rank first. None when neither rank was loaded."""
-    key, label = SIGNAL_SPECS[4]
+    key, label = SIGNAL_SPECS[3]
     if rank is None:
         return _signal(key, label, None, None)
     return _signal(key, label, format_rank(rank), defense_verdict(rank, side))
@@ -452,7 +467,7 @@ def combined_probability(
 
     ``logit(market)`` is added with coefficient 1. Platt has already been
     applied to ``adjustment``. None when the market is missing, the side
-    is not over or under, or the player is Out or Doubtful.
+    is not over or under, or the player is Out. Doubtful keeps a number.
 
     The result is rounded to 4 decimals and kept inside ``[0.0001, 0.9999]``
     so a later log loss stays finite.
@@ -507,11 +522,15 @@ def build_nba_signals(
     opponent_position_rank: float | None = None,
     injury_status: str | None = None,
 ) -> tuple[list[PickSignal], float | None, float | None]:
-    """Build the five signals, the calibrated probability, and the pre-Platt total.
+    """Build the four emitted signals, the calibrated probability, and the pre-Platt total.
 
-    The third value is the clipped adjustment total before Platt. Walk-forward
-    stores it so Platt can be refit without another pass over the features.
-    It is None when the side is not over or under.
+    The projection slot is not in the list. ``projected_value`` still
+    feeds ``projection_adjustment`` when a caller passes one, which is
+    what keeps ``combined_probability`` on the same formula. Production
+    passes None, and that term is zero. The third value is the clipped
+    adjustment total before Platt. Walk-forward stores it so Platt can
+    be refit without another pass over the features. It is None when
+    the side is not over or under.
 
     Args:
         side: ``over`` or ``under``.
@@ -523,15 +542,15 @@ def build_nba_signals(
             explicitly; this function never substitutes 0.5 on its own.
         last10_values: Exactly 10 non-DNP values, or None when 10 are not available.
         history_rate: Published side rate (``DailyPick.probability``).
-        projected_value: SportsDataIO projection for this metric.
+        projected_value: Model projection for this metric. None when no model has written one.
         opponent_rank: Overall defense rank. Used only when the position rank is missing.
         opponent_position_rank: Defense rank versus the player's position. Preferred.
-        injury_status: Out or Doubtful forces the combined probability to None.
-            The five signals are still returned.
+        injury_status: Out forces the combined probability to None.
+            Doubtful does not. The four emitted signals are still returned.
 
     Returns:
         ``(signals, combined_probability, adjustment_total)``. ``signals``
-        always has the five keys in ``SIGNAL_SPECS`` order.
+        has the keys in ``SIGNAL_SPECS`` order. ``projection`` is absent.
     """
     threshold = _finite(line)
     market = resolve_market_probability(
@@ -561,7 +580,6 @@ def build_nba_signals(
         market_signal(market),
         last10_signal(hits),
         history_signal(history_rate),
-        projection_signal(projected_value, edge),
         defense_signal(rank, side),
     ]
     if side not in ("over", "under"):

@@ -412,12 +412,15 @@
   }
 
   .today-snap {
+    --today-snap-gutter: clamp(16px, 3.4cqi, 40px);
     display: flex;
     gap: 10px;
     overflow-x: auto;
     scroll-snap-type: x mandatory;
-    margin-inline: calc(clamp(16px, 3.4cqi, 40px) * -1);
-    padding: 0 clamp(16px, 3.4cqi, 40px) 4px;
+    scroll-padding-inline: var(--today-snap-gutter);
+    scrollbar-width: none;
+    margin-inline: calc(var(--today-snap-gutter) * -1);
+    padding: 0 var(--today-snap-gutter) 4px;
   }
 
   .today-snap > * {

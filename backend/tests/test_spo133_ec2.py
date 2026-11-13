@@ -5,6 +5,7 @@ import json
 import os
 import stat
 import subprocess
+import sys
 from pathlib import Path
 
 import pytest
@@ -756,3 +757,55 @@ class TestPublicSubnets:
             assert "MapPublicIpOnLaunch" in text
             assert "no matching EC2 VPC found" in text
             assert "check" in text.lower()
+
+
+def test_nba_starts_and_serves_without_odds_api_key() -> None:
+    """Process, scheduler, health, and CSV players do not need ODDS_API_KEY."""
+    script = r"""
+import os
+import time
+
+os.environ["ODDS_API_KEY"] = ""
+os.environ["BALLDONTLIE_API_KEY"] = ""
+os.environ["PROXY_SECRET_REQUIRED"] = "false"
+os.environ.pop("SPORTSDATA_API_KEY", None)
+
+from fastapi.testclient import TestClient
+
+from app.main import app
+from app.services.scheduler import scheduler_service
+from app.settings import settings
+
+assert settings.odds_api_key == ""
+with TestClient(app) as client:
+    health = client.get("/api/health")
+    root = client.get("/health")
+    csv_players = client.get("/api/nba/csv/players")
+    assert health.status_code == 200, health.status_code
+    assert root.status_code == 200, root.status_code
+    assert csv_players.status_code == 200, csv_players.status_code
+    assert "Invalid API key" not in csv_players.text
+    assert scheduler_service.is_running is True
+    job_ids = {job.id for job in scheduler_service._scheduler.get_jobs()}
+    assert "nba_injuries_refresh" in job_ids
+    assert not any("projection" in job_id for job_id in job_ids)
+    time.sleep(2)
+    again = client.get("/api/health")
+    assert again.status_code == 200, again.status_code
+print("ok")
+"""
+    env = os.environ.copy()
+    env["ODDS_API_KEY"] = ""
+    env["BALLDONTLIE_API_KEY"] = ""
+    env["PROXY_SECRET_REQUIRED"] = "false"
+    env.pop("SPORTSDATA_API_KEY", None)
+    result = subprocess.run(
+        [sys.executable, "-c", script],
+        cwd=REPO / "backend",
+        env=env,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert result.returncode == 0, result.stderr[-2000:]
+    assert result.stdout.strip().endswith("ok")

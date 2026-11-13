@@ -478,6 +478,7 @@ class TestLogFetch:
         assert call_args[4] == "success"
         assert call_args[5] is None  # error_message
         assert call_args[6] == 250   # duration_ms
+        assert call_args[8] == "nba"  # league from the NBA service instance
 
     @pytest.mark.asyncio
     async def test_handles_db_execute_exception(self, monkeypatch):

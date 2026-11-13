@@ -967,7 +967,11 @@ def test_late_pacific_tip_counts_once_on_either_arena_date(tmp_path, arena_date)
 
 @pytest.mark.xfail(
     strict=True,
-    reason="SPO-104 QA: agent today uses UTC, so 10:30pm Pacific is already the next date",
+    reason=(
+        "SPO-104 QA: 2026-03-16T05:30Z is 22:30 Pacific on 03-15 and "
+        "01:30 Eastern on 03-16. The lineup date is America/New_York, "
+        "so it is 2026-03-16, and the planner today follows the process zone."
+    ),
 )
 def test_agent_today_matches_the_pacific_game_date(monkeypatch):
     import date_utils

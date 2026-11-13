@@ -44,3 +44,16 @@ The values are placeholders, not production secrets.
 |---|---|
 | `ssm/get-parameters-by-path-page1.json` | First page under `/sportslab/prod/`, includes `NextToken` |
 | `ssm/get-parameters-by-path-page2.json` | Second page (`--next-token page-2`) |
+
+## BALLDONTLIE `/v1`
+
+The files under `bdl/` were added to the repo on 2026-11-11T04:51:35Z (2026-11-10 22:51 America/Chicago). They do not carry a separate capture clock. The key was sent in the `Authorization` header. It is not in either file, and it is not in a sidecar.
+
+These are pretty-printed JSON with a one-space indent, not the raw HTTP bytes. The field values are the recorded response. Tests copy a loaded body when they need a last page (`meta.next_cursor` set to null or removed) or an empty `data` list. They do not type a new response.
+
+| File | Request |
+|---|---|
+| `bdl/player_injuries__page1.json` | `GET /v1/player_injuries?per_page=100` |
+| `bdl/standings_2026.json` | `GET /v1/standings?season=2026` |
+
+`player_injuries__page1.json` is one page of 100 rows with `meta.next_cursor` set. `standings_2026.json` has the 30 NBA clubs. Tests build `team_id -> abbreviation` from `data[].team.{id, abbreviation}`.

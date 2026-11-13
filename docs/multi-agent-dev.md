@@ -1,6 +1,6 @@
 ---
 name: NBA Multi-Agent Betting Advisor
-overview: Build a LangGraph betting advisor with 6 LLM agents, 1 deterministic scoring layer, and 20+ tool functions that analyze NBA player props from 7 analytical dimensions. The first strong production layer should be built from Existing CSV + NBA Stats + Official Injury Report + The Odds API; Dimensions 1-5 and 7 are active from those sources today, while Dimension 6 (projection + matchup) remains an explicit stub because the current SportsDataIO feed is dummy data and must not influence recommendations.
+overview: Build a LangGraph betting advisor with 6 LLM agents, 1 deterministic scoring layer, and 20+ tool functions that analyze NBA player props from 7 analytical dimensions. The first strong production layer should be built from Existing CSV + NBA Stats + Official Injury Report + The Odds API; Dimensions 1-5 and 7 are active from those sources today, while Dimension 6 (projection + matchup) remains an explicit stub because there is no projection source. An ML model is pending and must not be invented from the betting line.
 todos:
   - id: csv-enhance
     content: Enhance csv_player_history.py load_csv() to parse all 28 CSV columns and preserve metadata needed for structured signals (Season, W/L, Pos, shooting splits, FIC, etc.)
@@ -9,7 +9,7 @@ todos:
     content: "Create scripts/agents/tools/historical.py with structured tools for Dims 1-5 using Existing CSV + NBA Stats + Official Injury Report: base stats, minutes opportunity, usage/touches, shooting mix, lineup context, variance, schedule, and injury-aware teammate effects with reliability + sample-size outputs"
     status: pending
   - id: tools-projection
-    content: Create scripts/agents/tools/projection.py with 4 tool interfaces for Dimension 6 that always return unavailable until SportsDataIO is replaced with a real data source.
+    content: Create scripts/agents/tools/projection.py with 4 tool interfaces for Dimension 6 that always return unavailable until an ML model writes a projection.
     status: pending
   - id: tools-market
     content: Create scripts/agents/tools/market.py with pricing tools for Dimension 7 (current market, line movement, best price, bookmaker spread / disagreement)
@@ -41,7 +41,7 @@ The current `daily_analysis.py` is still anchored on historical hit rate plus so
 - the CSV has 28 columns but `csv_player_history.py` currently parses only a small subset
 - recent role changes, shooting context, variance, and schedule effects are mostly ignored
 - market data is used as a line source, not as a pricing benchmark
-- the projection API may look integrated, but **the current SportsDataIO feed is dummy data and must be treated as unavailable**
+- there is **no projection source**. The projection tools stay unavailable. Do not use the betting line as a projection.
 
 This design therefore treats projection + matchup as a **schema-stable stub**, not a live signal.
 
@@ -49,7 +49,7 @@ This design therefore treats projection + matchup as a **schema-stable stub**, n
 
 ## Design Corrections From the Previous Version
 
-1. Projection is not merely "weak"; it is **explicitly unusable** until the dummy feed is replaced.
+1. Projection is not merely "weak"; it is **explicitly unusable** until a model writes it.
 2. LLMs should not invent confidence scores from prose. Scoring must come from deterministic, structured signals.
 3. Market should be a benchmark for pricing and EV, not just one more vote in a 7-way debate.
 4. Correlated historical signals must be capped so one hot streak does not get counted multiple times.
@@ -93,7 +93,7 @@ This is a better split for a betting system than "LLM decides everything."
 | 3 | Shooting efficiency | Active | explain points variance and regression risk | Existing CSV + NBA Stats shooting dashboards |
 | 4 | Variance / floor-ceiling | Active | risk control, avoid noisy props | CSV distributions |
 | 5 | Schedule / availability / teammate context | Active | rest, game script, injury-driven role shifts | Existing CSV + NBA Stats lineups + Official Injury Report |
-| 6 | Projection + matchup | Stub only, zero weight | interface stability only | SportsDataIO dummy data |
+| 6 | Projection + matchup | Stub only, zero weight | interface stability only | No projection source; ML model pending |
 | 7 | Market / line / price | Active and mandatory for betting advice | fair probability, line movement, EV, price shopping | The Odds API + PostgreSQL odds_line_snapshots |
 
 Important consequence:
@@ -148,7 +148,7 @@ Each tool should return structured data, not just a paragraph. Every dimension-s
   "sample_size": 0,
   "reliability": 0.0,
   "window": "last_10 | season | with_star_out | etc",
-  "source": "csv | nba_stats | official_injury_report | odds_api | sportsdataio_stub",
+  "source": "csv | nba_stats | official_injury_report | odds_api | projection_stub",
   "as_of": "2026-03-12T18:30:00Z",
   "details": {}
 }
@@ -323,7 +323,7 @@ But every tool should currently return:
 ```json
 {
   "status": "unavailable",
-  "reason": "SportsDataIO data is dummy and excluded from scoring"
+  "reason": "no projection source; ML model pending"
 }
 ```
 
@@ -578,7 +578,7 @@ The CLI should surface both recommendation and uncertainty:
 > Should I bet Stephen Curry over 28.5 points today?
 [Planner] Parsed: Stephen Curry, points, 28.5, 2026-03-12
 [Stats Agent] Built 5 active historical/context dimensions
-[Projection Agent] Unavailable: dummy SportsDataIO feed excluded
+[Projection Agent] Unavailable: no projection source; ML model pending
 [Market Agent] Loaded 7 books, best over price -102 at FanDuel
 [Scoring] Model 0.61 vs Market 0.54 -> EV +3.8%
 [Critic] Risk: elevated volatility, recent FG% spike

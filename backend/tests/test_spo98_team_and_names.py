@@ -320,27 +320,25 @@ class TestDailyAnalysisWiring:
         assert all(p.player_team_code == "GSW" for p in picks)
         assert all(p.player_team != "Hawks" for p in picks)
 
-    def test_projection_team_still_wins(self):
+    def test_a_passed_team_map_does_not_override_the_log(self):
         logs = [
             {"team": "Warriors", "date_full": "2025-10-05"},
             {"team": "Hawks", "date_full": "2026-02-09"},
         ]
         event = _load_recorded_event()
-        projected = "Jalen Johnson"
-        assert projected in _outcome_names(event)
+        named = "Jalen Johnson"
+        assert named in _outcome_names(event)
         picks, _ = self._picks(
             logs,
             event["commence_time"],
-            projections={projected: {"team": "LAL"}},
+            projections={named: {"team": "LAL"}},
         )
-        projected_picks = [p for p in picks if p.player_name == projected]
-        other_picks = [p for p in picks if p.player_name != projected]
-        assert projected_picks
+        named_picks = [p for p in picks if p.player_name == named]
+        other_picks = [p for p in picks if p.player_name != named]
+        assert named_picks
         assert other_picks
-        # LAL is the away club on the recorded event, so the projection
-        # is kept. A code for a club that is not playing is not kept.
-        assert all(p.player_team == "LAL" for p in projected_picks)
-        assert all(p.player_team_code == "LAL" for p in projected_picks)
+        assert all(p.player_team == "Hawks" for p in named_picks)
+        assert all(p.player_team_code == "ATL" for p in named_picks)
         assert all(p.player_team == "Hawks" for p in other_picks)
 
 

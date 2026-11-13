@@ -2,8 +2,9 @@
  * /picks — NBA Daily Picks.
  *
  * The board is the November 2026 layout. Date, team filter, session
- * storage, re-analyze, lineup badges, reverse slip, and ask-the-agent
- * stay on this page. Numbers come from getDailyPicks.
+ * storage, re-analyze, and lineup badges stay on this page. A reverse
+ * add lives on the game page and the pick context menu. Ask-the-agent
+ * lives on the game page. Numbers come from getDailyPicks.
  */
 
 "use client";
@@ -16,8 +17,9 @@ import { useAgentWidget } from "@/contexts/AgentWidgetContext";
 import { useBetSlip } from "@/contexts/BetSlipContext";
 import { getDailyPicks, getLineups, triggerDailyAnalysis } from "@/lib/api";
 import { createAgentPickContextFromDailyPick } from "@/lib/agent-chat";
+import { isOutPick } from "@/lib/picks-board";
 import type { DailyPick } from "@/lib/schemas";
-import { complementHitRateLabel, sameSideSlipRead } from "@/lib/bet-slip-board";
+import { complementHitRateLabel, slipPickFromDaily } from "@/lib/bet-slip-board";
 import { getCanonicalTeamCode } from "@/lib/team-logos";
 import { getTodayString } from "@/lib/utils";
 
@@ -26,7 +28,7 @@ const STORAGE_KEY_TEAMS = "picks-filter-teams:v2";
 const STALE_BOARD_MINUTES = 15;
 
 export default function PicksPage() {
-  const { setPageContext, setSelectedPickContext, submitAction } = useAgentWidget();
+  const { setPageContext, submitAction } = useAgentWidget();
   const { picks: slipPicks, isInSlip, addPick, removePick } = useBetSlip();
   const todayString = getTodayString();
   const [selectedDate, setSelectedDate] = useState(todayString);
@@ -169,64 +171,25 @@ export default function PicksPage() {
     });
   }, [selectedDate, selectedTeams, setPageContext]);
 
-  const buildSlipPick = (
-    pick: DailyPick,
-    direction: string,
-    probability: number,
-    rateBasis?: "complement",
-  ) => ({
-    player_name: pick.player_name,
-    player_team: pick.player_team || "",
-    event_id: pick.event_id,
-    home_team: pick.home_team,
-    away_team: pick.away_team,
-    commence_time: pick.commence_time,
-    metric: pick.metric,
-    threshold: pick.threshold,
-    direction,
-    probability,
-    n_games: pick.n_games,
-    rate_basis: rateBasis,
-    ...sameSideSlipRead(pick, direction),
-  });
-
   const handleToggleSlip = useCallback(
     (pick: DailyPick) => {
       const id = `${pick.player_name}-${pick.metric}`;
       const existing = slipPicks.find(
         (item) => item.player_name === pick.player_name && item.metric === pick.metric,
       );
+      if (isOutPick(pick)) {
+        if (existing) removePick(id);
+        return;
+      }
       const reverse = pick.direction === "over" ? "under" : "over";
       if (existing && existing.direction !== reverse) {
         removePick(id);
         return;
       }
       removePick(id);
-      addPick(buildSlipPick(pick, pick.direction, pick.probability));
+      addPick(slipPickFromDaily(pick, pick.direction, pick.probability));
     },
     [addPick, removePick, slipPicks],
-  );
-
-  const handleAddReverse = useCallback(
-    (pick: DailyPick) => {
-      const reverse = pick.direction === "over" ? "under" : "over";
-      removePick(`${pick.player_name}-${pick.metric}`);
-      addPick(buildSlipPick(pick, reverse, 1 - pick.probability, "complement"));
-    },
-    [addPick, removePick],
-  );
-
-  const handleAsk = useCallback(
-    async (pick: DailyPick) => {
-      const pickContext = createAgentPickContextFromDailyPick(pick);
-      setSelectedPickContext(pickContext);
-      await submitAction({
-        action: "analyze_pick",
-        message: "Should I bet this?",
-        contextPatch: { selected_pick: pickContext },
-      });
-    },
-    [setSelectedPickContext, submitAction],
   );
 
   const handleReviewBoard = useCallback(async () => {
@@ -234,7 +197,10 @@ export default function PicksPage() {
       action: "review_board",
       message: "Review this board and identify the cleanest bet.",
       contextPatch: {
-        visible_picks: picks.slice(0, 6).map((pick) => createAgentPickContextFromDailyPick(pick)),
+        visible_picks: picks
+          .filter((pick) => !isOutPick(pick))
+          .slice(0, 6)
+          .map((pick) => createAgentPickContextFromDailyPick(pick)),
       },
     });
   }, [picks, submitAction]);
@@ -274,14 +240,12 @@ export default function PicksPage() {
           : null
       }
       onToggleSlip={handleToggleSlip}
-      onAddReverse={handleAddReverse}
       slipCaption={(pick) => {
         const leg = slipPicks.find(
           (item) => item.player_name === pick.player_name && item.metric === pick.metric,
         );
         return leg ? complementHitRateLabel(leg) : null;
       }}
-      onAsk={(pick) => void handleAsk(pick)}
       onReviewBoard={() => void handleReviewBoard()}
     />
   );

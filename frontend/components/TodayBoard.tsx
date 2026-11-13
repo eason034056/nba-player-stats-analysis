@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { useQuery } from "@tanstack/react-query";
 
+import { InjuryStatusTag } from "@/components/InjuryStatusTag";
 import { useAgentWidget } from "@/contexts/AgentWidgetContext";
 import {
   getDailyPicks,
@@ -12,6 +13,7 @@ import {
   getWnbaDailyPicks,
 } from "@/lib/api";
 import type { LeagueSegment } from "@/lib/event-detail-link";
+import { isOutPick } from "@/lib/picks-board";
 import {
   slateEyebrow,
   todayGames,
@@ -28,6 +30,16 @@ const TIER_CLASS = {
   lean: "bg-lean text-brand",
   pass: "bg-pass text-ink-2",
 } as const;
+
+function picksShownCount(data: {
+  total_picks?: number | null;
+  picks?: { injury_status?: string | null }[];
+}): number | null {
+  const total = data.total_picks;
+  if (typeof total !== "number" || !Number.isFinite(total)) return null;
+  const out = (data.picks ?? []).filter((pick) => isOutPick(pick)).length;
+  return Math.max(0, total - out);
+}
 
 function errorText(error: unknown): string {
   if (error instanceof Error && error.message) return error.message;
@@ -66,6 +78,11 @@ function ReadFace({
       </div>
       <div>
         <div className="text-[17px] font-bold tracking-[-0.01em]">{read.player}</div>
+        {read.injury ? (
+          <div className="mt-2">
+            <InjuryStatusTag tag={read.injury} />
+          </div>
+        ) : null}
         <div className={cn("mt-0.5 text-gray-light", tone === "flat" ? "text-xs" : "text-[13px]")}>
           {read.matchup}
         </div>
@@ -90,6 +107,11 @@ function GameTopRead({ game }: { game: TodayGameCard }) {
         <div className="mt-1 text-sm font-semibold text-ink">
           {game.topText ?? "No read on this game"}
         </div>
+        {game.injury ? (
+          <div className="mt-1.5">
+            <InjuryStatusTag tag={game.injury} />
+          </div>
+        ) : null}
       </div>
       {game.showProbability && game.topProbabilityText ? (
         <div
@@ -131,7 +153,10 @@ function WebBoard({
       <section className="flex flex-col gap-7 rounded-hero bg-brand p-[clamp(22px,4cqi,44px)] text-white">
         <div className="flex flex-wrap items-end justify-between gap-5">
           <div className="flex max-w-[620px] flex-col gap-3">
-            <div className="font-mono text-eyebrow font-semibold uppercase text-accent">
+            <div
+              data-testid="today-hero-eyebrow"
+              className="font-mono text-[12px] font-semibold uppercase leading-[1.2] tracking-[0.12em] text-accent"
+            >
               {eyebrow}
             </div>
             <h1 className="font-bold text-hero text-white">
@@ -271,8 +296,11 @@ function GamesBlock({
                   <span className="w-9 font-mono text-xs font-bold text-brand">{game.homeAbbr}</span>
                   <span className="truncate text-[15px] font-bold">{game.homeName}</span>
                 </div>
-                <div className="mt-1 truncate text-xs text-muted">
-                  {game.topText ? `Top read · ${game.topText}` : "Top read · No read on this game"}
+                <div className="mt-1 flex items-center gap-2">
+                  <span className="truncate text-xs text-muted">
+                    {game.topText ? `Top read · ${game.topText}` : "Top read · No read on this game"}
+                  </span>
+                  {game.injury ? <InjuryStatusTag tag={game.injury} /> : null}
                 </div>
               </div>
               <div className="flex shrink-0 flex-col items-end gap-2">
@@ -449,16 +477,12 @@ export function TodayBoard({ league }: { league: LeagueSegment }) {
 
   const events = eventsQuery.data?.events ?? [];
   const slateDate = eventsQuery.data?.date || selectedDate;
-  const picks = picksQuery.data?.picks ?? [];
-  const reads = picksQuery.isSuccess ? todayReads(picks, league, slateDate, 3, events) : [];
-  const games = todayGames(
-    events,
-    picksQuery.isSuccess ? picks : [],
-    league,
-    slateDate,
-  );
+  const loadedPicks = picksQuery.data?.picks ?? [];
+  const boardPicks = picksQuery.isSuccess ? loadedPicks : [];
+  const reads = picksQuery.isSuccess ? todayReads(boardPicks, league, slateDate, 3, events) : [];
+  const games = todayGames(events, boardPicks, league, slateDate, loadedPicks);
   const picksHref = league === "wnba" ? "/wnba/picks" : "/picks";
-  const picksCount = picksQuery.isSuccess ? picksQuery.data.total_picks : null;
+  const picksCount = picksQuery.isSuccess ? picksShownCount(picksQuery.data) : null;
   const picksLabel = picksQuery.isLoading
     ? "Loading reads"
     : picksQuery.isError
@@ -471,10 +495,10 @@ export function TodayBoard({ league }: { league: LeagueSegment }) {
     games: games.map((game) => {
       if (game.topSource === "event") return game;
       if (picksQuery.isLoading) {
-        return { ...game, topText: "Loading the top read", topProbabilityText: null, showProbability: false, tier: null };
+        return { ...game, topText: "Loading the top read", topProbabilityText: null, showProbability: false, tier: null, injury: null };
       }
       if (picksQuery.isError) {
-        return { ...game, topText: "Top read unavailable", topProbabilityText: null, showProbability: false, tier: null };
+        return { ...game, topText: "Top read unavailable", topProbabilityText: null, showProbability: false, tier: null, injury: null };
       }
       return game;
     }),
@@ -483,7 +507,7 @@ export function TodayBoard({ league }: { league: LeagueSegment }) {
     picksLabel,
     blurb:
       league === "nba"
-        ? "Each prop gets one probability, built from market prices, recent form, projection and matchup. Start with the strongest calls, or open any game."
+        ? "Each prop gets one probability, built from market prices, recent form, all-game history, and matchup. Start with the strongest calls, or open any game."
         : "Each card is a historical hit rate from tonight's board. Start with the strongest calls, or open any game.",
   };
 

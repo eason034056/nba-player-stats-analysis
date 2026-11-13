@@ -297,14 +297,18 @@ class TestRunDailyAnalysisLeagueRouting:
             )
         )
 
-        assert captured == ["daily_picks:nba:2026-05-14:tz480"]
+        assert captured == ["daily_picks:nba:v2:2026-05-14:tz480"]
 
-    # ---- 2.4 Projection skip on WNBA -------------------------------------
+    # ---- 2.4 No projection client for either league ----------------------
 
-    def test_wnba_does_not_call_projection_service(self, monkeypatch):
-        """WNBA projections aren't wired today (no SportsDataIO WNBA
-        wrapper). The pipeline MUST skip the network call rather than
-        hit it and catch an error — clean log, no spurious quota burn."""
+    def test_neither_league_imports_a_projection_service(self):
+        """NBA and WNBA share one analysis tree and neither calls a projection client."""
+        import app.services.daily_analysis as daily_analysis
+
+        assert not hasattr(daily_analysis, "projection_service")
+
+    def test_wnba_analysis_still_runs_without_a_projection_client(self, monkeypatch):
+        """WNBA sources stay on the Odds API and the WNBA CSV."""
         service = DailyAnalysisService()
 
         monkeypatch.setattr(
@@ -314,15 +318,6 @@ class TestRunDailyAnalysisLeagueRouting:
         monkeypatch.setattr(
             "app.services.daily_analysis.cache_service.set", AsyncMock()
         )
-
-        projection_mock = AsyncMock(return_value={})
-        monkeypatch.setattr(
-            "app.services.daily_analysis.projection_service.get_projections",
-            projection_mock,
-        )
-
-        # Single event so the pipeline gets past the "no events" early return.
-        # WNBA body: the first recorded NBA event, league fields only rewritten.
         service._get_events_for_date = AsyncMock(
             return_value=[
                 _listed_event(
@@ -334,49 +329,13 @@ class TestRunDailyAnalysisLeagueRouting:
                 )
             ]
         )
-        # No props → no analyse work; we only care about the projection call.
         service._get_props_for_market = AsyncMock(return_value=[])
 
-        asyncio.run(
+        result = asyncio.run(
             service.run_daily_analysis(date="2026-05-14", league="wnba")
         )
-
-        projection_mock.assert_not_awaited()
-
-    def test_nba_still_calls_projection_service(self, monkeypatch):
-        """Mirror guard — NBA path MUST keep calling projection_service so
-        the SPO-35 skip flag stays scoped to WNBA only."""
-        service = DailyAnalysisService()
-
-        monkeypatch.setattr(
-            "app.services.daily_analysis.cache_service.get",
-            AsyncMock(return_value=None),
-        )
-        monkeypatch.setattr(
-            "app.services.daily_analysis.cache_service.set", AsyncMock()
-        )
-
-        projection_mock = AsyncMock(return_value={})
-        monkeypatch.setattr(
-            "app.services.daily_analysis.projection_service.get_projections",
-            projection_mock,
-        )
-
-        service._get_events_for_date = AsyncMock(
-            return_value=[
-                _listed_event(
-                    "nba-evt-1",
-                    "Lakers",
-                    "Warriors",
-                    "2026-05-14T03:00:00Z",
-                )
-            ]
-        )
-        service._get_props_for_market = AsyncMock(return_value=[])
-
-        asyncio.run(service.run_daily_analysis(date="2026-05-14"))
-
-        projection_mock.assert_awaited_once()
+        assert result.picks == []
+        assert result.stats is not None
 
     # ---- 2.5 CSV service routing inside _analyze_single_event ------------
 

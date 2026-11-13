@@ -320,9 +320,9 @@ export function ResultsTable({ data, isLoading }: ResultsTableProps) {
               <span className="font-semibold">
                 {getMarketDisplayName(data.market)}
               </span>{" "}
-              for this game. Historical and projection panels remain
-              available below; the odds tile lights up automatically on the
-              next snapshot fetch when inventory appears.
+              for this game. The game log on this page stays available. The odds
+              tile lights up automatically on the next snapshot fetch when
+              inventory appears.
             </p>
             {data.message && (
               <p className="text-gray text-xs mt-2 italic">
@@ -356,8 +356,8 @@ export function ResultsTable({ data, isLoading }: ResultsTableProps) {
         </p>
       )}
 
-      <div className="table-container overflow-hint">
-        <table className="table">
+      <div data-testid="odds-table-scroll" className="table-container overflow-hint max-w-full overflow-x-auto">
+        <table className="table max-md:min-w-[760px]">
           <thead>
             <tr>
               <th>Bookmaker</th>

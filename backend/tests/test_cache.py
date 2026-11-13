@@ -312,6 +312,64 @@ class TestClearDailyPicksCache:
         deleted = await cache_service.clear_daily_picks_cache()
         assert deleted == 0
 
+    def _seed_mixed_daily_picks(self, fake_client) -> None:
+        """League keys plus the two pre-SPO-35 shapes that have no league segment."""
+        fake_client.store.clear()
+        fake_client.store["daily_picks:2026-11-11:tz-360"] = "legacy-tz"
+        fake_client.store["daily_picks:2026-11-11"] = "legacy-date"
+        fake_client.store["daily_picks:nba:v2:2026-11-11:tz-360"] = "v2"
+        fake_client.store["daily_picks:nba:2026-11-11:tz-360"] = "nba"
+        fake_client.store["daily_picks:wnba:2026-11-11:tz-360"] = "wnba"
+
+    @pytest.mark.asyncio
+    async def test_nba_clear_drops_legacy_date_keys_and_keeps_wnba(
+        self, cache_service, fake_client
+    ):
+        """NBA flush deletes v2, the unversioned NBA key, and pre-league keys.
+
+        Pre-SPO-35 keys are ``daily_picks:{date}:tz{offset}`` and
+        ``daily_picks:{date}``. ``daily_picks:wnba:*`` stays.
+        """
+        self._seed_mixed_daily_picks(fake_client)
+
+        deleted = await cache_service.clear_daily_picks_cache("nba")
+
+        assert deleted == 4
+        assert fake_client.store == {
+            "daily_picks:wnba:2026-11-11:tz-360": "wnba",
+        }
+
+    @pytest.mark.asyncio
+    async def test_wnba_clear_drops_only_the_wnba_key(
+        self, cache_service, fake_client
+    ):
+        """WNBA flush deletes ``daily_picks:wnba:*`` and leaves NBA and legacy keys."""
+        self._seed_mixed_daily_picks(fake_client)
+
+        deleted = await cache_service.clear_daily_picks_cache("wnba")
+
+        assert deleted == 1
+        assert "daily_picks:wnba:2026-11-11:tz-360" not in fake_client.store
+        assert fake_client.store == {
+            "daily_picks:2026-11-11:tz-360": "legacy-tz",
+            "daily_picks:2026-11-11": "legacy-date",
+            "daily_picks:nba:v2:2026-11-11:tz-360": "v2",
+            "daily_picks:nba:2026-11-11:tz-360": "nba",
+        }
+
+    @pytest.mark.asyncio
+    async def test_clear_without_league_drops_every_daily_picks_key(
+        self, cache_service, fake_client
+    ):
+        """``league=None`` still sweeps every ``daily_picks:*`` key."""
+        self._seed_mixed_daily_picks(fake_client)
+        fake_client.store["events:nba:2026-11-11:us"] = "events"
+
+        deleted = await cache_service.clear_daily_picks_cache(None)
+
+        assert deleted == 5
+        assert fake_client.store == {"events:nba:2026-11-11:us": "events"}
+
 
 # ===========================================================================
 # 9. close()

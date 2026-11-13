@@ -245,7 +245,7 @@ class TestRecordedCapture:
         reads = {
             item.player: item
             for item in assemble_event_reads(
-                event_id, rows, market="player_points", projections={}
+                event_id, rows, market="player_points"
             ).reads
         }
         for pick in picks:
@@ -266,12 +266,12 @@ class TestRecordedCapture:
             if pick.combined_probability is not None
             and reads[pick.player_name].combined_probability is not None
         ]
-        assert max(gaps) == pytest.approx(0.0069, abs=0.0001)
+        assert max(gaps) == pytest.approx(0.0074, abs=0.0001)
         walker = next(pick for pick in picks if pick.player_name == "Nickeil Alexander-Walker")
-        assert walker.combined_probability == pytest.approx(0.6730)
-        assert reads[walker.player_name].combined_probability == pytest.approx(0.6661)
-        assert walker.tier == "Playable"
-        assert reads[walker.player_name].tier == "Playable"
+        assert walker.combined_probability == pytest.approx(0.6088)
+        assert reads[walker.player_name].combined_probability == pytest.approx(0.6014)
+        assert walker.tier == "Lean"
+        assert reads[walker.player_name].tier == "Lean"
 
     def test_under_pick_tier_is_from_the_under_side_blend(self):
         picks = {pick.player_name: pick for pick in _stored_picks()}
@@ -290,18 +290,15 @@ class TestReadsRoute:
         monkeypatch.setattr("app.services.event_reads.cache_service", cache)
         from app.services.odds_gateway import odds_gateway
         from app.services.odds_theoddsapi import odds_provider
-        from app.services.projection_service import projection_service
 
         spies = {
             "gateway": AsyncMock(),
             "event_odds": AsyncMock(),
             "events": AsyncMock(),
-            "projections": AsyncMock(),
         }
         monkeypatch.setattr(odds_gateway, "get_market_snapshot", spies["gateway"])
         monkeypatch.setattr(odds_provider, "get_event_odds", spies["event_odds"])
         monkeypatch.setattr(odds_provider, "get_events", spies["events"])
-        monkeypatch.setattr(projection_service, "get_projections", spies["projections"])
         return db, spies
 
     def _get(self, path, params=None):
@@ -323,7 +320,7 @@ class TestReadsRoute:
         assert self._get(base, {"market": "player_points"}).status_code == 200
         assert self._get(base, {"market": ""}).status_code == 200
 
-    def test_no_odds_api_or_sportsdata_call_on_projection_miss_or_redis_error(self, monkeypatch):
+    def test_no_odds_api_call_and_no_projection_cache_read(self, monkeypatch):
         event_id, rows = _points_rows()
         cache = _FakeCache(fail_projections=True)
         db, spies = self._patch(monkeypatch, rows, cache)
@@ -332,7 +329,7 @@ class TestReadsRoute:
         assert response.json()["reads"]
         for spy in spies.values():
             assert spy.await_count == 0
-        assert any(key.startswith("projections:nba:2026-11-09") for key in cache.gets)
+        assert not any(str(key).startswith("projections:") for key in cache.gets)
 
     def test_empty_snapshot_is_200_and_cached(self, monkeypatch):
         cache = _FakeCache()
@@ -355,10 +352,241 @@ class TestReadsRoute:
         event_id, rows = _points_rows()
         cache = _FakeCache()
         self._patch(monkeypatch, rows, cache)
-        asyncio.run(get_event_reads(event_id, market="player_points", projections={}))
+        asyncio.run(get_event_reads(event_id, market="player_points"))
         assert cache.sets == [(event_reads_cache_key(event_id, "player_points"), 60)]
 
     def test_wnba_routes_have_no_reads_endpoint(self):
         paths = {getattr(route, "path", "") for route in app.routes}
         assert "/api/nba/events/{event_id}/reads" in paths
         assert not any(path.startswith("/api/wnba") and path.endswith("/reads") for path in paths)
+
+
+class TestRosterTeamOnEvent:
+    """team_code on bulk props goes through team_on_event, not latest_team.
+
+    The recorded Celtics at 76ers case lives in test_spo121_bulk_reads.py.
+    These cases cover a missing event club, a mid-season trade date, and
+    the clubs stored beside a cached props document. The game log is the
+    shipped SPO-122 excerpt; there is no Odds API body here.
+    """
+
+    @pytest.fixture
+    def excerpt_service(self, monkeypatch):
+        from pathlib import Path
+
+        from app.services.csv_player_history import CSVPlayerHistoryService
+
+        excerpt = (
+            Path(__file__).resolve().parents[1]
+            / "tests"
+            / "fixtures"
+            / "csv"
+            / "spo122_anfernee_simons_excerpt.csv"
+        )
+        monkeypatch.setattr(
+            "app.services.csv_player_history.CSV_PATH",
+            str(excerpt),
+        )
+        service = CSVPlayerHistoryService(league="nba")
+        service.load_csv()
+        return service
+
+    def test_missing_home_or_away_falls_back_to_the_log_club(self, excerpt_service):
+        from app.services.bulk_props import roster_fields
+
+        latest_pos = excerpt_service.latest_position("Anfernee Simons")
+        for home, away in (
+            ("Philadelphia 76ers", ""),
+            ("", "Boston Celtics"),
+            ("", ""),
+            ("  ", "Boston Celtics"),
+        ):
+            position, code = roster_fields(
+                "Anfernee Simons",
+                excerpt_service,
+                home_team=home,
+                away_team=away,
+                event_day="2026-11-10",
+            )
+            assert position == latest_pos
+            assert code == "CHI"
+
+    def test_trade_date_uses_the_club_on_that_day(self, excerpt_service):
+        from app.services.bulk_props import roster_fields
+
+        # First Bulls log is 2026-02-05 vs Toronto. Position stays the
+        # newest Pos, not the trade-day Pos.
+        position, code = roster_fields(
+            "Anfernee Simons",
+            excerpt_service,
+            home_team="Chicago Bulls",
+            away_team="Toronto Raptors",
+            event_day="2026-02-05",
+        )
+        assert code == "CHI"
+        assert position == excerpt_service.latest_position("Anfernee Simons")
+
+    def test_trade_date_does_not_reuse_the_older_stint(self, excerpt_service):
+        from app.services.bulk_props import roster_fields
+
+        # Same calendar day, but the event clubs are his former team.
+        # team_on_event must not reach back to the Celtics stint.
+        _, code = roster_fields(
+            "Anfernee Simons",
+            excerpt_service,
+            home_team="Boston Celtics",
+            away_team="Milwaukee Bucks",
+            event_day="2026-02-05",
+        )
+        assert code is None
+
+    def test_last_game_before_the_trade_keeps_the_old_club(self, excerpt_service):
+        from app.services.bulk_props import roster_fields
+
+        _, code = roster_fields(
+            "Anfernee Simons",
+            excerpt_service,
+            home_team="Boston Celtics",
+            away_team="Milwaukee Bucks",
+            event_day="2026-02-01",
+        )
+        assert code == "BOS"
+
+    def test_does_not_reuse_an_older_stint_when_facing_the_former_club(
+        self, excerpt_service
+    ):
+        from app.services.bulk_props import roster_fields
+
+        # 2026-02-11 is Bulls at Celtics, after the trade.
+        _, code = roster_fields(
+            "Anfernee Simons",
+            excerpt_service,
+            home_team="Chicago Bulls",
+            away_team="Boston Celtics",
+            event_day="2026-02-11",
+        )
+        assert code == "CHI"
+
+    def test_abbreviation_event_clubs_canonicalise(self, excerpt_service):
+        from app.services.bulk_props import roster_fields
+
+        _, white = roster_fields(
+            "Derrick White",
+            excerpt_service,
+            home_team="PHI",
+            away_team="BOS",
+            event_day="2026-11-10",
+        )
+        assert white == "BOS"
+        _, simons = roster_fields(
+            "Anfernee Simons",
+            excerpt_service,
+            home_team="PHI",
+            away_team="BOS",
+            event_day="2026-11-10",
+        )
+        assert simons is None
+
+    def test_cache_document_keeps_clubs_off_the_public_body(self, excerpt_service):
+        from datetime import date
+
+        from app.models.schemas import (
+            BulkPropBook,
+            BulkPropMarket,
+            BulkPropPlayer,
+            BulkPropsResponse,
+        )
+        from app.services.bulk_props import (
+            _ROSTER_EVENT_KEY,
+            _cache_document,
+            _clubs_from_cache,
+            attach_roster_fields,
+        )
+
+        payload = BulkPropsResponse(
+            event_id="evt",
+            source="snapshot",
+            markets=[
+                BulkPropMarket(
+                    market="player_points",
+                    players=[
+                        BulkPropPlayer(
+                            player="Anfernee Simons",
+                            line=9.5,
+                            bookmakers_count=1,
+                            books=[BulkPropBook(bookmaker="draftkings", line=9.5)],
+                        )
+                    ],
+                )
+            ],
+        )
+        document = _cache_document(
+            payload,
+            "Philadelphia 76ers",
+            "Boston Celtics",
+            date(2026, 11, 10),
+        )
+        assert document[_ROSTER_EVENT_KEY] == {
+            "home_team": "Philadelphia 76ers",
+            "away_team": "Boston Celtics",
+            "event_day": "2026-11-10",
+        }
+        parsed = BulkPropsResponse.model_validate(document)
+        assert parsed.model_dump() == payload.model_dump()
+        home, away, event_day = _clubs_from_cache(document)
+        assert (home, away, event_day) == (
+            "Philadelphia 76ers",
+            "Boston Celtics",
+            "2026-11-10",
+        )
+        enriched = attach_roster_fields(
+            parsed,
+            excerpt_service,
+            home_team=home,
+            away_team=away,
+            event_day=event_day,
+        )
+        assert enriched.markets[0].players[0].team_code is None
+        assert (
+            enriched.markets[0].players[0].position
+            == excerpt_service.latest_position("Anfernee Simons")
+        )
+
+    def test_cache_without_clubs_falls_back_to_the_log_club(self, excerpt_service):
+        from app.models.schemas import (
+            BulkPropBook,
+            BulkPropMarket,
+            BulkPropPlayer,
+            BulkPropsResponse,
+        )
+        from app.services.bulk_props import _clubs_from_cache, attach_roster_fields
+
+        payload = BulkPropsResponse(
+            event_id="evt",
+            source="snapshot",
+            markets=[
+                BulkPropMarket(
+                    market="player_points",
+                    players=[
+                        BulkPropPlayer(
+                            player="Anfernee Simons",
+                            line=9.5,
+                            bookmakers_count=1,
+                            books=[BulkPropBook(bookmaker="draftkings", line=9.5)],
+                        )
+                    ],
+                )
+            ],
+        )
+        home, away, event_day = _clubs_from_cache(payload.model_dump(mode="json"))
+        assert (home, away, event_day) == ("", "", None)
+        enriched = attach_roster_fields(
+            payload,
+            excerpt_service,
+            home_team=home,
+            away_team=away,
+            event_day=event_day,
+        )
+        # A pre-fix cache document has no roster_event, so the lookup
+        # follows the latest log club (Bulls) even on a Celtics game.
+        assert enriched.markets[0].players[0].team_code == "CHI"

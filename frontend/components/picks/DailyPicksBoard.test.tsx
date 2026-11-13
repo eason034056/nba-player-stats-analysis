@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import { screen } from "@testing-library/react";
+import { screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 
@@ -156,13 +156,18 @@ describe("DailyPicksBoard", () => {
     expect(onRetry).toHaveBeenCalledOnce();
   });
 
-  it("keeps the playable band below 70% and stacks the card on a narrow layout", async () => {
+  it("keeps the playable band below 70% and gives each card one slip control and a game link", async () => {
     const user = userEvent.setup();
     renderBoard();
 
-    const card = screen.getByRole("link", { name: "Bam Adebayo" }).closest("article");
-    expect(card?.className).toContain("flex-col");
-    expect(card?.className).toContain("md:flex-row");
+    const link = screen.getByRole("link", { name: "Bam Adebayo" });
+    const card = link.closest("article");
+    expect(card).not.toBeNull();
+    expect(link).toHaveAttribute("href", expect.stringContaining("/event/"));
+    expect(within(card!).getAllByRole("button").map((button) => button.getAttribute("aria-label"))).toEqual([
+      "Add to Bet Slip",
+    ]);
+    expect(within(card!).getByTestId("pick-rate")).toBeInTheDocument();
     const confidence = screen.getByRole("group", { name: "Confidence" });
     expect(confidence.className).toContain("overflow-x-auto");
     expect(confidence.className).toContain("md:flex-wrap");
@@ -184,5 +189,99 @@ describe("DailyPicksBoard", () => {
 
     expect(screen.getByText("Tyrese Haliburton")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "All" })).toHaveAttribute("aria-pressed", "true");
+  });
+
+  it("renders no projection, edge, minutes, injury, or lineup when those fields are null", () => {
+    const blank = {
+      ...picks.picks[0],
+      tier: "Strong play" as const,
+      combined_probability: 0.72,
+      has_projection: false,
+      projected_value: null,
+      projected_minutes: null,
+      edge: null,
+      injury_status: null,
+      lineup_confirmed: null,
+    };
+    renderBoard({ picks: [blank], teams: ["MIA"], showLineup: false });
+    const card = screen.getByRole("article");
+    expect(card).toHaveTextContent("Bam Adebayo");
+    expect(card).toHaveTextContent("72%");
+    expect(card.textContent ?? "").not.toMatch(/Proj|Edge|\bmin\b|NaN|—|Questionable|Lineup|Projection|Injury/);
+  });
+
+  it("renders an Out or Questionable tag and no lineup-confirmed tag", () => {
+    const marked = {
+      ...picks.picks[0],
+      tier: "Strong play" as const,
+      combined_probability: 0.72,
+      has_projection: false,
+      projected_value: null,
+      projected_minutes: null,
+      edge: null,
+      injury_status: "Questionable",
+      lineup_confirmed: true,
+    };
+    renderBoard({ picks: [marked], teams: ["MIA"], showLineup: false });
+    expect(screen.getByText("Questionable")).toBeInTheDocument();
+    expect(screen.queryByText("Lineup confirmed")).not.toBeInTheDocument();
+  });
+
+  it("dims an Out pick at the end with no bar, percent, or slip, and leaves Questionable unchanged", async () => {
+    const user = userEvent.setup();
+    const base = picks.picks[0];
+    const out = {
+      ...base,
+      player_name: "Jimmy Butler",
+      tier: null,
+      combined_probability: null,
+      probability: 0.91,
+      has_projection: false,
+      projected_value: null,
+      projected_minutes: null,
+      edge: null,
+      injury_status: "Out",
+      lineup_confirmed: null,
+    };
+    const questionable = {
+      ...base,
+      injury_status: "Questionable",
+      tier: "Playable" as const,
+      combined_probability: 0.74,
+      probability: 0.66,
+      lineup_confirmed: true as const,
+    };
+    const onToggleSlip = vi.fn();
+    renderBoard({
+      picks: [out, questionable],
+      teams: ["MIA"],
+      showLineup: true,
+      onToggleSlip,
+    });
+
+    expect(screen.getByText("picks").previousElementSibling).toHaveTextContent("1");
+    expect(screen.getByText("strong").previousElementSibling).toHaveTextContent("1");
+
+    const cards = screen.getAllByRole("article");
+    expect(cards).toHaveLength(2);
+    expect(cards[0]).toHaveTextContent("Bam Adebayo");
+    expect(cards[0]).toHaveTextContent("74%");
+    expect(cards[0]).toHaveTextContent("Questionable");
+    expect(cards[0].className).not.toContain("opacity-60");
+    expect(within(cards[0]).getByRole("button", { name: "Add to Bet Slip" })).toBeInTheDocument();
+
+    expect(cards[1]).toHaveTextContent("Jimmy Butler");
+    expect(cards[1]).toHaveTextContent("Out");
+    expect(cards[1]).not.toHaveTextContent("%");
+    expect(cards[1]).not.toHaveTextContent("—");
+    expect(cards[1]).not.toHaveTextContent("Lineup");
+    expect(cards[1]).not.toHaveTextContent("Def");
+    expect(cards[1].querySelector("a")).toHaveAttribute("href", expect.stringContaining("/event/"));
+    expect(within(cards[1]).queryByRole("button")).not.toBeInTheDocument();
+    expect(onToggleSlip).not.toHaveBeenCalled();
+
+    await user.click(screen.getByRole("button", { name: "Strong ≥70%" }));
+    expect(screen.queryByText("Jimmy Butler")).not.toBeInTheDocument();
+    expect(screen.getByText("Bam Adebayo")).toBeInTheDocument();
   });
 });

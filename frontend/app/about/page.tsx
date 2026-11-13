@@ -1,9 +1,8 @@
 /**
  * /about — Method, shared by NBA and WNBA.
  *
- * The layout follows the November 2026 prototype. The copy describes
- * the calculations the app actually runs. A five-signal blend and
- * signal verdicts are marked planned because the API does not return them.
+ * The blend copy mirrors backend/app/services/pick_signals.py and
+ * pick_signal_constants.py. Change them together.
  */
 
 import type { Metadata } from "next";
@@ -12,8 +11,36 @@ import Link from "next/link";
 export const metadata: Metadata = {
   title: "Method",
   description:
-    "How No-Vig reads a prop: remove the bookmaker margin, then show the historical hit rate and any projection the API returns.",
+    "How No-Vig reads a prop: remove the bookmaker margin, then weigh the fair price against the player's own numbers.",
 };
+
+const BLEND_SIGNALS: ReadonlyArray<{ label: string; detail: string; role: string }> = [
+  {
+    label: "Market price",
+    detail: "No-vig consensus for the side, across the books that post the line. Without it there is no combined probability.",
+    role: "Base",
+  },
+  {
+    label: "Last 10 games",
+    detail: "How often the player cleared the line in the last 10 games.",
+    role: "± 0.15",
+  },
+  {
+    label: "All-game hit rate",
+    detail: "How often the player cleared the line across the stored game log.",
+    role: "± 0.15",
+  },
+  {
+    label: "Opponent defense",
+    detail: "Where the opponent ranks against the player's position.",
+    role: "± 0.15",
+  },
+  {
+    label: "Projection",
+    detail: "Not used yet. It returns when a projection model ships.",
+    role: "Off",
+  },
+];
 
 export default function AboutPage() {
   return (
@@ -23,10 +50,8 @@ export default function AboutPage() {
           How we read a prop
         </h1>
         <p className="max-w-[720px] text-base leading-relaxed text-muted">
-          The price and the player&apos;s history are separate reads. The bookmaker margin
-          comes out of the posted odds. The board then shows how often the player cleared
-          that line, plus a projection when the API returns one. Those numbers are not
-          blended into a single probability.
+          Two steps: strip the bookmaker margin out of the price, then weigh that fair price
+          against the player&apos;s own numbers.
         </p>
       </div>
 
@@ -63,33 +88,29 @@ export default function AboutPage() {
       <section className="flex flex-col gap-4 rounded-3xl border border-line bg-white p-5 md:p-7">
         <div className="flex items-baseline gap-3">
           <div className="font-mono text-[13px] font-bold text-brand">02</div>
-          <h2 className="text-xl font-bold">What the board actually shows</h2>
+          <h2 className="text-xl font-bold">Blend the signals</h2>
         </div>
         <p className="text-[15px] leading-relaxed text-ink">
-          Each row below is its own field. Nothing on this list is weighted into the percent
-          on Daily Picks.
+          On NBA the market price is the starting point. Recent form, the all-game hit rate,
+          and the opponent&apos;s defense nudge it up or down. Each nudge is capped, and so is
+          their sum, so no single number overrides the market. On a game page each signal also
+          says whether it supports the side.
         </p>
-        <ul className="flex flex-col">
-          <Signal
-            label="Historical hit rate"
-            detail="DailyPick.probability. How often the player landed on the stored side of the mode line. The sample size is n_games. The daily board keeps rows at or above 65% with at least 10 games."
-          />
-          <Signal
-            label="No-vig consensus"
-            detail="On a game page, the mean fair price from the no-vig route. It is not copied onto DailyPick.probability."
-          />
-          <Signal
-            label="Projection"
-            detail="NBA only, when the projection route returns projected_value, edge, and minutes. WNBA has no projection route, so those tags stay hidden."
-          />
-          <Signal
-            label="Opponent rank"
-            detail="opponent_rank or opponent_position_rank, shown as Def # only when the number is present. A null rank stays blank."
-          />
+        <ul aria-label="Signals in the blend" className="flex flex-col">
+          {BLEND_SIGNALS.map((signal) => (
+            <Signal key={signal.label} {...signal} />
+          ))}
         </ul>
-        <p className="rounded-2xl bg-[#F6F2D2] px-4 py-3 text-sm leading-6 text-yellow">
-          Planned: one blended probability, and Supports / Neutral / Against verdicts.
-          The API does not return them, so this app does not show them.
+        <div className="overflow-x-auto rounded-2xl bg-dark px-[18px] py-4 font-mono text-[13px] leading-[1.9] text-[#EDE7F8]">
+          <div>
+            nudges = last10 + all_game + defense{" "}
+            <span className="text-[#8F86A3]">{"// each capped at ± 0.15 log-odds"}</span>
+          </div>
+          <div className="text-accent">p = sigmoid(logit(consensus) + a + b × clip(nudges, ± 0.35))</div>
+        </div>
+        <p className="text-sm leading-6 text-muted">
+          a and b are fit on past regular-season games. A player listed Out gets no number.
+          WNBA picks have no market blend yet, so their percent is the historical hit rate.
         </p>
       </section>
 
@@ -99,8 +120,8 @@ export default function AboutPage() {
           <h2 className="text-xl font-bold">Read the tier</h2>
         </div>
         <p className="text-[15px] leading-relaxed">
-          The tier is a display bucket on the historical hit rate. It is not a field the
-          API sends, and it is not a verdict.
+          The tier is a bucket on the percent you see: the combined probability on NBA, the
+          historical hit rate on WNBA. The API sends it with each read.
         </p>
         <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2 lg:grid-cols-4">
           <Tier name="Strong play" range="≥ 70%" className="bg-accent text-brand-ink" />
@@ -109,16 +130,16 @@ export default function AboutPage() {
           <Tier name="Pass" range="< 56%" className="bg-[#E2E2E2] text-[#4A4458]" />
         </div>
         <p className="text-sm leading-6 text-muted">
-          Lean only and Pass do not appear on Daily Picks with the current service, because
-          rows below 65% or under 10 games are dropped before the page loads them.
+          Daily Picks lists Strong play and Playable. Lean only shows up on a game page, where
+          every posted player gets a read. Below 56% there is no tier.
         </p>
       </section>
 
       <section className="rounded-3xl border border-line bg-white p-5 md:p-7">
         <h2 className="text-lg font-bold">NBA and WNBA</h2>
         <p className="mt-3 text-sm leading-6 text-muted">
-          Both leagues use the same no-vig formula and the same historical-rate board.
-          Picks and slips stay on separate routes.
+          Both leagues use the same no-vig formula. NBA blends it with the player&apos;s
+          numbers. WNBA shows the historical hit rate. Picks and slips stay on separate routes.
         </p>
         <ul className="mt-4 space-y-2 text-sm">
           <li>
@@ -178,11 +199,14 @@ function VigRow({ label, fill, percent }: { label: string; fill: string; percent
   );
 }
 
-function Signal({ label, detail }: { label: string; detail: string }) {
+function Signal({ label, detail, role }: { label: string; detail: string; role: string }) {
   return (
-    <li className="border-t border-[#EEEBF2] py-3">
-      <div className="text-[15px] font-bold">{label}</div>
-      <div className="mt-0.5 text-[13px] leading-6 text-muted">{detail}</div>
+    <li className="flex items-center gap-4 border-t border-[#EEEBF2] py-3">
+      <div className="min-w-0 flex-1">
+        <div className="text-[15px] font-bold">{label}</div>
+        <div className="mt-0.5 text-[13px] leading-6 text-muted">{detail}</div>
+      </div>
+      <div className="shrink-0 font-mono text-[13px] font-bold text-brand">{role}</div>
     </li>
   );
 }
