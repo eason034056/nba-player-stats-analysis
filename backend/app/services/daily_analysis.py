@@ -47,6 +47,7 @@ from app.services.prob import (
     posted_american_odds,
 )
 from app.services.cache import cache_service
+from app.settings import settings
 from app.services.defense_ranks import defense_fields
 from app.models.schemas import (
     AnalysisStats,
@@ -950,6 +951,23 @@ class DailyAnalysisService:
                         f"{date} (tz={tz_offset_minutes})"
                     )
                     return cached
+
+        # After the cache read, before any Odds API call or Redis write.
+        # A stored board is returned above. A miss becomes an empty board
+        # and is not stored. NBA never enters this branch.
+        if league_normalized == "wnba" and not settings.wnba_jobs_enabled:
+            logger.info(
+                "WNBA_JOBS_ENABLED is false; daily analysis skipped for %s",
+                date,
+            )
+            return DailyPicksResponse(
+                date=date,
+                analyzed_at=datetime.now(timezone.utc).isoformat(),
+                total_picks=0,
+                picks=[],
+                stats=None,
+                message="WNBA jobs are paused (WNBA_JOBS_ENABLED=false)",
+            )
 
         print(f"🚀 [{league_normalized.upper()}] Starting daily analysis: {date}")
 

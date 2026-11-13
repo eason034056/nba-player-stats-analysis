@@ -12,7 +12,7 @@ import logging
 import os
 import sys
 from pathlib import Path
-from unittest.mock import patch
+from unittest.mock import AsyncMock, patch
 
 import pytest
 
@@ -162,3 +162,163 @@ def test_compose_passes_wnba_jobs_enabled_to_the_backend() -> None:
     backend = text.split("container_name: no-vig-nba-backend", 1)[1]
     backend = backend.split("container_name:", 1)[0]
     assert "- WNBA_JOBS_ENABLED=${WNBA_JOBS_ENABLED:-true}" in backend
+
+
+@pytest.mark.asyncio
+async def test_wnba_fetch_and_store_does_not_write_when_the_flag_is_off(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The scrape, Redis, and Postgres all sit inside fetch_and_store."""
+    from app.services.lineup_service import wnba_lineup_service
+
+    monkeypatch.setattr(settings, "wnba_jobs_enabled", False)
+    scrape = AsyncMock(side_effect=AssertionError("scrape"))
+    monkeypatch.setattr("app.services.lineup_service.fetch_rotowire_lineups", scrape)
+    monkeypatch.setattr(
+        "app.services.lineup_service.cache_service.set",
+        AsyncMock(side_effect=AssertionError("redis")),
+    )
+    monkeypatch.setattr(
+        "app.services.lineup_service.db_service.execute",
+        AsyncMock(side_effect=AssertionError("postgres")),
+    )
+    monkeypatch.setattr(
+        "app.services.lineup_service.db_service.executemany",
+        AsyncMock(side_effect=AssertionError("postgres")),
+    )
+
+    assert await wnba_lineup_service.fetch_and_store("2026-07-01") == {}
+    scrape.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_nba_fetch_and_store_still_scrapes_when_the_flag_is_off(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from app.services.lineup_service import lineup_service
+
+    monkeypatch.setattr(settings, "wnba_jobs_enabled", False)
+    called = {"nba": False}
+
+    def _rotowire(date: str) -> dict:
+        called["nba"] = True
+        return {}
+
+    monkeypatch.setattr("app.services.lineup_service.fetch_rotowire_lineups", _rotowire)
+    monkeypatch.setattr(
+        "app.services.lineup_service.fetch_rotogrinders_lineups",
+        lambda date: {},
+    )
+    monkeypatch.setattr(lineup_service, "_log_fetch", AsyncMock())
+
+    with pytest.raises(RuntimeError):
+        await lineup_service.fetch_and_store("2026-07-01")
+    assert called["nba"] is True
+
+
+@pytest.mark.asyncio
+async def test_wnba_daily_analysis_does_not_call_odds_or_write_redis(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from app.services.daily_analysis import daily_analysis_service
+
+    monkeypatch.setattr(settings, "wnba_jobs_enabled", False)
+    events = AsyncMock(side_effect=AssertionError("odds"))
+    monkeypatch.setattr(daily_analysis_service, "_get_events_for_date", events)
+    monkeypatch.setattr(
+        "app.services.daily_analysis.cache_service.get",
+        AsyncMock(return_value=None),
+    )
+    monkeypatch.setattr(
+        "app.services.daily_analysis.cache_service.set",
+        AsyncMock(side_effect=AssertionError("redis")),
+    )
+
+    result = await daily_analysis_service.run_daily_analysis(
+        date="2026-07-01",
+        use_cache=True,
+        league="wnba",
+    )
+    assert result.total_picks == 0
+    assert result.picks == []
+    assert result.message == "WNBA jobs are paused (WNBA_JOBS_ENABLED=false)"
+    events.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_wnba_daily_analysis_returns_a_stored_board_when_the_flag_is_off(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from app.models.schemas import DailyPicksResponse
+    from app.services.daily_analysis import daily_analysis_service
+
+    monkeypatch.setattr(settings, "wnba_jobs_enabled", False)
+    stored = DailyPicksResponse(
+        date="2026-07-01",
+        analyzed_at="2026-07-01T16:00:00+00:00",
+        total_picks=0,
+        picks=[],
+    )
+    monkeypatch.setattr(
+        "app.services.daily_analysis.cache_service.get",
+        AsyncMock(return_value=stored.model_dump()),
+    )
+    events = AsyncMock(side_effect=AssertionError("odds"))
+    monkeypatch.setattr(daily_analysis_service, "_get_events_for_date", events)
+
+    result = await daily_analysis_service.run_daily_analysis(
+        date="2026-07-01",
+        use_cache=True,
+        league="wnba",
+    )
+    assert result.date == "2026-07-01"
+    assert result.message is None
+    events.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_nba_daily_analysis_still_fetches_events_when_the_flag_is_off(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from app.services.daily_analysis import daily_analysis_service
+
+    monkeypatch.setattr(settings, "wnba_jobs_enabled", False)
+    events = AsyncMock(return_value=[])
+    monkeypatch.setattr(daily_analysis_service, "_get_events_for_date", events)
+
+    result = await daily_analysis_service.run_daily_analysis(
+        date="2026-07-01",
+        use_cache=False,
+        league="nba",
+    )
+    assert result.total_picks == 0
+    events.assert_awaited()
+
+
+def test_wnba_trigger_posts_return_409_when_the_flag_is_off(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from fastapi.testclient import TestClient
+
+    from app.main import app
+    from app.middleware.rate_limit import limiter
+
+    monkeypatch.setattr(settings, "wnba_jobs_enabled", False)
+    analysis = AsyncMock(side_effect=AssertionError("analysis"))
+    fetch = AsyncMock(side_effect=AssertionError("lineup"))
+    monkeypatch.setattr("app.api.wnba.daily_analysis_service.run_daily_analysis", analysis)
+    monkeypatch.setattr("app.api.wnba.wnba_lineup_service.fetch_and_store", fetch)
+    limiter.enabled = False
+    try:
+        client = TestClient(app)
+        picks = client.post("/api/wnba/daily-picks/trigger?date=2026-07-01")
+        lineups = client.post("/api/wnba/lineups/refresh?date=2026-07-01")
+    finally:
+        limiter.enabled = True
+
+    assert picks.status_code == 409
+    assert lineups.status_code == 409
+    assert picks.json()["detail"] == "WNBA jobs are paused (WNBA_JOBS_ENABLED=false)"
+    assert lineups.json()["detail"] == "WNBA jobs are paused (WNBA_JOBS_ENABLED=false)"
+    analysis.assert_not_called()
+    fetch.assert_not_called()

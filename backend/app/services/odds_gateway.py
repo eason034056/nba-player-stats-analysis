@@ -250,6 +250,13 @@ class OddsMarketGateway:
                 continue
 
             context = json.loads(member)
+            # Hot keys are mixed NBA and WNBA. Skip only the WNBA sport
+            # while the flag is off so that job does not call the Odds API.
+            if (
+                context.get("sport") == "basketball_wnba"
+                and not settings.wnba_jobs_enabled
+            ):
+                continue
             normalized_markets = self._normalize_csv(context["markets"])
             normalized_books = self._normalize_bookmakers(context["bookmakers"])
             snapshot_key = self._build_snapshot_key(

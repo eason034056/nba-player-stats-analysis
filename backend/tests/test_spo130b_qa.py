@@ -1,7 +1,7 @@
-"""SPO-130b QA: WNBA_JOBS_ENABLED parsing, NBA job shape, and the paths the flag does not reach.
+"""SPO-130b QA: WNBA_JOBS_ENABLED parsing, NBA job shape, compose passthrough, and the lineup read.
 
-The two xfail(strict=True) tests describe gaps found in review. When a gap is
-fixed the xfail turns into XPASS and fails the run, so remove the marker then.
+The compose line and the lineup read used to be xfail(strict=True). Both gaps
+are fixed, so those tests run for real.
 """
 
 from __future__ import annotations
@@ -95,20 +95,12 @@ def _compose_backend_env() -> set[str]:
     return set(re.findall(r"^\s+-\s+([A-Z][A-Z0-9_]*)=", block, flags=re.M))
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason="QA must-fix: docker-compose.yml lists backend env vars explicitly, so .env WNBA_JOBS_ENABLED never reaches the container",
-)
 def test_compose_passes_wnba_jobs_enabled_to_the_backend() -> None:
     names = _compose_backend_env()
     assert "DATABASE_REQUIRED" in names
     assert "WNBA_JOBS_ENABLED" in names
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason="QA should-fix: GET /api/wnba/lineups still fetches and upserts on a cache miss with the flag off",
-)
 def test_wnba_lineups_read_does_not_refetch_when_the_flag_is_off(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

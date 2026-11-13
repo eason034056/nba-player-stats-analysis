@@ -403,7 +403,10 @@ class SchedulerService:
         print("   - Odds Snapshot: Daily UTC 16:05, 22:05, 23:35")
         print("   - Hot Odds Key Prewarm: Every 30 seconds")
         print("   - Daily Analysis (NBA): Daily UTC 12:00")
-        print("   - Daily Analysis (WNBA): Daily UTC 12:00 (independent of NBA)")
+        if settings.wnba_jobs_enabled:
+            print("   - Daily Analysis (WNBA): Daily UTC 12:00 (independent of NBA)")
+        else:
+            print("   - Daily Analysis (WNBA): not registered (WNBA_JOBS_ENABLED is false)")
         print("   - CSV Download: Daily 10:00 Chicago time")
         print(
             "   - NBA Injury Refresh: Chicago 11:00-00:59 at :07 and :37"
