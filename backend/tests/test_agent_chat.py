@@ -925,7 +925,7 @@ async def test_agent_chat_service_reviews_entire_bet_slip():
 
 
 def test_agent_chat_endpoint_validates_action_and_uses_service(monkeypatch):
-    from app.api import agent as agent_api
+    from app.api import agent_deadline
 
     with TestClient(app) as client:
         invalid_response = client.post(
@@ -942,7 +942,7 @@ def test_agent_chat_endpoint_validates_action_and_uses_service(monkeypatch):
                 graph_runner=graph_runner
             ).handle_chat(request)
 
-        monkeypatch.setattr(agent_api.agent_chat_service, "handle_chat", fake_handle_chat)
+        monkeypatch.setattr(agent_deadline.agent_chat_service, "handle_chat", fake_handle_chat)
 
         response = client.post(
             "/api/nba/agent/chat",

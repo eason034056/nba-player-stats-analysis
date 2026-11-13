@@ -39,3 +39,16 @@ tags = {
   Project   = "sportslab"
   ManagedBy = "terraform"
 }
+
+# EC2 backend. Defaults match the variables.
+# domain empty derives <eip-with-dashes>.sslip.io. A real hostname wins.
+instance_type   = "t4g.small"
+root_volume_gb  = 30
+enable_ssh      = false
+domain          = ""
+acme_email      = ""
+alarm_email     = ""
+
+# Leave false until the repository name is set. No static deploy keys are created.
+enable_github_deploy_role = false
+# github_repository       = "owner/name"

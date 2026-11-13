@@ -1,0 +1,31 @@
+# Production site. DOMAIN is a hostname, never a bare IP.
+# An empty domain is refused by caddy-entrypoint.sh. There is no plain-HTTP site.
+# No trusted_proxies: Caddy replaces X-Forwarded-For with the TCP peer and
+# passes x-real-ip and x-sportslab-proxy-secret through. Do not add trusted_proxies.
+#
+# The hostname block turns on automatic HTTPS. The http:// block is only the
+# redirect. The ACME HTTP-01 path is excluded so the challenge is not redirected.
+{
+	servers {
+		timeouts {
+			read_body 125s
+			read_header 30s
+		}
+	}
+}
+
+{$DOMAIN} {
+	reverse_proxy backend:8000 {
+		flush_interval -1
+		transport http {
+			read_timeout 125s
+			write_timeout 125s
+			response_header_timeout 125s
+		}
+	}
+}
+
+http://{$DOMAIN} {
+	@insecure not path /.well-known/acme-challenge/*
+	redir @insecure https://{host}{uri} permanent
+}

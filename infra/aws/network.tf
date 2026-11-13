@@ -28,6 +28,11 @@ data "aws_subnets" "public" {
   }
 }
 
+data "aws_subnet" "selected" {
+  for_each = toset(local.subnet_ids)
+  id       = each.value
+}
+
 locals {
   vpc_id            = data.aws_vpc.selected.id
   subnet_ids        = data.aws_subnets.selected.ids
@@ -38,10 +43,24 @@ resource "aws_db_subnet_group" "this" {
   name        = "${local.name_prefix}-rds"
   description = "Subnets for ${local.name_prefix} RDS"
   subnet_ids  = local.subnet_ids
+
+  # A lifecycle precondition does not change name, description, or subnet_ids,
+  # so it does not replace a group that already exists.
+  lifecycle {
+    precondition {
+      condition     = length(distinct([for subnet in data.aws_subnet.selected : subnet.availability_zone])) >= 2
+      error_message = "The DB subnet group needs subnets in at least two availability zones. Set vpc_id to a VPC whose subnets span two AZs."
+    }
+  }
 }
 
-# sportslab-app when project is sportslab. No ingress yet. SPO-133 attaches
-# the backend EC2 instance to this group.
+# sportslab-app when project is sportslab. The description stays as first
+# applied. Egress stays inline, so Terraform keeps managing that one outbound
+# rule. Ingress is not declared inline. It lives only in aws_security_group_rule
+# (TCP 80, 443, and optional 22 in ec2.tf). Because this block has no ingress,
+# the provider leaves those rules alone. Do not add an inline ingress block
+# here. That would make this resource authoritative for ingress and remove the
+# separate rules on the next apply.
 resource "aws_security_group" "app" {
   name        = "${local.name_prefix}-app"
   description = "Future EC2 backend. No ingress. SPO-133 attaches the instance."

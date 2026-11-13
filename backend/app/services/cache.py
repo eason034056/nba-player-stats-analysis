@@ -5,10 +5,14 @@ Encapsulates Redis operations and provides caching capabilities.
 Caching reduces the number of external Odds API calls, lowering costs and improving response speed.
 """
 
+import asyncio
 import json
+import logging
 import redis.asyncio as redis
 from typing import Optional, Any
 from app.settings import settings
+
+logger = logging.getLogger(__name__)
 
 
 class CacheService:
@@ -42,8 +46,35 @@ class CacheService:
             socket_connect_timeout: Seconds the TCP connect may block.
         """
         self._client: Optional[redis.Redis] = None
+        # Loop that created _client. None means the caller installed the
+        # client itself (tests). A process-wide client must not be reused
+        # on a later TestClient loop.
+        self._loop: asyncio.AbstractEventLoop | None = None
         self._socket_timeout = socket_timeout
         self._socket_connect_timeout = socket_connect_timeout
+
+    def _release_foreign_client(self) -> None:
+        """Drop a client whose loop is not the one running now.
+
+        ``asyncio.run`` and each ``TestClient`` own a loop. Closing a
+        client on a loop that has already finished raises, and leaving
+        it in place makes the next lifespan close fail the same way.
+        """
+        if self._client is None or self._loop is None:
+            return
+        try:
+            running = asyncio.get_running_loop()
+        except RuntimeError:
+            running = None
+        if self._loop is running and running is not None and not running.is_closed():
+            return
+        self._client = None
+        closed = self._loop.is_closed()
+        self._loop = None
+        logger.warning(
+            "Dropped a Redis client opened on %s",
+            "a closed event loop" if closed else "a different event loop",
+        )
 
     async def get_client(self) -> redis.Redis:
         """
@@ -58,6 +89,7 @@ class CacheService:
         Returns:
             Redis client instance
         """
+        self._release_foreign_client()
         if self._client is None:
             kwargs: dict[str, Any] = {"decode_responses": True}
             if self._socket_timeout is not None:
@@ -65,6 +97,7 @@ class CacheService:
             if self._socket_connect_timeout is not None:
                 kwargs["socket_connect_timeout"] = self._socket_connect_timeout
             self._client = redis.from_url(settings.redis_url, **kwargs)
+            self._loop = asyncio.get_running_loop()
         return self._client
 
     async def get(self, key: str) -> Optional[Any]:
@@ -239,11 +272,24 @@ class CacheService:
         """
         Close the Redis connection.
 
-        Call this to free resources when the application ends.
+        Call this to free resources when the application ends. A client
+        opened on another loop is dropped here. Disconnect on this loop
+        can still raise ``Event loop is closed`` after TestClient has
+        finished that loop. Shutdown logs that and continues.
+        ``self._client`` is cleared either way.
         """
-        if self._client:
-            await self._client.close()
-            self._client = None
+        self._release_foreign_client()
+        client = self._client
+        self._client = None
+        self._loop = None
+        if client is None:
+            return
+        try:
+            await client.close()
+        except RuntimeError as exc:
+            if "Event loop is closed" not in str(exc):
+                raise
+            logger.warning("Redis close skipped; the event loop is already closed")
 
     async def acquire_lock(self, key: str, ttl: int) -> bool:
         """

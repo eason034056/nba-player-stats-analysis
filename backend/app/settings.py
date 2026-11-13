@@ -6,9 +6,11 @@ settings.py - 應用程式配置設定
 - 每個屬性都對應一個環境變數（大小寫不敏感）
 """
 
-from pydantic import SecretStr
+import re
+from typing import Any
+
+from pydantic import SecretStr, field_validator, model_validator
 from pydantic_settings import BaseSettings
-from typing import List
 
 
 class Settings(BaseSettings):
@@ -19,8 +21,11 @@ class Settings(BaseSettings):
     例如: odds_api_key 對應 ODDS_API_KEY 環境變數
     """
     
-    # The Odds API 設定
-    odds_api_key: str = ""  # The Odds API 的 API 金鑰
+    # The Odds API. Empty is allowed. Startup and the scheduler do not
+    # require it. WNBA odds and the shared provider (NBA events, props,
+    # snapshots, daily analysis) read it when they call out. NBA injury
+    # refresh uses balldontlie_api_key instead.
+    odds_api_key: str = ""
     odds_api_base_url: str = "https://api.the-odds-api.com"  # API 基礎 URL
 
     # BALLDONTLIE. balldontlie_api_key 對應 BALLDONTLIE_API_KEY。SecretStr 讓
@@ -57,9 +62,25 @@ class Settings(BaseSettings):
     lineup_active_refresh_interval_minutes: int = 15
     lineup_pre_tipoff_refresh_interval_minutes: int = 5
     
-    # CORS 設定
-    allowed_origins: str = "http://localhost:3000"  # 允許的前端來源，逗號分隔
-    
+    # CORS. CORS_ALLOWED_ORIGINS wins when it is set. ALLOWED_ORIGINS stays
+    # as the alias so local compose keeps working. Neither may contain '*'.
+    allowed_origins: str = "http://localhost:3000"
+    cors_allowed_origins: str | None = None
+    cors_allowed_origin_regex: str = ""
+
+    # Shared with the Vercel rewrite. Empty means x-real-ip and
+    # x-forwarded-for are never trusted. Loaded on EC2 from SSM.
+    vercel_proxy_secret: SecretStr = SecretStr("")
+    # False locally, in tests, and in deploy/docker-compose.prod.yml. That
+    # compose value wins over the env file. When true, every route except the
+    # health checks requires x-sportslab-proxy-secret.
+    proxy_secret_required: bool = False
+
+    # Whole agent-chat request, including a slip or board of several graphs.
+    # Must finish before Vercel's 120s rewrite limit. 100s leaves room for
+    # the proxy. The validator refuses a value above 105.
+    agent_chat_timeout_seconds: float = 100
+
     # 日誌等級
     log_level: str = "info"
 
@@ -81,15 +102,101 @@ class Settings(BaseSettings):
     # Chicago during the slate window, which is the same 30 minutes.
     # A snapshot younger than this is not refreshed again.
     nba_injuries_refresh_minutes: int = 30
-    
+
+    @field_validator("vercel_proxy_secret", mode="before")
+    @classmethod
+    def strip_vercel_proxy_secret(cls, value: object) -> object:
+        """Drop surrounding whitespace so a padded SSM value still matches."""
+        if isinstance(value, SecretStr):
+            return value.get_secret_value().strip()
+        if isinstance(value, str):
+            return value.strip()
+        return value
+
+    @model_validator(mode="after")
+    def refuse_required_proxy_secret_when_empty(self) -> "Settings":
+        """Do not start when the flag is on and the secret is blank."""
+        if self.proxy_secret_required and self.vercel_proxy_secret.get_secret_value() == "":
+            raise ValueError(
+                "PROXY_SECRET_REQUIRED is true but VERCEL_PROXY_SECRET is empty"
+            )
+        return self
+
+    @field_validator("allowed_origins", "cors_allowed_origins")
+    @classmethod
+    def reject_wildcard_origin(cls, value: str | None) -> str | None:
+        """Refuse '*' in the allow-list. A star is not a valid origin."""
+        if value is None:
+            return None
+        for part in value.split(","):
+            token = part.strip()
+            if "*" in token:
+                raise ValueError(
+                    "CORS allow-list must not include '*'. "
+                    "Use exact origins or CORS_ALLOWED_ORIGIN_REGEX."
+                )
+        return value
+
+    @field_validator("cors_allowed_origin_regex")
+    @classmethod
+    def reject_open_origin_regex(cls, value: str) -> str:
+        """Refuse a regex that matches an arbitrary origin, including '*'."""
+        text = value.strip()
+        if text == "":
+            return ""
+        if text == "*":
+            raise ValueError("CORS_ALLOWED_ORIGIN_REGEX must not be '*'")
+        try:
+            compiled = re.compile(text)
+        except re.error as exc:
+            raise ValueError(
+                f"CORS_ALLOWED_ORIGIN_REGEX is not a valid regular expression ({exc})"
+            ) from exc
+        probes = ("https://evil.example", "http://evil.example")
+        if any(compiled.fullmatch(probe) for probe in probes):
+            raise ValueError(
+                "CORS_ALLOWED_ORIGIN_REGEX must not match an arbitrary origin"
+            )
+        return text
+
+    @field_validator("agent_chat_timeout_seconds")
+    @classmethod
+    def bound_agent_chat_timeout(cls, value: float) -> float:
+        """Keep the deadline under the 120s proxy limit."""
+        if value <= 0 or value > 105:
+            raise ValueError(
+                "agent_chat_timeout_seconds must be greater than 0 and at most 105"
+            )
+        return value
+
     @property
-    def allowed_origins_list(self) -> List[str]:
+    def allowed_origins_list(self) -> list[str]:
+        """Comma-separated browser origins.
+
+        A non-empty CORS_ALLOWED_ORIGINS wins. Blank or unset falls back to
+        ALLOWED_ORIGINS so local compose can pass an empty override.
         """
-        將 allowed_origins 字串轉換為列表
-        支援多個來源用逗號分隔
-        """
-        return [origin.strip() for origin in self.allowed_origins.split(",")]
-    
+        chosen = self.cors_allowed_origins
+        if chosen is None or chosen.strip() == "":
+            chosen = self.allowed_origins
+        return [origin.strip() for origin in chosen.split(",") if origin.strip()]
+
+    @property
+    def cors_origin_regex(self) -> str | None:
+        """Regex for CORSMiddleware.allow_origin_regex. None when unset."""
+        text = self.cors_allowed_origin_regex.strip()
+        return text or None
+
+    def cors_middleware_kwargs(self) -> dict[str, Any]:
+        """Arguments for CORSMiddleware. allow_origin_regex is omitted when empty."""
+        return {
+            "allow_origins": self.allowed_origins_list,
+            "allow_origin_regex": self.cors_origin_regex,
+            "allow_credentials": True,
+            "allow_methods": ["*"],
+            "allow_headers": ["*"],
+        }
+
     @property
     def bot_api_keys_set(self) -> set:
         """All valid bot API keys (free + premium)."""

@@ -223,3 +223,80 @@ variable "backup_window" {
   default     = "07:00-08:00"
   description = "RDS daily backup window in UTC (hh24:mi-hh24:mi). Must not overlap maintenance_window."
 }
+variable "instance_type" {
+  type        = string
+  default     = "t4g.small"
+  description = "EC2 instance type for the backend host. t4g.small is the planned size. t4g.medium is the later step if the scheduler moves to its own process."
+
+  validation {
+    condition     = can(regex("^[a-z][a-z0-9]*\\.[a-z0-9]+$", var.instance_type))
+    error_message = "instance_type must look like t4g.small."
+  }
+}
+
+variable "root_volume_gb" {
+  type        = number
+  default     = 30
+  description = "Encrypted gp3 root volume size in GB."
+
+  validation {
+    condition     = var.root_volume_gb >= 30 && var.root_volume_gb <= 100
+    error_message = "root_volume_gb must be from 30 to 100."
+  }
+}
+
+variable "enable_ssh" {
+  type        = bool
+  default     = false
+  description = "Open TCP 22 on the app security group. Closed by default. When true, ingress is only var.allowed_cidrs. 0.0.0.0/0 is already rejected on that list."
+}
+
+variable "domain" {
+  type        = string
+  default     = ""
+  description = "Bare hostname for Caddy. Empty derives <eip-with-dashes>.sslip.io from the Elastic IP. A non-empty value wins. No scheme and no path."
+
+  validation {
+    condition     = var.domain == "" || can(regex("^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?(\\.[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?)+$", var.domain))
+    error_message = "domain must be empty or a bare hostname such as api.example.com."
+  }
+}
+
+variable "acme_email" {
+  type        = string
+  default     = ""
+  description = "Optional contact email for the ACME account. Empty omits the Caddy email option. Let's Encrypt still issues without it."
+
+  validation {
+    condition     = var.acme_email == "" || can(regex("^[^@[:space:]]+@[^@[:space:]]+\\.[^@[:space:]]+$", var.acme_email))
+    error_message = "acme_email must be empty or a single email address."
+  }
+}
+
+variable "alarm_email" {
+  type        = string
+  default     = ""
+  description = "Optional address for CloudWatch alarm email. Empty creates no SNS topic. The subscription stays pending until the inbox confirms it."
+
+  validation {
+    condition     = var.alarm_email == "" || can(regex("^[^@[:space:]]+@[^@[:space:]]+\\.[^@[:space:]]+$", var.alarm_email))
+    error_message = "alarm_email must be empty or a single email address."
+  }
+}
+
+variable "enable_github_deploy_role" {
+  type        = bool
+  default     = false
+  description = "Create the GitHub Actions OIDC provider and the deploy role. Leave false until github_repository is set and Eason is ready to apply it."
+}
+
+variable "github_repository" {
+  type        = string
+  default     = ""
+  description = "GitHub repository allowed to assume the deploy role, as owner/name. Required only when enable_github_deploy_role is true."
+
+  validation {
+    condition     = var.enable_github_deploy_role == false || can(regex("^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$", var.github_repository))
+    error_message = "github_repository must be owner/name when enable_github_deploy_role is true."
+  }
+}

@@ -16,8 +16,9 @@ from urllib.parse import urlsplit
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.api import agent, health, metrics, nba, wnba, wnba_agent, daily_picks, picks, odds_history, lineups
+from app.middleware.event_stream import EventStreamCacheControlMiddleware
 from app.middleware.logging_config import RequestLoggingMiddleware, setup_logging
-from app.middleware.rate_limit import install_rate_limiter
+from app.middleware.rate_limit import install_rate_limiter, require_configured_proxy_secret
 from app.dsn import mask_database_url, redact_secrets
 from app.services.cache import cache_service
 from app.services.db import db_service
@@ -57,7 +58,8 @@ async def lifespan(app: FastAPI):
     Usage:
         app = FastAPI(lifespan=lifespan)
     """
-    # 啟動時執行
+    # 啟動時執行。正式環境要求代理密鑰，空密鑰不應該把行程留在能收請求的狀態。
+    require_configured_proxy_secret()
     setup_logging()
     print("🚀 Starting No-Vig NBA API...")
     print(f"📊 Odds API Base URL: {settings.odds_api_base_url}")
@@ -148,13 +150,8 @@ app = FastAPI(
 # - allow_credentials: 是否允許攜帶 cookies
 # - allow_methods: 允許的 HTTP 方法
 # - allow_headers: 允許的 HTTP 標頭
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=settings.allowed_origins_list,  # 從設定讀取允許的來源
-    allow_credentials=True,
-    allow_methods=["*"],  # 允許所有 HTTP 方法（GET, POST, PUT, DELETE 等）
-    allow_headers=["*"],  # 允許所有標頭
-)
+app.add_middleware(CORSMiddleware, **settings.cors_middleware_kwargs())
+app.add_middleware(EventStreamCacheControlMiddleware)
 
 # Request logging middleware (structured JSON logs + in-process metrics)
 app.add_middleware(RequestLoggingMiddleware)
@@ -166,6 +163,7 @@ install_rate_limiter(app)
 # include_router: 將路由器的所有端點加入應用
 # 這樣組織代碼可以讓不同功能模組分開管理
 app.include_router(health.router)
+app.include_router(health.root_router)
 app.include_router(metrics.router)
 app.include_router(nba.router)
 app.include_router(wnba.router)  # SPO-32 Phase 1: WNBA CSV + read-only stats

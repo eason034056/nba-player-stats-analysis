@@ -35,6 +35,16 @@ Event: Boston Celtics @ Philadelphia 76ers, `commence_time` `2026-11-11T01:10:00
 
 `test_process_event_missing_over` copies recorded rebounds and drops Over. The double-double Yes case copies the first recorded Yes. Yes+No and No-only stay on the inline builder, marked `TODO(SPO-106)`, because no No was posted.
 
+## AWS SSM Parameter Store
+
+Recorded `ssm get-parameters-by-path` JSON used by `tests/test_spo133_ec2.py`.
+The values are placeholders, not production secrets.
+
+| File | Request |
+|---|---|
+| `ssm/get-parameters-by-path-page1.json` | First page under `/sportslab/prod/`, includes `NextToken` |
+| `ssm/get-parameters-by-path-page2.json` | Second page (`--next-token page-2`) |
+
 ## BALLDONTLIE `/v1`
 
 The files under `bdl/` were added to the repo on 2026-11-11T04:51:35Z (2026-11-10 22:51 America/Chicago). They do not carry a separate capture clock. The key was sent in the `Authorization` header. It is not in either file, and it is not in a sidecar.

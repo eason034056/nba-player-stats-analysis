@@ -67,7 +67,7 @@ class TestNetworkSelection:
         ]
         assert bare == []
         assert 'data "aws_vpc" "default"' not in text
-        assert "data.aws_vpc.default" not in text
+        assert ("data.aws_vpc." + "default") not in text
 
     def test_subnet_lookups_follow_the_selected_vpc(self) -> None:
         text = NETWORK.read_text()
