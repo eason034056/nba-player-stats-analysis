@@ -47,3 +47,25 @@ These are pretty-printed JSON with a one-space indent, not the raw HTTP bytes. T
 | `bdl/standings_2026.json` | `GET /v1/standings?season=2026` |
 
 `player_injuries__page1.json` is one page of 100 rows with `meta.next_cursor` set. `standings_2026.json` has the 30 NBA clubs. Tests build `team_id -> abbreviation` from `data[].team.{id, abbreviation}`.
+
+## BALLDONTLIE odds provider (SPO-130d)
+
+`BdlPropsAdapter` and `BdlOddsProvider` read the captures already listed above: `props_live_21718080_OKC@POR_pregame.json`, `props_live_21718081_WAS@IND_upcoming.json`, `games_2026-11-10.json`, `games_2026-11-11.json`, and `backend_players_batch45.json`. Those files are unchanged.
+
+These four files were recorded on 2026-11-10 and 2026-11-11 from BALLDONTLIE `GET /v2/odds/player_props` and `GET /v1/players`. They are copied byte-for-byte. Tests read them as recorded.
+
+| File | What it is |
+|---|---|
+| `bdl/props_live_21718080_OKC@POR_t2.json` | `GET /v2/odds/player_props?game_id=21718080` after tip. Every `updated_at` is after `2026-11-11T04:00:00.000Z`. |
+| `bdl/props_live_21718079_ORL@SAC_inprogress.json` | `GET /v2/odds/player_props?game_id=21718079` while Orlando at Sacramento is in progress. |
+| `bdl/props_live_21718074_MIL@NYK_final.json` | `GET /v2/odds/player_props?game_id=21718074` after Milwaukee at New York is final. |
+| `bdl/players_ids_v2.json` | `GET /v1/players?player_ids[]=175&player_ids[]=416&player_ids[]=38017507` |
+| `bdl/players_empty.json` | Recorded 2026-11-13 ~04:30Z with `--bdl-only`. `GET /v1/players?player_ids[]=0&per_page=100`. `data` is `[]`. |
+| `bdl/props_empty.json` | Recorded 2026-11-13 ~04:30Z with `--bdl-only`. `GET /v2/odds/player_props?game_id=21718193`. `data` is `[]`. |
+
+These files are not in the tree. Tests that need them skip. `scripts/record_bdl_odds_fixtures.py` writes them from a live response and does not invent a body. It strips `apiKey` and `Authorization`. A 429 file is written only when a response is actually 429. `--bdl-only` records the BALLDONTLIE files and needs only `BALLDONTLIE_API_KEY`. Without that flag the same-slate pair still needs both keys. The same-slate pair stays skipped until `ODDS_API_KEY` is available.
+
+| File | What it is |
+|---|---|
+| `bdl/player_props_429.json` | A real `player_props` 429, if one occurs |
+| `same_slate/<date>_<away>@<home>__*.json` | One pregame game from both providers, plus `__meta.json`. Skipped until `ODDS_API_KEY` is available. |

@@ -590,7 +590,7 @@ async def test_process_event_delegates_and_stays_on_nba(monkeypatch, service, po
         snapshot_at=_SNAPSHOT_AT,
     )
     assert delegated == direct
-    assert calls[0]["sport"] == "basketball_nba"
+    assert calls[0]["league"] == "nba"
     assert calls[0]["event_id"] == points_payload["id"]
     assert odds_spies["httpx"].call_count == 0
     assert odds_spies["usage"].await_count == 0

@@ -76,20 +76,43 @@ def _app_provider_subclasses() -> list[type]:
 
 
 class TestOddsProviderContract:
-    def test_odds_provider_is_abstract_and_requires_get_event_odds(self):
-        assert inspect.isabstract(OddsProvider)
-        assert OddsProvider.__abstractmethods__ == frozenset(
-            {"get_events", "get_event_odds"}
-        )
+    def test_odds_provider_protocol_cannot_be_constructed_incomplete(self):
+        # Protocol: callers depend on the methods existing, not on ABC.
         with pytest.raises(TypeError):
-            OddsProvider()  # type: ignore[abstract]
+            OddsProvider()  # type: ignore[misc]
 
-        class _EventsOnly(OddsProvider):
-            async def get_events(self, sport, regions, date_from=None, date_to=None):
+        class _EventsOnly:
+            name = "partial"
+
+            async def get_events(self, sport, regions, date_from=None, date_to=None, *, league=None):
                 return []
 
-        with pytest.raises(TypeError, match="get_event_odds"):
-            _EventsOnly()
+            async def get_event_odds(self, sport, event_id, regions, markets, odds_format="american", bookmakers=None, *, league=None):
+                return {}
+
+        assert not isinstance(_EventsOnly(), OddsProvider)
+
+        class _Complete(OddsProvider):
+            name = "theoddsapi"
+
+            async def list_events(self, league, start_utc, end_utc):
+                return []
+
+            async def get_event_props(self, league, event_id, markets):
+                return None  # type: ignore[return-value]
+
+            async def rate_status(self):
+                return None  # type: ignore[return-value]
+
+            async def get_events(self, sport, regions, date_from=None, date_to=None, *, league=None):
+                return []
+
+            async def get_event_odds(
+                self, sport, event_id, regions, markets, odds_format="american", bookmakers=None, *, league=None
+            ):
+                return {}
+
+        assert isinstance(_Complete(), OddsProvider)
 
     def test_quota_usage_has_no_abstract_members(self):
         assert is_dataclass(QuotaUsage)

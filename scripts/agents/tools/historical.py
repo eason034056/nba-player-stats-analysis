@@ -552,15 +552,9 @@ def _today_date_string() -> str:
     return nba_slate_date(datetime.now(timezone.utc))[0]
 
 
-_LEAGUE_TO_SPORT_KEY: Dict[str, str] = {
-    "nba": "basketball_nba",
-    "wnba": "basketball_wnba",
-}
-
-
-def _sport_key_for(league: str = "nba") -> str:
-    """Map league → The Odds API sport_key (parameterized in SPO-33)."""
-    return _LEAGUE_TO_SPORT_KEY.get((league or "nba").lower(), "basketball_nba")
+def _league_key(league: str = "nba") -> str:
+    """Normalize a league argument. The provider rejects anything else."""
+    return (league or "nba").strip().lower()
 
 
 async def _infer_opponent_from_schedule(player: str, date: str, league: str = "nba") -> str:
@@ -582,10 +576,10 @@ async def _infer_opponent_from_schedule(player: str, date: str, league: str = "n
     except ImportError:
         return "unknown"
 
-    sport_key = _sport_key_for(league)
+    resolved_league = _league_key(league)
     now = datetime.now(timezone.utc)
     events = await odds_provider.get_events(
-        sport=sport_key,
+        league=resolved_league,
         regions="us",
         date_from=now - timedelta(hours=6),
         date_to=now + timedelta(hours=18),
@@ -600,7 +594,7 @@ async def _infer_opponent_from_schedule(player: str, date: str, league: str = "n
             from app.services.odds_gateway import odds_gateway
 
             snapshot = await odds_gateway.get_market_snapshot(
-                sport=sport_key,
+                league=resolved_league,
                 event_id=ev["id"],
                 regions="us",
                 markets="player_points",

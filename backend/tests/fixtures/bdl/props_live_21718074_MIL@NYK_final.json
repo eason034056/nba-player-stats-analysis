@@ -1,0 +1,92 @@
+{
+ "request": "https://api.balldontlie.io/v2/odds/player_props?game_id=21718074",
+ "status": 200,
+ "elapsed_s": 0.49,
+ "rate_headers": {
+  "x-ratelimit-limit": "5",
+  "x-ratelimit-remaining": "4",
+  "x-ratelimit-reset": "1794369903"
+ },
+ "response": {
+  "data": [
+   {
+    "id": 11012675053,
+    "game_id": 21718074,
+    "player_id": 447,
+    "vendor": "caesars",
+    "deeplinks": {
+     "event": {
+      "url": null,
+      "url_template": "https://sportsbook.caesars.com/us/{state}/bet/basketball/6355acae-4f48-4f3d-a34f-f83da9e82383/milwaukee-bucks-at-new-york-knicks"
+     },
+     "selections": {
+      "over": {
+       "url": null,
+       "url_template": "https://sportsbook.caesars.com/us/{state}/bet/betslip?selectionIds=40e00ac4-f1aa-3a67-88f9-0e970fc24bc1"
+      },
+      "under": {
+       "url": null,
+       "url_template": "https://sportsbook.caesars.com/us/{state}/bet/betslip?selectionIds=c7caa150-bd6a-39c5-b2b7-0d3aaf726f05"
+      }
+     }
+    },
+    "prop_type": "points",
+    "line_value": "21.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": 105,
+     "under_odds": -139
+    },
+    "updated_at": "2026-11-11T02:43:09.045Z"
+   },
+   {
+    "id": 11012675054,
+    "game_id": 21718074,
+    "player_id": 447,
+    "vendor": "caesars",
+    "deeplinks": {
+     "event": {
+      "url": null,
+      "url_template": "https://sportsbook.caesars.com/us/{state}/bet/basketball/6355acae-4f48-4f3d-a34f-f83da9e82383/milwaukee-bucks-at-new-york-knicks"
+     },
+     "selections": {
+      "over": {
+       "url": null,
+       "url_template": "https://sportsbook.caesars.com/us/{state}/bet/betslip?selectionIds=3e8fbfda-eb8b-30cb-96cb-1472a5e1da4d"
+      },
+      "under": {
+       "url": null,
+       "url_template": "https://sportsbook.caesars.com/us/{state}/bet/betslip?selectionIds=e0dee2d5-e9c6-31ed-aae6-94bd7663c739"
+      }
+     }
+    },
+    "prop_type": "rebounds",
+    "line_value": "16.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": -106,
+     "under_odds": -127
+    },
+    "updated_at": "2026-11-11T02:43:09.045Z"
+   },
+   {
+    "id": 11012675055,
+    "game_id": 21718074,
+    "player_id": 447,
+    "vendor": "fanatics",
+    "deeplinks": null,
+    "prop_type": "points",
+    "line_value": "20.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": 105,
+     "under_odds": -140
+    },
+    "updated_at": "2026-11-11T02:43:09.791Z"
+   }
+  ],
+  "meta": {
+   "per_page": 3
+  }
+ }
+}

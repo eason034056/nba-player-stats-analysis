@@ -14,13 +14,19 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+from collections.abc import Mapping
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, Literal, Optional
 
 from app.services.cache import cache_service
-from app.services.odds_provider import OddsAPIError, QuotaUsage
-from app.services.odds_theoddsapi import odds_provider
+from app.services.odds_provider import OddsAPIError, ProviderEvent, QuotaUsage
+from app.services.odds_theoddsapi import (
+    league_for_sport_key,
+    normalize_league,
+    odds_provider,
+    sport_key_for_league,
+)
 from app.settings import settings
 
 logger = logging.getLogger(__name__)
@@ -32,6 +38,45 @@ RequestPriority = Literal["interactive", "background"]
 QUOTA_USAGE_KEY = "odds:quota_usage:v1"
 HOT_KEYS_ZSET_KEY = "odds:hot_keys:v1"
 HOT_KEY_LAST_SEEN_PREFIX = "odds:hot_seen:v1:"
+
+
+class _LeagueProviders(Mapping[str, Any]):
+    """League → provider. The NBA entry reads ``settings.nba_odds_provider``.
+
+    Lookup is live, so a test can change the setting without rebuilding
+    the table. NBA accepts ``theoddsapi`` (the default) and
+    ``balldontlie``. The default does not switch: a blank value is
+    ``theoddsapi``, and WNBA always uses that client. ``balldontlie``
+    loads ``BdlOddsProvider`` here, not from a route or a job. Any other
+    league raises ``ValueError``.
+    """
+
+    def __getitem__(self, league: str) -> Any:
+        key = normalize_league(league)
+        if key == "nba":
+            selected = (settings.nba_odds_provider or "theoddsapi").strip().lower()
+            if selected == "balldontlie":
+                # Imported here so the default NBA path does not load the
+                # BALLDONTLIE provider when this module is imported.
+                from app.services.bdl_odds_provider import get_bdl_odds_provider
+
+                return get_bdl_odds_provider()
+            if selected != "theoddsapi":
+                raise ValueError(
+                    f"Unsupported nba_odds_provider: {settings.nba_odds_provider!r}. "
+                    "Allowed: 'theoddsapi', 'balldontlie'"
+                )
+        return odds_provider
+
+    def __iter__(self):
+        yield "nba"
+        yield "wnba"
+
+    def __len__(self) -> int:
+        return 2
+
+
+PROVIDERS: Mapping[str, Any] = _LeagueProviders()
 
 
 @dataclass(frozen=True)
@@ -54,7 +99,7 @@ class OddsMarketGateway:
 
     def __init__(
         self,
-        provider=odds_provider,
+        provider=None,
         cache=cache_service,
         fresh_ttl_seconds: Optional[int] = None,
         stale_ttl_seconds: Optional[int] = None,
@@ -63,6 +108,8 @@ class OddsMarketGateway:
         quota_protect_percent: Optional[int] = None,
         hot_keys_limit: Optional[int] = None,
     ):
+        # None: pick the provider from PROVIDERS on each call.
+        # A passed object is used for every league (gateway unit tests).
         self.provider = provider
         self.cache = cache
         self.fresh_ttl_seconds = fresh_ttl_seconds or settings.cache_ttl_market_fresh
@@ -75,20 +122,29 @@ class OddsMarketGateway:
 
     async def get_market_snapshot(
         self,
-        sport: str,
-        event_id: str,
-        regions: str,
-        markets: str,
+        sport: Optional[str] = None,
+        event_id: str = "",
+        regions: str = "us",
+        markets: str = "",
         odds_format: str = "american",
         bookmakers: Optional[list[str]] = None,
         priority: RequestPriority = "interactive",
         record_hot_key: bool = True,
+        *,
+        league: Optional[str] = None,
     ) -> MarketSnapshotResult:
+        """Shared snapshot for one event.
+
+        Pass ``league`` (``nba`` or ``wnba``). ``sport`` is only for a
+        hot-key member or test that still has an Odds API sport key.
+        When both are set, ``league`` is the one that is used.
+        """
+        resolved_league = self._resolve_league(league, sport)
         normalized_markets = self._normalize_csv(markets)
         normalized_books = self._normalize_bookmakers(bookmakers)
 
         snapshot_key = self._build_snapshot_key(
-            sport=sport,
+            league=resolved_league,
             event_id=event_id,
             regions=regions,
             markets=normalized_markets,
@@ -96,7 +152,7 @@ class OddsMarketGateway:
             bookmakers=normalized_books,
         )
         meta_key = self._build_snapshot_meta_key(
-            sport=sport,
+            league=resolved_league,
             event_id=event_id,
             regions=regions,
             markets=normalized_markets,
@@ -107,7 +163,7 @@ class OddsMarketGateway:
 
         if priority == "interactive" and record_hot_key:
             await self._record_hot_key(
-                sport=sport,
+                league=resolved_league,
                 event_id=event_id,
                 regions=regions,
                 markets=normalized_markets,
@@ -123,7 +179,7 @@ class OddsMarketGateway:
             if cached_result.data_age_seconds <= self.stale_ttl_seconds:
                 if priority != "background" or not await self.is_quota_protected():
                     self._trigger_background_refresh(
-                        sport=sport,
+                        league=resolved_league,
                         event_id=event_id,
                         regions=regions,
                         markets=normalized_markets,
@@ -158,7 +214,7 @@ class OddsMarketGateway:
             return await self._fetch_and_store(
                 snapshot_key=snapshot_key,
                 meta_key=meta_key,
-                sport=sport,
+                league=resolved_league,
                 event_id=event_id,
                 regions=regions,
                 markets=normalized_markets,
@@ -167,6 +223,17 @@ class OddsMarketGateway:
             )
         finally:
             await self.cache.release_lock(lock_key)
+
+    async def list_events(
+        self,
+        *,
+        league: str,
+        start_utc: datetime,
+        end_utc: datetime,
+    ) -> list[ProviderEvent]:
+        """Events for ``league`` in the UTC window, from that league's provider."""
+        provider = self._provider_for(league)
+        return await provider.list_events(league, start_utc, end_utc)
 
     async def record_quota_usage(self, usage: QuotaUsage) -> None:
         await self.cache.set(
@@ -250,23 +317,31 @@ class OddsMarketGateway:
                 continue
 
             context = json.loads(member)
+            member_league = self._league_from_hot_key(context)
+            if member_league is None:
+                await self.cache.remove_sorted_set_member(HOT_KEYS_ZSET_KEY, member)
+                continue
             normalized_markets = self._normalize_csv(context["markets"])
             normalized_books = self._normalize_bookmakers(context["bookmakers"])
+            stored_provider = context.get("provider")
+            provider_name = stored_provider if isinstance(stored_provider, str) and stored_provider else None
             snapshot_key = self._build_snapshot_key(
-                sport=context["sport"],
+                league=member_league,
                 event_id=context["event_id"],
                 regions=context["regions"],
                 markets=normalized_markets,
                 odds_format=context["odds_format"],
                 bookmakers=normalized_books,
+                provider_name=provider_name,
             )
             meta_key = self._build_snapshot_meta_key(
-                sport=context["sport"],
+                league=member_league,
                 event_id=context["event_id"],
                 regions=context["regions"],
                 markets=normalized_markets,
                 odds_format=context["odds_format"],
                 bookmakers=normalized_books,
+                provider_name=provider_name,
             )
             cached_result = await self._read_cached_snapshot(snapshot_key, meta_key)
             if cached_result and cached_result.data_age_seconds <= self.fresh_ttl_seconds:
@@ -274,7 +349,7 @@ class OddsMarketGateway:
 
             try:
                 await self.refresh_market_snapshot(
-                    sport=context["sport"],
+                    league=member_league,
                     event_id=context["event_id"],
                     regions=context["regions"],
                     markets=normalized_markets,
@@ -290,18 +365,21 @@ class OddsMarketGateway:
 
     async def refresh_market_snapshot(
         self,
-        sport: str,
-        event_id: str,
-        regions: str,
-        markets: str,
+        sport: Optional[str] = None,
+        event_id: str = "",
+        regions: str = "us",
+        markets: str = "",
         odds_format: str = "american",
         bookmakers: Optional[list[str]] = None,
         priority: RequestPriority = "background",
+        *,
+        league: Optional[str] = None,
     ) -> MarketSnapshotResult:
+        resolved_league = self._resolve_league(league, sport)
         normalized_markets = self._normalize_csv(markets)
         normalized_books = self._normalize_bookmakers(bookmakers)
         snapshot_key = self._build_snapshot_key(
-            sport=sport,
+            league=resolved_league,
             event_id=event_id,
             regions=regions,
             markets=normalized_markets,
@@ -309,7 +387,7 @@ class OddsMarketGateway:
             bookmakers=normalized_books,
         )
         meta_key = self._build_snapshot_meta_key(
-            sport=sport,
+            league=resolved_league,
             event_id=event_id,
             regions=regions,
             markets=normalized_markets,
@@ -339,7 +417,7 @@ class OddsMarketGateway:
             return await self._fetch_and_store(
                 snapshot_key=snapshot_key,
                 meta_key=meta_key,
-                sport=sport,
+                league=resolved_league,
                 event_id=event_id,
                 regions=regions,
                 markets=normalized_markets,
@@ -353,15 +431,19 @@ class OddsMarketGateway:
         self,
         snapshot_key: str,
         meta_key: str,
-        sport: str,
+        league: str,
         event_id: str,
         regions: str,
         markets: str,
         odds_format: str,
         bookmakers: Optional[list[str]],
     ) -> MarketSnapshotResult:
-        data, usage = await self.provider.get_event_odds_with_usage(
-            sport=sport,
+        provider = self._provider_for(league)
+        # Sport key is chosen here, inside the Odds API map, so the
+        # request path is /v4/sports/{sport_key}/events/{id}/odds with
+        # the same query the gateway sent before league= existed.
+        data, usage = await provider.get_event_odds_with_usage(
+            sport=sport_key_for_league(league),
             event_id=event_id,
             regions=regions,
             markets=markets,
@@ -457,7 +539,7 @@ class OddsMarketGateway:
 
     def _trigger_background_refresh(
         self,
-        sport: str,
+        league: str,
         event_id: str,
         regions: str,
         markets: str,
@@ -465,7 +547,7 @@ class OddsMarketGateway:
         bookmakers: Optional[list[str]],
     ) -> None:
         refresh_key = self._build_snapshot_key(
-            sport=sport,
+            league=league,
             event_id=event_id,
             regions=regions,
             markets=markets,
@@ -480,7 +562,7 @@ class OddsMarketGateway:
         async def _do_refresh() -> None:
             try:
                 await self.refresh_market_snapshot(
-                    sport=sport,
+                    league=league,
                     event_id=event_id,
                     regions=regions,
                     markets=markets,
@@ -497,7 +579,7 @@ class OddsMarketGateway:
 
     async def _record_hot_key(
         self,
-        sport: str,
+        league: str,
         event_id: str,
         regions: str,
         markets: str,
@@ -506,7 +588,8 @@ class OddsMarketGateway:
     ) -> None:
         member = json.dumps(
             {
-                "sport": sport,
+                "league": league,
+                "provider": self._provider_name(league),
                 "event_id": event_id,
                 "regions": regions,
                 "markets": markets,
@@ -541,33 +624,88 @@ class OddsMarketGateway:
 
     def _build_snapshot_key(
         self,
-        sport: str,
-        event_id: str,
-        regions: str,
-        markets: str,
-        odds_format: str,
-        bookmakers: Optional[list[str]],
+        sport: Optional[str] = None,
+        event_id: str = "",
+        regions: str = "",
+        markets: str = "",
+        odds_format: str = "",
+        bookmakers: Optional[list[str]] = None,
+        *,
+        league: Optional[str] = None,
+        provider_name: Optional[str] = None,
     ) -> str:
+        resolved = self._resolve_league(league, sport)
+        name = provider_name or self._provider_name(resolved)
         return (
-            "odds_snapshot:"
-            f"{sport}:{event_id}:{regions}:{markets}:"
+            "odds_snapshot:v2:"
+            f"{name}:{resolved}:{event_id}:{regions}:{markets}:"
             f"{self._serialize_bookmakers(bookmakers)}:{odds_format}"
         )
 
     def _build_snapshot_meta_key(
         self,
-        sport: str,
-        event_id: str,
-        regions: str,
-        markets: str,
-        odds_format: str,
-        bookmakers: Optional[list[str]],
+        sport: Optional[str] = None,
+        event_id: str = "",
+        regions: str = "",
+        markets: str = "",
+        odds_format: str = "",
+        bookmakers: Optional[list[str]] = None,
+        *,
+        league: Optional[str] = None,
+        provider_name: Optional[str] = None,
     ) -> str:
+        resolved = self._resolve_league(league, sport)
+        name = provider_name or self._provider_name(resolved)
         return (
-            "odds_snapshot_meta:"
-            f"{sport}:{event_id}:{regions}:{markets}:"
+            "odds_snapshot_meta:v2:"
+            f"{name}:{resolved}:{event_id}:{regions}:{markets}:"
             f"{self._serialize_bookmakers(bookmakers)}:{odds_format}"
         )
+
+    def _provider_for(self, league: str) -> Any:
+        """Provider for ``league``. An injected provider wins over the table."""
+        key = normalize_league(league)
+        if self.provider is not None:
+            return self.provider
+        return PROVIDERS[key]
+
+    def _provider_name(self, league: str) -> str:
+        provider = self._provider_for(league)
+        name = getattr(provider, "name", None)
+        if isinstance(name, str) and name:
+            return name
+        return "theoddsapi"
+
+    @staticmethod
+    def _resolve_league(league: Optional[str], sport: Optional[str]) -> str:
+        """League from ``league``, or from a legacy Odds API sport key."""
+        if league is not None and str(league).strip() != "":
+            return normalize_league(str(league))
+        if sport:
+            return league_for_sport_key(sport)
+        raise ValueError("league is required")
+
+    @staticmethod
+    def _league_from_hot_key(context: dict) -> Optional[str]:
+        """League stored on a hot-key member, including members written earlier.
+
+        Members from before this change have ``sport`` and no ``league``.
+        Their last-seen TTL is 5 minutes, so the old shape disappears on
+        its own. An unknown sport is dropped.
+        """
+        raw_league = context.get("league")
+        if isinstance(raw_league, str) and raw_league.strip():
+            try:
+                return normalize_league(raw_league)
+            except ValueError:
+                return None
+        sport = context.get("sport")
+        if not isinstance(sport, str) or not sport:
+            return None
+        try:
+            return league_for_sport_key(sport)
+        except ValueError:
+            return None
 
     @staticmethod
     def _build_lock_key(snapshot_key: str) -> str:

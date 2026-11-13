@@ -12,6 +12,7 @@ from fastapi import APIRouter
 
 from app.middleware.logging_config import get_metrics_snapshot
 from app.services.odds_gateway import odds_gateway
+from app.services.odds_theoddsapi import odds_provider
 
 logger = logging.getLogger(__name__)
 
@@ -26,12 +27,13 @@ router = APIRouter(prefix="/api", tags=["observability"])
 async def get_metrics():
     snapshot = get_metrics_snapshot()
 
-    # Odds API quota
-    quota_usage = await odds_gateway.get_quota_usage()
+    # Odds API quota. rate_status reads the same Redis object the gateway
+    # writes. The JSON keys below are unchanged.
+    quota_usage = await odds_provider.rate_status()
     quota_protected = await odds_gateway.is_quota_protected()
 
     quota_info = None
-    if quota_usage:
+    if quota_usage.recorded:
         quota_info = {
             "remaining": quota_usage.remaining,
             "used": quota_usage.used,
