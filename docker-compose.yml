@@ -63,6 +63,8 @@ services:
       # 正式環境把 DATABASE_URL 指到 RDS，並設 DATABASE_REQUIRED=true。
       - DATABASE_URL=${DATABASE_URL:-postgresql://novig:novig@postgres:5432/novig_nba}
       - DATABASE_REQUIRED=${DATABASE_REQUIRED:-false}
+      # 未設定時必須是 true。空字串會讓 Settings 解析失敗，整個 API 起不來。
+      - WNBA_JOBS_ENABLED=${WNBA_JOBS_ENABLED:-true}
 
     # 掛載 data 目錄（CSV 檔案）
     # 將主機的 data 目錄掛載到容器的 /app/data 目錄

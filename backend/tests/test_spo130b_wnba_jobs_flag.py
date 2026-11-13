@@ -11,6 +11,7 @@ from __future__ import annotations
 import logging
 import os
 import sys
+from pathlib import Path
 from unittest.mock import patch
 
 import pytest
@@ -148,3 +149,16 @@ def test_flag_false_drops_wnba_jobs_and_logs_once(
     assert all(not job_id.startswith("wnba") for job_id in false_ids)
     assert any(job_id.startswith("wnba") for job_id in true_ids)
     assert len(_skip_logs(caplog)) == 1
+
+
+def test_compose_passes_wnba_jobs_enabled_to_the_backend() -> None:
+    """Root compose lists env vars by name. .env only fills names on that list.
+
+    The default inside ``:-true`` keeps an unset variable from becoming
+    an empty string. An empty string makes Settings fail at startup.
+    """
+    root = Path(__file__).resolve().parents[2]
+    text = (root / "docker-compose.yml").read_text()
+    backend = text.split("container_name: no-vig-nba-backend", 1)[1]
+    backend = backend.split("container_name:", 1)[0]
+    assert "- WNBA_JOBS_ENABLED=${WNBA_JOBS_ENABLED:-true}" in backend
