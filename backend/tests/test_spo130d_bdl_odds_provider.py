@@ -40,10 +40,8 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 RECORD_SCRIPT = REPO_ROOT / "scripts" / "record_bdl_odds_fixtures.py"
 BACKEND_APP = Path(__file__).resolve().parents[1] / "app"
 
-# Captures the recorder writes only from a live response.
+# A 429 file exists only after a live 429. The same-slate pair needs ODDS_API_KEY.
 MISSING_FIXTURES = (
-    "players_empty.json",
-    "props_empty.json",
     "player_props_429.json",
 )
 
@@ -560,21 +558,20 @@ class TestRecordedSamples:
 class TestMissingFixtures:
     """Live captures that are not in the tree yet. Each skip names the file."""
 
-    def test_empty_players_when_present(self):
-        path = FIXTURE_DIR / "players_empty.json"
-        if not path.exists():
-            pytest.skip("players_empty.json is not recorded (empty /v1/players)")
-        payload = json.loads(path.read_text())
-        body = payload.get("response", payload)
-        assert body.get("data") == []
+    def test_empty_players_page_has_no_rows(self):
+        """Recorded 2026-11-13 with --bdl-only: ``/v1/players?player_ids[]=0``."""
+        payload = _load("players_empty.json")
+        assert payload["status"] == 200
+        assert payload["response"]["data"] == []
+        assert "player_ids" in payload["request"]
 
-    def test_empty_props_when_present(self):
-        path = FIXTURE_DIR / "props_empty.json"
-        if not path.exists():
-            pytest.skip("props_empty.json is not recorded (player_props with no rows)")
-        payload = json.loads(path.read_text())
-        body = payload.get("response", payload)
-        assert body.get("data") == []
+    def test_empty_props_page_emits_no_books(self):
+        """Recorded 2026-11-13 with --bdl-only for game 21718193."""
+        payload = _load("props_empty.json")
+        assert payload["status"] == 200
+        assert "game_id=21718193" in payload["request"]
+        body = payload["response"]
+        assert body["data"] == []
         adapter = BdlPropsAdapter()
         assert adapter.to_bookmakers(body["data"], {}) == []
 
@@ -593,7 +590,7 @@ class TestMissingFixtures:
         if not metas:
             pytest.skip(
                 "same-slate pair is not recorded. "
-                "Run scripts/record_bdl_odds_fixtures.py when both keys are set."
+                "ODDS_API_KEY is not available, so the pair stays skipped."
             )
         meta_path = metas[0]
         meta = json.loads(meta_path.read_text())
