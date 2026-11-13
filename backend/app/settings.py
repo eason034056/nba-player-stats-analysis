@@ -22,6 +22,9 @@ class Settings(BaseSettings):
     # The Odds API 設定
     odds_api_key: str = ""  # The Odds API 的 API 金鑰
     odds_api_base_url: str = "https://api.the-odds-api.com"  # API 基礎 URL
+    # NBA row of the odds provider table. Only "theoddsapi" is accepted.
+    # WNBA does not read this value.
+    nba_odds_provider: str = "theoddsapi"
 
     # BALLDONTLIE. balldontlie_api_key 對應 BALLDONTLIE_API_KEY。SecretStr 讓
     # Settings 的 repr 不印出金鑰。client 用 get_secret_value() 取出 str，
