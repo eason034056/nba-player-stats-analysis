@@ -386,6 +386,25 @@ class TestCacheClose:
         assert cache_service._client is None
 
     @pytest.mark.asyncio
+    async def test_close_ignores_a_closed_event_loop(self):
+        """A TestClient teardown can close the loop before Redis disconnects."""
+
+        class _ClosedLoopClient:
+            def __init__(self) -> None:
+                self.closed = False
+
+            async def close(self) -> None:
+                self.closed = True
+                raise RuntimeError("Event loop is closed")
+
+        svc = CacheService()
+        client = _ClosedLoopClient()
+        svc._client = client
+        await svc.close()
+        assert client.closed is True
+        assert svc._client is None
+
+    @pytest.mark.asyncio
     async def test_close_noop_when_no_client(self):
         """close() should do nothing if _client is already None."""
         svc = CacheService()

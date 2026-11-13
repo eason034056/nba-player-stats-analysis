@@ -6,9 +6,12 @@ Caching reduces the number of external Odds API calls, lowering costs and improv
 """
 
 import json
+import logging
 import redis.asyncio as redis
 from typing import Optional, Any
 from app.settings import settings
+
+logger = logging.getLogger(__name__)
 
 
 class CacheService:
@@ -239,11 +242,20 @@ class CacheService:
         """
         Close the Redis connection.
 
-        Call this to free resources when the application ends.
+        Call this to free resources when the application ends. TestClient
+        can close the event loop before this runs, after a scheduler job
+        has already opened Redis. The socket is gone in that case.
         """
-        if self._client:
-            await self._client.close()
-            self._client = None
+        client = self._client
+        self._client = None
+        if client is None:
+            return
+        try:
+            await client.close()
+        except RuntimeError as exc:
+            if "Event loop is closed" not in str(exc):
+                raise
+            logger.warning("Redis close skipped; the event loop is already closed")
 
     async def acquire_lock(self, key: str, ttl: int) -> bool:
         """

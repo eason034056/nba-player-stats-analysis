@@ -38,7 +38,7 @@ CORS `*` is rejected because a credentialed wildcard is not a configuration we w
 
 ## Tests / Verification
 
-- Backend pytest: `cd backend && python -m pytest tests -q` → 1614 passed, 65 skipped, 6 xfailed, 0 failed. After merging `origin/dev` (`55750de`). `tests/test_spo133_ec2.py` covers the public-subnet placement, the two preconditions, and a process start with `ODDS_API_KEY` empty. The SSM pages live in `backend/tests/fixtures/ssm/`.
+- Backend pytest: `cd backend && python -m pytest tests -q` → 1615 passed, 65 skipped, 6 xfailed, 0 failed. After merging `origin/dev` (`55750de`). `tests/test_spo133_ec2.py` covers the public-subnet placement, the two preconditions, and a process start with `ODDS_API_KEY` empty. Redis close ignores an already-closed event loop. The SSM pages live in `backend/tests/fixtures/ssm/`.
 - Terraform: `terraform fmt -check -recursive` clean. `terraform init -backend=false` uses hashicorp/aws v5.100.0. `terraform validate` succeeded. No plan and no apply.
 - Frontend: not exercised. Compose and the header contract are documented for the frontend rewrite.
 - Integration test: SKIPPED. No AWS account and no `RUN_INTEGRATION`. The SSM script test uses a fake `aws` binary.
