@@ -24,12 +24,18 @@ The keys are read from the environment and are never printed.
 
 Usage:
     PYTHONPATH=backend python3 scripts/record_bdl_odds_fixtures.py
+    PYTHONPATH=backend python3 scripts/record_bdl_odds_fixtures.py --bdl-only
 
-Requires ``BALLDONTLIE_API_KEY`` and ``ODDS_API_KEY``.
+Without ``--bdl-only`` both ``BALLDONTLIE_API_KEY`` and ``ODDS_API_KEY``
+are required, because the same-slate pair calls both providers.
+``--bdl-only`` records only the BALLDONTLIE fixtures (an empty players
+page, an empty props page, and a 429 only when one actually happens)
+and reads ``BALLDONTLIE_API_KEY`` alone.
 """
 
 from __future__ import annotations
 
+import argparse
 import json
 import os
 import sys
@@ -373,16 +379,32 @@ def _record_empty_props(bdl_key: str) -> None:
     print("no empty player_props body was returned; not writing props_empty.json")
 
 
-def main() -> None:
+def _parse_args(argv: list[str] | None) -> argparse.Namespace:
+    """``--bdl-only`` skips The Odds API and the same-slate pair."""
+    parser = argparse.ArgumentParser(description="Record BALLDONTLIE odds fixtures from live responses.")
+    parser.add_argument(
+        "--bdl-only",
+        action="store_true",
+        help="Record only BALLDONTLIE fixtures. Requires BALLDONTLIE_API_KEY.",
+    )
+    return parser.parse_args(argv)
+
+
+def main(argv: list[str] | None = None) -> None:
     """Record what the live APIs actually return. Exit before writing a guessed body."""
+    args = _parse_args(argv)
     _load_env_file(_REPO_ROOT / ".env")
     _load_env_file(_REPO_ROOT / "backend" / ".env")
     bdl_key = os.environ.get("BALLDONTLIE_API_KEY", "").strip()
     odds_key = os.environ.get("ODDS_API_KEY", "").strip()
-    if not bdl_key or not odds_key:
+    if args.bdl_only:
+        if not bdl_key:
+            raise SystemExit("BALLDONTLIE_API_KEY must be set")
+    elif not bdl_key or not odds_key:
         raise SystemExit("BALLDONTLIE_API_KEY and ODDS_API_KEY must both be set")
     try:
-        _record_same_slate(bdl_key, odds_key)
+        if not args.bdl_only:
+            _record_same_slate(bdl_key, odds_key)
         _record_empty_players(bdl_key)
         _record_empty_props(bdl_key)
     except _Http429 as exc:

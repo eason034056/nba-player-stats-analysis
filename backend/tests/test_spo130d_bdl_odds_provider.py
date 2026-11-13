@@ -40,13 +40,8 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 RECORD_SCRIPT = REPO_ROOT / "scripts" / "record_bdl_odds_fixtures.py"
 BACKEND_APP = Path(__file__).resolve().parents[1] / "app"
 
-# Captures the brief names that are not in this checkout. The recorder
-# writes the empty and 429 files only from a live response.
+# Captures the recorder writes only from a live response.
 MISSING_FIXTURES = (
-    "props_live_21718080_OKC@POR_t2.json",
-    "props_live_21718079_ORL@SAC_inprogress.json",
-    "props_live_21718074_MIL@NYK_final.json",
-    "players_ids_v2.json",
     "players_empty.json",
     "props_empty.json",
     "player_props_429.json",
@@ -519,17 +514,51 @@ class TestRegistry:
         assert "get_bdl_odds_provider" in gateway
 
 
+class TestRecordedSamples:
+    """The four copied captures. Each file is used as recorded."""
+
+    def test_okc_post_tip_capture_drops_every_row(self):
+        """Every t2 row is timestamped after the OKC at Portland tip."""
+        rows = _rows("props_live_21718080_OKC@POR_t2.json")
+        adapter, books = _adapt(rows, tip=_tip(OKC_GAME_ID))
+        assert adapter.post_tip_dropped == len(rows)
+        assert books == []
+
+    def test_in_progress_orlando_rows_are_after_tip(self):
+        """Orlando at Sacramento props in this file were updated after tip."""
+        game_id = 21718079
+        rows = _rows("props_live_21718079_ORL@SAC_inprogress.json")
+        adapter, books = _adapt(rows, tip=_tip(game_id))
+        assert adapter.post_tip_dropped == len(rows)
+        assert books == []
+
+    def test_final_milwaukee_rows_are_after_tip(self):
+        """The three remaining Milwaukee at New York rows are after tip."""
+        game_id = 21718074
+        rows = _rows("props_live_21718074_MIL@NYK_final.json")
+        adapter, books = _adapt(rows, tip=_tip(game_id))
+        assert adapter.post_tip_dropped == len(rows)
+        assert books == []
+
+    @pytest.mark.asyncio
+    async def test_player_ids_page_returns_the_recorded_names(self, caplog):
+        """``/v1/players?player_ids[]=`` names come from the copied page."""
+        client = _FixtureClient()
+        client.players = _load("players_ids_v2.json")["response"]
+        directory = BdlPlayerDirectory(client, aliases={})
+        with caplog.at_level(logging.INFO):
+            names = await directory.names_for([175, 416, 38017507])
+        assert names == {
+            175: "Shai Gilgeous-Alexander",
+            416: "Pascal Siakam",
+            38017507: "Andrew Nembhard",
+        }
+        assert directory.unaliased_count == 3
+        assert directory.missing_count == 0
+
+
 class TestMissingFixtures:
     """Live captures that are not in the tree yet. Each skip names the file."""
-
-    def test_post_tip_capture_when_present(self):
-        path = FIXTURE_DIR / "props_live_21718080_OKC@POR_t2.json"
-        if not path.exists():
-            pytest.skip("props_live_21718080_OKC@POR_t2.json is not recorded")
-        payload = json.loads(path.read_text())
-        rows = payload["response"]["data"] if "response" in payload else payload["data"]
-        adapter, books = _adapt(rows, tip=_tip(OKC_GAME_ID))
-        assert adapter.post_tip_dropped > 0 or books
 
     def test_empty_players_when_present(self):
         path = FIXTURE_DIR / "players_empty.json"
@@ -699,3 +728,28 @@ def test_record_script_strips_the_key_and_uses_snapshot_markets():
     )
     assert "Authorization" not in saved
     assert saved.get("x-ratelimit-remaining") == "4" or saved.get("X-RateLimit-Remaining") == "4"
+    assert "--bdl-only" in text
+
+
+def test_bdl_only_skips_the_odds_api(monkeypatch):
+    """``--bdl-only`` records BALLDONTLIE fixtures and does not call The Odds API."""
+    import importlib.util
+
+    spec = importlib.util.spec_from_file_location("record_bdl_odds_fixtures", RECORD_SCRIPT)
+    assert spec is not None and spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+
+    monkeypatch.setenv("BALLDONTLIE_API_KEY", "bdl-test-key")
+    monkeypatch.delenv("ODDS_API_KEY", raising=False)
+    calls: list[str] = []
+    monkeypatch.setattr(module, "_record_same_slate", lambda *_args: calls.append("slate"))
+    monkeypatch.setattr(module, "_record_empty_players", lambda *_args: calls.append("players"))
+    monkeypatch.setattr(module, "_record_empty_props", lambda *_args: calls.append("props"))
+    module.main(["--bdl-only"])
+    assert calls == ["players", "props"]
+
+    calls.clear()
+    with pytest.raises(SystemExit, match="must both be set"):
+        module.main([])
+    assert calls == []
