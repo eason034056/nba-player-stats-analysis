@@ -480,7 +480,10 @@ async def get_event_reads(
 
     # One Redis read for the whole event. The loader warns once when
     # the snapshot is missing, stale, or malformed, and returns None.
-    injury_entries = await load_nba_pick_injuries()
+    # Same cache object as the document above. Callers, including tests,
+    # patch this module's cache_service. Omitting it made the injury read
+    # open the process-wide Redis client on whatever loop was running.
+    injury_entries = await load_nba_pick_injuries(cache=cache_service)
     payload = await asyncio.to_thread(
         assemble_event_reads,
         event_id,

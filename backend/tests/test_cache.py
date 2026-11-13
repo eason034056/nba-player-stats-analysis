@@ -21,6 +21,7 @@ Coverage:
 15. build_events_key, build_props_key, build_players_key static methods
 """
 
+import asyncio
 import json
 import pytest
 import sys
@@ -386,8 +387,8 @@ class TestCacheClose:
         assert cache_service._client is None
 
     @pytest.mark.asyncio
-    async def test_close_ignores_a_closed_event_loop(self):
-        """A TestClient teardown can close the loop before Redis disconnects."""
+    async def test_close_drops_a_client_from_a_closed_loop(self):
+        """Do not disconnect a client whose loop has already finished."""
 
         class _ClosedLoopClient:
             def __init__(self) -> None:
@@ -397,12 +398,16 @@ class TestCacheClose:
                 self.closed = True
                 raise RuntimeError("Event loop is closed")
 
+        finished = asyncio.new_event_loop()
+        finished.close()
         svc = CacheService()
         client = _ClosedLoopClient()
         svc._client = client
+        svc._loop = finished
         await svc.close()
-        assert client.closed is True
+        assert client.closed is False
         assert svc._client is None
+        assert svc._loop is None
 
     @pytest.mark.asyncio
     async def test_close_noop_when_no_client(self):
@@ -685,6 +690,25 @@ class TestGetClient:
         client = await svc.get_client()
         assert client is fake
         assert svc._client is fake
+        assert svc._loop is asyncio.get_running_loop()
+
+    @pytest.mark.asyncio
+    async def test_get_client_replaces_a_client_from_a_closed_loop(self, monkeypatch):
+        """A client opened under asyncio.run must not be reused later."""
+        import app.services.cache as cache_module
+
+        replacement = FakeRedisClient()
+        monkeypatch.setattr(cache_module.redis, "from_url", lambda url, **kwargs: replacement)
+        finished = asyncio.new_event_loop()
+        finished.close()
+        svc = CacheService()
+        svc._client = FakeRedisClient()
+        svc._loop = finished
+
+        client = await svc.get_client()
+
+        assert client is replacement
+        assert svc._loop is asyncio.get_running_loop()
 
     @pytest.mark.asyncio
     async def test_get_client_reuses_existing_connection(self, cache_service, fake_client):
