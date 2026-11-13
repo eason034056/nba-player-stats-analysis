@@ -47,3 +47,20 @@ These are pretty-printed JSON with a one-space indent, not the raw HTTP bytes. T
 | `bdl/standings_2026.json` | `GET /v1/standings?season=2026` |
 
 `player_injuries__page1.json` is one page of 100 rows with `meta.next_cursor` set. `standings_2026.json` has the 30 NBA clubs. Tests build `team_id -> abbreviation` from `data[].team.{id, abbreviation}`.
+
+## BALLDONTLIE odds provider (SPO-130d)
+
+`BdlPropsAdapter` and `BdlOddsProvider` read the captures already listed above: `props_live_21718080_OKC@POR_pregame.json`, `props_live_21718081_WAS@IND_upcoming.json`, `games_2026-11-10.json`, `games_2026-11-11.json`, and `backend_players_batch45.json`. Those files are unchanged.
+
+These files are not in the tree. Tests that need them skip. `scripts/record_bdl_odds_fixtures.py` writes them from a live response and does not invent a body. It strips `apiKey` and `Authorization`. A 429 file is written only when a response is actually 429.
+
+| File | What it is |
+|---|---|
+| `bdl/props_live_21718080_OKC@POR_t2.json` | Post-tip props for the same OKC at Portland game |
+| `bdl/props_live_21718079_ORL@SAC_inprogress.json` | Props while Orlando at Sacramento is in progress |
+| `bdl/props_live_21718074_MIL@NYK_final.json` | Props after Milwaukee at New York is final |
+| `bdl/players_ids_v2.json` | `/v1/players?player_ids[]=` page |
+| `bdl/players_empty.json` | `/v1/players` whose `data` is empty |
+| `bdl/props_empty.json` | `player_props` whose `data` is empty |
+| `bdl/player_props_429.json` | A real `player_props` 429, if one occurs |
+| `same_slate/<date>_<away>@<home>__*.json` | One pregame game from both providers, plus `__meta.json` |
