@@ -83,8 +83,10 @@ class Settings(BaseSettings):
     nba_injuries_refresh_minutes: int = 30
 
     # WNBA_JOBS_ENABLED。預設 true，沒設環境變數時四個 WNBA 排程照常註冊。
-    # false 時 scheduler.start() 不註冊那四個工作，避免清空後被排程填回。
-    # NBA 排程和 WNBA HTTP 路由不讀這個值。
+    # false 時 scheduler.start() 不註冊那四個工作。
+    # WNBA 的 fetch_and_store、run_daily_analysis、兩個手動 POST，
+    # 以及 odds prewarm 裡 sport 為 basketball_wnba 的 key 也讀這個值。
+    # NBA 排程不讀這個值。
     wnba_jobs_enabled: bool = True
     
     @property
