@@ -38,7 +38,7 @@ CORS `*` is rejected because a credentialed wildcard is not a configuration we w
 
 ## Tests / Verification
 
-- Backend pytest: `cd backend && python -m pytest tests -q` → 1617 passed, 64 skipped, 6 xfailed, 0 failed, with Redis running and again with Redis stopped. After merging `origin/dev` (`55750de`). `tests/test_spo133_ec2.py` covers the public-subnet placement, the two preconditions, and a process start with `ODDS_API_KEY` empty. The shared Redis client is tied to the loop that opened it. `/reads` passes that same cache into the injury loader. The SSM pages live in `backend/tests/fixtures/ssm/`.
+- Backend pytest, with CI's Redis, Postgres, and env (`REDIS_URL`, `DATABASE_URL`, `ODDS_API_KEY`, `OPENAI_API_KEY`, `REQUIRE_DOCKER_TESTS=1`): `cd backend && pytest --tb=short -q` → 1657 passed, 24 skipped, 7 xfailed, 0 failed. After merging `origin/dev` (`55750de`). `tests/test_spo133_ec2.py` covers the public-subnet placement, the two preconditions, and a process start with `ODDS_API_KEY` empty. The shared Redis client is tied to the loop that opened it. `close()` still clears that client and does not fail shutdown when disconnect sees a closed loop. `/reads` passes that same cache into the injury loader. The SSM pages live in `backend/tests/fixtures/ssm/`.
 - Terraform: `terraform fmt -check -recursive` clean. `terraform init -backend=false` uses hashicorp/aws v5.100.0. `terraform validate` succeeded. No plan and no apply.
 - Frontend: not exercised. Compose and the header contract are documented for the frontend rewrite.
 - Integration test: SKIPPED. No AWS account and no `RUN_INTEGRATION`. The SSM script test uses a fake `aws` binary.

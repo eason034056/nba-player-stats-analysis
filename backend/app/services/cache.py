@@ -273,8 +273,10 @@ class CacheService:
         Close the Redis connection.
 
         Call this to free resources when the application ends. A client
-        opened on another loop is dropped here. It is not disconnected
-        on this loop, because that is what raises ``Event loop is closed``.
+        opened on another loop is dropped here. Disconnect on this loop
+        can still raise ``Event loop is closed`` after TestClient has
+        finished that loop. Shutdown logs that and continues.
+        ``self._client`` is cleared either way.
         """
         self._release_foreign_client()
         client = self._client
@@ -282,7 +284,12 @@ class CacheService:
         self._loop = None
         if client is None:
             return
-        await client.close()
+        try:
+            await client.close()
+        except RuntimeError as exc:
+            if "Event loop is closed" not in str(exc):
+                raise
+            logger.warning("Redis close skipped; the event loop is already closed")
 
     async def acquire_lock(self, key: str, ttl: int) -> bool:
         """

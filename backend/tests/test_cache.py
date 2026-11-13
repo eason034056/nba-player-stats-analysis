@@ -410,6 +410,32 @@ class TestCacheClose:
         assert svc._loop is None
 
     @pytest.mark.asyncio
+    async def test_close_clears_client_when_disconnect_hits_a_closed_loop(self):
+        """Shutdown still finishes when disconnect itself sees a closed loop.
+
+        The client belongs to the running loop, so it is not dropped as
+        foreign. ``close()`` raises ``Event loop is closed``. The service
+        clears ``_client`` and does not fail the caller.
+        """
+
+        class _Boom:
+            def __init__(self) -> None:
+                self.closed = False
+
+            async def close(self) -> None:
+                self.closed = True
+                raise RuntimeError("Event loop is closed")
+
+        svc = CacheService()
+        client = _Boom()
+        svc._client = client
+        svc._loop = asyncio.get_running_loop()
+        await svc.close()
+        assert client.closed is True
+        assert svc._client is None
+        assert svc._loop is None
+
+    @pytest.mark.asyncio
     async def test_close_noop_when_no_client(self):
         """close() should do nothing if _client is already None."""
         svc = CacheService()
