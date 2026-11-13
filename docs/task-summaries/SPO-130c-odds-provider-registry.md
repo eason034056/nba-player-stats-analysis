@@ -44,10 +44,11 @@ Redis on `localhost:6379`, Postgres `novig` / `novig_nba` (the CI services). Pyt
 
 | Tree | Result |
 |---|---|
-| `origin/dev` `55750de` | `1599 passed, 28 skipped, 7 xfailed` |
-| this branch | `1610 passed, 28 skipped, 7 xfailed` |
+| `origin/dev` `55750de`, local | `1599 passed, 28 skipped, 7 xfailed` |
+| this branch, local | `1610 passed, 28 skipped, 7 xfailed` |
+| this branch, CI Backend Tests on `b4aebfe` ([run 43360844480](https://github.com/eason034056/nba-player-stats-analysis/actions/runs/43360844480)) | `1611 passed, 27 skipped, 7 xfailed` |
 
-The extra 11 passes are `tests/test_spo130c_odds_provider_registry.py` (8) and three protocol signature cases (`list_events`, `get_event_props`, `rate_status`) on the existing provider-signature test. Skipped and xfailed counts match dev.
+The extra 11 local passes are `tests/test_spo130c_odds_provider_registry.py` (8) and three protocol signature cases (`list_events`, `get_event_props`, `rate_status`) on the existing provider-signature test. Local skipped and xfailed counts match the local `dev` run. CI on this SHA passes one more test and skips one fewer.
 
 Local API, no call to `api.the-odds-api.com`. `ODDS_API_BASE_URL` pointed at `127.0.0.1:8765`, which returned the recorded NBA events file (WNBA path rewritten only in that process). `GET /api/nba/events?date=2026-11-10&regions=us&tz_offset=0` → 200, 8 events, `sport_key=basketball_nba`, first id `07361a8381206817e27bd2697fad7479`. `GET /api/wnba/events` with the same query → 200, 8 events, `sport_key=basketball_wnba`. The mock saw exactly:
 
@@ -73,7 +74,7 @@ Local API, no call to `api.the-odds-api.com`. `ODDS_API_BASE_URL` pointed at `12
 | `scripts/agents/tools/market.py` `_get_events`, `_get_player_odds` | `league=` |
 | `scripts/agents/tools/historical.py` `_infer_opponent_from_schedule` | `league=` |
 
-Searched `backend/` and `scripts/` for `sport=`, `get_market_snapshot`, `get_events`, and `_SPORT_KEY`. The only remaining `sport=` under `backend/app` is the gateway building `/v4/sports/{sport_key}/...` from `sport_key_for_league`. Exploration scripts (`scripts/explore_odds_api_*.py`) and a few tests still call `get_events(sport=...)`. That parameter still works and sends the same URL. In-repo routes, jobs, and agent tools do not pass it.
+Searched `backend/` and `scripts/` for `sport=`, `get_market_snapshot`, `get_events`, and `_SPORT_KEY`. The only remaining `sport=` under `backend/app` is the gateway building `/v4/sports/{sport_key}/...` from `sport_key_for_league`. A few tests still call `get_events(sport=...)`. That parameter still works and sends the same URL. `scripts/explore_odds_api_*.py` do not call `get_events`. Each script sets its own `SPORT` (`basketball_nba` or `basketball_wnba`) and requests `/v4/sports/{SPORT}/...` directly. Those scripts are unchanged from `dev`. In-repo routes, jobs, and agent tools pass `league=`.
 
 ## Follow-ups
 
