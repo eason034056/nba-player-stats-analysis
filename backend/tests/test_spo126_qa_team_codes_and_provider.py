@@ -125,7 +125,10 @@ def _all_app_service_providers() -> list[type]:
 
 
 class TestProviderSignatures:
-    @pytest.mark.parametrize("method", ["get_events", "get_event_odds"])
+    @pytest.mark.parametrize(
+        "method",
+        ["get_events", "get_event_odds", "list_events", "get_event_props", "rate_status"],
+    )
     def test_concrete_providers_accept_the_abstract_parameters(self, method: str):
         abstract = inspect.signature(getattr(OddsProvider, method))
         providers = [cls for cls in _all_app_service_providers() if not inspect.isabstract(cls)]
