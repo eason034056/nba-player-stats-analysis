@@ -921,6 +921,11 @@ async def trigger_wnba_daily_analysis(
     ),
 ) -> DailyPicksResponse:
     """WNBA mirror of `POST /api/nba/daily-picks/trigger`."""
+    if not settings.wnba_jobs_enabled:
+        raise HTTPException(
+            status_code=409,
+            detail="WNBA jobs are paused (WNBA_JOBS_ENABLED=false)",
+        )
     if date is None:
         date = nba_slate_date()[0]
 
@@ -1025,6 +1030,11 @@ async def get_wnba_team_lineup(
 async def refresh_wnba_lineups(
     date: Optional[str] = Query(default=None, description="Refresh date (YYYY-MM-DD), defaults to the US slate date (America/New_York)"),
 ) -> LineupRefreshResponse:
+    if not settings.wnba_jobs_enabled:
+        raise HTTPException(
+            status_code=409,
+            detail="WNBA jobs are paused (WNBA_JOBS_ENABLED=false)",
+        )
     target_date = date or nba_slate_date()[0]
     try:
         lineups = await wnba_lineup_service.fetch_and_store(target_date)

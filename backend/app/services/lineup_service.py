@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import logging
 import time
 from dataclasses import dataclass
 from datetime import date as date_type
@@ -13,6 +14,8 @@ from app.services.db import db_service
 from app.services.lineup_provider_rotogrinders import fetch_rotogrinders_lineups
 from app.services.lineup_provider_rotowire import fetch_rotowire_lineups
 from app.settings import settings
+
+logger = logging.getLogger(__name__)
 
 
 def _build_lineups_key(date: str, league: str = "nba") -> str:
@@ -271,12 +274,19 @@ class LineupConsensusService:
 
         cached_data = await cache_service.get(cache_key)
         cached_meta = await cache_service.get(meta_key)
+        # The write lives in fetch_and_store. This read skips that call
+        # when WNBA jobs are paused, and still returns a stored slate.
+        writes_paused = self.league == "wnba" and not settings.wnba_jobs_enabled
         if isinstance(cached_data, dict):
             fetched_at = (cached_meta or {}).get("fetched_at")
-            if self._is_stale(cached_meta):
+            if self._is_stale(cached_meta) and not writes_paused:
                 self._trigger_background_refresh(date)
                 return LineupReadResult(date=date, lineups=cached_data, fetched_at=fetched_at, cache_state="stale")
-            return LineupReadResult(date=date, lineups=cached_data, fetched_at=fetched_at, cache_state="fresh")
+            state = "stale" if self._is_stale(cached_meta) else "fresh"
+            return LineupReadResult(date=date, lineups=cached_data, fetched_at=fetched_at, cache_state=state)
+
+        if writes_paused:
+            return LineupReadResult(date=date, lineups={}, fetched_at=None, cache_state="fresh")
 
         try:
             lineups = await self.fetch_and_store(date)
@@ -319,6 +329,16 @@ class LineupConsensusService:
         return result.lineups.get(normalized_team), result.cache_state, result.fetched_at
 
     async def fetch_and_store(self, date: str) -> dict[str, dict[str, Any]]:
+        # One guard for the scrape, the Redis write, the Postgres upsert,
+        # and the fetch log. Any caller that reaches this method stops
+        # here. NBA is unchanged.
+        if self.league == "wnba" and not settings.wnba_jobs_enabled:
+            logger.info(
+                "WNBA_JOBS_ENABLED is false; lineup fetch skipped for %s",
+                date,
+            )
+            return {}
+
         started = time.time()
         status = "success"
         error_message = None

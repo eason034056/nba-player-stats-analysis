@@ -313,6 +313,11 @@ class OddsMarketGateway:
             if member_league is None:
                 await self.cache.remove_sorted_set_member(HOT_KEYS_ZSET_KEY, member)
                 continue
+            # Hot keys are mixed NBA and WNBA. Skip the WNBA league while
+            # the flag is off so that job does not call the Odds API.
+            # _league_from_hot_key reads league, and sport on older members.
+            if member_league == "wnba" and not settings.wnba_jobs_enabled:
+                continue
             normalized_markets = self._normalize_csv(context["markets"])
             normalized_books = self._normalize_bookmakers(context["bookmakers"])
             stored_provider = context.get("provider")

@@ -191,13 +191,24 @@ class SchedulerService:
         # versa). Same UTC 12:00 cron cadence; each call writes to its
         # own cache namespace (`daily_picks:nba:v2:...` vs
         # `daily_picks:wnba:...`), no shared mutable state.
-        self._scheduler.add_job(
-            self._run_wnba_daily_analysis_job,
-            trigger=CronTrigger(hour=12, minute=0),
-            id='wnba_daily_analysis_job',
-            name='Daily High Probability Player Analysis (WNBA)',
-            replace_existing=True
-        )
+        #
+        # WNBA_JOBS_ENABLED defaults to true, so this block runs today.
+        # False skips all four WNBA jobs (this one and the three lineup
+        # jobs below) and logs that once. NBA jobs are not in this if.
+        if settings.wnba_jobs_enabled:
+            self._scheduler.add_job(
+                self._run_wnba_daily_analysis_job,
+                trigger=CronTrigger(hour=12, minute=0),
+                id='wnba_daily_analysis_job',
+                name='Daily High Probability Player Analysis (WNBA)',
+                replace_existing=True
+            )
+        else:
+            logger.info(
+                "WNBA_JOBS_ENABLED is false; skipping WNBA jobs: "
+                "wnba_daily_analysis_job, wnba_lineup_fetch_opening, "
+                "wnba_lineup_fetch_active_window, wnba_lineup_fetch_pre_tipoff"
+            )
         
         # Add CSV download job
         # Runs at 10:00 Chicago time
@@ -306,41 +317,44 @@ class SchedulerService:
         # rather than parameterising _run_lineup_fetch_job because the
         # latter is wired to the NBA lineup_service singleton and changing
         # it is out of "NBA path unchanged" scope.
-        self._scheduler.add_job(
-            self._run_wnba_lineup_fetch_job,
-            trigger=CronTrigger(
-                hour=9,
-                minute=30,
-                timezone="America/Chicago",
-            ),
-            id='wnba_lineup_fetch_opening',
-            name='WNBA Lineup Prefetch (baseline)',
-            replace_existing=True
-        )
+        # Same flag as wnba_daily_analysis_job. The skip line is logged once
+        # above, so this branch only omits the three lineup registrations.
+        if settings.wnba_jobs_enabled:
+            self._scheduler.add_job(
+                self._run_wnba_lineup_fetch_job,
+                trigger=CronTrigger(
+                    hour=9,
+                    minute=30,
+                    timezone="America/Chicago",
+                ),
+                id='wnba_lineup_fetch_opening',
+                name='WNBA Lineup Prefetch (baseline)',
+                replace_existing=True
+            )
 
-        self._scheduler.add_job(
-            self._run_wnba_lineup_fetch_job,
-            trigger=CronTrigger(
-                hour="11-21",
-                minute="0,15,30,45",
-                timezone="America/Chicago",
-            ),
-            id='wnba_lineup_fetch_active_window',
-            name='WNBA Lineup Refresh (every 15 minutes)',
-            replace_existing=True
-        )
+            self._scheduler.add_job(
+                self._run_wnba_lineup_fetch_job,
+                trigger=CronTrigger(
+                    hour="11-21",
+                    minute="0,15,30,45",
+                    timezone="America/Chicago",
+                ),
+                id='wnba_lineup_fetch_active_window',
+                name='WNBA Lineup Refresh (every 15 minutes)',
+                replace_existing=True
+            )
 
-        self._scheduler.add_job(
-            self._run_wnba_lineup_fetch_job,
-            trigger=CronTrigger(
-                hour="17,18,19",
-                minute="0,5,10,15,20,25,30,35,40,45,50,55",
-                timezone="America/Chicago",
-            ),
-            id='wnba_lineup_fetch_pre_tipoff',
-            name='WNBA Lineup Refresh (every 5 minutes, pre-tipoff)',
-            replace_existing=True
-        )
+            self._scheduler.add_job(
+                self._run_wnba_lineup_fetch_job,
+                trigger=CronTrigger(
+                    hour="17,18,19",
+                    minute="0,5,10,15,20,25,30,35,40,45,50,55",
+                    timezone="America/Chicago",
+                ),
+                id='wnba_lineup_fetch_pre_tipoff',
+                name='WNBA Lineup Refresh (every 5 minutes, pre-tipoff)',
+                replace_existing=True
+            )
 
         # NBA injury snapshot. Cron only fires inside the slate window,
         # at :07 and :37 Chicago (every 30 minutes). misfire_grace_time
@@ -389,7 +403,10 @@ class SchedulerService:
         print("   - Odds Snapshot: Daily UTC 16:05, 22:05, 23:35")
         print("   - Hot Odds Key Prewarm: Every 30 seconds")
         print("   - Daily Analysis (NBA): Daily UTC 12:00")
-        print("   - Daily Analysis (WNBA): Daily UTC 12:00 (independent of NBA)")
+        if settings.wnba_jobs_enabled:
+            print("   - Daily Analysis (WNBA): Daily UTC 12:00 (independent of NBA)")
+        else:
+            print("   - Daily Analysis (WNBA): not registered (WNBA_JOBS_ENABLED is false)")
         print("   - CSV Download: Daily 10:00 Chicago time")
         print(
             "   - NBA Injury Refresh: Chicago 11:00-00:59 at :07 and :37"
