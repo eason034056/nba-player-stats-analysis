@@ -77,13 +77,6 @@ from app.services.pick_signals import build_nba_signals, injury_blocks_combined
 #   - test_daily_analysis_league_routes_csv_service
 #   - test_daily_analysis_league_namespaces_cache_key
 
-# The Odds API sport key per league — proven via curl evidence in
-# docs/research/wnba-rollout/odds_api_wnba_markets.md §3.
-_SPORT_KEY_BY_LEAGUE: Dict[str, str] = {
-    "nba": "basketball_nba",
-    "wnba": "basketball_wnba",
-}
-
 # CSV historical service singletons created in csv_player_history.py
 # (one per league CSV file). Indirection keeps the league dispatch
 # centralized rather than scattered through _analyze_single_event.
@@ -93,14 +86,12 @@ _CSV_SERVICE_BY_LEAGUE: Dict[str, Any] = {
 }
 
 def _resolve_sport_key(league: str) -> str:
-    """Look up The Odds API sport key for a league, raising on unknown."""
-    sport_key = _SPORT_KEY_BY_LEAGUE.get(league.lower())
-    if sport_key is None:
-        raise ValueError(
-            f"Unsupported league: {league!r}. "
-            f"Registered: {sorted(_SPORT_KEY_BY_LEAGUE.keys())}"
-        )
-    return sport_key
+    """Look up The Odds API sport key for a league, raising on unknown.
+
+    The map lives on ``TheOddsAPIProvider``. This wrapper keeps the
+    daily-analysis call sites and their tests on one function.
+    """
+    return odds_provider.sport_key_for(league)
 
 
 def _resolve_csv_service(league: str):
@@ -1131,7 +1122,7 @@ class DailyAnalysisService:
 
         # Call Odds API
         raw_events = await odds_provider.get_events(
-            sport=sport_key,
+            league=league,
             regions="us",
             date_from=date_from,
             date_to=date_to
@@ -1407,10 +1398,8 @@ class DailyAnalysisService:
         Args:
             event_id: Event ID
             market: Market type (e.g. player_points)
-            league: League key, mapped to The Odds API ``sport_key`` via
-                    ``_resolve_sport_key``. The Odds API ``event_id``
-                    is globally unique across sport keys, but the gateway
-                    embeds ``sport`` in its snapshot cache key — wrong
+            league: League key. The gateway embeds ``league`` and the
+                    provider name in its snapshot cache key — wrong
                     league → cache miss + a misleading 404 from the API.
 
         Returns:
@@ -1418,7 +1407,7 @@ class DailyAnalysisService:
         """
         try:
             snapshot = await odds_gateway.get_market_snapshot(
-                sport=_resolve_sport_key(league),
+                league=league,
                 event_id=event_id,
                 regions="us",
                 markets=market,

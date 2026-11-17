@@ -326,7 +326,7 @@ class OddsSnapshotService:
         date_to = utc_end + timedelta(hours=1)
 
         raw_events = await odds_provider.get_events(
-            sport="basketball_nba",
+            league="nba",
             regions="us",
             date_from=date_from,
             date_to=date_to,
@@ -379,7 +379,7 @@ class OddsSnapshotService:
         """
         # Fetch odds for 4 markets in one call (reducing API calls)
         snapshot = await odds_gateway.get_market_snapshot(
-            sport="basketball_nba",
+            league="nba",
             event_id=event_id,
             regions="us",
             markets=SNAPSHOT_MARKETS,

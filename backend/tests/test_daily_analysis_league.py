@@ -175,8 +175,8 @@ class TestRunDailyAnalysisLeagueRouting:
         self, monkeypatch
     ):
         """`run_daily_analysis(league="wnba")` MUST call odds_provider with
-        ``sport='basketball_wnba'``; if this regresses, we silently fetch
-        NBA events under a WNBA cache key."""
+        ``league='wnba'``. The provider maps that to ``basketball_wnba``.
+        If this regresses, we silently fetch NBA events under a WNBA cache key."""
         service = DailyAnalysisService()
 
         monkeypatch.setattr(
@@ -202,7 +202,8 @@ class TestRunDailyAnalysisLeagueRouting:
 
         get_events.assert_awaited_once()
         kwargs = get_events.await_args.kwargs
-        assert kwargs["sport"] == "basketball_wnba"
+        assert kwargs["league"] == "wnba"
+        assert _resolve_sport_key(kwargs["league"]) == "basketball_wnba"
 
     def test_nba_default_keeps_basketball_nba_sport_key(self, monkeypatch):
         """Regression guard — adding the `league` parameter must NOT
@@ -226,7 +227,8 @@ class TestRunDailyAnalysisLeagueRouting:
         asyncio.run(service.run_daily_analysis(date="2026-05-14"))
 
         get_events.assert_awaited_once()
-        assert get_events.await_args.kwargs["sport"] == "basketball_nba"
+        assert get_events.await_args.kwargs["league"] == "nba"
+        assert _resolve_sport_key("nba") == "basketball_nba"
 
     # ---- 2.3 Cache key namespace ----------------------------------------
 

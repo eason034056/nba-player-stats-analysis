@@ -39,18 +39,9 @@ MARKET_MAP = {
     "pra": "player_points_rebounds_assists",
 }
 
-# SPO-58 (Phase 5c) — league → sport_key mapping. The Odds API parameterizes
-# every basketball league as a separate sport_key (SPO-33 added "basketball_wnba"
-# alongside the existing "basketball_nba"). Keeping the map here means the rest
-# of the file just forwards `league` and never duplicates the string literal.
-_LEAGUE_TO_SPORT_KEY: Dict[str, str] = {
-    "nba": "basketball_nba",
-    "wnba": "basketball_wnba",
-}
-
-
-def _sport_key_for(league: str = "nba") -> str:
-    return _LEAGUE_TO_SPORT_KEY.get((league or "nba").lower(), "basketball_nba")
+def _league_key(league: str = "nba") -> str:
+    """Normalize a league argument. The provider rejects anything else."""
+    return (league or "nba").strip().lower()
 
 
 def _signal_payload(signal, effect_size, sample_size, reliability, window, source, details):
@@ -218,8 +209,8 @@ async def _get_events(date: str = "", league: str = "nba"):
 
     - date 為空：查 now-6h ~ now+18h（UTC）
     - date 為 YYYY-MM-DD：視為本地日期，轉成 UTC 區間後查詢
-    - league: maps to sport_key via `_sport_key_for(...)`. Default "nba" keeps
-      legacy callers on the pre-5c path.
+    - league: ``nba`` or ``wnba``. Default "nba" keeps legacy callers
+      on the pre-5c path. The provider maps the league to a sport key.
     """
     from app.services.odds_theoddsapi import odds_provider
     now = datetime.now(timezone.utc)
@@ -238,7 +229,7 @@ async def _get_events(date: str = "", league: str = "nba"):
                 date_to = max(date_to, end_utc)
 
     return await odds_provider.get_events(
-        sport=_sport_key_for(league),
+        league=_league_key(league),
         regions="us",
         date_from=date_from,
         date_to=date_to,
@@ -254,7 +245,7 @@ async def _get_player_odds(
     from app.services.odds_gateway import odds_gateway
     try:
         snapshot = await odds_gateway.get_market_snapshot(
-            sport=_sport_key_for(league),
+            league=_league_key(league),
             event_id=event_id,
             regions="us",
             markets=market_key,
