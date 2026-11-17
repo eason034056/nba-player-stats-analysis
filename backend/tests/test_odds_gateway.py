@@ -429,13 +429,22 @@ async def test_prewarm_skips_wnba_keys_when_the_flag_is_off(monkeypatch):
         '{"bookmakers": null, "event_id": "evt_wnba", "markets": "player_points", '
         '"odds_format": "american", "regions": "us", "sport": "basketball_wnba"}'
     )
+    wnba_league_member = (
+        '{"bookmakers": null, "event_id": "evt_wnba_league", "league": "wnba", '
+        '"markets": "player_points", "odds_format": "american", "regions": "us"}'
+    )
     nba_member = (
         '{"bookmakers": null, "event_id": "evt_123", "markets": "player_points", '
         '"odds_format": "american", "regions": "us", "sport": "basketball_nba"}'
     )
-    cache.zsets[HOT_KEYS_ZSET_KEY] = {wnba_member: 9.0, nba_member: 1.0}
+    cache.zsets[HOT_KEYS_ZSET_KEY] = {
+        wnba_member: 9.0,
+        wnba_league_member: 8.0,
+        nba_member: 1.0,
+    }
     seen = datetime.now(timezone.utc).isoformat()
     cache.values[f"odds:hot_seen:v1:{wnba_member}"] = {"seen_at": seen}
+    cache.values[f"odds:hot_seen:v1:{wnba_league_member}"] = {"seen_at": seen}
     cache.values[f"odds:hot_seen:v1:{nba_member}"] = {"seen_at": seen}
 
     warmed = await gateway.prewarm_hot_keys()
@@ -443,3 +452,4 @@ async def test_prewarm_skips_wnba_keys_when_the_flag_is_off(monkeypatch):
     assert warmed == 1
     assert [call["sport"] for call in provider.calls] == ["basketball_nba"]
     assert wnba_member in cache.zsets[HOT_KEYS_ZSET_KEY]
+    assert wnba_league_member in cache.zsets[HOT_KEYS_ZSET_KEY]

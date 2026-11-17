@@ -477,7 +477,7 @@ async def get_events(
         date_to = utc_end + timedelta(hours=1)
         
         raw_events = await odds_provider.get_events(
-            sport="basketball_nba",
+            league="nba",
             regions=regions,
             date_from=date_from,
             date_to=date_to
@@ -876,7 +876,7 @@ async def calculate_no_vig(request: Request, body: NoVigRequest) -> NoVigRespons
     """
     try:
         snapshot = await odds_gateway.get_market_snapshot(
-            sport="basketball_nba",
+            league="nba",
             event_id=body.event_id,
             regions=body.regions,
             markets=body.market,
@@ -1072,7 +1072,7 @@ async def suggest_players(
     """
     try:
         snapshot = await odds_gateway.get_market_snapshot(
-            sport="basketball_nba",
+            league="nba",
             event_id=event_id,
             regions="us",
             markets=market,

@@ -22,6 +22,9 @@ class Settings(BaseSettings):
     # The Odds API 設定
     odds_api_key: str = ""  # The Odds API 的 API 金鑰
     odds_api_base_url: str = "https://api.the-odds-api.com"  # API 基礎 URL
+    # NBA row of the odds provider table. Only "theoddsapi" is accepted.
+    # WNBA does not read this value.
+    nba_odds_provider: str = "theoddsapi"
 
     # BALLDONTLIE. balldontlie_api_key 對應 BALLDONTLIE_API_KEY。SecretStr 讓
     # Settings 的 repr 不印出金鑰。client 用 get_secret_value() 取出 str，
@@ -85,7 +88,8 @@ class Settings(BaseSettings):
     # WNBA_JOBS_ENABLED。預設 true，沒設環境變數時四個 WNBA 排程照常註冊。
     # false 時 scheduler.start() 不註冊那四個工作。
     # WNBA 的 fetch_and_store、run_daily_analysis、兩個手動 POST，
-    # 以及 odds prewarm 裡 sport 為 basketball_wnba 的 key 也讀這個值。
+    # 以及 odds prewarm 裡 league 為 wnba 的 key 也讀這個值。
+    # 舊 hot key 只有 sport=basketball_wnba，會先換成 league 再判斷。
     # NBA 排程不讀這個值。
     wnba_jobs_enabled: bool = True
     
