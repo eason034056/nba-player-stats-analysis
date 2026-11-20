@@ -13,9 +13,12 @@ Coverage:
 6. close sets pool to None
 7. is_connected returns True when pool exists
 8. execute/fetch/fetchrow/executemany raise RuntimeError when pool is None
-9. init() success path (creates pool, runs schema)
+9. init() success path (creates pool, confirms schema_migrations is at head)
 10. init() failure path (sets pool to None)
 """
+
+import logging
+import socket
 
 import pytest
 import sys
@@ -26,7 +29,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 # Add project root to Python path so we can import app modules
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from app.services.db import DatabaseService, SCHEMA_SQL
+from app.services.db import DatabaseService
 
 
 # ---------------------------------------------------------------------------
@@ -48,6 +51,7 @@ class FakeConnection:
         # Default return values - can be overridden per test
         self.execute_return = "INSERT 0 1"
         self.fetch_return = [{"id": 1, "name": "Curry"}]
+        self.fetch_error: BaseException | None = None
         self.fetchrow_return = {"id": 1, "name": "Curry"}
         self.executemany_return = None
 
@@ -57,6 +61,8 @@ class FakeConnection:
 
     async def fetch(self, query, *args):
         self.fetch_calls.append((query, *args))
+        if self.fetch_error is not None:
+            raise self.fetch_error
         return self.fetch_return
 
     async def fetchrow(self, query, *args):
@@ -308,9 +314,12 @@ class TestInit:
     """Tests for DatabaseService.init()."""
 
     @pytest.mark.asyncio
-    async def test_init_creates_pool_and_runs_schema(self, monkeypatch):
-        """init() should create a pool and execute the schema SQL."""
+    async def test_init_creates_pool_and_confirms_head(self, monkeypatch):
+        """init() opens a pool and reads schema_migrations. It does not run SCHEMA_SQL."""
+        from app.migrations.runner import discover
+
         fake_conn = FakeConnection()
+        fake_conn.fetch_return = [{"version": migration.version} for migration in discover()]
         fake_pool = FakePool(fake_conn)
 
         # Patch asyncpg.create_pool to return our fake pool
@@ -328,9 +337,253 @@ class TestInit:
 
         assert svc.is_connected is True
         assert svc._pool is fake_pool
-        # The schema SQL should have been executed
-        assert len(fake_conn.execute_calls) == 1
-        assert fake_conn.execute_calls[0][0] == SCHEMA_SQL
+        assert fake_conn.execute_calls == []
+        assert any("schema_migrations" in call[0] for call in fake_conn.fetch_calls)
+
+    @pytest.mark.asyncio
+    async def test_init_leaves_the_pool_unset_when_migrations_are_missing(self, monkeypatch):
+        """A database behind the image is not papered over by running SCHEMA_SQL."""
+        fake_conn = FakeConnection()
+        fake_conn.fetch_return = []
+        fake_pool = FakePool(fake_conn)
+
+        import app.services.db as db_module
+
+        async def mock_create_pool(**kwargs):
+            return fake_pool
+
+        monkeypatch.setattr(db_module.asyncpg, "create_pool", mock_create_pool)
+
+        svc = DatabaseService()
+        with pytest.raises(db_module.SchemaNotAtHead):
+            await svc.init()
+
+        assert svc.is_connected is False
+        assert svc._pool is None
+        assert fake_conn.execute_calls == []
+        assert fake_pool.closed is True
+
+    @pytest.mark.asyncio
+    async def test_init_logs_missing_versions_once(
+        self, monkeypatch, caplog: pytest.LogCaptureFixture
+    ):
+        """A bare uvicorn start logs one ERROR and the copy-paste upgrade command.
+
+        The recorded versions are only 001, so 002 (and any later file) is
+        missing. A missing schema_migrations table is the same report with
+        every shipped version named. The DSN and its password stay out of the log.
+        """
+        import asyncpg
+
+        import app.services.db as db_module
+        from app.migrations.runner import discover
+
+        password = "pw-must-not-leak"
+        dsn = f"postgresql://novig:{password}@rds.example:5432/novig_nba"
+        shipped = [migration.version for migration in discover()]
+        cases = [
+            ("behind", [{"version": shipped[0]}], shipped[1:]),
+            ("no-table", None, shipped),
+        ]
+
+        async def mock_create_pool(**kwargs):
+            return current["pool"]
+
+        monkeypatch.setattr(db_module.asyncpg, "create_pool", mock_create_pool)
+        monkeypatch.setattr(db_module.settings, "database_url", dsn)
+        current: dict = {}
+
+        for name, fetch_return, missing in cases:
+            fake_conn = FakeConnection()
+            if name == "no-table":
+                fake_conn.fetch_error = asyncpg.UndefinedTableError(
+                    'relation "schema_migrations" does not exist'
+                )
+            else:
+                fake_conn.fetch_return = fetch_return
+            current["pool"] = FakePool(fake_conn)
+            svc = DatabaseService()
+            with caplog.at_level(logging.ERROR, logger="app.services.db"):
+                with pytest.raises(db_module.SchemaNotAtHead) as raised:
+                    await svc.init()
+
+            errors = [record for record in caplog.records if record.levelno >= logging.ERROR]
+            assert len(errors) == 1, name
+            message = errors[0].getMessage()
+            assert message == str(raised.value)
+            assert message == svc.schema_head_error
+            assert "python -m app.migrations upgrade" in message
+            assert "does not exist" not in message
+            for version in missing:
+                assert version in message
+            if name == "behind":
+                assert shipped[0] not in message
+            assert password not in caplog.text
+            assert dsn not in caplog.text
+            assert "postgresql://" not in caplog.text
+            assert svc.is_connected is False
+            caplog.clear()
+
+    @pytest.mark.asyncio
+    async def test_init_at_head_does_not_log_a_schema_error(
+        self, monkeypatch, caplog: pytest.LogCaptureFixture
+    ):
+        """A database that already has every shipped version logs no schema error."""
+        import app.services.db as db_module
+        from app.migrations.runner import discover
+
+        fake_conn = FakeConnection()
+        fake_conn.fetch_return = [
+            {"version": migration.version} for migration in discover()
+        ]
+        fake_pool = FakePool(fake_conn)
+
+        async def mock_create_pool(**kwargs):
+            return fake_pool
+
+        monkeypatch.setattr(db_module.asyncpg, "create_pool", mock_create_pool)
+
+        svc = DatabaseService()
+        with caplog.at_level(logging.ERROR, logger="app.services.db"):
+            await svc.init()
+
+        assert svc.is_connected is True
+        assert svc.schema_head_error is None
+        assert not any(
+            "python -m app.migrations upgrade" in record.getMessage()
+            for record in caplog.records
+        )
+        assert not any(record.levelno >= logging.ERROR for record in caplog.records)
+
+    @pytest.mark.asyncio
+    async def test_database_required_raises_the_same_schema_message(
+        self, monkeypatch, caplog: pytest.LogCaptureFixture
+    ):
+        """DATABASE_REQUIRED=true aborts with the one schema ERROR, and does not log a second one."""
+        import app.main as main_mod
+        import app.services.db as db_module
+        from fastapi import FastAPI
+
+        password = "pw-must-not-leak"
+        dsn = f"postgresql://novig:{password}@rds.example:5432/novig_nba"
+        fake_conn = FakeConnection()
+        fake_conn.fetch_return = []
+        fake_pool = FakePool(fake_conn)
+
+        async def mock_create_pool(**kwargs):
+            return fake_pool
+
+        monkeypatch.setattr(db_module.asyncpg, "create_pool", mock_create_pool)
+        monkeypatch.setattr(db_module.settings, "database_url", dsn)
+        monkeypatch.setattr(main_mod.settings, "database_required", True)
+        monkeypatch.setattr(main_mod, "setup_logging", lambda: None)
+
+        with caplog.at_level(logging.ERROR):
+            with pytest.raises(RuntimeError) as raised:
+                async with main_mod.lifespan(FastAPI()):
+                    pass
+
+        errors = [record for record in caplog.records if record.levelno >= logging.ERROR]
+        assert len(errors) == 1
+        assert str(raised.value) == errors[0].getMessage()
+        assert "python -m app.migrations upgrade" in str(raised.value)
+        assert password not in caplog.text
+        assert password not in str(raised.value)
+        assert "postgresql://" not in caplog.text
+        assert "postgresql://" not in str(raised.value)
+
+    @pytest.mark.asyncio
+    async def test_schema_behind_aborts_even_when_database_is_optional(
+        self, monkeypatch, caplog: pytest.LogCaptureFixture
+    ):
+        """A reachable database that is not at head stops startup when DATABASE_REQUIRED is false."""
+        import app.main as main_mod
+        import app.services.db as db_module
+        from fastapi import FastAPI
+
+        fake_conn = FakeConnection()
+        fake_conn.fetch_return = []
+        fake_pool = FakePool(fake_conn)
+
+        async def mock_create_pool(**kwargs):
+            return fake_pool
+
+        monkeypatch.setattr(db_module.asyncpg, "create_pool", mock_create_pool)
+        monkeypatch.setattr(main_mod.settings, "database_required", False)
+        monkeypatch.setattr(main_mod, "setup_logging", lambda: None)
+
+        with caplog.at_level(logging.ERROR):
+            with pytest.raises(RuntimeError, match="python -m app.migrations upgrade"):
+                async with main_mod.lifespan(FastAPI()):
+                    pass
+
+        errors = [record for record in caplog.records if record.levelno >= logging.ERROR]
+        assert len(errors) == 1
+        assert "DATABASE_REQUIRED" not in errors[0].getMessage()
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize(
+        "failure",
+        [ConnectionRefusedError("refused"), TimeoutError("timed out"), socket.gaierror("dns")],
+    )
+    async def test_connection_failure_still_boots_when_database_is_optional(
+        self, monkeypatch, failure
+    ):
+        """Refused, timed out, and unresolvable hosts stay on the boot-without-DB path."""
+        import app.main as main_mod
+        import app.services.db as db_module
+        from fastapi import FastAPI
+
+        async def mock_create_pool(**kwargs):
+            raise failure
+
+        monkeypatch.setattr(db_module.asyncpg, "create_pool", mock_create_pool)
+        monkeypatch.setattr(main_mod.settings, "database_required", False)
+        monkeypatch.setattr(main_mod, "setup_logging", lambda: None)
+
+        async with main_mod.lifespan(FastAPI()):
+            assert main_mod.db_service.is_connected is False
+
+    def test_health_is_not_served_when_schema_is_behind(self, monkeypatch):
+        """A reachable database that is not at head never answers GET /api/health with 200."""
+        import app.main as main_mod
+        import app.services.db as db_module
+        from fastapi.testclient import TestClient
+
+        fake_conn = FakeConnection()
+        fake_conn.fetch_return = []
+
+        async def mock_create_pool(**kwargs):
+            return FakePool(fake_conn)
+
+        monkeypatch.setattr(db_module.asyncpg, "create_pool", mock_create_pool)
+        monkeypatch.setattr(main_mod.settings, "database_required", False)
+        monkeypatch.setattr(main_mod, "setup_logging", lambda: None)
+
+        status: int | None = None
+        try:
+            with TestClient(main_mod.app) as client:
+                status = client.get("/api/health").status_code
+        except Exception:
+            status = None
+        assert status != 200
+
+    def test_health_stays_up_when_postgres_refuses_the_connection(self, monkeypatch):
+        """A refused connection with DATABASE_REQUIRED false still serves /api/health."""
+        import app.main as main_mod
+        import app.services.db as db_module
+        from fastapi.testclient import TestClient
+
+        async def mock_create_pool(**kwargs):
+            raise ConnectionRefusedError("refused")
+
+        monkeypatch.setattr(db_module.asyncpg, "create_pool", mock_create_pool)
+        monkeypatch.setattr(main_mod.settings, "database_required", False)
+        monkeypatch.setattr(main_mod, "setup_logging", lambda: None)
+
+        with TestClient(main_mod.app) as client:
+            response = client.get("/api/health")
+        assert response.status_code == 200
 
     @pytest.mark.asyncio
     async def test_init_sets_pool_none_on_failure(self, monkeypatch):
@@ -353,11 +606,15 @@ class TestInit:
         """init() should pass the correct DSN, min_size, and max_size."""
         import app.services.db as db_module
 
+        from app.migrations.runner import discover
+
         captured_kwargs = {}
+        connection = FakeConnection()
+        connection.fetch_return = [{"version": migration.version} for migration in discover()]
 
         async def mock_create_pool(**kwargs):
             captured_kwargs.update(kwargs)
-            return FakePool()
+            return FakePool(connection)
 
         monkeypatch.setattr(db_module.asyncpg, "create_pool", mock_create_pool)
 

@@ -49,6 +49,9 @@ COPY backend/ ./
 COPY scripts/agents ./scripts/agents
 COPY data ./data
 
+# The entrypoint applies migrations before the process becomes uvicorn.
+RUN chmod +x /app/docker-entrypoint.sh
+
 # ==================== 暴露端口 ====================
 # 聲明容器會使用的端口
 # 這只是文件說明，實際端口映射由 docker run -p 決定
@@ -64,9 +67,8 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
     CMD curl -f http://localhost:8000/api/health || exit 1
 
 # ==================== 啟動命令 ====================
-# 容器啟動時執行的命令
-# uvicorn: ASGI 伺服器
-# app.main:app: 應用程式位置（module:variable）
-# --host 0.0.0.0: 監聽所有介面（容器內需要）
-# --port 8000: 監聽端口
+# ENTRYPOINT 先跑 migration，再 exec CMD。
+# compose 若只換 CMD（例如加上 --proxy-headers），migration 仍會先跑。
+# 不要把 ENTRYPOINT 換成一支直接啟動 uvicorn 的命令。
+ENTRYPOINT ["/app/docker-entrypoint.sh"]
 CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]

@@ -20,7 +20,7 @@ from app.middleware.logging_config import RequestLoggingMiddleware, setup_loggin
 from app.middleware.rate_limit import install_rate_limiter
 from app.dsn import mask_database_url, redact_secrets
 from app.services.cache import cache_service
-from app.services.db import db_service
+from app.services.db import SchemaNotAtHead, db_service
 from app.services.scheduler import scheduler_service
 from app.settings import settings
 
@@ -65,11 +65,16 @@ async def lifespan(app: FastAPI):
     print(f"🐘 Database URL: {mask_database_url(settings.database_url)}")
 
     # 初始化 PostgreSQL 連線池。
-    # init() 自己吞掉連線錯誤並把 pool 設成 None，所以這裡還要看 is_connected。
-    # DATABASE_REQUIRED=true 時啟動必須失敗；預設 false，本機沒有 Postgres 仍可啟動。
+    # 連不上（拒絕、逾時、DNS）時 init() 把 pool 留空，不往外丟。
+    # DATABASE_REQUIRED=true 才因此中止啟動。預設 false，本機沒有 Postgres 仍可啟動。
+    # 連得上但 schema 不是 head 時，init() 已經記過一行 ERROR 並丟出 SchemaNotAtHead。
+    # 這裡用同一句話中止啟動，不論 DATABASE_REQUIRED，不再記第二次。
     secrets = _startup_secrets()
+    db_service.schema_head_error = None
     try:
         await db_service.init()
+    except SchemaNotAtHead as exc:
+        raise RuntimeError(str(exc)) from None
     except Exception as exc:
         safe = redact_secrets(str(exc), secrets)
         logger.error("PostgreSQL startup failed: %s", safe)
@@ -81,6 +86,8 @@ async def lifespan(app: FastAPI):
         print("⚠️ PostgreSQL 初始化失敗（連線字串已遮罩，詳見 error log）")
         print("   PostgreSQL 持久化儲存將不可用（仍可使用 Redis 快取）")
     else:
+        if db_service.schema_head_error:
+            raise RuntimeError(db_service.schema_head_error)
         if not db_service.is_connected:
             if settings.database_required:
                 logger.error(
