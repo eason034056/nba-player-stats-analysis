@@ -80,6 +80,8 @@ logs/
 # ==================== 快取 ====================
 .cache/
 *.cache
+# SPO-138 backfill: raw BALLDONTLIE pages, kept locally (python -m app.backfill --raw-dir).
+bdl-raw/
 
 # ==================== 建置產物 ====================
 *.pyc
