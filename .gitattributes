@@ -1,0 +1,9 @@
+# Recorded external API responses, saved unchanged by scripts/explore_*.py
+# (see backend/tests/fixtures/README.md). GitHub collapses generated files in
+# pull request diffs and leaves them out of the language bar. File contents,
+# git diff, and CI are unaffected. The captures are checked by tests, such as
+# the capture registry in test_bdl_client.py, not by reading them in review.
+# Hand-written fixtures (frontend/test/fixtures, copied API bodies) stay visible.
+backend/tests/fixtures/bdl/*.json       linguist-generated=true
+backend/tests/fixtures/odds_api_*.json  linguist-generated=true
+tests/fixtures/espn/**/*.json           linguist-generated=true
