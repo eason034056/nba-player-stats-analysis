@@ -91,6 +91,8 @@ langgraph==1.1.2
 
 # LangChain OpenAI: ChatOpenAI runtime used by scripts/agents
 langchain-openai==1.1.11
+# langsmith 0.15.x fails to import under pydantic 2.8.0 (FeedbackConfigSchema NameError).
+langsmith==0.14.17
 
 # ==================== HTML 解析 (SPO-34) ====================
 # BeautifulSoup4 + lxml: WNBA lineup HTML parsing (RotoWire WNBA scraper).

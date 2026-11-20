@@ -1,0 +1,18 @@
+{
+ "request": "https://api.balldontlie.io/v1/games?seasons%5B%5D=2025&season_type=bogus&per_page=100",
+ "status": 400,
+ "elapsed_s": 0.2,
+ "rate_headers": {
+  "x-ratelimit-limit": "600",
+  "x-ratelimit-remaining": "595",
+  "x-ratelimit-reset": "1794894335"
+ },
+ "response": {
+  "errors": [
+   {
+    "param": "season_type",
+    "error": "Invalid value"
+   }
+  ]
+ }
+}

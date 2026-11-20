@@ -1,0 +1,63 @@
+{
+ "request": "https://api.balldontlie.io/v1/games/434",
+ "status": 200,
+ "elapsed_s": 0.12,
+ "rate_headers": {
+  "x-ratelimit-limit": "600",
+  "x-ratelimit-remaining": "593",
+  "x-ratelimit-reset": "1795126253"
+ },
+ "response": {
+  "data": {
+   "id": 434,
+   "date": "2018-11-30",
+   "season": 2018,
+   "status": "Final",
+   "status_state": "final",
+   "period": 4,
+   "time": " ",
+   "postseason": false,
+   "postponed": false,
+   "home_team_score": 124,
+   "visitor_team_score": 109,
+   "datetime": "2018-12-01T01:00:00.000Z",
+   "home_q1": 28,
+   "home_q2": 38,
+   "home_q3": 25,
+   "home_q4": 33,
+   "home_ot1": null,
+   "home_ot2": null,
+   "home_ot3": null,
+   "home_timeouts_remaining": null,
+   "home_in_bonus": null,
+   "visitor_q1": 26,
+   "visitor_q2": 20,
+   "visitor_q3": 30,
+   "visitor_q4": 33,
+   "visitor_ot1": null,
+   "visitor_ot2": null,
+   "visitor_ot3": null,
+   "visitor_timeouts_remaining": null,
+   "visitor_in_bonus": null,
+   "ist_stage": null,
+   "home_team": {
+    "id": 21,
+    "conference": "West",
+    "division": "Northwest",
+    "city": "Oklahoma City",
+    "name": "Thunder",
+    "full_name": "Oklahoma City Thunder",
+    "abbreviation": "OKC"
+   },
+   "visitor_team": {
+    "id": 1,
+    "conference": "East",
+    "division": "Southeast",
+    "city": "Atlanta",
+    "name": "Hawks",
+    "full_name": "Atlanta Hawks",
+    "abbreviation": "ATL"
+   }
+  }
+ }
+}

@@ -1,0 +1,63 @@
+{
+ "request": "https://api.balldontlie.io/v1/games/1038278",
+ "status": 200,
+ "elapsed_s": 0.2,
+ "rate_headers": {
+  "x-ratelimit-limit": "600",
+  "x-ratelimit-remaining": "591",
+  "x-ratelimit-reset": "1795126253"
+ },
+ "response": {
+  "data": {
+   "id": 1038278,
+   "date": "2024-02-01",
+   "season": 2023,
+   "status": "Final",
+   "status_state": "final",
+   "period": 4,
+   "time": "Final",
+   "postseason": false,
+   "postponed": false,
+   "home_team_score": 124,
+   "visitor_team_score": 127,
+   "datetime": "2024-02-02T03:00:00.000Z",
+   "home_q1": 32,
+   "home_q2": 29,
+   "home_q3": 32,
+   "home_q4": 31,
+   "home_ot1": null,
+   "home_ot2": null,
+   "home_ot3": null,
+   "home_timeouts_remaining": 0,
+   "home_in_bonus": true,
+   "visitor_q1": 39,
+   "visitor_q2": 32,
+   "visitor_q3": 22,
+   "visitor_q4": 34,
+   "visitor_ot1": null,
+   "visitor_ot2": null,
+   "visitor_ot3": null,
+   "visitor_timeouts_remaining": 0,
+   "visitor_in_bonus": true,
+   "ist_stage": null,
+   "home_team": {
+    "id": 29,
+    "conference": "West",
+    "division": "Northwest",
+    "city": "Utah",
+    "name": "Jazz",
+    "full_name": "Utah Jazz",
+    "abbreviation": "UTA"
+   },
+   "visitor_team": {
+    "id": 23,
+    "conference": "East",
+    "division": "Atlantic",
+    "city": "Philadelphia",
+    "name": "76ers",
+    "full_name": "Philadelphia 76ers",
+    "abbreviation": "PHI"
+   }
+  }
+ }
+}

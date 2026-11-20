@@ -1,0 +1,63 @@
+{
+ "request": "https://api.balldontlie.io/v1/games/1038379",
+ "status": 200,
+ "elapsed_s": 0.12,
+ "rate_headers": {
+  "x-ratelimit-limit": "600",
+  "x-ratelimit-remaining": "587",
+  "x-ratelimit-reset": "1795126253"
+ },
+ "response": {
+  "data": {
+   "id": 1038379,
+   "date": "2024-02-14",
+   "season": 2023,
+   "status": "Final",
+   "status_state": "final",
+   "period": 4,
+   "time": "Final",
+   "postseason": false,
+   "postponed": false,
+   "home_team_score": 116,
+   "visitor_team_score": 100,
+   "datetime": "2024-02-15T02:00:00.000Z",
+   "home_q1": 37,
+   "home_q2": 33,
+   "home_q3": 29,
+   "home_q4": 17,
+   "home_ot1": null,
+   "home_ot2": null,
+   "home_ot3": null,
+   "home_timeouts_remaining": 2,
+   "home_in_bonus": true,
+   "visitor_q1": 25,
+   "visitor_q2": 16,
+   "visitor_q3": 28,
+   "visitor_q4": 31,
+   "visitor_ot1": null,
+   "visitor_ot2": null,
+   "visitor_ot3": null,
+   "visitor_timeouts_remaining": 2,
+   "visitor_in_bonus": true,
+   "ist_stage": null,
+   "home_team": {
+    "id": 24,
+    "conference": "West",
+    "division": "Pacific",
+    "city": "Phoenix",
+    "name": "Suns",
+    "full_name": "Phoenix Suns",
+    "abbreviation": "PHX"
+   },
+   "visitor_team": {
+    "id": 9,
+    "conference": "East",
+    "division": "Central",
+    "city": "Detroit",
+    "name": "Pistons",
+    "full_name": "Detroit Pistons",
+    "abbreviation": "DET"
+   }
+  }
+ }
+}

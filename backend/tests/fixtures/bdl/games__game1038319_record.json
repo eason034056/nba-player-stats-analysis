@@ -1,0 +1,63 @@
+{
+ "request": "https://api.balldontlie.io/v1/games/1038319",
+ "status": 200,
+ "elapsed_s": 0.11,
+ "rate_headers": {
+  "x-ratelimit-limit": "600",
+  "x-ratelimit-remaining": "589",
+  "x-ratelimit-reset": "1795126253"
+ },
+ "response": {
+  "data": {
+   "id": 1038319,
+   "date": "2024-02-07",
+   "season": 2023,
+   "status": "Final",
+   "status_state": "final",
+   "period": 4,
+   "time": "Final",
+   "postseason": false,
+   "postponed": false,
+   "home_team_score": 104,
+   "visitor_team_score": 127,
+   "datetime": "2024-02-08T00:30:00.000Z",
+   "home_q1": 22,
+   "home_q2": 23,
+   "home_q3": 23,
+   "home_q4": 36,
+   "home_ot1": null,
+   "home_ot2": null,
+   "home_ot3": null,
+   "home_timeouts_remaining": 2,
+   "home_in_bonus": true,
+   "visitor_q1": 15,
+   "visitor_q2": 33,
+   "visitor_q3": 43,
+   "visitor_q4": 36,
+   "visitor_ot1": null,
+   "visitor_ot2": null,
+   "visitor_ot3": null,
+   "visitor_timeouts_remaining": 2,
+   "visitor_in_bonus": false,
+   "ist_stage": null,
+   "home_team": {
+    "id": 23,
+    "conference": "East",
+    "division": "Atlantic",
+    "city": "Philadelphia",
+    "name": "76ers",
+    "full_name": "Philadelphia 76ers",
+    "abbreviation": "PHI"
+   },
+   "visitor_team": {
+    "id": 10,
+    "conference": "West",
+    "division": "Pacific",
+    "city": "Golden State",
+    "name": "Warriors",
+    "full_name": "Golden State Warriors",
+    "abbreviation": "GSW"
+   }
+  }
+ }
+}
