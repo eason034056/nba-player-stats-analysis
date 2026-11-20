@@ -14,6 +14,7 @@ Paths below are the paths in the recorded captures under
 ``backend/tests/fixtures/bdl/``:
 
 - ``GET /v1/games``
+- ``GET /v1/stats``
 - ``GET /v1/players`` (query key ``player_ids[]``, not ``ids[]``)
 - ``GET /v1/player_injuries``
 - ``GET /v2/odds/player_props``
@@ -48,11 +49,17 @@ BASE_URL = "https://api.balldontlie.io"
 
 # Recorded request paths. Do not rename these to match a remembered doc.
 _PATH_GAMES = "/v1/games"
+_PATH_STATS = "/v1/stats"
 _PATH_PLAYERS = "/v1/players"
 _PATH_INJURIES = "/v1/player_injuries"
 _PATH_PLAYER_PROPS = "/v2/odds/player_props"
 _PATH_ODDS = "/v2/odds"
 _PATH_PROJECTED_LINEUPS = "/nba/v1/projected_lineups"
+
+# The /v1/games season_type values with a recorded capture
+# (games__season2025_<type>_page1.json). These are the types stored (Q7);
+# preseason is not.
+SEASON_TYPES = ("regular", "playoffs", "playin", "ist")
 
 _MAX_ATTEMPTS = 3
 _FALLBACK_BACKOFF_SECONDS = 60.0
@@ -200,6 +207,10 @@ class BdlClient:
     Any wait derived from ``x-ratelimit-reset`` is capped at 65 seconds
     so a clock that is behind the server cannot sleep for an hour.
 
+    ``rate_limit_ceiling`` caps this client below whatever the observed or
+    configured limit says. The history backfill passes 500 so the 600/min
+    key keeps 100/min for live jobs. A lower observed limit still wins.
+
     Usage:
         client = BdlClient()
         page = await client.list_games(dates=["2026-11-11"])
@@ -213,6 +224,7 @@ class BdlClient:
         redis: redis_async.Redis | None = None,
         base_url: str = BASE_URL,
         rate_limit_per_min: int | None = None,
+        rate_limit_ceiling: int | None = None,
         transport: httpx.AsyncBaseTransport | None = None,
         sleep: SleepFn | None = None,
         clock: ClockFn | None = None,
@@ -226,11 +238,14 @@ class BdlClient:
             rate_limit_per_min = settings.bdl_rate_limit_per_min
         if rate_limit_per_min < 1:
             raise BdlError("BDL_RATE_LIMIT_PER_MIN must be at least 1")
+        if rate_limit_ceiling is not None and rate_limit_ceiling < 1:
+            raise BdlError("rate_limit_ceiling must be at least 1")
 
         if rate_limit_policy not in {"default", _INJURY_RATE_LIMIT_POLICY}:
             raise BdlError("unknown BALLDONTLIE rate limit policy")
         self._api_key = api_key
         self._configured_limit = rate_limit_per_min
+        self._limit_ceiling = rate_limit_ceiling
         self._rate_limit_policy = rate_limit_policy
         # The injury job shares a key with a process that cannot see this
         # Redis limiter. That policy is two HTTP tries and one wait, not
@@ -296,26 +311,68 @@ class BdlClient:
     async def list_games(
         self,
         *,
-        dates: list[str],
+        dates: list[str] | None = None,
+        seasons: list[int] | None = None,
+        season_type: str | None = None,
         per_page: int = 100,
         cursor: int | None = None,
     ) -> dict[str, Any]:
-        """List NBA games for one or more calendar dates.
+        """List NBA games by calendar date, by season, or both.
 
-        Calls ``GET /v1/games``. The recorded query uses a repeated
-        ``dates[]`` parameter, not a comma-joined string. ``dates`` are
-        the Eastern game dates the API stores on each game.
+        Calls ``GET /v1/games``. The recorded queries use a repeated
+        ``dates[]`` or a repeated ``seasons[]`` parameter, not a
+        comma-joined string. ``dates`` are the Eastern game dates the API
+        stores on each game. ``seasons`` are start years: 2000 is 2000-01.
+
+        ``season_type`` is ``"regular"``, ``"playoffs"``, ``"playin"``, or
+        ``"ist"`` (the NBA Cup final alone). Without it the API returns all
+        four. NBA Cup group, quarterfinal, and semifinal games come back as
+        ``"regular"``. The game object does not carry its type, and its
+        ``postseason`` flag differs by season for the play-in, so a caller
+        that stores a type records the one it asked for. ``"preseason"``
+        and any other value raise ``BdlError`` before a budget slot is taken.
 
         Returns the raw JSON object (``data`` plus ``meta``). Pass
         ``cursor`` from ``meta.next_cursor`` to read the next page, or
-        use ``iter_pages``. An empty ``dates`` list raises ``BdlError``
+        use ``iter_pages``. A season with no games is ``data: []`` with no
+        ``next_cursor`` key. No dates and no seasons raises ``BdlError``
         before a budget slot is taken: the API would otherwise return an
         unfiltered page.
         """
-        if not dates:
-            raise BdlError("list_games requires at least one date")
-        params = [("dates[]", date) for date in dates]
+        if not dates and not seasons:
+            raise BdlError("list_games requires at least one date or season")
+        if season_type is not None and season_type not in SEASON_TYPES:
+            raise BdlError(f"list_games season_type must be one of {SEASON_TYPES}")
+        params = [("dates[]", date) for date in dates or []]
+        params += [("seasons[]", str(season)) for season in seasons or []]
+        if season_type is not None:
+            params.append(("season_type", season_type))
         return await self._get(_PATH_GAMES, _with_page(params, per_page=per_page, cursor=cursor))
+
+    async def list_stats(
+        self,
+        *,
+        seasons: list[int],
+        per_page: int = 100,
+        cursor: int | None = None,
+    ) -> dict[str, Any]:
+        """List player box-score rows for one or more seasons.
+
+        Calls ``GET /v1/stats`` with a repeated ``seasons[]``, as in
+        ``stats__season2000_page1.json``. Each row nests ``player``,
+        ``team``, and ``game``. ``app.services.bdl_stats.normalize_stat_row``
+        turns one row into a ``BdlStatLine``.
+
+        Returns the raw JSON object. Pass ``cursor`` from
+        ``meta.next_cursor`` to read the next page, or use ``iter_pages``.
+        A season with no rows is ``data: []`` with no ``next_cursor`` key.
+        An empty ``seasons`` list raises ``BdlError`` before a budget slot
+        is taken.
+        """
+        if not seasons:
+            raise BdlError("list_stats requires at least one season")
+        params = [("seasons[]", str(season)) for season in seasons]
+        return await self._get(_PATH_STATS, _with_page(params, per_page=per_page, cursor=cursor))
 
     async def list_players(
         self,
@@ -661,6 +718,16 @@ class BdlClient:
         return max(candidates)
 
     async def _effective_limit(self) -> int:
+        """Observed ``x-ratelimit-limit`` when Redis has one, else the configured limit.
+
+        Never above ``rate_limit_ceiling`` when the client has one.
+        """
+        limit = await self._shared_limit()
+        if self._limit_ceiling is None:
+            return limit
+        return min(limit, self._limit_ceiling)
+
+    async def _shared_limit(self) -> int:
         """Observed ``x-ratelimit-limit`` when Redis has one, else the configured limit."""
         try:
             raw = await self._redis.get(_OBSERVED_LIMIT_KEY)
@@ -753,9 +820,10 @@ async def iter_pages(
 ) -> AsyncIterator[dict[str, Any]]:
     """Yield each page from a list method, following ``meta.next_cursor``.
 
-    ``fetch`` is ``list_games``, ``list_players``, ``list_player_injuries``,
-    or ``list_odds``. Keyword arguments are forwarded on every page
-    (``dates``, ``player_ids``, ``per_page``). ``cursor`` may be passed to
+    ``fetch`` is ``list_games``, ``list_stats``, ``list_players``,
+    ``list_player_injuries``, or ``list_odds``. Keyword arguments are
+    forwarded on every page (``dates``, ``seasons``, ``player_ids``,
+    ``per_page``). ``cursor`` may be passed to
     start later than the first page.
 
     The loop stops when ``meta`` is missing, ``next_cursor`` is missing,

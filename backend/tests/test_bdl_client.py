@@ -33,10 +33,14 @@ from app.services.bdl_client import (
     BdlRateLimitError,
     iter_pages,
 )
+from app.services.bdl_stats import normalize_stat_row
 
 FIXTURE_DIR = Path(__file__).resolve().parent / "fixtures" / "bdl"
 REPO_ROOT = Path(__file__).resolve().parents[2]
 EXPLORE_SCRIPT = REPO_ROOT / "scripts" / "explore_balldontlie_api.py"
+# One game per kind of gap in BALLDONTLIE's own data, captured by
+# ``explore_bdl_backfill.py --game-id``; read by test_backfill_verify.py.
+UPSTREAM_GAP_GAMES = (19865, 19052, 48851, 434, 1038278, 1038319, 1038379)
 
 # Every capture in the tarball says 5. 1_800_000_000 is a later minute
 # boundary, so a recorded reset (about 1_794_369_576) is already past and
@@ -135,10 +139,30 @@ def test_fixtures_match_recorded_paths_and_contain_no_key():
         "odds_2026-11-11.json": "/v2/odds",
         "projected_lineups_21718080.json": "/nba/v1/projected_lineups",
         "lineups_18447393_2026-01-15_agents_429.json": "/nba/v1/lineups",
+        "games__season2000_page1.json": "/v1/games",
+        "games__season1900_empty.json": "/v1/games",
+        "stats__season2000_page1.json": "/v1/stats",
+        "stats__season2025_page1.json": "/v1/stats",
+        "stats__season1900_empty.json": "/v1/stats",
+        "stats__seasonabc_http400.json": "/v1/stats",
+        "games__season2025_regular_page1.json": "/v1/games",
+        "games__season2025_playoffs_page1.json": "/v1/games",
+        "games__season2025_bogus_http400.json": "/v1/games",
+        "games__season2025_playin_page1.json": "/v1/games",
+        "games__season2025_ist_page1.json": "/v1/games",
+        "games__season2019_playin_page1.json": "/v1/games",
+        "stats__season2000_cursor272160_page.json": "/v1/stats",
+        "stats__season2025_cursor43451886_page.json": "/v1/stats",
+        "stats__season2020_cursor6587519_page.json": "/v1/stats",
+        "stats__season2020_cursor6603185_page.json": "/v1/stats",
+        "stats__season2025_cursor24626559_page.json": "/v1/stats",
+        "stats__season2026_page1.json": "/v1/stats",
+        **{f"games__game{game}_record.json": f"/v1/games/{game}" for game in UPSTREAM_GAP_GAMES},
+        **{f"stats__game{game}_page1.json": "/v1/stats" for game in UPSTREAM_GAP_GAMES},
     }
     found = {path.name for path in FIXTURE_DIR.glob("*.json")}
     # Other tickets may add captures in this directory. This set only has
-    # to contain the SPO-130a files.
+    # to contain the SPO-130a and SPO-138a files.
     assert set(expected) <= found
     api_key = os.environ.get("BALLDONTLIE_API_KEY", "")
     for path in FIXTURE_DIR.glob("*.json"):
@@ -767,6 +791,282 @@ async def test_observed_limit_header_overrides_a_higher_config():
     assert clock.sleeps == [60.0]
 
 
+@pytest.mark.asyncio
+async def test_ceiling_holds_the_budget_below_the_recorded_600():
+    """The backfill caps itself at 500/min so the GOAT key keeps 100/min for live jobs.
+
+    The 2025-26 games capture recorded ``x-ratelimit-limit: 600``. That
+    observed value raises the budget for everyone else; it must not raise
+    a client that set a ceiling.
+    """
+    capture = _load("games__season2025_regular_page1.json")
+    headers = dict(capture["rate_headers"])
+    assert headers["x-ratelimit-limit"] == "600"
+    clock = ManualClock(_MINUTE)
+    seen: list[float] = []
+    client = BdlClient(
+        api_key="unit-test-bdl-key-spo130a",
+        redis=fakeredis.aioredis.FakeRedis(decode_responses=True),
+        rate_limit_per_min=5,
+        rate_limit_ceiling=500,
+        transport=httpx.MockTransport(_budget_handler(capture, clock, headers, seen)),
+        sleep=clock.sleep,
+        clock=clock.time,
+    )
+    try:
+        for _ in range(500):
+            await client.list_games(seasons=[2025], season_type="regular")
+        assert clock.sleeps == []
+        await client.list_games(seasons=[2025], season_type="regular")
+    finally:
+        await client.aclose()
+
+    assert clock.sleeps == [60.0]
+    assert seen[499] == _MINUTE
+    assert seen[500] == _MINUTE + 60.0
+
+
+@pytest.mark.asyncio
+async def test_ceiling_does_not_raise_a_lower_observed_limit():
+    """A ceiling only lowers. A key that says 5/min still gets 5 calls a minute."""
+    capture = _load("games_2026-11-11.json")
+    headers = dict(capture["rate_headers"])
+    assert headers["x-ratelimit-limit"] == "5"
+    headers["x-ratelimit-remaining"] = "4"
+    clock = ManualClock(_MINUTE)
+    seen: list[float] = []
+    client = BdlClient(
+        api_key="unit-test-bdl-key-spo130a",
+        redis=fakeredis.aioredis.FakeRedis(decode_responses=True),
+        rate_limit_per_min=5,
+        rate_limit_ceiling=500,
+        transport=httpx.MockTransport(_budget_handler(capture, clock, headers, seen)),
+        sleep=clock.sleep,
+        clock=clock.time,
+    )
+    try:
+        for _ in range(6):
+            await client.list_games(dates=["2026-11-11"])
+    finally:
+        await client.aclose()
+
+    assert seen[:5] == [_MINUTE] * 5
+    assert seen[5] == _MINUTE + 60.0
+
+
+def test_ceiling_below_one_is_rejected():
+    with pytest.raises(BdlError):
+        BdlClient(
+            api_key="unit-test-bdl-key-spo130a",
+            redis=fakeredis.aioredis.FakeRedis(decode_responses=True),
+            rate_limit_ceiling=0,
+        )
+
+
+# ---------------------------------------------------------------------------
+# Season walks (SPO-138a captures)
+# ---------------------------------------------------------------------------
+
+
+def _recording_client(capture: dict, seen: list[httpx.Request], clock: ManualClock) -> BdlClient:
+    """Client that records each request and answers with ``capture``."""
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen.append(request)
+        return _json_response(capture)
+
+    return _client(handler, clock)
+
+
+@pytest.mark.asyncio
+async def test_list_stats_sends_the_recorded_season_query():
+    """``/v1/stats`` with ``seasons[]`` and ``per_page``, as in the 2000-01 capture."""
+    capture = _load("stats__season2000_page1.json")
+    path, query = _request_parts(capture)
+    seen: list[httpx.Request] = []
+    client = _recording_client(capture, seen, ManualClock(_MINUTE))
+    try:
+        body = await client.list_stats(seasons=[2000])
+    finally:
+        await client.aclose()
+
+    assert body == capture["response"]
+    request = seen[0]
+    assert request.url.path == path == "/v1/stats"
+    assert request.url.params.get_list("seasons[]") == query["seasons[]"] == ["2000"]
+    assert request.url.params.get_list("per_page") == query["per_page"]
+    assert request.url.params.get_list("cursor") == []
+
+
+@pytest.mark.asyncio
+async def test_list_stats_sends_cursor_when_asked():
+    """The recorded ``meta.next_cursor`` goes back as ``cursor``."""
+    capture = _load("stats__season2000_page1.json")
+    cursor = capture["response"]["meta"]["next_cursor"]
+    seen: list[httpx.Request] = []
+    client = _recording_client(capture, seen, ManualClock(_MINUTE))
+    try:
+        await client.list_stats(seasons=[2000], cursor=cursor)
+    finally:
+        await client.aclose()
+
+    assert seen[0].url.params.get_list("cursor") == [str(cursor)]
+
+
+@pytest.mark.asyncio
+async def test_list_stats_without_seasons_raises_before_a_request():
+    """An empty list would send no filter at all."""
+    seen: list[httpx.Request] = []
+    client = _recording_client(_load("stats__season2000_page1.json"), seen, ManualClock(_MINUTE))
+    try:
+        with pytest.raises(BdlError):
+            await client.list_stats(seasons=[])
+    finally:
+        await client.aclose()
+
+    assert seen == []
+
+
+@pytest.mark.asyncio
+async def test_list_games_sends_the_recorded_season_query():
+    """``list_games(seasons=...)`` sends ``seasons[]`` and no ``dates[]``."""
+    capture = _load("games__season2000_page1.json")
+    _, query = _request_parts(capture)
+    seen: list[httpx.Request] = []
+    client = _recording_client(capture, seen, ManualClock(_MINUTE))
+    try:
+        body = await client.list_games(seasons=[2000])
+    finally:
+        await client.aclose()
+
+    assert body == capture["response"]
+    assert seen[0].url.params.get_list("seasons[]") == query["seasons[]"] == ["2000"]
+    assert seen[0].url.params.get_list("dates[]") == []
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("season_type", ["regular", "playoffs", "playin", "ist"])
+async def test_list_games_sends_the_recorded_season_type(season_type: str):
+    """Q7: each season is walked once per type, and a game is stored with the type it was fetched under."""
+    capture = _load(f"games__season2025_{season_type}_page1.json")
+    _, query = _request_parts(capture)
+    seen: list[httpx.Request] = []
+    client = _recording_client(capture, seen, ManualClock(_MINUTE))
+    try:
+        body = await client.list_games(seasons=[2025], season_type=season_type)
+    finally:
+        await client.aclose()
+
+    assert body == capture["response"]
+    assert seen[0].url.params.get_list("season_type") == query["season_type"] == [season_type]
+    assert seen[0].url.params.get_list("seasons[]") == query["seasons[]"] == ["2025"]
+
+
+def test_recorded_season_types_split_on_postseason():
+    """What the filter returned in 2025-26: Cup group games are regular, and only playoff games are postseason."""
+    regular = _load("games__season2025_regular_page1.json")["response"]["data"]
+    playoffs = _load("games__season2025_playoffs_page1.json")["response"]["data"]
+    assert {game["postseason"] for game in regular} == {False}
+    assert any(game["ist_stage"] for game in regular)
+    assert {game["postseason"] for game in playoffs} == {True}
+    assert min(game["date"] for game in playoffs) == "2026-04-18"
+
+
+def test_recorded_postseason_flag_does_not_identify_play_in():
+    """The 2019-20 bubble play-in is postseason and the 2025-26 play-in is not, so the flag cannot classify a game."""
+    bubble = _load("games__season2019_playin_page1.json")["response"]["data"]
+    recent = _load("games__season2025_playin_page1.json")["response"]["data"]
+    assert {game["postseason"] for game in bubble} == {True}
+    assert {game["postseason"] for game in recent} == {False}
+    assert len(recent) == 6
+
+
+def test_recorded_ist_is_only_the_cup_championship():
+    """Cup group, quarterfinal, and semifinal games come back as regular. ``ist`` is the final alone."""
+    games = _load("games__season2025_ist_page1.json")["response"]["data"]
+    assert [game["ist_stage"] for game in games] == ["Championship"]
+
+
+def test_recorded_unknown_season_type_is_a_400():
+    """BALLDONTLIE checks the value instead of ignoring it, so a typo cannot pull every game type."""
+    capture = _load("games__season2025_bogus_http400.json")
+    assert capture["status"] == 400
+    assert capture["response"] == {"errors": [{"param": "season_type", "error": "Invalid value"}]}
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("season_type", ["preseason", "postseason", ""])
+async def test_list_games_rejects_an_unrecorded_season_type_before_a_request(season_type: str):
+    """Preseason is a BALLDONTLIE type that is never stored (Q7). Any other value costs no call and no budget slot."""
+    seen: list[httpx.Request] = []
+    client = _recording_client(_load("games__season2025_regular_page1.json"), seen, ManualClock(_MINUTE))
+    try:
+        with pytest.raises(BdlError):
+            await client.list_games(seasons=[2025], season_type=season_type)
+    finally:
+        await client.aclose()
+
+    assert seen == []
+
+
+@pytest.mark.asyncio
+async def test_list_games_without_dates_or_seasons_raises_before_a_request():
+    """No filter at all is refused, as an empty ``dates`` list already was."""
+    seen: list[httpx.Request] = []
+    client = _recording_client(_load("games__season2000_page1.json"), seen, ManualClock(_MINUTE))
+    try:
+        with pytest.raises(BdlError):
+            await client.list_games()
+        with pytest.raises(BdlError):
+            await client.list_games(dates=[], seasons=[])
+    finally:
+        await client.aclose()
+
+    assert seen == []
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("name", "method"),
+    [("stats__season1900_empty.json", "list_stats"), ("games__season1900_empty.json", "list_games")],
+)
+async def test_empty_season_is_one_page_without_next_cursor(name: str, method: str):
+    """A season with no rows is HTTP 200, ``data: []``, and no ``next_cursor`` key, so the walk stops."""
+    capture = _load(name)
+    assert capture["status"] == 200
+    assert capture["response"] == {"data": [], "meta": {"per_page": 100}}
+    seen: list[httpx.Request] = []
+    client = _recording_client(capture, seen, ManualClock(_MINUTE))
+    try:
+        pages = [page async for page in iter_pages(getattr(client, method), seasons=[1900])]
+    finally:
+        await client.aclose()
+
+    assert pages == [capture["response"]]
+    assert len(seen) == 1
+
+
+@pytest.mark.asyncio
+async def test_recorded_400_raises_api_error_without_retry():
+    """The 400 body recorded for ``seasons[]=abc`` raises once, with no wait and no key."""
+    capture = _load("stats__seasonabc_http400.json")
+    assert capture["status"] == 400
+    assert capture["response"]["errors"][0]["param"] == "seasons[0]"
+    seen: list[httpx.Request] = []
+    clock = ManualClock(_MINUTE)
+    client = _recording_client(capture, seen, clock)
+    try:
+        with pytest.raises(BdlApiError) as raised:
+            await client.list_stats(seasons=[2000])
+    finally:
+        await client.aclose()
+
+    assert raised.value.status_code == 400
+    assert "unit-test-bdl-key-spo130a" not in str(raised.value)
+    assert len(seen) == 1
+    assert clock.sleeps == []
+
+
 # ---------------------------------------------------------------------------
 # Live call. Not executed in the default suite.
 # ---------------------------------------------------------------------------
@@ -787,3 +1087,75 @@ async def test_live_list_games_smoke():
         await client.aclose()
     assert isinstance(page.get("data"), list)
     assert isinstance(page.get("meta"), dict)
+
+
+@pytest.mark.integration
+@pytest.mark.asyncio
+@pytest.mark.skipif(
+    os.environ.get("RUN_INTEGRATION") != "1" or not os.environ.get("BALLDONTLIE_API_KEY"),
+    reason="Set RUN_INTEGRATION=1 and BALLDONTLIE_API_KEY to call BALLDONTLIE.",
+)
+async def test_live_list_stats_filters_by_season_and_normalizes():
+    """One live 2000-01 stats page. The API applies ``seasons[]`` and every row normalizes.
+
+    Redis is in memory: this checks the BALLDONTLIE contract, not a local Redis.
+    """
+    client = BdlClient(redis=fakeredis.aioredis.FakeRedis(decode_responses=True))
+    try:
+        page = await client.list_stats(seasons=[2000], per_page=25)
+    finally:
+        await client.aclose()
+
+    rows = page["data"]
+    assert len(rows) == 25
+    assert isinstance(page["meta"].get("next_cursor"), int)
+    assert {row["game"]["season"] for row in rows} == {2000}
+    for row in rows:
+        normalize_stat_row(row)
+
+
+@pytest.mark.integration
+@pytest.mark.asyncio
+@pytest.mark.skipif(
+    os.environ.get("RUN_INTEGRATION") != "1" or not os.environ.get("BALLDONTLIE_API_KEY"),
+    reason="Set RUN_INTEGRATION=1 and BALLDONTLIE_API_KEY to call BALLDONTLIE.",
+)
+async def test_live_list_games_filters_by_season_type():
+    """One live 2025-26 playoffs page. The API applies ``season_type``: every game is postseason.
+
+    Redis is in memory: this checks the BALLDONTLIE contract, not a local Redis.
+    """
+    client = BdlClient(redis=fakeredis.aioredis.FakeRedis(decode_responses=True))
+    try:
+        page = await client.list_games(seasons=[2025], season_type="playoffs", per_page=25)
+    finally:
+        await client.aclose()
+
+    games = page["data"]
+    assert len(games) == 25
+    assert {game["season"] for game in games} == {2025}
+    assert {game["postseason"] for game in games} == {True}
+
+
+@pytest.mark.integration
+@pytest.mark.asyncio
+@pytest.mark.skipif(
+    os.environ.get("RUN_INTEGRATION") != "1" or not os.environ.get("BALLDONTLIE_API_KEY"),
+    reason="Set RUN_INTEGRATION=1 and BALLDONTLIE_API_KEY to call BALLDONTLIE.",
+)
+@pytest.mark.parametrize(("season_type", "stage_dates"), [
+    ("playin", {"2026-04-14", "2026-04-15", "2026-04-17"}),
+    ("ist", {"2025-12-16"}),
+])
+async def test_live_list_games_returns_the_play_in_and_the_cup_final(
+    season_type: str, stage_dates: set[str]
+):
+    """The two types Q7 added. Each fits on one page: 6 play-in games, 1 Cup final."""
+    client = BdlClient(redis=fakeredis.aioredis.FakeRedis(decode_responses=True))
+    try:
+        page = await client.list_games(seasons=[2025], season_type=season_type)
+    finally:
+        await client.aclose()
+
+    assert {game["date"] for game in page["data"]} == stage_dates
+    assert "next_cursor" not in page["meta"]

@@ -1,0 +1,18 @@
+{
+ "request": "https://api.balldontlie.io/v1/stats?seasons%5B%5D=abc&per_page=100",
+ "status": 400,
+ "elapsed_s": 0.18,
+ "rate_headers": {
+  "x-ratelimit-limit": "600",
+  "x-ratelimit-remaining": "597",
+  "x-ratelimit-reset": "1794781722"
+ },
+ "response": {
+  "errors": [
+   {
+    "param": "seasons[0]",
+    "error": "must be a valid integer (max 2147483647)"
+   }
+  ]
+ }
+}

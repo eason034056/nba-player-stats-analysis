@@ -1,0 +1,68 @@
+{
+ "request": "https://api.balldontlie.io/v1/games?seasons%5B%5D=2025&season_type=ist&per_page=100",
+ "status": 200,
+ "elapsed_s": 0.22,
+ "rate_headers": {
+  "x-ratelimit-limit": "600",
+  "x-ratelimit-remaining": "597",
+  "x-ratelimit-reset": "1794899149"
+ },
+ "response": {
+  "data": [
+   {
+    "id": 20377171,
+    "date": "2025-12-16",
+    "season": 2025,
+    "status": "Final",
+    "status_state": "final",
+    "period": 4,
+    "time": "Final",
+    "postseason": false,
+    "postponed": false,
+    "home_team_score": 124,
+    "visitor_team_score": 113,
+    "datetime": "2025-12-17T01:30:00.000Z",
+    "home_q1": 28,
+    "home_q2": 31,
+    "home_q3": 30,
+    "home_q4": 35,
+    "home_ot1": null,
+    "home_ot2": null,
+    "home_ot3": null,
+    "home_timeouts_remaining": 2,
+    "home_in_bonus": true,
+    "visitor_q1": 30,
+    "visitor_q2": 31,
+    "visitor_q3": 33,
+    "visitor_q4": 19,
+    "visitor_ot1": null,
+    "visitor_ot2": null,
+    "visitor_ot3": null,
+    "visitor_timeouts_remaining": 1,
+    "visitor_in_bonus": true,
+    "ist_stage": "Championship",
+    "home_team": {
+     "id": 20,
+     "conference": "East",
+     "division": "Atlantic",
+     "city": "New York",
+     "name": "Knicks",
+     "full_name": "New York Knicks",
+     "abbreviation": "NYK"
+    },
+    "visitor_team": {
+     "id": 27,
+     "conference": "West",
+     "division": "Southwest",
+     "city": "San Antonio",
+     "name": "Spurs",
+     "full_name": "San Antonio Spurs",
+     "abbreviation": "SAS"
+    }
+   }
+  ],
+  "meta": {
+   "per_page": 100
+  }
+ }
+}

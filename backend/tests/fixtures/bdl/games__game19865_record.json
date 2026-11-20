@@ -1,0 +1,63 @@
+{
+ "request": "https://api.balldontlie.io/v1/games/19865",
+ "status": 200,
+ "elapsed_s": 0.25,
+ "rate_headers": {
+  "x-ratelimit-limit": "600",
+  "x-ratelimit-remaining": "599",
+  "x-ratelimit-reset": "1795126253"
+ },
+ "response": {
+  "data": {
+   "id": 19865,
+   "date": "2005-12-19",
+   "season": 2005,
+   "status": "Final",
+   "status_state": "final",
+   "period": 4,
+   "time": " ",
+   "postseason": false,
+   "postponed": false,
+   "home_team_score": 90,
+   "visitor_team_score": 92,
+   "datetime": "2005-12-20T00:00:00.000Z",
+   "home_q1": 27,
+   "home_q2": 19,
+   "home_q3": 24,
+   "home_q4": 20,
+   "home_ot1": null,
+   "home_ot2": null,
+   "home_ot3": null,
+   "home_timeouts_remaining": null,
+   "home_in_bonus": null,
+   "visitor_q1": 19,
+   "visitor_q2": 25,
+   "visitor_q3": 28,
+   "visitor_q4": 20,
+   "visitor_ot1": null,
+   "visitor_ot2": null,
+   "visitor_ot3": null,
+   "visitor_timeouts_remaining": null,
+   "visitor_in_bonus": null,
+   "ist_stage": null,
+   "home_team": {
+    "id": 22,
+    "conference": "East",
+    "division": "Southeast",
+    "city": "Orlando",
+    "name": "Magic",
+    "full_name": "Orlando Magic",
+    "abbreviation": "ORL"
+   },
+   "visitor_team": {
+    "id": 28,
+    "conference": "East",
+    "division": "Atlantic",
+    "city": "Toronto",
+    "name": "Raptors",
+    "full_name": "Toronto Raptors",
+    "abbreviation": "TOR"
+   }
+  }
+ }
+}

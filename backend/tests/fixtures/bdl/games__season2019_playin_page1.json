@@ -1,0 +1,68 @@
+{
+ "request": "https://api.balldontlie.io/v1/games?seasons%5B%5D=2019&season_type=playin&per_page=100",
+ "status": 200,
+ "elapsed_s": 0.17,
+ "rate_headers": {
+  "x-ratelimit-limit": "600",
+  "x-ratelimit-remaining": "598",
+  "x-ratelimit-reset": "1794899149"
+ },
+ "response": {
+  "data": [
+   {
+    "id": 117681,
+    "date": "2020-08-15",
+    "season": 2019,
+    "status": "Final",
+    "status_state": "final",
+    "period": 4,
+    "time": "",
+    "postseason": true,
+    "postponed": false,
+    "home_team_score": 126,
+    "visitor_team_score": 122,
+    "datetime": "2020-08-15T18:30:00.000Z",
+    "home_q1": 31,
+    "home_q2": 27,
+    "home_q3": 31,
+    "home_q4": 37,
+    "home_ot1": null,
+    "home_ot2": null,
+    "home_ot3": null,
+    "home_timeouts_remaining": null,
+    "home_in_bonus": null,
+    "visitor_q1": 19,
+    "visitor_q2": 33,
+    "visitor_q3": 42,
+    "visitor_q4": 28,
+    "visitor_ot1": null,
+    "visitor_ot2": null,
+    "visitor_ot3": null,
+    "visitor_timeouts_remaining": null,
+    "visitor_in_bonus": null,
+    "ist_stage": null,
+    "home_team": {
+     "id": 25,
+     "conference": "West",
+     "division": "Northwest",
+     "city": "Portland",
+     "name": "Trail Blazers",
+     "full_name": "Portland Trail Blazers",
+     "abbreviation": "POR"
+    },
+    "visitor_team": {
+     "id": 15,
+     "conference": "West",
+     "division": "Southwest",
+     "city": "Memphis",
+     "name": "Grizzlies",
+     "full_name": "Memphis Grizzlies",
+     "abbreviation": "MEM"
+    }
+   }
+  ],
+  "meta": {
+   "per_page": 100
+  }
+ }
+}
