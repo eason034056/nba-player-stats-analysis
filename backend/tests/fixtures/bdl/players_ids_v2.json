@@ -1,0 +1,86 @@
+{
+ "request": "https://api.balldontlie.io/v1/players?player_ids%5B%5D=175&player_ids%5B%5D=416&player_ids%5B%5D=38017507",
+ "status": 200,
+ "elapsed_s": 0.14,
+ "rate_headers": {
+  "x-ratelimit-limit": "5",
+  "x-ratelimit-remaining": "1",
+  "x-ratelimit-reset": "1794370246"
+ },
+ "response": {
+  "data": [
+   {
+    "id": 175,
+    "first_name": "Shai",
+    "last_name": "Gilgeous-Alexander",
+    "position": "G",
+    "height": "6-6",
+    "weight": "195",
+    "jersey_number": "2",
+    "college": "Kentucky",
+    "country": "Canada",
+    "draft_year": 2018,
+    "draft_round": 1,
+    "draft_number": 11,
+    "team": {
+     "id": 21,
+     "conference": "West",
+     "division": "Northwest",
+     "city": "Oklahoma City",
+     "name": "Thunder",
+     "full_name": "Oklahoma City Thunder",
+     "abbreviation": "OKC"
+    }
+   },
+   {
+    "id": 416,
+    "first_name": "Pascal",
+    "last_name": "Siakam",
+    "position": "F",
+    "height": "6-9",
+    "weight": "245",
+    "jersey_number": "43",
+    "college": "New Mexico State",
+    "country": "Cameroon",
+    "draft_year": 2016,
+    "draft_round": 1,
+    "draft_number": 27,
+    "team": {
+     "id": 12,
+     "conference": "East",
+     "division": "Central",
+     "city": "Indiana",
+     "name": "Pacers",
+     "full_name": "Indiana Pacers",
+     "abbreviation": "IND"
+    }
+   },
+   {
+    "id": 38017507,
+    "first_name": "Andrew",
+    "last_name": "Nembhard",
+    "position": "G-F",
+    "height": "6-4",
+    "weight": "191",
+    "jersey_number": "2",
+    "college": "Gonzaga",
+    "country": "Canada",
+    "draft_year": 2022,
+    "draft_round": 2,
+    "draft_number": 31,
+    "team": {
+     "id": 12,
+     "conference": "East",
+     "division": "Central",
+     "city": "Indiana",
+     "name": "Pacers",
+     "full_name": "Indiana Pacers",
+     "abbreviation": "IND"
+    }
+   }
+  ],
+  "meta": {
+   "per_page": 25
+  }
+ }
+}

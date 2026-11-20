@@ -1,0 +1,16 @@
+{
+  "request": "https://api.balldontlie.io/v2/odds/player_props?game_id=21718193",
+  "status": 200,
+  "elapsed_s": 0.97,
+  "rate_headers": {
+    "x-ratelimit-limit": "600",
+    "x-ratelimit-remaining": "597",
+    "x-ratelimit-reset": "1794544272"
+  },
+  "response": {
+    "data": [],
+    "meta": {
+      "per_page": 0
+    }
+  }
+}

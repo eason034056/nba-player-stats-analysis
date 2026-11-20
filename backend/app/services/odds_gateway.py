@@ -44,19 +44,27 @@ class _LeagueProviders(Mapping[str, Any]):
     """League → provider. The NBA entry reads ``settings.nba_odds_provider``.
 
     Lookup is live, so a test can change the setting without rebuilding
-    the table. The only accepted NBA value in this change is
-    ``theoddsapi``. WNBA always uses that same client. Any other league
-    raises ``ValueError``.
+    the table. NBA accepts ``theoddsapi`` (the default) and
+    ``balldontlie``. The default does not switch: a blank value is
+    ``theoddsapi``, and WNBA always uses that client. ``balldontlie``
+    loads ``BdlOddsProvider`` here, not from a route or a job. Any other
+    league raises ``ValueError``.
     """
 
     def __getitem__(self, league: str) -> Any:
         key = normalize_league(league)
         if key == "nba":
             selected = (settings.nba_odds_provider or "theoddsapi").strip().lower()
+            if selected == "balldontlie":
+                # Imported here so the default NBA path does not load the
+                # BALLDONTLIE provider when this module is imported.
+                from app.services.bdl_odds_provider import get_bdl_odds_provider
+
+                return get_bdl_odds_provider()
             if selected != "theoddsapi":
                 raise ValueError(
                     f"Unsupported nba_odds_provider: {settings.nba_odds_provider!r}. "
-                    "Allowed: 'theoddsapi'"
+                    "Allowed: 'theoddsapi', 'balldontlie'"
                 )
         return odds_provider
 

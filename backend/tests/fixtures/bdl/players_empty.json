@@ -1,0 +1,16 @@
+{
+  "request": "https://api.balldontlie.io/v1/players?player_ids%5B%5D=0&per_page=100",
+  "status": 200,
+  "elapsed_s": 0.45,
+  "rate_headers": {
+    "x-ratelimit-limit": "600",
+    "x-ratelimit-remaining": "599",
+    "x-ratelimit-reset": "1794544272"
+  },
+  "response": {
+    "data": [],
+    "meta": {
+      "per_page": 100
+    }
+  }
+}
