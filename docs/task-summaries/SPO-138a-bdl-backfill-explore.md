@@ -42,6 +42,12 @@ The BDL client can walk a whole season, and every stats row it returns comes out
 - **Fabrication scan:** PASS, checked by hand. Every new unit test loads a recording from `tests/fixtures/bdl/`, saved by `scripts/explore_bdl_backfill.py`, and no key is in any recording.
 - **Frontend:** not touched.
 
+## CI
+
+`langsmith==0.14.17` is pinned next to `langchain-openai` in `backend/requirements.txt`. The same pin is in `scripts/agents/requirements_agents.txt` (the walk-forward job installs that file) and `nba_lineup_rag/requirements.txt`, which also install LangChain without a pin. langsmith 0.15.x fails to import under pydantic 2.8.0 (`FeedbackConfigSchema` NameError), so pytest exited before any test ran. pydantic stays at 2.8.0.
+
+Fresh Python 3.11 venv, `pip install -r backend/requirements.txt`: `import langsmith.utils` succeeds (langsmith 0.14.17, pydantic 2.8.0). Backend suite: 1674 passed, 72 skipped, 6 xfailed, in 22.60s. The walk-forward job's four files, after installing both requirements files (still langsmith 0.14.17 and pydantic 2.8.0): 29 passed, in 23.79s.
+
 ## Follow-ups
 
 - [ ] SPO-138b to g, in order: schema, writer, walker, verify, the backfill command, the gap view.
