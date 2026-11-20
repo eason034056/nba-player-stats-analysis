@@ -2,20 +2,22 @@
 
 Terraform for one Single-AZ RDS PostgreSQL 16 instance and one private S3 bucket. This directory does not create resources by itself. Eason runs `terraform apply` from his own machine with his own AWS login. No access keys are created here. The master password is stored by RDS in Secrets Manager (`manage_master_user_password = true`) and is not a Terraform output.
 
-State is local (`terraform.tfstate` in this directory). It is gitignored, as is `*.tfvars`. Commit only `terraform.tfvars.example`.
+`environment` defaults to `dev`. That is the stack already applied. `local.name_prefix` stays `var.project` (`sportslab`) for `dev`, so the RDS identifier, parameter group, subnet group, security groups, and IAM user keep today's names. `prod` uses `${var.project}-${var.environment}` and a different `bucket_name`, in a different state file. This directory does not ship a prod tfvars.
+
+State is still local (`terraform.tfstate` in this directory) until the migration in [Remote state](#remote-state). It is gitignored, as is `*.tfvars` and `backend-*.hcl`. Commit the examples only. Do not apply `environment = "prod"` while this directory is using the dev state. That plan replaces `sportslab-postgres`. The decision is `docs/decisions/SPO-140/decision_20261120_terraform-environments.md`.
 
 ## What apply creates
 
 - RDS PostgreSQL 16.x (`engine_version`, default `16.15`) on `db.t4g.micro`, gp3, 20 GB, autoscaling to 50 GB, Single-AZ.
 - Encrypted storage with the AWS-managed key `aws/rds` (`storage_encrypted` and no `kms_key_id`).
 - Automated backups kept `backup_retention_period` days (default 7), deletion protection on, final snapshot required.
-- Parameter group `${project}-pg16` (`postgres16`) with `rds.force_ssl = 1`.
-- Security group `${project}-app` (output `app_security_group_id`): no ingress. Egress is open. SPO-133 attaches the backend EC2 instance to it.
-- Security group `${project}-rds`: inbound TCP 5432 from `${project}-app` and from each id in `rds_allowed_security_group_ids` (default empty), by security group id. Inbound TCP 5432 from `allowed_cidrs` only while that list is non-empty. `allowed_cidrs = []` removes the CIDR rules. Each set entry must be an IPv4 `/32`. `0.0.0.0/0`, `0.0.0.0/32`, duplicates, and every IPv6 CIDR are rejected. An empty list is allowed.
+- Parameter group `${name_prefix}-pg16` (`postgres16`) with `rds.force_ssl = 1`. For `dev`, that name is `sportslab-pg16`.
+- Security group `${name_prefix}-app` (output `app_security_group_id`): no ingress. Egress is open. SPO-133 attaches the backend EC2 instance to it. For `dev`, the name is `sportslab-app`.
+- Security group `${name_prefix}-rds`: inbound TCP 5432 from `${name_prefix}-app` and from each id in `rds_allowed_security_group_ids` (default empty), by security group id. Inbound TCP 5432 from `allowed_cidrs` only while that list is non-empty. `allowed_cidrs = []` removes the CIDR rules. Each set entry must be an IPv4 `/32`. `0.0.0.0/0`, `0.0.0.0/32`, duplicates, and every IPv6 CIDR are rejected. An empty list is allowed. For `dev`, the name is `sportslab-rds`.
 - S3 bucket: Block Public Access (all four), BucketOwnerEnforced, versioning, SSE-S3 (AES256), TLS-only bucket policy.
 - Lifecycle: current objects larger than 128 KB move to Standard-IA after 30 days and to Glacier Instant Retrieval (`GLACIER_IR`) after 90. Noncurrent versions expire after 30 days. Incomplete multipart uploads abort after 7 days. `pg-dumps/` current objects expire after `pg_dump_retention_days` (default 90).
 - Prefix objects: `bdl-raw/`, `bdl-archive/`, `bdl-samples/`, `pg-dumps/`.
-- IAM user `${project}-runtime` with GetObject, PutObject, and ListBucket on those prefixes only. An empty `s3:prefix` is not allowed, so listing the bucket root is denied. No `s3:DeleteObject`. No access key.
+- IAM user `${name_prefix}-runtime` with GetObject, PutObject, and ListBucket on those prefixes only. An empty `s3:prefix` is not allowed, so listing the bucket root is denied. No `s3:DeleteObject`. No access key. For `dev`, the user is `sportslab-runtime`.
 
 Redis stays on the local compose stack. It is not in this module.
 
@@ -73,9 +75,57 @@ Then:
 2. IAM → user `sportslab-runtime` → Security credentials → Create access key → CLI. Put `AWS_ACCESS_KEY_ID` and `AWS_SECRET_ACCESS_KEY` in the masked form. Terraform does not create this key, so it never lands in state.
 3. Build `DATABASE_URL` as documented in `docs/deployment/aws.md`.
 
-To change the allowlist later, edit `allowed_cidrs` and apply again. After the EC2 backend is attached to `${project}-app`, set `allowed_cidrs = []` and apply. That drops the Mac and box CIDR rules. RDS still allows the app security group. To rotate the runtime key, create a new key in the console, update the box, then delete the old key. To rotate the master password, use Secrets Manager rotation or RDS modify; do not put the new password in a `.tf` file.
+To change the allowlist later, edit `allowed_cidrs` and apply again. After the EC2 backend is attached to `${name_prefix}-app` (`sportslab-app` for dev), set `allowed_cidrs = []` and apply. That drops the Mac and box CIDR rules. RDS still allows the app security group. To rotate the runtime key, create a new key in the console, update the box, then delete the old key. To rotate the master password, use Secrets Manager rotation or RDS modify; do not put the new password in a `.tf` file.
 
 Tearing the stack down is a separate decision. The provisioner policy below has no `rds:DeleteDBInstance` and no `s3:DeleteBucket`. Deletion protection is on. Eason turns those off with his own admin login if he ever wants them gone.
+
+## Remote state
+
+`terraform init` with the committed files still uses the local state. The S3 backend block is commented so that init does not ask for a bucket.
+
+When a state bucket exists:
+
+1. Create or reuse a bucket in `us-east-2` that is not the data bucket. Versioning on, SSE-S3, Block Public Access on.
+2. `cp backend-dev.hcl.example backend-dev.hcl` and replace `REPLACE_WITH_STATE_BUCKET`. `backend-dev.hcl` is gitignored.
+3. Uncomment `backend "s3" {}` in `versions.tf` in the working copy. Do not commit that uncomment until the migrate below has succeeded.
+4. `terraform init -migrate-state -backend-config=backend-dev.hcl`. The destination key must be `sportslab/dev/aws.tfstate`.
+5. Do not run that migrate with `backend-prod.hcl`.
+
+`backend-prod.hcl.example` sets `sportslab/prod/aws.tfstate` in the same state bucket. `-backend-config` does nothing while `backend "s3" {}` is commented. Prod init is only for the day the block is uncommented, and it uses a different `TF_DATA_DIR` so this directory's dev backend is not switched:
+
+```bash
+mkdir -p "$HOME/.sportslab-terraform/prod"
+cp backend-prod.hcl.example "$HOME/.sportslab-terraform/backend-prod.hcl"
+# edit the bucket name in that copy
+TF_DATA_DIR="$HOME/.sportslab-terraform/prod" terraform init -backend-config="$HOME/.sportslab-terraform/backend-prod.hcl"
+```
+
+Run that only when creating the prod stack. There is no prod apply target in this repo. Do not `terraform init -reconfigure` in the dev data dir with the prod file. That points the next dev plan at the prod key.
+
+## SSM paths
+
+This module does not create SSM parameters. The path for a stack is `/sportslab/${environment}/`. For the applied stack that is `/sportslab/dev/`.
+
+#64 currently defaults `deploy/pull-ssm-env.sh` to `/sportslab/prod/` and hardcodes `parameter/sportslab/prod` in the instance policy. Those parameters, if they exist, belong to this dev stack. Copy them to `/sportslab/dev/` as SecureString with the default `aws/ssm` key (omit `--key-id`). List and check by name or by `length(Parameters)` only. Do not print values. Point the host at `/sportslab/dev/`, confirm it can read, then delete `/sportslab/prod/`. The command sequence is in `docs/decisions/SPO-140/decision_20261120_terraform-environments.md`. This PR does not change #64.
+
+## Prod database from a dev snapshot
+
+Do not create the prod instance from this PR. When prod is wanted, restore a snapshot. Do not run the Ball Don't Lie backfill a second time.
+
+1. Prod state is the empty key from the `TF_DATA_DIR` init above, with a gitignored tfvars that sets `environment = "prod"` and a new `bucket_name`.
+2. In `us-east-2`, `rds:CreateDBSnapshot` of the dev instance, or `rds:CopyDBSnapshot` of an automated snapshot. Then `rds:RestoreDBInstanceFromDBSnapshot` to identifier `sportslab-prod-postgres`.
+3. `terraform import aws_db_instance.postgres sportslab-prod-postgres` into that prod state.
+4. Plan. Expect new prod security groups, subnet group, parameter group, bucket, and IAM user. If the imported database would be replaced, stop.
+5. The same plan also needs the read and write actions already listed in the provisioner policy below (`rds:Describe*`, create and modify, tags, S3, IAM). The reference policy's user ARN is `sportslab-runtime`. The prod user name is `sportslab-prod-runtime`. `sportslab-*` on the RDS ARNs already covers the prod names.
+
+## Follow-up for #64
+
+After this is on `dev`, the EC2 branch still has to:
+
+- Change the default in `deploy/pull-ssm-env.sh` from `/sportslab/prod/` to `/sportslab/dev/`, and build the path as `/sportslab/${environment}/`.
+- Change the instance policy ARNs from `parameter/sportslab/prod` and `parameter/sportslab/prod/*` to `parameter/sportslab/${environment}` and `parameter/sportslab/${environment}/*`, including the KMS encryption-context condition. Default `environment` is `dev`.
+- Update the SSM sections of `docs/deployment/aws.md` and `docs/deployment/aws-steps-zh-TW.md` on that branch to the same path.
+- Leave `aws_instance` `Name` as `${local.name_prefix}-app`. For `dev` that stays `sportslab-app`. Do not set an `Environment` tag of `prod` on the instance. Provider `default_tags` add `Environment` from `var.environment`.
 
 ## If your account has no default VPC
 
