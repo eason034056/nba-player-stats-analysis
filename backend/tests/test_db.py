@@ -17,6 +17,7 @@ Coverage:
 10. init() failure path (sets pool to None)
 """
 
+import logging
 import pytest
 import sys
 import os
@@ -48,6 +49,7 @@ class FakeConnection:
         # Default return values - can be overridden per test
         self.execute_return = "INSERT 0 1"
         self.fetch_return = [{"id": 1, "name": "Curry"}]
+        self.fetch_error: BaseException | None = None
         self.fetchrow_return = {"id": 1, "name": "Curry"}
         self.executemany_return = None
 
@@ -57,6 +59,8 @@ class FakeConnection:
 
     async def fetch(self, query, *args):
         self.fetch_calls.append((query, *args))
+        if self.fetch_error is not None:
+            raise self.fetch_error
         return self.fetch_return
 
     async def fetchrow(self, query, *args):
@@ -355,6 +359,132 @@ class TestInit:
         assert svc._pool is None
         assert fake_conn.execute_calls == []
         assert fake_pool.closed is True
+
+    @pytest.mark.asyncio
+    async def test_init_logs_missing_versions_once(
+        self, monkeypatch, caplog: pytest.LogCaptureFixture
+    ):
+        """A bare uvicorn start logs one ERROR and the copy-paste upgrade command.
+
+        The recorded versions are only 001, so 002 (and any later file) is
+        missing. A missing schema_migrations table is the same report with
+        every shipped version named. The DSN and its password stay out of the log.
+        """
+        import asyncpg
+
+        import app.services.db as db_module
+        from app.migrations.runner import discover
+
+        password = "pw-must-not-leak"
+        dsn = f"postgresql://novig:{password}@rds.example:5432/novig_nba"
+        shipped = [migration.version for migration in discover()]
+        cases = [
+            ("behind", [{"version": shipped[0]}], shipped[1:]),
+            ("no-table", None, shipped),
+        ]
+
+        async def mock_create_pool(**kwargs):
+            return current["pool"]
+
+        monkeypatch.setattr(db_module.asyncpg, "create_pool", mock_create_pool)
+        monkeypatch.setattr(db_module.settings, "database_url", dsn)
+        current: dict = {}
+
+        for name, fetch_return, missing in cases:
+            fake_conn = FakeConnection()
+            if name == "no-table":
+                fake_conn.fetch_error = asyncpg.UndefinedTableError(
+                    'relation "schema_migrations" does not exist'
+                )
+            else:
+                fake_conn.fetch_return = fetch_return
+            current["pool"] = FakePool(fake_conn)
+            svc = DatabaseService()
+            with caplog.at_level(logging.ERROR, logger="app.services.db"):
+                await svc.init()
+
+            errors = [record for record in caplog.records if record.levelno >= logging.ERROR]
+            assert len(errors) == 1, name
+            message = errors[0].getMessage()
+            assert message == svc.schema_head_error
+            assert "python -m app.migrations upgrade" in message
+            for version in missing:
+                assert version in message
+            if name == "behind":
+                assert shipped[0] not in message
+            assert password not in caplog.text
+            assert dsn not in caplog.text
+            assert "postgresql://" not in caplog.text
+            assert svc.is_connected is False
+            caplog.clear()
+
+    @pytest.mark.asyncio
+    async def test_init_at_head_does_not_log_a_schema_error(
+        self, monkeypatch, caplog: pytest.LogCaptureFixture
+    ):
+        """A database that already has every shipped version logs no schema error."""
+        import app.services.db as db_module
+        from app.migrations.runner import discover
+
+        fake_conn = FakeConnection()
+        fake_conn.fetch_return = [
+            {"version": migration.version} for migration in discover()
+        ]
+        fake_pool = FakePool(fake_conn)
+
+        async def mock_create_pool(**kwargs):
+            return fake_pool
+
+        monkeypatch.setattr(db_module.asyncpg, "create_pool", mock_create_pool)
+
+        svc = DatabaseService()
+        with caplog.at_level(logging.ERROR, logger="app.services.db"):
+            await svc.init()
+
+        assert svc.is_connected is True
+        assert svc.schema_head_error is None
+        assert not any(
+            "python -m app.migrations upgrade" in record.getMessage()
+            for record in caplog.records
+        )
+        assert not any(record.levelno >= logging.ERROR for record in caplog.records)
+
+    @pytest.mark.asyncio
+    async def test_database_required_raises_the_same_schema_message(
+        self, monkeypatch, caplog: pytest.LogCaptureFixture
+    ):
+        """DATABASE_REQUIRED=true aborts with the one schema ERROR, and does not log a second one."""
+        import app.main as main_mod
+        import app.services.db as db_module
+        from fastapi import FastAPI
+
+        password = "pw-must-not-leak"
+        dsn = f"postgresql://novig:{password}@rds.example:5432/novig_nba"
+        fake_conn = FakeConnection()
+        fake_conn.fetch_return = []
+        fake_pool = FakePool(fake_conn)
+
+        async def mock_create_pool(**kwargs):
+            return fake_pool
+
+        monkeypatch.setattr(db_module.asyncpg, "create_pool", mock_create_pool)
+        monkeypatch.setattr(db_module.settings, "database_url", dsn)
+        monkeypatch.setattr(main_mod.settings, "database_required", True)
+        monkeypatch.setattr(main_mod, "setup_logging", lambda: None)
+
+        with caplog.at_level(logging.ERROR):
+            with pytest.raises(RuntimeError) as raised:
+                async with main_mod.lifespan(FastAPI()):
+                    pass
+
+        errors = [record for record in caplog.records if record.levelno >= logging.ERROR]
+        assert len(errors) == 1
+        assert str(raised.value) == errors[0].getMessage()
+        assert "python -m app.migrations upgrade" in str(raised.value)
+        assert password not in caplog.text
+        assert password not in str(raised.value)
+        assert "postgresql://" not in caplog.text
+        assert "postgresql://" not in str(raised.value)
 
     @pytest.mark.asyncio
     async def test_init_sets_pool_none_on_failure(self, monkeypatch):

@@ -124,13 +124,15 @@ cd backend
 python -m venv .venv
 source .venv/bin/activate
 pip install -r requirements.txt
+python -m app.migrations upgrade
 uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 ```
 
 Notes:
 
+- `python -m app.migrations upgrade` reads `DATABASE_URL` and applies the SQL files. Run it before uvicorn. The Docker image runs the same command in its entrypoint.
 - If not using Docker, you should start `Redis` yourself
-- If `PostgreSQL` isn't running, some persistence features might not work, but the API may launch with downgraded functionality
+- If `PostgreSQL` isn't running, the upgrade command fails. uvicorn can still start; `init()` then logs an error that names the missing migration versions and the same upgrade command. Persistence features will not work until the schema is at head.
 
 #### Frontend
 

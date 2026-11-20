@@ -66,8 +66,10 @@ async def lifespan(app: FastAPI):
 
     # 初始化 PostgreSQL 連線池。
     # init() 自己吞掉連線錯誤並把 pool 設成 None，所以這裡還要看 is_connected。
-    # DATABASE_REQUIRED=true 時啟動必須失敗；預設 false，本機沒有 Postgres 仍可啟動。
+    # schema 落後時 init() 已經記過一行 ERROR。DATABASE_REQUIRED=true 時用同一句話中止啟動，不再記第二次。
+    # 預設 false，本機沒有 Postgres 仍可啟動，但那一行 ERROR 還在。
     secrets = _startup_secrets()
+    db_service.schema_head_error = None
     try:
         await db_service.init()
     except Exception as exc:
@@ -83,6 +85,8 @@ async def lifespan(app: FastAPI):
     else:
         if not db_service.is_connected:
             if settings.database_required:
+                if db_service.schema_head_error:
+                    raise RuntimeError(db_service.schema_head_error)
                 logger.error(
                     "DATABASE_REQUIRED is true but PostgreSQL initialization did not open a pool"
                 )

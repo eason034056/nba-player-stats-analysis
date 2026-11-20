@@ -33,6 +33,26 @@ from app.settings import settings
 
 logger = logging.getLogger(__name__)
 
+# The CLI reads DATABASE_URL by default, so this line needs no --dsn-env flag.
+UPGRADE_COMMAND = "python -m app.migrations upgrade"
+
+
+class SchemaNotAtHead(Exception):
+    """schema_migrations is missing one or more shipped versions.
+
+    The message is the one ERROR line init() logs. It names versions and the
+    upgrade command. It never includes a DSN or a password.
+    """
+
+    def __init__(self, missing: list[str]) -> None:
+        self.missing = list(missing)
+        super().__init__(
+            "schema_migrations is not at head; missing "
+            + ", ".join(self.missing)
+            + ". Run "
+            + UPGRADE_COMMAND
+        )
+
 
 # ==================== Table Creation SQL ====================
 
@@ -365,22 +385,26 @@ $spo117_line_unique$;
 
 
 async def _confirm_schema_at_head(conn: asyncpg.Connection) -> None:
-    """Raise when the database is missing a shipped migration version.
+    """Raise SchemaNotAtHead when a shipped version is not recorded.
 
-    The message names versions only. It does not include the DSN.
+    A missing schema_migrations table is the same state as every shipped
+    version being absent. That is what a database built only by SCHEMA_SQL
+    looks like. Other query errors propagate, so a refused connection is not
+    reported as a migration problem.
     """
     from app.migrations.runner import discover
 
     expected = [migration.version for migration in discover()]
-    rows = await conn.fetch("SELECT version FROM schema_migrations")
+    try:
+        rows = await conn.fetch("SELECT version FROM schema_migrations")
+    except asyncpg.UndefinedTableError:
+        if expected:
+            raise SchemaNotAtHead(expected) from None
+        return
     applied = {row["version"] for row in rows}
     missing = [version for version in expected if version not in applied]
     if missing:
-        raise RuntimeError(
-            "schema_migrations is not at head; missing "
-            + ", ".join(missing)
-            + ". Run python -m app.migrations upgrade before start"
-        )
+        raise SchemaNotAtHead(missing)
 
 
 class DatabaseService:
@@ -407,6 +431,28 @@ class DatabaseService:
         _pool is the asyncpg connection pool, lazily initialized in init()
         """
         self._pool: Optional[asyncpg.Pool] = None
+        # Set by init() when the schema is behind. Lifespan reads it.
+        self.schema_head_error: str | None = None
+
+    async def _close_pool_after_failed_init(self) -> None:
+        """Close a pool that init() opened and then decided not to keep.
+
+        A close failure is logged with the password redacted. The schema-head
+        message, when there is one, was already logged by the caller.
+        """
+        pool = self._pool
+        self._pool = None
+        if pool is None:
+            return
+        try:
+            await pool.close()
+        except Exception as close_exc:
+            password = urlsplit(settings.database_url).password or ""
+            secrets = (password,) if len(password) >= 4 else ()
+            logger.error(
+                "PostgreSQL pool close after a failed init also failed: %s",
+                redact_secrets(str(close_exc), secrets),
+            )
 
     async def init(self):
         """
@@ -419,8 +465,10 @@ class DatabaseService:
 
         The entrypoint runs ``python -m app.migrations upgrade`` before
         uvicorn. This method does not execute SCHEMA_SQL. A database that
-        is behind the image leaves the pool unset.
+        is behind the image leaves the pool unset and logs one ERROR line
+        naming the missing versions and that command. The DSN is not logged.
         """
+        self.schema_head_error = None
         try:
             self._pool = await asyncpg.create_pool(
                 dsn=settings.database_url,
@@ -433,6 +481,12 @@ class DatabaseService:
 
             print("✅ PostgreSQL connection pool established, schema is at head")
 
+        except SchemaNotAtHead as exc:
+            # One line. Lifespan reuses exc's text when startup must fail.
+            self.schema_head_error = str(exc)
+            logger.error("%s", self.schema_head_error)
+            await self._close_pool_after_failed_init()
+
         except Exception as exc:
             # Log the failure without the password. main.lifespan decides
             # whether DATABASE_REQUIRED should abort startup.
@@ -442,16 +496,7 @@ class DatabaseService:
                 "PostgreSQL initialization failed: %s",
                 redact_secrets(str(exc), secrets),
             )
-            pool = self._pool
-            self._pool = None
-            if pool is not None:
-                try:
-                    await pool.close()
-                except Exception as close_exc:
-                    logger.error(
-                        "PostgreSQL pool close after a failed init also failed: %s",
-                        redact_secrets(str(close_exc), secrets),
-                    )
+            await self._close_pool_after_failed_init()
 
     async def close(self):
         """
