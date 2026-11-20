@@ -18,6 +18,8 @@ Coverage:
 """
 
 import logging
+import socket
+
 import pytest
 import sys
 import os
@@ -353,7 +355,8 @@ class TestInit:
         monkeypatch.setattr(db_module.asyncpg, "create_pool", mock_create_pool)
 
         svc = DatabaseService()
-        await svc.init()
+        with pytest.raises(db_module.SchemaNotAtHead):
+            await svc.init()
 
         assert svc.is_connected is False
         assert svc._pool is None
@@ -401,13 +404,16 @@ class TestInit:
             current["pool"] = FakePool(fake_conn)
             svc = DatabaseService()
             with caplog.at_level(logging.ERROR, logger="app.services.db"):
-                await svc.init()
+                with pytest.raises(db_module.SchemaNotAtHead) as raised:
+                    await svc.init()
 
             errors = [record for record in caplog.records if record.levelno >= logging.ERROR]
             assert len(errors) == 1, name
             message = errors[0].getMessage()
+            assert message == str(raised.value)
             assert message == svc.schema_head_error
             assert "python -m app.migrations upgrade" in message
+            assert "does not exist" not in message
             for version in missing:
                 assert version in message
             if name == "behind":
@@ -487,6 +493,99 @@ class TestInit:
         assert "postgresql://" not in str(raised.value)
 
     @pytest.mark.asyncio
+    async def test_schema_behind_aborts_even_when_database_is_optional(
+        self, monkeypatch, caplog: pytest.LogCaptureFixture
+    ):
+        """A reachable database that is not at head stops startup when DATABASE_REQUIRED is false."""
+        import app.main as main_mod
+        import app.services.db as db_module
+        from fastapi import FastAPI
+
+        fake_conn = FakeConnection()
+        fake_conn.fetch_return = []
+        fake_pool = FakePool(fake_conn)
+
+        async def mock_create_pool(**kwargs):
+            return fake_pool
+
+        monkeypatch.setattr(db_module.asyncpg, "create_pool", mock_create_pool)
+        monkeypatch.setattr(main_mod.settings, "database_required", False)
+        monkeypatch.setattr(main_mod, "setup_logging", lambda: None)
+
+        with caplog.at_level(logging.ERROR):
+            with pytest.raises(RuntimeError, match="python -m app.migrations upgrade"):
+                async with main_mod.lifespan(FastAPI()):
+                    pass
+
+        errors = [record for record in caplog.records if record.levelno >= logging.ERROR]
+        assert len(errors) == 1
+        assert "DATABASE_REQUIRED" not in errors[0].getMessage()
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize(
+        "failure",
+        [ConnectionRefusedError("refused"), TimeoutError("timed out"), socket.gaierror("dns")],
+    )
+    async def test_connection_failure_still_boots_when_database_is_optional(
+        self, monkeypatch, failure
+    ):
+        """Refused, timed out, and unresolvable hosts stay on the boot-without-DB path."""
+        import app.main as main_mod
+        import app.services.db as db_module
+        from fastapi import FastAPI
+
+        async def mock_create_pool(**kwargs):
+            raise failure
+
+        monkeypatch.setattr(db_module.asyncpg, "create_pool", mock_create_pool)
+        monkeypatch.setattr(main_mod.settings, "database_required", False)
+        monkeypatch.setattr(main_mod, "setup_logging", lambda: None)
+
+        async with main_mod.lifespan(FastAPI()):
+            assert main_mod.db_service.is_connected is False
+
+    def test_health_is_not_served_when_schema_is_behind(self, monkeypatch):
+        """A reachable database that is not at head never answers GET /api/health with 200."""
+        import app.main as main_mod
+        import app.services.db as db_module
+        from fastapi.testclient import TestClient
+
+        fake_conn = FakeConnection()
+        fake_conn.fetch_return = []
+
+        async def mock_create_pool(**kwargs):
+            return FakePool(fake_conn)
+
+        monkeypatch.setattr(db_module.asyncpg, "create_pool", mock_create_pool)
+        monkeypatch.setattr(main_mod.settings, "database_required", False)
+        monkeypatch.setattr(main_mod, "setup_logging", lambda: None)
+
+        status: int | None = None
+        try:
+            with TestClient(main_mod.app) as client:
+                status = client.get("/api/health").status_code
+        except Exception:
+            status = None
+        assert status != 200
+
+    def test_health_stays_up_when_postgres_refuses_the_connection(self, monkeypatch):
+        """A refused connection with DATABASE_REQUIRED false still serves /api/health."""
+        import app.main as main_mod
+        import app.services.db as db_module
+        from fastapi.testclient import TestClient
+
+        async def mock_create_pool(**kwargs):
+            raise ConnectionRefusedError("refused")
+
+        monkeypatch.setattr(db_module.asyncpg, "create_pool", mock_create_pool)
+        monkeypatch.setattr(main_mod.settings, "database_required", False)
+        monkeypatch.setattr(main_mod, "setup_logging", lambda: None)
+
+        with TestClient(main_mod.app) as client:
+            response = client.get("/api/health")
+        assert response.status_code == 200
+
+    @pytest.mark.asyncio
     async def test_init_sets_pool_none_on_failure(self, monkeypatch):
         """init() should catch exceptions and leave pool as None."""
         import app.services.db as db_module
@@ -507,11 +606,15 @@ class TestInit:
         """init() should pass the correct DSN, min_size, and max_size."""
         import app.services.db as db_module
 
+        from app.migrations.runner import discover
+
         captured_kwargs = {}
+        connection = FakeConnection()
+        connection.fetch_return = [{"version": migration.version} for migration in discover()]
 
         async def mock_create_pool(**kwargs):
             captured_kwargs.update(kwargs)
-            return FakePool()
+            return FakePool(connection)
 
         monkeypatch.setattr(db_module.asyncpg, "create_pool", mock_create_pool)
 

@@ -237,7 +237,8 @@ async def test_init_does_not_create_tables_on_an_empty_database(
 
     monkeypatch.setattr(db_module.settings, "database_url", scratch_dsn)
     service = db_module.DatabaseService()
-    await service.init()
+    with pytest.raises(db_module.SchemaNotAtHead):
+        await service.init()
     assert service.is_connected is False
     conn = await asyncpg.connect(scratch_dsn, timeout=5)
     try:

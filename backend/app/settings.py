@@ -37,8 +37,9 @@ class Settings(BaseSettings):
 
     # PostgreSQL 設定
     database_url: str = "postgresql://novig:novig@localhost:5432/novig_nba"  # PostgreSQL 連線 URL
-    # False locally so tests and dev without Postgres still boot.
+    # False locally so a refused connection, timeout, or DNS failure still boots.
     # Set DATABASE_REQUIRED=true in production so a bad URL fails startup.
+    # A reachable database that is not at head fails startup either way.
     database_required: bool = False
     
     # Redis 設定

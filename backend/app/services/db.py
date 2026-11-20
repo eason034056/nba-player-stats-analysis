@@ -464,9 +464,11 @@ class DatabaseService:
         - max_size: maximum pool size (default 10)
 
         The entrypoint runs ``python -m app.migrations upgrade`` before
-        uvicorn. This method does not execute SCHEMA_SQL. A database that
-        is behind the image leaves the pool unset and logs one ERROR line
-        naming the missing versions and that command. The DSN is not logged.
+        uvicorn. This method does not execute SCHEMA_SQL. A reachable
+        database that is behind the image logs one ERROR line naming the
+        missing versions and that command, then raises ``SchemaNotAtHead``.
+        The DSN is not logged. Connection refused, timeout, and DNS failure
+        are swallowed so a missing local database can still boot.
         """
         self.schema_head_error = None
         try:
@@ -482,10 +484,13 @@ class DatabaseService:
             print("✅ PostgreSQL connection pool established, schema is at head")
 
         except SchemaNotAtHead as exc:
-            # One line. Lifespan reuses exc's text when startup must fail.
+            # One line, then the exception. Startup fails either way
+            # DATABASE_REQUIRED is set. A missing schema_migrations table
+            # is this same exception: every shipped version is missing.
             self.schema_head_error = str(exc)
             logger.error("%s", self.schema_head_error)
             await self._close_pool_after_failed_init()
+            raise
 
         except Exception as exc:
             # Log the failure without the password. main.lifespan decides
