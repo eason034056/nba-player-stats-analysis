@@ -10,6 +10,7 @@ already ran ``SCHEMA_SQL``, it changes nothing: the statements are
 from __future__ import annotations
 
 import os
+import re
 import shutil
 import subprocess
 from pathlib import Path
@@ -48,6 +49,9 @@ def test_baseline_text_is_schema_sql() -> None:
     assert _baseline_body() == SCHEMA_SQL.strip() + "\n"
 
 
+_PG_ATTVER_LINE = re.compile(r"ALTER TABLE .* SET \(pg_attver=\d+\);")
+
+
 def _normalize_dump(text: str) -> str:
     kept: list[str] = []
     for line in text.splitlines():
@@ -55,6 +59,10 @@ def _normalize_dump(text: str) -> str:
         if not stripped or stripped.startswith("--") or stripped.startswith("\\"):
             continue
         if stripped.startswith("SET ") or stripped.startswith("SELECT pg_catalog.set_config"):
+            continue
+        # pg_dump emits a per-database attribute version. Two databases built
+        # with the same statements get different numbers, so it is not schema.
+        if _PG_ATTVER_LINE.fullmatch(stripped):
             continue
         kept.append(stripped)
     return "\n".join(kept) + "\n"
