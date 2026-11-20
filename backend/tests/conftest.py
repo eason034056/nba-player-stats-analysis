@@ -34,6 +34,31 @@ def _with_database(url: str, database: str) -> str:
     return urlunsplit((parts.scheme, parts.netloc, f"/{database}", parts.query, ""))
 
 
+@pytest.fixture(scope="session", autouse=True)
+def apply_shipped_migrations() -> None:
+    """Apply 001 and 002 to the database named by ``DATABASE_URL``.
+
+    ``DatabaseService.init`` confirms ``schema_migrations`` is at head and
+    does not run ``SCHEMA_SQL``. CI sets ``DATABASE_URL`` to the postgres
+    service. Tests that open that database and read the legacy tables need
+    the files applied first. Scratch databases stay empty. When
+    ``DATABASE_URL`` is unset the fixture does nothing, and those tests skip.
+    """
+    if not os.environ.get("DATABASE_URL", "").strip():
+        return
+
+    async def _run() -> None:
+        from app.migrations.runner import upgrade
+
+        conn = await asyncpg.connect(_admin_url(), timeout=10)
+        try:
+            await upgrade(conn)
+        finally:
+            await conn.close()
+
+    asyncio.run(_run())
+
+
 @pytest_asyncio.fixture
 async def scratch_dsn() -> AsyncIterator[str]:
     """DSN of an empty database that is dropped after the test."""

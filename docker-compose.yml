@@ -82,6 +82,8 @@ services:
     networks:
       - app-network
     
+    # 不設定 command。映像 ENTRYPOINT 先 upgrade，再 exec Dockerfile 的 uvicorn。
+    # 換掉 ENTRYPOINT 就不會跑 migration。只換 CMD 時 migration 仍會先跑。
     # 重啟策略
     # unless-stopped: 除非手動停止，否則自動重啟
     restart: unless-stopped

@@ -15,7 +15,7 @@ from pathlib import Path
 import pytest
 
 from app.dsn import mask_database_url, redact_secrets
-from app.services.db import SCHEMA_SQL, DatabaseService
+from app.services.db import DatabaseService
 from app.settings import Settings
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -53,10 +53,17 @@ def _run(script: Path, env: dict[str, str], *args: str) -> subprocess.CompletedP
 class _Conn:
     def __init__(self) -> None:
         self.execute_calls: list[tuple] = []
+        self.fetch_calls: list[tuple] = []
 
     async def execute(self, query: str, *args: object) -> str:
         self.execute_calls.append((query, *args))
         return "OK"
+
+    async def fetch(self, query: str, *args: object) -> list[dict[str, str]]:
+        self.fetch_calls.append((query, *args))
+        from app.migrations.runner import discover
+
+        return [{"version": migration.version} for migration in discover()]
 
 
 class _Pool:
@@ -199,7 +206,8 @@ class TestInit:
         assert "sslrootcert=/app/certs/global-bundle.pem" in captured["dsn"]
         assert captured["min_size"] == 2
         assert captured["max_size"] == 10
-        assert connection.execute_calls[0][0] == SCHEMA_SQL
+        assert connection.execute_calls == []
+        assert any("schema_migrations" in call[0] for call in connection.fetch_calls)
 
     @pytest.mark.asyncio
     async def test_init_failure_log_has_no_password(

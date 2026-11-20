@@ -9,6 +9,7 @@ scratch databases in ``conftest.py`` and skip when no Postgres answers.
 
 from __future__ import annotations
 
+import asyncio
 import os
 import subprocess
 import sys
@@ -39,12 +40,13 @@ def _write(directory: Path, files: dict[str, str]) -> Path:
 
 @pytest.mark.asyncio
 async def test_upgrade_applies_the_shipped_files_once(scratch_conn: asyncpg.Connection) -> None:
-    assert await upgrade(scratch_conn) == ["002"]
+    assert await upgrade(scratch_conn) == ["001", "002"]
+    assert await _has_table(scratch_conn, "odds_line_snapshots")
     assert await _has_table(scratch_conn, "player_game_stats")
-    assert await _versions(scratch_conn) == ["002"]
+    assert await _versions(scratch_conn) == ["001", "002"]
 
     assert await upgrade(scratch_conn) == []
-    assert await _versions(scratch_conn) == ["002"]
+    assert await _versions(scratch_conn) == ["001", "002"]
 
 
 @pytest.mark.asyncio
@@ -87,7 +89,7 @@ async def test_file_and_its_record_commit_together(
 
 
 def test_shipped_files_are_in_version_order() -> None:
-    assert [migration.version for migration in discover()] == ["002"]
+    assert [migration.version for migration in discover()] == ["001", "002"]
 
 
 @pytest.mark.parametrize(
@@ -137,3 +139,36 @@ def test_cli_without_the_variable_names_it() -> None:
     result = _cli("SPO138_TEST_DSN", None)
     assert result.returncode == 2
     assert "SPO138_TEST_DSN" in result.stderr
+
+
+@pytest.mark.asyncio
+async def test_concurrent_upgrades_apply_each_file_once(
+    scratch_dsn: str, tmp_path: Path
+) -> None:
+    """Two upgrades at once, holding the advisory lock, run each file one time."""
+    directory = _write(tmp_path, {
+        "001_slow.sql": (
+            "CREATE TABLE apply_once (n INTEGER);"
+            "INSERT INTO apply_once VALUES (1);"
+            "SELECT pg_sleep(0.8);"
+        ),
+        "002_next.sql": (
+            "CREATE TABLE apply_once_b (n INTEGER);"
+            "INSERT INTO apply_once_b VALUES (1);"
+        ),
+    })
+    first = await asyncpg.connect(scratch_dsn, timeout=5)
+    second = await asyncpg.connect(scratch_dsn, timeout=5)
+    try:
+        results = await asyncio.gather(
+            upgrade(first, directory),
+            upgrade(second, directory),
+        )
+        count_a = await first.fetchval("SELECT count(*) FROM apply_once")
+        count_b = await first.fetchval("SELECT count(*) FROM apply_once_b")
+    finally:
+        await first.close()
+        await second.close()
+    assert sorted(results, key=len) == [[], ["001", "002"]]
+    assert count_a == 1
+    assert count_b == 1

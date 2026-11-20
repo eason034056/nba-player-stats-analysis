@@ -13,7 +13,7 @@ Coverage:
 6. close sets pool to None
 7. is_connected returns True when pool exists
 8. execute/fetch/fetchrow/executemany raise RuntimeError when pool is None
-9. init() success path (creates pool, runs schema)
+9. init() success path (creates pool, confirms schema_migrations is at head)
 10. init() failure path (sets pool to None)
 """
 
@@ -26,7 +26,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 # Add project root to Python path so we can import app modules
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from app.services.db import DatabaseService, SCHEMA_SQL
+from app.services.db import DatabaseService
 
 
 # ---------------------------------------------------------------------------
@@ -308,9 +308,12 @@ class TestInit:
     """Tests for DatabaseService.init()."""
 
     @pytest.mark.asyncio
-    async def test_init_creates_pool_and_runs_schema(self, monkeypatch):
-        """init() should create a pool and execute the schema SQL."""
+    async def test_init_creates_pool_and_confirms_head(self, monkeypatch):
+        """init() opens a pool and reads schema_migrations. It does not run SCHEMA_SQL."""
+        from app.migrations.runner import discover
+
         fake_conn = FakeConnection()
+        fake_conn.fetch_return = [{"version": migration.version} for migration in discover()]
         fake_pool = FakePool(fake_conn)
 
         # Patch asyncpg.create_pool to return our fake pool
@@ -328,9 +331,30 @@ class TestInit:
 
         assert svc.is_connected is True
         assert svc._pool is fake_pool
-        # The schema SQL should have been executed
-        assert len(fake_conn.execute_calls) == 1
-        assert fake_conn.execute_calls[0][0] == SCHEMA_SQL
+        assert fake_conn.execute_calls == []
+        assert any("schema_migrations" in call[0] for call in fake_conn.fetch_calls)
+
+    @pytest.mark.asyncio
+    async def test_init_leaves_the_pool_unset_when_migrations_are_missing(self, monkeypatch):
+        """A database behind the image is not papered over by running SCHEMA_SQL."""
+        fake_conn = FakeConnection()
+        fake_conn.fetch_return = []
+        fake_pool = FakePool(fake_conn)
+
+        import app.services.db as db_module
+
+        async def mock_create_pool(**kwargs):
+            return fake_pool
+
+        monkeypatch.setattr(db_module.asyncpg, "create_pool", mock_create_pool)
+
+        svc = DatabaseService()
+        await svc.init()
+
+        assert svc.is_connected is False
+        assert svc._pool is None
+        assert fake_conn.execute_calls == []
+        assert fake_pool.closed is True
 
     @pytest.mark.asyncio
     async def test_init_sets_pool_none_on_failure(self, monkeypatch):

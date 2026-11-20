@@ -4,7 +4,7 @@ db.py - PostgreSQL Database Service
 Provides asynchronous PostgreSQL connection pool and query functionality using asyncpg.
 Responsible for:
 1. Managing the database connection pool
-2. Automatically creating tables (schema migration) when the application starts
+2. Confirming schema_migrations is at head when the application starts
 3. Providing helper methods for queries (execute, fetch, fetchrow)
 
 asyncpg is a high-performance async PostgreSQL driver, does not rely on an ORM,
@@ -249,8 +249,8 @@ CREATE TABLE IF NOT EXISTS lineup_fetch_logs (
 -- Backfill: pre-existing NBA rows get league='nba' via the column DEFAULT.
 -- New WNBA writes must pass league='wnba' (lineup_service handles this).
 --
--- All statements are idempotent — safe to run multiple times via
--- db_service.init() on every startup.
+-- All statements are idempotent — safe to apply more than once.
+-- 001_baseline.sql is this text. init() does not execute it.
 
 ALTER TABLE team_lineup_snapshots
     ADD COLUMN IF NOT EXISTS league TEXT NOT NULL DEFAULT 'nba';
@@ -364,6 +364,25 @@ $spo117_line_unique$;
 """
 
 
+async def _confirm_schema_at_head(conn: asyncpg.Connection) -> None:
+    """Raise when the database is missing a shipped migration version.
+
+    The message names versions only. It does not include the DSN.
+    """
+    from app.migrations.runner import discover
+
+    expected = [migration.version for migration in discover()]
+    rows = await conn.fetch("SELECT version FROM schema_migrations")
+    applied = {row["version"] for row in rows}
+    missing = [version for version in expected if version not in applied]
+    if missing:
+        raise RuntimeError(
+            "schema_migrations is not at head; missing "
+            + ", ".join(missing)
+            + ". Run python -m app.migrations upgrade before start"
+        )
+
+
 class DatabaseService:
     """
     PostgreSQL Database Service Class
@@ -376,7 +395,7 @@ class DatabaseService:
 
     Usage:
         db = DatabaseService()
-        await db.init()          # Create connection pool + tables
+        await db.init()          # Create connection pool; schema comes from migrations
         rows = await db.fetch("SELECT * FROM table WHERE id = $1", 123)
         await db.close()         # Close the pool
     """
@@ -391,15 +410,16 @@ class DatabaseService:
 
     async def init(self):
         """
-        Initialize the database connection pool and create tables
+        Open the connection pool and confirm schema_migrations is at head.
 
         asyncpg.create_pool: creates the connection pool
         - dsn: PostgreSQL URI string
         - min_size: minimum pool size (default 2)
         - max_size: maximum pool size (default 10)
 
-        After creation, immediately executes SCHEMA_SQL to ensure tables exist
-        Uses IF NOT EXISTS for idempotency (won't error if run repeatedly)
+        The entrypoint runs ``python -m app.migrations upgrade`` before
+        uvicorn. This method does not execute SCHEMA_SQL. A database that
+        is behind the image leaves the pool unset.
         """
         try:
             self._pool = await asyncpg.create_pool(
@@ -408,11 +428,10 @@ class DatabaseService:
                 max_size=10
             )
 
-            # Run schema migration (create tables)
             async with self._pool.acquire() as conn:
-                await conn.execute(SCHEMA_SQL)
+                await _confirm_schema_at_head(conn)
 
-            print("✅ PostgreSQL connection pool established, tables are ready")
+            print("✅ PostgreSQL connection pool established, schema is at head")
 
         except Exception as exc:
             # Log the failure without the password. main.lifespan decides

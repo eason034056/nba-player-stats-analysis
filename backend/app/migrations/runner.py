@@ -26,6 +26,10 @@ CREATE TABLE IF NOT EXISTS schema_migrations (
 )
 """
 
+# Session lock held from discover through the last apply. 001 takes its own
+# transaction lock (1170117) inside the file. This key is different.
+_UPGRADE_LOCK = 138138001
+
 
 class MigrationError(RuntimeError):
     """The migration files cannot be put in one order."""
@@ -64,15 +68,32 @@ def discover(directory: Path = MIGRATIONS_DIR) -> list[Migration]:
 async def upgrade(conn: asyncpg.Connection, directory: Path = MIGRATIONS_DIR) -> list[str]:
     """Apply every file whose version is not yet in ``schema_migrations``.
 
+    One session advisory lock covers discover and every apply. Two containers
+    starting together take turns: the second sees the versions the first
+    recorded and does not run those files again. The lock ends when this
+    function returns. If the connection dies first, PostgreSQL drops it.
+
     Returns:
         The versions this call applied, in order. Empty when the schema is
         already at the newest file.
 
     Raises:
-        MigrationError: from ``discover``, before any SQL runs.
+        MigrationError: from ``discover``. No migration file has run.
         asyncpg.PostgresError: a file failed. Its transaction rolled back;
             the files before it stay applied.
     """
+    await conn.execute("SELECT pg_advisory_lock($1::bigint)", _UPGRADE_LOCK)
+    try:
+        return await _apply_pending(conn, directory)
+    finally:
+        try:
+            await conn.execute("SELECT pg_advisory_unlock($1::bigint)", _UPGRADE_LOCK)
+        except Exception:
+            # The connection can no longer run SQL. Disconnect releases the lock.
+            pass
+
+
+async def _apply_pending(conn: asyncpg.Connection, directory: Path) -> list[str]:
     migrations = discover(directory)
     await conn.execute(_BOOTSTRAP)
     rows = await conn.fetch("SELECT version FROM schema_migrations")
