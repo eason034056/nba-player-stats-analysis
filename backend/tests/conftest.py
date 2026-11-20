@@ -12,40 +12,85 @@ import asyncio
 import os
 import uuid
 from collections.abc import AsyncIterator
-from urllib.parse import parse_qs, unquote, urlsplit, urlunsplit
+from urllib.parse import parse_qs, urlsplit, urlunsplit
 
 import asyncpg
 import pytest
 import pytest_asyncio
 
 _CI_URL = "postgresql://novig:novig@localhost:5432/novig_nba"
-# CI's workflow uses localhost. `postgres` is the compose service name.
+# Case-insensitive. A comma-separated netloc host is local only when every
+# entry matches. [::1] is compared as ::1.
+# `postgres` is the Compose service name. Leftover risk: this does not resolve
+# DNS, so that name can point at a remote address and still pass. CI's
+# workflow uses localhost, not this name.
 _LOCAL_DB_HOSTS = frozenset({"localhost", "127.0.0.1", "::1", "postgres"})
 
 
-def _migration_target_host(url: str) -> str | None:
-    """Return the host this URL would connect to.
+def _host_key(host: str) -> str:
+    """Fold case and strip a bracketed IPv6 form down to the address."""
+    text = host.strip().lower()
+    if len(text) >= 2 and text.startswith("[") and text.endswith("]"):
+        text = text[1:-1]
+    return text
 
-    None means a unix socket: an empty host, or a host that is a filesystem
-    path. A libpq ``host`` query parameter overrides the authority.
+
+def _netloc_host_is_local(hostname: str) -> bool:
+    """True when every comma-separated entry is on the allow-list."""
+    parts = [part.strip() for part in hostname.split(",")]
+    if not parts or any(part == "" for part in parts):
+        return False
+    return all(_host_key(part) in _LOCAL_DB_HOSTS for part in parts)
+
+
+def _query_sets_host(url: str) -> bool:
+    """True when the URL carries host= or hostaddr=.
+
+    The values are not read. asyncpg ignores host= once the netloc has a
+    host, and duplicate host= parameters are last-wins.
     """
-    parts = urlsplit(url)
-    from_query = parse_qs(parts.query, keep_blank_values=True).get("host")
-    raw = from_query[0] if from_query is not None else parts.hostname
-    if raw is None:
-        return None
-    host = unquote(raw).strip()
-    if host == "":
-        return None
-    return host
+    keys = parse_qs(urlsplit(url).query, keep_blank_values=True)
+    return "host" in keys or "hostaddr" in keys
 
 
-def _is_local_test_database(url: str) -> bool:
-    """True when pytest may migrate this URL without an explicit override."""
-    host = _migration_target_host(url)
-    if host is None or host.startswith("/"):
-        return True
-    return host.lower() in _LOCAL_DB_HOSTS
+def _named_env_host(name: str) -> str:
+    """A PGHOST value safe to put in a refusal, or the variable name."""
+    value = os.environ.get(name, "").strip()
+    if value and "://" not in value and "@" not in value and " " not in value:
+        return value
+    return name
+
+
+def _refusal_host(url: str) -> str:
+    """Host text for a refusal. Never the URL."""
+    hostname = urlsplit(url).hostname
+    if hostname and not _netloc_host_is_local(hostname):
+        return hostname
+    for name in ("PGHOST", "PGHOSTADDR"):
+        if name in os.environ:
+            return _named_env_host(name)
+    if _query_sets_host(url):
+        return "query host parameter"
+    return hostname or "unknown"
+
+
+def _migration_refusal_host(url: str) -> str | None:
+    """Return the host to name when this URL must not be migrated.
+
+    None means the fixture may connect. ``ALLOW_REMOTE_TEST_DB=1`` is handled
+    by the caller. A host-less URL with no host= and no PGHOST/PGHOSTADDR is
+    a local unix socket.
+    """
+    if _query_sets_host(url):
+        return _refusal_host(url)
+    if "PGHOST" in os.environ or "PGHOSTADDR" in os.environ:
+        return _refusal_host(url)
+    hostname = urlsplit(url).hostname
+    if hostname is None or hostname.strip() == "":
+        return None
+    if _netloc_host_is_local(hostname):
+        return None
+    return hostname
 
 
 def _admin_url() -> str:
@@ -73,18 +118,24 @@ def apply_shipped_migrations() -> None:
 
     A non-local host is refused before any connection, unless
     ``ALLOW_REMOTE_TEST_DB=1``. The refusal names the host and not the URL.
+    Any ``host=`` or ``hostaddr=`` query parameter is refused, and so is a
+    set ``PGHOST`` or ``PGHOSTADDR``. In CI the refusal fails the session.
     """
     raw = os.environ.get("DATABASE_URL", "").strip()
     if not raw:
         return
     url = _admin_url()
     if os.environ.get("ALLOW_REMOTE_TEST_DB", "").strip() != "1":
-        if not _is_local_test_database(url):
-            host = _migration_target_host(url) or "unknown"
-            pytest.skip(
+        host = _migration_refusal_host(url)
+        if host is not None:
+            message = (
                 "refusing to migrate non-local database host "
                 f"{host} during pytest; set ALLOW_REMOTE_TEST_DB=1 to override"
             )
+            ci = os.environ.get("CI")
+            if ci is not None and ci.strip() != "" and ci.strip().lower() not in {"false", "0"}:
+                pytest.fail(message)
+            pytest.skip(message)
 
     async def _run() -> None:
         from app.migrations.runner import upgrade
