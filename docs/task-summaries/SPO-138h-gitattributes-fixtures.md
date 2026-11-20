@@ -31,7 +31,7 @@ SPO-138a (#94) shows why this matters. It adds 1,292 lines of code and tests, pl
 
 - **`git check-attr linguist-generated`** on every JSON under `backend/tests/fixtures/` and `tests/fixtures/`: 38 `true`. The one `unspecified` file is `player-double-double-one-sided.json`, as intended. `odds_api.py`, `record_fixtures.py`, `README.md`, and `frontend/test/fixtures/event/nba-no-vig-synthetic.json` are `unspecified`. SPO-138a's new recordings match `backend/tests/fixtures/bdl/*.json`.
 - **No content change:** after `git add --renormalize .`, the only staged file is `.gitattributes`.
-- **CI:** this branch has no code change. On `dev` today, Backend Tests and the walk-forward guard stop at pytest start-up, because langsmith 0.15.1 (released 2026-11-20) fails to import under pydantic 2.8.0. #94 and #95 each pin `langsmith==0.14.17`. Once either is merged, update this branch and CI runs green.
+- **CI:** all 6 checks passed (Backend Tests 1744 passed). The run merged this branch onto `dev` at `fc3f5ed`, which already has #94's `langsmith==0.14.17` pin. Without that pin, Backend Tests and the walk-forward guard stop at pytest start-up, because langsmith 0.15.1 (released 2026-11-20) fails to import under pydantic 2.8.0.
 - **Frontend:** not touched.
 
 ## Follow-ups
