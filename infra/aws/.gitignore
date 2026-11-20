@@ -13,3 +13,8 @@ override.tf.json
 # Variable files can hold account ids and allowlisted IPs. Commit the example only.
 *.tfvars
 !*.tfvars.example
+
+# Backend config names the state bucket. Commit the examples only.
+backend.hcl
+backend-*.hcl
+!backend-*.hcl.example
