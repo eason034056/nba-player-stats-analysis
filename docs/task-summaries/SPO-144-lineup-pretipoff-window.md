@@ -59,10 +59,10 @@ Mutation check: `NBA_LINEUP_PRETIPOFF_LOOKBACK` was changed from `timedelta(hour
 ## Follow-ups
 
 - [x] Eason, 2026-11-21: every game on the slate gets `[that tip - 2 hours, that tip)`, for NBA and for WNBA. The gap between two windows stays closed.
-- [x] Eason, 2026-11-21: a missing key, or a body with no usable tip, skips the 5-minute window for the rest of that slate. No fixed-hour fallback. Same rule for WNBA. A failed call is not part of that pin: the next tick reads again.
+- [x] Eason, 2026-11-21: a missing key, or a body with no usable tip, skips the 5-minute window for the rest of that slate. No fixed-hour fallback. Same rule for WNBA.
 - [ ] The outer cron starts at 09:00 CT. A tip before 11:00 AM CT loses the part of the window before 09:00. The 12:30 PM ET matinee (window from 09:30 CT) is inside the grid.
 - [ ] The NBA games read uses the default BALLDONTLIE client, which can retry a 429 or a 5xx before it raises. After it raises, the slate is not cached, and the next tick reads again. The WNBA events client retries with no wait between attempts, then raises the same way.
-- [ ] QA review 6003790585, M1: the extra failed-call test file is waiting on Eason. It is not applied in this PR. A raised call is already left uncached, and the 36-hour TTL for a missing key or a body with no usable tip is unchanged.
+- [ ] A failed call is not part of that pin: the next tick reads again. Eason has not decided this. QA review 6003790585, M1: the extra failed-call test file is waiting on Eason. It is not applied in this PR. A raised call is already left uncached, and the 36-hour TTL for a missing key or a body with no usable tip is unchanged.
 
 ## Progress notes (for the docs PR)
 
