@@ -1,10 +1,8 @@
 import type { ReactNode } from "react";
 import { screen, waitFor } from "@testing-library/react";
-import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import BetSlipPage from "@/app/betslip/page";
-import { AGENT_CHAT_UI_ENABLED } from "@/lib/agent-chat-ui";
 import {
   clearBetSlip,
   createBetSlipPick,
@@ -141,7 +139,7 @@ describe("BetSlipPage", () => {
     ).toBeInTheDocument();
   });
 
-  it.skipIf(AGENT_CHAT_UI_ENABLED)("hides Review with agent when chat UI is off", async () => {
+  it("hides Review with agent when chat UI is off", async () => {
     seedBetSlip([createBetSlipPick()]);
 
     renderWithProviders(<BetSlipPage />, { withAgentWidget: true });
@@ -155,35 +153,6 @@ describe("BetSlipPage", () => {
     expect(screen.queryByRole("button", { name: /review with agent/i })).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: /download png/i })).toBeInTheDocument();
     expect(apiMocks.sendAgentChat).not.toHaveBeenCalled();
-  });
-
-  it.skipIf(!AGENT_CHAT_UI_ENABLED)("reviews the current slip through the agent widget", async () => {
-    const user = userEvent.setup();
-    seedBetSlip([createBetSlipPick()]);
-
-    renderWithProviders(<BetSlipPage />, { withAgentWidget: true });
-
-    await waitFor(() => {
-      expect(
-        screen.getByRole("heading", { level: 2, name: /your picks/i }),
-      ).toBeInTheDocument();
-    });
-
-    await user.click(screen.getByRole("button", { name: /review with agent/i }));
-
-    expect(await screen.findByRole("dialog", { name: /betting agent/i })).toBeInTheDocument();
-    expect(apiMocks.sendAgentChat).toHaveBeenCalledWith(
-      expect.objectContaining({
-        action: "review_slip",
-        context: expect.objectContaining({
-          bet_slip: expect.arrayContaining([
-            expect.objectContaining({
-              player_name: "Stephen Curry",
-            }),
-          ]),
-        }),
-      }),
-    );
   });
 
   it("includes a local date query in detail links", async () => {

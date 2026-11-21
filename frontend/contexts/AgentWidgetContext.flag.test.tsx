@@ -4,7 +4,6 @@ import { describe, expect, it, vi } from "vitest";
 
 import { AgentWidget } from "@/components/AgentWidget";
 import { useAgentWidget } from "@/contexts/AgentWidgetContext";
-import { AGENT_CHAT_UI_ENABLED } from "@/lib/agent-chat-ui";
 import { renderWithProviders } from "@/test/test-utils";
 
 const apiMocks = vi.hoisted(() => ({
@@ -41,7 +40,7 @@ function ChatHarness() {
 }
 
 describe("agent chat flag", () => {
-  it.skipIf(AGENT_CHAT_UI_ENABLED)("does not open the widget or call sendAgentChat when chat UI is off", async () => {
+  it("does not open the widget or call sendAgentChat when chat UI is off", async () => {
     const user = userEvent.setup();
     renderWithProviders(
       <>
