@@ -103,3 +103,9 @@ langsmith==0.14.17
 # - The existing NBA path is unchanged and does not depend on BS4.
 beautifulsoup4==4.14.3
 lxml==6.0.2
+
+# ==================== ML dataset export (SPO-138j) ====================
+# Offline Parquet export (python -m app.ml.build_dataset).
+# The API process does not import app.ml.
+pandas==3.0.1
+pyarrow==23.0.1
