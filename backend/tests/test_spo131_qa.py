@@ -12,15 +12,12 @@ import logging
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
-import pytest
-
 from tests import test_spo131_bdl_injuries as base
 from tests.test_spo131_bdl_injuries import (
     INJURY_PAGE,
     STANDINGS,
     NBA_INJURIES_CACHE_KEY,
     NBA_INJURIES_CACHE_TTL_SECONDS,
-    get_cached_nba_injuries,
     nba_injuries,
     normalize_bdl_injuries,
     refresh_nba_injuries,
@@ -39,24 +36,6 @@ def _fresh_entries() -> list[dict]:
     return normalize_bdl_injuries(INJURY_PAGE["data"], _MAPPING, fetched_at=_now_iso())
 
 
-def _seed(body) -> base.CacheService:
-    service, _fake = base._cache()
-    asyncio.run(service.set(NBA_INJURIES_CACHE_KEY, body, ttl=NBA_INJURIES_CACHE_TTL_SECONDS))
-    return service
-
-
-def _agent_path(monkeypatch: pytest.MonkeyPatch, service) -> object:
-    historical = base._historical()
-    base._set_dummy_key(monkeypatch)
-    # NBA always reads the cache. The retired env var is ignored.
-    base._set_injury_source(monkeypatch, "bdl")
-    base._use_cache(monkeypatch, service)
-    base._forbid_scraper(monkeypatch)
-    base._forbid_refresh(monkeypatch)
-    base._guard_network(monkeypatch)
-    return historical
-
-
 def _single_page() -> dict:
     """The recorded page as the only page: a copy with ``next_cursor`` cleared."""
     page = copy.deepcopy(INJURY_PAGE)
@@ -71,61 +50,6 @@ def _row(last_name: str) -> dict:
 # ---------------------------------------------------------------------------
 # Fresh, empty, malformed
 # ---------------------------------------------------------------------------
-
-
-def test_fresh_snapshot_with_an_empty_list_means_no_injuries(monkeypatch):
-    service = _seed({"fetched_at": _now_iso(), "entries": []})
-    historical = _agent_path(monkeypatch, service)
-    report = asyncio.run(historical.get_official_injury_report("UTA", league="nba"))
-    assert report["signal"] == "neutral"
-    assert report["details"]["injuries"] == []
-    assert "reason" not in report["details"]
-
-
-@pytest.mark.parametrize("entries", ["missing", None, "oops", {"UTA": []}])
-def test_fresh_body_without_an_entries_list_is_unavailable(monkeypatch, entries):
-    body = {"fetched_at": _now_iso()}
-    if entries != "missing":
-        body["entries"] = entries
-    service = _seed(body)
-    historical = _agent_path(monkeypatch, service)
-    report = asyncio.run(historical.get_official_injury_report("UTA", league="nba"))
-    assert report["signal"] == "caution"
-    assert report["details"]["reason"] == "injury data unavailable"
-
-
-@pytest.mark.parametrize("fetched_at", [None, "", "yesterday", 1731300000])
-def test_unreadable_fetched_at_is_unavailable(monkeypatch, fetched_at):
-    service = _seed({"fetched_at": fetched_at, "entries": _fresh_entries()})
-    historical = _agent_path(monkeypatch, service)
-    report = asyncio.run(historical.get_official_injury_report("UTA", league="nba"))
-    assert report["signal"] == "caution"
-    assert report["details"]["reason"] == "injury data unavailable"
-    assert report["details"]["injuries"] == []
-
-
-def test_non_object_body_is_unavailable(monkeypatch):
-    service = _seed(_fresh_entries())  # a bare list, not {fetched_at, entries}
-    historical = _agent_path(monkeypatch, service)
-    report = asyncio.run(historical.get_official_injury_report("UTA", league="nba"))
-    assert report["signal"] == "caution"
-    assert report["details"]["reason"] == "injury data unavailable"
-
-
-def test_redis_error_is_unavailable_not_healthy(monkeypatch):
-    service, fake = base._cache()
-
-    async def _boom(_key):
-        raise ConnectionError("redis down")
-
-    fake.get = _boom
-    historical = _agent_path(monkeypatch, service)
-    report = asyncio.run(historical.get_official_injury_report("UTA", league="nba"))
-    assert report["signal"] == "caution"
-    assert report["details"]["reason"] == "injury data unavailable"
-    impact = historical.auto_teammate_impact("Jaren Jackson Jr", "points", 12.5, league="nba")
-    assert impact["signal"] == "caution"
-    assert impact["details"]["teammate_chemistry"] == []
 
 
 # ---------------------------------------------------------------------------
@@ -205,27 +129,6 @@ def test_recorded_statuses_are_all_handled():
         assert entry["status"] == entry["raw_status"]
 
 
-def test_doubtful_player_reads_as_caution_with_the_source_word(monkeypatch):
-    entries = _fresh_entries()
-    doubtful = next(e for e in entries if e["raw_status"] == "Doubtful")
-    service = _seed({"fetched_at": _now_iso(), "entries": entries})
-    historical = _agent_path(monkeypatch, service)
-    report = asyncio.run(historical.get_official_injury_report(doubtful["team"], league="nba"))
-    row = next(e for e in report["details"]["injuries"] if e["bdl_player_id"] == doubtful["bdl_player_id"])
-    assert row["status"] == "Doubtful"
-    assert row["raw_status"] == "Doubtful"
-
-
-def test_unrecognized_status_is_not_read_as_healthy(monkeypatch):
-    row = _row("Jackson Jr.")
-    row["status"] = "Out For Season"
-    entries = normalize_bdl_injuries([row], _MAPPING, fetched_at=_now_iso())
-    service = _seed({"fetched_at": _now_iso(), "entries": entries})
-    historical = _agent_path(monkeypatch, service)
-    availability = historical.get_availability_context("Jaren Jackson Jr", league="nba")
-    assert availability["signal"] == "caution"
-
-
 def test_unrecognized_status_is_kept_and_logged(caplog):
     row = _row("Jackson Jr.")
     row["status"] = "Out For Season"
@@ -240,61 +143,9 @@ def test_unrecognized_status_is_kept_and_logged(caplog):
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.parametrize("query", ["Jaren Jackson Jr", "Jaren Jackson Jr."])
-def test_suffix_spellings_match_the_bdl_row(monkeypatch, query):
-    """Punctuation and case fold. The recorded row is Jaren Jackson Jr."""
-    service = _seed({"fetched_at": _now_iso(), "entries": _fresh_entries()})
-    historical = _agent_path(monkeypatch, service)
-    availability = historical.get_availability_context(query, league="nba")
-    assert availability["signal"] == "caution"
-    assert availability["details"]["status"] == "Out"
-
-
-def test_stem_without_the_suffix_does_not_match_the_jr_row(monkeypatch):
-    """'jaren jackson' is not the recorded 'Jaren Jackson Jr.' row.
-
-    The old key dropped the suffix and this query came back Out. The
-    suffix stays, so the lookup is Healthy.
-    """
-    service = _seed({"fetched_at": _now_iso(), "entries": _fresh_entries()})
-    historical = _agent_path(monkeypatch, service)
-    availability = historical.get_availability_context("jaren jackson", league="nba")
-    assert availability["signal"] == "neutral"
-    assert availability["details"]["status"] == "Healthy"
-
-
-def test_accented_bdl_name_matches_the_ascii_query(monkeypatch):
-    row = _row("Jackson Jr.")
-    row["player"]["first_name"] = "Járén"
-    entries = normalize_bdl_injuries([row], _MAPPING, fetched_at=_now_iso())
-    service = _seed({"fetched_at": _now_iso(), "entries": entries})
-    historical = _agent_path(monkeypatch, service)
-    availability = historical.get_availability_context("Jaren Jackson Jr", league="nba")
-    assert availability["details"]["status"] == "Out"
-
-
-def test_player_is_looked_up_on_the_bdl_team_for_that_team_id(monkeypatch):
-    # The recorded row puts Jaren Jackson Jr. on team_id 29 (UTA).
-    row = _row("Jackson Jr.")
-    assert _MAPPING[row["player"]["team_id"]] == "UTA"
-    entries = normalize_bdl_injuries([row], _MAPPING, fetched_at=_now_iso())
-    service = _seed({"fetched_at": _now_iso(), "entries": entries})
-    historical = _agent_path(monkeypatch, service)
-    uta = asyncio.run(historical.get_official_injury_report("UTA", league="nba"))
-    mem = asyncio.run(historical.get_official_injury_report("MEM", league="nba"))
-    assert [e["bdl_player_id"] for e in uta["details"]["injuries"]] == [row["player"]["id"]]
-    assert mem["details"]["injuries"] == []
-
-
 # ---------------------------------------------------------------------------
 # No BALLDONTLIE call on the agent path
 # ---------------------------------------------------------------------------
-
-
-def test_agent_tools_do_not_import_a_bdl_client_or_http_library():
-    text = (_REPO / "scripts" / "agents" / "tools" / "historical.py").read_text(encoding="utf-8")
-    for needle in ("bdl_client", "balldontlie.io", "api.balldontlie", "refresh_nba_injuries", "httpx", "aiohttp"):
-        assert needle not in text
 
 
 def test_cache_read_module_has_no_http_client():
@@ -315,16 +166,3 @@ def test_fixtures_carry_no_credentials():
 # ---------------------------------------------------------------------------
 
 
-def test_wnba_availability_and_teammate_paths_stay_on_the_scraper(monkeypatch):
-    historical = base._historical()
-    base._set_dummy_key(monkeypatch)
-    base._patch_scraper(monkeypatch)
-
-    def _no_cache():
-        raise AssertionError("NBA injury cache opened for WNBA")
-
-    monkeypatch.setattr(nba_injuries, "open_injury_cache", _no_cache)
-    base._guard_network(monkeypatch)
-    rows = historical._fetch_injury_report_for_team("NYL", league="WNBA")
-    assert [r["player"] for r in rows] == ["Breanna Stewart"]
-    assert base._ScrapingFetcher.calls == 1

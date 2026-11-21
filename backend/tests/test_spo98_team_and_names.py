@@ -17,17 +17,6 @@ from unittest.mock import MagicMock
 import pytest
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-sys.path.insert(
-    0,
-    os.path.abspath(
-        os.path.join(
-            os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
-            "..",
-            "scripts",
-            "agents",
-        )
-    ),
-)
 
 from app.services.csv_player_history import (
     CSVPlayerHistoryService,
@@ -342,24 +331,3 @@ class TestDailyAnalysisWiring:
         assert all(p.player_team == "Hawks" for p in other_picks)
 
 
-class TestHistoricalGamesFor:
-    def test_nba_and_wnba_exact_names_and_event_day_team(self):
-        from tools.historical import _games_for, _team_for
-
-        jokic = _games_for("Nikola Jokić", league="nba")
-        assert jokic
-        assert jokic[0]["player_name"] == "Nikola Jokic"
-        assert _games_for("Smith", league="nba") == []
-        assert _games_for("Curry", league="nba") == []
-
-        assert _team_for("Buddy Hield", "2025-11-01", league="nba") == "Warriors"
-        assert _team_for("Buddy Hield", "2026-04-30", league="nba") == "Hawks"
-        assert _team_for("Buddy Hield", league="nba") == "Hawks"
-        assert _team_for("Mo Bamba", "2026-01-15", league="nba") == "Raptors"
-
-        wilson = _games_for("Aja Wilson", league="wnba")
-        assert wilson
-        assert wilson[0]["player_name"] == "A'ja Wilson"
-        assert _games_for("Wilson", league="wnba") == []
-        assert _team_for("DiJonai Carrington", "2025-06-01", league="wnba") == "Wings"
-        assert _team_for("DiJonai Carrington", league="wnba") == "Lynx"

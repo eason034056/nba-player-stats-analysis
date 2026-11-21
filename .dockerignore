@@ -1,9 +1,6 @@
 *
 !backend/
 !backend/**
-!scripts/
-!scripts/agents/
-!scripts/agents/**
 !data/
 !data/**
 # SPO-100: finetune JSONL is not read at runtime. Keep the CSVs and

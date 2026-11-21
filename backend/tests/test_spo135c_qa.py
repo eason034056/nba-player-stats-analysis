@@ -42,66 +42,6 @@ def test_leftover_nba_injury_source_env_is_ignored(monkeypatch) -> None:
     assert not hasattr(loaded, "nba_injury_source")
 
 
-def test_picks_reads_and_nba_agent_tools_do_not_construct_bdl_client(
-    monkeypatch, caplog
-) -> None:
-    """Request paths only read Redis. A BDL constructor must not run."""
-
-    class _Boom:
-        def __init__(self, *args, **kwargs):
-            raise AssertionError("BDL client constructed on the request path")
-
-    monkeypatch.setattr("app.services.bdl_client.BdlClient", _Boom)
-    caplog.set_level(logging.WARNING)
-    out = _entry("Out")
-    picks = _picks_for([out["player"], "Dyson Daniels"], [out])
-    assert {row.injury_status for row in picks if row.player_name == out["player"]} == {
-        "Out"
-    }
-
-    class _Cache:
-        async def get(self, key):
-            assert key == NBA_INJURIES_CACHE_KEY
-            return {
-                "fetched_at": datetime.now(timezone.utc).isoformat(),
-                "entries": [out],
-            }
-
-    loaded = asyncio.run(load_nba_pick_injuries(cache=_Cache()))
-    assert loaded is not None
-    assert loaded[0]["status"] == "Out"
-
-    signals, combined, _total = build_nba_signals(
-        side="over",
-        line=24.5,
-        player_name=out["player"],
-        market_probability=0.58,
-        injury_status=None,
-    )
-    # The helper blends when the caller passes no injury word. /reads
-    # now passes the cache word; a missing snapshot is what leaves it None.
-    assert combined is not None
-    assert 0.0 < combined < 1.0
-    assert [signal.key for signal in signals] == [
-        "market",
-        "last10",
-        "history",
-        "defense",
-    ]
-
-    from tests.test_spo131_qa import _agent_path, _seed
-
-    body = {
-        "fetched_at": datetime.now(timezone.utc).isoformat(),
-        "entries": [out],
-    }
-    historical = _agent_path(monkeypatch, _seed(body))
-    report = asyncio.run(
-        historical.get_official_injury_report(out["team"], league="nba")
-    )
-    assert report["details"]["injuries"]
-
-
 def test_suffix_is_kept_so_a_unique_jr_row_does_not_attach_to_the_stem() -> None:
     """A unique 'Gary Trent Jr.' row does not attach to 'Gary Trent'.
 

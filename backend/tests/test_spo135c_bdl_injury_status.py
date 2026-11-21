@@ -767,23 +767,3 @@ def test_wnba_pick_ignores_the_nba_snapshot() -> None:
     assert all(pick.combined_probability is None for pick in picks)
 
 
-def test_wnba_agent_injury_path_still_scrapes(monkeypatch) -> None:
-    from tests.test_spo131_bdl_injuries import (
-        _ScrapingFetcher,
-        _expect_espn_cbs,
-        _forbid_refresh,
-        _historical,
-        _set_dummy_key,
-        _set_injury_source,
-    )
-
-    historical = _historical()
-    _set_dummy_key(monkeypatch)
-    _set_injury_source(monkeypatch, "bdl")
-    _expect_espn_cbs(monkeypatch)
-    _forbid_refresh(monkeypatch)
-    result = asyncio.run(historical.get_official_injury_report("Liberty", league="wnba"))
-    assert _ScrapingFetcher.calls == 1
-    assert result["details"]["injuries"][0]["player"] == "Breanna Stewart"
-    assert result["details"]["injuries"][0]["source"] == "espn"
-    assert "bdl_player_id" not in result["details"]["injuries"][0]
