@@ -55,6 +55,19 @@ LABEL_SOURCES: dict[str, SourceSpec] = {
     "prop_actuals": SourceSpec("prop_actuals", LABEL, "target_result"),
 }
 
+# Injury and lineup reads for SPO-138l. They are not part of
+# ``feature_source_names``: that tuple is the 138j/138k allow-list, and the
+# dataset metadata still reports it unchanged. ``game_lineups`` is a
+# post-tip stand-in. The other three are visible only at or before T.
+ABSENCE_SOURCES: dict[str, SourceSpec] = {
+    "injury_snapshots": SourceSpec("injury_snapshots", FEATURE, TIMESTAMP),
+    "game_lineups": SourceSpec("game_lineups", FEATURE, "standin"),
+    "projected_lineups": SourceSpec("projected_lineups", FEATURE, TIMESTAMP),
+    "projected_lineup_players": SourceSpec(
+        "projected_lineup_players", FEATURE, TIMESTAMP
+    ),
+}
+
 # Named rejection, not a generic "unknown", so a props query cannot be
 # mistaken for a source we merely forgot to register.
 REJECTED_SOURCES: dict[str, str] = {
@@ -68,6 +81,30 @@ REJECTED_SOURCES: dict[str, str] = {
 def feature_source_names() -> tuple[str, ...]:
     """Return the feature sources registered by this export, in order."""
     return tuple(FEATURE_SOURCES)
+
+
+def absence_source_names() -> tuple[str, ...]:
+    """Return injury and lineup sources, in registry order.
+
+    These names are not included in :func:`feature_source_names`.
+    """
+    return tuple(ABSENCE_SOURCES)
+
+
+def require_absence_source(name: str) -> SourceSpec:
+    """Return the injury or lineup rule for ``name``.
+
+    Raises:
+        SourceError: ``name`` is ``player_prop_snapshots`` or is not an
+            injury or lineup source.
+    """
+    rejected = REJECTED_SOURCES.get(name)
+    if rejected is not None:
+        raise SourceError(rejected)
+    spec = ABSENCE_SOURCES.get(name)
+    if spec is None:
+        raise SourceError(f"{name} is not an injury or lineup source")
+    return spec
 
 
 def require_feature_source(name: str) -> SourceSpec:
