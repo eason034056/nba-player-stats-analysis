@@ -622,9 +622,9 @@ Open questions for Eason (they don't block approval): whether to stop the backen
 - **Expired BDL cursor:** the backfill script has a documented `--restart-season <season>` path, which re-walks that season from its first page. Upserts are idempotent, so a re-walk is safe.
 - **#64 follow-up:** add a 90-day current-object expiration rule for `bdl-raw/` in `s3.tf`, alongside s3:PutObject.
 
-## 11. Read layer: `003_read_layer.sql` (SPO-138i, 2026-11-20)
+## 11. Read layer: `004_read_layer.sql` (SPO-138i, 2026-11-20)
 
-`003` adds one table and four views. No 002 table changes. The reasons and the rejected alternatives are in [`decision_20261120_read-layer-and-ml-inputs.md`](decision_20261120_read-layer-and-ml-inputs.md).
+`004` adds one table and four views. It is 004 because SPO-138g's `003_bdl_game_gaps.sql` holds version 003. No 002 table changes. The reasons and the rejected alternatives are in [`decision_20261120_read-layer-and-ml-inputs.md`](decision_20261120_read-layer-and-ml-inputs.md).
 
 | Object | Kind | Read by |
 |---|---|---|

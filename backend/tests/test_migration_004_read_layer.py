@@ -1,7 +1,7 @@
 """
-test_migration_003_read_layer.py - the SPO-138i read layer in a real PostgreSQL.
+test_migration_004_read_layer.py - the SPO-138i read layer in a real PostgreSQL.
 
-Each test creates a scratch database, applies 002 and 003 inside one
+Each test creates a scratch database, applies 002 and 004 inside one
 transaction, and drops the database afterwards. The tests skip when no server
 answers ``DATABASE_URL``, like ``test_migration_002_bdl_core.py``.
 """
@@ -16,7 +16,7 @@ import pytest
 import pytest_asyncio
 
 MIGRATIONS = Path(__file__).resolve().parents[1] / "app" / "migrations"
-FILES = ("002_bdl_core.sql", "003_read_layer.sql")
+FILES = ("002_bdl_core.sql", "004_read_layer.sql")
 
 FINAL_GAME = 123
 UPCOMING_GAME = 124
@@ -28,7 +28,7 @@ LEBRON, CURRY, DAVIS, GREEN, REAVES = 237, 115, 140, 185, 666
 
 @pytest_asyncio.fixture
 async def db(scratch_conn: asyncpg.Connection) -> asyncpg.Connection:
-    """Scratch database with 002 and 003 applied and four games to hang rows on."""
+    """Scratch database with 002 and 004 applied and four games to hang rows on."""
     async with scratch_conn.transaction():
         for name in FILES:
             await scratch_conn.execute((MIGRATIONS / name).read_text(encoding="utf-8"))

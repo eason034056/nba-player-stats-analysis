@@ -1,4 +1,5 @@
--- 003_read_layer.sql: SPO-138i read layer for the frontend and the ML model.
+-- 004_read_layer.sql: SPO-138i read layer for the frontend and the ML model.
+-- Version 003 is SPO-138g's 003_bdl_game_gaps.sql.
 --
 -- Additive only: one table (predictions) and four views. No 002 table is
 -- altered. The file has no BEGIN/COMMIT: the runner applies it and records the

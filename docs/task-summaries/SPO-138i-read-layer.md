@@ -7,7 +7,7 @@
 
 ## Summary
 
-This PR adds `003_read_layer.sql`: one table and four views on top of the 002 schema. No 002 table changes, and nothing writes `predictions` yet.
+This PR adds `004_read_layer.sql`: one table and four views on top of the 002 schema. It is 004 because SPO-138g's `003_bdl_game_gaps.sql` (not yet in `dev`) holds 003. A database that records 003 would otherwise skip this file, and the runner refuses two files with one version. No 002 table changes, and nothing writes `predictions` yet.
 
 1. `predictions` stores one row per model run for a game, player, and market. Triggers set `predicted_at` to the insert time, refuse inserts at or after tip-off, and refuse UPDATE and DELETE. No line, book, or price is stored.
 2. `prop_actuals` gives the result of all 12 markets for each stat line of a final game, using `prop_markets.stat_columns` and `settle_rule`. It reads no odds.
@@ -18,9 +18,9 @@ This PR adds `003_read_layer.sql`: one table and four views on top of the 002 sc
 
 | Area | Files | Change |
 |---|---|---|
-| Schema | `backend/app/migrations/003_read_layer.sql` | New. `predictions` with two triggers and an index; views `current_predictions`, `prop_actuals`, `current_injuries`, `current_projected_lineups` |
-| Tests | `backend/tests/test_migration_003_read_layer.py` | New. 17 tests on a scratch database |
-| Tests | `backend/tests/test_migration_runner.py`, `test_migration_001_baseline.py` | The shipped migration list is now `["001", "002", "003"]` |
+| Schema | `backend/app/migrations/004_read_layer.sql` | New. `predictions` with two triggers and an index; views `current_predictions`, `prop_actuals`, `current_injuries`, `current_projected_lineups` |
+| Tests | `backend/tests/test_migration_004_read_layer.py` | New. 17 tests on a scratch database |
+| Tests | `backend/tests/test_migration_runner.py`, `test_migration_001_baseline.py` | The shipped migration list is now `["001", "002", "004"]` |
 | Docs | `docs/decisions/SPO-138/decision_20261120_read-layer-and-ml-inputs.md` | New. Decisions, rejected alternatives, tradeoffs |
 | Docs | `docs/decisions/SPO-138/data-model.md` | §1.7 `status` stores BDL's word (Doubtful kept); new §11 for 003 |
 | Docs | `docs/decisions/SPO-138/data-model-er.drawio.svg` | The new table, the four views, and the planned rules (orange border) |
@@ -35,9 +35,9 @@ This PR adds `003_read_layer.sql`: one table and four views on top of the 002 sc
 
 ## Tests / Verification
 
-- **003:** `pytest tests/test_migration_003_read_layer.py` → 17 passed, on a throwaway `postgres:16-alpine`.
+- **004:** `pytest tests/test_migration_004_read_layer.py` → 17 passed, on a throwaway `postgres:16-alpine`.
 - **Mutation check:** two rules were broken on purpose and the tests failed both times. Filtering `listed` before picking the newest row failed the injury test. Removing `NEW.predicted_at := now()` failed the insert-time, after-tip-off, and latest-run tests.
-- **Migrations and pool:** `test_migration_runner.py`, `test_migration_001_baseline.py`, `test_migration_002_bdl_core.py`, `test_migration_003_read_layer.py`, `test_db.py` → 113 passed.
+- **Migrations and pool:** `test_migration_runner.py`, `test_migration_001_baseline.py`, `test_migration_002_bdl_core.py`, `test_migration_004_read_layer.py`, `test_db.py` → 113 passed.
 - **Full backend suite** (`--continue-on-collection-errors`): 1591 passed, 23 skipped, 7 xfailed, 3 failed, 16 collection errors. The failures and errors also happen on a clean `origin/dev` checkout:
   - 3 failures in `test_spo132b_optional_vpc.py::TestVpcIdConsole`, the Terraform console tests.
   - 16 collection errors in `test_bdl_client.py`, `test_spo130a_qa_*` (2), `test_spo130d_bdl_odds_provider.py`, `test_spo135c*` to `test_spo135h*` (9), and `test_spo137a*` (3): `fakeredis` is in `requirements.txt` but not in the local venv.
@@ -53,4 +53,4 @@ This PR adds `003_read_layer.sql`: one table and four views on top of the 002 sc
 
 ## Progress notes (for the docs PR)
 
-- SPO-138i: `003_read_layer` adds `predictions` and the read views for the frontend and the player-props model.
+- SPO-138i: `004_read_layer` adds `predictions` and the read views for the frontend and the player-props model.

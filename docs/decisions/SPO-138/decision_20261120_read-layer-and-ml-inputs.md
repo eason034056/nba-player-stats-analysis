@@ -15,7 +15,7 @@ Without one definition, every query re-derives "newest" and "settled" its own wa
 
 ## Decision
 
-1. **The 14 tables of 002 do not change.** `003_read_layer.sql` adds one table and four views.
+1. **The 14 tables of 002 do not change.** `004_read_layer.sql` adds one table and four views (version 003 is SPO-138g's `003_bdl_game_gaps.sql`).
 2. **`predictions`** holds one row per model run for a game, player, and market (`model_version`, `predicted_value`, nullable `distribution`).
    - `predicted_at` is the insert's transaction time. A trigger overwrites whatever the writer sends.
    - An insert at or after `games.datetime_utc` is refused, and so is one for a game with no `datetime_utc`.
