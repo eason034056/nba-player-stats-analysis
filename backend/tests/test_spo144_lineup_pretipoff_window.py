@@ -714,11 +714,18 @@ def test_nba_restart_after_a_failed_call_reads_again(
 def test_unreadable_games_body_stays_skipped_for_the_slate(
     monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
 ) -> None:
-    """A body with no usable tip is still stored. The next tick does not call."""
+    """Recorded 2026-11-11 rows with every datetime blanked. No usable tip stays stored."""
     import asyncio
 
     fake = _install_cache(monkeypatch)
-    client = _GamesClient(payload={"data": "not-a-list"})
+    payload = deepcopy(_load("games_2026-11-11.json")["response"])
+    assert any(
+        isinstance(game.get("datetime"), str) and game["datetime"].strip()
+        for game in payload["data"]
+    )
+    for game in payload["data"]:
+        game["datetime"] = ""
+    client = _GamesClient(payload=payload)
     _patch_client(monkeypatch, client)
     fetch = AsyncMock(return_value=[])
     monkeypatch.setattr("app.services.scheduler.lineup_service.fetch_and_store", fetch)
