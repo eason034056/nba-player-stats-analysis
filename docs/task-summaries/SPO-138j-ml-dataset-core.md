@@ -16,12 +16,12 @@ This PR adds an offline dataset export. One output row is one `player_game_stats
 |---|---|---|
 | Sources | `backend/app/ml/sources.py` | Allow-list. This PR registers `games` and `player_game_stats` with a prior-date rule. `player_prop_snapshots` is rejected by name. `prop_actuals` is a label source, not a feature. |
 | T | `backend/app/ml/asof.py` | `games.datetime_utc - hours_before_tip`. Default is 3. A NULL tip is 00:00 America/New_York on `games.date` itself: the hour offset is not applied again. The fallback is counted. It is not stored as a tip time. |
-| Load | `backend/app/ml/load.py` | Read-only asyncpg, one season per query. The output window plus the previous season. DSN from the env var named by `--dsn-env`. Connection errors drop the URL and the password. |
+| Load | `backend/app/ml/load.py` | Read-only asyncpg, one season per query. The output window plus the previous season. DSN from the env var named by `--dsn-env`. Connection errors drop the URL and the password, including a piece split off by `#`, `/`, or `?`. |
 | Features | `backend/app/ml/features.py` | Last 5 and last 10 played games (`dnp` false) for `pts`, `reb`, `ast`, `fg3m`, `stl`, `blk`, and `seconds_played`. Also `n_prev_games`, `n_played_prev`, `dnp_last_10`, `days_rest`, `is_back_to_back`, `is_home`, `season_type`. |
 | Labels | `backend/app/ml/labels.py` | Pivot to `y_<market>`. All-NULL rows are dropped. A single NULL market stays NULL. Double-double and triple-double stay 0/1. |
 | CLI | `backend/app/ml/build_dataset.py` | `python -m app.ml.build_dataset`. `--seasons START:END` is inclusive. Metadata is `<file>.meta.json`. |
 | Deps | `backend/requirements.txt` | `pandas==3.0.1`, `pyarrow==23.0.1`. |
-| Tests | `backend/tests/test_spo138j_ml_dataset.py`, `test_spo138j_ml_dataset_db.py` | In-memory boundaries and a scratch database with 002 and 004. |
+| Tests | `backend/tests/test_spo138j_ml_dataset.py`, `test_spo138j_ml_dataset_db.py`, `test_spo138j_qa_review.py` | In-memory boundaries, a scratch database with 002 and 004, and the review checks for the password pieces and the NULL tip. |
 
 `dnp_last_10` counts DNP rows among the last 10 prior player rows (date, then game id), not among the last 10 played games. `dnp_last_10_window` is how many rows that count used. A short played window is NULL plus `n_played_prev`. It is not a partial mean and not a zero.
 
