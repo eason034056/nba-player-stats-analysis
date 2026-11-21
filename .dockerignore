@@ -3,7 +3,7 @@
 !backend/**
 !data/
 !data/**
-# SPO-100: finetune JSONL is not read at runtime. Keep the CSVs and
-# star_players.json (matched by the whitelist above); drop only *.jsonl.
-# This line must stay after !data/** so the later pattern wins.
+# SPO-142b removed the training JSONL files. Keep this pattern after
+# !data/** so a local data/*.jsonl is not copied into the image. The
+# CSVs and star_players.json stay included by the whitelist above.
 data/*.jsonl

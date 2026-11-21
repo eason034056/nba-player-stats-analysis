@@ -1,47 +1,26 @@
-# NBA + WNBA Multi-Agent Betting Advisor
+# NBA + WNBA Player Props
 
-This project is an implementation of a multi-agent system for Generative AI Assignment 4. The system uses `LangGraph` to coordinate multiple LLM agents and combines historical data, live odds, and lineup information to provide analysis results for player props. **Both NBA and WNBA are supported as first-class leagues** — the architecture is league-parameterized, so each league has its own routes, CSV, agent context, and UI (see `docs/dev-doc.md` for the league plumbing). It also features an interactive web front-end for users to input questions and view responses directly.
+This project is a web app for NBA and WNBA player props. **Both leagues are first-class** — each league has its own routes, CSV, and UI (see `docs/dev-doc.md` for the league plumbing; the agent paragraphs in that file are historical). The front-end lets a user pick a game, read vig-free prices, lineups, and historical game logs.
 
-## System Architecture
+The LangGraph chat package (`scripts/agents/`), the lineup RAG package (`nba_lineup_rag/`), and the finetune and dataset trees were removed in SPO-142b. SPO-142a had already removed `POST /api/nba/agent/chat` and `POST /api/wnba/agent/chat`. The decision record is `docs/decisions/SPO-142/decision_20261121_remove-agent-trees.md`. `sample_outputs.md` is a saved demo from the removed CLI.
 
-```mermaid
-graph TD
-    User["User Query"] --> Planner["Planner Agent"]
-    Planner -->|fan-out| Stats["Historical + Opportunity Agent"]
-    Planner -->|fan-out| ProjectionStub["Projection Agent (stub only)"]
-    Planner -->|fan-out| Market["Market + Odds Agent"]
-    Stats --> Score["Deterministic Scoring Node"]
-    ProjectionStub --> Score
-    Market --> Score
-    Score --> Critic["Critic Agent"]
-    Critic --> Synthesizer["Synthesizer Agent"]
-    Synthesizer -->|missing mandatory input only| Planner
-    Synthesizer -->|ready| FinalOutput["Final Decision"]
-```
+## What the app does
 
-This diagram shows the main LangGraph flow used by the project: the planner routes work to the analysis agents, the deterministic scoring node aggregates the signals, the critic checks risk and contradictions, and the synthesizer produces the final recommendation.
-
-## Assignment Requirements Mapping
-
-- At least 2 LLM-based agents: This project currently includes several agents such as `planner`, `historical_agent`, `projection_agent`, `market_agent`, `critic`, and `synthesizer`
-- Agent framework: Uses `LangGraph`
-- Front-end: Provides a `Next.js` web interface, and a CLI entry point via `scripts/agents/cli.py`
-- README requirement: This document explains how to launch the project and obtain necessary data
+The browser talks to the Next.js app. That app proxies `/api/backend/...` to the FastAPI server. The server reads The Odds API, BALLDONTLIE, RotoWire, and RotoGrinders, and it scores daily picks from the cached odds, the injury snapshot, and the game-log CSVs. Redis holds the short-lived caches. PostgreSQL holds the odds snapshots and the backfill tables.
 
 ## Project Features
 
-- Query NBA **and WNBA** games and player props information
+- Query NBA **and WNBA** games and player props
 - Display vig-free probabilities and market consensus
-- Analyze player historical game data (NBA and WNBA CSVs)
-- Integrate live odds, lineups, and agent analysis results
-- Interact with the multi-agent system via the front-end Agent Widget (league-aware: each league has its own betslip + agent context)
+- Read player historical game data from the NBA and WNBA CSVs
+- Show live odds, lineups, and injury status
+- The front-end Agent Widget is still in the Next.js app. The backend chat routes it used to call are gone.
 
 ## Tech Stack
 
 ### Backend
 
 - `FastAPI`
-- `LangGraph`
 - `Redis`
 - `PostgreSQL`
 - `HTTPX`
@@ -62,7 +41,6 @@ This diagram shows the main LangGraph flow used by the project: the planner rout
 - `Node.js 18+`
 - `Python 3.11+`
 - `The Odds API` key: <https://the-odds-api.com/>
-- `OpenAI API` key: Needed for agent chat functionality
 
 ### Recommended: Start Backend with Docker, Frontend Locally
 
@@ -74,17 +52,15 @@ cp env.example .env
 
 2. Edit the root `.env` file
 
-At minimum, fill in the following two fields:
+At minimum, fill in the odds key:
 
 ```bash
 ODDS_API_KEY=your_odds_api_key_here
-OPENAI_API_KEY=your_openai_api_key_here
 ```
 
 Notes:
 
 - `ODDS_API_KEY` is used to fetch live odds data
-- `OPENAI_API_KEY` is needed to enable multi-agent chat/analysis features
 - NBA projections are not loaded. `has_projection` stays false until a model writes those fields.
 
 3. Start the backend, Redis, and PostgreSQL
@@ -213,24 +189,7 @@ After going to <http://localhost:3000>, you can:
 
 - Pick a league (NBA at `/`, WNBA at `/wnba`)
 - View games and player props
-- Use Agent Widget to ask analysis questions (each league has its own agent chat — `/api/nba/agent/chat` vs `/api/wnba/agent/chat`)
-- View odds, lineup, historical context, and more
-
-### CLI Front-End
-
-If you want to use the multi-agent system directly via command line:
-
-```bash
-cd scripts/agents
-python cli.py "Should I bet Curry over 28.5 points tonight?"
-```
-
-To enter interactive mode:
-
-```bash
-cd scripts/agents
-python cli.py
-```
+- View odds, lineup, historical context, and daily picks
 
 ## 4. Testing and Utility Commands
 
@@ -248,26 +207,6 @@ cd frontend
 npm test
 ```
 
-### Walk-forward backtest
-
-From the repository root, after the backend and agent dependencies are installed:
-
-```bash
-pip install -r backend/requirements.txt -r scripts/agents/requirements_agents.txt
-python scripts/agents/evaluation/backtest.py --report backtest_report.md
-```
-
-`backtest.py` is the walk-forward harness. It scores every NBA and WNBA player-game using only games dated strictly before that game, writes `backtest_report.md`, and prints the three measurement assumptions (proxy line, assumed -110, no CLV). `--odds-history PATH` loads opening and closing lines so ROI uses the real prices and CLV is computed. With no file, that hook stays inactive. `--guard-only` runs the fast calibration check that CI also runs. `--save-rows DIR` writes the row-level CSV and is gitignored.
-
-### Export LangGraph Mermaid Diagram
-
-Assignment requires a graph visualization. You can export the LangGraph Mermaid diagram with:
-
-```bash
-cd scripts/agents
-python graph.py
-```
-
 ## 5. Project Structure
 
 ```text
@@ -275,15 +214,13 @@ python graph.py
 ├── backend/                 # FastAPI backend
 │   └── app/api/
 │       ├── nba.py           # /api/* — NBA events, props/no-vig, player-history, csv/*
-│       ├── wnba.py          # /api/wnba/* — same surface for WNBA (events, props/no-vig, player-history, csv/*)
-│       ├── agent.py         # /api/nba/agent/chat — NBA multi-agent endpoint
-│       └── wnba_agent.py    # /api/wnba/agent/chat — WNBA multi-agent endpoint (symmetric prefix)
+│       └── wnba.py          # /api/wnba/* — same surface for WNBA (events, props/no-vig, player-history, csv/*)
 ├── frontend/                # Next.js frontend (App Router)
 │   └── app/
 │       ├── (NBA routes)     # /, /event/[eventId], /picks, /betslip, /about
 │       └── wnba/            # /wnba, /wnba/event/[eventId], /wnba/player/[name], /wnba/picks, /wnba/betslip
-├── scripts/agents/          # LangGraph multi-agent system and CLI (league-parameterized)
-├── data/                    # Local data files (nba_player_game_logs.csv + wnba_player_game_logs.csv)
+├── scripts/                 # Exploration scripts, CSV hygiene, and ops helpers
+├── data/                    # nba_player_game_logs.csv, wnba_player_game_logs.csv, star_players.json
 ├── docker-compose.yml       # Backend, Redis, PostgreSQL launch configuration
 ├── env.example              # Environment variable example
 └── README.md

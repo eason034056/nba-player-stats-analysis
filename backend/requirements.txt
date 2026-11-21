@@ -84,11 +84,6 @@ fakeredis==2.26.2
 # - 開發時使用
 python-dotenv==1.0.0
 
-# ==================== 資料集生成（scripts/dataset）====================
-# openai: OpenAI API 客戶端
-# - Phase 3 用於生成 Tree-of-Thought 結構化答案
-openai>=1.0.0
-
 # ==================== HTML 解析 (SPO-34) ====================
 # BeautifulSoup4 + lxml: WNBA lineup HTML parsing (RotoWire WNBA scraper).
 # - WNBA path needs selector-grade parsing of `is-expected`/`is-confirmed`

@@ -22,7 +22,6 @@ import pytest
 _BACKEND = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 _REPO = os.path.dirname(_BACKEND)
 sys.path.insert(0, _BACKEND)
-sys.path.insert(0, os.path.join(_REPO, "nba_lineup_rag"))
 
 from app.services.cache import CacheService  # noqa: E402
 from app.services.injury_status import OUT, PROBABLE, UNRESOLVED_INJURY_STATUSES  # noqa: E402
@@ -41,7 +40,6 @@ from app.services.nba_injuries import (  # noqa: E402
 )
 from app.settings import Settings  # noqa: E402
 from pydantic import SecretStr  # noqa: E402
-from src.config import NBA_TEAMS  # noqa: E402
 
 _FIXTURE_DIR = os.path.join(_BACKEND, "tests", "fixtures", "bdl")
 _INJURY_PATH = os.path.join(_FIXTURE_DIR, "player_injuries__page1.json")
@@ -146,7 +144,6 @@ def test_standings_codes_match_nba_tables() -> None:
     codes = set(mapping.values())
     assert len(mapping) == 30
     assert len(codes) == 30
-    assert codes == set(NBA_TEAMS)
     assert codes == set(TEAM_ALIASES)
 
 
@@ -176,7 +173,7 @@ def test_normalize_drops_available_and_maps_doubtful() -> None:
     assert set(normalized) == _ENTRY_KEYS
     assert normalized["player"] == f"{player['first_name']} {player['last_name']}".strip()
     assert normalized["team"] == mapping[player["team_id"]]
-    assert normalized["team"] in NBA_TEAMS
+    assert normalized["team"] in TEAM_ALIASES
     assert normalized["position"] == player["position"]
     assert normalized["status"] == sample["status"]
     assert normalized["raw_status"] == sample["status"]
