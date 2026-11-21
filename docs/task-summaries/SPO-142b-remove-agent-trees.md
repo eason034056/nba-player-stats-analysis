@@ -24,7 +24,7 @@ This PR deletes the LangGraph package, the lineup RAG package, the finetune note
 | Injury words | `backend/app/services/injury_status.py` | Docstring only |
 | Dependencies | `backend/requirements.txt` | Removed `openai`. Its only remaining importer was `scripts/dataset/03_generate_answers.py` |
 | Ignore rules | `.gitignore`, `.dockerignore` | Dropped ignore lines that existed only for `nba_lineup_rag/`. Root `.env` stays ignored. `data/` is not ignored. `data/*.jsonl` stays out of the image |
-| Current docs | `CLAUDE.md`, `README.md`, `docs/deployment/vercel.md` | Point at the trees that remain, and say the chat routes and the four trees are gone |
+| Current docs | repo-root context document, `README.md`, `docs/deployment/vercel.md` | Point at the trees that remain, and say the chat routes and the four trees are gone |
 | Historical specs | `docs/dev-doc.md`, `docs/multi-agent-dev.md`, `sample_outputs.md` | Short note at the top. Bodies kept |
 | Decision | `docs/decisions/SPO-142/decision_20261121_remove-agent-trees.md` | New |
 | Not edited | `docs/progress.md`, `frontend/`, `env.example`, `docs/new-function-dev-doc.md`, `backtest_report.md`, `docs/task-summaries/` other than this file | `env.example` and `docs/new-function-dev-doc.md` do not name the removed trees. `docs/progress.md` still does; this PR does not change it |
