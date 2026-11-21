@@ -188,10 +188,15 @@ def sanitize_error(exc: BaseException, dsn: str | None = None) -> str:
 async def connect_readonly(dsn: str) -> asyncpg.Connection:
     """Open a session that cannot write. The DSN is never put in an error.
 
+    A ``ValueError`` from the driver means the address could not be read
+    (a raw ``#`` or ``?`` in the password is the usual cause). That text is
+    replaced with a fixed message, because the driver percent-decodes the
+    password before it writes the error.
+
     Raises:
-        LoadError: the server cannot be reached, or the session cannot be
-            made read-only. The message is passed through
-            :func:`sanitize_error`.
+        LoadError: the DSN cannot be read, the server cannot be reached, or
+            the session cannot be made read-only. An unreadable DSN uses a
+            fixed message. Other messages pass through :func:`sanitize_error`.
     """
     try:
         conn = await asyncpg.connect(
@@ -200,6 +205,10 @@ async def connect_readonly(dsn: str) -> asyncpg.Connection:
             command_timeout=120,
             server_settings={"default_transaction_read_only": "on"},
         )
+    except ValueError:
+        raise LoadError(
+            "invalid DSN: percent-encode every special character in the password"
+        ) from None
     except Exception as exc:
         raise LoadError(sanitize_error(exc, dsn)) from None
     return conn
