@@ -12,9 +12,9 @@ re-walked.
 Gaps in BALLDONTLIE's own data are listed in the report and do not block,
 because a re-walk returns the same data: final games with no lines, lines
 per game, final games where a team's player points differ from its score,
-and final games where a team's minutes add to under 230. A team plays at
-least 240 minutes; seasons that send whole minutes round a team's total to
-231-239.
+and final games where a team's minutes add to under 230. The last two are
+read from the ``bdl_games_with_gaps`` view (migration 003), which also keeps
+those games out of ``player_game_log``.
 
 The full 2000-01 to 2026-27 walk lists 50 games, and fetching them again by
 game id returns the same lines (``stats__game*_page1.json``):
@@ -43,7 +43,6 @@ from app.backfill.writer import GAME_TYPE_BY_SEASON_TYPE
 logger = logging.getLogger(__name__)
 
 _ERROR_TEXT_LIMIT = 500
-_SHORT_TEAM_SECONDS = 230 * 60
 _NOT_WALKED: Mapping[str, Any] = {
     "cursor": None, "pages_fetched": 0, "rows_fetched": 0, "rows_dropped": 0, "rows_rejected": 0,
 }
@@ -79,21 +78,9 @@ SELECT min(lines) AS fewest, max(lines) AS most FROM (
     GROUP BY s.bdl_game_id
 ) per_game
 """
-_TEAM_TOTALS = """
-SELECT bdl_game_id,
-       coalesce(home_points, 0) <> home_score OR coalesce(visitor_points, 0) <> visitor_score AS points_off,
-       least(coalesce(home_seconds, 0), coalesce(visitor_seconds, 0)) < $3 AS minutes_short
-FROM (
-    SELECT g.bdl_game_id, g.home_score, g.visitor_score,
-           sum(s.pts) FILTER (WHERE s.bdl_team_id = g.home_team_id) AS home_points,
-           sum(s.pts) FILTER (WHERE s.bdl_team_id = g.visitor_team_id) AS visitor_points,
-           sum(s.seconds_played) FILTER (WHERE s.bdl_team_id = g.home_team_id) AS home_seconds,
-           sum(s.seconds_played) FILTER (WHERE s.bdl_team_id = g.visitor_team_id) AS visitor_seconds
-    FROM games g
-    JOIN player_game_stats s ON s.league = g.league AND s.bdl_game_id = g.bdl_game_id
-    WHERE g.league = $1 AND g.season = $2 AND g.status_state = 'final'
-    GROUP BY g.bdl_game_id, g.home_score, g.visitor_score
-) per_game
+_GAMES_WITH_GAPS = """
+SELECT bdl_game_id, points_off, minutes_short FROM bdl_games_with_gaps
+WHERE league = $1 AND season = $2
 ORDER BY bdl_game_id
 """
 _MARK_DONE = """
@@ -192,7 +179,7 @@ async def verify_season(conn: asyncpg.Connection, *, league: str, season: int) -
 
     without_stats = await conn.fetch(_FINAL_GAMES_WITHOUT_STATS, league, season)
     per_game = await conn.fetchrow(_LINES_PER_FINAL_GAME, league, season)
-    team_totals = await conn.fetch(_TEAM_TOTALS, league, season, _SHORT_TEAM_SECONDS)
+    gaps = await conn.fetch(_GAMES_WITH_GAPS, league, season)
     return SeasonReport(
         season=season,
         problems=tuple(problems),
@@ -202,8 +189,8 @@ async def verify_season(conn: asyncpg.Connection, *, league: str, season: int) -
         rejected_rows=rejected,
         final_games_without_stats=tuple(row["bdl_game_id"] for row in without_stats),
         stat_rows_per_final_game=None if per_game["fewest"] is None else (per_game["fewest"], per_game["most"]),
-        final_games_points_off_score=tuple(row["bdl_game_id"] for row in team_totals if row["points_off"]),
-        final_games_under_230_minutes=tuple(row["bdl_game_id"] for row in team_totals if row["minutes_short"]),
+        final_games_points_off_score=tuple(row["bdl_game_id"] for row in gaps if row["points_off"]),
+        final_games_under_230_minutes=tuple(row["bdl_game_id"] for row in gaps if row["minutes_short"]),
     )
 
 
