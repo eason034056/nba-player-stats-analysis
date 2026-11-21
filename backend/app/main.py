@@ -15,7 +15,7 @@ from urllib.parse import urlsplit
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from app.api import agent, health, metrics, nba, wnba, wnba_agent, daily_picks, picks, odds_history, lineups
+from app.api import health, metrics, nba, wnba, daily_picks, picks, odds_history, lineups
 from app.middleware.logging_config import RequestLoggingMiddleware, setup_logging
 from app.middleware.rate_limit import install_rate_limiter
 from app.dsn import mask_database_url, redact_secrets
@@ -176,8 +176,6 @@ app.include_router(health.router)
 app.include_router(metrics.router)
 app.include_router(nba.router)
 app.include_router(wnba.router)  # SPO-32 Phase 1: WNBA CSV + read-only stats
-app.include_router(agent.router)
-app.include_router(wnba_agent.router)  # SPO-58 Phase 5c: WNBA agent chat
 app.include_router(daily_picks.router)  # 每日高機率球員分析
 app.include_router(picks.router)  # Discord bot AI picks API
 app.include_router(odds_history.router)  # 盤口歷史快照（Line Movement Tracking）

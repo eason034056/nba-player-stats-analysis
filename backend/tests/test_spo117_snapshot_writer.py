@@ -685,15 +685,8 @@ async def test_omitted_history_date_follows_the_eastern_slate(monkeypatch):
 
 
 def test_open_close_uses_the_main_line_not_the_bovada_ladder():
-    import sys
-    from pathlib import Path
-
-    agents = Path(__file__).resolve().parents[2] / "scripts" / "agents"
-    if str(agents) not in sys.path:
-        sys.path.insert(0, str(agents))
-    from evaluation.odds_history import open_close_from_snapshots
-
     from app.services.bulk_props import _main_book_line as stored_main_line
+    from app.services.snapshot_open_close import open_close_from_snapshots
 
     player = "Nickeil Alexander-Walker"
     rows = [row for row in _history_rows(player) if row["bookmaker"] == "bovada"]

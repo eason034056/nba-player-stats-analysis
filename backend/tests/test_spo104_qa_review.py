@@ -13,9 +13,7 @@ Over/Under prices come from the recorded Odds API body
 
 from __future__ import annotations
 
-import csv
 import json
-import math
 import sys
 from datetime import date, datetime, timedelta, timezone
 from zoneinfo import ZoneInfo
@@ -27,10 +25,8 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 _BACKEND = Path(__file__).resolve().parents[1]
-_REPO = _BACKEND.parent
-for _path in (_BACKEND, _REPO, _REPO / "scripts" / "agents"):
-    if str(_path) not in sys.path:
-        sys.path.insert(0, str(_path))
+if str(_BACKEND) not in sys.path:
+    sys.path.insert(0, str(_BACKEND))
 
 from app.api import nba as nba_api  # noqa: E402
 from app.api import wnba as wnba_api  # noqa: E402
@@ -406,75 +402,36 @@ def test_snapshot_parser_treats_null_no_price_as_missing(one_sided):
     assert rows[0][10] is None
 
 
-def test_market_quote_skips_a_missing_under_price(player_points):
-    from scripts.agents.scoring import compute_scorecard
-    from scripts.agents.tools.market import (
-        _build_market_quote_for_line,
-        _extract_player_lines,
-    )
-
-    lines, matched, _candidates, _suggestions = _extract_player_lines(
-        player_points, "Jalen Johnson"
-    )
-    assert matched == "Jalen Johnson"
-    same = [dict(row) for row in lines if abs(row["line"] - 20.5) < 1e-9]
-    assert len(same) >= 2
-    posted = [row["under_odds"] for row in same]
-    one_sided = dict(same[0])
-    one_sided["under_odds"] = None
-    quote = _build_market_quote_for_line([one_sided, same[1]], 20.5, "under")
-    assert quote["signal"] == "neutral"
-    assert quote["details"]["best_odds"] == same[1]["under_odds"]
-    assert quote["details"]["best_book"] == same[1]["bookmaker"]
-    assert quote["details"]["best_book"] != one_sided["bookmaker"]
-
-    for row in same:
-        row["under_odds"] = None
-    missing = _build_market_quote_for_line(same, 20.5, "under")
-    assert missing["signal"] == "unavailable"
-    assert missing["details"]["pricing_mode"] == "unavailable"
-    card = compute_scorecard(
-        {},
-        {},
-        {
-            "get_current_market": {"signal": "unavailable", "details": {"n_books": 0}},
-            "get_market_quote_for_line": missing,
-        },
-        direction="under",
-    )
-    assert card["expected_value_pct"] is None
-    assert card["market_implied_probability"] is None
-    assert card["best_odds"] is None
-    assert posted
-
-
-def test_market_quote_ignores_a_null_fair_under(player_points):
-    from scripts.agents.tools.market import (
-        _build_market_quote_for_line,
-        _extract_player_lines,
-    )
-
-    lines, _matched, _candidates, _suggestions = _extract_player_lines(
-        player_points, "Jalen Johnson"
-    )
-    same = [dict(row) for row in lines if abs(row["line"] - 20.5) < 1e-9]
-    blank = dict(same[0])
-    blank["under_odds"] = None
-    blank["fair_under"] = None
-    quote = _build_market_quote_for_line([blank, same[1]], 20.5, "under")
-    assert quote["signal"] == "neutral"
-    assert quote["details"]["best_odds"] == same[1]["under_odds"]
-    assert quote["details"]["market_implied_for_query"] == round(same[1]["fair_under"], 4)
+def _recorded_two_sided_points(payload: dict, player: str, line: float) -> dict:
+    """First Over/Under pair at ``line`` for ``player`` in a recorded Odds API body."""
+    for book in payload.get("bookmakers", []):
+        for market in book.get("markets", []):
+            over = under = None
+            for outcome in market.get("outcomes", []):
+                if outcome.get("description") != player:
+                    continue
+                side = str(outcome.get("name", "")).lower()
+                if side == "over":
+                    over = outcome
+                elif side == "under":
+                    under = outcome
+            if over is None or under is None or over.get("point") is None:
+                continue
+            if abs(float(over["point"]) - line) > 1e-9:
+                continue
+            return {
+                "bookmaker": book["key"],
+                "line": float(over["point"]),
+                "over_odds": int(over["price"]),
+                "under_odds": int(under["price"]),
+            }
+    raise AssertionError(f"{player} has no recorded two-sided line at {line}")
 
 
 def test_open_close_skips_a_null_under_without_raising(player_points):
-    from evaluation.odds_history import open_close_from_snapshots
-    from scripts.agents.tools.market import _extract_player_lines
+    from app.services.snapshot_open_close import open_close_from_snapshots
 
-    lines, _matched, _candidates, _suggestions = _extract_player_lines(
-        player_points, "Jalen Johnson"
-    )
-    posted = next(row for row in lines if abs(row["line"] - 20.5) < 1e-9)
+    posted = _recorded_two_sided_points(player_points, "Jalen Johnson", 20.5)
     kept = {
         "player_name": "Jalen Johnson",
         "date": "2026-11-09",
@@ -834,165 +791,3 @@ def test_snapshot_parser_drops_a_bad_yes_price(one_sided):
     assert rows == []
 
 
-def test_same_line_side_prob_skips_nulls_and_callers_keep_ev_empty(player_points):
-    from scripts.agents.scoring import compute_scorecard
-    from scripts.agents.tools.market import (
-        _build_market_quote_for_line,
-        _extract_player_lines,
-        _same_line_side_prob,
-    )
-
-    assert _same_line_side_prob([], "under") is None
-    assert _same_line_side_prob([{"fair_under": None}, {"fair_under": None}], "under") is None
-    assert _same_line_side_prob(
-        [{"fair_under": None}, {"fair_under": 0.4}, {"fair_under": 0.6}],
-        "under",
-    ) == pytest.approx(0.5)
-
-    lines, _matched, _candidates, _suggestions = _extract_player_lines(
-        player_points, "Jalen Johnson"
-    )
-    same = [dict(row) for row in lines if abs(row["line"] - 20.5) < 1e-9]
-    for row in same:
-        row["fair_under"] = None
-    quote = _build_market_quote_for_line(same, 20.5, "under")
-    assert quote["details"]["market_implied_for_query"] is None
-    assert quote["details"]["best_odds"] is not None
-    card = compute_scorecard(
-        {"get_base_stats": {"signal": "neutral", "effect_size": 0, "reliability": 0.5, "details": {}}},
-        {},
-        {
-            "get_current_market": {"signal": "neutral", "details": {"n_books": len(same)}},
-            "get_market_quote_for_line": quote,
-        },
-        direction="under",
-    )
-    assert card["market_implied_probability"] is None
-    assert card["expected_value_pct"] is None
-
-
-def _late_tip_event() -> dict:
-    """Recorded Bucks at 76ers event, retimed to a 10:30pm Pacific tip.
-
-    No kickoff in the recorded schedule splits the Eastern and Pacific
-    calendar dates. The clubs, season, and id stay on event 401704632.
-    """
-    recorded = next(
-        event
-        for event in load_schedule_events()
-        if str(event.get("id")) == "401704632"
-    )
-    event = json.loads(json.dumps(recorded))
-    event["date"] = "2026-03-16T05:30:00Z"
-    return event
-
-
-def _club_names(event: dict) -> tuple[str, str]:
-    home = away = ""
-    for competitor in event.get("competitors") or []:
-        name = str((competitor.get("team") or {}).get("shortDisplayName") or "")
-        if competitor.get("homeAway") == "home":
-            home = name
-        else:
-            away = name
-    return home, away
-
-
-def _log_row(player: str, when: str, team: str, opponent: str) -> dict[str, str]:
-    return {
-        "Player": player,
-        "Season": "2025-2026",
-        "Date": when,
-        "Team": team,
-        "Opponent": opponent,
-        "MIN": "20:00",
-        "PTS": "20",
-    }
-
-
-def _history_for(rows: list[dict[str, str]], tmp_path: Path):
-    from app.services import csv_player_history as history
-    from scripts.agents.tools.historical import _build_base_rate_signal
-
-    path = tmp_path / "late-tip.csv"
-    with path.open("w", encoding="utf-8", newline="") as handle:
-        writer = csv.DictWriter(f=handle, fieldnames=list(rows[0].keys()))
-        writer.writeheader()
-        writer.writerows(rows)
-    with patch.object(history, "CSV_PATH", str(path)):
-        service = history.CSVPlayerHistoryService(league="nba")
-        service.load_csv()
-    name = service.resolve_player_name("Late Tip Player")
-    logs = service._cache[name]
-    signal = _build_base_rate_signal(
-        logs, "points", 15.0, window="season", source="csv"
-    )
-    return logs, signal
-
-
-@pytest.mark.parametrize("arena_date", ("3/15/2026", "3/16/2026"))
-def test_late_pacific_tip_counts_once_on_either_arena_date(tmp_path, arena_date):
-    """One kickoff matched on the Pacific date and on the Eastern date.
-
-    ``2026-03-16T05:30:00Z`` is 10:30pm Pacific on the 15th and 12:30am
-    Eastern on the 16th. Each date resolves to that event once. A single
-    game-log row stays one row in hygiene, history, and the hit rate.
-    """
-    event = _late_tip_event()
-    home, away = _club_names(event)
-    index = ScheduleIndex()
-    index.add(event)
-    pacific = index.match("2026-03-15", home, away)
-    eastern = index.match("2026-03-16", home, away)
-    assert [item["id"] for item in pacific] == ["401704632"]
-    assert [item["id"] for item in eastern] == ["401704632"]
-    assert len({item["id"] for item in pacific + eastern}) == 1
-
-    report = hygiene_rows(
-        [_log_row("Late Tip Player", arena_date, home, away)],
-        [event],
-        league="nba",
-    )
-    assert report.output_rows == 1
-    assert report.rows[0]["GameType"] == "regular_season"
-    logs, signal = _history_for(report.rows, tmp_path)
-    assert len(logs) == 1
-    assert logs[0]["points"] == 20
-    assert signal["sample_size"] == 1
-    assert signal["details"]["total"] == 1
-    assert signal["details"]["over_count"] == 1
-    assert signal["details"]["hit_rate"] == 1.0
-    assert math.isfinite(signal["details"]["hit_rate"])
-
-
-@pytest.mark.xfail(
-    strict=True,
-    reason=(
-        "SPO-104 QA: 2026-03-16T05:30Z is 22:30 Pacific on 03-15 and "
-        "01:30 Eastern on 03-16. The lineup date is America/New_York, "
-        "so it is 2026-03-16, and the planner today follows the process zone."
-    ),
-)
-def test_agent_today_matches_the_pacific_game_date(monkeypatch):
-    import date_utils
-    import tools.historical as historical
-
-    fixed = datetime(2026, 3, 16, 5, 30, tzinfo=timezone.utc)
-
-    class _UTCNow(datetime):
-        def astimezone(self, tz=None):
-            if tz is None:
-                return fixed
-            return datetime.astimezone(self, tz)
-
-    class _Clock(datetime):
-        @classmethod
-        def now(cls, tz=None):
-            if tz is None:
-                return _UTCNow(2026, 3, 16, 5, 30, tzinfo=timezone.utc)
-            return fixed.astimezone(tz)
-
-    monkeypatch.setattr(date_utils, "datetime", _Clock)
-    monkeypatch.setattr(historical, "datetime", _Clock)
-    assert date_utils.normalize_date("today") == "2026-03-15"
-    assert historical._today_date_string() == "2026-03-15"

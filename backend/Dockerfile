@@ -44,9 +44,8 @@ COPY backend/requirements.txt ./requirements.txt
 RUN pip install --no-cache-dir -r requirements.txt
 
 # ==================== 複製應用程式 ====================
-# 複製 backend 應用、agent runtime 與資料目錄到容器
+# 複製 backend 應用與資料目錄到容器
 COPY backend/ ./
-COPY scripts/agents ./scripts/agents
 COPY data ./data
 
 # The entrypoint applies migrations before the process becomes uvicorn.
