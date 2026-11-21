@@ -55,14 +55,18 @@ _CUP_QUARTERFINAL_2024_12_10 = "401734902"  # Magic at Bucks, counts as reg
 _CUP_SEMIFINAL_2024_12_14 = "401734906"  # Hawks at Bucks, counts as reg
 _CUP_FINAL_2024_12_17 = "401734908"  # Bucks at Thunder, does not count as reg
 _CUP_FINAL_2025_12_16 = "401809839"  # Spurs at Knicks, does not count as reg
-_WNBA_PRESEASON_2026_04_25 = "401866150"  # Fever at Liberty, seasonType pre
-_WNBA_REGULAR_2026_05_08 = "401856891"  # Mystics at Tempo, seasonType reg
-_WNBA_PLAYOFFS_2025_09_14 = "401820272"  # Valkyries at Lynx, seasonType post
 
 
 def _schedule() -> list[dict]:
     """The committed ESPN schedule, not a constructed payload."""
     return load_schedule_events()
+
+
+def test_loaded_schedule_has_no_wnba_events():
+    """The committed index has no event whose league is wnba."""
+    events = _schedule()
+    assert events
+    assert all(event.get("league") != "wnba" for event in events)
 
 
 def _event(event_id: str) -> dict:
@@ -256,9 +260,9 @@ def test_downloader_keeps_games_the_fixture_does_not_list(tmp_path: Path):
 class TestOptInFlags:
     """Stats and daily picks default to the regular season. Each flag is separate."""
 
-    def _player_file(self, tmp_path: Path, league: str) -> tuple[Path, str]:
+    def _player_file(self, tmp_path: Path) -> tuple[Path, str]:
         """One real regular row, one real playoff row, one real or copied play-in row."""
-        shipped_name = "wnba_player_game_logs.csv" if league == "wnba" else "nba_player_game_logs.csv"
+        shipped_name = "nba_player_game_logs.csv"
         shipped = _shipped(shipped_name)
         by_player: dict[str, dict[str, dict[str, str]]] = {}
         for row in shipped:
@@ -273,8 +277,6 @@ class TestOptInFlags:
         if GAME_TYPE_PLAY_IN in by_player[player]:
             play_in = dict(by_player[player][GAME_TYPE_PLAY_IN])
         else:
-            # WNBA has no play-in games. A copied row with that token checks
-            # the flag without inventing an ESPN event.
             play_in = dict(regular)
             play_in["GameType"] = GAME_TYPE_PLAY_IN
             play_in["Date"] = "9/20/2025"
@@ -289,7 +291,7 @@ class TestOptInFlags:
         return path, player
 
     def test_stats_flags_are_independent(self, tmp_path, monkeypatch):
-        path, player = self._player_file(tmp_path, "nba")
+        path, player = self._player_file(tmp_path)
         monkeypatch.setattr("app.services.csv_player_history.CSV_PATH", str(path))
         service = CSVPlayerHistoryService(league="nba")
         default = service.get_player_stats(player, "points", 15)
@@ -391,8 +393,8 @@ class TestOptInFlags:
 class TestLoadCsvSkipsDroppedTypes:
     """``load_csv`` is the second gate for a file that still contains dropped types."""
 
-    def _rows_for(self, league: str) -> tuple[list[dict[str, str]], list[str], str]:
-        shipped_name = "wnba_player_game_logs.csv" if league == "wnba" else "nba_player_game_logs.csv"
+    def _rows_for(self) -> tuple[list[dict[str, str]], list[str], str]:
+        shipped_name = "nba_player_game_logs.csv"
         template = next(row for row in _shipped(shipped_name) if row["GameType"] == GAME_TYPE_REGULAR)
         columns = list(template.keys())
         player = "Filter Player"
@@ -415,7 +417,7 @@ class TestLoadCsvSkipsDroppedTypes:
         return [kept, *dropped_rows], columns, player
 
     def test_nba_loader_skips_summer_preseason_g_league_and_unclassified(self, tmp_path, monkeypatch):
-        rows, columns, player = self._rows_for("nba")
+        rows, columns, player = self._rows_for()
         path = tmp_path / "nba_player_game_logs.csv"
         _write_csv(path, rows, columns)
         monkeypatch.setattr("app.services.csv_player_history.CSV_PATH", str(path))
