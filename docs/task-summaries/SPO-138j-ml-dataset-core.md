@@ -31,7 +31,7 @@ The package is larger than the 600-line sketch (about 1,100 lines across the six
 
 - **The model must not see the line.** `player_prop_snapshots` is named in the rejection, so a later query cannot treat it as a source we merely forgot.
 - **Stats use a stricter cut than a timestamp.** A game on the target date is excluded even when its tip is already before T. The target game and any later game are excluded with the same check.
-- **T is 3 hours before a known tip.** `--hours-before-tip` and `prediction_instant` both default to 3. A missing `datetime_utc` is midnight America/New_York on the game date, and that midnight does not move when the hour offset changes.
+- **T is 3 hours, not 60 minutes.** `--hours-before-tip` and `prediction_instant` both default to 3. A known tip still subtracts that offset. A missing `datetime_utc` is 00:00 America/New_York on `games.date`, and that midnight is not shifted by the offset.
 - **One prior season is loaded on purpose.** Output season 2015 still sees 2014. If that is still fewer than 5 or 10 played games, the mean is NULL and the count says how many games existed.
 - **DNP is void.** It stays out of the played means, it counts in `dnp_last_10`, and a DNP label row is dropped because every actual is NULL.
 - **The work stays out of the API process.** `app.main` does not import `app.ml`. The export is a CLI. The connection is read-only.
@@ -43,7 +43,7 @@ Pins: `pandas==3.0.1` and `pyarrow==23.0.1` install and import on Python 3.11.18
 ```
 cd backend
 DATABASE_URL="" python -m pytest tests/test_spo138j_ml_dataset.py -q
-DATABASE_URL=postgresql://test:test@127.0.0.1:5441/test python -m pytest tests/test_spo138j_ml_dataset_db.py -q
+DATABASE_URL=postgresql://test:test@127.0.0.1:5441/test python -m pytest tests/test_spo138j_ml_dataset_db.py tests/test_spo138j_qa_review.py -q
 ```
 
 - In-memory: 20 passed. Timestamp boundary (one second before T, exactly T, one second after). Prior-date rule, including a same-day game whose tip is already before T. Allow-list, including `player_prop_snapshots`, and `prop_actuals` refused as a feature. Own game, later game, and same-day game do not change means. Shuffled input and a season boundary produce the same 2015 row. DNP, per-market NULL, all-NULL drop, short history, a NULL stat inside a full window, trade / home-away, NULL tip. Parquet and metadata round-trip. API import does not load `app.ml`.
@@ -57,7 +57,18 @@ DATABASE_URL=postgresql://test:test@127.0.0.1:5441/test python -m pytest tests/t
 
 Both edits were reverted. The same commands then passed again (20 and 2).
 
-- QA review: `tests/test_spo138j_qa_review.py`. A password containing `#`, `/`, or `?` does not appear on stderr (`invalid literal for int()` used to print the piece before the separator). A NULL tip stays at midnight New York time for every `--hours-before-tip`. Export files and stdout omit the DSN.
+QA review file `tests/test_spo138j_qa_review.py`: 5 passed on scratch Postgres 16 (`127.0.0.1:5441`), migrations 002 and 004 only. Together with the database tests that is 7 passed. The in-memory file stayed at 20 passed.
+
+- A password containing `#`, `/`, or `?` does not appear on stderr, and the CLI does not print `postgresql://`. `urlsplit` leaves that password empty, so the redaction also removes the raw userinfo password and the pieces split on those three characters.
+- A NULL tip is 00:00 America/New_York on `games.date`. Winter `2026-01-15` is 05:00 UTC. Summer `2026-07-15` is 04:00 UTC, and `hours_before_tip=6` does not move it. A known tip of `2026-01-16 00:30` UTC is still `2026-01-15 21:30` UTC.
+- The Parquet file, the metadata, and stdout omit the DSN. An empty 2015 export has `row_count` 0.
+
+**QA mutation check** (reverted before commit):
+
+- NULL-tip line changed back to `as_of = tip - timedelta(hours=hours_before_tip)` so the fallback subtracted hours again. `test_null_tip_t_is_new_york_midnight_on_the_game_date` failed: `datetime(2026, 1, 15, 2, 0, tzinfo=UTC)` against `datetime(2026, 1, 15, 5, 0, tzinfo=UTC)`.
+- Password-piece redaction removed. `test_cli_never_prints_part_of_a_password_with_an_unencoded_separator` failed for `#`, `/`, and `?` (3 failed). The driver message contained the password piece before the separator.
+
+Both edits were restored. The three commands then passed again: 20, and 7 (2 database + 5 review).
 
 Known failures that are not this ticket: 3 tests in `test_spo132b_optional_vpc.py::TestVpcIdConsole`. They fail the same way on clean `origin/dev`. This PR does not change them.
 
@@ -71,3 +82,4 @@ Known failures that are not this ticket: 3 tests in `test_spo132b_optional_vpc.p
 ## Progress notes (for the docs PR)
 
 - SPO-138j: offline dataset export. One `pregame` row per `player_game_stats` line, T = tip-off minus 3 hours, form features from prior dates, labels from `prop_actuals`. Parquet out. No feature table and no writes to `predictions`.
+- SPO-138j QA: a NULL tip stays at 00:00 America/New_York on the game date (the hour offset is not applied again). A connection error masks a password that contains `#`, `/`, or `?`, and the CLI does not print the URL.
