@@ -155,7 +155,7 @@ _CANONICAL_BY_FOLDED = {
     _folded_status(_STATUS_QUESTIONABLE): _STATUS_QUESTIONABLE,
     _folded_status(_STATUS_DAY_TO_DAY): _STATUS_DAY_TO_DAY,
     _folded_status(_STATUS_PROBABLE): _STATUS_PROBABLE,
-    _folded_status(_STATUS_DOUBTFUL): _STATUS_QUESTIONABLE,
+    _folded_status(_STATUS_DOUBTFUL): _STATUS_DOUBTFUL,
 }
 _DROPPED_FOLDED = frozenset({_folded_status(_STATUS_AVAILABLE)})
 _KNOWN_FOLDED = frozenset(_CANONICAL_BY_FOLDED) | _DROPPED_FOLDED
@@ -184,13 +184,13 @@ def _mapped_status(raw_status: Any) -> str | None:
     dropped, in any case. A blank or whitespace-only status is missing
     data, not a healthy player, so it is stored as ``Questionable``.
     A non-string status is omitted. ``doubtful`` is stored as
-    ``Questionable``. Picks and reads use that stored word and do not
-    block on the source word. A stored Doubtful keeps its blend.
-    Daily picks also copy the original word to ``injury_status_raw``.
-    The original word stays on ``raw_status``.
+    ``Doubtful`` (SPO-135i). Picks and reads block only on ``Out``, so
+    a stored Doubtful keeps its blend. Daily picks also copy the
+    original word to ``injury_status_raw``. The original word stays on
+    ``raw_status``.
 
     A known word is stored in its canonical capitalization: ``Out``,
-    ``Questionable``, ``Day-To-Day``, or ``Probable``. ``Day To Day``
+    ``Doubtful``, ``Questionable``, ``Day-To-Day``, or ``Probable``. ``Day To Day``
     and ``DAY_TO_DAY`` are ``Day-To-Day``. A folded string that starts
     with ``out`` as its own word is ``Out`` (``Out For Season``,
     ``Out (Season)``, ``Out - Personal``). ``out of`` does not: ``Out
@@ -241,9 +241,9 @@ def normalize_bdl_injuries(
     Returns:
         One dict per kept row. Only ``Available`` is omitted, in any
         case. A blank status is kept as ``Questionable``. A non-string
-        status is omitted. ``Doubtful`` is ``status="Questionable"``
-        and ``raw_status`` keeps the original string. ``Out``,
-        ``Questionable``, ``Day-To-Day``, and ``Probable`` are stored
+        status is omitted. ``raw_status`` keeps the original string.
+        ``Out``, ``Doubtful``, ``Questionable``, ``Day-To-Day``, and
+        ``Probable`` are stored
         as those canonical words. A different case, hyphen, underscore,
         or extra whitespace does not change a known word and is not
         logged. ``Out For Season`` is stored as ``Out`` and is logged,

@@ -755,7 +755,7 @@ async def get_event_props(
     from that capture. History comes from the NBA game log.
     `combined_probability` is the existing signal model. An Out player
     in the Redis injury snapshot has a null blend. Doubtful is stored
-    as Questionable and keeps a number. This route reads that snapshot
+    as Doubtful and keeps a number. This route reads that snapshot
     and does not call BALLDONTLIE. It does not call The Odds API,
     including when no capture is stored.
 

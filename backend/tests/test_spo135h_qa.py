@@ -165,7 +165,7 @@ def test_top_read_skips_out_and_keeps_the_raw_doubtful_next() -> None:
     the recorded player_points books change.
     """
     out = _entry("Out")
-    doubtful = _entry("Questionable", raw="Doubtful")
+    doubtful = _entry("Doubtful")
     assert out["player"] != doubtful["player"]
     best_source, nxt, _healthy = _sources(out["player"])
     picks = _analyze(

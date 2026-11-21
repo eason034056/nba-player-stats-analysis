@@ -1,8 +1,8 @@
 /**
  * injury-tag.ts
  *
- * The BDL injury word shown on a card. `injury_status` stays the stored
- * status (Doubtful still arrives there as Questionable). The tag text is
+ * The BDL injury word shown on a card. `injury_status` is the stored
+ * status (Doubtful arrives as Doubtful since SPO-135i). The tag text is
  * the raw word when it has a non-blank value, otherwise the stored status.
  * Out exclusion does not read this module.
  */

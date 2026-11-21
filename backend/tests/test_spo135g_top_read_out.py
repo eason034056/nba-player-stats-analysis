@@ -283,9 +283,9 @@ def test_gary_trent_jr_out_does_not_skip_gary_trent() -> None:
 
 
 def test_raw_doubtful_stays_the_top_read() -> None:
-    """Doubtful is still Questionable on the row. top_read does not add a new block."""
-    doubtful = _entry("Questionable", raw="Doubtful")
-    assert doubtful["status"] == "Questionable"
+    """A stored Doubtful is not Out. top_read does not add a new block."""
+    doubtful = _entry("Doubtful")
+    assert doubtful["status"] == "Doubtful"
     assert doubtful["raw_status"] == "Doubtful"
     cached, _nxt, _healthy = _pair(doubtful["player"])
     reads = best_top_reads(cached, injury_entries=[doubtful])

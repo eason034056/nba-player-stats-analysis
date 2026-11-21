@@ -13,7 +13,15 @@ Design principles:
   - Market-implied probability is required for bet eligibility.
 """
 
+import os
+import sys
 from typing import Any, Dict, List, Optional
+
+_BACKEND_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "backend"))
+if _BACKEND_DIR not in sys.path:
+    sys.path.append(_BACKEND_DIR)
+
+from app.services.injury_status import is_unresolved_injury
 
 # ---------------------------------------------------------------------------
 # Tuning constants
@@ -320,14 +328,14 @@ def compute_scorecard(
         wo_n = c.get("without", {}).get("n", 0) or 0
         has_data = w_n >= 3 and wo_n >= 3
 
-        if status in ("Questionable", "Day-To-Day"):
+        if is_unresolved_injury(status):
             unresolved_injury = True
             questionable_stars.append(star)
 
         if status == "Out" and has_data:
             tm_adj += (-delta) * 0.02
             out_stars.append(star)
-        elif status in ("Questionable", "Day-To-Day") and has_data:
+        elif is_unresolved_injury(status) and has_data:
             tm_adj += (-delta) * 0.01
 
     own_report = historical_signals.get("get_own_team_injury_report", {})
@@ -338,7 +346,7 @@ def compute_scorecard(
     ]
     questionable_list = [
         e for e in (own_injuries if isinstance(own_injuries, list) else [])
-        if e.get("status", "") in ("Questionable", "Day-To-Day")
+        if is_unresolved_injury(e.get("status", ""))
     ]
 
     if len(serious_out) >= 3:

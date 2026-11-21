@@ -35,7 +35,7 @@ _PHRASES = (
     ("Out (Season)", "Out"),
     ("Out - Personal", "Out"),
     ("out\xa0for\u00a0season", "Out"),
-    ("Doubtful ", "Questionable"),
+    ("Doubtful ", "Doubtful"),
     ("Day To Day", "Day-To-Day"),
     ("OFS", "Questionable"),
     ("Questionable (out last game)", "Questionable"),
@@ -78,7 +78,7 @@ def test_top_read_skips_a_recorded_out_row_with_folded_status(
     """top_read uses the same Out check as the blend, not an exact 'Out'."""
     out = dict(_entry("Out"))
     out["status"] = status
-    next_row = _entry("Questionable", raw="Doubtful")
+    next_row = _entry("Doubtful")
     assert out["player"] != next_row["player"]
     best_source, nxt, _healthy = _sources(out["player"])
     picks = _analyze(

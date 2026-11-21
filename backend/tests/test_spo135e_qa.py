@@ -54,7 +54,7 @@ def test_reads_questionable_and_raw_doubtful_keep_the_same_blend(
 ) -> None:
     """Parity with daily picks: Questionable and raw Doubtful keep a number."""
     questionable = _entry("Questionable")
-    doubtful = _entry("Questionable", raw="Doubtful")
+    doubtful = _entry("Doubtful")
     event_id, rows = _points_rows()
     posted = sorted({row["player_name"] for row in rows})
     sources = [name for name in posted if name != "Dyson Daniels"]

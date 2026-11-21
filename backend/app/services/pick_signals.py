@@ -21,9 +21,8 @@ Every rule is relative to the pick's side (over or under).
 ``combined_probability`` starts from the market no-vig log-odds, adds
 bounded adjustments from the other four signals, and applies Platt scaling
 to the adjustment total only. No market price, or an injury status of Out,
-returns None. Doubtful is Questionable. The cache stores it that way, and
-a literal Doubtful word does not null the blend. WNBA does not call
-this module.
+returns None. Doubtful does not null the blend; it scores like
+Questionable. WNBA does not call this module.
 """
 
 from __future__ import annotations
@@ -154,9 +153,9 @@ def _injury_word_blocks(status: str | None) -> bool:
 def injury_blocks_combined(status: str | None) -> bool:
     """True when the player is Out, ignoring case and whitespace.
 
-    ``status`` is the word on the pick. The BALLDONTLIE cache stores
-    Doubtful as Questionable, so a cache Doubtful is not Out. A literal
-    Doubtful word is not Out either. WNBA does not call this module.
+    ``status`` is the word on the pick. Doubtful is not Out, whether it
+    comes from the BALLDONTLIE cache or elsewhere. WNBA does not call
+    this module.
     """
     return _injury_word_blocks(status)
 

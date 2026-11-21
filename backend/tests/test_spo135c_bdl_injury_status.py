@@ -632,10 +632,10 @@ def test_startup_fill_runs_once_only_when_the_key_is_missing(monkeypatch) -> Non
 
 
 def test_doubtful_does_not_block_and_out_does() -> None:
-    """Doubtful is Questionable. Only Out blocks the blend.
+    """Only Out blocks the blend. Doubtful scores like Questionable.
 
-    The cache still stores Doubtful as Questionable and keeps raw_status.
-    The blend reads the normalized word. A literal Doubtful does not block.
+    The cache stores Doubtful as Doubtful (SPO-135i) and keeps raw_status.
+    The blend reads the stored word. Doubtful does not block.
     """
     assert injury_blocks_combined("Out") is True
     assert injury_blocks_combined("Doubtful") is False
@@ -657,7 +657,7 @@ def test_out_pick_has_no_combined_probability() -> None:
 
 def test_questionable_and_raw_doubtful_keep_the_same_probability() -> None:
     questionable = _entry("Questionable")
-    doubtful = _entry("Questionable", raw="Doubtful")
+    doubtful = _entry("Doubtful")
     picks = _picks_for(
         [questionable["player"], doubtful["player"]],
         [questionable, doubtful],
@@ -666,7 +666,7 @@ def test_questionable_and_raw_doubtful_keep_the_same_probability() -> None:
     d_rows = _named(picks, doubtful["player"])
     assert {row.injury_status for row in q_rows} == {"Questionable"}
     assert all(row.combined_probability is not None for row in q_rows)
-    assert {row.injury_status for row in d_rows} == {"Questionable"}
+    assert {row.injury_status for row in d_rows} == {"Doubtful"}
     assert {row.combined_probability for row in d_rows} == {
         row.combined_probability for row in q_rows
     }

@@ -694,9 +694,9 @@ class DailyPick(BaseModel):
         default=None,
         description=(
             "Normalized NBA injury status from the BALLDONTLIE snapshot: "
-            "Out, Questionable, Probable, or Day-To-Day. Doubtful is stored "
-            "as Questionable and keeps a blend, the same as any other "
-            "Questionable row. Null when the snapshot is missing, stale, or "
+            "Out, Doubtful, Questionable, Probable, or Day-To-Day. Doubtful "
+            "keeps the same blend as a Questionable row; only Out blocks it. "
+            "Null when the snapshot is missing, stale, or "
             "malformed, or when the name is missing or ambiguous. WNBA stays null. "
             "The source word is injury_status_raw."
         ),
