@@ -228,19 +228,30 @@ class SchedulerService:
             replace_existing=True
         )
         
-        # Add odds snapshot jobs (3 times a day)
+        # Add odds snapshot jobs (3 times a day).
         #
-        # Odds snapshot strategy (Line Movement Tracking):
-        # - Early (UTC 16:00 ≈ US Eastern 11AM): Early line, after injury reports
-        # - Mid (UTC 22:00 ≈ US Eastern 5PM): Late afternoon, after sharp money
-        # - Final (UTC 23:30 ≈ US Eastern 6:30PM): Pre-lock, final line
+        # Eastern wall-clock time, year-round. Each CronTrigger passes
+        # timezone="America/New_York", so 11:05, 17:05, and 18:35 stay on
+        # the Eastern clock through daylight time. The scheduler default
+        # stays UTC. Lineup jobs already pass timezone="America/Chicago".
+        #
+        # - Early, 11:05 America/New_York: early line, after injury reports.
+        # - Mid, 17:05 America/New_York: late afternoon, after sharp money.
+        # - Final, 18:35 America/New_York: pre-lock, before 7:00 PM tip-offs.
+        #
+        # Standard time (EST, UTC-5): 16:05, 22:05, and 23:35 UTC.
+        # Daylight time (EDT, UTC-4): 15:05, 21:05, and 22:35 UTC.
         #
         # Each snapshot calls odds API once per event for 4 markets,
         # calculates no-vig for all bookmaker/player/market, and batch writes to PostgreSQL.
         # Failure does not affect daily analysis.
         self._scheduler.add_job(
             self._run_odds_snapshot_job,
-            trigger=CronTrigger(hour=16, minute=5),
+            trigger=CronTrigger(
+                hour=11,
+                minute=5,
+                timezone="America/New_York",
+            ),
             id='odds_snapshot_early',
             name='Odds Snapshot (Early Line)',
             replace_existing=True
@@ -248,7 +259,11 @@ class SchedulerService:
         
         self._scheduler.add_job(
             self._run_odds_snapshot_job,
-            trigger=CronTrigger(hour=22, minute=5),
+            trigger=CronTrigger(
+                hour=17,
+                minute=5,
+                timezone="America/New_York",
+            ),
             id='odds_snapshot_mid',
             name='Odds Snapshot (Mid Line)',
             replace_existing=True
@@ -256,7 +271,11 @@ class SchedulerService:
         
         self._scheduler.add_job(
             self._run_odds_snapshot_job,
-            trigger=CronTrigger(hour=23, minute=35),
+            trigger=CronTrigger(
+                hour=18,
+                minute=35,
+                timezone="America/New_York",
+            ),
             id='odds_snapshot_final',
             name='Odds Snapshot (Final Pre-Lock)',
             replace_existing=True
@@ -400,7 +419,7 @@ class SchedulerService:
         print("📅 Scheduled Jobs:")
         print("   - Free Lineup Refresh: 09:30 (baseline) / 11:00-22:00 every 15min / 22:00-00:30 every 5min")
         print("   - Projection Data Prefetch: Daily UTC 16:00, 22:00, 23:30")
-        print("   - Odds Snapshot: Daily UTC 16:05, 22:05, 23:35")
+        print("   - Odds Snapshot: Daily 11:05, 17:05, 18:35 America/New_York")
         print("   - Hot Odds Key Prewarm: Every 30 seconds")
         print("   - Daily Analysis (NBA): Daily UTC 12:00")
         if settings.wnba_jobs_enabled:
