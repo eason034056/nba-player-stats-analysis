@@ -190,7 +190,7 @@ BDL `/v1/player_injuries` is a current roster, not a historical log (docs; no da
 | bdl_player_id | INTEGER NOT NULL | |
 | listed | BOOLEAN NOT NULL | `false` on the row that records the player leaving the list. No default |
 | bdl_team_id | INTEGER | FK to `teams` |
-| status | TEXT | e.g. Out, Day-To-Day |
+| status | TEXT | BDL's word with unified spelling: Out, Doubtful, Questionable, Day-To-Day, Probable. Doubtful stays Doubtful. An unknown word is stored as sent (trimmed); blank is NULL (§11) |
 | return_date | DATE | |
 | description | TEXT | BDL `description`, same name as the API field |
 
@@ -621,3 +621,17 @@ Open questions for Eason (they don't block approval): whether to stop the backen
 - **Wipe gate:** the 130 cutover (130i merged and deployed) is a hard gate before the wipe. After the wipe, nothing restarts the backend with NBA on The Odds API.
 - **Expired BDL cursor:** the backfill script has a documented `--restart-season <season>` path, which re-walks that season from its first page. Upserts are idempotent, so a re-walk is safe.
 - **#64 follow-up:** add a 90-day current-object expiration rule for `bdl-raw/` in `s3.tf`, alongside s3:PutObject.
+
+## 11. Read layer: `004_read_layer.sql` (SPO-138i, 2026-11-20)
+
+`004` adds one table and four views. It is 004 because SPO-138g's `003_bdl_game_gaps.sql` holds version 003. No 002 table changes. The reasons and the rejected alternatives are in [`decision_20261120_read-layer-and-ml-inputs.md`](decision_20261120_read-layer-and-ml-inputs.md).
+
+| Object | Kind | Read by |
+|---|---|---|
+| `predictions` | Append-only table. `predicted_at` is the transaction start time; the tip-off check is the wall clock at the INSERT | Frontend predictions and record; model grading |
+| `current_predictions` | View: newest run per game, player, market, and model version | Frontend |
+| `prop_actuals` | View: the result of every market for each stat line of a final game. NULL is void (`dnp`) or unknown | Model label; grading |
+| `current_injuries` | View: each player's newest row, kept only if still listed | Frontend |
+| `current_projected_lineups` | View: newest projected version per game and team | Frontend |
+
+The model never reads `player_prop_snapshots`; prop odds enter only the betting decision and its evaluation. Model inputs are built outside Postgres by the dataset module (SPO-138j) under the as-of rules in the decision file.

@@ -40,13 +40,13 @@ def _write(directory: Path, files: dict[str, str]) -> Path:
 
 @pytest.mark.asyncio
 async def test_upgrade_applies_the_shipped_files_once(scratch_conn: asyncpg.Connection) -> None:
-    assert await upgrade(scratch_conn) == ["001", "002"]
+    assert await upgrade(scratch_conn) == ["001", "002", "004"]
     assert await _has_table(scratch_conn, "odds_line_snapshots")
     assert await _has_table(scratch_conn, "player_game_stats")
-    assert await _versions(scratch_conn) == ["001", "002"]
+    assert await _versions(scratch_conn) == ["001", "002", "004"]
 
     assert await upgrade(scratch_conn) == []
-    assert await _versions(scratch_conn) == ["001", "002"]
+    assert await _versions(scratch_conn) == ["001", "002", "004"]
 
 
 @pytest.mark.asyncio
@@ -89,7 +89,7 @@ async def test_file_and_its_record_commit_together(
 
 
 def test_shipped_files_are_in_version_order() -> None:
-    assert [migration.version for migration in discover()] == ["001", "002"]
+    assert [migration.version for migration in discover()] == ["001", "002", "004"]
 
 
 @pytest.mark.parametrize(
