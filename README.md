@@ -212,8 +212,7 @@ npm test
 .
 ├── backend/                 # FastAPI backend
 │   └── app/api/
-│       ├── nba.py           # /api/* — NBA events, props/no-vig, player-history, csv/*
-│       └── wnba.py          # backend route module; the UI does not call it
+│       └── nba.py           # /api/* — NBA events, props/no-vig, player-history, csv/*
 ├── frontend/                # Next.js frontend (App Router)
 │   └── app/
 │       └── (routes)         # /, /event/[eventId], /picks, /betslip, /about

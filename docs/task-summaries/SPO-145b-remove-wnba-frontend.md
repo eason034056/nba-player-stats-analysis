@@ -40,7 +40,7 @@ Mutation check, after that green run: `BetSlipProvider` skipped `localStorage.re
 
 ## Follow-ups
 
-- SPO-145a still owns `/api/wnba` and `backend/app/api/wnba.py`. The README tree still names that file because the module is on disk.
+- This PR's README tree no longer names `wnba.py`. #115 (SPO-145a) owns deleting `backend/app/api/wnba.py` and `/api/wnba`.
 - `data/wnba_player_game_logs.csv` is still in the repo. The product README no longer tells a reader to download it.
 - `#108` (SPO-144) was not in the two commits that landed on `origin/dev` during this work. This branch already contains `3b5ee9c`.
 
