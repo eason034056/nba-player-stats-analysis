@@ -6,6 +6,7 @@ import { useQuery } from "@tanstack/react-query";
 
 import { InjuryStatusTag } from "@/components/InjuryStatusTag";
 import { useAgentWidget } from "@/contexts/AgentWidgetContext";
+import { AGENT_CHAT_UI_ENABLED } from "@/lib/agent-chat-ui";
 import {
   getDailyPicks,
   getEvents,
@@ -173,13 +174,15 @@ function WebBoard({
             >
               {countText}
             </Link>
-            <button
-              type="button"
-              onClick={onAsk}
-              className="inline-flex min-h-11 items-center rounded-full border border-white/40 px-5 text-sm font-semibold text-white"
-            >
-              Ask the agent
-            </button>
+            {AGENT_CHAT_UI_ENABLED ? (
+              <button
+                type="button"
+                onClick={onAsk}
+                className="inline-flex min-h-11 items-center rounded-full border border-white/40 px-5 text-sm font-semibold text-white"
+              >
+                Ask the agent
+              </button>
+            ) : null}
           </div>
         </div>
         {picksLabel && (

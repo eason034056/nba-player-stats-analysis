@@ -16,6 +16,11 @@ const apiMocks = vi.hoisted(() => ({
 }));
 
 vi.mock("next/navigation", () => navigationMocks);
+// This file mounts the widget on purpose. The product flag stays off
+// everywhere else; here the kept widget still has to open and send.
+vi.mock("@/lib/agent-chat-ui", () => ({
+  AGENT_CHAT_UI_ENABLED: true,
+}));
 vi.mock("@/lib/api", async () => {
   const actual = await vi.importActual<typeof import("@/lib/api")>("@/lib/api");
   return {

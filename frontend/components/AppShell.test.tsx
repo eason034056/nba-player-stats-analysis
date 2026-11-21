@@ -4,6 +4,7 @@ import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { AppShell } from "@/components/AppShell";
+import { AGENT_CHAT_UI_ENABLED } from "@/lib/agent-chat-ui";
 import {
   clearBetSlip,
   createBetSlipPick,
@@ -131,40 +132,57 @@ describe("AppShell", () => {
     expect(within(primary).queryByText("1")).not.toBeInTheDocument();
   });
 
-  it("keeps an Ask control on every NBA and WNBA route", () => {
-    const paths = [
-      "/",
-      "/picks",
-      "/betslip",
-      "/about",
-      "/event/heat-bucks",
-      "/wnba",
-      "/wnba/picks",
-      "/wnba/betslip",
-      "/wnba/event/aces-liberty",
-      "/wnba/player/A%27ja%20Wilson",
-    ];
+  const shellPaths = [
+    "/",
+    "/picks",
+    "/betslip",
+    "/about",
+    "/event/heat-bucks",
+    "/wnba",
+    "/wnba/picks",
+    "/wnba/betslip",
+    "/wnba/event/aces-liberty",
+    "/wnba/player/A%27ja%20Wilson",
+  ];
+
+  function renderShellPaths() {
     const { rerender } = renderWithProviders(
       <AppShell>
         <p>Board</p>
       </AppShell>,
       { withAgentWidget: true },
     );
-
-    for (const path of paths) {
+    return (path: string) => {
       navigationMocks.usePathname.mockReturnValue(path);
       rerender(
         <AppShell>
           <p>Board</p>
         </AppShell>,
       );
+    };
+  }
+
+  it.skipIf(!AGENT_CHAT_UI_ENABLED)("keeps an Ask control on every NBA and WNBA route", () => {
+    const showPath = renderShellPaths();
+    for (const path of shellPaths) {
+      showPath(path);
       expect(screen.getByRole("button", { name: "Ask the agent" })).toBeInTheDocument();
       expect(screen.getByRole("button", { name: "Ask agent" })).toBeInTheDocument();
       expect(screen.queryByRole("button", { name: /ask the board/i })).not.toBeInTheDocument();
     }
   });
 
-  it("opens the betting agent from Ask the agent", async () => {
+  it.skipIf(AGENT_CHAT_UI_ENABLED)("renders no Ask controls on NBA or WNBA routes when chat UI is off", () => {
+    const showPath = renderShellPaths();
+    for (const path of shellPaths) {
+      showPath(path);
+      expect(screen.queryByRole("button", { name: "Ask the agent" })).not.toBeInTheDocument();
+      expect(screen.queryByRole("button", { name: "Ask agent" })).not.toBeInTheDocument();
+      expect(screen.queryByRole("button", { name: /^ask$/i })).not.toBeInTheDocument();
+    }
+  });
+
+  it.skipIf(!AGENT_CHAT_UI_ENABLED)("opens the betting agent from Ask the agent", async () => {
     const user = userEvent.setup();
     renderWithProviders(
       <AppShell>
@@ -177,7 +195,7 @@ describe("AppShell", () => {
     expect(screen.getByRole("button", { name: "Close betting agent" })).toBeInTheDocument();
   });
 
-  it("opens the betting agent from the compact Ask agent control", async () => {
+  it.skipIf(!AGENT_CHAT_UI_ENABLED)("opens the betting agent from the compact Ask agent control", async () => {
     const user = userEvent.setup();
     renderWithProviders(
       <AppShell>

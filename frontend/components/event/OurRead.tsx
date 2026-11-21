@@ -10,6 +10,7 @@ import {
   type ReadSignal,
   type SignalVerdict,
 } from "@/lib/event-page";
+import { AGENT_CHAT_UI_ENABLED } from "@/lib/agent-chat-ui";
 import { cn } from "@/lib/utils";
 
 const VERDICT_DOT: Record<SignalVerdict, string> = {
@@ -238,7 +239,7 @@ export function OurRead({
                   The other side&apos;s hit rate is not on this response.
                 </p>
               ) : null}
-              {model.listedOut ? null : (
+              {AGENT_CHAT_UI_ENABLED && !model.listedOut ? (
                 <button
                   type="button"
                   onClick={onAsk}
@@ -246,7 +247,7 @@ export function OurRead({
                 >
                   Ask the agent
                 </button>
-              )}
+              ) : null}
             </div>
           </>
         )}

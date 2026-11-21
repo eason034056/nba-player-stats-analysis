@@ -6,6 +6,7 @@ import { usePathname } from "next/navigation";
 import { useAgentWidget } from "@/contexts/AgentWidgetContext";
 import { useBetSlip } from "@/contexts/BetSlipContext";
 import { useWnbaBetSlip } from "@/contexts/WnbaBetSlipContext";
+import { AGENT_CHAT_UI_ENABLED } from "@/lib/agent-chat-ui";
 import {
   hrefForSection,
   isWnbaPath,
@@ -178,7 +179,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             <SectionLinks pathname={pathname} count={count} variant="bar" />
           </nav>
           <div className="justify-self-end">
-            <AskAgentButton />
+            {AGENT_CHAT_UI_ENABLED ? <AskAgentButton /> : null}
           </div>
         </div>
         <div className="flex items-center justify-between px-4 pb-3 pt-3.5 md:hidden">
@@ -189,7 +190,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             </Link>
             <LeagueSwitch pathname={pathname} />
           </div>
-          <AskAgentButton compact />
+          {AGENT_CHAT_UI_ENABLED ? <AskAgentButton compact /> : null}
         </div>
       </header>
 

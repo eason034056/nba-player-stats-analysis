@@ -4,7 +4,8 @@
  * The board is the November 2026 layout. Date, team filter, session
  * storage, re-analyze, and lineup badges stay on this page. A reverse
  * add lives on the game page and the pick context menu. Ask-the-agent
- * lives on the game page. Numbers come from getDailyPicks.
+ * lives on the game page when AGENT_CHAT_UI_ENABLED is true. Numbers
+ * come from getDailyPicks.
  */
 
 "use client";
@@ -17,6 +18,7 @@ import { useAgentWidget } from "@/contexts/AgentWidgetContext";
 import { useBetSlip } from "@/contexts/BetSlipContext";
 import { getDailyPicks, getLineups, triggerDailyAnalysis } from "@/lib/api";
 import { createAgentPickContextFromDailyPick } from "@/lib/agent-chat";
+import { AGENT_CHAT_UI_ENABLED } from "@/lib/agent-chat-ui";
 import { isOutPick } from "@/lib/picks-board";
 import type { DailyPick } from "@/lib/schemas";
 import { complementHitRateLabel, slipPickFromDaily } from "@/lib/bet-slip-board";
@@ -193,6 +195,7 @@ export default function PicksPage() {
   );
 
   const handleReviewBoard = useCallback(async () => {
+    if (!AGENT_CHAT_UI_ENABLED) return;
     await submitAction({
       action: "review_board",
       message: "Review this board and identify the cleanest bet.",
@@ -246,7 +249,7 @@ export default function PicksPage() {
         );
         return leg ? complementHitRateLabel(leg) : null;
       }}
-      onReviewBoard={() => void handleReviewBoard()}
+      onReviewBoard={AGENT_CHAT_UI_ENABLED ? () => void handleReviewBoard() : undefined}
     />
   );
 }

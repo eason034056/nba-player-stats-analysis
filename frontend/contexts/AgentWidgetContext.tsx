@@ -13,6 +13,7 @@ import { usePathname } from "next/navigation";
 
 import { useBetSlip } from "@/contexts/BetSlipContext";
 import { ApiError, sendAgentChat } from "@/lib/api";
+import { AGENT_CHAT_UI_ENABLED } from "@/lib/agent-chat-ui";
 import {
   createAgentPickContextFromBetSlip,
   type AgentAction,
@@ -194,6 +195,7 @@ export const AgentWidgetProvider = ({ children }: { children: ReactNode }) => {
   }, []);
 
   const openWidget = useCallback(() => {
+    if (!AGENT_CHAT_UI_ENABLED) return;
     setIsOpen(true);
   }, []);
 
@@ -264,6 +266,7 @@ export const AgentWidgetProvider = ({ children }: { children: ReactNode }) => {
 
   const runRequest = useCallback(
     async (request: AgentChatRequest, appendUserMessage: boolean) => {
+      if (!AGENT_CHAT_UI_ENABLED) return;
       if (appendUserMessage) {
         setMessages((current) => [
           ...current,
@@ -291,6 +294,7 @@ export const AgentWidgetProvider = ({ children }: { children: ReactNode }) => {
 
   const submitAction = useCallback(
     async ({ action, message, contextPatch }: AgentWidgetSubmitOptions) => {
+      if (!AGENT_CHAT_UI_ENABLED) return;
       const nextThreadId = threadId || createLocalId();
       const request: AgentChatRequest = {
         thread: nextThreadId,

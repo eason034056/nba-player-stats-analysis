@@ -4,6 +4,7 @@ import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import PicksPage from "@/app/picks/page";
+import { AGENT_CHAT_UI_ENABLED } from "@/lib/agent-chat-ui";
 import { clearBetSlip, renderWithProviders } from "@/test/test-utils";
 import { getTodayString } from "@/lib/utils";
 
@@ -161,7 +162,17 @@ describe("PicksPage", () => {
     expect(screen.getByText(/lineup aligned/i)).toBeInTheDocument();
   });
 
-  it("keeps Ask off the pick card and sends the visible board from Review board", async () => {
+  it.skipIf(AGENT_CHAT_UI_ENABLED)("keeps Ask off the pick card and hides Review board when chat UI is off", async () => {
+    renderWithProviders(<PicksPage />, { withAgentWidget: true });
+
+    expect(await screen.findByText("Stephen Curry")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /ask agent about/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Review board" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /ask the agent/i })).not.toBeInTheDocument();
+    expect(apiMocks.sendAgentChat).not.toHaveBeenCalled();
+  });
+
+  it.skipIf(!AGENT_CHAT_UI_ENABLED)("keeps Ask off the pick card and sends the visible board from Review board", async () => {
     const user = userEvent.setup();
 
     renderWithProviders(<PicksPage />, { withAgentWidget: true });

@@ -37,6 +37,7 @@ import {
   useEventReads,
 } from "@/lib/api";
 import { createAgentPickContextFromDailyPick } from "@/lib/agent-chat";
+import { AGENT_CHAT_UI_ENABLED } from "@/lib/agent-chat-ui";
 import {
   buildOurRead,
   nbaReadsStatus,
@@ -432,6 +433,11 @@ export function EventDetail({ league }: { league: League }) {
     slip.removePick(id);
     slip.addPick(seed);
   };
+  const askAgent = () => {
+    if (!AGENT_CHAT_UI_ENABLED) return;
+    if (pick) setSelectedPickContext(createAgentPickContextFromDailyPick(pick));
+    openWidget();
+  };
 
   const chartEmpty = (() => {
     if (binary) return "Game log bars are for Over/Under stats. Double-double history is in the panel below.";
@@ -666,10 +672,7 @@ export function EventDetail({ league }: { league: League }) {
               otherInSlip={existing?.direction === model.other?.direction}
               onAddPrimary={() => model.primary && addSeed(model.primary)}
               onAddOther={() => model.other && addSeed(model.other)}
-              onAsk={() => {
-                if (pick) setSelectedPickContext(createAgentPickContextFromDailyPick(pick));
-                openWidget();
-              }}
+              onAsk={askAgent}
             />
           </div>
 
@@ -788,10 +791,7 @@ export function EventDetail({ league }: { league: League }) {
           otherInSlip={existing?.direction === model.other?.direction}
           onAddPrimary={() => model.primary && addSeed(model.primary)}
           onAddOther={() => model.other && addSeed(model.other)}
-          onAsk={() => {
-            if (pick) setSelectedPickContext(createAgentPickContextFromDailyPick(pick));
-            openWidget();
-          }}
+          onAsk={askAgent}
         />
       ) : null}
     </div>

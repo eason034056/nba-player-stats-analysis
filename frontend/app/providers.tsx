@@ -22,6 +22,7 @@ import { AgentWidget } from "@/components/AgentWidget";
 import { AgentWidgetProvider } from "@/contexts/AgentWidgetContext";
 import { BetSlipProvider } from "@/contexts/BetSlipContext";
 import { WnbaBetSlipProvider } from "@/contexts/WnbaBetSlipContext";
+import { AGENT_CHAT_UI_ENABLED } from "@/lib/agent-chat-ui";
 
 /**
  * Providers 元件
@@ -84,7 +85,7 @@ export function Providers({ children }: { children: React.ReactNode }) {
         <WnbaBetSlipProvider>
           <AgentWidgetProvider>
             {children}
-            <AgentWidget />
+            {AGENT_CHAT_UI_ENABLED ? <AgentWidget /> : null}
           </AgentWidgetProvider>
         </WnbaBetSlipProvider>
       </BetSlipProvider>

@@ -2,12 +2,14 @@ import { screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 
+import { EventActionBar } from "@/components/event/EventActionBar";
 import { EventHeader } from "@/components/event/EventHeader";
 import { GameFilters } from "@/components/event/GameFilters";
 import { GameLogChart } from "@/components/event/GameLogChart";
 import { OurRead } from "@/components/event/OurRead";
 import { PlayerRail } from "@/components/event/PlayerRail";
 import { StatChips } from "@/components/event/StatChips";
+import { AGENT_CHAT_UI_ENABLED } from "@/lib/agent-chat-ui";
 import { buildOurRead, buildReadSignals, gameLogChart, lineupChip } from "@/lib/event-page";
 import { dailyPicksResponseSchema, playerHistoryResponseSchema } from "@/lib/schemas";
 import edgesFixture from "@/test/fixtures/event/nba-history-threshold-edges.json";
@@ -267,7 +269,7 @@ describe("OurRead", () => {
     expect(screen.getByText("Odds request failed")).toBeInTheDocument();
   });
 
-  it("asks the agent", async () => {
+  it.skipIf(!AGENT_CHAT_UI_ENABLED)("asks the agent", async () => {
     const onAsk = vi.fn();
     const user = userEvent.setup();
     renderWithProviders(
@@ -294,6 +296,25 @@ describe("OurRead", () => {
       pick: null,
       market: "player_points",
     }).every((signal) => signal.value === null)).toBe(true);
+  });
+
+  it.skipIf(AGENT_CHAT_UI_ENABLED)("renders no Ask the agent control when chat UI is off", () => {
+    const onAsk = vi.fn();
+    renderWithProviders(
+      <OurRead
+        model={model}
+        isLoading={false}
+        isError={false}
+        errorText={null}
+        primaryInSlip={false}
+        otherInSlip={false}
+        onAddPrimary={noop}
+        onAddOther={noop}
+        onAsk={onAsk}
+      />,
+    );
+    expect(screen.queryByRole("button", { name: "Ask the agent" })).not.toBeInTheDocument();
+    expect(onAsk).not.toHaveBeenCalled();
   });
 
   it("hides an NBA projection signal when its value is null", () => {
@@ -464,5 +485,61 @@ describe("GameFilters", () => {
     expect(screen.getByText("Home and away are not on the game log.")).toBeInTheDocument();
     expect(screen.getByText("10 games")).toBeInTheDocument();
     expect(screen.getByRole("option", { name: "BOS" })).toBeInTheDocument();
+  });
+});
+
+describe("EventActionBar", () => {
+  const model = buildOurRead({
+    player: "A'ja Wilson",
+    marketName: "Points",
+    market: "player_points",
+    binary: false,
+    eventId: "wnba-1",
+    homeTeam: "Las Vegas Aces",
+    awayTeam: "New York Liberty",
+    commenceTime: "2026-11-11T00:00:00Z",
+    team: "LVA",
+    position: null,
+    line: wilsonPick.threshold,
+    pick: wilsonPick,
+    consensus: null,
+    last10: [],
+    history: null,
+    league: "wnba",
+  });
+
+  it.skipIf(!AGENT_CHAT_UI_ENABLED)("asks from the mobile bar", async () => {
+    const onAsk = vi.fn();
+    const user = userEvent.setup();
+    renderWithProviders(
+      <EventActionBar
+        league="nba"
+        model={model}
+        primaryInSlip={false}
+        otherInSlip={false}
+        onAddPrimary={noop}
+        onAddOther={noop}
+        onAsk={onAsk}
+      />,
+    );
+    await user.click(screen.getByRole("button", { name: /^ask$/i }));
+    expect(onAsk).toHaveBeenCalled();
+  });
+
+  it.skipIf(AGENT_CHAT_UI_ENABLED)("renders no Ask control when chat UI is off", () => {
+    const onAsk = vi.fn();
+    renderWithProviders(
+      <EventActionBar
+        league="nba"
+        model={model}
+        primaryInSlip={false}
+        otherInSlip={false}
+        onAddPrimary={noop}
+        onAddOther={noop}
+        onAsk={onAsk}
+      />,
+    );
+    expect(screen.queryByRole("button", { name: /^ask$/i })).not.toBeInTheDocument();
+    expect(onAsk).not.toHaveBeenCalled();
   });
 });

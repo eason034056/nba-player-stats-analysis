@@ -4,6 +4,7 @@ import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { TodayBoard } from "@/components/TodayBoard";
+import { AGENT_CHAT_UI_ENABLED } from "@/lib/agent-chat-ui";
 import { formatPercent } from "@/lib/player-dd";
 import {
   dailyPicksResponseSchema,
@@ -104,6 +105,11 @@ describe("TodayBoard", () => {
     expect(eyebrow.className).not.toContain("#7b4fc4");
     expect(within(web).queryByText(/NOV 11/)).not.toBeInTheDocument();
     expect(within(web).getByRole("link", { name: /all 3 picks/i })).toHaveAttribute("href", "/picks");
+    if (AGENT_CHAT_UI_ENABLED) {
+      expect(within(web).getByRole("button", { name: "Ask the agent" })).toBeInTheDocument();
+    } else {
+      expect(within(web).queryByRole("button", { name: "Ask the agent" })).not.toBeInTheDocument();
+    }
 
     const bam = within(web).getByRole("link", { name: /bam adebayo/i });
     expect(bam).toHaveTextContent("72%");

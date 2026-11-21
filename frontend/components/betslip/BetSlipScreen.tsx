@@ -7,6 +7,7 @@ import { useQueries, useQuery } from "@tanstack/react-query";
 import { InjuryStatusTag } from "@/components/InjuryStatusTag";
 import { LineupStatusBadge } from "@/components/LineupStatusBadge";
 import { useAgentWidget } from "@/contexts/AgentWidgetContext";
+import { AGENT_CHAT_UI_ENABLED } from "@/lib/agent-chat-ui";
 import { useBetSlip, type BetSlipPick } from "@/contexts/BetSlipContext";
 import { createAgentPickContextFromBetSlip } from "@/lib/agent-chat";
 import { getDailyPicks, getLineups } from "@/lib/api";
@@ -272,6 +273,7 @@ export function BetSlipScreen() {
   }, [generateCanvas, handleDownload, picks]);
 
   const handleReviewSlip = useCallback(async () => {
+    if (!AGENT_CHAT_UI_ENABLED) return;
     await submitAction({
       action: "review_slip",
       message: "Compare with my slip",
@@ -381,13 +383,15 @@ export function BetSlipScreen() {
               );
             })}
             <div className="mt-1.5 flex flex-wrap gap-2.5">
-              <button
-                type="button"
-                onClick={() => void handleReviewSlip()}
-                className="min-h-11 rounded-full bg-brand-tint px-[18px] text-sm font-semibold text-brand"
-              >
-                Review with agent
-              </button>
+              {AGENT_CHAT_UI_ENABLED ? (
+                <button
+                  type="button"
+                  onClick={() => void handleReviewSlip()}
+                  className="min-h-11 rounded-full bg-brand-tint px-[18px] text-sm font-semibold text-brand"
+                >
+                  Review with agent
+                </button>
+              ) : null}
               <button
                 type="button"
                 onClick={clearAll}

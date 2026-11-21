@@ -7,6 +7,7 @@ import {
   type OurReadModel,
 } from "@/lib/event-page";
 import type { LeagueSegment } from "@/lib/event-detail-link";
+import { AGENT_CHAT_UI_ENABLED } from "@/lib/agent-chat-ui";
 import { cn } from "@/lib/utils";
 
 /**
@@ -97,7 +98,7 @@ export function EventActionBar({
           )}
         </button>
       ) : null}
-      {model.listedOut ? null : (
+      {AGENT_CHAT_UI_ENABLED && !model.listedOut ? (
         <button
           type="button"
           onClick={onAsk}
@@ -105,7 +106,7 @@ export function EventActionBar({
         >
           Ask
         </button>
-      )}
+      ) : null}
       </div>
     </div>
   );
