@@ -1,9 +1,10 @@
-"""SPO-144: NBA 5-minute lineup refresh follows each game's own tip.
+"""SPO-144: 5-minute lineup refresh follows each game's own tip.
 
 The window for a game is ``[that tip - 2 hours, that tip)``. A slate
-with several tips is open when ``now`` sits in any one of them. Clocks
-are fixed. Nothing here sleeps or calls the network. Game rows come
-from the recorded BALLDONTLIE captures under ``tests/fixtures/bdl/``.
+with several tips is open when ``now`` sits in any one of them. NBA
+and WNBA use the same gate. Clocks are fixed. Nothing here sleeps or
+calls the network. NBA rows come from the recorded BALLDONTLIE
+captures. WNBA rows copy fields from the recorded Odds API events list.
 """
 
 from __future__ import annotations
@@ -35,21 +36,52 @@ from app.services.scheduler import (
     SchedulerService,
     nba_lineup_pretipoff_in_window,
     nba_lineup_tips_cache_key,
+    tips_from_events_payload,
     tips_from_games_payload,
+    wnba_lineup_tips_cache_key,
 )
 from app.settings import settings
 
 FIXTURE_DIR = Path(__file__).resolve().parent / "fixtures" / "bdl"
+ODDS_EVENTS_FIXTURE = (
+    Path(__file__).resolve().parent / "fixtures" / "odds_api_events__basketball_nba.json"
+)
 SCHEDULER_PATH = Path(__file__).resolve().parents[1] / "app" / "services" / "scheduler.py"
 CHICAGO = ZoneInfo("America/Chicago")
 EASTERN = ZoneInfo("America/New_York")
 EVERY_FIVE = "0,5,10,15,20,25,30,35,40,45,50,55"
 _TEST_KEY = "unit-test-bdl-key-spo144"
+_ODDS_KEY = "unit-test-odds-key-spo144"
 
 
 def _load(name: str) -> dict:
     """One recorded capture. The file is ``{request, status, response}``."""
     return json.loads((FIXTURE_DIR / name).read_text())
+
+
+def _load_odds_events() -> list:
+    """Recorded Odds API events list. Each object has ``commence_time``."""
+    payload = json.loads(ODDS_EVENTS_FIXTURE.read_text())
+    assert isinstance(payload, list) and payload
+    assert "commence_time" in payload[0]
+    return payload
+
+
+def _wnba_events_at(*stamps: str) -> list[dict]:
+    """Recorded event rows with ``commence_time`` set to ``stamps``.
+
+    ``sport_key`` becomes ``basketball_wnba``. Every other field stays
+    on the recorded object. ``stamps`` use the recorded ``Z`` form.
+    """
+    recorded = _load_odds_events()
+    assert len(recorded) >= len(stamps)
+    events: list[dict] = []
+    for stamp, row in zip(stamps, recorded):
+        event = deepcopy(row)
+        event["sport_key"] = "basketball_wnba"
+        event["commence_time"] = stamp
+        events.append(event)
+    return events
 
 
 def _chicago(year: int, month: int, day: int, hour: int, minute: int) -> datetime:
@@ -620,15 +652,19 @@ def test_missing_bdl_key_warns_once_and_does_not_build_a_client(
 
 
 def test_nba_and_wnba_pre_tipoff_triggers() -> None:
-    """NBA cron is the wide 5-minute grid. WNBA stays at 17, 18, and 19 CT."""
+    """Both 5-minute jobs use the wide Chicago grid. Opening and 15-minute stay put."""
     jobs = _registered(SchedulerService())
     nba_func, nba = jobs["lineup_fetch_pre_tipoff"]
     wnba_func, wnba = jobs["wnba_lineup_fetch_pre_tipoff"]
     active_func, _active = jobs["lineup_fetch_active_window"]
+    wnba_opening, wnba_opening_job = jobs["wnba_lineup_fetch_opening"]
+    wnba_active, wnba_active_job = jobs["wnba_lineup_fetch_active_window"]
 
     assert nba_func.__name__ == "_run_lineup_fetch_pre_tipoff_job"
     assert active_func.__name__ == "_run_lineup_fetch_job"
-    assert wnba_func.__name__ == "_run_wnba_lineup_fetch_job"
+    assert wnba_func.__name__ == "_run_wnba_lineup_fetch_pre_tipoff_job"
+    assert wnba_opening.__name__ == "_run_wnba_lineup_fetch_job"
+    assert wnba_active.__name__ == "_run_wnba_lineup_fetch_job"
 
     nba_trigger = str(nba["trigger"])
     wnba_trigger = str(wnba["trigger"])
@@ -637,12 +673,299 @@ def test_nba_and_wnba_pre_tipoff_triggers() -> None:
     assert NBA_LINEUP_PRETIPOFF_CRON_HOUR == "9-23"
     assert NBA_LINEUP_PRETIPOFF_CRON_MINUTE == EVERY_FIVE
     assert "hour='22,23,0'" not in nba_trigger
+    assert "hour='17,18,19'" not in nba_trigger
     assert str(nba["trigger"].timezone) == "America/Chicago"
 
-    assert "hour='17,18,19'" in wnba_trigger
+    assert f"hour='{NBA_LINEUP_PRETIPOFF_CRON_HOUR}'" in wnba_trigger
     assert f"minute='{EVERY_FIVE}'" in wnba_trigger
+    assert "hour='17,18,19'" not in wnba_trigger
     assert str(wnba["trigger"].timezone) == "America/Chicago"
     assert wnba_func.__name__ != nba_func.__name__
+
+    assert "hour='11-21'" in str(wnba_active_job["trigger"])
+    assert "minute='0,15,30,45'" in str(wnba_active_job["trigger"])
+    opening_trigger = str(wnba_opening_job["trigger"])
+    assert "hour='9'" in opening_trigger
+    assert "minute='30'" in opening_trigger
+
+
+# ---------------------------------------------------------------------------
+# WNBA: same windows, events list, own cache key
+# ---------------------------------------------------------------------------
+
+
+def _patch_wnba_events(monkeypatch: pytest.MonkeyPatch, events: object) -> AsyncMock:
+    """Stub ``get_events``. The recorded list is the only body shape used."""
+    get_events = AsyncMock(return_value=events)
+    monkeypatch.setattr("app.services.odds_theoddsapi.odds_provider.get_events", get_events)
+    monkeypatch.setattr(settings, "odds_api_key", _ODDS_KEY)
+    return get_events
+
+
+async def _run_wnba_pre_tipoff(service: SchedulerService, now: datetime) -> None:
+    await service._run_wnba_lineup_fetch_pre_tipoff_job(now=now)
+
+
+def test_recorded_odds_events_keep_their_eastern_slate() -> None:
+    """The captured events list. 2026-11-10T00:10:00Z is the evening of 2026-11-09."""
+    payload = _load_odds_events()
+    status, tips = tips_from_events_payload(payload, "2026-11-09")
+    assert status == "ok"
+    assert datetime(2026, 11, 10, 0, 10, tzinfo=timezone.utc) in tips
+    empty_status, empty_tips = tips_from_events_payload(payload, "1900-01-01")
+    assert empty_status == "no_games"
+    assert empty_tips == ()
+    bad_status, bad_tips = tips_from_events_payload({"data": []}, "2026-11-09")
+    assert bad_status == "unreadable"
+    assert bad_tips == ()
+
+
+@pytest.mark.parametrize(
+    ("early_stamp", "late_stamp", "day"),
+    [
+        ("2026-01-16T00:00:00Z", "2026-01-16T02:30:00Z", (2026, 1, 15)),
+        ("2026-07-15T23:00:00Z", "2026-07-16T01:30:00Z", (2026, 7, 15)),
+    ],
+)
+def test_wnba_each_game_keeps_its_own_two_hour_window(
+    monkeypatch: pytest.MonkeyPatch,
+    early_stamp: str,
+    late_stamp: str,
+    day: tuple[int, int, int],
+) -> None:
+    """7:00 PM ET and 9:30 PM ET. The gap does not scrape. One events call."""
+    import asyncio
+
+    year, month, date = day
+    _install_cache(monkeypatch)
+    events = _wnba_events_at(early_stamp, late_stamp)
+    get_events = _patch_wnba_events(monkeypatch, events)
+    fetch = AsyncMock(return_value=[])
+    monkeypatch.setattr("app.services.scheduler.wnba_lineup_service.fetch_and_store", fetch)
+    bdl = AsyncMock(side_effect=AssertionError("nba games must not be called"))
+    monkeypatch.setattr("app.services.bdl_client.BdlClient", bdl)
+
+    clocks = [
+        (_chicago(year, month, date, 15, 55), False),
+        (_chicago(year, month, date, 16, 0), True),
+        (_chicago(year, month, date, 17, 55), True),
+        (_chicago(year, month, date, 18, 0), False),
+        (_chicago(year, month, date, 18, 15), False),
+        (_chicago(year, month, date, 18, 30), True),
+        (_chicago(year, month, date, 20, 25), True),
+        (_chicago(year, month, date, 20, 30), False),
+    ]
+    slate = clocks[1][0].astimezone(EASTERN).date().isoformat()
+
+    async def _go() -> None:
+        service = SchedulerService()
+        for moment, _open in clocks:
+            await _run_wnba_pre_tipoff(service, moment)
+        second = SchedulerService()
+        await _run_wnba_pre_tipoff(second, clocks[5][0])
+
+    asyncio.run(_go())
+
+    fired = [call.args[0] for call in fetch.await_args_list]
+    assert fired == [slate, slate, slate, slate, slate]
+    assert get_events.await_count == 1
+    assert get_events.await_args.kwargs == {"league": "wnba"}
+    assert _ODDS_KEY not in str(get_events.await_args)
+    bdl.assert_not_called()
+
+
+@pytest.mark.parametrize(
+    ("matinee_stamp", "night_stamp", "day", "slate"),
+    [
+        ("2026-12-25T17:30:00Z", "2026-12-26T00:00:00Z", (2026, 12, 25), "2026-12-25"),
+        ("2026-07-15T16:30:00Z", "2026-07-15T23:00:00Z", (2026, 7, 15), "2026-07-15"),
+    ],
+)
+def test_wnba_matinee_and_evening_each_open(
+    monkeypatch: pytest.MonkeyPatch,
+    matinee_stamp: str,
+    night_stamp: str,
+    day: tuple[int, int, int],
+    slate: str,
+) -> None:
+    """12:30 PM ET opens 9:30 AM CT. The 7:00 PM ET game is a second window."""
+    import asyncio
+
+    year, month, date = day
+    _install_cache(monkeypatch)
+    events = _wnba_events_at(matinee_stamp, night_stamp)
+    get_events = _patch_wnba_events(monkeypatch, events)
+    fetch = AsyncMock(return_value=[])
+    monkeypatch.setattr("app.services.scheduler.wnba_lineup_service.fetch_and_store", fetch)
+
+    clocks = [
+        (_chicago(year, month, date, 9, 25), False),
+        (_chicago(year, month, date, 9, 30), True),
+        (_chicago(year, month, date, 11, 25), True),
+        (_chicago(year, month, date, 11, 30), False),
+        (_chicago(year, month, date, 15, 55), False),
+        (_chicago(year, month, date, 16, 0), True),
+        (_chicago(year, month, date, 17, 55), True),
+        (_chicago(year, month, date, 18, 0), False),
+    ]
+
+    async def _go() -> None:
+        service = SchedulerService()
+        for moment, _open in clocks:
+            await _run_wnba_pre_tipoff(service, moment)
+
+    asyncio.run(_go())
+    assert [call.args[0] for call in fetch.await_args_list] == [slate] * 4
+    assert get_events.await_count == 1
+
+
+@pytest.mark.parametrize(
+    ("stamp", "day", "slate"),
+    [
+        ("2026-01-16T00:00:00Z", (2026, 1, 15), "2026-01-15"),
+        ("2026-07-15T23:00:00Z", (2026, 7, 15), "2026-07-15"),
+    ],
+)
+def test_wnba_single_game_closes_at_that_tip(
+    monkeypatch: pytest.MonkeyPatch,
+    stamp: str,
+    day: tuple[int, int, int],
+    slate: str,
+) -> None:
+    """One recorded row, retimed to 7:00 PM ET. 6:00 PM CT does not scrape."""
+    import asyncio
+
+    year, month, date = day
+    _install_cache(monkeypatch)
+    events = _wnba_events_at(stamp)
+    _patch_wnba_events(monkeypatch, events)
+    fetch = AsyncMock(return_value=[])
+    monkeypatch.setattr("app.services.scheduler.wnba_lineup_service.fetch_and_store", fetch)
+
+    async def _go() -> None:
+        service = SchedulerService()
+        await _run_wnba_pre_tipoff(service, _chicago(year, month, date, 15, 55))
+        await _run_wnba_pre_tipoff(service, _chicago(year, month, date, 16, 0))
+        await _run_wnba_pre_tipoff(service, _chicago(year, month, date, 18, 0))
+
+    asyncio.run(_go())
+    assert [call.args[0] for call in fetch.await_args_list] == [slate]
+
+
+def test_wnba_tips_are_cached_apart_from_nba(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The WNBA key holds both tips. A value under the NBA key is not the slate."""
+    import asyncio
+
+    fake = _install_cache(monkeypatch)
+    events = _wnba_events_at("2026-07-15T23:00:00Z", "2026-07-16T01:30:00Z")
+    get_events = _patch_wnba_events(monkeypatch, events)
+    fetch = AsyncMock(return_value=[])
+    monkeypatch.setattr("app.services.scheduler.wnba_lineup_service.fetch_and_store", fetch)
+    seen: dict[str, object] = {}
+
+    async def _go() -> None:
+        await fake.set(
+            nba_lineup_tips_cache_key("2026-07-15"),
+            json.dumps({"status": "no_games", "tips_utc": []}),
+        )
+        service = SchedulerService()
+        await _run_wnba_pre_tipoff(service, _chicago(2026, 7, 15, 18, 30))
+        key = wnba_lineup_tips_cache_key("2026-07-15")
+        seen["stored"] = await fake.get(key)
+        seen["nba"] = await fake.get(nba_lineup_tips_cache_key("2026-07-15"))
+
+    asyncio.run(_go())
+    assert get_events.await_count == 1
+    fetch.assert_awaited_once_with("2026-07-15")
+    stored = json.loads(str(seen["stored"]))
+    assert stored["status"] == "ok"
+    assert stored["tips_utc"] == [
+        "2026-07-15T23:00:00+00:00",
+        "2026-07-16T01:30:00+00:00",
+    ]
+    assert json.loads(str(seen["nba"]))["status"] == "no_games"
+
+
+def test_wnba_no_games_does_not_scrape(monkeypatch: pytest.MonkeyPatch) -> None:
+    import asyncio
+
+    _install_cache(monkeypatch)
+    get_events = _patch_wnba_events(monkeypatch, [])
+    fetch = AsyncMock(return_value=[])
+    monkeypatch.setattr("app.services.scheduler.wnba_lineup_service.fetch_and_store", fetch)
+
+    async def _go() -> None:
+        service = SchedulerService()
+        moment = _chicago(2026, 7, 15, 16, 0)
+        await _run_wnba_pre_tipoff(service, moment)
+        await _run_wnba_pre_tipoff(service, moment)
+
+    asyncio.run(_go())
+    assert get_events.await_count == 1
+    fetch.assert_not_awaited()
+
+
+def test_wnba_schedule_error_warns_once_and_skips(
+    monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+) -> None:
+    """The 15-minute WNBA handler still scrapes. It does not read events."""
+    import asyncio
+
+    _install_cache(monkeypatch)
+    get_events = AsyncMock(side_effect=RuntimeError("schedule down"))
+    monkeypatch.setattr("app.services.odds_theoddsapi.odds_provider.get_events", get_events)
+    monkeypatch.setattr(settings, "odds_api_key", _ODDS_KEY)
+    fetch = AsyncMock(return_value=[])
+    monkeypatch.setattr("app.services.scheduler.wnba_lineup_service.fetch_and_store", fetch)
+    caplog.set_level(logging.WARNING, logger="app.services.scheduler")
+
+    async def _go() -> None:
+        service = SchedulerService()
+        moment = _chicago(2026, 7, 15, 16, 0)
+        await _run_wnba_pre_tipoff(service, moment)
+        await _run_wnba_pre_tipoff(service, moment)
+        await service._run_wnba_lineup_fetch_job(now=moment)
+
+    asyncio.run(_go())
+    warnings = [
+        record.getMessage()
+        for record in caplog.records
+        if record.levelno == logging.WARNING and "schedule unreadable" in record.getMessage()
+    ]
+    assert warnings == [
+        "wnba_lineup_fetch_pre_tipoff schedule unreadable (RuntimeError); skipping the 5-minute window"
+    ]
+    assert get_events.await_count == 1
+    fetch.assert_awaited_once_with("2026-07-15")
+    assert _ODDS_KEY not in caplog.text
+
+
+def test_wnba_missing_odds_key_does_not_call_events(
+    monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+) -> None:
+    import asyncio
+
+    _install_cache(monkeypatch)
+    get_events = AsyncMock(side_effect=AssertionError("events called without a key"))
+    monkeypatch.setattr("app.services.odds_theoddsapi.odds_provider.get_events", get_events)
+    monkeypatch.setattr(settings, "odds_api_key", "   ")
+    fetch = AsyncMock(return_value=[])
+    monkeypatch.setattr("app.services.scheduler.wnba_lineup_service.fetch_and_store", fetch)
+    caplog.set_level(logging.WARNING, logger="app.services.scheduler")
+
+    async def _go() -> None:
+        service = SchedulerService()
+        moment = _chicago(2026, 1, 15, 16, 0)
+        await _run_wnba_pre_tipoff(service, moment)
+        await _run_wnba_pre_tipoff(service, moment)
+
+    asyncio.run(_go())
+    get_events.assert_not_awaited()
+    fetch.assert_not_awaited()
+    warnings = [record.getMessage() for record in caplog.records if record.levelno == logging.WARNING]
+    assert warnings == [
+        "wnba_lineup_fetch_pre_tipoff schedule unreadable (ODDS_API_KEY is unset); skipping the 5-minute window"
+    ]
 
 
 def test_injury_hours_and_comment_stay_independent_of_the_lineup_job() -> None:
