@@ -14,7 +14,7 @@ The browser talks to the Next.js app. That app proxies `/api/backend/...` to the
 - Display vig-free probabilities and market consensus
 - Read player historical game data from the NBA CSV
 - Show live odds, lineups, and injury status
-- The front-end Agent Widget is still in the Next.js app. The backend chat routes it used to call are gone.
+- The front-end Agent Widget is still in the Next.js app. The backend chat route it used to call is gone.
 
 ## Tech Stack
 
@@ -177,13 +177,17 @@ To fully use the project, make sure:
 
 ### Web Front-End
 
-The frontend NBA routes are the product surface. Pages under `frontend/app/wnba` stay until SPO-145b; this backend no longer has `/api/wnba`.
+The frontend routes are:
 
-- `/` — NBA
+- `/` — Today
+- `/event/[eventId]` — one game
+- `/picks` — daily picks
+- `/betslip` — bet slip
+- `/about` — method
 
 After going to <http://localhost:3000>, you can:
 
-- View NBA games and player props
+- View games and player props
 - View odds, lineup, historical context, and daily picks
 
 ## 4. Testing and Utility Commands

@@ -83,7 +83,7 @@ describe("NBA event page projection requests", () => {
       }),
     );
 
-    renderWithProviders(<EventDetail league="nba" />);
+    renderWithProviders(<EventDetail />);
     expect(await screen.findByTestId("player-row-Tyler Herro")).toBeInTheDocument();
     await user.click(screen.getByTestId("player-row-Tyler Herro"));
 

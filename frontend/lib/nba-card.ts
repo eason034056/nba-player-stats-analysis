@@ -29,9 +29,9 @@ export function finiteRate(value: number | null | undefined): value is number {
 /** Rate for the NBA 65% filter and the strong / playable chips. */
 export function boardRate(
   pick: { probability: number; combined_probability?: number | null },
-  league: LeagueSegment,
+  _league?: LeagueSegment,
 ): number {
-  if (league === "nba" && finiteRate(pick.combined_probability)) {
+  if (finiteRate(pick.combined_probability)) {
     return pick.combined_probability;
   }
   return pick.probability;

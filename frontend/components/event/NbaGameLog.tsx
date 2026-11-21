@@ -67,7 +67,7 @@ export function NbaGameLog({
 
       <div data-testid="game-filters" className="flex flex-col gap-3.5 md:gap-5">
         <div className="grid gap-3.5 md:grid-cols-3 md:gap-4">
-          <RangeControl league="nba" value={filters.range} onChange={filters.onRange} labelClassName="max-md:hidden" />
+          <RangeControl value={filters.range} onChange={filters.onRange} labelClassName="max-md:hidden" />
           <div className="flex items-end gap-2 md:block">
             <LineControl {...filters} inlineLabel className="flex-1" />
             <button

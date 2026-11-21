@@ -36,8 +36,6 @@ const apiMocks = vi.hoisted(() => ({
   getEvents: vi.fn(),
   getDailyPicks: vi.fn(),
   getLineups: vi.fn(),
-  getWNBAEvents: vi.fn(),
-  getWnbaDailyPicks: vi.fn(),
 }));
 
 vi.mock("@/lib/api", async () => {
@@ -207,7 +205,7 @@ describe("top read fallback when picks are missing", () => {
     });
     apiMocks.getDailyPicks.mockResolvedValueOnce(payload).mockRejectedValue(new Error("picks down"));
 
-    renderWithProviders(<TodayBoard league="nba" />, { queryClient: client });
+    renderWithProviders(<TodayBoard />, { queryClient: client });
 
     const web = await screen.findByTestId("today-web");
     expect(within(web).getByText("No read on this game")).toBeInTheDocument();
@@ -227,7 +225,7 @@ describe("event read for a listed Out player", () => {
     renderWithProviders(
       <>
         <OurRead
-          league="nba"
+         
           model={model}
           isLoading={false}
           isError={false}
@@ -239,7 +237,7 @@ describe("event read for a listed Out player", () => {
           onAsk={vi.fn()}
         />
         <EventActionBar
-          league="nba"
+         
           model={model}
           primaryInSlip={false}
           otherInSlip={false}

@@ -23,16 +23,8 @@ import nbaHistoryFixture from "@/test/fixtures/event/nba-history-bam.json";
 import nbaLineupFixture from "@/test/fixtures/event/nba-lineup-mixed.json";
 import nbaBosLineupFixture from "@/test/fixtures/event/nba-lineup-bos.json";
 import nbaNoVigFixture from "@/test/fixtures/event/nba-no-vig-bam.json";
-import wnbaEventsFixture from "@/test/fixtures/event/wnba-events.json";
-import wnbaPicksFixture from "@/test/fixtures/event/wnba-daily-picks.json";
-import wnbaSuggestFixture from "@/test/fixtures/event/wnba-suggest.json";
-import wnbaHistoryFixture from "@/test/fixtures/event/wnba-history-wilson.json";
-import wnbaLvaLineupFixture from "@/test/fixtures/event/wnba-lineup-lva.json";
-import wnbaNylLineupFixture from "@/test/fixtures/event/wnba-lineup-nyl.json";
-import wnbaNoVigFixture from "@/test/fixtures/event/wnba-no-vig-wilson.json";
 import emptyCsvFixture from "@/test/fixtures/event/csv-players-empty.json";
 import nbaDdEmptyFixture from "@/test/fixtures/event/nba-dd-history-empty.json";
-import wnbaDdEmptyFixture from "@/test/fixtures/event/wnba-dd-history-empty.json";
 import ddOneSidedFixture from "@/test/fixtures/event/nba-no-vig-dd-one-sided.json";
 import halfHistoryFixture from "@/test/fixtures/event/nba-history-half-percent.json";
 import emptyPicksFixture from "@/test/fixtures/event/nba-daily-picks-empty.json";
@@ -47,16 +39,8 @@ const nbaHistory = playerHistoryResponseSchema.parse(nbaHistoryFixture);
 const nbaLineup = teamLineupSchema.parse(nbaLineupFixture);
 const nbaBosLineup = teamLineupSchema.parse(nbaBosLineupFixture);
 const nbaNoVig = noVigResponseSchema.parse(nbaNoVigFixture);
-const wnbaEvents = eventsResponseSchema.parse(wnbaEventsFixture);
-const wnbaPicks = dailyPicksResponseSchema.parse(wnbaPicksFixture);
-const wnbaSuggest = playerSuggestResponseSchema.parse(wnbaSuggestFixture);
-const wnbaHistory = playerHistoryResponseSchema.parse(wnbaHistoryFixture);
-const wnbaLvaLineup = teamLineupSchema.parse(wnbaLvaLineupFixture);
-const wnbaNylLineup = teamLineupSchema.parse(wnbaNylLineupFixture);
-const wnbaNoVig = noVigResponseSchema.parse(wnbaNoVigFixture);
 const emptyCsv = csvPlayersResponseSchema.parse(emptyCsvFixture);
 const nbaDdEmpty = playerDDHistoryResponseSchema.parse(nbaDdEmptyFixture);
-const wnbaDdEmpty = playerDDHistoryResponseSchema.parse(wnbaDdEmptyFixture);
 const ddOneSided = noVigResponseSchema.parse(ddOneSidedFixture);
 const halfHistory = playerHistoryResponseSchema.parse(halfHistoryFixture);
 const emptyPicks = dailyPicksResponseSchema.parse(emptyPicksFixture);
@@ -72,21 +56,13 @@ const nav = vi.hoisted(() => ({
 
 const apiMocks = vi.hoisted(() => ({
   getEvents: vi.fn(),
-  getWNBAEvents: vi.fn(),
   getDailyPicks: vi.fn(),
-  getWnbaDailyPicks: vi.fn(),
   getPlayerSuggestions: vi.fn(),
-  getWNBAPlayerSuggestions: vi.fn(),
   getTeamLineup: vi.fn(),
-  getWNBATeamLineup: vi.fn(),
   calculateNoVig: vi.fn(),
-  calculateWNBANoVig: vi.fn(),
   getPlayerHistory: vi.fn(),
-  getWNBAPlayerHistory: vi.fn(),
   getCSVPlayers: vi.fn(),
-  getWNBACSVPlayers: vi.fn(),
   getPlayerDDHistory: vi.fn(),
-  getWNBAPlayerDDHistory: vi.fn(),
   useEventReads: vi.fn(),
   useEventBulkProps: vi.fn(),
 }));
@@ -119,31 +95,21 @@ describe("EventDetail fixtures", () => {
     nav.player = "Bam Adebayo";
     nav.path = "/event/evt-mia-bos";
     apiMocks.getEvents.mockResolvedValue(nbaEvents);
-    apiMocks.getWNBAEvents.mockResolvedValue(wnbaEvents);
     apiMocks.getDailyPicks.mockResolvedValue(nbaPicks);
-    apiMocks.getWnbaDailyPicks.mockResolvedValue(wnbaPicks);
     apiMocks.getPlayerSuggestions.mockResolvedValue(nbaSuggest);
-    apiMocks.getWNBAPlayerSuggestions.mockResolvedValue(wnbaSuggest);
     apiMocks.getTeamLineup.mockImplementation(async (team: string) =>
       team === "BOS" ? nbaBosLineup : nbaLineup,
     );
-    apiMocks.getWNBATeamLineup.mockImplementation(async (team: string) =>
-      team === "NYL" ? wnbaNylLineup : wnbaLvaLineup,
-    );
     apiMocks.calculateNoVig.mockResolvedValue(nbaNoVig);
-    apiMocks.calculateWNBANoVig.mockResolvedValue(wnbaNoVig);
     apiMocks.getPlayerHistory.mockResolvedValue(nbaHistory);
-    apiMocks.getWNBAPlayerHistory.mockResolvedValue(wnbaHistory);
     apiMocks.getCSVPlayers.mockResolvedValue(emptyCsv);
-    apiMocks.getWNBACSVPlayers.mockResolvedValue(emptyCsv);
     apiMocks.getPlayerDDHistory.mockResolvedValue(nbaDdEmpty);
-    apiMocks.getWNBAPlayerDDHistory.mockResolvedValue(wnbaDdEmpty);
     apiMocks.useEventReads.mockReturnValue({ data: undefined });
     apiMocks.useEventBulkProps.mockReturnValue({ data: undefined });
   });
 
   it("reads the NBA game from the fixture payloads", async () => {
-    renderWithProviders(<EventDetail league="nba" />, { withAgentWidget: true });
+    renderWithProviders(<EventDetail />, { withAgentWidget: true });
 
     expect(
       (await screen.findAllByRole("heading", { name: /celtics @ heat/i })).length,
@@ -162,10 +128,6 @@ describe("EventDetail fixtures", () => {
     expect(screen.getAllByText("Supports").length).toBeGreaterThan(0);
     expect(screen.getAllByText("Neutral").length).toBeGreaterThan(0);
     expect(screen.queryByRole("button", { name: /ask the board/i })).not.toBeInTheDocument();
-    expect(apiMocks.getWNBAEvents).not.toHaveBeenCalled();
-    expect(apiMocks.calculateWNBANoVig).not.toHaveBeenCalled();
-    expect(apiMocks.getWNBATeamLineup).not.toHaveBeenCalled();
-    expect(apiMocks.getWNBAPlayerHistory).not.toHaveBeenCalled();
 
     if (AGENT_CHAT_UI_ENABLED) {
       const user = userEvent.setup();
@@ -197,7 +159,7 @@ describe("EventDetail fixtures", () => {
       error: null,
       refetch: vi.fn(),
     });
-    renderWithProviders(<EventDetail league="nba" />);
+    renderWithProviders(<EventDetail />);
     const herro = await screen.findByTestId("player-row-Tyler Herro");
     expect(herro).toHaveTextContent("Loading");
     expect(herro).not.toHaveTextContent("No read");
@@ -222,7 +184,7 @@ describe("EventDetail fixtures", () => {
       refetch: vi.fn(),
     });
     const user = userEvent.setup();
-    renderWithProviders(<EventDetail league="nba" />);
+    renderWithProviders(<EventDetail />);
     expect(await screen.findByText("Reads failed.")).toBeInTheDocument();
     expect(screen.getByText("Props failed.")).toBeInTheDocument();
     expect(screen.getAllByText("Unavailable").length).toBeGreaterThan(0);
@@ -231,43 +193,10 @@ describe("EventDetail fixtures", () => {
     expect(refetch).toHaveBeenCalled();
   });
 
-  it("reads the WNBA game from the WNBA fixtures", async () => {
-    nav.eventId = "evt-lva-nyl";
-    nav.player = "A'ja Wilson";
-    nav.path = "/wnba/event/evt-lva-nyl";
-    renderWithProviders(<EventDetail league="wnba" />, { withAgentWidget: true });
-
-    expect(
-      await screen.findByRole("heading", { name: /new york liberty @ las vegas aces/i }),
-    ).toBeInTheDocument();
-    expect(await screen.findByText("Projection is not available for WNBA.")).toBeInTheDocument();
-    expect(screen.getByText("Playable")).toBeInTheDocument();
-    expect(await screen.findByText("LVA lineup confirmed")).toBeInTheDocument();
-    expect(screen.getByText("NYL lineup projected")).toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: /ask the board/i })).not.toBeInTheDocument();
-    expect(apiMocks.getWNBAEvents).toHaveBeenCalled();
-    expect(apiMocks.getWnbaDailyPicks).toHaveBeenCalled();
-    expect(apiMocks.getWNBAPlayerSuggestions).toHaveBeenCalled();
-    expect(apiMocks.calculateWNBANoVig).toHaveBeenCalled();
-    expect(apiMocks.getWNBAPlayerHistory).toHaveBeenCalled();
-    expect(apiMocks.getWNBATeamLineup).toHaveBeenCalledWith("NYL", "2026-11-10");
-    expect(apiMocks.getWNBATeamLineup).toHaveBeenCalledWith("LVA", "2026-11-10");
-    expect(apiMocks.getEvents).not.toHaveBeenCalled();
-    expect(apiMocks.getDailyPicks).not.toHaveBeenCalled();
-    expect(apiMocks.getPlayerSuggestions).not.toHaveBeenCalled();
-    expect(apiMocks.getTeamLineup).not.toHaveBeenCalled();
-    expect(apiMocks.calculateNoVig).not.toHaveBeenCalled();
-    expect(apiMocks.getPlayerHistory).not.toHaveBeenCalled();
-    expect(apiMocks.getCSVPlayers).not.toHaveBeenCalled();
-    expect(apiMocks.getPlayerDDHistory).not.toHaveBeenCalled();
-    const hrefs = Array.from(document.querySelectorAll("a")).map((node) => node.getAttribute("href") ?? "");
-    expect(hrefs.filter((href) => href.includes("/api/nba"))).toEqual([]);
-    expect(hrefs.filter((href) => href.includes("/player/") && !href.includes("/wnba/player/"))).toEqual([]);
-  });
 
   it("adds the stored side to the slip for that league", async () => {
     const user = userEvent.setup();
-    renderWithProviders(<EventDetail league="nba" />);
+    renderWithProviders(<EventDetail />);
     await user.click(await screen.findByRole("button", { name: "Add Over 18.5 to slip" }));
     await waitFor(() => {
       const picks = JSON.parse(window.localStorage.getItem("betslip_picks") ?? "[]");
@@ -282,7 +211,7 @@ describe("EventDetail fixtures", () => {
         }),
       ]);
     });
-    expect(JSON.parse(window.localStorage.getItem("wnba_betslip_picks") ?? "[]")).toEqual([]);
+    expect(window.localStorage.getItem("wnba_betslip_picks")).toBeNull();
 
     await user.click(screen.getByRole("button", { name: "Under instead (35%)" }));
     await waitFor(() => {
@@ -299,44 +228,10 @@ describe("EventDetail fixtures", () => {
     });
   });
 
-  it("adds a WNBA read to the WNBA slip only", async () => {
-    nav.eventId = "evt-lva-nyl";
-    nav.player = "A'ja Wilson";
-    nav.path = "/wnba/event/evt-lva-nyl";
-    const user = userEvent.setup();
-    renderWithProviders(<EventDetail league="wnba" />, { withAgentWidget: true });
-    await user.click(await screen.findByRole("button", { name: "Add Over 22.5" }));
-    await waitFor(() => {
-      const picks = JSON.parse(window.localStorage.getItem("wnba_betslip_picks") ?? "[]");
-      expect(picks).toEqual([
-        expect.objectContaining({
-          player_name: "A'ja Wilson",
-          event_id: "evt-lva-nyl",
-          metric: "points",
-          threshold: 22.5,
-          direction: "over",
-          probability: 0.68,
-        }),
-      ]);
-    });
-    expect(JSON.parse(window.localStorage.getItem("betslip_picks") ?? "[]")).toEqual([]);
-    if (AGENT_CHAT_UI_ENABLED) {
-      await user.click(screen.getByRole("button", { name: "Ask the agent" }));
-      await waitFor(() => {
-        const stored = JSON.parse(window.sessionStorage.getItem("agent_widget_state") ?? "{}");
-        expect(stored.pageContext.route).toBe("/wnba/event/evt-lva-nyl");
-        expect(stored.selectedPickContext.player_name).toBe("A'ja Wilson");
-        expect(stored.selectedPickContext.probability).toBe(0.68);
-      });
-    } else {
-      expect(screen.queryByRole("button", { name: "Ask the agent" })).not.toBeInTheDocument();
-      expect(screen.queryByRole("button", { name: /^ask$/i })).not.toBeInTheDocument();
-    }
-  });
 
   it("keeps the selected stat and line when the mobile tabs change", async () => {
     const user = userEvent.setup();
-    renderWithProviders(<EventDetail league="nba" />);
+    renderWithProviders(<EventDetail />);
     await screen.findAllByRole("heading", { name: /celtics @ heat/i });
     await user.click(screen.getByRole("button", { name: "REB" }));
     await user.click(screen.getByRole("tab", { name: "Odds" }));
@@ -374,7 +269,7 @@ describe("EventDetail fixtures", () => {
       return nbaHistory;
     });
     const user = userEvent.setup();
-    renderWithProviders(<EventDetail league="nba" />);
+    renderWithProviders(<EventDetail />);
     const chart = await screen.findByTestId("game-log");
     expect(await within(chart).findByText("Points · 40 games")).toBeInTheDocument();
     const filters = screen.getByTestId("game-filters");
@@ -401,14 +296,14 @@ describe("EventDetail fixtures", () => {
       request.market === "player_double_double" ? ddOneSided : nbaNoVig,
     );
     const user = userEvent.setup();
-    renderWithProviders(<EventDetail league="nba" />);
+    renderWithProviders(<EventDetail />);
     await user.click(await screen.findByRole("button", { name: "DD" }));
     expect(await screen.findByText(`No-vig consensus ${formatPercent(0.6755)} yes`)).toBeInTheDocument();
   });
 
   it("prints the history rate with formatPercent on the log tiles", async () => {
     apiMocks.getPlayerHistory.mockResolvedValue(halfHistory);
-    renderWithProviders(<EventDetail league="nba" />);
+    renderWithProviders(<EventDetail />);
     const over = await screen.findByTestId("log-tile-over");
     expect(over).toHaveTextContent(formatPercent(0.6755));
     expect(over).not.toHaveTextContent("67.5%");
@@ -420,7 +315,7 @@ describe("EventDetail fixtures", () => {
     apiMocks.getPlayerHistory.mockResolvedValue(emptyHistory);
     apiMocks.calculateNoVig.mockResolvedValue(emptyNoVig);
     apiMocks.getTeamLineup.mockResolvedValue(null);
-    renderWithProviders(<EventDetail league="nba" />);
+    renderWithProviders(<EventDetail />);
     expect((await screen.findAllByText(/No posted line/)).length).toBeGreaterThan(0);
     expect(screen.getAllByText("No read").length).toBeGreaterThan(0);
     expect(screen.getByText("No stored read for this player.")).toBeInTheDocument();

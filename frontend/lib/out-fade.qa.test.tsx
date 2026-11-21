@@ -12,7 +12,6 @@ import { clearBetSlip, createBetSlipPick, renderWithProviders, seedBetSlip } fro
 import emptyLineupsFixture from "@/test/fixtures/lineups/empty.json";
 import rawInjuryFixture from "@/test/fixtures/picks/nba-daily-picks-raw-injury.json";
 import todayPicksFixture from "@/test/fixtures/today/nba-daily-picks.json";
-import wnbaPicksFixture from "@/test/fixtures/today/wnba-daily-picks.json";
 
 vi.mock("next/link", () => ({
   default: ({ href, children, ...props }: { href: string; children: ReactNode }) => (
@@ -40,7 +39,6 @@ vi.mock("@/lib/api", async () => {
 const todayPicks = dailyPicksResponseSchema.parse(todayPicksFixture);
 const emptyLineups = lineupsResponseSchema.parse(emptyLineupsFixture);
 const [doubtful, listedOut] = rawInjuryFixture.picks.map((pick) => dailyPickSchema.parse(pick));
-const wilson = dailyPicksResponseSchema.parse(wnbaPicksFixture).picks[0];
 
 // Tailwind is not loaded in jsdom, so read the opacity utility the user would see
 // and multiply it up the tree. 1 means full strength.
@@ -163,41 +161,3 @@ describe("Out leg fade on the slip", () => {
   });
 });
 
-describe("WNBA rows that carry injury words", () => {
-  const loud: DailyPick = { ...wilson, injury_status: "Out", injury_status_raw: "Out For Season" };
-
-  // The rail and Today gate the chip on league. The board does not (same as dev), and WNBA rows arrive with null words.
-  it("show no injury chip on the rail or Today", () => {
-    const rows = eventPlayerRows({
-      suggested: [loud.player_name],
-      picks: [loud],
-      metric: "player_points",
-      eventId: loud.event_id,
-      selectedName: "",
-      postedLine: null,
-      awayLineup: null,
-      homeLineup: null,
-      awayAbbr: "NYL",
-      homeAbbr: "LVA",
-      league: "wnba",
-    });
-    expect(rows.every((row) => row.injury == null)).toBe(true);
-    renderWithProviders(
-      <PlayerRail
-        league="wnba"
-        rows={rows}
-        selected=""
-        onSelect={vi.fn()}
-        isLoading={false}
-        isError={false}
-        errorText={null}
-        onRetry={vi.fn()}
-      />,
-    );
-    const button = screen.getByRole("button", { name: new RegExp(loud.player_name) });
-    expect(button).not.toHaveTextContent("Injury:");
-    expect(button.querySelector("[data-injury-tone]")).toBeNull();
-
-    expect(todayReads([{ ...wilson, injury_status_raw: "Doubtful" }], "wnba", "2026-11-10")[0]?.injury).toBeNull();
-  });
-});

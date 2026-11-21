@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { getPlayerHistory, getWNBAPlayerHistory } from "@/lib/api";
+import { getPlayerHistory } from "@/lib/api";
 import { eventPlayerRows, eventTeammates } from "@/lib/event-page";
 import { dailyPicksResponseSchema, teamLineupSchema, type DailyPick } from "@/lib/schemas";
 import nbaPicksFixture from "@/test/fixtures/event/nba-daily-picks.json";
@@ -245,20 +245,4 @@ describe("SPO-122 player-history query", () => {
     expect(params.has("as_of")).toBe(false);
   });
 
-  it("sends the event clubs on the WNBA route too", async () => {
-    const fetchMock = stubFetch();
-    await getWNBAPlayerHistory({
-      player: "Napheesa Collier",
-      metric: "points",
-      threshold: 20.5,
-      home_team: "Minnesota Lynx",
-      away_team: "Chicago Sky",
-    });
-    const url = String((fetchMock.mock.calls[0] as unknown[])[0]);
-    expect(url).toContain("/api/wnba/player-history?");
-    const params = new URL(url, "http://127.0.0.1").searchParams;
-    expect(params.get("home_team")).toBe("Minnesota Lynx");
-    expect(params.get("away_team")).toBe("Chicago Sky");
-    expect(params.has("as_of")).toBe(false);
-  });
 });

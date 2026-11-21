@@ -10,10 +10,7 @@ import { AGENT_CHAT_UI_ENABLED } from "@/lib/agent-chat-ui";
 import {
   getDailyPicks,
   getEvents,
-  getWNBAEvents,
-  getWnbaDailyPicks,
 } from "@/lib/api";
-import type { LeagueSegment } from "@/lib/event-detail-link";
 import { isOutPick } from "@/lib/picks-board";
 import {
   slateEyebrow,
@@ -399,7 +396,7 @@ function TeamSide({
   );
 }
 
-export function TodayBoard({ league }: { league: LeagueSegment }) {
+export function TodayBoard() {
   const todayString = getTodayString();
   const [selectedDate, setSelectedDate] = useState(todayString);
   const [initialDate, setInitialDate] = useState(todayString);
@@ -425,21 +422,14 @@ export function TodayBoard({ league }: { league: LeagueSegment }) {
   }, [checkAndUpdateDate]);
 
   const eventsQuery = useQuery({
-    queryKey: [league === "wnba" ? "wnba-events" : "events", selectedDate],
-    queryFn: () =>
-      league === "wnba" ? getWNBAEvents(selectedDate) : getEvents(selectedDate),
+    queryKey: ["events", selectedDate],
+    queryFn: () => getEvents(selectedDate),
     staleTime: 60 * 1000,
   });
 
   const picksQuery = useQuery({
-    queryKey: [
-      league === "wnba" ? "wnba-daily-picks" : "daily-picks",
-      selectedDate,
-    ],
-    queryFn: () =>
-      league === "wnba"
-        ? getWnbaDailyPicks({ date: selectedDate })
-        : getDailyPicks({ date: selectedDate }),
+    queryKey: ["daily-picks", selectedDate],
+    queryFn: () => getDailyPicks({ date: selectedDate }),
     staleTime: 5 * 60 * 1000,
   });
 
@@ -482,9 +472,9 @@ export function TodayBoard({ league }: { league: LeagueSegment }) {
   const slateDate = eventsQuery.data?.date || selectedDate;
   const loadedPicks = picksQuery.data?.picks ?? [];
   const boardPicks = picksQuery.isSuccess ? loadedPicks : [];
-  const reads = picksQuery.isSuccess ? todayReads(boardPicks, league, slateDate, 3, events) : [];
-  const games = todayGames(events, boardPicks, league, slateDate, loadedPicks);
-  const picksHref = league === "wnba" ? "/wnba/picks" : "/picks";
+  const reads = picksQuery.isSuccess ? todayReads(boardPicks, "nba", slateDate, 3, events) : [];
+  const games = todayGames(events, boardPicks, "nba", slateDate, loadedPicks);
+  const picksHref = "/picks";
   const picksCount = picksQuery.isSuccess ? picksShownCount(picksQuery.data) : null;
   const picksLabel = picksQuery.isLoading
     ? "Loading reads"
@@ -509,9 +499,7 @@ export function TodayBoard({ league }: { league: LeagueSegment }) {
     picksCount,
     picksLabel,
     blurb:
-      league === "nba"
-        ? "Each prop gets one probability, built from market prices, recent form, all-game history, and matchup. Start with the strongest calls, or open any game."
-        : "Each card is a historical hit rate from tonight's board. Start with the strongest calls, or open any game.",
+      "Each prop gets one probability, built from market prices, recent form, all-game history, and matchup. Start with the strongest calls, or open any game.",
   };
 
   return (

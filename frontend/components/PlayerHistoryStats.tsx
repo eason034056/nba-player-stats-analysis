@@ -35,11 +35,10 @@ import {
   Filter,
   X,
 } from "lucide-react";
-import { getCSVPlayers, getPlayerHistory, calculateNoVig, calculateWNBANoVig } from "@/lib/api";
+import { getCSVPlayers, getPlayerHistory, calculateNoVig } from "@/lib/api";
 import {
   HISTORY_METRICS,
   recentGamesOptions,
-  type SeasonLeague,
   type HistoryMetricKey,
   type GameLog,
   type CSVPlayersResponse,
@@ -154,22 +153,16 @@ interface PlayerHistoryStatsProps {
   initialMarket?: string;
   initialThreshold?: string;
   /**
-   * SPO-83: league-parametrized data sources. All optional and defaulted to the
-   * NBA functions, so existing NBA callers (the event page) keep their exact
-   * behavior with zero prop changes. The WNBA event page passes the `getWNBA*`
-   * siblings — same response schemas, different endpoints.
-   *
-   * ⚠ When two leagues render in one session, the TanStack Query cache keys
-   * MUST be namespaced or NBA results leak into WNBA panels (and vice versa).
-   * That is what `cacheNamespace` guards — it is folded into every queryKey here.
+   * Optional data sources. They default to the NBA routes, so existing
+   * callers keep their behavior. `cacheNamespace` is folded into every
+   * query key so a test override does not collide with the live cache.
    */
   getCSVPlayersFn?: (query?: string) => Promise<CSVPlayersResponse>;
   getPlayerHistoryFn?: (request: PlayerHistoryRequest) => Promise<PlayerHistoryResponse>;
   calculateNoVigFn?: (request: NoVigRequest) => Promise<NoVigResponse>;
   /**
    * SPO-102: binary history route. Defaults inside PlayerDDTile from
-   * `cacheNamespace` (NBA → `/api/nba/player-dd-history`, WNBA → the
-   * `/api/wnba` sibling). Pass an override in tests.
+   * `/api/nba/player-dd-history`. Pass an override in tests.
    */
   getPlayerDDHistoryFn?: (
     request: PlayerDDHistoryRequest,
@@ -199,11 +192,7 @@ export function PlayerHistoryStats({
   eventAway = "",
   eventAsOf = "",
 }: PlayerHistoryStatsProps) {
-  // A missing client follows the league. Passing the NBA function into a
-  // WNBA panel would post the binary market to /api/nba/props/no-vig.
-  const resolvedCalculateNoVig =
-    calculateNoVigFn ??
-    (cacheNamespace === "wnba" ? calculateWNBANoVig : calculateNoVig);
+  const resolvedCalculateNoVig = calculateNoVigFn ?? calculateNoVig;
   const [searchInput, setSearchInput] = useState(initialPlayer);
   const [selectedPlayer, setSelectedPlayer] = useState(initialPlayer);
   const [metric, setMetric] = useState<HistoryMetricKey>(
@@ -238,8 +227,7 @@ export function PlayerHistoryStats({
     }
   }, [initialMarket, metric]);
   
-  const seasonLeague: SeasonLeague = cacheNamespace === "wnba" ? "wnba" : "nba";
-  const gameRangeOptions = recentGamesOptions(seasonLeague);
+  const gameRangeOptions = recentGamesOptions();
   const numericThreshold = parseFloat(threshold);
   const hasLine = threshold.trim() !== "" && Number.isFinite(numericThreshold);
   const [recentN, setRecentN] = useState<number>(0);
@@ -696,13 +684,7 @@ export function PlayerHistoryStats({
       {selectedPlayer && isBinaryHistoryMetric(metric) && (
         <PlayerDDTile
           playerName={selectedPlayer}
-          league={
-            cacheNamespace === "wnba"
-              ? "wnba"
-              : cacheNamespace === "nba"
-                ? "nba"
-                : null
-          }
+          league="nba"
           eventId={eventId}
           getPlayerDDHistoryFn={getPlayerDDHistoryFn}
           calculateNoVigFn={resolvedCalculateNoVig}

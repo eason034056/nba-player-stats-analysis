@@ -1,25 +1,17 @@
 "use client";
 
-import type { League } from "@/components/EventDetail";
 import { cn } from "@/lib/utils";
 
 export type LogRange = 5 | 10 | 20 | 0;
 export type LogRole = "all" | "starter" | "bench";
 export type MateMode = "all" | "with" | "without";
 
-export const RANGE_OPTIONS: Record<League, ReadonlyArray<{ value: LogRange; label: string }>> = {
-  nba: [
-    { value: 5, label: "L5" },
-    { value: 10, label: "L10" },
-    { value: 20, label: "L20" },
-    { value: 0, label: "All" },
-  ],
-  wnba: [
-    { value: 10, label: "Last 10" },
-    { value: 20, label: "Last 20" },
-    { value: 0, label: "All" },
-  ],
-};
+export const RANGE_OPTIONS: ReadonlyArray<{ value: LogRange; label: string }> = [
+  { value: 5, label: "L5" },
+  { value: 10, label: "L10" },
+  { value: 20, label: "L20" },
+  { value: 0, label: "All" },
+];
 
 export interface FilterState {
   range: LogRange;
@@ -96,13 +88,11 @@ function Segment<T extends string | number>({
 }
 
 export function RangeControl({
-  league,
   value,
   onChange,
   className,
   labelClassName,
 }: {
-  league: League;
   value: LogRange;
   onChange: (range: LogRange) => void;
   className?: string;
@@ -113,7 +103,7 @@ export function RangeControl({
       label="Range"
       value={value}
       onChange={onChange}
-      options={RANGE_OPTIONS[league]}
+      options={RANGE_OPTIONS}
       className={className}
       labelClassName={labelClassName}
     />
@@ -339,10 +329,9 @@ export function MoreFilters(filters: FilterState) {
 }
 
 export function GameFilters({
-  league,
   gameCount,
   ...filters
-}: FilterState & { league: League; gameCount: number | null }) {
+}: FilterState & { gameCount: number | null }) {
   return (
     <div data-testid="game-filters" className="flex flex-col gap-4">
       <div className="flex items-center justify-between gap-3">
@@ -352,7 +341,7 @@ export function GameFilters({
         </p>
       </div>
       <div className="grid gap-4 md:grid-cols-2">
-        <RangeControl league={league} value={filters.range} onChange={filters.onRange} />
+        <RangeControl value={filters.range} onChange={filters.onRange} />
         <LineControl {...filters} />
         <VenueControl />
         <RoleControl value={filters.role} onChange={filters.onRole} />

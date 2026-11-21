@@ -96,7 +96,7 @@ describe("proxy request headers", () => {
 
   it("forwards a local request without the proxy secret when the env var is unset", () => {
     const prepared = prepareProxiedRequest({
-      pathname: "/api/backend/api/wnba/events",
+      pathname: "/api/backend/api/nba/events",
       headers: headers({
         [PROXY_SECRET_HEADER]: BROWSER_SECRET,
         "x-real-ip": SPOOFED_IP,
@@ -105,7 +105,7 @@ describe("proxy request headers", () => {
       env: { BACKEND_API_URL: undefined, VERCEL_PROXY_SECRET: undefined },
     });
     expect(prepared.ok).toBe(true);
-    expect(prepared.destination.toString()).toBe("http://localhost:8000/api/wnba/events");
+    expect(prepared.destination.toString()).toBe("http://localhost:8000/api/nba/events");
     expect(prepared.headers.has(PROXY_SECRET_HEADER)).toBe(false);
     expect(prepared.headers.get("x-real-ip")).toBe(CLIENT_IP);
     const serialized = [...prepared.headers.entries()].map(([, value]) => value).join("\n");

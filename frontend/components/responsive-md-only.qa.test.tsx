@@ -25,7 +25,8 @@ describe("QA: Picks card flex sizing is md-only", () => {
 
 });
 
-describe("QA: WNBA signal rows keep basis-60 at every width", () => {
+
+describe("QA: signal rows keep basis-60 when there is no verdict", () => {
   it("the non-verdict branch is the unprefixed basis-60", () => {
     const src = readFileSync(path.join(__dirname, "event/OurRead.tsx"), "utf8");
     expect(src).toMatch(/showVerdict \? "md:basis-60" : "basis-60"/);

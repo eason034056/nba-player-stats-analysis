@@ -29,18 +29,7 @@ vi.mock("@/lib/agent-chat-ui", () => ({
   AGENT_CHAT_UI_ENABLED: true,
 }));
 
-const shellPaths = [
-  "/",
-  "/picks",
-  "/betslip",
-  "/about",
-  "/event/heat-bucks",
-  "/wnba",
-  "/wnba/picks",
-  "/wnba/betslip",
-  "/wnba/event/aces-liberty",
-  "/wnba/player/A%27ja%20Wilson",
-];
+const shellPaths = ["/", "/picks", "/betslip", "/about", "/event/heat-bucks"];
 
 describe("AppShell with the agent chat UI on", () => {
   beforeEach(() => {
@@ -48,7 +37,7 @@ describe("AppShell with the agent chat UI on", () => {
     navigationMocks.usePathname.mockReturnValue("/");
   });
 
-  it("keeps an Ask control on every NBA and WNBA route", () => {
+  it("keeps an Ask control on every shell route", () => {
     const { rerender } = renderWithProviders(
       <AppShell>
         <p>Board</p>

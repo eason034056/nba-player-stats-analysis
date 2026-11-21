@@ -6,36 +6,36 @@ import { EventActionBar } from "@/components/event/EventActionBar";
 import { OurRead } from "@/components/event/OurRead";
 import { buildOurRead, buildReadSignals } from "@/lib/event-page";
 import { dailyPicksResponseSchema } from "@/lib/schemas";
-import wnbaPicksFixture from "@/test/fixtures/event/wnba-daily-picks.json";
+import nbaPicksFixture from "@/test/fixtures/event/nba-daily-picks.json";
 import { renderWithProviders } from "@/test/test-utils";
 
 vi.mock("next/navigation", () => ({
-  usePathname: () => "/event/wnba-1",
+  usePathname: () => "/event/evt-mia-bos",
 }));
 
 vi.mock("@/lib/agent-chat-ui", () => ({
   AGENT_CHAT_UI_ENABLED: true,
 }));
 
-const wilsonPick = dailyPicksResponseSchema.parse(wnbaPicksFixture).picks[0];
+const bamPick = dailyPicksResponseSchema.parse(nbaPicksFixture).picks[0];
 
 const model = buildOurRead({
-  player: "A'ja Wilson",
+  player: bamPick.player_name,
   marketName: "Points",
   market: "player_points",
   binary: false,
-  eventId: "wnba-1",
-  homeTeam: "Las Vegas Aces",
-  awayTeam: "New York Liberty",
-  commenceTime: "2026-11-11T00:00:00Z",
-  team: "LVA",
+  eventId: bamPick.event_id,
+  homeTeam: bamPick.home_team,
+  awayTeam: bamPick.away_team,
+  commenceTime: bamPick.commence_time,
+  team: bamPick.player_team,
   position: null,
-  line: wilsonPick.threshold,
-  pick: wilsonPick,
+  line: bamPick.threshold,
+  pick: bamPick,
   consensus: null,
   last10: [],
   history: null,
-  league: "wnba",
+  league: "nba",
 });
 
 describe("event ask controls with the agent chat UI on", () => {
@@ -73,7 +73,7 @@ describe("event ask controls with the agent chat UI on", () => {
     const user = userEvent.setup();
     renderWithProviders(
       <EventActionBar
-        league="nba"
+       
         model={model}
         primaryInSlip={false}
         otherInSlip={false}

@@ -3,19 +3,13 @@
 /**
  * TanStack Query entry for the double-double tile.
  *
- * Components call this hook. They do not call `fetch`. NBA and WNBA each
- * have a history route and a no-vig route; the league argument picks the
- * pair. An unknown league disables both queries.
+ * Components call this hook. They do not call `fetch`. `null` disables
+ * both queries. A player name is still required before history loads.
  */
 
 import { useQuery } from "@tanstack/react-query";
 
-import {
-  calculateNoVig,
-  calculateWNBANoVig,
-  getPlayerDDHistory,
-  getWNBAPlayerDDHistory,
-} from "@/lib/api";
+import { calculateNoVig, getPlayerDDHistory } from "@/lib/api";
 import { METRIC_TO_MARKET } from "@/lib/metric-to-market";
 import type {
   NoVigRequest,
@@ -24,7 +18,7 @@ import type {
   PlayerDDHistoryResponse,
 } from "@/lib/schemas";
 
-export type DDLeague = "nba" | "wnba";
+export type DDLeague = "nba";
 
 /** Odds API market key. Matches backend `BINARY_MARKET_KEYS`. */
 export const PLAYER_DOUBLE_DOUBLE_MARKET = METRIC_TO_MARKET.dd;
@@ -50,15 +44,12 @@ export function usePlayerDDTileData({
 }: UsePlayerDDTileDataArgs) {
   const trimmedPlayer = playerName.trim();
   const trimmedSeason = season?.trim() ? season.trim() : undefined;
-  const leagueSupported = league === "nba" || league === "wnba";
+  const leagueSupported = league === "nba";
   const canQueryHistory = leagueSupported && trimmedPlayer.length > 0;
   const canQueryOdds = canQueryHistory && Boolean(eventId);
 
-  const historyFn =
-    getPlayerDDHistoryFn ??
-    (league === "wnba" ? getWNBAPlayerDDHistory : getPlayerDDHistory);
-  const oddsFn =
-    calculateNoVigFn ?? (league === "wnba" ? calculateWNBANoVig : calculateNoVig);
+  const historyFn = getPlayerDDHistoryFn ?? getPlayerDDHistory;
+  const oddsFn = calculateNoVigFn ?? calculateNoVig;
 
   const historyQuery = useQuery({
     queryKey: [

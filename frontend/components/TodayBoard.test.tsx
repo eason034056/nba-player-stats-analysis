@@ -21,8 +21,6 @@ import nbaPicksPartialFixture from "@/test/fixtures/today/nba-daily-picks-partia
 import nbaPicksCountFixture from "@/test/fixtures/today/nba-daily-picks-total-mismatch.json";
 import nbaPicksCountMissingFixture from "@/test/fixtures/today/nba-daily-picks-count-missing.json";
 import nbaPicksMissingDirectionFixture from "@/test/fixtures/today/nba-daily-picks-missing-direction.json";
-import wnbaEventsFixture from "@/test/fixtures/today/wnba-events.json";
-import wnbaPicksFixture from "@/test/fixtures/today/wnba-daily-picks.json";
 import recordedNoVig from "@/test/fixtures/props-no-vig/player-double-double.json";
 import { giannisTopRead } from "@/test/fixtures/today/top-read";
 
@@ -32,14 +30,10 @@ const nbaEventsEmpty = eventsResponseSchema.parse(nbaEventsEmptyFixture);
 const nbaPicksEmpty = dailyPicksResponseSchema.parse(nbaPicksEmptyFixture);
 const nbaEventsPartial = eventsResponseSchema.parse(nbaEventsPartialFixture);
 const nbaPicksCount = dailyPicksResponseSchema.parse(nbaPicksCountFixture);
-const wnbaEvents = eventsResponseSchema.parse(wnbaEventsFixture);
-const wnbaPicks = dailyPicksResponseSchema.parse(wnbaPicksFixture);
 
 const apiMocks = vi.hoisted(() => ({
   getEvents: vi.fn(),
   getDailyPicks: vi.fn(),
-  getWNBAEvents: vi.fn(),
-  getWnbaDailyPicks: vi.fn(),
 }));
 
 vi.mock("next/link", () => ({
@@ -82,8 +76,6 @@ describe("TodayBoard", () => {
     vi.setSystemTime(new Date("2026-11-10T18:00:00-06:00"));
     apiMocks.getEvents.mockReset();
     apiMocks.getDailyPicks.mockReset();
-    apiMocks.getWNBAEvents.mockReset();
-    apiMocks.getWnbaDailyPicks.mockReset();
   });
 
   afterEach(() => {
@@ -94,7 +86,7 @@ describe("TodayBoard", () => {
     apiMocks.getEvents.mockResolvedValue(nbaEvents);
     apiMocks.getDailyPicks.mockResolvedValue(nbaPicks);
 
-    renderWithProviders(<TodayBoard league="nba" />);
+    renderWithProviders(<TodayBoard />);
 
     const web = await screen.findByTestId("today-web");
     const eyebrow = within(web).getByTestId("today-hero-eyebrow");
@@ -162,15 +154,13 @@ describe("TodayBoard", () => {
 
     expect(apiMocks.getEvents).toHaveBeenCalledWith("2026-11-10");
     expect(apiMocks.getDailyPicks).toHaveBeenCalledWith({ date: "2026-11-10" });
-    expect(apiMocks.getWNBAEvents).not.toHaveBeenCalled();
-    expect(apiMocks.getWnbaDailyPicks).not.toHaveBeenCalled();
   });
 
   it("shows empty states when the slate and the board have no rows", async () => {
     apiMocks.getEvents.mockResolvedValue(nbaEventsEmpty);
     apiMocks.getDailyPicks.mockResolvedValue(nbaPicksEmpty);
 
-    renderWithProviders(<TodayBoard league="nba" />);
+    renderWithProviders(<TodayBoard />);
 
     const web = await screen.findByTestId("today-web");
     expect(within(web).getByText("No games on this date.")).toBeInTheDocument();
@@ -183,7 +173,7 @@ describe("TodayBoard", () => {
     apiMocks.getEvents.mockReturnValue(new Promise(() => {}));
     apiMocks.getDailyPicks.mockReturnValue(new Promise(() => {}));
 
-    renderWithProviders(<TodayBoard league="nba" />);
+    renderWithProviders(<TodayBoard />);
 
     expect(screen.getByTestId("today-loading")).toHaveTextContent("Loading tonight's board");
     expect(screen.queryByText("Bam Adebayo")).not.toBeInTheDocument();
@@ -195,7 +185,7 @@ describe("TodayBoard", () => {
     apiMocks.getEvents.mockRejectedValueOnce(new Error("board down"));
     apiMocks.getDailyPicks.mockResolvedValue(nbaPicks);
 
-    renderWithProviders(<TodayBoard league="nba" />);
+    renderWithProviders(<TodayBoard />);
 
     const alert = await screen.findByRole("alert");
     expect(alert).toHaveTextContent("Could not load games.");
@@ -211,7 +201,7 @@ describe("TodayBoard", () => {
     apiMocks.getEvents.mockRejectedValueOnce("board down");
     apiMocks.getDailyPicks.mockResolvedValue(nbaPicksEmpty);
 
-    renderWithProviders(<TodayBoard league="nba" />);
+    renderWithProviders(<TodayBoard />);
 
     const alert = await screen.findByRole("alert");
     expect(alert).toHaveTextContent("Could not load games.");
@@ -224,7 +214,7 @@ describe("TodayBoard", () => {
     apiMocks.getEvents.mockResolvedValue(nbaEvents);
     apiMocks.getDailyPicks.mockRejectedValue(new Error("picks down"));
 
-    renderWithProviders(<TodayBoard league="nba" />);
+    renderWithProviders(<TodayBoard />);
 
     const web = await screen.findByTestId("today-web");
     expect(within(web).getByText(/reads unavailable/i)).toHaveTextContent("picks down");
@@ -241,7 +231,7 @@ describe("TodayBoard", () => {
       nbaPicksPartialFixture as unknown as DailyPicksResponse,
     );
 
-    renderWithProviders(<TodayBoard league="nba" />);
+    renderWithProviders(<TodayBoard />);
 
     const web = await screen.findByTestId("today-web");
     const bam = within(web).getByRole("link", { name: /bam adebayo/i });
@@ -273,7 +263,7 @@ describe("TodayBoard", () => {
       ],
     });
 
-    renderWithProviders(<TodayBoard league="nba" />);
+    renderWithProviders(<TodayBoard />);
 
     const web = await screen.findByTestId("today-web");
     expect(within(web).getByRole("link", { name: /all 2 picks/i })).toHaveAttribute("href", "/picks");
@@ -288,7 +278,7 @@ describe("TodayBoard", () => {
       nbaPicksCountMissingFixture as unknown as DailyPicksResponse,
     );
 
-    renderWithProviders(<TodayBoard league="nba" />);
+    renderWithProviders(<TodayBoard />);
 
     const web = await screen.findByTestId("today-web");
     expect(within(web).getByRole("link", { name: "All picks →" })).toBeInTheDocument();
@@ -302,7 +292,7 @@ describe("TodayBoard", () => {
       nbaPicksMissingDirectionFixture as unknown as DailyPicksResponse,
     );
 
-    renderWithProviders(<TodayBoard league="nba" />);
+    renderWithProviders(<TodayBoard />);
 
     const web = await screen.findByTestId("today-web");
     expect(within(web).getByRole("link", { name: /bam adebayo/i })).toHaveTextContent("— 10.5 REB");
@@ -314,48 +304,11 @@ describe("TodayBoard", () => {
     apiMocks.getEvents.mockResolvedValue(nbaEvents);
     apiMocks.getDailyPicks.mockResolvedValue(nbaPicksCount);
 
-    renderWithProviders(<TodayBoard league="nba" />);
+    renderWithProviders(<TodayBoard />);
 
     const web = await screen.findByTestId("today-web");
     expect(within(web).getByRole("link", { name: /all 9 picks/i })).toHaveAttribute("href", "/picks");
     expect(within(web).getAllByRole("link", { name: /bam adebayo/i })).toHaveLength(1);
-  });
-
-  it("renders the WNBA board from the WNBA endpoints", async () => {
-    apiMocks.getWNBAEvents.mockResolvedValue(wnbaEvents);
-    apiMocks.getWnbaDailyPicks.mockResolvedValue(wnbaPicks);
-
-    renderWithProviders(<TodayBoard league="wnba" />);
-
-    const web = await screen.findByTestId("today-web");
-    const wilson = within(web).getByRole("link", { name: /a'ja wilson/i });
-    expect(wilson).toHaveTextContent("71%");
-    expect(wilson).toHaveTextContent("LVA @ NYL");
-    expect(wilson).not.toHaveTextContent("LAL");
-    expect(wilson).not.toHaveTextContent("NYK");
-    expect(wilson.getAttribute("href")).toContain("/wnba/event/aces-liberty");
-
-    const stewart = within(web).getByRole("link", { name: /breanna stewart/i });
-    expect(stewart).toHaveTextContent("Playable");
-    expect(stewart).toHaveTextContent("67%");
-    expect(stewart).not.toHaveTextContent("68%");
-    expect(stewart).not.toHaveTextContent("67.6%");
-    expect(stewart).toHaveTextContent("SEA @ MIN");
-    expect(stewart).not.toHaveTextContent("GSW");
-    expect(within(web).getByText("Lynx")).toBeInTheDocument();
-    expect(within(web).queryByText("Timberwolves")).not.toBeInTheDocument();
-    expect(within(web).getByRole("link", { name: /all 2 picks/i })).toHaveAttribute("href", "/wnba/picks");
-    const fanduelImplied = recordedNoVig.results.find(
-      (row) => row.bookmaker === "fanduel",
-    )?.p_over_imp;
-    expect(formatPercent(fanduelImplied)).toBe("71%");
-    expect(within(web).queryByText("70.6%")).not.toBeInTheDocument();
-    expect(within(web).queryByText("71.4%")).not.toBeInTheDocument();
-
-    expect(apiMocks.getEvents).not.toHaveBeenCalled();
-    expect(apiMocks.getDailyPicks).not.toHaveBeenCalled();
-    expect(apiMocks.getWNBAEvents).toHaveBeenCalledWith("2026-11-10");
-    expect(apiMocks.getWnbaDailyPicks).toHaveBeenCalledWith({ date: "2026-11-10" });
   });
 
   it("uses top_read and the ET wall clock from the events payload", async () => {
@@ -376,7 +329,7 @@ describe("TodayBoard", () => {
     apiMocks.getEvents.mockResolvedValue(withRead);
     apiMocks.getDailyPicks.mockResolvedValue(nbaPicks);
 
-    renderWithProviders(<TodayBoard league="nba" />);
+    renderWithProviders(<TodayBoard />);
 
     const web = await screen.findByTestId("today-web");
     expect(within(web).getByRole("link", { name: /bam adebayo/i })).toHaveTextContent("MIA @ MIL · 8:00 PM");
@@ -403,7 +356,7 @@ describe("TodayBoard", () => {
     apiMocks.getEvents.mockResolvedValue(withRead);
     apiMocks.getDailyPicks.mockRejectedValue(new Error("picks down"));
 
-    renderWithProviders(<TodayBoard league="nba" />);
+    renderWithProviders(<TodayBoard />);
 
     const web = await screen.findByTestId("today-web");
     expect(within(web).getByText("Antetokounmpo Under 31.5 PTS")).toBeInTheDocument();
@@ -413,3 +366,4 @@ describe("TodayBoard", () => {
     expect(within(web).queryByText("72%")).not.toBeInTheDocument();
   });
 });
+

@@ -204,26 +204,5 @@
       "tier": null,
       "signals": null
     }
-  },
-  "wnba": {
-    "player_name": "WNBA Guard",
-    "player_team": "Liberty",
-    "player_team_code": "NYL",
-    "event_id": "evt-nyl-lva",
-    "home_team": "Las Vegas Aces",
-    "away_team": "New York Liberty",
-    "commence_time": "2026-11-11T02:00:00Z",
-    "metric": "points",
-    "threshold": 12.5,
-    "direction": "over",
-    "probability": 0.697,
-    "n_games": 32,
-    "bookmakers_count": 4,
-    "all_lines": [
-      12.5
-    ],
-    "has_projection": false,
-    "tier": null,
-    "combined_probability": null
   }
 }

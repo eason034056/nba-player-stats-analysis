@@ -106,14 +106,15 @@ describe("read signals", () => {
     expect(signals.find((signal) => signal.key === "market")?.detail).toMatch(/not on this response/);
   });
 
-  it("says WNBA has no projection instead of a stand-in number", () => {
+  it("says a missing projection is not on this response", () => {
     const projection = buildReadSignals({
       ...base,
       pick: pick({ projected_value: null, opponent_rank: null, opponent_position_rank: null }),
     }).find((signal) => signal.key === "projection");
     expect(projection?.value).toBeNull();
-    expect(projection?.detail).toBe("Projection is not available for WNBA.");
+    expect(projection?.detail).toBe("Projection is not on this response.");
   });
+
 });
 
 describe("player rows and lines", () => {

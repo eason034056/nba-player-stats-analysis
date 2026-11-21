@@ -14,7 +14,6 @@ import { METRIC_TO_MARKET, type MetricKey } from "./metric-to-market";
 import { boardRate, nbaTierFace, tierFromBackend } from "./nba-card";
 import { injuryTag, type InjuryTag } from "./injury-tag";
 import { injuryTagForPlayer, isOutPick, isPlayerOutInGame } from "./picks-board";
-import { formatPercent, formatTierPercent } from "./player-dd";
 import {
   DIRECTION_DISPLAY_NAMES,
   type DailyPick,
@@ -31,7 +30,9 @@ export interface ReadTier {
 }
 
 /**
- * WNBA display bucket. NBA cards do not call this. They use DailyPick.tier.
+ * Display bucket for a raw probability.
+ * NBA cards use the tier string from the API. This helper is the cutoff
+ * table those strings come from, used when a caller only has a rate.
  */
 export function readTier(probability: number | null | undefined): ReadTier | null {
   if (probability == null || !Number.isFinite(probability)) return null;
@@ -145,8 +146,8 @@ export function etWallClock(iso: string | null | undefined): string | null {
 
 /**
  * Tip time for a game card.
- * NBA events carry `commence_time_et` plus `display_tz` "ET". That wall clock
- * is what the card prints. WNBA and older payloads omit both, and this falls
+ * Events carry `commence_time_et` plus `display_tz` "ET". That wall clock
+ * is what the card prints. Older payloads omit both, and this falls
  * back to `commence_time` in the browser zone. A label other than ET also
  * falls back, so the card does not show an ET face under a different name.
  */
@@ -178,14 +179,13 @@ function knownMarket(metric: string): string | null {
   return null;
 }
 
-function readHref(pick: DailyPick, league: LeagueSegment, date: string): string {
+function readHref(pick: DailyPick, date: string): string {
   return buildEventDetailHref({
     eventId: pick.event_id,
     date,
     player: pick.player_name,
     market: knownMarket(pick.metric),
     threshold: pick.threshold,
-    league,
   });
 }
 
@@ -200,14 +200,12 @@ export function rankReads(picks: DailyPick[], league: LeagueSegment): DailyPick[
   });
 }
 
-function cardTier(pick: DailyPick, league: LeagueSegment): ReadTier | null {
-  if (league === "nba") return tierFromBackend(pick.tier);
-  return readTier(pick.probability);
+function cardTier(pick: DailyPick): ReadTier | null {
+  return tierFromBackend(pick.tier);
 }
 
-function cardProbability(pick: DailyPick, league: LeagueSegment): string {
-  if (league === "nba") return nbaTierFace(pick).probabilityText;
-  return formatPercent(pick.probability);
+function cardProbability(pick: DailyPick): string {
+  return nbaTierFace(pick).probabilityText;
 }
 
 export interface TodayReadCard {
@@ -231,34 +229,28 @@ export function todayReads(
 ): TodayReadCard[] {
   const tipByEvent = new Map(events.map((event) => [event.event_id, eventTipClock(event)]));
   const eligible = rankReads(picks, league).filter(
-    (pick) => league !== "nba" || !isPlayerOutInGame(picks, pick.event_id, pick.player_name),
+    (pick) => !isPlayerOutInGame(picks, pick.event_id, pick.player_name),
   );
   return eligible
     .slice(0, limit)
     .map((pick, index) => {
       const time = tipByEvent.get(pick.event_id) ?? boardClock(pick.commence_time);
-      const storedTier = tierFromBackend(pick.tier);
-      const tier = league === "nba" ? cardTier(pick, league) : storedTier;
-      const probabilityText =
-        league === "nba"
-          ? cardProbability(pick, league)
-          : storedTier
-            ? formatTierPercent(pick.probability)
-            : formatPercent(pick.probability);
+      const tier = cardTier(pick);
+      const probabilityText = cardProbability(pick);
       return {
         key: `${pick.event_id}-${pick.player_name}-${pick.metric}-${pick.direction}`,
         rank: index + 1,
         player: pick.player_name,
         matchup: matchupLine(
-          teamAbbr(pick.away_team, league),
-          teamAbbr(pick.home_team, league),
+          teamAbbr(pick.away_team),
+          teamAbbr(pick.home_team),
           time,
         ),
         propText: propText(pick),
         probabilityText,
         tier,
-        href: readHref(pick, league, date),
-        injury: league === "nba" ? injuryTag(pick.injury_status_raw, pick.injury_status) : null,
+        href: readHref(pick, date),
+        injury: injuryTag(pick.injury_status_raw, pick.injury_status),
       };
     });
 }
@@ -286,35 +278,12 @@ function topReadText(read: TopRead): string {
   return `${playerLastName(read.player)} ${directionLabel(read.side)} ${formatThreshold(read.line)} ${marketShort(read.market)}`;
 }
 
-/**
- * Badge for a tier string the API already chose.
- * `null` stays `null`. This does not look at the probability, so a high
- * rate with no tier does not become "Strong play".
- */
-function samePublishedProp(pick: DailyPick, eventId: string, read: TopRead): boolean {
-  return (
-    pick.event_id === eventId &&
-    pick.player_name === read.player &&
-    pick.direction === read.side &&
-    pick.threshold === read.line &&
-    knownMarket(pick.metric) === read.market
-  );
-}
-
-function tierForTopRead(read: TopRead, eventId: string, picks: DailyPick[]): ReadTier | null {
-  const match = picks.find((pick) => samePublishedProp(pick, eventId, read));
-  return match ? tierFromBackend(match.tier) : null;
-}
-
 function topReadIsOut(
   read: TopRead,
   eventId: string,
-  picks: DailyPick[],
-  league: LeagueSegment,
   injuryPicks: readonly DailyPick[],
 ): boolean {
-  if (league === "nba") return isPlayerOutInGame(injuryPicks, eventId, read.player);
-  return picks.some((pick) => isOutPick(pick) && samePublishedProp(pick, eventId, read));
+  return isPlayerOutInGame(injuryPicks, eventId, read.player);
 }
 
 export function todayGames(
@@ -331,27 +300,21 @@ export function todayGames(
   injuryPicks: readonly DailyPick[] = picks,
 ): TodayGameCard[] {
   const ranked = rankReads(picks, league).filter(
-    (pick) => league !== "nba" || !isPlayerOutInGame(injuryPicks, pick.event_id, pick.player_name),
+    (pick) => !isPlayerOutInGame(injuryPicks, pick.event_id, pick.player_name),
   );
   return events.map((event) => {
-    // NBA: the top published pick by blend. top_read is ranked on the
+    // The top published pick by blend. top_read is ranked on the
     // historical rate and carries no blend, so it only fills text when no
     // published pick exists, without a percent or tier.
     const publishedRead = event.top_read ?? null;
     const apiRead =
-      publishedRead && topReadIsOut(publishedRead, event.event_id, picks, league, injuryPicks)
+      publishedRead && topReadIsOut(publishedRead, event.event_id, injuryPicks)
         ? null
         : publishedRead;
     const best = ranked.find((pick) => pick.event_id === event.event_id) ?? null;
-    const useApi = league === "nba" ? best == null && apiRead != null : apiRead != null;
+    const useApi = best == null && apiRead != null;
     const pick = useApi ? null : best;
-    const tier = useApi
-      ? league === "nba"
-        ? null
-        : tierForTopRead(apiRead!, event.event_id, picks)
-      : pick
-        ? cardTier(pick, league)
-        : null;
+    const tier = pick ? cardTier(pick) : null;
     const href = useApi
       ? buildEventDetailHref({
           eventId: event.event_id,
@@ -360,35 +323,21 @@ export function todayGames(
           market: apiRead!.market,
           threshold: apiRead!.line,
           commenceTime: event.commence_time,
-          league,
         })
       : pick
-        ? readHref(pick, league, date)
+        ? readHref(pick, date)
         : buildEventDetailHref({
             eventId: event.event_id,
             date,
             commenceTime: event.commence_time,
-            league,
           });
-    let topProbabilityText: string | null = null;
-    if (useApi && league !== "nba") {
-      topProbabilityText = tier
-        ? formatTierPercent(apiRead!.probability)
-        : formatPercent(apiRead!.probability);
-    } else if (pick) {
-      topProbabilityText =
-        league === "nba"
-          ? cardProbability(pick, league)
-          : tier
-            ? formatTierPercent(pick.probability)
-            : formatPercent(pick.probability);
-    }
+    const topProbabilityText = pick ? cardProbability(pick) : null;
     return {
       eventId: event.event_id,
-      awayAbbr: teamAbbr(event.away_team, league),
-      homeAbbr: teamAbbr(event.home_team, league),
-      awayName: teamShortName(event.away_team, league),
-      homeName: teamShortName(event.home_team, league),
+      awayAbbr: teamAbbr(event.away_team),
+      homeAbbr: teamAbbr(event.home_team),
+      awayName: teamShortName(event.away_team),
+      homeName: teamShortName(event.home_team),
       time: eventTipClock(event),
       topText: useApi
         ? topReadText(apiRead!)
@@ -400,13 +349,10 @@ export function todayGames(
       tier,
       topSource: useApi ? "event" : pick ? "picks" : "none",
       href,
-      injury:
-        league === "nba"
-          ? pick
-            ? injuryTag(pick.injury_status_raw, pick.injury_status)
-            : useApi && apiRead
-              ? injuryTagForPlayer(injuryPicks, event.event_id, apiRead.player)
-              : null
+      injury: pick
+        ? injuryTag(pick.injury_status_raw, pick.injury_status)
+        : useApi && apiRead
+          ? injuryTagForPlayer(injuryPicks, event.event_id, apiRead.player)
           : null,
     };
   });

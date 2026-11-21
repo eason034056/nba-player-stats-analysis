@@ -13,7 +13,6 @@ const boundary = qa.boundary.map((row) => dailyPickSchema.parse(row));
 const sameEvent = qa.sameEvent.map((row) => dailyPickSchema.parse(row));
 const events = eventsResponseSchema.parse(qa.events);
 const tierNoBlend = dailyPickSchema.parse(qa.tierNoBlend);
-const wnba = dailyPickSchema.parse(qa.wnba);
 const moved = {
   pick: dailyPickSchema.parse(qa.movedLine.pick),
   read: propReadSchema.parse(qa.movedLine.read),
@@ -108,20 +107,6 @@ describe("QA: bet slip legs", () => {
   });
 });
 
-describe("QA: WNBA regression", () => {
-  it("ignores the blend, keeps the historical one-decimal percent and the old bucket", () => {
-    const withBlend = { ...wnba, combined_probability: 0.9, tier: "Strong play" as const };
-    expect(boardRate(withBlend, "wnba")).toBe(0.697);
-    const [row] = buildPickRows([withBlend], "wnba", "2026-11-10");
-    expect(row.probabilityText).toBe(formatPercent(0.697));
-    expect(row.tierName).toBe("playable");
-    const [read] = todayReads([withBlend], "wnba", "2026-11-10");
-    expect(read.probabilityText).toBe(formatTierPercent(0.697));
-    expect(read.tier?.label).toBe("Strong play");
-    expect(actionBarPercent(withBlend, "wnba")).toBeNull();
-    expect(sortPicks([withBlend], "wnba")).toHaveLength(1);
-  });
-});
 
 // These two lock the fix for the game-page rail. They fail at 29e7fd7.
 describe("QA: game-page rail keeps one source per row", () => {

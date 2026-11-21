@@ -1,11 +1,7 @@
 import { getLocalDateString } from "./utils";
 
-/**
- * League segment for the event-detail URL. NBA-only on origin/dev pre-SPO-33;
- * SPO-33 adds "wnba" to expose `/wnba/event/[eventId]` while leaving every
- * existing NBA call site untouched (default = `"nba"`).
- */
-export type LeagueSegment = "nba" | "wnba";
+/** Kept so existing imports that name the NBA segment still type-check. */
+export type LeagueSegment = "nba";
 
 interface BuildEventDetailHrefOptions {
   eventId: string;
@@ -14,12 +10,6 @@ interface BuildEventDetailHrefOptions {
   player?: string | null;
   market?: string | null;
   threshold?: number | string | null;
-  /**
-   * Which league's event page to link to. Defaults to "nba" so every existing
-   * NBA caller continues to produce `/event/<id>` paths with no source change.
-   * Pass `"wnba"` to produce `/wnba/event/<id>` paths (SPO-33).
-   */
-  league?: LeagueSegment;
 }
 
 export const buildEventDetailHref = ({
@@ -29,7 +19,6 @@ export const buildEventDetailHref = ({
   player,
   market,
   threshold,
-  league = "nba",
 }: BuildEventDetailHrefOptions): string => {
   const params = new URLSearchParams();
   const resolvedDate = date || (commenceTime ? getLocalDateString(commenceTime) : undefined);
@@ -51,6 +40,6 @@ export const buildEventDetailHref = ({
   }
 
   const queryString = params.toString();
-  const basePath = league === "wnba" ? `/wnba/event/${eventId}` : `/event/${eventId}`;
+  const basePath = `/event/${eventId}`;
   return queryString ? `${basePath}?${queryString}` : basePath;
 };

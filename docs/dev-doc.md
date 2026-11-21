@@ -1,6 +1,6 @@
 > **【SPO-142b｜這份文件裡的 agent 路徑已經刪除】**
 >
-> `scripts/agents/`、`nba_lineup_rag/`、`scripts/finetune/`、`scripts/dataset/` 已從 repo 移除。`POST /api/nba/agent/chat` 與 `POST /api/wnba/agent/chat` 在 SPO-142a 刪除。下面提到 `scripts/agents/state.py`、`scripts/agents/agents.py`、`nba_agent.py`、`wnba_agent.py` 的段落是當時的架構紀錄，不是現在的進入點。決定見 `docs/decisions/SPO-142/decision_20261121_remove-agent-trees.md`。
+> `scripts/agents/`、`nba_lineup_rag/`、`scripts/finetune/`、`scripts/dataset/` 已從 repo 移除。`POST /api/nba/agent/chat` 在 SPO-142a 刪除。下面提到 `scripts/agents/state.py`、`scripts/agents/agents.py`、`nba_agent.py` 的段落是當時的架構紀錄，不是現在的進入點。決定見 `docs/decisions/SPO-142/decision_20261121_remove-agent-trees.md`。
 
 以下是一份早期的開發文檔（PRD + Tech Spec）。內容以 **Python/FastAPI 後端 + Next.js 前端** 為主，並包含資料流、API 設計、資料結構、去水算法、快取策略、錯誤處理、部署與測試要求。
 

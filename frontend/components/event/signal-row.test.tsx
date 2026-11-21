@@ -46,7 +46,7 @@ describe("NBA signal rows", () => {
 
     renderWithProviders(
       <OurRead
-        league="nba"
+       
         model={model}
         isLoading={false}
         isError={false}

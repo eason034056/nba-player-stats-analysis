@@ -2,12 +2,7 @@ import { screen, within } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { PlayerDDTile, type PlayerDDTileProps } from "@/components/PlayerDDTile";
-import {
-  calculateNoVig,
-  calculateWNBANoVig,
-  getPlayerDDHistory,
-  getWNBAPlayerDDHistory,
-} from "@/lib/api";
+import { calculateNoVig, getPlayerDDHistory } from "@/lib/api";
 import type {
   NoVigResponse,
   PlayerDDHistoryResponse,
@@ -36,9 +31,7 @@ vi.mock("@/lib/api", () => {
   return {
     ApiError,
     getPlayerDDHistory: vi.fn(),
-    getWNBAPlayerDDHistory: vi.fn(),
     calculateNoVig: vi.fn(),
-    calculateWNBANoVig: vi.fn(),
   };
 });
 
@@ -292,35 +285,15 @@ describe("PlayerDDTile", () => {
     expect(screen.queryByText("-250")).not.toBeInTheDocument();
   });
 
-  it("uses the WNBA routes when league is wnba and no override is passed", async () => {
-    vi.mocked(getWNBAPlayerDDHistory).mockResolvedValue(jokicHistory);
-    vi.mocked(calculateWNBANoVig).mockResolvedValue(recordedNoVig);
 
-    renderTile({ league: "wnba", eventId: "wnba-evt" });
-
-    expect(await screen.findByText("81%")).toBeInTheDocument();
-    expect(getWNBAPlayerDDHistory).toHaveBeenCalledWith({ player: "Nikola Jokic" });
-    expect(calculateWNBANoVig).toHaveBeenCalledWith(
-      expect.objectContaining({
-        event_id: "wnba-evt",
-        player_name: "Nikola Jokic",
-        market: "player_double_double",
-      }),
-    );
-    expect(getPlayerDDHistory).not.toHaveBeenCalled();
-    expect(calculateNoVig).not.toHaveBeenCalled();
-  });
-
-  it("does not call either league when the league is unsupported", async () => {
+  it("does not call the history or odds routes when the tile is off", async () => {
     renderTile({ league: null });
 
     expect(
       await screen.findByText(/not available for this league/),
     ).toBeInTheDocument();
     expect(getPlayerDDHistory).not.toHaveBeenCalled();
-    expect(getWNBAPlayerDDHistory).not.toHaveBeenCalled();
     expect(calculateNoVig).not.toHaveBeenCalled();
-    expect(calculateWNBANoVig).not.toHaveBeenCalled();
     expect(screen.queryByText("81%")).not.toBeInTheDocument();
     expect(screen.queryByText("0%")).not.toBeInTheDocument();
   });

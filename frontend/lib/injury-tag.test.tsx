@@ -336,25 +336,6 @@ describe("Doubtful does not block", () => {
     expect(read.probabilityText).toBe("60%");
   });
 
-  it("does not put an injury chip on a WNBA row", () => {
-    const quiet = { ...doubtful, injury_status: null, injury_status_raw: null };
-    const railArgs = {
-      suggested: [quiet.player_name],
-      picks: [quiet],
-      metric: "player_points" as const,
-      eventId: quiet.event_id,
-      selectedName: "",
-      postedLine: null,
-      awayLineup: null,
-      homeLineup: null,
-      awayAbbr: "MIL",
-      homeAbbr: "MIA",
-      league: "wnba" as const,
-    };
-    expect(eventPlayerRows(railArgs)[0]?.injury).toBeNull();
-    expect(todayReads([quiet], "wnba", "2026-11-10")[0]?.injury).toBeNull();
-    expect(eventPlayerRows({ ...railArgs, picks: [doubtful] })[0]?.injury).toBeNull();
-  });
 });
 
 describe("slip caption", () => {

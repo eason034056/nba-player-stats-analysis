@@ -5,16 +5,8 @@ import { usePathname } from "next/navigation";
 
 import { useAgentWidget } from "@/contexts/AgentWidgetContext";
 import { useBetSlip } from "@/contexts/BetSlipContext";
-import { useWnbaBetSlip } from "@/contexts/WnbaBetSlipContext";
 import { AGENT_CHAT_UI_ENABLED } from "@/lib/agent-chat-ui";
-import {
-  hrefForSection,
-  isWnbaPath,
-  leagueSwitchHref,
-  shellSection,
-  type LeagueId,
-  type ShellSection,
-} from "@/lib/shell-nav";
+import { hrefForSection, shellSection, type ShellSection } from "@/lib/shell-nav";
 import { cn } from "@/lib/utils";
 
 const SECTIONS: { id: ShellSection; label: string }[] = [
@@ -39,32 +31,6 @@ function BrandMark({ compact = false }: { compact?: boolean }) {
   );
 }
 
-function LeagueSwitch({ pathname }: { pathname: string }) {
-  const onWnba = isWnbaPath(pathname);
-  const choice = (league: LeagueId, label: string) => {
-    const active = league === "wnba" ? onWnba : !onWnba;
-    return (
-      <Link
-        href={leagueSwitchHref(pathname, league)}
-        aria-current={active ? "true" : undefined}
-        className={cn(
-          "rounded-badge px-[7px] py-[3px] font-mono text-[11px] font-bold leading-none",
-          active ? "bg-brand-tint text-brand" : "text-muted hover:text-brand",
-        )}
-      >
-        {label}
-      </Link>
-    );
-  };
-
-  return (
-    <div role="group" aria-label="League" className="inline-flex items-center gap-0.5">
-      {choice("nba", "NBA")}
-      {choice("wnba", "WNBA")}
-    </div>
-  );
-}
-
 function SlipBadge({ count }: { count: number }) {
   if (count <= 0) return null;
   return (
@@ -83,14 +49,13 @@ function SectionLinks({
   count: number;
   variant: "bar" | "tabs";
 }) {
-  const league: LeagueId = isWnbaPath(pathname) ? "wnba" : "nba";
   const active = shellSection(pathname);
 
   return (
     <>
       {SECTIONS.map((section) => {
         const isActive = active === section.id;
-        const href = hrefForSection(section.id, league);
+        const href = hrefForSection(section.id);
         if (variant === "tabs") {
           return (
             <Link
@@ -156,10 +121,7 @@ function AskAgentButton({ compact = false }: { compact?: boolean }) {
 
 export function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname() || "/";
-  const onWnba = isWnbaPath(pathname);
-  const { count: nbaCount } = useBetSlip();
-  const { count: wnbaCount } = useWnbaBetSlip();
-  const count = onWnba ? wnbaCount : nbaCount;
+  const { count } = useBetSlip();
 
   return (
     <div className="flex min-h-screen flex-col bg-canvas text-ink">
@@ -169,11 +131,10 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           className="hidden h-header w-full grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center px-8 md:grid"
         >
           <div className="flex min-w-0 items-center gap-2.5 justify-self-start">
-            <Link href={onWnba ? "/wnba" : "/"} className="flex items-center gap-2.5">
+            <Link href="/" className="flex items-center gap-2.5">
               <BrandMark />
               <span className="text-lg font-bold tracking-[-0.02em]">No-Vig</span>
             </Link>
-            <LeagueSwitch pathname={pathname} />
           </div>
           <nav aria-label="Primary" className="flex items-center gap-1 justify-self-center">
             <SectionLinks pathname={pathname} count={count} variant="bar" />
@@ -184,11 +145,10 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         </div>
         <div className="flex items-center justify-between px-4 pb-3 pt-3.5 md:hidden">
           <div className="flex items-center gap-2">
-            <Link href={onWnba ? "/wnba" : "/"} className="flex items-center gap-2">
+            <Link href="/" className="flex items-center gap-2">
               <BrandMark compact />
               <span className="text-[17px] font-bold tracking-[-0.02em]">No-Vig</span>
             </Link>
-            <LeagueSwitch pathname={pathname} />
           </div>
           {AGENT_CHAT_UI_ENABLED ? <AskAgentButton compact /> : null}
         </div>

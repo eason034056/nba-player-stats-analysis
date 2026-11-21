@@ -2,9 +2,9 @@
  * PlayerDDTile — Double-double (Yes/No) panel.
  *
  * Data comes from two routes shipped with the 12-metric backend:
- *   - GET /api/{nba|wnba}/player-dd-history
+ *   - GET /api/nba/player-dd-history
  *     `prob_dd`, `n_games`, `dd_games`, `message`
- *   - POST /api/{nba|wnba}/props/no-vig with market `player_double_double`
+ *   - POST /api/nba/props/no-vig with market `player_double_double`
  *     per-book `yes_price`, `no_price`, `p_yes_imp`, `p_no_imp`,
  *     `yes_fair_prob`, `no_fair_prob`, plus consensus `p_yes_fair` / `p_no_fair`
  *
@@ -60,9 +60,7 @@ const UNSUPPORTED_LEAGUE_MESSAGE =
 export interface PlayerDDTileProps {
   playerName: string;
   /**
-   * Which league's routes to call. NBA and WNBA both expose the history
-   * route and the binary no-vig branch. `null` renders the unavailable
-   * state and does not call either API.
+   * `null` renders the unavailable state and does not call the API.
    */
   league: DDLeague | null;
   /** Required for live Yes/No prices. History still loads without it. */

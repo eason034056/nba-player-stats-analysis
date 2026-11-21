@@ -7,7 +7,6 @@ import { dailyPickSchema } from "@/lib/schemas";
 import { createBetSlipPick } from "@/test/test-utils";
 import qa from "@/test/fixtures/spo-121b/qa-review.json";
 
-const wnba = dailyPickSchema.parse(qa.wnba);
 const validPick = dailyPickSchema.parse(qa.movedLine.pick);
 
 describe("QA: slip totals use the side-correct blend on under legs", () => {
@@ -66,57 +65,6 @@ describe("QA: slip totals use the side-correct blend on under legs", () => {
   });
 });
 
-describe("QA: WNBA game page ignores NBA reads status", () => {
-  it("keeps the historical lean and never prints Loading or Unavailable", () => {
-    const rows = eventPlayerRows({
-      suggested: ["Bench Player"],
-      picks: [wnba],
-      metric: "player_points",
-      eventId: wnba.event_id,
-      selectedName: wnba.player_name,
-      postedLine: null,
-      awayLineup: null,
-      homeLineup: null,
-      awayAbbr: "NYL",
-      homeAbbr: "LVA",
-      league: "wnba",
-      reads: [
-        {
-          player: wnba.player_name,
-          market: "player_points",
-          line: 99.5,
-          side: "under",
-          combined_probability: 0.9,
-          tier: "Strong play",
-        },
-      ],
-      readsStatus: "loading",
-    });
-    const posted = rows.find((row) => row.name === wnba.player_name);
-    const bench = rows.find((row) => row.name === "Bench Player");
-    expect(posted?.lineText).toBe("12.5");
-    expect(posted?.leanText).toBe(`O ${formatPercent(0.697)}`);
-    expect(posted?.leanText).not.toContain("Loading");
-    expect(bench?.leanText).toBe("No read");
-
-    const failed = eventPlayerRows({
-      suggested: ["Bench Player"],
-      picks: [],
-      metric: "player_points",
-      eventId: wnba.event_id,
-      selectedName: "",
-      postedLine: null,
-      awayLineup: null,
-      homeLineup: null,
-      awayAbbr: "NYL",
-      homeAbbr: "LVA",
-      league: "wnba",
-      readsStatus: "error",
-    }).find((row) => row.name === "Bench Player");
-    expect(failed?.leanText).toBe("No read");
-    expect(failed?.leanText).not.toContain("Unavailable");
-  });
-});
 
 describe("QA: catch(null) only softens new optional fields", () => {
   it("keeps a valid tier and blend, and still rejects a bad required probability", () => {
