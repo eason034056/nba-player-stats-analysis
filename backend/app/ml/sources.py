@@ -1,13 +1,16 @@
 """Allow-list of dataset sources and the visibility rule for each one.
 
 A feature query and the label loader are different readers. Feature queries
-in this export may use ``games`` and ``player_game_stats`` only, and only a
-game whose date is strictly before the target game's date. The label loader
-may read the target game's final result from ``prop_actuals``. That result
-is never a feature.
+in this export may use ``games``, ``player_game_stats``, and opening
+``game_odds_snapshots``. Stats and games are limited to a game whose date
+is strictly before the target game's date. Opening game odds are limited to
+rows whose ``snapshot_at`` is at or before T. The label loader may read the
+target game's final result from ``prop_actuals``. That result is never a
+feature.
 
 ``player_prop_snapshots`` is rejected by name. The model does not read the
 betting line. Only a later betting decision or evaluation may use that table.
+Closing and live game odds are not a feature source.
 """
 
 from __future__ import annotations
@@ -31,8 +34,8 @@ class SourceSpec:
 
     ``role`` is ``feature`` or ``label``. ``visibility`` is ``prior_date``
     (game date strictly before the target) or ``timestamp`` (observed at or
-    before T). This export registers no timestamped feature source; the
-    timestamp rule is here so a later source can use the same boundary.
+    before T). ``game_odds_snapshots`` uses the timestamp rule, and only
+    when the row is also ``snapshot_kind = 'opening'``.
     """
 
     name: str
@@ -43,7 +46,10 @@ class SourceSpec:
 FEATURE_SOURCES: dict[str, SourceSpec] = {
     "games": SourceSpec("games", FEATURE, PRIOR_DATE),
     "player_game_stats": SourceSpec("player_game_stats", FEATURE, PRIOR_DATE),
+    "game_odds_snapshots": SourceSpec("game_odds_snapshots", FEATURE, TIMESTAMP),
 }
+
+OPENING_KIND = "opening"
 
 LABEL_SOURCES: dict[str, SourceSpec] = {
     "prop_actuals": SourceSpec("prop_actuals", LABEL, "target_result"),
@@ -83,7 +89,7 @@ def require_feature_source(name: str) -> SourceSpec:
     if spec is None:
         raise SourceError(
             f"{name} is not on the feature allow-list "
-            "(this export registers games and player_game_stats only)"
+            "(this export registers games, player_game_stats, and game_odds_snapshots)"
         )
     return spec
 
@@ -151,3 +157,40 @@ def row_is_visible(
             return False
         return row_date < target_date
     raise SourceError(f"unknown visibility rule {visibility!r}")
+
+
+def opening_game_odds_visible(
+    *,
+    snapshot_kind: str,
+    snapshot_at: datetime | None,
+    as_of: datetime | None,
+) -> bool:
+    """Return whether one ``game_odds_snapshots`` row may be a feature at T.
+
+    The table must be on the feature allow-list. A row is visible only when
+    ``snapshot_kind`` is ``opening`` and ``snapshot_at <= as_of``. Exactly T
+    is included. One second after T is not. A NULL ``snapshot_at`` is not
+    visible and is not filled in. Live and closing rows are not visible,
+    even when their timestamp is before T.
+
+    ``as_of`` is the same T as the rest of the row (tip minus
+    ``hours_before_tip``, or 00:00 America/New_York on the game date when
+    the tip is NULL). This function does not subtract hours and does not
+    build a second cutoff.
+
+    Raises:
+        SourceError: a present timestamp has no timezone, or the table is
+            no longer a timestamped feature source.
+    """
+    spec = require_feature_source("game_odds_snapshots")
+    if spec.visibility != TIMESTAMP:
+        raise SourceError("game_odds_snapshots must use the timestamp rule")
+    if snapshot_kind != OPENING_KIND:
+        return False
+    return row_is_visible(
+        spec.visibility,
+        observed_at=snapshot_at,
+        row_date=None,
+        target_date=None,
+        as_of=as_of,
+    )

@@ -13,9 +13,11 @@ Run from ``backend/``::
 environment variable and is never printed.
 
 History loaded for features starts the season before ``START``, so the
-first output season is not cut off. Every output row has
-``info_source = pregame``. The file next to the Parquet is
-``<file>.meta.json`` (``player_games.parquet`` -> ``player_games.meta.json``).
+first output season is not cut off. Opening game odds for those seasons
+are aggregated at the same T (median home spread, median total, implied
+points). Every output row has ``info_source = pregame``. The file next to
+the Parquet is ``<file>.meta.json`` (``player_games.parquet`` ->
+``player_games.meta.json``).
 
 This command does not write ``predictions`` and does not create a feature
 table. It is not imported by the API.
@@ -35,9 +37,19 @@ from pathlib import Path
 
 from app.ml.asof import DEFAULT_HOURS_BEFORE_TIP, T_RULE, prediction_instant
 from app.ml.features import COUNT_COLUMNS, features_for_target, form_column_names
+from app.ml.game_odds import (
+    MEASUREMENT_SQL,
+    MEASUREMENT_STATUS,
+    ODDS_COLUMNS,
+    ODDS_COUNT_COLUMNS,
+    ODDS_VALUE_COLUMNS,
+    OPENING_ODDS_LIMITATION,
+    opening_odds_features,
+)
 from app.ml.labels import label_column_names, pivot_labels
 from app.ml.load import (
     ActualRecord,
+    GameOddsRecord,
     GameRecord,
     LoadError,
     StatRecord,
@@ -45,6 +57,7 @@ from app.ml.load import (
     dsn_from_env,
     load_feature_rows,
     load_labels,
+    load_opening_game_odds,
     load_span,
     output_span,
     sanitize_error,
@@ -70,7 +83,9 @@ IDENTITY_COLUMNS = (
     "tip_fallback",
 )
 
-OUTPUT_COLUMNS = IDENTITY_COLUMNS + COUNT_COLUMNS + form_column_names() + label_column_names()
+OUTPUT_COLUMNS = (
+    IDENTITY_COLUMNS + COUNT_COLUMNS + form_column_names() + ODDS_COLUMNS + label_column_names()
+)
 
 INT_COLUMNS = (
     "season",
@@ -82,8 +97,8 @@ INT_COLUMNS = (
     "dnp_last_10",
     "dnp_last_10_window",
     "days_rest",
-) + label_column_names()
-FLOAT_COLUMNS = form_column_names()
+) + ODDS_COUNT_COLUMNS + label_column_names()
+FLOAT_COLUMNS = form_column_names() + ODDS_VALUE_COLUMNS
 NULLABLE_BOOL_COLUMNS = ("is_home", "is_back_to_back")
 _OUTPUT_SET = frozenset(OUTPUT_COLUMNS)
 
@@ -134,7 +149,8 @@ def build_parser() -> argparse.ArgumentParser:
         prog="python -m app.ml.build_dataset",
         description=(
             "Export one Parquet row per player_game_stats row. "
-            "Season endpoints are inclusive."
+            "Season endpoints are inclusive. "
+            "Opening game odds are the median across books visible at T."
         ),
     )
     parser.add_argument(
@@ -225,6 +241,52 @@ def _group_stats(stats: Sequence[StatRecord], league: str) -> dict[tuple[str, in
     return grouped
 
 
+def _group_odds(
+    odds: Sequence[GameOddsRecord], league: str
+) -> dict[tuple[str, int], list[GameOddsRecord]]:
+    grouped: dict[tuple[str, int], list[GameOddsRecord]] = {}
+    for row in odds:
+        if row.league != league:
+            continue
+        grouped.setdefault((row.league, row.bdl_game_id), []).append(row)
+    return grouped
+
+
+def _odds_coverage(rows: Sequence[Mapping[str, object]]) -> dict[str, int]:
+    """Coverage of the opening-odds features on kept player-game rows.
+
+    Counts are rows, not books. Two players in one game stay two rows, and
+    a game is counted once in ``games_with_eligible_book``.
+    """
+    games: set[int] = set()
+    with_spread = 0
+    with_total = 0
+    with_implied = 0
+    without_books = 0
+    for row in rows:
+        books = row["opening_books"]
+        if books == 0:
+            without_books += 1
+        elif isinstance(books, int):
+            game_id = row["bdl_game_id"]
+            if isinstance(game_id, int):
+                games.add(game_id)
+        if row["opening_spread_home"] is not None:
+            with_spread += 1
+        if row["opening_total"] is not None:
+            with_total += 1
+        if row["team_implied_points"] is not None:
+            with_implied += 1
+    return {
+        "kept_rows": len(rows),
+        "rows_with_spread_median": with_spread,
+        "rows_with_total_median": with_total,
+        "rows_with_implied_points": with_implied,
+        "rows_with_no_eligible_book": without_books,
+        "games_with_eligible_book": len(games),
+    }
+
+
 def _index_actuals(
     actuals: Sequence[ActualRecord], league: str
 ) -> dict[tuple[str, int, int], dict[str, int | None]]:
@@ -251,6 +313,7 @@ def assemble_dataset(
     hours_before_tip: float = DEFAULT_HOURS_BEFORE_TIP,
     git_head: str,
     league: str = "nba",
+    odds: Sequence[GameOddsRecord] = (),
 ) -> Dataset:
     """Build dataset rows from already loaded records.
 
@@ -262,6 +325,9 @@ def assemble_dataset(
         games: Schedule rows, including the season before the output window.
         stats: Player-game rows for that same load window.
         actuals: Label rows for the output seasons.
+        odds: Opening game-odds rows for the load window. Empty means every
+            odds feature is NULL and every odds count is 0. Rows that are
+            not opening, have no timestamp, or are after T do not count.
         season_start: First output season, inclusive.
         season_end: Last output season, inclusive.
         hours_before_tip: Subtracted from tip-off. Defaults to 3.
@@ -277,6 +343,7 @@ def assemble_dataset(
     by_game = _index_games(games, league)
     by_player = _group_stats(stats, league)
     by_label = _index_actuals(actuals, league)
+    by_odds = _group_odds(odds, league)
 
     kept: list[dict[str, object]] = []
     candidates = 0
@@ -298,6 +365,18 @@ def assemble_dataset(
             row["info_source"] = INFO_SOURCE
             row["as_of"] = instant.as_of
             row["tip_fallback"] = instant.tip_fallback
+            home_flag = row["is_home"]
+            if home_flag is not None and not isinstance(home_flag, bool):
+                raise DatasetError("is_home must be a bool or null")
+            row.update(
+                opening_odds_features(
+                    by_odds.get((target.league, target.bdl_game_id), ()),
+                    league=target.league,
+                    bdl_game_id=target.bdl_game_id,
+                    is_home=home_flag,
+                    as_of=instant.as_of,
+                )
+            )
             labels = pivot_labels(by_label.get((target.league, target.bdl_game_id, target.bdl_player_id), {}))
             if labels is None:
                 continue
@@ -331,6 +410,11 @@ def assemble_dataset(
         "league": league,
         "feature_sources": list(feature_source_names()),
         "label_source": "prop_actuals",
+        "game_odds_features": list(ODDS_COLUMNS),
+        "game_odds_coverage": _odds_coverage(kept),
+        "game_odds_measurement": MEASUREMENT_STATUS,
+        "game_odds_measurement_sql": MEASUREMENT_SQL,
+        "game_odds_limitation": OPENING_ODDS_LIMITATION,
     }
     return Dataset(rows=kept, metadata=metadata)
 
@@ -392,9 +476,9 @@ async def export_dataset(
     dsn = dsn_from_env(dsn_env)
     conn = await connect_readonly(dsn)
     try:
-        games, stats = await load_feature_rows(
-            conn, league=league, seasons=load_span(season_start, season_end)
-        )
+        loaded_seasons = load_span(season_start, season_end)
+        games, stats = await load_feature_rows(conn, league=league, seasons=loaded_seasons)
+        odds = await load_opening_game_odds(conn, league=league, seasons=loaded_seasons)
         actuals = await load_labels(
             conn, league=league, seasons=output_span(season_start, season_end)
         )
@@ -409,6 +493,7 @@ async def export_dataset(
         hours_before_tip=hours_before_tip,
         git_head=git_head if git_head is not None else read_git_head(),
         league=league,
+        odds=odds,
     )
     write_outputs(dataset, out)
     logger.info("wrote %s rows", dataset.metadata["row_count"])
