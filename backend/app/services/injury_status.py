@@ -1,7 +1,7 @@
-"""NBA injury status words shared by the injury cache and the agents that read it.
+"""NBA injury status words shared by the injury cache and the pick readers.
 
-This module imports nothing, so ``scripts/agents/scoring.py`` can use it
-without pulling in Redis or settings.
+This module imports nothing, so a caller can use it without pulling in
+Redis or settings.
 """
 
 from __future__ import annotations

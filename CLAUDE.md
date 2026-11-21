@@ -1,39 +1,29 @@
 # Sports Lab — Project Context
 
-NBA player props betting advisor. Multi-agent in-process LangGraph system + FastAPI backend + Next.js frontend that recommends or rejects player prop bets given live odds, lineups, and historical data.
+NBA and WNBA player props advisor. FastAPI backend and Next.js frontend. The site shows live odds, lineups, injuries, and historical game logs, and it scores daily picks from those inputs.
 
-Tech stack: Python 3.11+ / FastAPI / LangGraph / Pydantic v2 / Redis / PostgreSQL / pytest / Next.js 14 / TypeScript / Tailwind CSS / TanStack Query / Docker Compose.
+The in-process LangGraph chat package, the lineup RAG package, and the finetune and dataset trees were removed in SPO-142b, after SPO-142a removed the chat HTTP routes. The record is `docs/decisions/SPO-142/decision_20261121_remove-agent-trees.md`.
+
+Tech stack: Python 3.11+ / FastAPI / Pydantic v2 / Redis / PostgreSQL / pytest / Next.js 14 / TypeScript / Tailwind CSS / TanStack Query / Docker Compose.
 
 Ticket prefix: `SPO`
-
-## Product agents (LangGraph nodes)
-
-"Agent" in this codebase means an in-process LangGraph node that answers an end-user betting query. They live in `scripts/agents/` and `backend/`. Names: `planner`, `historical_agent`, `projection_agent`, `market_agent`, `critic`, `synthesizer`. They run inside one Python process per user request.
 
 ## Sub-Projects
 
 - `backend/` — FastAPI server, REST API, scheduler, DB models, odds gateway, integration tests
-- `frontend/` — Next.js 14 App Router, TanStack Query data layer, Tailwind UI, Agent Widget
-- `scripts/agents/` — LangGraph multi-agent system + CLI entry (`cli.py`, `graph.py`)
-- `nba_lineup_rag/` — RAG pipeline for lineup / injury context (RotoWire + RotoGrinders ingestion)
-- `data/` — `nba_player_game_logs.csv` and other static historical data (download path documented in README)
-- `notebooks/` — exploratory analysis, backtest notebooks
+- `frontend/` — Next.js 14 App Router, TanStack Query data layer, Tailwind UI. The Agent Widget and its tests stay in the frontend; this repo no longer has a chat route for them.
+- `data/` — `nba_player_game_logs.csv`, `wnba_player_game_logs.csv`, and `star_players.json`
+- `notebooks/` — exploratory analysis
 - `docker-compose.yml` — backend + Redis + Postgres dev stack
+- `scripts/` — exploration scripts, CSV hygiene, and ops helpers. The agent, dataset, and finetune directories are gone.
 
-Key existing docs: `README.md`, `docs/dev-doc.md`, `docs/multi-agent-dev.md`, `docs/new-function-dev-doc.md`, `backtest_report.md`, `sample_outputs.md`. The projection API note was removed. The replacement policy is under `docs/decisions/SPO-135/`.
+Key existing docs: `README.md`, `docs/dev-doc.md`, `docs/multi-agent-dev.md`, `docs/new-function-dev-doc.md`, `sample_outputs.md`. `docs/dev-doc.md`, `docs/multi-agent-dev.md`, and `sample_outputs.md` describe the removed chat system and are historical. `backtest_report.md` is the last checked-in walk-forward report; the command that wrote it was removed with `scripts/agents/`. The projection API note was removed. The replacement policy is under `docs/decisions/SPO-135/`.
 
 ## Coding Conventions
 
-### LangGraph Patterns (product agents)
-
-- Graph nodes: functions taking `state: dict`, returning `dict` with partial state updates → see `scripts/agents/<node>.py`
-- State schema: TypedDict (or Pydantic BaseModel for validated state) in `scripts/agents/state.py`. Use `total=False` for optional fields, `Annotated[list, operator.add]` for append-only lists
-- Graph construction: `StateGraph` with explicit `END` for terminal nodes
-- Fan-out / scoring / critic / synthesizer pattern as documented in `README.md` system architecture diagram
-
 ### FastAPI Patterns
 
-- Routes under `backend/app/api/<domain>.py`. One router per domain (nba, odds, agents, scheduler).
+- Routes under `backend/app/api/<domain>.py`. One router per domain (nba, wnba, lineups, picks, daily picks, odds history, health).
 - Use FastAPI `Depends` for cross-cutting concerns: DB session, current user, settings.
 - Async-first for any handler that does I/O (HTTPX outbound, DB query, Redis). No blocking calls in async handlers.
 - Request / response shapes: Pydantic v2 models in `backend/app/schemas/<domain>.py`. Never return raw dicts from a route.
@@ -47,17 +37,16 @@ Key existing docs: `README.md`, `docs/dev-doc.md`, `docs/multi-agent-dev.md`, `d
 - Public env vars must be prefixed `NEXT_PUBLIC_`. Server-only env vars stay unprefixed and are never imported in client components.
 - Components: small, single-responsibility, prefer composition over conditional rendering.
 
-### Tool Functions (product agents)
+### Service Functions
 
-- Place in `scripts/agents/tools/` or `backend/app/services/`. Each tool is one focused function.
-- Return format: `{"status": "success" | "error", "data": {...}, "sources": [...]}`. The product agent's reasoning depends on this shape.
-- Wrap external API calls in `try / except` with structured logging. Docstrings must be LLM-readable (the product critic reads them at runtime).
+- Place in `backend/app/services/`. Each function does one job.
+- Wrap external API calls in `try / except` with structured logging. Docstrings must say what the function returns and which failure leaves the caller with an empty or null result.
 
-### External API Wrappers (strict — LLMs hallucinate API shapes)
+### External API Wrappers (strict — response shapes must be recorded)
 
 > ⚠ This is the **authoritative anti-hallucination policy** for Sports Lab. Do not duplicate the rules elsewhere; cite this section.
 
-This codebase calls multiple live external APIs: **The Odds API**, **BALLDONTLIE**, **RotoWire** (lineup), **RotoGrinders** (lineup / DFS), **OpenAI** (LLM). Each has rate limits, paid quotas, and a documented track record of silent schema drift. These rules exist because response shapes get assumed from memory without a call to the real endpoint, and a sports-betting product where the odds parser silently breaks is a product that loses money. NBA projections are not fetched. A later model may fill those fields.
+This codebase calls multiple live external APIs: **The Odds API**, **BALLDONTLIE**, **RotoWire** (lineup), and **RotoGrinders** (lineup / DFS). Each has rate limits, paid quotas, and a documented track record of silent schema drift. These rules exist because response shapes get assumed from memory without a call to the real endpoint, and a sports-betting product where the odds parser silently breaks is a product that loses money. NBA projections are not fetched. A later model may fill those fields.
 
 1. **Exploration script first (engineer).** Before implementing `backend/app/services/<provider>_gateway.py` or any new external API client, create `scripts/explore_<provider>_api.py` that calls 2–3 real endpoints and pretty-prints raw responses. Commit this script alongside the client — it is the ground-truth reference for API shape and the first place to check when the API changes (e.g., when The Odds API renames a market key).
 
@@ -73,8 +62,8 @@ This codebase calls multiple live external APIs: **The Odds API**, **BALLDONTLIE
 
 - Type hints required everywhere (Python 3.10+ style: `str | None`, `list[X]`)
 - Docstrings: Google style. Logging: `logging.getLogger(__name__)`
-- Pydantic v2 for all validated I/O (schemas, settings, agent state where applicable)
-- Error handling: multi-level (tool → node → graph → API handler), graceful degradation — never let a single bad odds row crash the request
+- Pydantic v2 for all validated I/O (schemas and settings)
+- Error handling: graceful degradation in the service and the API handler. Never let a single bad odds row crash the request.
 
 ### Settings (`backend/app/settings.py`)
 
@@ -91,7 +80,6 @@ class Settings(BaseSettings):
         extra="ignore",
     )
     odds_api_key: str
-    openai_api_key: str
     redis_url: str = "redis://localhost:6379/0"
     database_url: str = "postgresql+asyncpg://..."
     ...

@@ -18,13 +18,10 @@ Fitted on walk-forward data:
   records the rows those two numbers came from, including the cutoff.
   Rows dated after the cutoff are the holdout and are not in the fit.
 
-Regenerate the fitted pair (does not call an external API)::
-
-    cd scripts/agents && python -m evaluation.fit_combined_platt
-
-That command replays NBA MED20, fits Platt on rows dated on or before
-2026-03-17 (pass ``--cutoff`` to use another date), and rewrites
-``PLATT_A``, ``PLATT_B``, and ``FIT_SAMPLE`` in this file.
+The fitter that wrote this pair lived at
+``scripts/agents/evaluation/fit_combined_platt.py``. SPO-142b removed
+that tree. ``PLATT_A``, ``PLATT_B``, and ``FIT_SAMPLE`` stay at the last
+fit: NBA MED20, rows dated on or before 2026-03-17, market prior 0.5.
 """
 
 from __future__ import annotations
@@ -67,7 +64,7 @@ PROJECTION_EDGE_WEIGHT = 0.04
 # Walk-forward only. Production returns None when no book posts the modal line.
 OFFLINE_MARKET_PRIOR = 0.5
 
-# Platt on the clipped adjustment total. Rewritten by fit_combined_platt.
+# Platt on the clipped adjustment total. Frozen at the last fit.
 # Market log-odds is added afterwards with coefficient 1.
 PLATT_A = 0.28036258
 PLATT_B = 2.15982400

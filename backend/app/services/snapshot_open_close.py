@@ -1,8 +1,8 @@
 """Historical opening and closing lines for ROI and closing-line value.
 
 ``open_close_from_snapshots`` lives here so a later closing-line reader
-can call it without ``scripts/agents``. The evaluation package re-exports
-these names while that tree is still present.
+can call it from the backend. SPO-142a moved the function into this
+module. SPO-142b removed the re-export under ``scripts/agents``.
 
 The repository does not ship sportsbook history. This module is the hook
 that starts working once that history exists. Two inputs are accepted:

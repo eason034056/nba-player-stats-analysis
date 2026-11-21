@@ -6,8 +6,6 @@ in this module builds an odds, injury, or lineup HTTP body.
 
 from __future__ import annotations
 
-import importlib.util
-import json
 import os
 import sys
 from collections import defaultdict
@@ -17,7 +15,6 @@ from zoneinfo import ZoneInfo
 import pytest
 
 _BACKEND = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-_REPO = os.path.dirname(_BACKEND)
 sys.path.insert(0, _BACKEND)
 
 from app.services.csv_player_history import (  # noqa: E402
@@ -53,14 +50,6 @@ def wnba_service():
     service = CSVPlayerHistoryService(league="wnba")
     service.load_csv()
     return service
-
-
-def _sample_contexts():
-    path = os.path.join(_REPO, "scripts", "dataset", "01_sample_contexts.py")
-    spec = importlib.util.spec_from_file_location("sample_contexts_spo98", path)
-    module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(module)
-    return module
 
 
 class TestNameKeyEdges:
@@ -316,50 +305,6 @@ class TestRosterAndSampleContexts:
         lynx = detect_team_code("Lynx", league="wnba")
         assert lynx == "MIN"
         assert "DiJonai Carrington" in cache.get(lynx, [])
-
-    def test_sample_context_team_is_latest_in_the_window(self, nba_service):
-        contexts = _sample_contexts()
-        stats = nba_service.get_player_stats("Buddy Hield", "points", 15.5)
-        assert stats["game_logs"][0]["team"] == "Warriors"
-        assert (
-            contexts._get_team_for_context((0, None, None, None, None), stats, {})
-            == "Hawks"
-        )
-
-        last_ten = nba_service.get_player_stats("Buddy Hield", "points", 15.5, n=10)
-        assert last_ten["game_logs"][0]["team"] == "Warriors"
-        assert last_ten["game_logs"][-1]["team"] == "Hawks"
-        assert (
-            contexts._get_team_for_context((10, None, None, None, None), last_ten, {})
-            == "Hawks"
-        )
-
-        missing = nba_service.get_player_stats(_UNKNOWN, "points", 15.5)
-        assert missing["game_logs"] == []
-        assert (
-            contexts._get_team_for_context((0, None, None, None, None), missing, {})
-            == ""
-        )
-        assert (
-            contexts._get_team_for_context(
-                (0, None, None, ["Not A Star"], True),
-                stats,
-                {"Hawks": ["Jalen Johnson"]},
-            )
-            == ""
-        )
-
-        star_path = os.path.join(_REPO, "data", "star_players.json")
-        with open(star_path, encoding="utf-8") as handle:
-            stars = json.load(handle)
-        assert (
-            contexts._get_team_for_context(
-                (0, None, None, ["Stephen Curry"], True),
-                stats,
-                stars,
-            )
-            == "Warriors"
-        )
 
 
 class TestReReviewEdges:

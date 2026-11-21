@@ -32,6 +32,8 @@ todos:
 isProject: false
 ---
 
+> **SPO-142b.** This plan describes `scripts/agents/`, which was removed after the chat routes were deleted in SPO-142a. The commands and paths below are the historical build plan. They are not current entry points. See `docs/decisions/SPO-142/decision_20261121_remove-agent-trees.md`. `backtest_report.md` remains in the repo because later decision notes still cite that checked-in report. Nothing in the tree regenerates it.
+
 # NBA Multi-Agent Betting Advisor (Assignment 4)
 
 ## Problem: Current Analysis Is Still Too Shallow

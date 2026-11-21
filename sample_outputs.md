@@ -1,6 +1,8 @@
 # Sample Outputs – NBA Multi-Agent Betting Advisor
 
-Generated: 2026-03-12 14:05
+> **SPO-142b.** Saved demo from the removed LangGraph CLI (`scripts/agents/`). Not a current entry point. The chat routes were removed in SPO-142a.
+
+Saved: 2026-03-12 14:05
 
 ## Agent Graph
 
