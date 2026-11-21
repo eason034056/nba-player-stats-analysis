@@ -66,6 +66,10 @@ cp terraform.tfvars.example terraform.tfvars
 curl -s https://checkip.amazonaws.com
 ```
 
+範例檔已經有 `environment = "dev"`。這是現在這組已經建立的資源。名稱維持 `sportslab-postgres`、`sportslab-pg16`、`sportslab-rds`、`sportslab-app`、`sportslab-runtime`。不要改成帶 `-dev` 或 `-prod` 的名字，也不要在這份 state 上套 `environment = "prod"`，否則 plan 會想重建 RDS。`Environment` 標籤會就地加上，不會換掉資料庫、S3 或 VPC。不要對 default VPC 加標籤。
+
+狀態檔仍在這台 Mac。等狀態桶準備好，再照 `infra/aws/README.md` 只把目前這份狀態遷到 `sportslab/dev/aws.tfstate`。不要遷到 prod 的 key。prod 之後從 dev 的快照還原，不在這一步建立。決定寫在 `docs/decisions/SPO-140/decision_20261120_terraform-environments.md`。
+
 然後：
 
 ```bash

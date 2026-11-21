@@ -1,0 +1,13 @@
+# Copy to backend-dev.hcl (gitignored). Use this file only for the stack
+# that already exists. Do not pass backend-prod.hcl to that migrate.
+#
+# bucket is the state bucket, not var.bucket_name. Create it first in
+# us-east-2 with versioning, SSE-S3, and Block Public Access. Terraform
+# cannot create the bucket that holds its own state.
+#
+# The key is a literal because a backend block cannot read var.environment.
+
+bucket  = "REPLACE_WITH_STATE_BUCKET"
+key     = "sportslab/dev/aws.tfstate"
+region  = "us-east-2"
+encrypt = true

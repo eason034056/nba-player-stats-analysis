@@ -6,7 +6,13 @@ The backend and Postgres both run on that Mac. Postgres is the `no-vig-nba-postg
 
 Step-by-step for that Mac, in Traditional Chinese: [docs/deployment/aws-steps-zh-TW.md](aws-steps-zh-TW.md).
 
-Placeholders only in `env.example` (`cp env.example .env`). Never commit `.env`, `terraform.tfvars`, or `terraform.tfstate`.
+Placeholders only in `env.example` (`cp env.example .env`). Never commit `.env`, `terraform.tfvars`, `backend-*.hcl`, or `terraform.tfstate`.
+
+## Stack environment
+
+The applied module is `environment = "dev"`. `infra/aws/terraform.tfvars.example` sets that. Resource names stay `sportslab-postgres`, `sportslab-pg16`, `sportslab-rds`, `sportslab-app`, and `sportslab-runtime`. The provider adds an `Environment` tag. That tag update does not replace the database, the bucket, or the VPC. Do not apply `environment = "prod"` against this state.
+
+State is still the local file until you migrate it to `sportslab/dev/aws.tfstate`. The steps, the prod snapshot restore, and the SSM copy from `/sportslab/prod/` to `/sportslab/dev/` are in `infra/aws/README.md` and `docs/decisions/SPO-140/decision_20261120_terraform-environments.md`. SSM itself is not in this module. The EC2 branch (#64) still has to point `pull-ssm-env.sh` and the instance policy at `/sportslab/${environment}/`, with `dev` as the default.
 
 ## Environment variables
 

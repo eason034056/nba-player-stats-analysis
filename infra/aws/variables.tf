@@ -31,6 +31,17 @@ variable "project" {
   }
 }
 
+variable "environment" {
+  type        = string
+  default     = "dev"
+  description = "Stack name. dev keeps the resource names already applied. prod is a second stack with its own names and its own state key. There is no staging value."
+
+  validation {
+    condition     = contains(["dev", "prod"], var.environment)
+    error_message = "environment must be dev or prod."
+  }
+}
+
 variable "tags" {
   type        = map(string)
   description = "Tags applied to supported resources via provider default_tags."

@@ -4,6 +4,9 @@
 
 region      = "us-east-2"
 project     = "sportslab"
+# dev is the stack already applied. Do not set prod in this file.
+# prod needs its own gitignored tfvars and the prod state key.
+environment = "dev"
 
 # Leave vpc_id unset to use the default VPC. Set it when the account has no
 # default VPC. Find it with:
@@ -35,6 +38,7 @@ max_allocated_storage   = 50
 backup_retention_period = 7
 pg_dump_retention_days  = 90
 
+# Environment is set from var.environment in the provider. Leave it out here.
 tags = {
   Project   = "sportslab"
   ManagedBy = "terraform"

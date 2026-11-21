@@ -1,0 +1,10 @@
+# Copy to backend-prod.hcl (gitignored) only when a prod stack is created.
+# Do not use this file to migrate the state that exists today. That state
+# is the dev stack and belongs at sportslab/dev/aws.tfstate.
+#
+# Same state bucket as dev, different key. bucket is not var.bucket_name.
+
+bucket  = "REPLACE_WITH_STATE_BUCKET"
+key     = "sportslab/prod/aws.tfstate"
+region  = "us-east-2"
+encrypt = true
