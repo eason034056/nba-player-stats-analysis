@@ -101,14 +101,13 @@ def _gateway(provider) -> OddsMarketGateway:
     )
 
 
-def test_registry_returns_the_odds_api_for_both_leagues():
+def test_registry_returns_the_odds_api_for_nba():
     assert settings.nba_odds_provider == "theoddsapi"
     assert isinstance(PROVIDERS["nba"], TheOddsAPIProvider)
-    assert isinstance(PROVIDERS["wnba"], TheOddsAPIProvider)
     assert PROVIDERS["nba"] is odds_provider
-    assert PROVIDERS["wnba"] is odds_provider
     assert PROVIDERS["nba"].name == "theoddsapi"
-    assert PROVIDERS["wnba"].name == "theoddsapi"
+    with pytest.raises(ValueError):
+        PROVIDERS["wnba"]
 
 
 def test_unknown_league_and_unknown_nba_provider_raise(monkeypatch):
@@ -118,7 +117,6 @@ def test_unknown_league_and_unknown_nba_provider_raise(monkeypatch):
     monkeypatch.setattr(settings, "nba_odds_provider", "other")
     with pytest.raises(ValueError, match="nba_odds_provider"):
         PROVIDERS["nba"]
-    assert PROVIDERS["wnba"].name == "theoddsapi"
 
 
 @pytest.mark.asyncio
@@ -152,7 +150,8 @@ async def test_gateway_rejects_unknown_league_before_http(monkeypatch):
             markets="player_points",
         )
     assert captured == []
-    assert gateway._provider_for("wnba").name == "theoddsapi"
+    with pytest.raises(ValueError):
+        gateway._provider_for("wnba")
 
 
 @pytest.mark.asyncio
@@ -165,7 +164,7 @@ async def test_league_events_request_matches_sport_key_request(monkeypatch):
     start = datetime(2026, 11, 9, 0, 0, 0)
     end = datetime(2026, 11, 11, 23, 59, 59)
 
-    for league, sport in (("nba", "basketball_nba"), ("wnba", "basketball_wnba")):
+    for league, sport in (("nba", "basketball_nba"),):
         before = len(captured)
         await provider.get_events(
             sport=sport,
@@ -210,7 +209,7 @@ async def test_league_props_request_matches_sport_key_request(monkeypatch):
     provider = _provider()
     event_id = recorded["id"]
 
-    for league, sport in (("nba", "basketball_nba"), ("wnba", "basketball_wnba")):
+    for league, sport in (("nba", "basketball_nba"),):
         before = len(captured)
         await provider.get_event_odds_with_usage(
             sport=sport,
@@ -244,7 +243,7 @@ async def test_gateway_league_request_matches_sport_request(monkeypatch):
     provider = _provider()
     event_id = recorded["id"]
 
-    for league, sport in (("nba", "basketball_nba"), ("wnba", "basketball_wnba")):
+    for league, sport in (("nba", "basketball_nba"),):
         before = len(captured)
         await _gateway(provider).get_market_snapshot(
             sport=sport,
@@ -283,14 +282,13 @@ def test_cache_key_differs_by_provider_and_by_league():
         bookmakers=None,
     )
     nba = gateway._build_snapshot_key(league="nba", **shared)
-    wnba = gateway._build_snapshot_key(league="wnba", **shared)
     other = gateway._build_snapshot_key(league="nba", provider_name="other", **shared)
     from_sport = gateway._build_snapshot_key(sport="basketball_nba", **shared)
-    assert nba != wnba
+    with pytest.raises(ValueError):
+        gateway._build_snapshot_key(league="wnba", **shared)
     assert nba != other
     assert nba == from_sport
     assert nba.startswith("odds_snapshot:v2:theoddsapi:nba:")
-    assert wnba.startswith("odds_snapshot:v2:theoddsapi:wnba:")
     assert other.startswith("odds_snapshot:v2:other:nba:")
     meta = gateway._build_snapshot_meta_key(league="nba", **shared)
     assert meta.startswith("odds_snapshot_meta:v2:theoddsapi:nba:")

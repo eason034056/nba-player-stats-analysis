@@ -12,7 +12,7 @@ schedule event on local date plus both team names, then:
 - drops Summer League, preseason, and G League
 - keeps rows that do not join any event, labeled ``unclassified``, so a
   schedule that does not list a date cannot delete that game
-- collapses duplicate rows of the same game (the WNBA file recorded
+- collapses duplicate rows of the same game (a file can record
   Maria Conde's 2026-05-08 game once per season dropdown)
 
 The schedule file is produced by ``scripts/explore_espn_schedule_api.py``.
@@ -46,10 +46,9 @@ GAME_TYPE_PLAY_IN = "play_in"
 GAME_TYPE_PRESEASON = "preseason"
 GAME_TYPE_SUMMER = "summer_league"
 GAME_TYPE_GLEAGUE = "g_league"
-# One token for both leagues. ESPN marks the NBA Cup final and the WNBA
-# Commissioner's Cup final with the same competition type (``CC`` /
-# ``commissioners-cup``) while ``seasonType`` stays ``reg``. ``GAME_TYPE_NBA_CUP``
-# is the earlier name for that same token.
+# ESPN marks the NBA Cup final with competition type ``CC`` /
+# ``commissioners-cup`` while ``seasonType`` stays ``reg``.
+# ``GAME_TYPE_NBA_CUP`` is the earlier name for that same token.
 GAME_TYPE_CUP = "cup_championship"
 GAME_TYPE_NBA_CUP = GAME_TYPE_CUP
 GAME_TYPE_UNCLASSIFIED = "unclassified"
@@ -58,7 +57,7 @@ GAME_TYPE_AMBIGUOUS = "ambiguous"
 # Kept in the canonical file and loaded into the stats cache.
 # The default sample is ``regular_season`` only. Playoffs and the
 # play-in are opt-in. ``cup_championship`` is its own token, so an NBA
-# or WNBA Cup final stays out of that default sample.
+# Cup final stays out of that default sample.
 CANONICAL_GAME_TYPES = frozenset(
     {
         GAME_TYPE_REGULAR,
@@ -204,14 +203,13 @@ def csv_team_keys(name: str) -> set[str]:
 def season_label_for_event(event: dict[str, Any]) -> str:
     """Season string for one recorded event.
 
-    WNBA payloads use a single calendar year (``displayName`` ``"2025"``).
-    NBA payloads use ``"2025-26"``, which we expand to ``"2025-2026"`` so
-    the column stays in the form the scraper already writes.
+    A single calendar year (``displayName`` ``"2025"``) is returned as
+    that year. NBA payloads use ``"2025-26"``, which we expand to
+    ``"2025-2026"`` so the column stays in the form the scraper writes.
     """
     season = event.get("season") or {}
     display = str(season.get("displayName") or "").strip()
-    league = str(event.get("league") or "")
-    if league == "wnba" or display.isdigit():
+    if display.isdigit():
         if display:
             return display
         year = season.get("year")
@@ -228,13 +226,12 @@ def season_label_for_event(event: dict[str, Any]) -> str:
     return f"{int(year) - 1}-{int(year)}"
 
 
-# Exact notes headlines on the recorded championship events. Group-stage
-# headlines ("NBA Cup - Group Play", "WNBA Commissioner's Cup") are different
-# strings, and those competitions are type Standard.
+# Exact notes headline on the recorded NBA Cup final. Group-stage
+# headlines ("NBA Cup - Group Play") are a different string, and that
+# competition is type Standard.
 _CUP_CHAMPIONSHIP_HEADLINES = frozenset(
     {
         "NBA Cup Championship",
-        "WNBA Commissioner's Cup Championship",
     }
 )
 
@@ -242,13 +239,12 @@ _CUP_CHAMPIONSHIP_HEADLINES = frozenset(
 def _is_cup_championship(event: dict[str, Any]) -> bool:
     """True when the recorded competition is a Cup final.
 
-    NBA group play through the semifinals, and WNBA Commissioner's Cup
-    pool games, stay regular season: ESPN gives them
-    ``seasonType.abbreviation`` ``reg`` and a Standard competition type.
-    The championship uses the same season type. The recorded competition
-    type is ``CC`` / ``commissioners-cup`` on both the NBA Cup final and
-    the WNBA Commissioner's Cup final. The notes headline is the other
-    signal. Event ids are not a list in this module.
+    NBA group play through the semifinals stays regular season: ESPN
+    gives those games ``seasonType.abbreviation`` ``reg`` and a Standard
+    competition type. The championship uses the same season type. The
+    recorded competition type is ``CC`` / ``commissioners-cup`` on the
+    NBA Cup final. The notes headline is the other signal. Event ids
+    are not a list in this module.
     """
     competition = event.get("competition") or {}
     comp_type = competition.get("type") or {}
@@ -277,7 +273,7 @@ def game_type_for_event(event: dict[str, Any]) -> str:
         return GAME_TYPE_SUMMER
     if league == "nba-development":
         return GAME_TYPE_GLEAGUE
-    if league in {"nba", "wnba"} and _is_cup_championship(event):
+    if league == "nba" and _is_cup_championship(event):
         return GAME_TYPE_CUP
     abbrev = str((event.get("seasonType") or {}).get("abbreviation") or "").lower()
     return _SEASON_TYPE_ABBREV.get(abbrev, GAME_TYPE_UNCLASSIFIED)
@@ -453,9 +449,9 @@ def _overlay_recorded_team_schedules(
     ids are added (the 2026-27 Celtics schedule is not in the older
     compact file).
 
-    ``league`` is the fixture slug (``nba`` or ``wnba``) passed by the
-    caller. A file whose name starts with a different league is skipped,
-    so ``league="wnba"`` does not relabel an NBA recording. A file with
+    ``league`` is the fixture slug passed by the caller. A file whose
+    name starts with a different league is skipped, so a non-NBA
+    recording is not folded onto an NBA index. A file with
     no ``{league}_`` prefix uses the explicit league. When ``league`` is
     omitted or blank, each file's slug is that prefix and a warning is
     logged. A filename with no prefix raises ``ValueError``.
@@ -543,12 +539,8 @@ def leagues_for_csv(league: str) -> set[str]:
     """Fixture league slugs that may appear in one of our CSVs.
 
     The NBA file is where Summer League and G League rows leaked in.
-    The WNBA file only joins WNBA events, so an NBA game on the same
-    date cannot relabel a WNBA row.
     """
     key = league.lower()
-    if key == "wnba":
-        return {"wnba"}
     if key == "nba":
         return {
             "nba",
@@ -584,7 +576,7 @@ def _resolve_matches(matches: list[dict[str, Any]]) -> tuple[str, str]:
 
     Duplicate listings of the same game agree on both fields and resolve.
     An NBA game and a G League game that share nicknames on the same night
-    disagree. The parent-league event (``nba`` / ``wnba``) is the one the
+    disagree. The parent-league event (``nba``) is the one the
     CSV row is about when the other hits are only G League or Summer
     League: those affiliate clubs reuse the parent nickname
     (``Lakers``, ``Suns``) while the scraped NBA rows use that same
@@ -593,8 +585,8 @@ def _resolve_matches(matches: list[dict[str, Any]]) -> tuple[str, str]:
     labels = {(event["season_label"], event["game_type"]) for event in matches}
     if len(labels) == 1:
         return labels.pop()
-    parent = [event for event in matches if event.get("league") in {"nba", "wnba"}]
-    others = [event for event in matches if event.get("league") not in {"nba", "wnba"}]
+    parent = [event for event in matches if event.get("league") == "nba"]
+    others = [event for event in matches if event.get("league") != "nba"]
     parent_labels = {(event["season_label"], event["game_type"]) for event in parent}
     others_are_affiliates = bool(others) and all(
         event.get("league") == "nba-development" or "summer" in str(event.get("league") or "")

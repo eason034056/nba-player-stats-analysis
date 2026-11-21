@@ -265,12 +265,6 @@ class TestTierFollowsCombinedProbability:
         assert changed == {"Enters", "Leaves", "Relabel", "Short"}
         assert shift["new_board"] == shift["old_board"] - shift["left"] + shift["entered"]
 
-    def test_wnba_board_still_uses_the_historical_rate(self):
-        pick = _pick("A'ja Wilson", probability=0.80, combined=None)
-        assert select_daily_picks([pick], league="wnba") == [pick]
-        assert select_daily_picks([pick]) == []
-        assert board_score(pick, "wnba") == pytest.approx(0.80)
-        assert board_score(pick, "nba") is None
 
     def test_query_default_is_still_065(self):
         from app.api.daily_picks import get_daily_picks

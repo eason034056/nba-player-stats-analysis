@@ -46,46 +46,14 @@ TEAM_ALIASES: dict[str, tuple[str, ...]] = {
     "WAS": ("Washington Wizards", "Wizards", "WAS"),
 }
 
-# WNBA team aliases — codes match `<div class="lineup__abbr">…</div>` values
-# on the RotoWire WNBA page (verified live 2026-05-13; see
-# docs/research/wnba-rollout/lineup_sources_comparison.md §2.4 and the
-# committed `rotowire_wnba_sample.html`).
-# ⚠ Several codes overlap with NBA codes (CHI, IND, TOR, WAS, ATL, DAL, MIN,
-# NYK, PHX) but refer to different franchises — keep lookups league-namespaced
-# via `LEAGUE_TEAM_LOOKUPS`; never merge into a single global table.
-WNBA_TEAM_ALIASES: dict[str, tuple[str, ...]] = {
-    "ATL": ("Atlanta Dream", "Dream", "ATL"),
-    "CHI": ("Chicago Sky", "Sky", "CHI"),
-    "CON": ("Connecticut Sun", "Sun", "Connecticut", "CON"),
-    "DAL": ("Dallas Wings", "Wings", "DAL"),
-    "GSV": ("Golden State Valkyries", "Valkyries", "GSV"),
-    "IND": ("Indiana Fever", "Fever", "IND"),
-    "LAS": ("Los Angeles Sparks", "Sparks", "LA Sparks", "LAS"),
-    "LVA": ("Las Vegas Aces", "Aces", "Las Vegas", "LVA"),
-    "MIN": ("Minnesota Lynx", "Lynx", "MIN"),
-    "NYL": ("New York Liberty", "Liberty", "NY Liberty", "NYL"),
-    "PHX": ("Phoenix Mercury", "Mercury", "PHX"),
-    "SEA": ("Seattle Storm", "Storm", "SEA"),
-    "TOR": ("Toronto Tempo", "Tempo", "TOR"),
-    "WAS": ("Washington Mystics", "Mystics", "WAS"),
-}
-
-
 TEAM_LOOKUP: dict[str, str] = {}
 for code, aliases in TEAM_ALIASES.items():
     TEAM_LOOKUP[_normalize_lookup_key(code)] = code
     for alias in aliases:
         TEAM_LOOKUP[_normalize_lookup_key(alias)] = code
 
-WNBA_TEAM_LOOKUP: dict[str, str] = {}
-for code, aliases in WNBA_TEAM_ALIASES.items():
-    WNBA_TEAM_LOOKUP[_normalize_lookup_key(code)] = code
-    for alias in aliases:
-        WNBA_TEAM_LOOKUP[_normalize_lookup_key(alias)] = code
-
 LEAGUE_TEAM_LOOKUPS: dict[str, dict[str, str]] = {
     "nba": TEAM_LOOKUP,
-    "wnba": WNBA_TEAM_LOOKUP,
 }
 
 POSITION_TOKENS = {"PG", "SG", "SF", "PF", "C", "G", "F"}
@@ -120,8 +88,7 @@ NON_PLAYER_LINE_KEYS = {
     "–",
 }
 
-# League → team code → canonical names. TOR is the Raptors in the NBA
-# cache and the Tempo in the WNBA cache. The two lists are not merged.
+# League → team code → canonical names. The roster cache is NBA.
 _TEAM_ROSTER_CACHE: dict[str, dict[str, list[str]]] = {}
 
 
@@ -150,13 +117,13 @@ def strip_html_lines(raw_html: str) -> list[str]:
 
 
 def detect_team_code(raw_line: str, league: str = "nba") -> str | None:
-    """Resolve a raw text line to a team code within the given league.
+    """Resolve a raw text line to an NBA team code.
 
-    Default `league="nba"` keeps existing NBA call sites byte-identical.
-    Pass `league="wnba"` to resolve against WNBA codes (e.g. SEA, LVA,
-    Connecticut Sun) without leaking NBA matches.
+    ``league`` must be ``nba``. Any other value raises ``ValueError``.
     """
-    lookup = LEAGUE_TEAM_LOOKUPS.get(league, TEAM_LOOKUP)
+    if league not in LEAGUE_TEAM_LOOKUPS:
+        raise ValueError(f"Unknown league for team code: {league!r}")
+    lookup = LEAGUE_TEAM_LOOKUPS[league]
     line = re.sub(r"\(\d+\s*-\s*\d+\)", "", raw_line).strip()
     line = TIME_LINE_RE.sub("", line).strip()
     if not line:
@@ -279,8 +246,7 @@ def normalize_rotogrinders_player_candidate(raw_name: str) -> str | None:
 def _roster_league(league: str | None) -> str:
     """Normalize a roster league. Missing means NBA.
 
-    An unknown league is an error. Guessing would put a Tempo player on
-    the Raptors list, which is the bug this cache exists to prevent.
+    An unknown league is an error. The roster is built from one league's CSV.
     """
     key = (league or "nba").strip().lower()
     if key not in LEAGUE_TEAM_LOOKUPS:
@@ -291,15 +257,12 @@ def _roster_league(league: str | None) -> str:
 def _build_team_roster_cache(league: str = "nba") -> dict[str, list[str]]:
     """Latest-club roster for one league.
 
-    Team codes overlap (MIN is the Timberwolves and the Lynx, TOR is the
-    Raptors and the Tempo). The default ``league="nba"`` keeps existing
-    callers on the NBA list. Pass ``league="wnba"`` for the WNBA list.
-    The two lists are stored separately and are not merged.
+    The default ``league="nba"`` reads the NBA CSV. Any other league raises.
     """
     from app.services.csv_player_history import CSVPlayerHistoryService, team_from_game_logs
 
     league_key = _roster_league(league)
-    aliases = WNBA_TEAM_ALIASES if league_key == "wnba" else TEAM_ALIASES
+    aliases = TEAM_ALIASES
     roster_map: dict[str, list[str]] = {code: [] for code in aliases}
 
     service = CSVPlayerHistoryService(league=league_key)

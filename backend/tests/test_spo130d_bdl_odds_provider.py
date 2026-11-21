@@ -440,12 +440,12 @@ class TestProvider:
         assert _book(board.bookmakers, "ballybet") is None
 
     @pytest.mark.asyncio
-    async def test_non_digit_id_and_wnba_do_not_call(self):
+    async def test_non_digit_id_and_other_league_do_not_call(self):
         provider, client = _provider()
         with pytest.raises(ValueError, match="digits"):
             await provider.get_event_props("nba", "07361a8381206817e27bd2697fad7479", ("player_points",))
         with pytest.raises(ValueError, match="only serves nba"):
-            await provider.list_events("wnba", datetime.now(timezone.utc), datetime.now(timezone.utc))
+            await provider.list_events("other", datetime.now(timezone.utc), datetime.now(timezone.utc))
         assert client.calls == []
 
     @pytest.mark.asyncio
@@ -465,18 +465,18 @@ class TestProvider:
 class TestRegistry:
     """The setting accepts balldontlie. The default path stays The Odds API."""
 
-    def test_default_is_the_odds_api_for_both_leagues(self):
+    def test_default_is_the_odds_api_for_nba(self):
         assert settings.nba_odds_provider == "theoddsapi"
         assert isinstance(PROVIDERS["nba"], TheOddsAPIProvider)
-        assert isinstance(PROVIDERS["wnba"], TheOddsAPIProvider)
         assert PROVIDERS["nba"].name == "theoddsapi"
+        with pytest.raises(ValueError):
+            PROVIDERS["wnba"]
 
-    def test_balldontlie_is_accepted_and_wnba_does_not_switch(self, monkeypatch):
+    def test_balldontlie_is_accepted_for_nba(self, monkeypatch):
         monkeypatch.setattr(settings, "nba_odds_provider", "balldontlie")
         provider = PROVIDERS["nba"]
         assert provider.name == "balldontlie"
         assert type(provider).__name__ == "BdlOddsProvider"
-        assert isinstance(PROVIDERS["wnba"], TheOddsAPIProvider)
         monkeypatch.setattr(settings, "nba_odds_provider", "BallDontLie")
         assert PROVIDERS["nba"].name == "balldontlie"
 
@@ -484,7 +484,6 @@ class TestRegistry:
         monkeypatch.setattr(settings, "nba_odds_provider", "other")
         with pytest.raises(ValueError, match="nba_odds_provider"):
             PROVIDERS["nba"]
-        assert PROVIDERS["wnba"].name == "theoddsapi"
 
     def test_routes_and_jobs_do_not_import_the_new_modules(self):
         forbidden = ("bdl_odds_provider", "bdl_props_adapter", "bdl_player_directory")

@@ -467,29 +467,6 @@ class TestDailyPickShape:
 
 
 class TestLeagueWiring:
-    def test_wnba_pick_stays_null(self):
-        pick = DailyPick(
-            player_name="A'ja Wilson",
-            event_id="wnba-evt-1",
-            home_team="Toronto Tempo",
-            away_team="Seattle Storm",
-            commence_time="2026-05-14T23:00:00Z",
-            metric="points",
-            threshold=14.5,
-            direction="over",
-            probability=0.74,
-            n_games=18,
-            bookmakers_count=3,
-        )
-        returned = _with_nba_signal_verdicts(
-            pick,
-            league="wnba",
-            bookmakers_data=load_odds_fixture(RECORDED)["bookmakers"],
-            game_logs=[{"value": 20}] * 12,
-        )
-        assert returned is pick
-        assert pick.signals is None
-        assert pick.combined_probability is None
 
     def test_nba_analyze_omits_projection_and_keeps_the_other_signals(self):
         payload = load_odds_fixture(RECORDED)
@@ -562,55 +539,6 @@ class TestLeagueWiring:
         # One book, both sides. SPO-115 counts the book once.
         assert pick.bookmakers_count == 1
 
-    def test_wnba_analyze_output_stays_free_of_nba_signals(self, monkeypatch):
-        payload = load_odds_fixture(RECORDED)
-        books = _filtered_books(
-            payload,
-            lambda book, outcome: (
-                book.get("key") == "draftkings"
-                and outcome.get("description") == LUKA
-                and outcome.get("point") == 36.5
-            ),
-        )
-        service = DailyAnalysisService()
-        service._get_props_for_market = AsyncMock(return_value=books)
-        history = MagicMock()
-        history.latest_position = MagicMock(return_value="F")
-        history.get_player_stats = MagicMock(
-            return_value={
-                "p_over": 0.74,
-                "p_under": 0.19,
-                "n_games": 18,
-                "game_logs": [{"team": "Aces", "value": 20}] * 12,
-            }
-        )
-        monkeypatch.setattr(
-            "app.services.daily_analysis._resolve_csv_service",
-            lambda _league: history,
-        )
-        picks, _players, _props = asyncio.run(
-            service._analyze_single_event(
-                event_id="wnba-evt-1",
-                home_team="Toronto Tempo",
-                away_team="Seattle Storm",
-                commence_time="2026-05-14T23:00:00Z",
-                league="wnba",
-            )
-        )
-        assert picks
-        for pick in picks:
-            dumped = pick.model_dump()
-            assert dumped["signals"] is None
-            assert dumped["combined_probability"] is None
-            assert dumped["probability"] == pytest.approx(0.74)
-            assert dumped["has_projection"] is False
-            assert dumped["projected_value"] is None
-            assert dumped["tier"] == read_tier(0.74)
-            assert "projection" not in {
-                row["key"] for row in (dumped["signals"] or [])
-            }
-        points = next(pick for pick in picks if pick.metric == "points")
-        assert points.player_name == LUKA
 
 
 def test_nba_picks_and_reads_omit_the_projection_key():

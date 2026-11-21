@@ -278,7 +278,7 @@ class CSVDownloaderService:
             fetch_events_for_csv_text,
         )
 
-        league = "wnba" if "wnba" in self.save_path.name.lower() else "nba"
+        league = "nba"
         if not dates_in_game_log(content):
             events: list[dict[str, Any]] = []
         else:
@@ -301,7 +301,7 @@ class CSVDownloaderService:
         from app.services.game_log_hygiene import hygiene_csv_file
 
         target = path or self.save_path
-        league = "wnba" if "wnba" in self.save_path.name.lower() else "nba"
+        league = "nba"
         return hygiene_csv_file(target, league=league, events=events)
 
     async def _reload_csv_cache(self) -> None:
@@ -339,11 +339,8 @@ class CSVDownloaderService:
         try:
             from app.services.cache import cache_service
             
-            # Clear daily picks cache (NBA only — this downloader only
-            # refreshes the NBA CSV; WNBA CSV refresh lives elsewhere).
-            # SPO-35: scope by league so an NBA download doesn't blast
-            # the WNBA picks cache and double-charge The Odds API quota.
-            # The next /api/nba/daily-picks request will re-analyze.
+            # Clear the NBA daily picks cache. The next
+            # /api/nba/daily-picks request will re-analyze.
             deleted = await cache_service.clear_daily_picks_cache(league="nba")
             
             if deleted > 0:

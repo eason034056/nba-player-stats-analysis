@@ -44,8 +44,12 @@ def test_nba_glob_matches_v2_and_the_legacy_league_key_only() -> None:
     assert wnba == ["daily_picks:wnba:2026-11-10:tz480"]
 
 
-def test_nba_flush_drops_pre_league_keys_and_leaves_wnba() -> None:
-    """clear_daily_picks_cache('nba') drops pre-league date keys and leaves WNBA."""
+def test_nba_flush_drops_pre_league_keys_and_leaves_other_league() -> None:
+    """clear_daily_picks_cache('nba') drops pre-league date keys.
+
+    A stored key whose segment is not nba stays. This call does not
+    delete that key.
+    """
     from app.services.cache import CacheService
 
     class _Fake:
@@ -53,7 +57,7 @@ def test_nba_flush_drops_pre_league_keys_and_leaves_wnba() -> None:
             self.store = {
                 "daily_picks:nba:v2:2026-11-10:tz480": "v2",
                 "daily_picks:nba:2026-11-10:tz480": "legacy-nba",
-                "daily_picks:wnba:2026-11-10:tz480": "wnba",
+                "daily_picks:wnba:2026-11-10:tz480": "other",
                 "daily_picks:2026-11-10:tz480": "pre-league-tz",
                 "daily_picks:2026-11-10": "pre-league",
             }
@@ -72,7 +76,7 @@ def test_nba_flush_drops_pre_league_keys_and_leaves_wnba() -> None:
     deleted = asyncio.run(service.clear_daily_picks_cache(league="nba"))
     assert deleted == 4
     assert fake.store == {
-        "daily_picks:wnba:2026-11-10:tz480": "wnba",
+        "daily_picks:wnba:2026-11-10:tz480": "other",
     }
 
 

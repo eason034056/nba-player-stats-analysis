@@ -87,19 +87,7 @@ class TestLaCollisions:
         for name in affiliates:
             assert canonical_team_code(name) not in _NBA_CODES, name
 
-    def test_wnba_full_names_never_land_on_an_nba_code(self):
-        for team in _directory("wnba"):
-            assert canonical_team_code(team["displayName"]) not in _NBA_CODES, (
-                team["displayName"]
-            )
 
-    def test_recorded_sparks_stay_wnba(self):
-        sparks = next(
-            team for team in _directory("wnba") if team["shortDisplayName"] == "Sparks"
-        )
-        assert canonical_team_code(sparks["displayName"], league="wnba") == "LAS"
-        assert canonical_team_code(sparks["displayName"]) not in {"LAC", "LAL"}
-        assert canonical_team_code("LA Sparks") not in {"LAC", "LAL"}
 
     def test_unknown_league_still_raises(self):
         with pytest.raises(ValueError):

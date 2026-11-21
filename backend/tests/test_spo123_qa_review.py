@@ -366,20 +366,3 @@ def test_new_route_is_nba_only_and_does_not_shadow_props():
     assert "/api/nba/events/{event_id}/props" in paths
 
 
-@pytest.mark.asyncio
-async def test_wnba_events_list_still_served(client, monkeypatch):
-    async def fake_events(**kwargs):
-        return []
-
-    async def fake_get(key):
-        return None
-
-    async def fake_set(key, value, ttl):
-        return True
-
-    monkeypatch.setattr("app.api.wnba.odds_provider.get_events", fake_events)
-    monkeypatch.setattr("app.api.wnba.cache_service.get", fake_get)
-    monkeypatch.setattr("app.api.wnba.cache_service.set", fake_set)
-    response = await client.get("/api/wnba/events", params={"date": "2026-11-10", "tz_offset": -300})
-    assert response.status_code == 200
-    assert response.json()["events"] == []

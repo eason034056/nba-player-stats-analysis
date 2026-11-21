@@ -45,11 +45,6 @@ def nba_service():
     return service
 
 
-@pytest.fixture(scope="module")
-def wnba_service():
-    service = CSVPlayerHistoryService(league="wnba")
-    service.load_csv()
-    return service
 
 
 class TestNameKeyEdges:
@@ -93,7 +88,7 @@ class TestNameKeyEdges:
         assert player_name_key(None) == ""
         assert player_name_key("   ") == ""
 
-    def test_stored_spellings_round_trip(self, nba_service, wnba_service):
+    def test_stored_spellings_round_trip(self, nba_service):
         cases = {
             nba_service: [
                 ("Luka Dončić", "Luka Doncic"),
@@ -117,12 +112,6 @@ class TestNameKeyEdges:
                 ("  PJ   WASHINGTON ", "P.J. Washington"),
                 ("Jrue Holiday", "Jrue Holiday"),
             ],
-            wnba_service: [
-                ("  a'JA   wilson ", "A'ja Wilson"),
-                ("A’ja Wilson", "A'ja Wilson"),
-                ("Te Hina Paopao", "Te-Hina Paopao"),
-                ("Betnijah Laney Hamilton", "Betnijah Laney-Hamilton"),
-            ],
         }
         for service, pairs in cases.items():
             for query, stored in pairs:
@@ -133,27 +122,27 @@ class TestNameKeyEdges:
         assert nba_service.resolve_player_name("De Aaron Fox") is None
         assert nba_service.resolve_player_name("D Angelo Russell") is None
 
-    def test_empty_query_matches_nobody(self, nba_service, wnba_service):
-        for service in (nba_service, wnba_service):
+    def test_empty_query_matches_nobody(self, nba_service):
+        for service in (nba_service,):
             assert service.resolve_player_name("") is None
             assert service.resolve_player_name("   ") is None
             assert match_player_name(None, service._all_players) is None
             assert match_player_name("Jr.", service._all_players) is None
             assert match_player_name("III", service._all_players) is None
 
-    def test_every_stored_name_survives_case_and_whitespace(self, nba_service, wnba_service):
-        for service in (nba_service, wnba_service):
+    def test_every_stored_name_survives_case_and_whitespace(self, nba_service):
+        for service in (nba_service,):
             for name in service._all_players:
                 assert service.resolve_player_name(name) == name
                 assert service.resolve_player_name(f"  {name.upper()}  ") == name
 
-    def test_csv_keys_do_not_collide_across_different_players(self, nba_service, wnba_service):
+    def test_csv_keys_do_not_collide_across_different_players(self, nba_service):
         """Two different stored players must not fold to one key.
 
         A shared key would make ``match_player_name`` return None for every
         non-exact query, which is a silent miss. Neither CSV has such a pair.
         """
-        for league, service in (("nba", nba_service), ("wnba", wnba_service)):
+        for league, service in (("nba", nba_service),):
             groups: dict[str, list[str]] = defaultdict(list)
             for name in service._all_players:
                 groups[player_name_key(name)].append(name)
@@ -176,10 +165,10 @@ class TestNameKeyEdges:
 class TestUnmatchedNameCallSites:
     """Each identity lookup returns an empty result when nothing matches."""
 
-    @pytest.mark.parametrize("league", ["nba", "wnba"])
-    def test_csv_methods_reject_unknown_and_substring(self, league, nba_service, wnba_service):
-        service = nba_service if league == "nba" else wnba_service
-        substring = "Smith" if league == "nba" else "Wilson"
+    @pytest.mark.parametrize("league", ["nba"])
+    def test_csv_methods_reject_unknown_and_substring(self, league, nba_service):
+        service = nba_service
+        substring = "Smith"
         for query in (_UNKNOWN, substring):
             stats = service.get_player_stats(query, "points", 10.5)
             assert stats["player"] == query
@@ -201,7 +190,7 @@ class TestUnmatchedNameCallSites:
             assert service.get_teammates(query) == []
             assert service.resolve_player_name(query) is None
 
-    def test_accented_query_does_not_return_the_near_name(self, nba_service, wnba_service):
+    def test_accented_query_does_not_return_the_near_name(self, nba_service):
         jokic = nba_service.get_player_stats("Nikola Jokić", "points", 20.5)
         jovic = nba_service.get_player_stats("Nikola Jovic", "points", 20.5)
         assert jokic["player"] == "Nikola Jokic"
@@ -210,11 +199,6 @@ class TestUnmatchedNameCallSites:
         assert jokic["game_logs"] != jovic["game_logs"]
         assert "Nikola Jokic" not in nba_service.get_teammates("Nikola Jokić")
         assert nba_service.get_player_opponents("Nikola Jokić")
-
-        mates = wnba_service.get_teammates("Aja Wilson")
-        assert mates
-        assert "A'ja Wilson" not in mates
-        assert wnba_service.get_player_opponents("Aja Wilson")
 
 
 class TestTradeDayTeams:
@@ -254,16 +238,6 @@ class TestTradeDayTeams:
         # remaining game (2025-12-29) is already the Raptors stint.
         assert team_from_game_logs(logs, "2025-10-16") == "Raptors"
 
-    def test_wnba_carrington_trade_day_and_gap(self, wnba_service):
-        logs = wnba_service._cache["DiJonai Carrington"]
-        assert team_from_game_logs(logs, "2025-08-01") == "Wings"
-        assert team_from_game_logs(logs, "2025-08-03") == "Wings"
-        assert team_from_game_logs(logs, "2025-08-05") == "Lynx"
-        chart = wnba_service.get_player_stats("DiJonai Carrington", "points", 10.5)
-        assert chart["player"] == "DiJonai Carrington"
-        assert team_from_game_logs(chart["game_logs"], "2025-08-03") == "Wings"
-        assert team_from_game_logs(chart["game_logs"], "2025-08-05") == "Lynx"
-        assert team_from_game_logs(chart["game_logs"]) == "Lynx"
 
     def test_post_midnight_utc_same_calendar_day_stays_put(self, nba_service):
         # 23:00Z is still 2026-03-15 in UTC (7pm ET). The two-club log below
@@ -295,16 +269,6 @@ class TestRosterAndSampleContexts:
         assert "Mo Bamba" in cache["UTA"]
         assert "Mo Bamba" not in cache["TOR"]
 
-    def test_wnba_player_is_on_her_own_roster(self):
-        from app.services.lineup_source_support import (
-            _build_team_roster_cache,
-            detect_team_code,
-        )
-
-        cache = _build_team_roster_cache(league="wnba")
-        lynx = detect_team_code("Lynx", league="wnba")
-        assert lynx == "MIN"
-        assert "DiJonai Carrington" in cache.get(lynx, [])
 
 
 class TestReReviewEdges:
@@ -328,9 +292,6 @@ class TestReReviewEdges:
         assert team_from_game_logs(logs, aware) == "Trail Blazers"
 
 
-    def test_date_before_every_wnba_log_is_the_earliest_club(self, wnba_service):
-        logs = wnba_service._cache["DiJonai Carrington"]
-        assert team_from_game_logs(logs, "2020-01-01") == "Wings"
 
 
     def test_shared_team_code_initials_do_not_cross_leagues(self):
@@ -347,11 +308,6 @@ class TestReReviewEdges:
         resolved = resolve_canonical_player_name("T. Key", "TOR")
         assert resolved["canonical_name"] != "Teonni Key"
         assert resolved["resolution_status"] == "unresolved"
-
-        wnba_cache = _build_team_roster_cache(league="wnba")
-        assert "Teonni Key" in wnba_cache["TOR"]
-        assert "Tyreke Key" not in wnba_cache["TOR"]
-        wnba_resolved = resolve_canonical_player_name("T. Key", "TOR", league="wnba")
-        assert wnba_resolved["resolution_status"] == "team_resolved"
-        assert wnba_resolved["canonical_name"] == "Teonni Key"
+        with pytest.raises(ValueError):
+            _build_team_roster_cache(league="other")
 

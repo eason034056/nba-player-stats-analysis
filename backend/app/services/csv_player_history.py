@@ -104,23 +104,15 @@ _DD_REQUIRED_COMPONENTS = 2  # ≥2 doubles = double-double
 # In Docker environment, data directory is mounted to /app/data
 # In local development, path is relative to project root
 #
-# 💡 League dispatch — SPO-32 introduced WNBA. The service is parameterized
-# on `league`, not duplicated. `_LEAGUE_FILE_NAMES` is the single source of
-# truth for "league key → CSV file name"; adding a new league later (e.g.
-# NCAA) is a one-line addition here plus a singleton at the bottom of the
-# module. ⚠ The env var fallback for NBA (`CSV_DATA_PATH`) is intentionally
-# kept under its legacy name to preserve existing test patches and ops
-# scripts; WNBA gets its own env var (`WNBA_CSV_DATA_PATH`) so an operator
-# can override one league without accidentally pointing the other at the
-# wrong file.
+# `_LEAGUE_FILE_NAMES` maps a league key to its CSV file name.
+# The NBA env var stays `CSV_DATA_PATH` so existing test patches and
+# ops scripts keep working.
 _LEAGUE_FILE_NAMES: Dict[str, str] = {
     "nba": "nba_player_game_logs.csv",
-    "wnba": "wnba_player_game_logs.csv",
 }
 
 _LEAGUE_ENV_VARS: Dict[str, str] = {
     "nba": "CSV_DATA_PATH",  # legacy name — unchanged for backward compat
-    "wnba": "WNBA_CSV_DATA_PATH",
 }
 
 
@@ -129,15 +121,13 @@ def _get_csv_path(league: str = "nba") -> str:
     Get CSV file path for the given league.
 
     Search order (per league):
-    1. League-specific environment variable (e.g. CSV_DATA_PATH for NBA,
-       WNBA_CSV_DATA_PATH for WNBA)
+    1. League-specific environment variable (`CSV_DATA_PATH` for NBA)
     2. /app/data/<league>_player_game_logs.csv (Docker environment)
     3. data/<league>_player_game_logs.csv relative to project root
 
     Args:
-        league: League key (e.g. "nba", "wnba"). Defaults to "nba" so
-                existing callers that pre-date the league parameter
-                continue to resolve to the NBA CSV unchanged.
+        league: League key. ``"nba"`` is the registered key. Defaults to
+                ``"nba"`` so existing callers keep the NBA CSV.
 
     Returns:
         str: Absolute file path to CSV
@@ -407,9 +397,8 @@ class CSVPlayerHistoryService:
     CSV Player History Data Service
 
     Uses a per-instance cache to avoid reloading the CSV on every request.
-    One singleton per league lives at module bottom (`nba_csv_player_service`,
-    `wnba_csv_player_service`); the league parameter selects which CSV file
-    backs each instance.
+    The module singleton is `nba_csv_player_service`. The league parameter
+    selects the CSV file. Only `nba` is registered.
 
     💡 Why parameterize on `league` instead of subclassing: the parsing
     logic is identical (same CSV schema), only the file path differs.
@@ -418,7 +407,7 @@ class CSVPlayerHistoryService:
     and one set of tests to keep in sync.
 
     Attributes:
-        league: League key (e.g. "nba", "wnba") — selects the CSV source
+        league: League key (`"nba"`) — selects the CSV source
         _csv_path: Absolute CSV file path resolved at construction
         _cache: cached CSV data (keyed by player name)
         _all_players: all player names (sorted)
@@ -535,8 +524,8 @@ class CSVPlayerHistoryService:
         # that keeps `test_csv_player_history.py` working unchanged — those
         # tests do `patch("app.services.csv_player_history.CSV_PATH", ...)`
         # AFTER instantiation, so binding to `self._csv_path` eagerly in
-        # __init__ would break them. WNBA (and any future league) uses the
-        # per-instance path directly because it has no legacy test surface.
+        # __init__ would break them. A non-NBA instance would use the
+        # per-instance path. Only ``nba`` is registered.
         if self.league == "nba":
             csv_path = CSV_PATH
         else:
@@ -864,8 +853,8 @@ class CSVPlayerHistoryService:
     def _history_season_label(self, season: Optional[str]) -> Optional[str]:
         """Season label for the season-scoped rate. NBA only.
 
-        A blank query uses the recorded current NBA season. WNBA returns
-        None so the shared response leaves the season fields null.
+        A blank query uses the recorded current NBA season. A non-NBA
+        instance returns None so the season fields stay null.
         """
         if self.league != "nba":
             return None
@@ -909,7 +898,8 @@ class CSVPlayerHistoryService:
         other filters). A teammate is out of a game when they are not in
         the lineup cache for that team and date. ``with_mean`` /
         ``without_mean`` are the player's stat on those two splits.
-        WNBA returns an empty list and keeps ``teammates`` as names.
+        A non-NBA instance returns an empty list and keeps ``teammates``
+        as names.
         """
         if self.league != "nba":
             return []
@@ -963,7 +953,7 @@ class CSVPlayerHistoryService:
         season_games: List[Dict[str, Any]],
         threshold: float,
     ) -> Dict[str, Any]:
-        """Season hit rate beside the all-games rate. Empty for WNBA."""
+        """Season hit rate beside the all-games rate."""
         if self.league != "nba":
             return {}
         values = [float(game["value"]) for game in season_games if game.get("value") is not None]
@@ -1468,7 +1458,6 @@ class CSVPlayerHistoryService:
 # (`from app.services.csv_player_history import csv_player_service`) keeps
 # working without modification.
 nba_csv_player_service = CSVPlayerHistoryService(league="nba")
-wnba_csv_player_service = CSVPlayerHistoryService(league="wnba")
 
 # Backward-compatible alias — DO NOT remove without updating every NBA
 # call site. New code should reference `nba_csv_player_service` directly.

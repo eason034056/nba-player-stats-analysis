@@ -39,7 +39,6 @@ from app.services.odds_provider import OddsAPIError
 from app.services.csv_player_history import (
     csv_player_service,
     team_on_event,
-    wnba_csv_player_service,
 )
 from app.services.prob import (
     american_to_prob,
@@ -47,7 +46,6 @@ from app.services.prob import (
     posted_american_odds,
 )
 from app.services.cache import cache_service
-from app.settings import settings
 from app.services.defense_ranks import defense_fields
 from app.models.schemas import (
     AnalysisStats,
@@ -73,17 +71,13 @@ from app.services.pick_signals import build_nba_signals, injury_blocks_combined
 # addition here — daily_analysis is one function tree, not a fork
 # (CLAUDE.md § Architectural guardrails: "Parameterize, don't fork").
 #
-# Tied tests:
-#   - test_daily_analysis_league_routes_sport_key (NBA vs WNBA dispatch)
-#   - test_daily_analysis_league_routes_csv_service
-#   - test_daily_analysis_league_namespaces_cache_key
+# The map has one row. ``_resolve_csv_service`` raises on any other league.
 
 # CSV historical service singletons created in csv_player_history.py
 # (one per league CSV file). Indirection keeps the league dispatch
 # centralized rather than scattered through _analyze_single_event.
 _CSV_SERVICE_BY_LEAGUE: Dict[str, Any] = {
     "nba": csv_player_service,
-    "wnba": wnba_csv_player_service,
 }
 
 def _resolve_sport_key(league: str) -> str:
@@ -203,9 +197,8 @@ STORED_MIN_SAMPLE_GAMES = 5
 def read_tier(probability: float | None) -> str | None:
     """Map a probability onto a read tier.
 
-    NBA passes ``combined_probability``. WNBA passes the historical
-    rate, because a WNBA pick has no combined probability. The cutoffs
-    are the same either way.
+    The caller passes ``combined_probability``. The cutoffs do not
+    depend on which probability that number came from.
 
     Args:
         probability: The probability the tier is based on, or None.
@@ -261,7 +254,7 @@ def choose_daily_pick_side(
 DAILY_PICKS_CACHE_KEY = "daily_picks"
 
 # NBA payloads from before injury_status_raw live under the unversioned
-# key. Readers and writers use v2 only. WNBA stays unversioned.
+# key. Readers and writers use v2 only.
 NBA_DAILY_PICKS_CACHE_VERSION = "v2"
 
 # Cache TTL (15 minutes)
@@ -272,24 +265,26 @@ def daily_picks_cache_key(league: str, date: str, tz_offset_minutes: int) -> str
     """Redis key for one league, local date, and timezone offset.
 
     NBA keys include ``v2`` so a payload stored before
-    ``injury_status_raw`` is not read. WNBA keys stay
-    ``daily_picks:wnba:{date}:tz{offset}``.
+    ``injury_status_raw`` is not read.
 
     Args:
-        league: ``nba`` or ``wnba``.
+        league: ``nba``.
         date: Local date YYYY-MM-DD.
         tz_offset_minutes: Minutes east of UTC. UTC+8 is 480.
 
     Returns:
-        ``daily_picks:nba:v2:{date}:tz{offset}`` or the unversioned WNBA key.
+        ``daily_picks:nba:v2:{date}:tz{offset}``.
+
+    Raises:
+        ValueError: ``league`` is not ``nba``.
     """
     league_key = league.lower()
-    if league_key == "nba":
-        return (
-            f"{DAILY_PICKS_CACHE_KEY}:nba:{NBA_DAILY_PICKS_CACHE_VERSION}:"
-            f"{date}:tz{tz_offset_minutes}"
-        )
-    return f"{DAILY_PICKS_CACHE_KEY}:{league_key}:{date}:tz{tz_offset_minutes}"
+    if league_key != "nba":
+        raise ValueError(f"Unsupported league for daily-picks cache: {league!r}")
+    return (
+        f"{DAILY_PICKS_CACHE_KEY}:nba:{NBA_DAILY_PICKS_CACHE_VERSION}:"
+        f"{date}:tz{tz_offset_minutes}"
+    )
 
 
 def _optional_stat(value: Any) -> float | None:
@@ -305,19 +300,23 @@ def _optional_stat(value: Any) -> float | None:
 def board_score(pick: DailyPick, league: str = "nba") -> float | None:
     """Probability the daily-picks floor is applied to.
 
-    NBA uses ``combined_probability``. A missing or non-finite combined
-    score does not fall back to the historical rate, so that row leaves
-    the board. WNBA has no combined probability and keeps the historical
-    rate.
+    The score is ``combined_probability``. A missing or non-finite
+    combined score does not fall back to the historical rate, so that
+    row leaves the board.
 
     Args:
         pick: One stored pick.
-        league: ``nba`` or ``wnba``. Anything else uses the NBA score.
+        league: Must be ``nba``.
 
     Returns:
         A finite probability, or None when the score cannot be used.
+
+    Raises:
+        ValueError: ``league`` is not ``nba``.
     """
-    raw = pick.probability if league.lower() == "wnba" else pick.combined_probability
+    if league.lower() != "nba":
+        raise ValueError(f"Unsupported league for board score: {league!r}")
+    raw = pick.combined_probability
     if raw is None or isinstance(raw, bool) or not isinstance(raw, (int, float)):
         return None
     number = float(raw)
@@ -329,10 +328,10 @@ def board_score(pick: DailyPick, league: str = "nba") -> float | None:
 def sort_stored_picks(picks: List[DailyPick], league: str = "nba") -> None:
     """Order a stored list by the score that board uses.
 
-    NBA orders by ``combined_probability``. WNBA orders by the historical
-    rate. A missing or non-finite score sorts last, so a row that cannot
-    reach the board does not sit above one that can. Equal scores keep
-    the order analysis produced them in.
+    The list is ordered by ``combined_probability``. A missing or
+    non-finite score sorts last, so a row that cannot reach the board
+    does not sit above one that can. Equal scores keep the order
+    analysis produced them in.
 
     ``best_top_reads`` still picks the highest historical probability.
     On a tie it keeps the earlier row of this list, so an NBA tie keeps
@@ -341,7 +340,7 @@ def sort_stored_picks(picks: List[DailyPick], league: str = "nba") -> None:
 
     Args:
         picks: Stored candidates. Sorted in place.
-        league: ``nba`` or ``wnba``. Passed to ``board_score``.
+        league: ``nba``. Passed to ``board_score``.
     """
 
     def key(pick: DailyPick) -> tuple[bool, float]:
@@ -364,16 +363,14 @@ def select_daily_picks(
 
     The stored list can include Lean rows and short NBA samples. This is
     the filter the NBA daily-picks route applies. Defaults are the
-    published board: combined probability 0.65 and 10 games. WNBA passes
-    ``league="wnba"`` and is filtered on the historical rate instead.
+    published board: combined probability 0.65 and 10 games.
 
     Args:
-        picks: Stored picks. An NBA list is ordered by combined
-            probability (``board_score``). A WNBA list is ordered by the
-            historical rate.
+        picks: Stored picks, ordered by combined probability
+            (``board_score``).
         min_probability: Inclusive floor on ``board_score``.
         min_games: Inclusive sample floor.
-        league: ``nba`` (combined probability) or ``wnba`` (historical).
+        league: ``nba``.
 
     Returns:
         Picks that meet both floors, in the original order. An NBA row
@@ -389,7 +386,7 @@ def select_daily_picks(
         # visible. A missing blend that is not Out still leaves the
         # board. Doubtful follows its blend, the same as a
         # Questionable row.
-        if league.lower() != "wnba" and injury_blocks_combined(pick.injury_status):
+        if injury_blocks_combined(pick.injury_status):
             kept.append(pick)
             continue
         score = board_score(pick, league)
@@ -533,28 +530,17 @@ TEAM_CODE_ALIASES: Dict[str, str] = {
 def canonical_team_code(team_name: str, league: str = "nba") -> str:
     """Map a team name to its league's code.
 
-    ``league`` defaults to ``"nba"`` so existing callers keep the NBA
-    alias table. WNBA callers pass ``league="wnba"``. Lynx and Wings
-    are not NBA aliases, so they stay unresolved on the default path
-    and resolve to MIN and DAL only for WNBA. An unknown league raises
-    rather than borrowing the other table.
+    ``league`` defaults to ``"nba"``. An unknown league raises rather
+    than borrowing another table.
     """
     if not team_name:
         return ""
 
     league_key = (league or "nba").strip().lower()
-    if league_key == "wnba":
-        from app.services.lineup_source_support import detect_team_code
-
-        code = detect_team_code(team_name, league="wnba")
-        if code:
-            return code
-    elif league_key != "nba":
+    if league_key != "nba":
         raise ValueError(f"Unknown league for team code: {league!r}")
 
     normalized = re.sub(r"[^A-Z0-9]", "", team_name.upper())
-    if league_key == "wnba":
-        return normalized
     return TEAM_CODE_ALIASES.get(normalized, normalized)
 
 
@@ -584,7 +570,7 @@ def _opponent_club(
         player_team: Club label already limited to a team in this game.
         home_team: Event home name.
         away_team: Event away name.
-        league: ``nba`` or ``wnba``. The code table depends on it.
+        league: ``nba``. The code table depends on it.
 
     Returns:
         The opponent name from the event, or None when the player's club
@@ -804,10 +790,9 @@ class DailyAnalysisService:
         Args:
             probability_threshold: When set, this cutoff is the only storage
                 gate and the sample floor stays ``MIN_SAMPLE_GAMES``. When
-                omitted, NBA storage uses the Lean floor and
-                ``STORED_MIN_SAMPLE_GAMES``. WNBA stays on 0.65 and 10 games
-                either way. The default HTTP query, not this constructor, is
-                what the published board shows.
+                omitted, storage uses the Lean floor and
+                ``STORED_MIN_SAMPLE_GAMES``. The default HTTP query, not
+                this constructor, is what the published board shows.
         """
         if probability_threshold is None:
             self.probability_threshold = HIGH_PROBABILITY_THRESHOLD
@@ -821,17 +806,22 @@ class DailyAnalysisService:
         """Sample floor for a row that can be stored.
 
         The default NBA service stores down to ``STORED_MIN_SAMPLE_GAMES``
-        so the query's ``min_games`` can go below 10. WNBA, and a service
-        constructed with an explicit probability threshold, keep
+        so the query's ``min_games`` can go below 10. A service
+        constructed with an explicit probability threshold keeps
         ``MIN_SAMPLE_GAMES``.
 
         Args:
-            league: ``nba`` or ``wnba``.
+            league: ``nba``.
 
         Returns:
             Inclusive minimum ``n_games``.
+
+        Raises:
+            ValueError: ``league`` is not ``nba``.
         """
-        if league.lower() == "nba" and not self._explicit_probability_threshold:
+        if league.lower() != "nba":
+            raise ValueError(f"Unsupported league: {league!r}")
+        if not self._explicit_probability_threshold:
             return STORED_MIN_SAMPLE_GAMES
         return MIN_SAMPLE_GAMES
 
@@ -847,18 +837,23 @@ class DailyAnalysisService:
         Over wins when both sides clear that bar. The default NBA service
         tries the Lean floor only after that first choice misses. Trying
         Lean first would store a 0.57 over and drop a 0.90 under, and the
-        default query would then lose the under. WNBA and an explicit
-        threshold use one cutoff only.
+        default query would then lose the under. An explicit threshold
+        uses one cutoff only.
 
         Args:
             p_over: Share of prior games strictly above the line.
             p_under: Share of prior games strictly below the line.
-            league: ``nba`` or ``wnba``.
+            league: ``nba``.
 
         Returns:
             ``("over"|"under", rate)`` or ``(None, None)``.
+
+        Raises:
+            ValueError: ``league`` is not ``nba``.
         """
-        if league.lower() != "nba" or self._explicit_probability_threshold:
+        if league.lower() != "nba":
+            raise ValueError(f"Unsupported league: {league!r}")
+        if self._explicit_probability_threshold:
             return choose_daily_pick_side(
                 p_over, p_under, self.probability_threshold
             )
@@ -892,12 +887,9 @@ class DailyAnalysisService:
             date: Analysis date (YYYY-MM-DD). None means the America/New_York slate date.
             use_cache: Whether to use cache, default True
             tz_offset_minutes: Timezone offset in minutes, default 480 (UTC+8, Taipei)
-            league: League key — ``"nba"`` (default) or ``"wnba"``. Controls
-                    The Odds API ``sport_key`` (``basketball_nba`` vs
-                    ``basketball_wnba``), which CSV history service is used
-                    for probability lookup, and the Redis cache namespace.
-                    Default ``"nba"`` preserves existing callers unchanged.
-                    Raises ``ValueError`` on an unknown league.
+            league: ``"nba"``. Selects the Odds API sport key, the NBA CSV
+                    history service, and the Redis cache namespace.
+                    Raises ``ValueError`` on any other league.
 
         Returns:
             DailyPicksResponse: Contains all high-probability player picks
@@ -906,7 +898,6 @@ class DailyAnalysisService:
             >>> service = DailyAnalysisService()
             >>> result = await service.run_daily_analysis()
             >>> print(f"Found {result.total_picks} high-probability picks")
-            >>> wnba_result = await service.run_daily_analysis(league="wnba")
         """
         start_time = time.time()
 
@@ -920,8 +911,7 @@ class DailyAnalysisService:
             date = nba_slate_date()[0]
 
         # 1. Check cache (league-namespaced + timezone-scoped, SPO-35)
-        # Pre-SPO-35 keys lived under f"daily_picks:{date}:tz{tz}" and would
-        # have produced cross-league collisions once WNBA shipped. They roll
+        # Pre-SPO-35 keys lived under f"daily_picks:{date}:tz{tz}". They roll
         # off naturally within 15 min (DAILY_PICKS_CACHE_TTL).
         if use_cache:
             cache_key = daily_picks_cache_key(
@@ -942,23 +932,6 @@ class DailyAnalysisService:
                         f"{date} (tz={tz_offset_minutes})"
                     )
                     return cached
-
-        # After the cache read, before any Odds API call or Redis write.
-        # A stored board is returned above. A miss becomes an empty board
-        # and is not stored. NBA never enters this branch.
-        if league_normalized == "wnba" and not settings.wnba_jobs_enabled:
-            logger.info(
-                "WNBA_JOBS_ENABLED is false; daily analysis skipped for %s",
-                date,
-            )
-            return DailyPicksResponse(
-                date=date,
-                analyzed_at=datetime.now(timezone.utc).isoformat(),
-                total_picks=0,
-                picks=[],
-                stats=None,
-                message="WNBA jobs are paused (WNBA_JOBS_ENABLED=false)",
-            )
 
         print(f"🚀 [{league_normalized.upper()}] Starting daily analysis: {date}")
 
@@ -994,7 +967,7 @@ class DailyAnalysisService:
         # NBA injury rows come from Redis. A miss, a stale body, or a
         # read error logs once inside the loader and leaves every
         # injury_status null. This does not call BALLDONTLIE, and a
-        # failure here must not abort the board. WNBA does not read it.
+        # failure here must not abort the board.
         injury_entries: list[dict[str, Any]] | None = None
         if league_normalized == "nba":
             try:
@@ -1035,15 +1008,13 @@ class DailyAnalysisService:
                 print(f"⚠️ Failed to analyze event {event_id}: {e}")
                 continue
 
-        # 4. Order the stored list by the score the board uses.
-        # NBA: combined_probability. WNBA: the historical rate. A missing
+        # 4. Order the stored list by combined_probability. A missing
         # score sorts last. Equal scores keep analysis order.
         sort_stored_picks(all_picks, league_normalized)
 
         # 5. Calculate statistics. high_prob_count stays the published
-        # board (0.65 and 10 games) even when NBA storage also kept Lean
-        # rows and shorter samples. NBA scores that board on
-        # combined_probability. WNBA scores it on the historical rate.
+        # board (0.65 and 10 games) even when storage also kept Lean
+        # rows and shorter samples. The board scores combined_probability.
         # The default query then reports the same total_picks as this count.
         duration = time.time() - start_time
         published_count = len(
@@ -1103,9 +1074,8 @@ class DailyAnalysisService:
             tz_offset_minutes: Timezone offset in minutes, default 480 (UTC+8, Taipei)
                                Positive = east (like UTC+8 = 480)
                                Negative = west (like UTC-6 = -360)
-            league: League key ("nba" / "wnba"). Default "nba" preserves
-                    the pre-SPO-35 call shape; ``_resolve_sport_key``
-                    maps to the correct The Odds API ``sport_key``.
+            league: ``nba``. ``_resolve_sport_key`` maps it to
+                    ``basketball_nba``.
 
         Returns:
             List of events
@@ -1195,13 +1165,7 @@ class DailyAnalysisService:
             commence_time: Event start time
             projections: Ignored. Older callers passed a projection map.
                 The betting line is not used in its place.
-            league: League key — picks the CSV history service to query
-                    (``csv_player_service`` for NBA,
-                    ``wnba_csv_player_service`` for WNBA). The market
-                    list ``SUPPORTED_MARKETS`` is shared today because
-                    every entry in it is a hard-supported WNBA market
-                    too (Phase 0 evidence in
-                    ``docs/research/wnba-rollout/odds_api_wnba_markets.md``).
+            league: ``nba``. Selects the NBA CSV history service.
 
         Returns:
             Tuple[List[DailyPick], int, int]: (High probability picks, player count, prop count)
@@ -1212,18 +1176,15 @@ class DailyAnalysisService:
         # Older callers still pass this keyword. It is not a projection source.
         _ = projections
 
-        # Resolve the league-specific CSV history service once per event.
-        # For the NBA path we keep reading through `self.csv_service` so
-        # existing tests that monkey-patch the instance attribute
-        # (`service.csv_service = MagicMock()`) keep working without
-        # tearing them all up — backward compat for a stable test suite.
-        # For non-NBA leagues we resolve via the league registry, which
-        # is also where future leagues plug in.
-        csv_service = (
-            self.csv_service
-            if league.lower() == "nba"
-            else _resolve_csv_service(league)
-        )
+        # Read through `self.csv_service` so tests that monkey-patch the
+        # instance attribute (`service.csv_service = MagicMock()`) keep
+        # working. Any league other than nba is rejected before that.
+        if league.lower() != "nba":
+            raise ValueError(
+                f"Unsupported league: {league!r}. "
+                f"Registered: {sorted(_CSV_SERVICE_BY_LEAGUE)}"
+            )
+        csv_service = self.csv_service
 
         # Analyze each metric
         for market_key, metric_key in SUPPORTED_MARKETS:
@@ -1267,8 +1228,8 @@ class DailyAnalysisService:
                     n_games = history_stats.get("n_games", 0)
 
                     # Published board stays at MIN_SAMPLE_GAMES via the query.
-                    # Default NBA storage keeps a shorter sample so min_games
-                    # can ask for it. WNBA stays at MIN_SAMPLE_GAMES.
+                    # Default storage keeps a shorter sample so min_games
+                    # can ask for it.
                     if n_games < self._candidate_min_games(league):
                         continue
 
@@ -1312,7 +1273,7 @@ class DailyAnalysisService:
                     # API description has no
                     # bdl_player_id, so the match is the full name with
                     # the suffix kept. A missing or ambiguous name stays
-                    # null on both fields. WNBA stays null on both.
+                    # null on both fields.
                     has_projection = False
                     projected_value = None
                     projected_minutes = None
@@ -1365,16 +1326,10 @@ class DailyAnalysisService:
                         injury_status=injury_status,
                         injury_status_raw=injury_status_raw,
                         lineup_confirmed=lineup_confirmed,
-                        # NBA tier is filled after the signal step. Starting
+                        # Tier is filled after the signal step. Starting
                         # at None means a raised signal call cannot leave
                         # the historical label on a row whose blend is null.
-                        # WNBA never runs that step, so it keeps the
-                        # historical label here.
-                        tier=(
-                            None
-                            if league.lower() == "nba"
-                            else read_tier(side_probability)
-                        ),
+                        tier=None,
                         p_over=round(p_over, 4) if p_over is not None else None,
                         p_under=round(p_under, 4) if p_under is not None else None,
                         season_mean=_optional_stat(history_stats.get("season_mean")),
@@ -1556,17 +1511,19 @@ def _with_nba_signal_verdicts(
     bookmakers_data: List[Dict[str, Any]],
     game_logs: List[Dict[str, Any]],
 ) -> DailyPick:
-    """Attach the NBA signals on a pick. WNBA is returned unchanged.
+    """Attach the NBA signals on a pick.
 
     The projection slot is omitted. A market, last-10, history, or
     defense input that fails still serializes as null.
 
-    Both new fields stay None for WNBA. The bookmaker list is the snapshot
-    already fetched for this market; this does not request odds again and
-    does not change how lines are grouped.
+    The bookmaker list is the snapshot already fetched for this market.
+    This does not request odds again and does not change how lines are grouped.
+
+    Raises:
+        ValueError: ``league`` is not ``nba``.
     """
     if league.lower() != "nba":
-        return pick
+        raise ValueError(f"Unsupported league for signal verdicts: {league!r}")
     values = _recent_stat_values(game_logs)
     last10 = values[-10:] if len(values) >= 10 else None
     signals, combined, _adjustment = build_nba_signals(
@@ -1585,9 +1542,7 @@ def _with_nba_signal_verdicts(
     # would leave the list holding the pre-signal object.
     pick.signals = signals
     pick.combined_probability = combined
-    # NBA tier follows the calibrated probability. The historical label
-    # set on the constructor is what WNBA keeps, because this function
-    # returns before this assignment when the league is not NBA.
+    # Tier follows the calibrated probability.
     pick.tier = read_tier(combined)
     return pick
 
@@ -1640,8 +1595,8 @@ def best_top_reads(
 
     The cache payload is the JSON written by ``run_daily_analysis``.
     Equal historical probabilities keep the earlier row. The stored
-    list is ordered by ``sort_stored_picks`` (the blend for NBA, the
-    historical rate for WNBA), so an NBA tie keeps the higher blend.
+    list is ordered by ``sort_stored_picks`` (the blend), so a tie
+    keeps the higher blend.
 
     Each event is chosen on its own. The game is that ``event_id``.
     The player is the stored ``player_name``. A candidate is skipped
@@ -1652,8 +1607,7 @@ def best_top_reads(
     picks and ``/reads`` use. The next-highest finite candidate on
     that same event is used. When every candidate is Out, that event
     is absent and its ``top_read`` stays null. ``injury_entries``
-    left as None does not skip anyone. WNBA does not call this with
-    a snapshot.
+    left as None does not skip anyone.
 
     Args:
         cached: Daily-picks cache document, or anything that is not one.

@@ -2,12 +2,11 @@
 
 Every HTTP body is a recorded capture from ``tests/fixtures/``:
 ``bdl/games_2026-11-11.json``, ``bdl/games__season1900_empty.json`` and
-``bdl/lineups_18447393_2026-01-15_agents_429.json`` for BALLDONTLIE, and
-``odds_api_events__basketball_nba.json`` for The Odds API (only ``commence_time``
-and ``sport_key`` move, as in the SPO-144 tests). A 5xx carries no body.
+``bdl/lineups_18447393_2026-01-15_agents_429.json`` for BALLDONTLIE. A 5xx
+carries no body.
 
-The real clients run (``BdlClient`` and ``TheOddsAPIProvider._make_request``), so
-retry counts are the clients' own. Trigger fire times come from the real
+The real BALLDONTLIE client runs, so retry counts are the client's own.
+Trigger fire times come from the real
 ``CronTrigger`` objects ``SchedulerService.start()`` registers. No network.
 
 Recovery clocks are 16:05 CT and later, never a quarter hour, so the failure
@@ -21,7 +20,6 @@ import json
 import logging
 import os
 import sys
-from copy import deepcopy
 from datetime import datetime, timedelta
 from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
@@ -35,23 +33,19 @@ from pydantic import SecretStr
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from app.services import bdl_client as bdl_module
-from app.services import odds_theoddsapi as odds_module
 from app.services.cache import cache_service
 from app.services.scheduler import (
     SchedulerService,
     lineup_active_window_covers,
     nba_lineup_tips_cache_key,
     nba_slate_date,
-    wnba_lineup_tips_cache_key,
 )
 from app.settings import settings
 
 FIXTURES = Path(__file__).resolve().parent / "fixtures"
 CHICAGO = ZoneInfo("America/Chicago")
 _BDL_KEY = "unit-test-bdl-key-spo144i"
-_ODDS_KEY = "unit-test-odds-key-spo144i"
 _REAL_BDL_CLIENT = bdl_module.BdlClient
-_REAL_ASYNC_CLIENT = httpx.AsyncClient
 _START = 1_800_000_000.0  # later than the recorded x-ratelimit-reset
 
 
@@ -110,52 +104,12 @@ def _install_bdl(monkeypatch: pytest.MonkeyPatch, server: _BdlServer) -> fakered
     return fake
 
 
-def _wnba_events(*stamps: str) -> list[dict]:
-    recorded = json.loads((FIXTURES / "odds_api_events__basketball_nba.json").read_text())
-    events = []
-    for stamp, row in zip(stamps, recorded):
-        event = deepcopy(row)
-        event["sport_key"] = "basketball_wnba"
-        event["commence_time"] = stamp
-        events.append(event)
-    return events
-
-
-class _OddsServer:
-    def __init__(self, status: int, events: list[dict]) -> None:
-        self.status = status
-        self.events = events
-        self.healthy = False
-        self.paths: list[str] = []
-
-    def handler(self, request: httpx.Request) -> httpx.Response:
-        self.paths.append(request.url.path)
-        if self.healthy:
-            return httpx.Response(200, json=self.events)
-        return httpx.Response(self.status)
-
-
-def _install_odds(monkeypatch: pytest.MonkeyPatch, server: _OddsServer) -> fakeredis.aioredis.FakeRedis:
-    fake = fakeredis.aioredis.FakeRedis(decode_responses=True)
-    monkeypatch.setattr(cache_service, "_client", fake)
-
-    def _factory(*args: object, **kwargs: object) -> httpx.AsyncClient:
-        kwargs["transport"] = httpx.MockTransport(server.handler)
-        return _REAL_ASYNC_CLIENT(*args, **kwargs)
-
-    monkeypatch.setattr(odds_module.httpx, "AsyncClient", _factory)
-    monkeypatch.setattr(settings, "odds_api_key", _ODDS_KEY)
-    monkeypatch.setattr(odds_module.odds_provider, "api_key", _ODDS_KEY)
-    return fake
-
-
 def _app_warnings(caplog: pytest.LogCaptureFixture, needle: str) -> list[str]:
     return [r.getMessage() for r in caplog.records
             if r.name.startswith("app.") and r.levelno == logging.WARNING and needle in r.getMessage()]
 
 
-def _triggers(monkeypatch: pytest.MonkeyPatch, wnba_enabled: bool = True) -> dict[str, object]:
-    monkeypatch.setattr(settings, "wnba_jobs_enabled", wnba_enabled)
+def _triggers(monkeypatch: pytest.MonkeyPatch) -> dict[str, object]:
     with patch("app.services.scheduler.AsyncIOScheduler") as mock_sched:
         instance = MagicMock()
         instance.get_jobs.return_value = []
@@ -252,38 +206,6 @@ def test_nba_recorded_empty_page_still_pins_the_slate(monkeypatch: pytest.Monkey
     fetch.assert_not_awaited()
 
 
-@pytest.mark.parametrize("status", [429, 500])
-def test_wnba_failed_read_retries_next_tick_and_restart(
-    monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture, status: int
-) -> None:
-    server = _OddsServer(status, _wnba_events("2026-07-15T23:00:00Z"))
-    fake = _install_odds(monkeypatch, server)
-    fetch = AsyncMock(return_value=[])
-    monkeypatch.setattr("app.services.scheduler.wnba_lineup_service.fetch_and_store", fetch)
-    caplog.set_level(logging.DEBUG)
-    seen: dict[str, object] = {}
-
-    async def _go() -> None:
-        service = SchedulerService()
-        await service._run_wnba_lineup_fetch_pre_tipoff_job(now=_chicago(2026, 7, 15, 16, 5))
-        seen["after_one"] = len(server.paths)
-        await service._run_wnba_lineup_fetch_pre_tipoff_job(now=_chicago(2026, 7, 15, 16, 10))
-        seen["after_two"] = len(server.paths)
-        seen["stored"] = await fake.get(wnba_lineup_tips_cache_key("2026-07-15"))
-        server.healthy = True
-        await SchedulerService()._run_wnba_lineup_fetch_pre_tipoff_job(now=_chicago(2026, 7, 15, 16, 20))
-
-    asyncio.run(_go())
-
-    assert seen["after_one"] == 3  # _make_request's own three attempts, unchanged
-    assert seen["after_two"] == 6
-    assert set(server.paths) == {"/v4/sports/basketball_wnba/events"}
-    assert seen["stored"] is None
-    assert len(_app_warnings(caplog, "schedule unreadable")) == 1
-    fetch.assert_awaited_once_with("2026-07-15")
-    assert not [r for r in caplog.records if r.name.startswith("app.") and _ODDS_KEY in r.getMessage()]
-
-
 # ---------------------------------------------------------------------------
 # One read per slate on success; quarter-hour ticks scrape once
 # ---------------------------------------------------------------------------
@@ -321,40 +243,6 @@ def test_nba_full_day_one_read_and_one_scrape_per_tick(monkeypatch: pytest.Monke
     assert len(window) == 60 and all(scrapes[t] == 1 for t in window)
 
 
-def test_wnba_quarter_hour_ticks_scrape_once_and_gap_stays_closed(monkeypatch: pytest.MonkeyPatch) -> None:
-    trig = _triggers(monkeypatch)
-    server = _OddsServer(500, _wnba_events("2026-07-15T23:00:00Z", "2026-07-16T01:30:00Z"))
-    server.healthy = True
-    _install_odds(monkeypatch, server)
-    fetch = AsyncMock(return_value=[])
-    monkeypatch.setattr("app.services.scheduler.wnba_lineup_service.fetch_and_store", fetch)
-    day0, day1 = _chicago(2026, 7, 15, 0, 0), _chicago(2026, 7, 16, 0, 0)
-    five = set(_fires(trig["wnba_lineup_fetch_pre_tipoff"], day0, day1))
-    fifteen = set(_fires(trig["wnba_lineup_fetch_active_window"], day0, day1))
-    scrapes: dict[datetime, int] = {}
-
-    async def _go() -> None:
-        service = SchedulerService()
-        for tick in sorted(five | fifteen):
-            before = fetch.await_count
-            if tick in five:
-                await service._run_wnba_lineup_fetch_pre_tipoff_job(now=tick)
-            if tick in fifteen:
-                await service._run_wnba_lineup_fetch_job(now=tick)
-            scrapes[tick] = fetch.await_count - before
-
-    asyncio.run(_go())
-
-    assert server.paths == ["/v4/sports/basketball_wnba/events"]
-    assert max(scrapes.values()) == 1
-    for start, end in (((16, 0), (18, 0)), ((18, 30), (20, 30))):
-        ticks = [t for t in five if _chicago(2026, 7, 15, *start) <= t < _chicago(2026, 7, 15, *end)]
-        assert ticks and all(scrapes[t] == 1 for t in ticks)
-    gap = [t for t in five if _chicago(2026, 7, 15, 18, 5) <= t < _chicago(2026, 7, 15, 18, 30)
-           and t.minute % 15]
-    assert gap and all(scrapes[t] == 0 for t in gap)
-
-
 # ---------------------------------------------------------------------------
 # The gate and the grid against the real registered triggers
 # ---------------------------------------------------------------------------
@@ -364,31 +252,31 @@ def test_wnba_quarter_hour_ticks_scrape_once_and_gap_stays_closed(monkeypatch: p
 def test_gate_matches_the_registered_fifteen_minute_triggers(
     monkeypatch: pytest.MonkeyPatch, day: tuple[int, int, int]
 ) -> None:
-    """Standard, spring-forward, daylight, fall-back days: gate == real CronTrigger fire set, both leagues."""
+    """Standard, spring-forward, daylight, fall-back days: gate == real CronTrigger fire set."""
     trig = _triggers(monkeypatch)
     day0 = _chicago(*day, 0, 0)
     day1 = day0 + timedelta(days=1)
     five = _fires(trig["lineup_fetch_pre_tipoff"], day0, day1)
-    for job in ("lineup_fetch_active_window", "wnba_lineup_fetch_active_window"):
-        fifteen = set(_fires(trig[job], day0, day1))
-        assert fifteen
-        assert {t for t in five if lineup_active_window_covers(t)} == fifteen
+    fifteen = set(_fires(trig["lineup_fetch_active_window"], day0, day1))
+    assert fifteen
+    assert {t for t in five if lineup_active_window_covers(t)} == fifteen
 
 
 def test_five_minute_grid_is_9_to_22_and_first_read_of_a_slate_is_9am_that_day(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     trig = _triggers(monkeypatch)
-    for job in ("lineup_fetch_pre_tipoff", "wnba_lineup_fetch_pre_tipoff"):
-        fires = _fires(trig[job], _chicago(2026, 11, 10, 0, 0), _chicago(2026, 11, 12, 0, 0))
-        local = [t.astimezone(CHICAGO) for t in fires]
-        assert {t.hour for t in local} == set(range(9, 23))
-        assert (local[-1].hour, local[-1].minute) == (22, 55)
-        first_for_slate = min(t for t in fires if nba_slate_date(t)[0] == "2026-11-11")
-        assert first_for_slate.astimezone(CHICAGO) == _chicago(2026, 11, 11, 9, 0)
+    fires = _fires(trig["lineup_fetch_pre_tipoff"], _chicago(2026, 11, 10, 0, 0), _chicago(2026, 11, 12, 0, 0))
+    local = [t.astimezone(CHICAGO) for t in fires]
+    assert {t.hour for t in local} == set(range(9, 23))
+    assert (local[-1].hour, local[-1].minute) == (22, 55)
+    first_for_slate = min(t for t in fires if nba_slate_date(t)[0] == "2026-11-11")
+    assert first_for_slate.astimezone(CHICAGO) == _chicago(2026, 11, 11, 9, 0)
 
 
-def test_wnba_flag_off_registers_no_wnba_lineup_jobs(monkeypatch: pytest.MonkeyPatch) -> None:
-    trig = _triggers(monkeypatch, wnba_enabled=False)
-    assert not [job for job in trig if job.startswith("wnba_lineup")]
+def test_registered_jobs_include_no_removed_lineup_ids(monkeypatch: pytest.MonkeyPatch) -> None:
+    trig = _triggers(monkeypatch)
+    assert not [job for job in trig if "wnba" in job]
     assert {"lineup_fetch_pre_tipoff", "lineup_fetch_active_window", "lineup_fetch_opening"} <= set(trig)
+
+

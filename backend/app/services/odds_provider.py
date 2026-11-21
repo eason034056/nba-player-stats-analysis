@@ -14,7 +14,7 @@ from typing import Any, Literal, Optional, Protocol, runtime_checkable
 
 
 # League key used by routes, jobs, and the gateway. Not an upstream sport key.
-League = Literal["nba", "wnba"]
+League = Literal["nba"]
 
 # Game state on ProviderEvent. The Odds API events list has no status field,
 # so that provider reports "scheduled" for every row it returns.

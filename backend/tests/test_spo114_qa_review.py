@@ -1074,21 +1074,6 @@ async def test_more_malformed_ids_are_404_without_a_query(client, monkeypatch, o
     _assert_no_live_calls(odds_spies)
 
 
-@pytest.mark.asyncio
-async def test_well_formed_unknown_event_is_empty_200_and_wnba_route_is_absent(
-    client, monkeypatch, odds_spies
-):
-    event_id = "a" * 128
-    assert event_id_is_well_formed(event_id)
-    db = _FakeDB([])
-    _install(monkeypatch, db, _FakeCache())
-    response = await client.get(f"/api/nba/events/{event_id}/props")
-    assert response.status_code == 200
-    assert response.json()["markets"] == []
-    assert response.json()["source"] == "snapshot"
-    missing = await client.get(f"/api/wnba/events/{event_id}/props")
-    assert missing.status_code == 404
-    _assert_no_live_calls(odds_spies)
 
 
 @pytest.mark.asyncio

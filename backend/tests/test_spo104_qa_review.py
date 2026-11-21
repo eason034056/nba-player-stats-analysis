@@ -29,7 +29,6 @@ if str(_BACKEND) not in sys.path:
     sys.path.insert(0, str(_BACKEND))
 
 from app.api import nba as nba_api  # noqa: E402
-from app.api import wnba as wnba_api  # noqa: E402
 from app.middleware.rate_limit import limiter  # noqa: E402
 from app.services.cache import CacheService  # noqa: E402
 from app.services.csv_player_history import (  # noqa: E402
@@ -58,7 +57,6 @@ _PLAYER_POINTS = _BACKEND / "tests" / "fixtures" / "odds_api_event_odds__player_
 _NULL_NO_FIELDS = ("under_odds", "p_under_imp", "no_price", "p_no_imp")
 _ROUTES = (
     ("/api/nba/props/no-vig", nba_api),
-    ("/api/wnba/props/no-vig", wnba_api),
 )
 
 
@@ -104,7 +102,7 @@ def _snapshot(data: dict, fetched_at: str = "2026-05-08T12:00:00Z") -> MarketSna
 
 @pytest.fixture
 def client():
-    """HTTP client for the NBA and WNBA routers, with the rate limiter off.
+    """HTTP client for the NBA router, with the rate limiter off.
 
     Redis is not running in this environment. The limiter is not what these
     tests cover.
@@ -112,7 +110,6 @@ def client():
     limiter.enabled = False
     app = FastAPI()
     app.include_router(nba_api.router)
-    app.include_router(wnba_api.router)
     try:
         with TestClient(app) as http:
             yield http
@@ -497,23 +494,14 @@ def test_naive_and_date_only_values_are_not_shifted():
     assert _coerce_date(date(2026, 11, 1)) == date(2026, 11, 1)
 
 
-def test_wnba_late_tip_uses_the_same_pacific_day():
-    logs = [
-        {"team": "Aces", "game_date": datetime(2026, 7, 14)},
-        {"team": "Mercury", "game_date": datetime(2026, 7, 15)},
-    ]
-    assert team_from_game_logs(logs, "2026-07-15T05:30:00Z") == "Aces"
-    assert team_from_game_logs(logs, "2026-07-15") == "Mercury"
 
 
 def test_recorded_lakers_hawks_tip_is_the_pacific_date(player_points):
     day = _coerce_date(player_points["commence_time"])
     assert day == date(2026, 11, 9)
     assert CacheService.build_events_key(day.isoformat(), "us") == "events:nba:2026-11-09:us"
-    assert (
-        CacheService.build_events_key(day.isoformat(), "us", league="wnba")
-        == "events:wnba:2026-11-09:us"
-    )
+    with pytest.raises(ValueError):
+        CacheService.build_events_key(day.isoformat(), "us", league="other")
     utc_day = player_points["commence_time"][:10]
     assert utc_day == "2026-11-10"
     assert CacheService.build_events_key(utc_day, "us") != CacheService.build_events_key(

@@ -57,8 +57,7 @@ def normalize_nba_season_label(value: str | None) -> str:
     """CSV season label for a query value.
 
     ``2025-26`` and ``2025-2026`` both become ``2025-2026``. A blank
-    value stays blank. A single calendar year is returned unchanged,
-    which is the WNBA shape and is not rewritten into an NBA span.
+    value stays blank. A single calendar year is returned unchanged.
     """
     text = (value or "").strip()
     if not text:

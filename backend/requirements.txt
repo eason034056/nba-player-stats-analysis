@@ -84,16 +84,6 @@ fakeredis==2.26.2
 # - 開發時使用
 python-dotenv==1.0.0
 
-# ==================== HTML 解析 (SPO-34) ====================
-# BeautifulSoup4 + lxml: WNBA lineup HTML parsing (RotoWire WNBA scraper).
-# - WNBA path needs selector-grade parsing of `is-expected`/`is-confirmed`
-#   status, `is-pct-play-N` integers, and `<a title="Full Name">`
-#   attributes — the line-strip approach used for NBA can't access any of
-#   those without losing fidelity.
-# - The existing NBA path is unchanged and does not depend on BS4.
-beautifulsoup4==4.14.3
-lxml==6.0.2
-
 # ==================== ML dataset export (SPO-138j) ====================
 # Offline Parquet export (python -m app.ml.build_dataset).
 # The API process does not import app.ml.

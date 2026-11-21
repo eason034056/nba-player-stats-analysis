@@ -110,7 +110,7 @@ def ou_payload() -> dict:
     return _load(_OU_FIXTURE)
 
 
-@pytest.mark.parametrize("module_path", ["app.api.nba", "app.api.wnba"])
+@pytest.mark.parametrize("module_path", ["app.api.nba"])
 def test_one_sided_dd_leaves_under_empty(dd_payload, module_path):
     import importlib
 
@@ -185,7 +185,7 @@ def _select_books(payload: dict, mode: str) -> list[dict]:
     return kept
 
 
-@pytest.mark.parametrize("module_path", ["app.api.nba", "app.api.wnba"])
+@pytest.mark.parametrize("module_path", ["app.api.nba"])
 @pytest.mark.parametrize(
     ("mode", "uses_prior", "prior_count"),
     [
@@ -224,7 +224,7 @@ def test_consensus_prior_flags(dd_payload, module_path, mode, uses_prior, prior_
         assert len(response.results) == prior_count
 
 
-@pytest.mark.parametrize("module_path", ["app.api.nba", "app.api.wnba"])
+@pytest.mark.parametrize("module_path", ["app.api.nba"])
 def test_over_under_line_is_not_synthetic(ou_payload, module_path):
     import importlib
 

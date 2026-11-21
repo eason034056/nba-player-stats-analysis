@@ -290,7 +290,7 @@ def test_home_and_away_implied_points_stay_one_row_per_player() -> None:
         _odds(1, "fanduel", T, -5, 220),
         _odds(1, "betmgm", T, -4, 220),
         _odds(2, "draftkings", datetime(2015, 10, 29, 20, 0, tzinfo=UTC), -4, 220),
-        _odds(9, "draftkings", T, -20, 180, league="wnba"),
+        _odds(9, "draftkings", T, -20, 180, league="other"),
     ]
     games = [
         _game(1, on),

@@ -219,22 +219,6 @@ class TestHygieneRules:
         assert report.rows[0]["GameType"] == GAME_TYPE_REGULAR
         assert report.ambiguous == 0
 
-    def test_cross_season_duplicate_keeps_the_schedule_season(self):
-        # Same box score stored once under the wrong season and once under
-        # the season the schedule assigns. Keep the matching copy.
-        event = _recorded(_WNBA_REGULAR)
-        home, away = _sides(event)
-        date = _csv_date(event)
-        rows = [
-            _row("Maria Conde", "2025", date, home, away, pts="2"),
-            _row("Maria Conde", "2026", date, home, away, pts="2"),
-        ]
-        report = hygiene_rows(rows, [event], league="wnba")
-        assert report.output_rows == 1
-        assert report.duplicates_removed == 1
-        assert report.rows[0]["Season"] == "2026"
-        assert report.rows[0]["GameType"] == GAME_TYPE_REGULAR
-        assert report.rows[0]["Player"] == "Maria Conde"
 
     def test_recorded_2027_schedule_labels_the_current_regular_season(self):
         # The Celtics 2026-27 regular season is a curl of the site API,
@@ -347,27 +331,6 @@ class TestShippedCsv:
         ]
         assert early_regular == []
 
-    def test_wnba_maria_conde_is_deduped_onto_2026(self):
-        rows = self._rows("wnba_player_game_logs.csv")
-        conde = [
-            row for row in rows
-            if row["Player"] == "Maria Conde" and parse_csv_date(row["Date"]) == "2026-05-08"
-        ]
-        assert len(conde) == 1
-        assert conde[0]["Season"] == "2026"
-        assert conde[0]["GameType"] == GAME_TYPE_REGULAR
-        # No other player-game is stored under two seasons.
-        seen: dict[tuple[str, str, str, str], set[str]] = {}
-        for row in rows:
-            key = (
-                row["Player"].strip().lower(),
-                parse_csv_date(row["Date"]) or row["Date"],
-                row["Team"].strip().lower(),
-                row["Opponent"].strip().lower(),
-            )
-            seen.setdefault(key, set()).add(row["Season"])
-        cross = [key for key, seasons in seen.items() if len(seasons) > 1]
-        assert cross == []
 
     def test_recorded_fixture_labels_opening_night(self):
         # Ground the parser on the committed payload, not a hand-built event.
