@@ -1,6 +1,6 @@
 # SPO-138 data model
 
-Base: `origin/dev` `55750de`. The schema is [`backend/app/migrations/002_bdl_core.sql`](../../../backend/app/migrations/002_bdl_core.sql) and [`003_bdl_game_gaps.sql`](../../../backend/app/migrations/003_bdl_game_gaps.sql). This document records why each table has its shape, which readers use it, how big it gets, and what Eason decided. If this document and the migration disagree, the migration is what runs; fix this document. [backfill-plan.md](backfill-plan.md) follows from it. ER diagram: [data-model-er.drawio.svg](data-model-er.drawio.svg) (open it in draw.io to edit).
+Base: `origin/dev` `55750de`, plus later migrations through `005`. The schema is [`backend/app/migrations/002_bdl_core.sql`](../../../backend/app/migrations/002_bdl_core.sql), [`003_bdl_game_gaps.sql`](../../../backend/app/migrations/003_bdl_game_gaps.sql), [`004_read_layer.sql`](../../../backend/app/migrations/004_read_layer.sql), and [`005_bdl_pit.sql`](../../../backend/app/migrations/005_bdl_pit.sql). This document records why each table has its shape, which readers use it, how big it gets, and what Eason decided. If this document and the migration disagree, the migration is what runs; fix this document. [backfill-plan.md](backfill-plan.md) follows from it. ER diagram: [data-model-er.drawio.svg](data-model-er.drawio.svg) (open it in draw.io to edit).
 
 Eason, via Lead, 2026-11-12 9:22 PM CT: backfill every data type to the earliest season BDL offers; old Odds API history lives only in the pre-wipe RDS snapshot (no S3 export of that history). Amended by Eason 2026-11-15: games and stats start at 2000-01, not 1946-47 (§9). The other data types keep their start seasons, all later than 2000. Eason's SPO-130 decisions (SPO-130 plan §7, not in this repo): BetParx and Bally Bet count as one source; drop alt lines; add 130j pre-tip closing snapshots; no RotoWire fallback for NBA.
 
@@ -82,7 +82,7 @@ Conventions, unless a table says otherwise:
 
 - **PK:** `(league, bdl_player_id)`
 - **Index:** `(league, display_name)` for the current name-based routes until they switch to player id
-- `position` is the player's position today. The position in one game is `game_lineups.position` (2025-26 on).
+- `position` is the player's position today, as BALLDONTLIE sends it. It is not the position in one game. A game's position is `game_lineups.position` (actual lineup, 2025-26 on) or `projected_lineup_players.position` (projected starters). See §12.
 
 ### 1.5 `games`
 
@@ -213,7 +213,7 @@ BDL `/v1/player_injuries` is a current roster, not a historical log (docs; no da
 | bdl_game_id | BIGINT NOT NULL | |
 | bdl_player_id | INTEGER NOT NULL | |
 | bdl_team_id | INTEGER | |
-| starter | BOOLEAN NOT NULL | |
+| starter | BOOLEAN NOT NULL | True when BALLDONTLIE marks the player as a starter in that game. `player_game_log.is_starter` copies it and is NULL when the game has no lineup row. It is not a projected-lineup flag: `projected_lineup_players` has no starter column, because a projected row is already one of the five starters. See §12 |
 | position | TEXT | |
 
 - **PK:** `(league, bdl_game_id, bdl_player_id)`. Its prefix serves the by-game read, so there is no separate index.
@@ -444,7 +444,8 @@ Suggested versions:
 2. **`002_bdl_core.sql`** — the new tables and indexes in §1, all additive, one transaction (or every statement `IF NOT EXISTS` / `CREATE INDEX IF NOT EXISTS`) so a mid-run container restart is retry-safe. Compose `restart: unless-stopped` will rerun the entrypoint; if `002` is not retry-safe the container loops and `/api/health` never becomes ready. No drop, no rewrite of the six tables.
 3. **`003_bdl_game_gaps.sql`** — the `bdl_games_with_gaps` view and `player_game_log` without those games (§1.6). Views only; no table changes. It reached `dev` after 004, so a database can record 004 first; the runner applies every version not yet in `schema_migrations`, and 004 does not read these views.
 4. **`004_read_layer.sql`** — `predictions` and the read views (§11).
-5. Later, after 130 writers/readers and the 138 wipe, and only after the DROP gate below: **`00N_drop_legacy_snapshots.sql`** drops `odds_line_snapshots` and `team_lineup_snapshots` (and the two SportsDataIO tables if that has not already happened).
+5. **`005_bdl_pit.sql`** — point-in-time reads, coverage, hit rate, and the integrity backstop (§12). No `ALTER TABLE` of a 002 table. A unique index and triggers refuse the four bad writes the view also names.
+6. Later, after 130 writers/readers and the 138 wipe, and only after the DROP gate below: **`00N_drop_legacy_snapshots.sql`** drops `odds_line_snapshots` and `team_lineup_snapshots` (and the two SportsDataIO tables if that has not already happened).
 
 **Same image, same PR (must-fix M2).** The first foundation deploy must ship, in **one** image and **one** PR, both of:
 
@@ -638,3 +639,50 @@ Open questions for Eason (they don't block approval): whether to stop the backen
 | `current_projected_lineups` | View: newest projected version per game and team | Frontend |
 
 The model never reads `player_prop_snapshots`; prop odds enter only the betting decision and its evaluation. Model inputs are built outside Postgres by the dataset module (SPO-138j) under the as-of rules in the decision file.
+
+## 12. Point-in-time reads: `005_bdl_pit.sql` (SPO-141, 2026-11-21)
+
+`005` adds tables, views, functions, indexes, and triggers. It does not `ALTER`, `DROP`, or `COMMENT ON` any object from `002`. `003` only adds `bdl_games_with_gaps` and replaces the view `player_game_log`; it does not change `games`, `player_game_stats`, `projected_lineups`, `projected_lineup_players`, `injury_snapshots`, `player_prop_snapshots`, or `prop_markets`, which are what `005` reads. Settlement stays `004`'s `prop_actuals`. Nothing in this section is stored hit-rate history.
+
+| Object | Kind | What it answers |
+|---|---|---|
+| `game_as_of(league, game, hours_before_tip DEFAULT 3)` | Function | T. `datetime_utc` minus the hours. NULL `datetime_utc` is 00:00 America/New_York on `games.date`, and the hours parameter is then ignored |
+| `source_refreshes` | Table | One row per poll run: `injuries`, `projected_lineups`, `game_odds_live`, `game_odds_closing`, `props_live`, `props_closing` |
+| `source_covered(league, source, as_of, staleness DEFAULT '90 minutes')` | Function | True only when a complete refresh at or before `as_of` is inside the window. False means unknown, not healthy. An incomplete run does not count |
+| `projected_lineup_sources` | Table | Side row for one `projected_lineups` version. `source` is `poll` or `backfill_final`. No row means `poll` |
+| `projected_lineup_versions` | View | `known_from` is `updated_at` for `backfill_final`, otherwise `first_seen_at` |
+| `projected_lineups_asof(league, game, as_of)` | Function | Newest version per team with `known_from <= T`, one row per projected starter. `current_projected_lineups` is unchanged |
+| `injuries_asof(league, as_of)` | Function | Latest row per player at or before T, then kept only if `listed`. Same order as `current_injuries` |
+| `teammate_availability(league, team, season, as_of)` | Function | Games dated before `as_of`. Every row has `out_basis = 'inferred_from_stats'` |
+| `player_market_results(...)` | Function | One final game before `before_date`: `over` / `under` / `push`, or `yes` / `no`, or `void` (`dnp`), or `unknown` |
+| `player_hit_rate(..., last_n, home_or_away, opponent_team_id, season_type)` | Function | Hits over decided games. Void and unknown are skipped. A push is out of the denominator |
+| `bdl_integrity_problems` | View | Backstop. Zero rows when the refusal objects are enforcing |
+| `player_prop_snapshots_player_market_game_idx`, `injury_snapshots_team_latest_idx` | Indexes | New names. `002`'s `player_prop_snapshots_player_market_idx` stays |
+
+### Refusal without changing a 002 table
+
+Eason, 2026-11-21: refuse the bad write, and keep the view. A unique index is not a table constraint. A trigger is not an `ALTER TABLE`. `pg_constraint` for the 14 tables is the same before and after `005`.
+
+| Name | On | Refuses |
+|---|---|---|
+| `player_game_stats_league_bdl_stat_id_uidx` | `player_game_stats (league, bdl_stat_id)` | A second row with the same BDL stat id. `bdl_stat_id` is `NOT NULL` in `002`, so the index has no `WHERE` |
+| `games_refuse_same_team` | `BEFORE INSERT OR UPDATE` on `games` | `home_team_id = visitor_team_id` (`games_same_team`). NULL teams are not equal, matching the view |
+| `games_refuse_orphan_stat_team` | `BEFORE UPDATE OF home_team_id, visitor_team_id` on `games` | A team change that leaves a stat row on neither side (`stat_team_not_in_game`). A score update does not fire it. Inserting the game cannot orphan a stat, because `002` requires the game row first |
+| `player_game_stats_refuse_team_not_in_game` | `BEFORE INSERT OR UPDATE` on `player_game_stats` | `bdl_team_id` is in `teams` and is neither `home_team_id` nor `visitor_team_id`. A team id that is not stored is left to the foreign key |
+| `player_prop_snapshots_refuse_market_type_mismatch` | `BEFORE INSERT OR UPDATE` on `player_prop_snapshots` | `(settle_rule = 'sum')` is not `(market_type = 'over_under')` |
+
+The prop predicate is the view's predicate. A sum market (points, rebounds, and the other counting props) must be `over_under`. `double_double` and `triple_double` are `double_digits`, so they must be `milestone`. An opening `player_points` milestone is refused before it can replace the over/under row under `002`'s opening key. The props adapter copies a milestone only for `player_double_double` and does not map `triple_double`; the database still accepts a `triple_double` milestone and refuses a `triple_double` over/under, because that is what the view names.
+
+`bdl_integrity_problems` returns `games_same_team`, `stat_id_duplicate`, `stat_team_not_in_game`, and `prop_market_type_mismatch`. With the index and the triggers in force it returns no rows. Disabling a trigger, or dropping the unique index, makes the matching rows visible. That is how a test checks the view without leaving a bad row behind.
+
+### Last-N
+
+Eason, 2026-11-21: a push uses one of the N games. `player_hit_rate` skips `void` and `unknown`, keeps `push` inside `LIMIT last_n`, and divides hits by hits plus misses only. Nothing is written back to a table.
+
+### Read notes that stay off the 002 columns
+
+These were going to be `COMMENT ON` the `002` columns. `005` does not comment on `002`. The text lives here.
+
+- **`players.position`** is the position BALLDONTLIE sends for the player today. Rolling or game-level position does not read it. One game's position is `game_lineups.position`. A projected starter's position is `projected_lineup_players.position`.
+- **`game_lineups.starter`** is true when that player started that game. `player_game_log.is_starter` is this column, and it is NULL when the game has no lineup row (before 2025-26, or a game BALLDONTLIE has not lined up). Projected lineups do not have the column: every row in `projected_lineup_players` is one of the five projected starters.
+
