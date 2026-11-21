@@ -2,9 +2,8 @@
 
 NBA rows come from the shipped excerpt
 ``tests/fixtures/csv/spo122_anfernee_simons_excerpt.csv`` and the event
-identity from the recorded Odds API body. WNBA rows come from the shipped
-``data/wnba_player_game_logs.csv``. Nothing here is typed by hand from an
-external API.
+identity from the recorded Odds API body. Nothing here is typed by hand
+from an external API.
 """
 
 from __future__ import annotations

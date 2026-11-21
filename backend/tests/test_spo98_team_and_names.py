@@ -1,7 +1,6 @@
 """SPO-98: event-day team attribution and normalized exact player names.
 
-Real rows come from ``data/nba_player_game_logs.csv`` and
-``data/wnba_player_game_logs.csv``. The shipped NBA file is a single
+Real rows come from ``data/nba_player_game_logs.csv``. The shipped NBA file is a single
 2025-2026 season; 126 players appear for more than one club, and 124 of
 those have a different team on their first game than on their last, so
 ``game_logs[0]`` after the oldest-first chart reversal labels them with

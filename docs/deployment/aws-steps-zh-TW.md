@@ -6,6 +6,32 @@
 
 允許連上 RDS 5432 的位址只有兩個 `/32`：真實的 box `/32`（只寫在 gitignore 的 `terraform.tfvars`；範例檔用 `198.51.100.10/32`），以及這台 Mac 目前的對外 IP。每天一份的 `pg-dumps/` 保留 90 天。
 
+## SPO-145：清掉本機 Redis 裡留下的 WNBA key
+
+Redis 留在這台 Mac。compose 的服務名稱是 `redis`，容器名稱是 `no-vig-nba-redis`。NBA-only 後端部署之後，清掉還留在本機 Redis 的 WNBA 快取。這一步不碰 RDS。應用程式啟動時也不會自己清 Redis。
+
+具名快取用前綴刪除就夠了：
+
+- `events:wnba:*`
+- `daily_picks:wnba:*`
+- `lineups:wnba:*`
+
+`basketball_wnba` 的 hot-key member 在 sorted set `odds:hot_keys:v1`。最後看到的時間在 `odds:hot_seen:v1:` 底下。上面三個前綴刪不到這些 member。
+
+```bash
+docker exec no-vig-nba-redis sh -c '
+  redis-cli --scan --pattern "events:wnba:*" | xargs -r redis-cli DEL
+  redis-cli --scan --pattern "daily_picks:wnba:*" | xargs -r redis-cli DEL
+  redis-cli --scan --pattern "lineups:wnba:*" | xargs -r redis-cli DEL
+'
+```
+
+對同一顆本機 Redis 執行 `FLUSHDB` 也可以。這些快取壽命很短。`FLUSHDB` 會一併清掉目前的 NBA key，後端會重建。不要對 RDS 執行 `FLUSHDB`。
+
+```bash
+docker exec no-vig-nba-redis redis-cli FLUSHDB
+```
+
 ## 1. 用 Homebrew 安裝工具
 
 ```bash

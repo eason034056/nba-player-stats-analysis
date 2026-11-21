@@ -6,6 +6,32 @@ The backend and Postgres both run on that Mac. Postgres is the `no-vig-nba-postg
 
 Step-by-step for that Mac, in Traditional Chinese: [docs/deployment/aws-steps-zh-TW.md](aws-steps-zh-TW.md).
 
+## SPO-145: flush leftover WNBA keys in local Redis
+
+Redis stays on this Mac, in the compose service `redis` (container `no-vig-nba-redis`). After the NBA-only backend is deployed, flush the leftover WNBA cache. This step does not touch RDS. Application startup does not flush Redis.
+
+A prefix delete is enough for the named caches:
+
+- `events:wnba:*`
+- `daily_picks:wnba:*`
+- `lineups:wnba:*`
+
+Hot-key members for `basketball_wnba` sit in the sorted set `odds:hot_keys:v1`. Their last-seen keys sit under `odds:hot_seen:v1:`. The three prefixes above do not remove those members.
+
+```bash
+docker exec no-vig-nba-redis sh -c '
+  redis-cli --scan --pattern "events:wnba:*" | xargs -r redis-cli DEL
+  redis-cli --scan --pattern "daily_picks:wnba:*" | xargs -r redis-cli DEL
+  redis-cli --scan --pattern "lineups:wnba:*" | xargs -r redis-cli DEL
+'
+```
+
+`FLUSHDB` on that same local Redis is also enough. These caches are short-lived. `FLUSHDB` also drops current NBA keys, and the backend rebuilds them. Do not run `FLUSHDB` against RDS.
+
+```bash
+docker exec no-vig-nba-redis redis-cli FLUSHDB
+```
+
 Placeholders only in `env.example` (`cp env.example .env`). Never commit `.env`, `terraform.tfvars`, `backend-*.hcl`, or `terraform.tfstate`.
 
 ## Stack environment

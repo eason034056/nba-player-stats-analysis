@@ -1,31 +1,21 @@
 """SPO-104 follow-ups for the offline schedule index.
 
-The Commissioner's Cup final is the recorded ESPN team schedule
-``tests/fixtures/espn/recorded/wnba_team_5_schedule_2025_type_2.json``,
-event 401736430. The compact index lists that id as a regular-season
-game with no competition notes.
+A team-schedule filename with no league prefix raises. A blank or
+missing ``GameType`` is regular season.
 """
 
 from __future__ import annotations
 
-import json
-import logging
 from pathlib import Path
 
 import pytest
 
 from app.services.game_log_hygiene import (
-    GAME_TYPE_CUP,
     GAME_TYPE_REGULAR,
     _SCHEDULE_CACHE,
     _overlay_recorded_team_schedules,
     coalesce_game_type,
-    default_schedule_path,
-    game_type_for_event,
-    load_schedule_events,
 )
-
-_CUP_EVENT_ID = "401736430"
 
 
 @pytest.fixture(autouse=True)
