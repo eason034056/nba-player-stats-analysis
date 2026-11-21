@@ -202,8 +202,7 @@ def test_recorded_statuses_are_all_handled():
     entries = normalize_bdl_injuries(INJURY_PAGE["data"], _MAPPING, fetched_at=_now_iso())
     assert {e["raw_status"] for e in entries} == raw - {"Available"}
     for entry in entries:
-        expected = "Questionable" if entry["raw_status"] == "Doubtful" else entry["raw_status"]
-        assert entry["status"] == expected
+        assert entry["status"] == entry["raw_status"]
 
 
 def test_doubtful_player_reads_as_caution_with_the_source_word(monkeypatch):
@@ -213,7 +212,7 @@ def test_doubtful_player_reads_as_caution_with_the_source_word(monkeypatch):
     historical = _agent_path(monkeypatch, service)
     report = asyncio.run(historical.get_official_injury_report(doubtful["team"], league="nba"))
     row = next(e for e in report["details"]["injuries"] if e["bdl_player_id"] == doubtful["bdl_player_id"])
-    assert row["status"] == "Questionable"
+    assert row["status"] == "Doubtful"
     assert row["raw_status"] == "Doubtful"
 
 

@@ -22,8 +22,9 @@ from app.models.agent_chat import (
     AgentVerdictCard,
     AgentVerdictEvidenceStat,
 )
+from app.services.injury_status import is_out_or_unresolved
 
-GraphRunner = Callable[[str, dict[str, Any]], Awaitable[dict[str, Any]]]
+GraphRunner =Callable[[str, dict[str, Any]], Awaitable[dict[str, Any]]]
 
 logger = logging.getLogger(__name__)
 
@@ -869,8 +870,7 @@ class AgentChatService:
         top_impact: dict[str, Any] | None = None
         impact_shift = 0.0
         for row in chemistry_rows:
-            status = str(row.get("injury_status") or "")
-            if status not in {"Out", "Questionable", "Day-To-Day"}:
+            if not is_out_or_unresolved(str(row.get("injury_status") or "")):
                 continue
             shift = -float(row.get("chemistry_delta") or 0.0)
             if top_impact is None or abs(shift) > abs(impact_shift):

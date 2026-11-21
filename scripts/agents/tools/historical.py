@@ -48,6 +48,7 @@ from app.services.csv_player_history import (
     wnba_csv_player_service,
 )
 from app.services.normalize import player_name_key
+from app.services.injury_status import is_out_or_unresolved
 
 _STAR_PLAYERS_PATH = os.path.join(_PROJECT_ROOT, "data", "star_players.json")
 
@@ -832,7 +833,7 @@ def get_availability_context(
             )
     status = player_entry["status"] if player_entry else "Healthy"
     return _signal_payload(
-        "caution" if status in ("Out", "Questionable", "Day-To-Day") else "neutral",
+        "caution" if is_out_or_unresolved(status) else "neutral",
         0.0, 1, 0.9 if player_entry else 0.6, "today", "official_injury_report",
         {"player": player, "status": status, "detail": player_entry},
     )
@@ -920,7 +921,7 @@ def auto_teammate_impact(player: str, metric: str, threshold: float, league: str
         })
 
     active_stars = [c["star"] for c in chemistry if c["injury_status"] in ("Healthy", "Probable")]
-    out_stars = [c["star"] for c in chemistry if c["injury_status"] in ("Out", "Questionable", "Day-To-Day")]
+    out_stars = [c["star"] for c in chemistry if is_out_or_unresolved(c["injury_status"])]
     scenario = f"Active: {', '.join(active_stars) or 'none'}; Out/Questionable: {', '.join(out_stars) or 'none'}"
 
     min_n = min(

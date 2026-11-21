@@ -1,7 +1,7 @@
 """SPO-135h: NBA Doubtful keeps the Questionable blend.
 
-The recorded BALLDONTLIE page stores Doubtful as status Questionable
-and keeps raw_status Doubtful. That row is the same pick as a plain
+The recorded BALLDONTLIE page stores Doubtful as status Doubtful
+(SPO-135i) and keeps raw_status Doubtful. That row is the same pick as a plain
 Questionable row: a number on daily picks and on
 GET /api/nba/events/{id}/reads, and the filtered board keeps it only
 when that number clears the floor. Out still nulls the blend and still
@@ -59,21 +59,21 @@ def _points(picks, name: str):
 
 
 def test_raw_doubtful_pick_matches_plain_questionable() -> None:
-    """A cache Doubtful row is Questionable and keeps that blend.
+    """A cache Doubtful row keeps the Questionable blend.
 
     Both names are on the recorded injury page. The odds capture's
     descriptions are replaced with those names. Prices, books, and the
     market key stay recorded.
     """
     questionable = _entry("Questionable")
-    doubtful = _entry("Questionable", raw="Doubtful")
+    doubtful = _entry("Doubtful")
     picks = _picks_for(
         [questionable["player"], doubtful["player"]],
         [questionable, doubtful],
     )
     plain = _points(picks, questionable["player"])
     raw = _points(picks, doubtful["player"])
-    assert raw.injury_status == "Questionable"
+    assert raw.injury_status == "Doubtful"
     assert plain.injury_status == "Questionable"
     assert raw.combined_probability is not None
     assert raw.combined_probability == plain.combined_probability
@@ -87,7 +87,7 @@ def test_filtered_board_keeps_raw_doubtful_only_above_the_floor() -> None:
     the floor is higher. Questionable does the same.
     """
     questionable = _entry("Questionable")
-    doubtful = _entry("Questionable", raw="Doubtful")
+    doubtful = _entry("Doubtful")
     picks = _picks_for(
         [questionable["player"], doubtful["player"]],
         [questionable, doubtful],
@@ -117,7 +117,7 @@ def test_reads_give_raw_doubtful_a_number(monkeypatch) -> None:
     ``raw_status`` set to the stored status, so the prices stay put and
     only the source word changes. The two numbers match.
     """
-    doubtful = _entry("Questionable", raw="Doubtful")
+    doubtful = _entry("Doubtful")
     event_id, rows = _points_rows()
     posted = sorted({row["player_name"] for row in rows})
     source = next(name for name in posted if name != "Dyson Daniels")
@@ -211,7 +211,7 @@ def test_wnba_literal_doubtful_keeps_todays_blend_board_and_reads() -> None:
     still no WNBA reads route.
     """
     word = _recorded_doubtful_word()
-    doubtful = _entry("Questionable", raw="Doubtful")
+    doubtful = _entry("Doubtful")
     assert doubtful["raw_status"] == word
 
     from app.services.daily_analysis import DailyAnalysisService

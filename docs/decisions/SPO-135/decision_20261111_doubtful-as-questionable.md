@@ -4,6 +4,8 @@
 - **Date:** 2026-11-11
 - **Status:** Accepted
 
+> Superseded in part by SPO-135i (2026-11-20): the cache stores Doubtful as `Doubtful`, not `Questionable`. Doubtful still keeps the Questionable blend and never blocks. See `decision_20261120_doubtful-kept.md`.
+
 ## Context
 
 The BALLDONTLIE cache stores Doubtful as `status="Questionable"` and keeps `raw_status="Doubtful"`. SPO-135c taught `injury_blocks_combined(status, raw_status)` to treat either word as Out. A cache Doubtful then had `combined_probability` null on daily picks and on NBA `/reads`, while `DailyPick.injury_status` stayed Questionable. `select_daily_picks` drops a null blend that is not Out, so that pick left the filtered board. Out stayed on the board with a null blend. `best_top_reads` already ignored Doubtful and skipped only Out.

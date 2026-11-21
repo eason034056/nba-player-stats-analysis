@@ -1,7 +1,7 @@
 """SPO-137a: NBA picks return BALLDONTLIE's status word as injury_status_raw.
 
-The recorded injury page stores Doubtful as status Questionable and
-keeps raw_status Doubtful. The pick copies that raw_status with no
+The recorded injury page stores Doubtful as status Doubtful (SPO-135i)
+and keeps raw_status Doubtful. The pick copies that raw_status with no
 case change and no trimming. injury_status stays the normalized word.
 Out still nulls the blend. Doubtful does not. WNBA stays null on both
 fields. A stored pick that omits injury_status_raw still validates.
@@ -79,14 +79,14 @@ def _renamed(entry: dict, player: str) -> dict:
 
 
 def test_recorded_doubtful_exposes_the_source_word_and_keeps_the_blend() -> None:
-    """A cache Doubtful row is Questionable, and the raw word is Doubtful.
+    """A cache Doubtful row stores Doubtful, the same word as raw_status.
 
     The blend matches a plain Questionable row. The signal builder does
     not take raw_status. Out is still the only block.
     """
     assert "raw_status" not in inspect.signature(build_nba_signals).parameters
     questionable = _entry("Questionable")
-    doubtful = _entry("Questionable", raw="Doubtful")
+    doubtful = _entry("Doubtful")
     assert _page_status(doubtful) == doubtful["raw_status"]
     picks = _picks_for(
         [questionable["player"], doubtful["player"]],
@@ -94,11 +94,11 @@ def test_recorded_doubtful_exposes_the_source_word_and_keeps_the_blend() -> None
     )
     plain = _points(picks, questionable["player"])
     raw = _points(picks, doubtful["player"])
-    assert raw.injury_status == "Questionable"
+    assert raw.injury_status == "Doubtful"
     assert raw.injury_status == doubtful["status"]
     assert raw.injury_status_raw == doubtful["raw_status"]
     assert raw.injury_status_raw == _page_status(doubtful)
-    assert raw.injury_status_raw != raw.injury_status
+    assert raw.injury_status_raw == raw.injury_status
     assert plain.injury_status == "Questionable"
     assert plain.injury_status_raw == questionable["raw_status"]
     assert plain.injury_status_raw == _page_status(questionable)
@@ -187,7 +187,7 @@ def test_missing_and_stale_snapshots_leave_both_fields_null() -> None:
 
 def test_wnba_leaves_both_fields_null() -> None:
     """WNBA does not copy the NBA snapshot, including a Doubtful row."""
-    doubtful = _entry("Questionable", raw="Doubtful")
+    doubtful = _entry("Doubtful")
     from app.services.daily_analysis import DailyAnalysisService
     import app.services.daily_analysis as daily_analysis
     from tests.test_spo135c_bdl_injury_status import _async_return
@@ -261,7 +261,7 @@ def test_legacy_payload_without_the_field_validates_as_null() -> None:
 
 def test_cache_document_round_trips_the_raw_word() -> None:
     """The daily-picks cache write is model_dump, and the read validates it."""
-    doubtful = _entry("Questionable", raw="Doubtful")
+    doubtful = _entry("Doubtful")
     row = _points(_picks_for([doubtful["player"]], [doubtful]), doubtful["player"])
     document = DailyPicksResponse(
         date="2026-11-10",
@@ -269,11 +269,11 @@ def test_cache_document_round_trips_the_raw_word() -> None:
         total_picks=1,
         picks=[row],
     ).model_dump(mode="json")
-    assert document["picks"][0]["injury_status"] == "Questionable"
+    assert document["picks"][0]["injury_status"] == "Doubtful"
     assert document["picks"][0]["injury_status_raw"] == doubtful["raw_status"]
     again = DailyPicksResponse.model_validate(document)
     assert again.picks[0].injury_status_raw == doubtful["raw_status"]
-    assert again.picks[0].injury_status == "Questionable"
+    assert again.picks[0].injury_status == "Doubtful"
 
 
 def test_a_row_without_a_source_string_keeps_the_normalized_status() -> None:
@@ -484,7 +484,7 @@ def _delete(path: str, params: dict) -> httpx.Response:
 
 def test_nba_daily_picks_route_returns_both_fields(monkeypatch, _open_limiter) -> None:
     """GET /api/nba/daily-picks returns the normalized word and the source word."""
-    doubtful = _entry("Questionable", raw="Doubtful")
+    doubtful = _entry("Doubtful")
     _install_route(monkeypatch, doubtful["player"], [doubtful])
     response = _get(
         "/api/nba/daily-picks",
@@ -499,7 +499,7 @@ def test_nba_daily_picks_route_returns_both_fields(monkeypatch, _open_limiter) -
     body = response.json()
     matched = [row for row in body["picks"] if row["player_name"] == doubtful["player"]]
     assert matched
-    assert {row["injury_status"] for row in matched} == {"Questionable"}
+    assert {row["injury_status"] for row in matched} == {"Doubtful"}
     assert {row["injury_status_raw"] for row in matched} == {doubtful["raw_status"]}
     assert all(row["combined_probability"] is not None for row in matched)
     others = [row for row in body["picks"] if row["player_name"] != doubtful["player"]]
@@ -510,7 +510,7 @@ def test_nba_daily_picks_route_returns_both_fields(monkeypatch, _open_limiter) -
 
 def test_wnba_daily_picks_route_returns_both_fields_null(monkeypatch, _open_limiter) -> None:
     """GET /api/wnba/daily-picks leaves both fields null beside a Doubtful row."""
-    doubtful = _entry("Questionable", raw="Doubtful")
+    doubtful = _entry("Doubtful")
     _install_route(monkeypatch, doubtful["player"], [doubtful])
     import app.services.daily_analysis as daily_analysis
 

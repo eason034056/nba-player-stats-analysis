@@ -378,8 +378,8 @@ def select_daily_picks(
     Returns:
         Picks that meet both floors, in the original order. An NBA row
         whose ``injury_status`` is Out is kept when the sample floor
-        passes, even though its blend is null. Doubtful is Questionable
-        and uses the blend floor.
+        passes, even though its blend is null. Doubtful, like
+        Questionable, uses the blend floor.
     """
     kept: List[DailyPick] = []
     for pick in picks:
@@ -387,8 +387,8 @@ def select_daily_picks(
             continue
         # Out stays on the board with a null blend so injury_status is
         # visible. A missing blend that is not Out still leaves the
-        # board. Doubtful is stored as Questionable and follows its
-        # blend, the same as any other Questionable row.
+        # board. Doubtful follows its blend, the same as a
+        # Questionable row.
         if league.lower() != "wnba" and injury_blocks_combined(pick.injury_status):
             kept.append(pick)
             continue
@@ -1308,8 +1308,8 @@ class DailyAnalysisService:
                     # injury_status_raw is that same row's raw_status,
                     # copied with no case change and no trimming. The
                     # signal builder still receives only injury_status.
-                    # Out blocks. A stored Doubtful is already Questionable
-                    # and does not. The Odds API description has no
+                    # Out blocks. A stored Doubtful does not. The Odds
+                    # API description has no
                     # bdl_player_id, so the match is the full name with
                     # the suffix kept. A missing or ambiguous name stays
                     # null on both fields. WNBA stays null on both.
@@ -1611,7 +1611,7 @@ def _top_read_candidate_is_out(
     punctuation, and accents. The suffix stays, so a row for
     ``Gary Trent Jr.`` does not skip ``Gary Trent``. Only Out skips,
     with the same case and whitespace fold the blend uses.
-    Questionable, including a source word of Doubtful, does not.
+    Doubtful and Questionable do not.
     This does not log and does not call BALLDONTLIE.
 
     Args:

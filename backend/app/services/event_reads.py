@@ -16,7 +16,7 @@ lookup uses ``match_injury_entry``, the same helper daily picks use.
 This module reads that key and does not call BALLDONTLIE. A snapshot
 row has a player name and no BALLDONTLIE id, so the id argument stays
 unset. Out sets ``combined_probability`` to null. Doubtful is stored
-as Questionable and keeps a number. A missing or stale snapshot leaves
+as Doubtful and keeps a number. A missing or stale snapshot leaves
 the blend in place and the loader logs one warning.
 """
 
@@ -283,8 +283,8 @@ def _injury_status(
     malformed. The status is then None, so the blend is not blocked.
     The snapshot row and the Odds API description are a name only.
     Daily picks leave ``bdl_player_id`` unset for the same reason, and
-    this calls the same helper. Doubtful is already Questionable on
-    the snapshot, and this returns that word.
+    this calls the same helper. A snapshot Doubtful is returned as
+    Doubtful.
 
     Args:
         entries: Fresh injury rows, or None.

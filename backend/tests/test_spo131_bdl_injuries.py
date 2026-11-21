@@ -27,6 +27,7 @@ sys.path.insert(0, os.path.join(_REPO, "scripts", "agents"))
 sys.path.insert(0, os.path.join(_REPO, "nba_lineup_rag"))
 
 from app.services.cache import CacheService  # noqa: E402
+from app.services.injury_status import OUT, PROBABLE, UNRESOLVED_INJURY_STATUSES  # noqa: E402
 from app.services.lineup_source_support import TEAM_ALIASES  # noqa: E402
 from app.services import nba_injuries  # noqa: E402
 from app.services.nba_injuries import (  # noqa: E402
@@ -48,7 +49,7 @@ _FIXTURE_DIR = os.path.join(_BACKEND, "tests", "fixtures", "bdl")
 _INJURY_PATH = os.path.join(_FIXTURE_DIR, "player_injuries__page1.json")
 _STANDINGS_PATH = os.path.join(_FIXTURE_DIR, "standings_2026.json")
 
-_SCORING_STATUSES = {"Out", "Questionable", "Day-To-Day", "Probable", "Healthy"}
+_SCORING_STATUSES = {OUT, PROBABLE, "Healthy"} | UNRESOLVED_INJURY_STATUSES
 _ENTRY_KEYS = {
     "player",
     "bdl_player_id",
@@ -271,12 +272,11 @@ def test_normalize_drops_available_and_maps_doubtful() -> None:
     doubtful = [entry for entry in entries if entry["raw_status"] == "Doubtful"]
     assert len(doubtful_rows) == 2
     assert len(doubtful) == 2
-    assert {entry["status"] for entry in doubtful} == {"Questionable"}
+    assert {entry["status"] for entry in doubtful} == {"Doubtful"}
 
     statuses = {entry["status"] for entry in entries}
     assert statuses <= _SCORING_STATUSES
-    assert "Doubtful" not in statuses
-    assert statuses == {"Out", "Questionable", "Day-To-Day", "Probable"}
+    assert statuses == {"Out", "Doubtful", "Questionable", "Day-To-Day", "Probable"}
 
     sample = next(row for row in rows if row["status"] == "Out")
     normalized = next(entry for entry in entries if entry["bdl_player_id"] == sample["player"]["id"])
