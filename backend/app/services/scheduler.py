@@ -93,17 +93,76 @@ def nba_injury_refresh_in_window(now: datetime | None = None) -> bool:
     return local.hour in NBA_INJURY_REFRESH_HOURS
 
 
-# Outer cron for lineup_fetch_pre_tipoff. The handler returns before the
-# scrape unless now is in [tip - 2 hours, tip) for some game on the slate.
-# 09:00 Chicago covers a 12:30 PM ET matinee, whose window opens at 09:30 CT.
-# 23:55 is the last tick. The 15-minute job is a separate registration.
+# Outer cron for the NBA and WNBA 5-minute pre-tipoff jobs. The handler
+# returns before the scrape unless now is in [tip - 2 hours, tip) for
+# some game on the slate. 09:00 Chicago covers a 12:30 PM ET matinee,
+# whose window opens at 09:30 CT. 22:55 is the last tick. No window
+# reaches 23:00 Chicago. The 15-minute registration below uses
+# LINEUP_ACTIVE_WINDOW_* and runs through 21:45.
 NBA_LINEUP_PRETIPOFF_TZ = ZoneInfo("America/Chicago")
 NBA_LINEUP_PRETIPOFF_LOOKBACK = timedelta(hours=2)
-NBA_LINEUP_PRETIPOFF_CRON_HOUR = "9-23"
+NBA_LINEUP_PRETIPOFF_CRON_HOUR = "9-22"
 NBA_LINEUP_PRETIPOFF_CRON_MINUTE = "0,5,10,15,20,25,30,35,40,45,50,55"
+# Shared by lineup_fetch_active_window and wnba_lineup_fetch_active_window.
+# The 5-minute handlers skip a tick these fields already cover.
+LINEUP_ACTIVE_WINDOW_TZ = ZoneInfo("America/Chicago")
+LINEUP_ACTIVE_WINDOW_CRON_HOUR = "11-21"
+LINEUP_ACTIVE_WINDOW_CRON_MINUTE = "0,15,30,45"
 # One Eastern slate, including a restart later that same night. The next
 # slate date is a different key, so this does not have to expire at midnight.
 NBA_LINEUP_TIPS_CACHE_TTL_SECONDS = 36 * 60 * 60
+
+
+def _expand_cron_field(expr: str) -> frozenset[int]:
+    """Every integer a cron hour or minute field names.
+
+    ``11-21`` is 11 through 21. ``0,15,30,45`` is those four minutes.
+    A comma may mix ranges and single numbers. The 15-minute lineup
+    registration and ``lineup_active_window_covers`` both read the
+    expanded form of ``LINEUP_ACTIVE_WINDOW_CRON_HOUR`` and
+    ``LINEUP_ACTIVE_WINDOW_CRON_MINUTE``.
+
+    Args:
+        expr: One cron field, as passed to ``CronTrigger``.
+
+    Returns:
+        The values that field matches.
+    """
+    values: set[int] = set()
+    for part in expr.split(","):
+        if "-" in part:
+            start_s, end_s = part.split("-", 1)
+            values.update(range(int(start_s), int(end_s) + 1))
+        else:
+            values.add(int(part))
+    return frozenset(values)
+
+
+LINEUP_ACTIVE_WINDOW_HOURS = _expand_cron_field(LINEUP_ACTIVE_WINDOW_CRON_HOUR)
+LINEUP_ACTIVE_WINDOW_MINUTES = _expand_cron_field(LINEUP_ACTIVE_WINDOW_CRON_MINUTE)
+
+
+def lineup_active_window_covers(now: datetime) -> bool:
+    """True when the 15-minute lineup job already fires at this Chicago tick.
+
+    ``lineup_active_window_covers`` is the gate that keeps the 5-minute
+    pre-tipoff handler from scraping a minute the 15-minute job of the
+    same league scrapes. Both leagues register that job with
+    ``LINEUP_ACTIVE_WINDOW_CRON_HOUR`` and
+    ``LINEUP_ACTIVE_WINDOW_CRON_MINUTE``. A tick at 22:00 Chicago is
+    outside those hours, so the 5-minute job still scrapes it.
+
+    A naive ``now`` is read as UTC.
+
+    Args:
+        now: Instant to test.
+
+    Returns:
+        True when the Chicago hour and minute are both in the 15-minute cron.
+    """
+    moment = now if now.tzinfo is not None else now.replace(tzinfo=timezone.utc)
+    local = moment.astimezone(LINEUP_ACTIVE_WINDOW_TZ)
+    return local.hour in LINEUP_ACTIVE_WINDOW_HOURS and local.minute in LINEUP_ACTIVE_WINDOW_MINUTES
 
 
 def wnba_lineup_tips_cache_key(slate_date: str) -> str:
@@ -540,18 +599,18 @@ class SchedulerService:
         self._scheduler.add_job(
             self._run_lineup_fetch_job,
             trigger=CronTrigger(
-                hour="11-21",
-                minute="0,15,30,45",
-                timezone="America/Chicago",
+                hour=LINEUP_ACTIVE_WINDOW_CRON_HOUR,
+                minute=LINEUP_ACTIVE_WINDOW_CRON_MINUTE,
+                timezone=LINEUP_ACTIVE_WINDOW_TZ,
             ),
             id='lineup_fetch_active_window',
             name='Free Lineup Refresh (every 15 minutes)',
             replace_existing=True
         )
 
-        # Wide 5-minute grid. _run_lineup_fetch_pre_tipoff_job returns
-        # before the scrape unless now is in [tip - 2h, tip) for some
-        # game on the slate. The 15-minute job above does not use that gate.
+        # Wide 5-minute grid through 22:55. The handler returns unless
+        # now is in [tip - 2h, tip) for some game, and it also returns
+        # on a minute the 15-minute job above already scrapes.
         self._scheduler.add_job(
             self._run_lineup_fetch_pre_tipoff_job,
             trigger=CronTrigger(
@@ -568,8 +627,10 @@ class SchedulerService:
         #
         # Opening and the 15-minute window match the NBA jobs above and
         # always scrape. The 5-minute job uses the same Chicago grid as
-        # the NBA pre-tipoff job. Its handler returns unless now is in
-        # [tip - 2h, tip) for some WNBA game. Independent job IDs ensure
+        # the NBA pre-tipoff job, through 22:55. Its handler returns on
+        # a minute the 15-minute job already scrapes, and it returns
+        # unless now is in [tip - 2h, tip) for some WNBA game.
+        # Independent job IDs ensure
         # WNBA failures don't block NBA refreshes and vice versa.
         #
         # Opening and the 15-minute window call _run_wnba_lineup_fetch_job.
@@ -593,9 +654,9 @@ class SchedulerService:
             self._scheduler.add_job(
                 self._run_wnba_lineup_fetch_job,
                 trigger=CronTrigger(
-                    hour="11-21",
-                    minute="0,15,30,45",
-                    timezone="America/Chicago",
+                    hour=LINEUP_ACTIVE_WINDOW_CRON_HOUR,
+                    minute=LINEUP_ACTIVE_WINDOW_CRON_MINUTE,
+                    timezone=LINEUP_ACTIVE_WINDOW_TZ,
                 ),
                 id='wnba_lineup_fetch_active_window',
                 name='WNBA Lineup Refresh (every 15 minutes)',
@@ -987,8 +1048,9 @@ class SchedulerService:
 
         ``_run_lineup_fetch_pre_tipoff_job`` is the handler for
         ``lineup_fetch_pre_tipoff``. The cron fires every 5 minutes from
-        09:00 through 23:55 Chicago. This method returns before
-        ``fetch_and_store`` when the clock is outside every game's
+        09:00 through 22:55 Chicago. This method returns before
+        ``fetch_and_store`` when the Chicago minute is one the 15-minute
+        job already scrapes, when the clock is outside every game's
         window, when the slate has no games, or when the schedule cannot
         be read. The 15-minute job does not call this method, so it
         still runs.
@@ -1009,6 +1071,8 @@ class SchedulerService:
             moment = now.replace(tzinfo=timezone.utc)
         else:
             moment = now
+        if lineup_active_window_covers(moment):
+            return
         slate = nba_slate_date(moment)[0]
         _status, tips = await self._nba_tips_for_slate(slate)
         if not nba_lineup_pretipoff_in_window(moment, tips):
@@ -1174,8 +1238,9 @@ class SchedulerService:
 
         ``_run_wnba_lineup_fetch_pre_tipoff_job`` is the handler for
         ``wnba_lineup_fetch_pre_tipoff``. The cron fires every 5 minutes
-        from 09:00 through 23:55 Chicago. This method returns before
-        ``fetch_and_store`` when the clock is outside every game's
+        from 09:00 through 22:55 Chicago. This method returns before
+        ``fetch_and_store`` when the Chicago minute is one the 15-minute
+        WNBA job already scrapes, when the clock is outside every game's
         window, when the slate has no games, or when the events list
         cannot be read. The 15-minute WNBA job does not call this method.
 
@@ -1195,6 +1260,8 @@ class SchedulerService:
             moment = now.replace(tzinfo=timezone.utc)
         else:
             moment = now
+        if lineup_active_window_covers(moment):
+            return
         slate = nba_slate_date(moment)[0]
         _status, tips = await self._wnba_tips_for_slate(slate)
         if not nba_lineup_pretipoff_in_window(moment, tips):
