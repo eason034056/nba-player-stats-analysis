@@ -25,7 +25,9 @@ from pydantic import SecretStr
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
+from app.services.bdl_client import BdlApiError, BdlRateLimitError
 from app.services.cache import cache_service
+from app.services.odds_provider import OddsAPIError
 from app.services.scheduler import (
     NBA_INJURY_REFRESH_CRON_HOUR,
     NBA_INJURY_REFRESH_CRON_MINUTE,
@@ -579,15 +581,16 @@ def test_no_games_does_not_run_the_five_minute_refresh(monkeypatch: pytest.Monke
 def test_schedule_error_warns_once_and_skips(
     monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
 ) -> None:
-    """The 15-minute handler still scrapes. It does not read the schedule."""
+    """A failed call skips this tick and is tried again. The 15-minute job still scrapes."""
     import asyncio
 
-    _install_cache(monkeypatch)
+    fake = _install_cache(monkeypatch)
     client = _GamesClient(error=RuntimeError("schedule down"))
     _patch_client(monkeypatch, client)
     fetch = AsyncMock(return_value=[])
     monkeypatch.setattr("app.services.scheduler.lineup_service.fetch_and_store", fetch)
     caplog.set_level(logging.WARNING, logger="app.services.scheduler")
+    seen: dict[str, object] = {}
 
     async def _go() -> None:
         service = SchedulerService()
@@ -595,6 +598,7 @@ def test_schedule_error_warns_once_and_skips(
         await _run_pre_tipoff(service, moment)
         await _run_pre_tipoff(service, moment)
         await service._run_lineup_fetch_job(now=moment)
+        seen["stored"] = await fake.get(nba_lineup_tips_cache_key("2026-11-11"))
 
     asyncio.run(_go())
 
@@ -606,8 +610,9 @@ def test_schedule_error_warns_once_and_skips(
     assert warnings == [
         "lineup_fetch_pre_tipoff schedule unreadable (RuntimeError); skipping the 5-minute window"
     ]
-    assert len(client.calls) == 1
-    assert client.closed == 1
+    assert len(client.calls) == 2
+    assert client.closed == 2
+    assert seen["stored"] is None
     fetch.assert_awaited_once_with("2026-11-11")
     assert _TEST_KEY not in caplog.text
 
@@ -646,8 +651,96 @@ def test_missing_bdl_key_warns_once_and_does_not_build_a_client(
     ]
 
 
+@pytest.mark.parametrize("error", [BdlRateLimitError("busy"), BdlApiError("down", 503)])
+def test_nba_failed_call_recovers_on_the_next_tick(
+    monkeypatch: pytest.MonkeyPatch, error: BaseException
+) -> None:
+    """A 429 or a 5xx does not pin the slate. The next tick reads and scrapes."""
+    import asyncio
+
+    fake = _install_cache(monkeypatch)
+    payload = _load("games_2026-11-11.json")["response"]
+    client = _GamesClient(payload=payload, error=error)
+    _patch_client(monkeypatch, client)
+    fetch = AsyncMock(return_value=[])
+    monkeypatch.setattr("app.services.scheduler.lineup_service.fetch_and_store", fetch)
+    inside = _chicago(2026, 11, 11, 16, 0)
+
+    async def _go() -> None:
+        first = SchedulerService()
+        await _run_pre_tipoff(first, inside)
+        assert await fake.get(nba_lineup_tips_cache_key("2026-11-11")) is None
+        client.error = None
+        await _run_pre_tipoff(first, inside)
+        restarted = SchedulerService()
+        await _run_pre_tipoff(restarted, inside)
+
+    asyncio.run(_go())
+    assert len(client.calls) == 2
+    assert [call.args[0] for call in fetch.await_args_list] == ["2026-11-11", "2026-11-11"]
+
+
+def test_nba_restart_after_a_failed_call_reads_again(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Redis does not keep the failed call, so another process reads."""
+    import asyncio
+
+    fake = _install_cache(monkeypatch)
+    payload = _load("games_2026-11-11.json")["response"]
+    client = _GamesClient(payload=payload, error=BdlRateLimitError("busy"))
+    _patch_client(monkeypatch, client)
+    fetch = AsyncMock(return_value=[])
+    monkeypatch.setattr("app.services.scheduler.lineup_service.fetch_and_store", fetch)
+    inside = _chicago(2026, 11, 11, 16, 0)
+
+    async def _go() -> None:
+        await _run_pre_tipoff(SchedulerService(), inside)
+        assert await fake.get(nba_lineup_tips_cache_key("2026-11-11")) is None
+        client.error = None
+        await _run_pre_tipoff(SchedulerService(), inside)
+
+    asyncio.run(_go())
+    assert len(client.calls) == 2
+    fetch.assert_awaited_once_with("2026-11-11")
+
+
+def test_unreadable_games_body_stays_skipped_for_the_slate(
+    monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+) -> None:
+    """A body with no usable tip is still stored. The next tick does not call."""
+    import asyncio
+
+    fake = _install_cache(monkeypatch)
+    client = _GamesClient(payload={"data": "not-a-list"})
+    _patch_client(monkeypatch, client)
+    fetch = AsyncMock(return_value=[])
+    monkeypatch.setattr("app.services.scheduler.lineup_service.fetch_and_store", fetch)
+    caplog.set_level(logging.WARNING, logger="app.services.scheduler")
+    seen: dict[str, object] = {}
+
+    async def _go() -> None:
+        service = SchedulerService()
+        moment = _chicago(2026, 11, 11, 16, 0)
+        await _run_pre_tipoff(service, moment)
+        await _run_pre_tipoff(service, moment)
+        seen["stored"] = await fake.get(nba_lineup_tips_cache_key("2026-11-11"))
+
+    asyncio.run(_go())
+    assert len(client.calls) == 1
+    fetch.assert_not_awaited()
+    stored = json.loads(str(seen["stored"]))
+    assert stored["status"] == "unreadable"
+    warnings = [
+        record.getMessage()
+        for record in caplog.records
+        if record.levelno == logging.WARNING and "games payload" in record.getMessage()
+    ]
+    assert len(warnings) == 1
+
+
 # ---------------------------------------------------------------------------
-# Triggers: NBA dynamic, WNBA unchanged, injury hours unchanged
+# Triggers: NBA dynamic, WNBA per-game, injury hours unchanged
 # ---------------------------------------------------------------------------
 
 
@@ -908,16 +1001,17 @@ def test_wnba_no_games_does_not_scrape(monkeypatch: pytest.MonkeyPatch) -> None:
 def test_wnba_schedule_error_warns_once_and_skips(
     monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
 ) -> None:
-    """The 15-minute WNBA handler still scrapes. It does not read events."""
+    """A failed events call skips this tick and is tried again. The 15-minute job still scrapes."""
     import asyncio
 
-    _install_cache(monkeypatch)
+    fake = _install_cache(monkeypatch)
     get_events = AsyncMock(side_effect=RuntimeError("schedule down"))
     monkeypatch.setattr("app.services.odds_theoddsapi.odds_provider.get_events", get_events)
     monkeypatch.setattr(settings, "odds_api_key", _ODDS_KEY)
     fetch = AsyncMock(return_value=[])
     monkeypatch.setattr("app.services.scheduler.wnba_lineup_service.fetch_and_store", fetch)
     caplog.set_level(logging.WARNING, logger="app.services.scheduler")
+    seen: dict[str, object] = {}
 
     async def _go() -> None:
         service = SchedulerService()
@@ -925,6 +1019,7 @@ def test_wnba_schedule_error_warns_once_and_skips(
         await _run_wnba_pre_tipoff(service, moment)
         await _run_wnba_pre_tipoff(service, moment)
         await service._run_wnba_lineup_fetch_job(now=moment)
+        seen["stored"] = await fake.get(wnba_lineup_tips_cache_key("2026-07-15"))
 
     asyncio.run(_go())
     warnings = [
@@ -935,7 +1030,8 @@ def test_wnba_schedule_error_warns_once_and_skips(
     assert warnings == [
         "wnba_lineup_fetch_pre_tipoff schedule unreadable (RuntimeError); skipping the 5-minute window"
     ]
-    assert get_events.await_count == 1
+    assert get_events.await_count == 2
+    assert seen["stored"] is None
     fetch.assert_awaited_once_with("2026-07-15")
     assert _ODDS_KEY not in caplog.text
 
@@ -966,6 +1062,45 @@ def test_wnba_missing_odds_key_does_not_call_events(
     assert warnings == [
         "wnba_lineup_fetch_pre_tipoff schedule unreadable (ODDS_API_KEY is unset); skipping the 5-minute window"
     ]
+
+
+@pytest.mark.parametrize(
+    "error",
+    [OddsAPIError("busy", 429), OddsAPIError("down", 500)],
+)
+def test_wnba_failed_call_recovers_on_the_next_tick(
+    monkeypatch: pytest.MonkeyPatch, error: BaseException
+) -> None:
+    """A 429 or a 5xx does not pin the slate. The next tick reads and scrapes."""
+    import asyncio
+
+    fake = _install_cache(monkeypatch)
+    events = _wnba_events_at("2026-07-15T23:00:00Z")
+    queue: list[object] = [error, events]
+    calls: list[dict] = []
+
+    async def get_events(**kwargs: object) -> object:
+        calls.append(dict(kwargs))
+        item = queue.pop(0)
+        if isinstance(item, Exception):
+            raise item
+        return item
+
+    monkeypatch.setattr("app.services.odds_theoddsapi.odds_provider.get_events", get_events)
+    monkeypatch.setattr(settings, "odds_api_key", _ODDS_KEY)
+    fetch = AsyncMock(return_value=[])
+    monkeypatch.setattr("app.services.scheduler.wnba_lineup_service.fetch_and_store", fetch)
+    inside = _chicago(2026, 7, 15, 16, 0)
+
+    async def _go() -> None:
+        await _run_wnba_pre_tipoff(SchedulerService(), inside)
+        assert await fake.get(wnba_lineup_tips_cache_key("2026-07-15")) is None
+        await _run_wnba_pre_tipoff(SchedulerService(), inside)
+
+    asyncio.run(_go())
+    assert len(calls) == 2
+    assert calls[0] == {"league": "wnba"}
+    fetch.assert_awaited_once_with("2026-07-15")
 
 
 def test_injury_hours_and_comment_stay_independent_of_the_lineup_job() -> None:

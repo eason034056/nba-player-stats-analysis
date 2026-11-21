@@ -319,6 +319,22 @@ def _cached_tips(raw: object) -> tuple[str, tuple[datetime, ...]] | None:
     return None
 
 
+def _schedule_is_durable(status: str) -> bool:
+    """True when a slate status is kept for the rest of that slate.
+
+    ``ok``, ``no_games``, and ``unreadable`` are kept. ``unreadable`` is
+    a missing key or a body with no usable tip. ``transient`` is a failed
+    call. It is not kept, so the next tick reads again.
+
+    Args:
+        status: The status half of a tips result.
+
+    Returns:
+        True when the caller should write memory and Redis.
+    """
+    return status in {"ok", "no_games", "unreadable"}
+
+
 def _dump_tips(status: str, tips: tuple[datetime, ...]) -> dict[str, str | list[str] | None]:
     """JSON-ready cache body. Each tip is UTC ISO text."""
     return {
@@ -383,6 +399,10 @@ class SchedulerService:
         # on the next 5-minute tick. The two leagues do not share a dict.
         self._nba_tips_memory: dict[str, tuple[str, tuple[datetime, ...]]] = {}
         self._wnba_tips_memory: dict[str, tuple[str, tuple[datetime, ...]]] = {}
+        # A failed call is not stored. These sets keep that warning to
+        # one line per slate in this process. The next tick still reads.
+        self._nba_schedule_warned: set[str] = set()
+        self._wnba_schedule_warned: set[str] = set()
     
     def start(self):
         """
@@ -974,8 +994,11 @@ class SchedulerService:
         still runs.
 
         The slate's tips are read at most once per ``nba_slate_date``
-        and stored under ``lineup:v1:nba:tips:<date>``. The source is
-        one ``BdlClient.list_games(dates=[slate])`` call.
+        and stored under ``lineup:v1:nba:tips:<date>`` when the read
+        returns a body. A failed call is not stored, so the next tick
+        tries again. A missing key, or a body with no usable tip, is
+        stored and skips the 5-minute window for the rest of that slate.
+        The source is one ``BdlClient.list_games(dates=[slate])`` call.
 
         Args:
             now: Clock for the windows and the slate date. None is the current time.
@@ -992,6 +1015,30 @@ class SchedulerService:
             return
         await self._run_lineup_fetch_job(now=moment)
 
+    def _warn_schedule_once(
+        self,
+        seen: set[str],
+        slate_date: str,
+        message: str,
+        *args: object,
+    ) -> None:
+        """Log ``message`` once per ``slate_date`` in this process.
+
+        ``_warn_schedule_once`` is for a failed schedule call. The call
+        is not stored, so later ticks would otherwise repeat the line.
+        ``seen`` is the league's set. A new process warns again, once.
+
+        Args:
+            seen: Slate dates already warned in this process.
+            slate_date: Eastern game date.
+            message: Warning template. The key is not part of it.
+            *args: Values for the template, such as an exception type name.
+        """
+        if slate_date in seen:
+            return
+        seen.add(slate_date)
+        logger.warning(message, *args)
+
     async def _nba_tips_for_slate(
         self,
         slate_date: str,
@@ -999,16 +1046,16 @@ class SchedulerService:
         """Every usable NBA tip on ``slate_date``, from memory, Redis, or one read.
 
         ``_nba_tips_for_slate`` is how the 5-minute job learns each
-        game's window. The first call for a date reads BALLDONTLIE and
-        stores the status. Later calls in this process, and in another
-        process that shares Redis, do not call again. ``no_games`` and
-        ``unreadable`` are stored the same way.
+        game's window. A body is stored for the slate. A failed call
+        is not stored in this process or in Redis, so the next tick,
+        and another process, reads again.
 
         Args:
             slate_date: Eastern game date, ``YYYY-MM-DD``.
 
         Returns:
-            ``("ok", tips)``, ``("no_games", ())``, or ``("unreadable", ())``.
+            ``("ok", tips)``, ``("no_games", ())``, ``("unreadable", ())``,
+            or ``("transient", ())`` when the call failed.
         """
         remembered = self._nba_tips_memory.get(slate_date)
         if remembered is not None:
@@ -1021,6 +1068,8 @@ class SchedulerService:
             self._nba_tips_memory[slate_date] = cached
             return cached
         result = await self._read_nba_tips(slate_date)
+        if not _schedule_is_durable(result[0]):
+            return result
         self._nba_tips_memory[slate_date] = result
         await cache_service.set(
             key,
@@ -1032,17 +1081,20 @@ class SchedulerService:
     async def _read_nba_tips(self, slate_date: str) -> tuple[str, tuple[datetime, ...]]:
         """One ``GET /v1/games?dates[]=`` for ``slate_date``.
 
-        An empty key or a failed call logs one warning and returns
-        ``unreadable``. The warning names the exception type, not the
-        key and not the response body. ``per_page`` is 100, which covers
-        one NBA date, so this does not follow a later page.
+        An empty key logs one warning and returns ``unreadable``, which
+        the caller stores for the slate. A failed call logs one warning
+        per slate in this process and returns ``transient``, which the
+        caller does not store. The warning names the exception type, not
+        the key and not the response body. ``per_page`` is 100, which
+        covers one NBA date, so this does not follow a later page.
 
         Args:
             slate_date: Eastern game date.
 
         Returns:
             The same pair as ``tips_from_games_payload``,
-            or ``("unreadable", ())`` when the call did not return a body.
+            ``("unreadable", ())`` when the key is missing or the body
+            was not returned, or ``("transient", ())`` when the call failed.
         """
         api_key = settings.balldontlie_api_key.get_secret_value().strip()
         if not api_key:
@@ -1060,7 +1112,9 @@ class SchedulerService:
             try:
                 payload = await client.list_games(dates=[slate_date], per_page=100)
             except Exception as exc:
-                logger.warning(
+                self._warn_schedule_once(
+                    self._nba_schedule_warned,
+                    slate_date,
                     "lineup_fetch_pre_tipoff schedule unreadable (%s); skipping the 5-minute window",
                     type(exc).__name__,
                 )
@@ -1070,7 +1124,9 @@ class SchedulerService:
                 await client.aclose()
             except Exception:
                 pass
-        if failed or payload is None:
+        if failed:
+            return ("transient", ())
+        if payload is None:
             return ("unreadable", ())
         status, tips = tips_from_games_payload(payload, slate_date)
         if status == "unreadable":
@@ -1124,9 +1180,11 @@ class SchedulerService:
         cannot be read. The 15-minute WNBA job does not call this method.
 
         The slate's tips are read at most once per ``nba_slate_date``
-        and stored under ``lineup:v1:wnba:tips:<date>``. The source is
-        one ``get_events(league="wnba")`` call. An unreadable list skips
-        the 5-minute window for the rest of that slate.
+        and stored under ``lineup:v1:wnba:tips:<date>`` when the read
+        returns a body. A failed call is not stored, so the next tick
+        tries again. A missing key, or a body with no usable tip, is
+        stored and skips the 5-minute window for the rest of that slate.
+        The source is one ``get_events(league="wnba")`` call.
 
         Args:
             now: Clock for the windows and the slate date. None is the current time.
@@ -1150,17 +1208,16 @@ class SchedulerService:
         """Every usable WNBA tip on ``slate_date``, from memory, Redis, or one read.
 
         ``_wnba_tips_for_slate`` is how the 5-minute WNBA job learns each
-        game's window. The first call for a date reads The Odds API
-        events list and stores the status. Later calls in this process,
-        and in another process that shares Redis, do not call again.
-        ``no_games`` and ``unreadable`` are stored the same way. The NBA
-        tip key is not read.
+        game's window. A body is stored for the slate. A failed call
+        is not stored in this process or in Redis, so the next tick,
+        and another process, reads again. The NBA tip key is not read.
 
         Args:
             slate_date: Eastern game date, ``YYYY-MM-DD``.
 
         Returns:
-            ``("ok", tips)``, ``("no_games", ())``, or ``("unreadable", ())``.
+            ``("ok", tips)``, ``("no_games", ())``, ``("unreadable", ())``,
+            or ``("transient", ())`` when the call failed.
         """
         remembered = self._wnba_tips_memory.get(slate_date)
         if remembered is not None:
@@ -1173,6 +1230,8 @@ class SchedulerService:
             self._wnba_tips_memory[slate_date] = cached
             return cached
         result = await self._read_wnba_tips(slate_date)
+        if not _schedule_is_durable(result[0]):
+            return result
         self._wnba_tips_memory[slate_date] = result
         await cache_service.set(
             key,
@@ -1184,9 +1243,11 @@ class SchedulerService:
     async def _read_wnba_tips(self, slate_date: str) -> tuple[str, tuple[datetime, ...]]:
         """One ``get_events(league="wnba")`` for ``slate_date``.
 
-        An empty Odds API key or a failed call logs one warning and
-        returns ``unreadable``. The warning names the exception type,
-        not the key and not the response body. Events whose Eastern
+        An empty Odds API key logs one warning and returns ``unreadable``,
+        which the caller stores for the slate. A failed call logs one
+        warning per slate in this process and returns ``transient``,
+        which the caller does not store. The warning names the exception
+        type, not the key and not the response body. Events whose Eastern
         slate date is not ``slate_date`` are ignored.
 
         Args:
@@ -1194,7 +1255,8 @@ class SchedulerService:
 
         Returns:
             The same pair as ``tips_from_events_payload``,
-            or ``("unreadable", ())`` when the call did not return a body.
+            ``("unreadable", ())`` when the key is missing, or
+            ``("transient", ())`` when the call failed.
         """
         api_key = settings.odds_api_key.strip()
         if not api_key:
@@ -1208,11 +1270,13 @@ class SchedulerService:
         try:
             payload = await odds_provider.get_events(league="wnba")
         except Exception as exc:
-            logger.warning(
+            self._warn_schedule_once(
+                self._wnba_schedule_warned,
+                slate_date,
                 "wnba_lineup_fetch_pre_tipoff schedule unreadable (%s); skipping the 5-minute window",
                 type(exc).__name__,
             )
-            return ("unreadable", ())
+            return ("transient", ())
         status, tips = tips_from_events_payload(payload, slate_date)
         if status == "unreadable":
             logger.warning(
