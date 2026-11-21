@@ -41,7 +41,7 @@ When no other book has a single points total, the maximum remains. A shared low 
 cd backend && DATABASE_URL="" python -m pytest -q --tb=line
 ```
 
-`1634 passed, 252 skipped, 3 xfailed` in 18.89s. `DATABASE_URL` was set to empty. This environment has no Docker and no local Postgres, so tests that open a database skipped. The session did not load a remote host. `test_spo132b_optional_vpc.py::TestVpcIdConsole` was 3 skipped here. Those three are known failures on a clean `origin/dev` when the console path actually runs. They did not fail in this run.
+`1638 passed, 252 skipped, 3 xfailed` in 17.08s, after merging `origin/dev` `439cbe7` (SPO-146 and SPO-147). `DATABASE_URL` was set to empty. This environment has no Docker and no local Postgres, so tests that open a database skipped. The session did not load a remote host. `test_spo132b_optional_vpc.py::TestVpcIdConsole` was 3 skipped here. Those three are known failures on a clean `origin/dev` when the console path actually runs. They did not fail in this run. The merge did not touch the files in this ticket. `odds_gateway.py` stays as SPO-146 left it.
 
 `tests/test_bdl_client.py` and `tests/test_spo130d_bdl_odds_provider.py` together: `86 passed, 7 skipped`. The skips are the live client test, the unrecorded 429 file, and the same-slate pair, which is not in the tree.
 
