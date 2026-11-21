@@ -7,6 +7,8 @@
 > Superseded in part by SPO-135e (2026-11-11): `/reads` loads this snapshot. Injury names keep the suffix. Startup refills a stale key inside the slate window. `misfire_grace_time` is 25 minutes.
 >
 > Superseded in part by SPO-135h (2026-11-11): NBA Doubtful keeps the Questionable blend and stays on the board when that blend clears the floor. Out still blocks. See `decision_20261111_doubtful-as-questionable.md`.
+>
+> Superseded in part by SPO-135i (2026-11-20): the cache stores Doubtful as `Doubtful`, not `Questionable`. Doubtful still keeps the Questionable blend and never blocks. See `decision_20261120_doubtful-kept.md`.
 
 ## Context
 
