@@ -218,11 +218,12 @@ def test_default_hours_before_tip_is_three_and_null_tip_uses_new_york_midnight()
 
     winter = prediction_instant(date(2026, 1, 15), None)
     assert winter.tip_fallback is True
-    assert winter.as_of == datetime(2026, 1, 15, 2, 0, tzinfo=UTC)
+    assert winter.as_of == datetime(2026, 1, 15, 5, 0, tzinfo=UTC)
+    assert prediction_instant(date(2026, 1, 15), None, hours_before_tip=9).as_of == winter.as_of
 
     summer = prediction_instant(date(2026, 7, 15), None)
     assert summer.tip_fallback is True
-    assert summer.as_of == datetime(2026, 7, 15, 1, 0, tzinfo=UTC)
+    assert summer.as_of == datetime(2026, 7, 15, 4, 0, tzinfo=UTC)
 
     with pytest.raises(ValueError, match="timezone-aware"):
         prediction_instant(date(2026, 1, 15), datetime(2026, 1, 15, 23, 0))

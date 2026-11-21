@@ -137,10 +137,33 @@ def dsn_from_env(env_name: str) -> str:
     return value
 
 
+def _raw_password_pieces(dsn: str) -> tuple[str, ...]:
+    """Return the userinfo password and the pieces split by ``#``, ``/``, ``?``.
+
+    ``urlsplit`` treats those characters as a fragment, a path, or a query, so
+    ``.password`` is empty. asyncpg then raises with the first piece in the
+    message, because it reads that text as a port.
+    """
+    userinfo = dsn.split("://", 1)[-1].rsplit("@", 1)[0]
+    if ":" not in userinfo:
+        return ()
+    password = userinfo.split(":", 1)[1]
+    if not password:
+        return ()
+    pieces = [password]
+    for part in re.split(r"[/#?]", password):
+        if part and part not in pieces:
+            pieces.append(part)
+    pieces.sort(key=len, reverse=True)
+    return tuple(pieces)
+
+
 def sanitize_error(exc: BaseException, dsn: str | None = None) -> str:
     """Return ``exc``'s message with the DSN and its password removed.
 
     A masked URL is still a DSN, so any URL is replaced with ``[dsn]``.
+    A password that contains ``#``, ``/``, or ``?`` is removed in pieces,
+    because the whole URL is not what the driver puts in the error.
     """
     secrets: list[str] = []
     if dsn and len(dsn) >= 4:
@@ -151,6 +174,10 @@ def sanitize_error(exc: BaseException, dsn: str | None = None) -> str:
             password = ""
         if len(password) >= 4:
             secrets.append(password)
+        for piece in _raw_password_pieces(dsn):
+            if len(piece) >= 4 and piece not in secrets:
+                secrets.append(piece)
+    secrets.sort(key=len, reverse=True)
     text = redact_secrets(str(exc), tuple(secrets))
     if dsn:
         text = text.replace(dsn, "[dsn]")

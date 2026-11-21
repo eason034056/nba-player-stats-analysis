@@ -15,7 +15,7 @@ This PR adds an offline dataset export. One output row is one `player_game_stats
 | Area | Files | Change |
 |---|---|---|
 | Sources | `backend/app/ml/sources.py` | Allow-list. This PR registers `games` and `player_game_stats` with a prior-date rule. `player_prop_snapshots` is rejected by name. `prop_actuals` is a label source, not a feature. |
-| T | `backend/app/ml/asof.py` | `games.datetime_utc - hours_before_tip`. Default is 3. A NULL tip uses 00:00 America/New_York on `games.date` and is counted. It is not stored as a tip time. |
+| T | `backend/app/ml/asof.py` | `games.datetime_utc - hours_before_tip`. Default is 3. A NULL tip is 00:00 America/New_York on `games.date` itself: the hour offset is not applied again. The fallback is counted. It is not stored as a tip time. |
 | Load | `backend/app/ml/load.py` | Read-only asyncpg, one season per query. The output window plus the previous season. DSN from the env var named by `--dsn-env`. Connection errors drop the URL and the password. |
 | Features | `backend/app/ml/features.py` | Last 5 and last 10 played games (`dnp` false) for `pts`, `reb`, `ast`, `fg3m`, `stl`, `blk`, and `seconds_played`. Also `n_prev_games`, `n_played_prev`, `dnp_last_10`, `days_rest`, `is_back_to_back`, `is_home`, `season_type`. |
 | Labels | `backend/app/ml/labels.py` | Pivot to `y_<market>`. All-NULL rows are dropped. A single NULL market stays NULL. Double-double and triple-double stay 0/1. |
@@ -31,7 +31,7 @@ The package is larger than the 600-line sketch (about 1,100 lines across the six
 
 - **The model must not see the line.** `player_prop_snapshots` is named in the rejection, so a later query cannot treat it as a source we merely forgot.
 - **Stats use a stricter cut than a timestamp.** A game on the target date is excluded even when its tip is already before T. The target game and any later game are excluded with the same check.
-- **T is 3 hours, not 60 minutes.** `--hours-before-tip` and `prediction_instant` both default to 3. A missing `datetime_utc` does not invent a tip.
+- **T is 3 hours before a known tip.** `--hours-before-tip` and `prediction_instant` both default to 3. A missing `datetime_utc` is midnight America/New_York on the game date, and that midnight does not move when the hour offset changes.
 - **One prior season is loaded on purpose.** Output season 2015 still sees 2014. If that is still fewer than 5 or 10 played games, the mean is NULL and the count says how many games existed.
 - **DNP is void.** It stays out of the played means, it counts in `dnp_last_10`, and a DNP label row is dropped because every actual is NULL.
 - **The work stays out of the API process.** `app.main` does not import `app.ml`. The export is a CLI. The connection is read-only.
@@ -56,6 +56,8 @@ DATABASE_URL=postgresql://test:test@127.0.0.1:5441/test python -m pytest tests/t
 - T guard `observed_at <= as_of` changed to `<`. `test_timestamp_boundary_includes_t_and_excludes_the_next_second` failed on the exactly-T assertion (`assert False`).
 
 Both edits were reverted. The same commands then passed again (20 and 2).
+
+- QA review: `tests/test_spo138j_qa_review.py`. A password containing `#`, `/`, or `?` does not appear on stderr (`invalid literal for int()` used to print the piece before the separator). A NULL tip stays at midnight New York time for every `--hours-before-tip`. Export files and stdout omit the DSN.
 
 Known failures that are not this ticket: 3 tests in `test_spo132b_optional_vpc.py::TestVpcIdConsole`. They fail the same way on clean `origin/dev`. This PR does not change them.
 

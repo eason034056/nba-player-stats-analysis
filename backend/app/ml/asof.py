@@ -1,9 +1,9 @@
 """Prediction time T for one game.
 
-T is ``games.datetime_utc`` minus ``hours_before_tip``. The default is 3
-hours everywhere in this package. A NULL tip is not replaced with a guessed
-tip time: T is then 00:00 America/New_York on ``games.date``, minus the same
-offset, and the row is counted as a fallback.
+When ``games.datetime_utc`` is present, T is that tip minus
+``hours_before_tip`` (default 3). A NULL tip is not a guessed tip time: T is
+00:00 America/New_York on ``games.date``, and the hour offset is not applied
+again. The row is counted as a fallback.
 """
 
 from __future__ import annotations
@@ -18,9 +18,9 @@ UTC = timezone.utc
 
 T_RULE = (
     "T = games.datetime_utc - hours_before_tip. "
-    "When datetime_utc is NULL, T is 00:00 America/New_York on games.date "
-    "minus hours_before_tip. That fallback is counted in metadata. "
-    "It is not a guessed tip time."
+    "When datetime_utc is NULL, T is 00:00 America/New_York on games.date. "
+    "hours_before_tip is not subtracted from that midnight. "
+    "The fallback is counted in metadata. It is not a guessed tip time."
 )
 
 
@@ -47,9 +47,9 @@ def prediction_instant(
     Args:
         game_date: ``games.date``. Used only when ``datetime_utc`` is NULL.
         datetime_utc: ``games.datetime_utc``. Aware when present. NULL takes
-            the New York midnight fallback.
-        hours_before_tip: Hours subtracted from the tip. Defaults to 3.
-            Negative values are rejected.
+            00:00 America/New_York on ``game_date``, with no further offset.
+        hours_before_tip: Hours subtracted from a known tip. Defaults to 3.
+            Negative values are rejected. Ignored when the tip is NULL.
 
     Returns:
         The UTC instant T and the fallback flag.
@@ -71,5 +71,5 @@ def prediction_instant(
             raise ValueError("datetime_utc must be timezone-aware")
         tip = datetime_utc.astimezone(UTC)
         fallback = False
-    as_of = tip - timedelta(hours=hours_before_tip)
+    as_of = tip if fallback else tip - timedelta(hours=hours_before_tip)
     return AsOf(as_of=as_of, tip_fallback=fallback, hours_before_tip=hours_before_tip)
