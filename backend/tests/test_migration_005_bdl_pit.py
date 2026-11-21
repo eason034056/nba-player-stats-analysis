@@ -161,6 +161,66 @@ async def _triggers(conn: asyncpg.Connection) -> list[tuple]:
     return [tuple(row) for row in rows]
 
 
+async def _descriptions(conn: asyncpg.Connection, index_names: list[str]) -> list[tuple]:
+    """Comments on the 14 tables of 002: the table, its columns, its constraints, and the indexes named in index_names.
+
+    A COMMENT ON writes pg_description and does not change columns or constraints.
+    index_names is the index list from before 005, so a comment on a new index is not this check.
+    """
+    rows = await conn.fetch(
+        """
+        SELECT kind, rel, object_name, description
+        FROM (
+            SELECT 'table' AS kind, c.relname AS rel, '' AS object_name, d.description
+            FROM pg_description d
+            JOIN pg_class c ON c.oid = d.objoid
+            JOIN pg_namespace n ON n.oid = c.relnamespace
+            WHERE d.classoid = 'pg_class'::regclass
+              AND d.objsubid = 0
+              AND n.nspname = 'public'
+              AND c.relname = ANY($1::text[])
+            UNION ALL
+            SELECT 'column', c.relname, a.attname, d.description
+            FROM pg_description d
+            JOIN pg_class c ON c.oid = d.objoid
+            JOIN pg_namespace n ON n.oid = c.relnamespace
+            JOIN pg_attribute a ON a.attrelid = c.oid AND a.attnum = d.objsubid
+            WHERE d.classoid = 'pg_class'::regclass
+              AND d.objsubid > 0
+              AND n.nspname = 'public'
+              AND c.relname = ANY($1::text[])
+            UNION ALL
+            SELECT 'constraint', con.conrelid::regclass::text, con.conname, d.description
+            FROM pg_description d
+            JOIN pg_constraint con ON con.oid = d.objoid
+            WHERE d.classoid = 'pg_constraint'::regclass
+              AND con.connamespace = 'public'::regnamespace
+              AND con.conrelid IN (
+                  SELECT c.oid FROM pg_class c
+                  JOIN pg_namespace n ON n.oid = c.relnamespace
+                  WHERE n.nspname = 'public' AND c.relname = ANY($1::text[])
+              )
+            UNION ALL
+            SELECT 'index', t.relname, ic.relname, d.description
+            FROM pg_description d
+            JOIN pg_class ic ON ic.oid = d.objoid
+            JOIN pg_index i ON i.indexrelid = ic.oid
+            JOIN pg_class t ON t.oid = i.indrelid
+            JOIN pg_namespace n ON n.oid = t.relnamespace
+            WHERE d.classoid = 'pg_class'::regclass
+              AND d.objsubid = 0
+              AND n.nspname = 'public'
+              AND t.relname = ANY($1::text[])
+              AND ic.relname = ANY($2::text[])
+        ) comments
+        ORDER BY 1, 2, 3, 4
+        """,
+        list(TABLES_002),
+        index_names,
+    )
+    return [tuple(row) for row in rows]
+
+
 async def _hit(
     conn: asyncpg.Connection,
     league: str,
@@ -214,7 +274,7 @@ async def test_a_second_runner_pass_is_a_no_op(db: asyncpg.Connection) -> None:
 async def test_002_tables_keep_columns_types_and_constraints(
     scratch_conn: asyncpg.Connection, tmp_path: Path
 ) -> None:
-    """005 may add indexes and triggers. Columns and constraints stay put."""
+    """005 may add indexes and triggers. Columns, constraints, and comments stay put."""
     for migration in discover():
         if migration.version != "005":
             (tmp_path / migration.path.name).write_bytes(migration.path.read_bytes())
@@ -224,6 +284,8 @@ async def test_002_tables_keep_columns_types_and_constraints(
     before_constraints = await _constraints(scratch_conn)
     before_indexes = await _indexes(scratch_conn)
     before_triggers = await _triggers(scratch_conn)
+    before_index_names = [name for _table, name, _defn in before_indexes]
+    before_descriptions = await _descriptions(scratch_conn, before_index_names)
     before_books = [tuple(row) for row in await scratch_conn.fetch(
         "SELECT league, book_key, source_group, display_name, active FROM books ORDER BY 1, 2"
     )]
@@ -236,6 +298,7 @@ async def test_002_tables_keep_columns_types_and_constraints(
 
     assert await _columns(scratch_conn) == before_columns
     assert await _constraints(scratch_conn) == before_constraints
+    assert await _descriptions(scratch_conn, before_index_names) == before_descriptions
     assert [tuple(row) for row in await scratch_conn.fetch(
         "SELECT league, book_key, source_group, display_name, active FROM books ORDER BY 1, 2"
     )] == before_books
@@ -392,6 +455,44 @@ async def test_a_null_stat_is_unknown_and_left_out_of_the_hit_rate(db: asyncpg.C
     assert await _hit(db, "nba", 12, "player_points", Decimal("24.5"), "2026-01-08", None, None, None, None) == (
         0, 0, 0, 0, None,
     )
+
+
+@pytest.mark.asyncio
+async def test_an_all_push_window_has_a_null_hit_rate(db: asyncpg.Connection) -> None:
+    """Only pushes means the denominator is empty. hit_rate is NULL, not 0."""
+    await db.execute(
+        """
+        INSERT INTO player_game_stats
+            (league, bdl_stat_id, bdl_game_id, bdl_player_id, bdl_team_id, season, date,
+             seconds_played, dnp, pts)
+        VALUES
+            ('nba', 301, 1, 12, 1, 2025, '2026-01-01', 1800, false, 10),
+            ('nba', 302, 2, 12, 1, 2025, '2026-01-03', 1800, false, 10)
+        """
+    )
+    assert await _hit(db, "nba", 12, "player_points", Decimal("10"), "2026-01-08", None, None, None, None) == (
+        2, 0, 0, 2, None,
+    )
+
+
+@pytest.mark.asyncio
+async def test_a_played_zero_is_under(db: asyncpg.Connection) -> None:
+    """Zero points in a game that was played is under a half-point line. It is not void."""
+    await db.execute(
+        """
+        INSERT INTO player_game_stats
+            (league, bdl_stat_id, bdl_game_id, bdl_player_id, bdl_team_id, season, date,
+             seconds_played, dnp, pts)
+        VALUES ('nba', 303, 3, 12, 1, 2025, '2026-01-05', 1800, false, 0)
+        """
+    )
+    result = await db.fetchval(
+        """
+        SELECT result FROM player_market_results('nba', 12, 'player_points', 0.5, '2026-01-08')
+        WHERE bdl_game_id = 3
+        """
+    )
+    assert result == "under"
 
 
 @pytest.mark.asyncio
