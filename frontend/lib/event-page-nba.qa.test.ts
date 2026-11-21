@@ -205,23 +205,6 @@ describe("QA: blank team never falls back to the home team", () => {
     expect(joinMeta(rows[0].position, rows[0].team, " · ")).toBeNull();
   });
 
-  it("keeps the WNBA rail without a backend tier and with half-away rounding", () => {
-    const rows = eventPlayerRows({
-      suggested: [],
-      picks: [pick({ probability: 0.697, tier: "Playable" })],
-      metric: "player_points",
-      eventId: "evt-mia-bos",
-      selectedName: "",
-      postedLine: null,
-      awayLineup: null,
-      homeLineup: null,
-      awayAbbr: "BOS",
-      homeAbbr: "MIA",
-      league: "wnba",
-    });
-    expect(rows[0].tier).toBeNull();
-    expect(rows[0].leanText).toBe("O 70%");
-  });
 
   it("floors the NBA rail percent beside the backend tier", () => {
     const rows = eventPlayerRows({
@@ -291,11 +274,10 @@ describe("QA: DailyPick schema tolerates new and broken fields", () => {
 });
 
 describe("QA: NBA clock and lineup chips stay league-scoped", () => {
-  it("does not append ET for another zone label, and WNBA ignores the ET face", () => {
+  it("appends ET only for an Eastern wall clock", () => {
     const pt = eventClock({ ...nbaEvent, display_tz: "PT" }, "nba");
     expect(pt.web).toBe(eventWhen(nbaEvent.commence_time));
     expect(pt.web).not.toMatch(/ET$/);
-    expect(eventClock(nbaEvent, "wnba").web).toBe(eventWhen(nbaEvent.commence_time));
     expect(eventClock(nbaEvent, "nba").web).toBe("Tue, Nov 10 · 7:30 PM ET");
     expect(eventClock(null, "nba")).toEqual({ web: null, mobile: null });
   });
@@ -305,17 +287,6 @@ describe("QA: NBA clock and lineup chips stay league-scoped", () => {
     expect(bad.web).toBe(eventWhen(nbaEvent.commence_time));
   });
 
-  it("WNBA chips come from the lineup snapshot even when a status is passed", () => {
-    const chips = eventLineupChips({
-      league: "wnba",
-      awayAbbr: "NYL",
-      homeAbbr: "LVA",
-      status: { away: "confirmed", home: "confirmed" },
-      awayLineup: null,
-      homeLineup: null,
-    });
-    expect(chips.map((chip) => chip.tone)).not.toContain("confirmed");
-  });
 
   it("NBA chips say unavailable when lineup_status is missing", () => {
     const chips = eventLineupChips({

@@ -1,6 +1,5 @@
 "use client";
 
-import type { LeagueSegment } from "@/lib/event-detail-link";
 import type { LineupChipModel } from "@/lib/event-page";
 import { cn } from "@/lib/utils";
 
@@ -24,7 +23,6 @@ export function EventHeader({
   errorText,
   onBack,
   onRetry,
-  league = "wnba",
   mobileWhen = null,
 }: {
   awayName: string;
@@ -38,14 +36,13 @@ export function EventHeader({
   errorText: string | null;
   onBack: () => void;
   onRetry: () => void;
-  league?: LeagueSegment;
   mobileWhen?: string | null;
 }) {
-  const nba = league === "nba" && !isLoading && !isError;
+  const showMobile = !isLoading && !isError;
   const matchup = `${awayName} @ ${homeName}`;
   return (
     <div className="flex flex-col gap-4">
-      {nba ? (
+      {showMobile ? (
         <div data-testid="event-mobile-header" className="flex items-center gap-3 md:hidden">
           <button
             type="button"
@@ -63,7 +60,7 @@ export function EventHeader({
           </div>
         </div>
       ) : null}
-      <div className={cn("flex flex-col gap-4", nba && "hidden md:flex")}>
+      <div className={cn("flex flex-col gap-4", showMobile && "hidden md:flex")}>
       <button
         type="button"
         onClick={onBack}
@@ -94,7 +91,7 @@ export function EventHeader({
                 <div
                   className={cn(
                     "-ml-2.5 flex h-12 w-12 items-center justify-center rounded-full border-[3px] border-white font-mono text-[13px] font-bold text-white",
-                    league === "nba" ? "bg-brand-soft" : "bg-brand",
+                    "bg-brand-soft",
                   )}
                 >
                   {homeAbbr || "—"}
@@ -104,7 +101,7 @@ export function EventHeader({
                 <h1
                   className={cn(
                     "font-bold leading-none tracking-[-0.03em] text-ink",
-                    league === "nba" ? "text-[clamp(24px,3.6cqi,36px)]" : "text-2xl md:text-4xl",
+                    "text-[clamp(24px,3.6cqi,36px)]",
                   )}
                 >
                   {matchup}

@@ -18,9 +18,8 @@ import type { MarketKey } from "./MarketSelect";
 import type { PlayerSuggestResponse } from "@/lib/schemas";
 
 /**
- * Signature for `suggestFn` (SPO-33). Mirrors NBA's `getPlayerSuggestions`
- * exactly so a WNBA-aware caller can inject `getWNBAPlayerSuggestions`
- * without forking this component.
+ * Signature for `suggestFn`. Matches `getPlayerSuggestions` so a test
+ * can inject a stub without forking this component.
  */
 export type PlayerSuggestFn = (
   eventId: string,
@@ -35,15 +34,12 @@ interface PlayerInputProps {
   onChange: (value: string) => void;
   disabled?: boolean;
   /**
-   * Override the player-suggest fetcher (SPO-33). Defaults to NBA's
-   * `getPlayerSuggestions`. WNBA callers pass `getWNBAPlayerSuggestions`.
-   * Backwards-compatible: existing NBA call sites don't change.
+   * Override the player-suggest fetcher. Defaults to `getPlayerSuggestions`.
+   * Existing call sites do not pass this.
    */
   suggestFn?: PlayerSuggestFn;
   /**
-   * Cache namespace token for TanStack Query keys (SPO-33). Defaults to
-   * `"nba"`. WNBA callers pass `"wnba"` so per-league player-list caches
-   * don't collide in a multi-league session.
+   * Cache namespace token for TanStack Query keys. Defaults to `"nba"`.
    */
   cacheNamespace?: string;
 }
@@ -65,8 +61,7 @@ export function PlayerInput({
   const inputRef = useRef<HTMLInputElement>(null);
   const listRef = useRef<HTMLUListElement>(null);
 
-  // Get all players (cache key includes `cacheNamespace` so NBA + WNBA
-  // event-level player lists don't collide in the same browser session).
+  // Get all players. The cache key includes `cacheNamespace`.
   const { data: allPlayers, isLoading: isLoadingAll } = useQuery({
     queryKey: ["allPlayers", cacheNamespace, eventId, market],
     queryFn: () => suggestFn(eventId, "", market),

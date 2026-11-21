@@ -13,7 +13,7 @@
 import Link from "next/link";
 import { Clock, ChevronRight, CalendarOff } from "lucide-react";
 import { type NBAEvent } from "@/lib/schemas";
-import { buildEventDetailHref, type LeagueSegment } from "@/lib/event-detail-link";
+import { buildEventDetailHref } from "@/lib/event-detail-link";
 import { formatGameTime } from "@/lib/utils";
 import { TeamLogo } from "./TeamLogo";
 
@@ -21,12 +21,6 @@ interface EventListProps {
   events: NBAEvent[];
   selectedDate: string;
   isLoading?: boolean;
-  /**
-   * Which league's event-detail route to link to (SPO-33). Defaults to
-   * "nba" so the existing home page is unchanged. WNBA callers pass "wnba"
-   * to produce `/wnba/event/<id>` links.
-   */
-  league?: LeagueSegment;
 }
 
 /**
@@ -41,18 +35,15 @@ interface EventListProps {
 function EventCard({
   event,
   selectedDate,
-  league = "nba",
 }: {
   event: NBAEvent;
   selectedDate: string;
-  league?: LeagueSegment;
 }) {
   return (
     <Link
       href={buildEventDetailHref({
         eventId: event.event_id,
         date: selectedDate,
-        league,
       })}
       className="group block"
     >
@@ -178,7 +169,7 @@ function EventSkeleton() {
 /**
  * EventList 元件
  */
-export function EventList({ events, selectedDate, isLoading, league = "nba" }: EventListProps) {
+export function EventList({ events, selectedDate, isLoading }: EventListProps) {
   // Loading state
   if (isLoading) {
     return (
@@ -218,7 +209,7 @@ export function EventList({ events, selectedDate, isLoading, league = "nba" }: E
           className="animate-fade-in"
           style={{ animationDelay: `${index * 50}ms` }}
         >
-          <EventCard event={event} selectedDate={selectedDate} league={league} />
+          <EventCard event={event} selectedDate={selectedDate} />
         </div>
       ))}
     </div>

@@ -25,7 +25,6 @@ import { createPortal } from "react-dom";
 import { useRouter } from "next/navigation";
 import { Plus, Minus, ExternalLink, ClipboardList, ArrowLeftRight } from "lucide-react";
 import { useBetSlip } from "@/contexts/BetSlipContext";
-import { useWnbaBetSlip } from "@/contexts/WnbaBetSlipContext";
 import { reverseSlipPick, slipPickFromDaily } from "@/lib/bet-slip-board";
 import { buildEventDetailHref } from "@/lib/event-detail-link";
 import { metricToMarket } from "@/lib/metric-to-market";
@@ -38,16 +37,8 @@ interface PickContextMenuProps {
   children: ReactNode;
   /** Pick data */
   pick: DailyPick;
-  /**
-   * Which bet slip this menu writes to. Defaults to "nba" so existing call
-   * sites (the NBA `/picks` page) keep behaving exactly as before.
-   *
-   * 💡 The component reads BOTH contexts (NBA and WNBA) and picks one based
-   * on this prop. Why call both hooks unconditionally? React's rules of hooks
-   * require stable call order — switching which hook is invoked per render
-   * would break that. Reading the unused context is cheap.
-   */
-  league?: "nba" | "wnba";
+  /** Accepted so existing call sites keep compiling. The slip is the NBA slip. */
+  league?: "nba";
 }
 
 interface MenuPosition {
@@ -67,16 +58,10 @@ interface MenuPosition {
 export function PickContextMenu({
   children,
   pick,
-  league = "nba",
+  league: _league = "nba",
 }: PickContextMenuProps) {
   const router = useRouter();
-  // Both contexts are always mounted (see `providers.tsx`), so calling both
-  // hooks is safe. `slip` is the active one; `isWnba` also controls the
-  // route the "View Details" action navigates to.
-  const nbaSlip = useBetSlip();
-  const wnbaSlip = useWnbaBetSlip();
-  const isWnba = league === "wnba";
-  const { picks, addPick, removePick, isInSlip } = isWnba ? wnbaSlip : nbaSlip;
+  const { picks, addPick, removePick, isInSlip } = useBetSlip();
   
   // Menu state
   const [isOpen, setIsOpen] = useState(false);
@@ -223,14 +208,10 @@ export function PickContextMenu({
       player: pick.player_name,
       market: marketKey,
       threshold: pick.threshold,
-      // ⚠ Must thread league through so WNBA picks open `/wnba/event/<id>`
-      // not the NBA route. Without this, a WNBA card would deep-link to a
-      // non-existent NBA event id.
-      league: isWnba ? "wnba" : "nba",
     });
     router.push(href);
     closeMenu();
-  }, [pick, router, closeMenu, isWnba]);
+  }, [pick, router, closeMenu]);
 
   // ==================== Effects ====================
 

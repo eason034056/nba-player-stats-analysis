@@ -129,7 +129,7 @@ describe("QA: History label only beside a historical rate", () => {
   function renderRead(model: ReturnType<typeof nbaRead>) {
     return renderWithProviders(
       <OurRead
-        league="nba"
+       
         model={model}
         isLoading={false}
         isError={false}
@@ -159,7 +159,7 @@ describe("QA: History label only beside a historical rate", () => {
   it("the mobile button is labeled History only for the history rate", () => {
     const { unmount } = render(
       <EventActionBar
-        league="nba"
+       
         model={nbaRead(pick({ combined_probability: 0.675, tier: "Strong play" }))}
         primaryInSlip={false}
         otherInSlip={false}
@@ -172,7 +172,7 @@ describe("QA: History label only beside a historical rate", () => {
     unmount();
     render(
       <EventActionBar
-        league="nba"
+       
         model={nbaRead(pick({ combined_probability: null, p_under: 0.31 }))}
         primaryInSlip={false}
         otherInSlip={false}

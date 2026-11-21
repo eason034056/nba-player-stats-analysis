@@ -38,15 +38,14 @@ describe("AboutPage", () => {
     expect(screen.getByText(/sigmoid\(logit\(consensus\) \+ a \+ b × clip\(nudges, ± 0\.35\)\)/)).toBeInTheDocument();
     expect(screen.getByText(/player listed out gets no number/i)).toBeInTheDocument();
 
-    expect(screen.getByText(/combined probability on NBA, the historical hit rate on WNBA/i)).toBeInTheDocument();
+    expect(screen.getByText(/bucket on the combined probability/i)).toBeInTheDocument();
     expect(screen.queryByText(/planned/i)).not.toBeInTheDocument();
     expect(screen.queryByText(/not blended/i)).not.toBeInTheDocument();
 
     expect(screen.getByText(/for informational and research purposes only/i)).toBeInTheDocument();
     expect(screen.getByText(/this is not betting advice/i)).toBeInTheDocument();
     const hrefs = screen.getAllByRole("link").map((link) => link.getAttribute("href"));
-    expect(hrefs).toEqual(
-      expect.arrayContaining(["/picks", "/betslip", "/wnba/picks", "/wnba/betslip"]),
-    );
+    expect(hrefs).toEqual(expect.arrayContaining(["/picks", "/betslip"]));
+    expect(hrefs.some((href) => href?.includes("/wnba"))).toBe(false);
   });
 });

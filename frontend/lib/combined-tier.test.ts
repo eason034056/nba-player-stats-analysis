@@ -108,7 +108,6 @@ describe("NBA combined tier", () => {
     expect(action).toContain("66%");
     expect(action).not.toContain("59%");
     expect(actionBarPercent(besideTier, "nba")).toBe("66%");
-    expect(actionBarPercent(besideTier, "wnba")).toBeNull();
   });
 
   it("keeps Thybulle when the blend is 0.73 and the historical rate is 0.40", () => {
@@ -228,11 +227,9 @@ describe("NBA combined tier", () => {
   it("does not call readTier from the NBA card or the bet slip", () => {
     expect(source("lib/nba-card.ts")).not.toMatch(/readTier/);
     expect(source("components/betslip/BetSlipScreen.tsx")).not.toMatch(/readTier/);
-    expect(source("lib/today-board.ts")).toMatch(
-      /if \(league === "nba"\) return tierFromBackend\(pick\.tier\)/,
-    );
-    expect(source("lib/picks-board.ts")).toMatch(/league === "nba" \? nbaTierFace\(pick\) : null/);
-    expect(source("lib/event-page.ts")).toMatch(/if \(args\.league === "nba"\)/);
+    expect(source("lib/today-board.ts")).toMatch(/return tierFromBackend\(pick\.tier\)/);
+    expect(source("lib/picks-board.ts")).toMatch(/const face = nbaTierFace\(pick\)/);
+    expect(source("lib/event-page.ts")).toMatch(/return buildNbaRead\(args\)/);
     expect(source("components/agent-widget/presentation.ts")).toMatch(/toFixed\(1\)/);
   });
 });

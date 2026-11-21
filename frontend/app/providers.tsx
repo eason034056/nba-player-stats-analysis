@@ -11,6 +11,7 @@
  * BetSlipProvider:
  * - 管理下注列表的全局狀態
  * - 自動同步到 localStorage 持久化
+ * - 掛載時清掉已退役的 `wnba_betslip_picks`，避免舊資料留在瀏覽器裡
  */
 
 "use client"; // 標記為客戶端元件，因為使用了 state
@@ -21,7 +22,6 @@ import { useState, useEffect } from "react";
 import { AgentWidget } from "@/components/AgentWidget";
 import { AgentWidgetProvider } from "@/contexts/AgentWidgetContext";
 import { BetSlipProvider } from "@/contexts/BetSlipContext";
-import { WnbaBetSlipProvider } from "@/contexts/WnbaBetSlipContext";
 import { AGENT_CHAT_UI_ENABLED } from "@/lib/agent-chat-ui";
 
 /**
@@ -76,18 +76,11 @@ export function Providers({ children }: { children: React.ReactNode }) {
     // QueryClientProvider: React Query 的 context provider
     // 讓所有子元件都能使用 useQuery、useMutation 等 hooks
     <QueryClientProvider client={queryClient}>
-      {/* BetSlipProvider + WnbaBetSlipProvider: two independent slips, both
-          visible to the whole tree (AppShell reads both counts; the active one
-          is picked path-based in the shell per SPO-29). Nesting one
-          inside the other is fine for React; the order does not imply
-          dependence. */}
       <BetSlipProvider>
-        <WnbaBetSlipProvider>
-          <AgentWidgetProvider>
-            {children}
-            {AGENT_CHAT_UI_ENABLED ? <AgentWidget /> : null}
-          </AgentWidgetProvider>
-        </WnbaBetSlipProvider>
+        <AgentWidgetProvider>
+          {children}
+          {AGENT_CHAT_UI_ENABLED ? <AgentWidget /> : null}
+        </AgentWidgetProvider>
       </BetSlipProvider>
       
       {/* React Query Devtools: 開發工具

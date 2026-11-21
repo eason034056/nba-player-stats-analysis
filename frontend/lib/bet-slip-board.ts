@@ -117,16 +117,16 @@ export function complementHitRateLabel(
   return `${side} hit rate ${formatTierPercent(pick.probability)} (1 − ${other} ${formatTierPercent(1 - pick.probability)})`;
 }
 
-export function slipMatchup(pick: BetSlipPick, league: LeagueSegment): string {
-  const away = teamAbbr(pick.away_team, league) || pick.away_team;
-  const home = teamAbbr(pick.home_team, league) || pick.home_team;
+export function slipMatchup(pick: BetSlipPick, _league?: LeagueSegment): string {
+  const away = teamAbbr(pick.away_team) || pick.away_team;
+  const home = teamAbbr(pick.home_team) || pick.home_team;
   const time = boardClock(pick.commence_time);
   const teams = `${away} @ ${home}`;
   return time ? `${teams} · ${time}` : teams;
 }
 
-export function slipTeamCode(pick: BetSlipPick, league: LeagueSegment): string {
-  return teamAbbr(pick.player_team, league) || pick.player_team.slice(0, 3).toUpperCase();
+export function slipTeamCode(pick: BetSlipPick, _league?: LeagueSegment): string {
+  return teamAbbr(pick.player_team) || pick.player_team.slice(0, 3).toUpperCase();
 }
 
 export function slipCardFace(pick: BetSlipPick) {
@@ -174,13 +174,12 @@ export function reverseSlipPick(pick: DailyPick): SlipPickInput {
   return slipPickFromDaily(pick, reverse, 1 - pick.probability, "complement");
 }
 
-export function slipDetailHref(pick: BetSlipPick, league: LeagueSegment): string {
+export function slipDetailHref(pick: BetSlipPick, _league?: LeagueSegment): string {
   return buildEventDetailHref({
     eventId: pick.event_id,
     commenceTime: pick.commence_time,
     player: pick.player_name,
     market: metricToMarket(pick.metric),
     threshold: pick.threshold,
-    league,
   });
 }

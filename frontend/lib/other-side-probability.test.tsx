@@ -128,7 +128,7 @@ describe("nbaOtherSideProbability", () => {
     const model = nbaRead(pick({ combined_probability: 0.673, p_under: 0.41, tier: "Lean" }));
     renderWithProviders(
       <OurRead
-        league="nba"
+       
         model={model}
         isLoading={false}
         isError={false}
@@ -155,7 +155,7 @@ describe("nbaOtherSideProbability", () => {
     renderWithProviders(
       <>
         <OurRead
-          league="nba"
+         
           model={model}
           isLoading={false}
           isError={false}
@@ -167,7 +167,7 @@ describe("nbaOtherSideProbability", () => {
           onAsk={() => {}}
         />
         <EventActionBar
-          league="nba"
+         
           model={model}
           primaryInSlip={false}
           otherInSlip={false}

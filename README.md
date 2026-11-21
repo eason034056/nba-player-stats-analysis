@@ -1,6 +1,6 @@
-# NBA + WNBA Multi-Agent Betting Advisor
+# NBA Multi-Agent Betting Advisor
 
-This project is an implementation of a multi-agent system for Generative AI Assignment 4. The system uses `LangGraph` to coordinate multiple LLM agents and combines historical data, live odds, and lineup information to provide analysis results for player props. **Both NBA and WNBA are supported as first-class leagues** — the architecture is league-parameterized, so each league has its own routes, CSV, agent context, and UI (see `docs/dev-doc.md` for the league plumbing). It also features an interactive web front-end for users to input questions and view responses directly.
+This project is an implementation of a multi-agent system for Generative AI Assignment 4. The system uses `LangGraph` to coordinate multiple LLM agents and combines historical data, live odds, and lineup information to provide analysis results for NBA player props. It also features an interactive web front-end for users to input questions and view responses directly.
 
 ## System Architecture
 
@@ -30,11 +30,11 @@ This diagram shows the main LangGraph flow used by the project: the planner rout
 
 ## Project Features
 
-- Query NBA **and WNBA** games and player props information
+- Query NBA games and player props information
 - Display vig-free probabilities and market consensus
-- Analyze player historical game data (NBA and WNBA CSVs)
+- Analyze player historical game data from the NBA CSV
 - Integrate live odds, lineups, and agent analysis results
-- Interact with the multi-agent system via the front-end Agent Widget (league-aware: each league has its own betslip + agent context)
+- Interact with the multi-agent system via the front-end Agent Widget
 
 ## Tech Stack
 
@@ -152,17 +152,16 @@ Assignment 4 requires the README to explain "where to download the data." This p
 
 ### A. Historical Data CSV
 
-The project uses one player game logs file **per league**:
+The project uses one player game logs file:
 
 - NBA target path: `data/nba_player_game_logs.csv`
-- WNBA target path: `data/wnba_player_game_logs.csv`
 
-Both CSVs ship with the repo (committed alongside `data/`). They originate from the same scraper project:
+The CSV ships with the repo (committed alongside `data/`). It originates from the scraper project:
 
 - Original source (NBA): <https://github.com/eason034056/nba-player-stats-scraper/blob/main/nba_player_game_logs.csv>
 - Direct download (NBA): <https://raw.githubusercontent.com/eason034056/nba-player-stats-scraper/main/nba_player_game_logs.csv>
 
-If either file is missing from your clone, re-download via the same scraper repo (or `git lfs` if your clone uses LFS). For the NBA CSV the canonical command is:
+If the file is missing from your clone, re-download via the same scraper repo (or `git lfs` if your clone uses LFS). The canonical command is:
 
 ```bash
 mkdir -p data
@@ -171,8 +170,6 @@ python scripts/hygiene_game_logs.py
 ```
 
 The raw scraper file stamps a single `Season` value on every row and mixes Summer League, preseason, the regular season, and playoffs (RealGM's "All Games" view). `scripts/hygiene_game_logs.py` rewrites `Season` and adds `GameType` from the recorded ESPN schedule in `tests/fixtures/espn/`, and drops Summer League and preseason so they cannot feed props. `POST /api/trigger-csv-download` fetches the live ESPN schedule for the seasons in the file, then runs that same pass. Rows that still do not join a game are kept as `unclassified` (they do not feed props) and the download reports failure. Refresh the schedule fixture with `python scripts/explore_espn_schedule_api.py` when a new season starts.
-
-The WNBA CSV is loaded by `backend/app/services/csv_player_history.py` via the same `_get_csv_path(league=...)` helper — searching `/app/data/wnba_player_game_logs.csv` (Docker) then `data/wnba_player_game_logs.csv` (local) — so as long as the file exists at one of those paths, the `/api/wnba/csv/*` endpoints work without further configuration. The same hygiene script covers `data/wnba_player_game_logs.csv`.
 
 ### B. Use API to Download CSV Automatically
 
@@ -204,16 +201,18 @@ To fully use the project, make sure:
 
 ### Web Front-End
 
-The frontend exposes two parallel league routes with equivalent prop-pick UI:
+The frontend routes are:
 
-- `/` — NBA (default landing page)
-- `/wnba` — WNBA (mirror routes: `/wnba/event/[eventId]`, `/wnba/player/[name]`, `/wnba/picks`, `/wnba/betslip`)
+- `/` — Today
+- `/event/[eventId]` — one game
+- `/picks` — daily picks
+- `/betslip` — bet slip
+- `/about` — method
 
 After going to <http://localhost:3000>, you can:
 
-- Pick a league (NBA at `/`, WNBA at `/wnba`)
 - View games and player props
-- Use Agent Widget to ask analysis questions (each league has its own agent chat — `/api/nba/agent/chat` vs `/api/wnba/agent/chat`)
+- Use Agent Widget to ask analysis questions
 - View odds, lineup, historical context, and more
 
 ### CLI Front-End
@@ -257,7 +256,7 @@ pip install -r backend/requirements.txt -r scripts/agents/requirements_agents.tx
 python scripts/agents/evaluation/backtest.py --report backtest_report.md
 ```
 
-`backtest.py` is the walk-forward harness. It scores every NBA and WNBA player-game using only games dated strictly before that game, writes `backtest_report.md`, and prints the three measurement assumptions (proxy line, assumed -110, no CLV). `--odds-history PATH` loads opening and closing lines so ROI uses the real prices and CLV is computed. With no file, that hook stays inactive. `--guard-only` runs the fast calibration check that CI also runs. `--save-rows DIR` writes the row-level CSV and is gitignored.
+`backtest.py` is the walk-forward harness. It scores every NBA player-game using only games dated strictly before that game, writes `backtest_report.md`, and prints the three measurement assumptions (proxy line, assumed -110, no CLV). `--odds-history PATH` loads opening and closing lines so ROI uses the real prices and CLV is computed. With no file, that hook stays inactive. `--guard-only` runs the fast calibration check that CI also runs. `--save-rows DIR` writes the row-level CSV and is gitignored.
 
 ### Export LangGraph Mermaid Diagram
 
@@ -280,10 +279,9 @@ python graph.py
 │       └── wnba_agent.py    # /api/wnba/agent/chat — WNBA multi-agent endpoint (symmetric prefix)
 ├── frontend/                # Next.js frontend (App Router)
 │   └── app/
-│       ├── (NBA routes)     # /, /event/[eventId], /picks, /betslip, /about
-│       └── wnba/            # /wnba, /wnba/event/[eventId], /wnba/player/[name], /wnba/picks, /wnba/betslip
+│       └── (routes)         # /, /event/[eventId], /picks, /betslip, /about
 ├── scripts/agents/          # LangGraph multi-agent system and CLI (league-parameterized)
-├── data/                    # Local data files (nba_player_game_logs.csv + wnba_player_game_logs.csv)
+├── data/                    # Local data files (nba_player_game_logs.csv)
 ├── docker-compose.yml       # Backend, Redis, PostgreSQL launch configuration
 ├── env.example              # Environment variable example
 └── README.md

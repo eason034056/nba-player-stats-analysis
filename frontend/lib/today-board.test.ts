@@ -23,14 +23,10 @@ import nbaEventsFixture from "@/test/fixtures/today/nba-events.json";
 import nbaPicksFixture from "@/test/fixtures/today/nba-daily-picks.json";
 import nbaPicksPartialFixture from "@/test/fixtures/today/nba-daily-picks-partial.json";
 import nbaPicksMissingDirectionFixture from "@/test/fixtures/today/nba-daily-picks-missing-direction.json";
-import wnbaEventsFixture from "@/test/fixtures/today/wnba-events.json";
-import wnbaPicksFixture from "@/test/fixtures/today/wnba-daily-picks.json";
 import { brokenTopRead, giannisTopRead } from "@/test/fixtures/today/top-read";
 
 const nbaEvents = eventsResponseSchema.parse(nbaEventsFixture);
 const nbaPicks = dailyPicksResponseSchema.parse(nbaPicksFixture);
-const wnbaEvents = eventsResponseSchema.parse(wnbaEventsFixture);
-const wnbaPicks = dailyPicksResponseSchema.parse(wnbaPicksFixture);
 
 describe("today board dates", () => {
   it("reads a YYYY-MM-DD slate as a civil date, not a UTC midnight", () => {
@@ -109,7 +105,8 @@ describe("today board numbers", () => {
     expect(tierFromBackend("Pass")).toBeNull();
   });
 
-  it("buckets WNBA display tiers on the stored probability", () => {
+
+  it("buckets display tiers on the stored probability", () => {
     expect(readTier(0.7)?.name).toBe("strong");
     expect(readTier(0.699)?.name).toBe("playable");
     expect(readTier(0.65)?.name).toBe("playable");
@@ -118,17 +115,6 @@ describe("today board numbers", () => {
     expect(readTier(0.559)?.name).toBe("pass");
     expect(readTier(null)).toBeNull();
     expect(readTier(undefined)).toBeNull();
-  });
-
-  it("formats a half-away probability the same way formatPercent does", () => {
-    const stewart = todayReads(wnbaPicks.picks, "wnba", wnbaPicks.date).find(
-      (read) => read.player === "Breanna Stewart",
-    );
-    expect(stewart?.tier?.label).toBe("Playable");
-    expect(stewart?.probabilityText).toBe("67%");
-    expect(stewart?.probabilityText).toBe(formatTierPercent(0.6755));
-    expect(stewart?.probabilityText).not.toBe(formatPercent(0.6755));
-    expect(stewart?.probabilityText).not.toBe("67.6%");
   });
 
   it("keeps a null probability as an em dash and does not throw", () => {
@@ -170,20 +156,6 @@ describe("today board leagues", () => {
     expect(games[2].topSource).toBe("none");
   });
 
-  it("uses WNBA abbreviations and does not borrow NBA codes", () => {
-    const games = todayGames(wnbaEvents.events, wnbaPicks.picks, "wnba", wnbaEvents.date);
-    expect(games.map((game) => `${game.awayAbbr} @ ${game.homeAbbr}`)).toEqual([
-      "LVA @ NYL",
-      "SEA @ MIN",
-    ]);
-    expect(games.map((game) => `${game.awayAbbr} @ ${game.homeAbbr}`).join(" ")).not.toMatch(
-      /LAL|NYK|GSW|SAS/,
-    );
-    expect(games[0].href.startsWith("/wnba/event/")).toBe(true);
-    expect(games[1].awayName).toBe("Storm");
-    expect(games[1].homeName).toBe("Lynx");
-    expect(games[0].topSource).toBe("picks");
-  });
 });
 
 describe("today board event fields", () => {

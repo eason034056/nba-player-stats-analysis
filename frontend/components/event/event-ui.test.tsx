@@ -14,13 +14,12 @@ import { dailyPicksResponseSchema, playerHistoryResponseSchema } from "@/lib/sch
 import edgesFixture from "@/test/fixtures/event/nba-history-threshold-edges.json";
 import nbaHistoryFixture from "@/test/fixtures/event/nba-history-bam.json";
 import nbaPicksFixture from "@/test/fixtures/event/nba-daily-picks.json";
-import wnbaPicksFixture from "@/test/fixtures/event/wnba-daily-picks.json";
 import { renderWithProviders } from "@/test/test-utils";
 
 const noop = vi.fn();
 const bamHistory = playerHistoryResponseSchema.parse(nbaHistoryFixture);
 const edgeHistory = playerHistoryResponseSchema.parse(edgesFixture);
-const wilsonPick = dailyPicksResponseSchema.parse(wnbaPicksFixture).picks[0];
+const bamPick = dailyPicksResponseSchema.parse(nbaPicksFixture).picks[0];
 
 function logOn(dateFull: string) {
   const game = bamHistory.game_logs.find((row) => row.date_full === dateFull);
@@ -45,8 +44,8 @@ describe("EventHeader", () => {
         onRetry={noop}
       />,
     );
-    expect(screen.getByRole("heading", { name: /boston celtics @ miami heat/i })).toBeInTheDocument();
-    expect(screen.getByText("Tue, Nov 10 · 7:30 PM")).toBeInTheDocument();
+    expect(screen.getAllByRole("heading", { name: /boston celtics @ miami heat/i })).toHaveLength(2);
+    expect(screen.getAllByText("Tue, Nov 10 · 7:30 PM")).toHaveLength(2);
     expect(screen.getByText("BOS lineup status unavailable")).toBeInTheDocument();
   });
 
@@ -153,7 +152,6 @@ describe("PlayerRail", () => {
   it("does not label an NBA lean History, because that number is the blend", () => {
     renderWithProviders(
       <PlayerRail
-        league="nba"
         rows={rows}
         selected="Bam Adebayo"
         onSelect={noop}
@@ -197,43 +195,22 @@ describe("PlayerRail", () => {
 
 describe("OurRead", () => {
   const model = buildOurRead({
-    player: "A'ja Wilson",
+    player: bamPick.player_name,
     marketName: "Points",
     market: "player_points",
     binary: false,
-    eventId: "wnba-1",
-    homeTeam: "Las Vegas Aces",
-    awayTeam: "New York Liberty",
-    commenceTime: "2026-11-11T00:00:00Z",
-    team: "LVA",
+    eventId: bamPick.event_id,
+    homeTeam: bamPick.home_team,
+    awayTeam: bamPick.away_team,
+    commenceTime: bamPick.commence_time,
+    team: bamPick.player_team,
     position: null,
-    line: wilsonPick.threshold,
-    pick: wilsonPick,
+    line: bamPick.threshold,
+    pick: bamPick,
     consensus: null,
     last10: [],
     history: null,
-    league: "wnba",
-  });
-
-  it("renders a WNBA read with the projection gap and no verdict", () => {
-    renderWithProviders(
-      <OurRead
-        model={model}
-        isLoading={false}
-        isError={false}
-        errorText={null}
-        primaryInSlip={false}
-        otherInSlip={false}
-        onAddPrimary={noop}
-        onAddOther={noop}
-        onAsk={noop}
-      />,
-    );
-    expect(screen.getByText(/A'ja Wilson/)).toBeInTheDocument();
-    expect(screen.getByText(/Projection is not available for WNBA/)).toBeInTheDocument();
-    expect(screen.queryByText(/supports|neutral|against/i)).not.toBeInTheDocument();
-    expect(screen.getByText("Playable")).toBeInTheDocument();
-    expect(screen.queryByText("Strong play")).not.toBeInTheDocument();
+    league: "nba",
   });
 
   it("shows loading and error states", () => {
@@ -251,7 +228,7 @@ describe("OurRead", () => {
       />,
     );
     expect(screen.getByText("Loading this read.")).toBeInTheDocument();
-    expect(screen.queryByText("A'ja Wilson")).not.toBeInTheDocument();
+    expect(screen.queryByText(bamPick.player_name)).not.toBeInTheDocument();
     rerender(
       <OurRead
         model={model}
@@ -330,7 +307,6 @@ describe("OurRead", () => {
         onAddPrimary={noop}
         onAddOther={noop}
         onAsk={noop}
-        league="nba"
       />,
     );
     expect(screen.getByText("Market price")).toBeInTheDocument();
@@ -428,7 +404,6 @@ describe("GameFilters", () => {
   it("disables venue because home and away are not on the game log", () => {
     renderWithProviders(
       <GameFilters
-        league="wnba"
         range={10}
         onRange={noop}
         lineText="18.5"
@@ -460,29 +435,28 @@ describe("GameFilters", () => {
 
 describe("EventActionBar", () => {
   const model = buildOurRead({
-    player: "A'ja Wilson",
+    player: bamPick.player_name,
     marketName: "Points",
     market: "player_points",
     binary: false,
-    eventId: "wnba-1",
-    homeTeam: "Las Vegas Aces",
-    awayTeam: "New York Liberty",
-    commenceTime: "2026-11-11T00:00:00Z",
-    team: "LVA",
+    eventId: bamPick.event_id,
+    homeTeam: bamPick.home_team,
+    awayTeam: bamPick.away_team,
+    commenceTime: bamPick.commence_time,
+    team: bamPick.player_team,
     position: null,
-    line: wilsonPick.threshold,
-    pick: wilsonPick,
+    line: bamPick.threshold,
+    pick: bamPick,
     consensus: null,
     last10: [],
     history: null,
-    league: "wnba",
+    league: "nba",
   });
 
   it("renders no Ask control when chat UI is off", () => {
     const onAsk = vi.fn();
     renderWithProviders(
       <EventActionBar
-        league="nba"
         model={model}
         primaryInSlip={false}
         otherInSlip={false}

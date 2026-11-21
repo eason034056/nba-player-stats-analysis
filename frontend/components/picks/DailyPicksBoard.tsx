@@ -146,9 +146,7 @@ export function DailyPicksBoard({
             Daily Picks
           </h1>
           <p className="text-[15px] leading-relaxed text-muted max-md:hidden">
-            {league === "nba"
-              ? `Props whose combined probability is ${floor}% or more.`
-              : `Props whose historical hit rate is ${floor}% or more, ranked by that rate.`}
+            {`Props whose combined probability is ${floor}% or more.`}
           </p>
           <p className="text-[13px] text-muted md:hidden">
             {pickCount} props at {floor}%+ · {strongCount} strong
@@ -438,10 +436,9 @@ export function DailyPicksBoard({
       ) : null}
 
       <p className="text-[13px] leading-6 text-muted">
-        The line is the most common line across books.{" "}
-        {league === "nba"
-          ? "The percent is the combined probability. Opponent rank appears only when the response includes it. Tap a pick to see every signal behind it."
-          : "The percent is the historical hit rate over the stored sample. Projection, edge, minutes, and opponent rank appear only when the response includes them. A blended probability is not on this board."}
+        The line is the most common line across books. The percent is the combined
+        probability. Opponent rank appears only when the response includes it. Tap a pick to
+        see every signal behind it.
       </p>
     </div>
   );

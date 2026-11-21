@@ -61,19 +61,15 @@ function renderLog(props: Partial<Parameters<typeof NbaGameLog>[0]> = {}) {
 }
 
 describe("RangeControl", () => {
-  it("offers L5, L10, L20, and All on NBA and keeps the WNBA labels", () => {
-    const { unmount } = render(<RangeControl league="nba" value={5} onChange={noop} />);
+  it("offers L5, L10, L20, and All", () => {
+    render(<RangeControl value={5} onChange={noop} />);
     expect(screen.getAllByRole("button").map((button) => button.textContent)).toEqual(["L5", "L10", "L20", "All"]);
     expect(screen.getByRole("button", { name: "L5" })).toHaveAttribute("aria-pressed", "true");
-    unmount();
-
-    render(<RangeControl league="wnba" value={10} onChange={noop} />);
-    expect(screen.getAllByRole("button").map((button) => button.textContent)).toEqual(["Last 10", "Last 20", "All"]);
   });
 
   it("sends 5 when L5 is picked", async () => {
     const onChange = vi.fn();
-    render(<RangeControl league="nba" value={10} onChange={onChange} />);
+    render(<RangeControl value={10} onChange={onChange} />);
     await userEvent.click(screen.getByRole("button", { name: "L5" }));
     expect(onChange).toHaveBeenCalledWith(5);
   });

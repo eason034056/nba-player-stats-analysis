@@ -114,7 +114,7 @@ describe("QA: caption, rail, and action bar keep the two sources apart", () => {
     renderWithProviders(
       <>
         <PlayerRail
-          league="nba"
+         
           rows={[row]}
           selected="Bam Adebayo"
           onSelect={noop}
@@ -124,7 +124,7 @@ describe("QA: caption, rail, and action bar keep the two sources apart", () => {
           onRetry={noop}
         />
         <EventActionBar
-          league="nba"
+         
           model={model}
           primaryInSlip={false}
           otherInSlip={false}

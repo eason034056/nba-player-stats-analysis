@@ -66,7 +66,7 @@ function shareCard(): HTMLElement {
   return screen.getByText("novig · for research only").parentElement as HTMLElement;
 }
 
-function rows(pick: DailyPick, league: "nba" | "wnba" = "nba") {
+function rows(pick: DailyPick, league: "nba" = "nba") {
   return eventPlayerRows({
     suggested: [pick.player_name],
     picks: [pick],
@@ -82,10 +82,9 @@ function rows(pick: DailyPick, league: "nba" | "wnba" = "nba") {
   });
 }
 
-function renderRail(pick: DailyPick, league: "nba" | "wnba" = "nba") {
+function renderRail(pick: DailyPick, league: "nba" = "nba") {
   renderWithProviders(
     <PlayerRail
-      league={league}
       rows={rows(pick, league)}
       selected=""
       onSelect={vi.fn()}
@@ -225,7 +224,7 @@ describe("screen-reader prefix", () => {
 
     const railView = renderWithProviders(
       <PlayerRail
-        league="nba"
+       
         rows={rows(listedOut)}
         selected=""
         onSelect={vi.fn()}
@@ -249,17 +248,6 @@ describe("screen-reader prefix", () => {
   });
 });
 
-describe("WNBA", () => {
-  it("shows no injury chip or prefix on the board, the rail, or Today", () => {
-    const wnbaQuiet: DailyPick = { ...doubtful, injury_status: null, injury_status_raw: null };
-    renderWithProviders(<DailyPicksBoard {...boardProps({ league: "wnba", picks: [wnbaQuiet], teams: ["LVA"] })} />);
-    const card = screen.getByRole("article");
-    expect(card).not.toHaveTextContent("Injury:");
-    const button = renderRail(wnbaQuiet, "wnba");
-    expect(button).not.toHaveTextContent("Injury:");
-    expect(todayReads([wnbaQuiet], "wnba", "2026-11-10")[0]?.injury).toBeNull();
-  });
-});
 
 describe("percent floor", () => {
   it("floors 0.697 to 69% on a Doubtful slip leg and its share card", async () => {

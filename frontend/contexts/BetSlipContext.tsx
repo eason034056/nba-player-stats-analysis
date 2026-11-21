@@ -105,6 +105,8 @@ const BetSlipContext = createContext<BetSlipContextType | undefined>(undefined);
 
 // localStorage key
 const STORAGE_KEY = "betslip_picks";
+/** Retired second slip. Removed on mount so a stale value is never parsed. */
+const RETIRED_WNBA_SLIP_KEY = "wnba_betslip_picks";
 
 // ==================== Provider 組件 ====================
 
@@ -131,6 +133,11 @@ export function BetSlipProvider({ children }: { children: ReactNode }) {
    * 這避免了 SSR/SSG 時的 hydration mismatch 問題
    */
   useEffect(() => {
+      try {
+        localStorage.removeItem(RETIRED_WNBA_SLIP_KEY);
+      } catch {
+        // Storage can throw. Nothing else reads the retired key.
+      }
     try {
       const stored = localStorage.getItem(STORAGE_KEY);
       if (stored) {

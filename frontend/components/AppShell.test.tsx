@@ -31,25 +31,17 @@ vi.mock("next/link", () => ({
 
 vi.mock("next/navigation", () => navigationMocks);
 
-function seedWnbaSlip(count: number) {
-  const picks = Array.from({ length: count }, (_, index) =>
-    createBetSlipPick({
-      id: `aja-${index}`,
-      player_name: `Player ${index}`,
-    }),
-  );
-  window.localStorage.setItem("wnba_betslip_picks", JSON.stringify(picks));
-}
+const RETIRED_SLIP_KEY = "wnba_betslip_picks";
 
 describe("AppShell", () => {
   beforeEach(() => {
     clearBetSlip();
-    window.localStorage.removeItem("wnba_betslip_picks");
+    window.localStorage.removeItem(RETIRED_SLIP_KEY);
     window.sessionStorage.clear();
     navigationMocks.usePathname.mockReturnValue("/");
   });
 
-  it("highlights Today and shows the NBA bet slip count", async () => {
+  it("highlights Today and shows the bet slip count", async () => {
     seedBetSlip([createBetSlipPick(), createBetSlipPick({ id: "bam", player_name: "Bam Adebayo" })]);
     renderWithProviders(
       <AppShell>
@@ -63,6 +55,7 @@ describe("AppShell", () => {
     expect(within(primary).getByRole("link", { name: "Picks" })).toHaveAttribute("href", "/picks");
     expect(within(primary).getByRole("link", { name: "Method" })).toHaveAttribute("href", "/about");
     expect(within(primary).getByRole("link", { name: /bet slip/i })).toHaveAttribute("href", "/betslip");
+    expect(screen.queryByRole("group", { name: "League" })).not.toBeInTheDocument();
 
     await waitFor(() => {
       expect(within(primary).getByText("2")).toBeInTheDocument();
@@ -84,64 +77,21 @@ describe("AppShell", () => {
     expect(within(mobile).getByRole("link", { name: "Method" })).toHaveAttribute("href", "/about");
   });
 
-  it("routes the league switch between NBA and WNBA sections", () => {
-    const { rerender } = renderWithProviders(
-      <AppShell>
-        <p>Board</p>
-      </AppShell>,
-    );
-
-    for (const group of screen.getAllByRole("group", { name: "League" })) {
-      expect(within(group).getByRole("link", { name: "NBA" })).toHaveAttribute("aria-current", "true");
-      expect(within(group).getByRole("link", { name: "WNBA" })).toHaveAttribute("href", "/wnba");
-    }
-
-    navigationMocks.usePathname.mockReturnValue("/wnba/picks");
-    rerender(
-      <AppShell>
-        <p>Board</p>
-      </AppShell>,
-    );
-
-    const primary = screen.getByRole("navigation", { name: "Primary" });
-    expect(within(primary).getByRole("link", { name: "Picks" })).toHaveAttribute("href", "/wnba/picks");
-    expect(within(primary).getByRole("link", { name: "Today" })).toHaveAttribute("href", "/wnba");
-    expect(within(primary).getByRole("link", { name: /bet slip/i })).toHaveAttribute("href", "/wnba/betslip");
-    for (const group of screen.getAllByRole("group", { name: "League" })) {
-      expect(within(group).getByRole("link", { name: "WNBA" })).toHaveAttribute("aria-current", "true");
-      expect(within(group).getByRole("link", { name: "NBA" })).toHaveAttribute("href", "/picks");
-    }
-  });
-
-  it("uses the WNBA slip count on a WNBA route", async () => {
-    seedBetSlip([createBetSlipPick()]);
-    seedWnbaSlip(2);
-    navigationMocks.usePathname.mockReturnValue("/wnba");
+  it("drops a retired slip key so it cannot be parsed", async () => {
+    window.localStorage.setItem(RETIRED_SLIP_KEY, "{not-json");
     renderWithProviders(
       <AppShell>
         <p>Board</p>
       </AppShell>,
     );
 
-    const primary = screen.getByRole("navigation", { name: "Primary" });
     await waitFor(() => {
-      expect(within(primary).getByText("2")).toBeInTheDocument();
+      expect(window.localStorage.getItem(RETIRED_SLIP_KEY)).toBeNull();
     });
-    expect(within(primary).queryByText("1")).not.toBeInTheDocument();
+    expect(screen.getByRole("navigation", { name: "Primary" })).toBeInTheDocument();
   });
 
-  const shellPaths = [
-    "/",
-    "/picks",
-    "/betslip",
-    "/about",
-    "/event/heat-bucks",
-    "/wnba",
-    "/wnba/picks",
-    "/wnba/betslip",
-    "/wnba/event/aces-liberty",
-    "/wnba/player/A%27ja%20Wilson",
-  ];
+  const shellPaths = ["/", "/picks", "/betslip", "/about", "/event/heat-bucks"];
 
   function renderShellPaths() {
     const { rerender } = renderWithProviders(
@@ -160,7 +110,7 @@ describe("AppShell", () => {
     };
   }
 
-  it("renders no Ask controls on NBA or WNBA routes when chat UI is off", () => {
+  it("renders no Ask controls when chat UI is off", () => {
     const showPath = renderShellPaths();
     for (const path of shellPaths) {
       showPath(path);
@@ -170,7 +120,7 @@ describe("AppShell", () => {
     }
   });
 
-  it("keeps Method as one page and sends the league switch to Today", () => {
+  it("highlights Method on the method page", () => {
     navigationMocks.usePathname.mockReturnValue("/about");
     renderWithProviders(
       <AppShell>
@@ -181,15 +131,12 @@ describe("AppShell", () => {
     const primary = screen.getByRole("navigation", { name: "Primary" });
     expect(within(primary).getByRole("link", { name: "Method" })).toHaveAttribute("aria-current", "page");
     expect(within(primary).getByRole("link", { name: "Method" })).toHaveAttribute("href", "/about");
-    for (const group of screen.getAllByRole("group", { name: "League" })) {
-      expect(within(group).getByRole("link", { name: "NBA" })).toHaveAttribute("href", "/");
-      expect(within(group).getByRole("link", { name: "WNBA" })).toHaveAttribute("href", "/wnba");
-    }
+    expect(within(primary).getByRole("link", { name: "Today" })).toHaveAttribute("href", "/");
   });
 
-  it("highlights Today on an event page and switches to the other league's Today", () => {
+  it("highlights Today on an event page", () => {
     navigationMocks.usePathname.mockReturnValue("/event/heat-bucks");
-    const { rerender } = renderWithProviders(
+    renderWithProviders(
       <AppShell>
         <p>Event</p>
       </AppShell>,
@@ -197,26 +144,13 @@ describe("AppShell", () => {
 
     const primary = screen.getByRole("navigation", { name: "Primary" });
     expect(within(primary).getByRole("link", { name: "Today" })).toHaveAttribute("aria-current", "page");
-    for (const group of screen.getAllByRole("group", { name: "League" })) {
-      expect(within(group).getByRole("link", { name: "WNBA" })).toHaveAttribute("href", "/wnba");
-      expect(within(group).getByRole("link", { name: "NBA" })).toHaveAttribute("aria-current", "true");
-    }
-
-    navigationMocks.usePathname.mockReturnValue("/wnba/event/aces-liberty");
-    rerender(
-      <AppShell>
-        <p>Event</p>
-      </AppShell>,
-    );
-    expect(within(primary).getByRole("link", { name: "Today" })).toHaveAttribute("href", "/wnba");
-    for (const group of screen.getAllByRole("group", { name: "League" })) {
-      expect(within(group).getByRole("link", { name: "NBA" })).toHaveAttribute("href", "/");
-      expect(within(group).getByRole("link", { name: "WNBA" })).toHaveAttribute("aria-current", "true");
-    }
+    expect(within(primary).getByRole("link", { name: "Today" })).toHaveAttribute("href", "/");
+    expect(within(primary).getByRole("link", { name: "Picks" })).toHaveAttribute("href", "/picks");
+    expect(within(primary).getByRole("link", { name: /bet slip/i })).toHaveAttribute("href", "/betslip");
   });
 
-  it("sends a WNBA player page to NBA Today and keeps the WNBA section links", () => {
-    navigationMocks.usePathname.mockReturnValue("/wnba/player/A%27ja%20Wilson");
+  it("does not light a tab for a path outside the four sections", () => {
+    navigationMocks.usePathname.mockReturnValue("/player/Stephen%20Curry");
     renderWithProviders(
       <AppShell>
         <p>Player</p>
@@ -225,13 +159,9 @@ describe("AppShell", () => {
 
     const primary = screen.getByRole("navigation", { name: "Primary" });
     expect(within(primary).getByRole("link", { name: "Today" })).not.toHaveAttribute("aria-current", "page");
-    expect(within(primary).getByRole("link", { name: "Today" })).toHaveAttribute("href", "/wnba");
-    expect(within(primary).getByRole("link", { name: "Picks" })).toHaveAttribute("href", "/wnba/picks");
-    expect(within(primary).getByRole("link", { name: /bet slip/i })).toHaveAttribute("href", "/wnba/betslip");
-    for (const group of screen.getAllByRole("group", { name: "League" })) {
-      expect(within(group).getByRole("link", { name: "NBA" })).toHaveAttribute("href", "/");
-      expect(within(group).getByRole("link", { name: "WNBA" })).toHaveAttribute("aria-current", "true");
-    }
+    expect(within(primary).getByRole("link", { name: "Today" })).toHaveAttribute("href", "/");
+    expect(within(primary).getByRole("link", { name: "Picks" })).toHaveAttribute("href", "/picks");
+    expect(within(primary).getByRole("link", { name: /bet slip/i })).toHaveAttribute("href", "/betslip");
   });
 
   it("spans the web header and leaves the research disclaimer on Method only", () => {
@@ -250,7 +180,7 @@ describe("AppShell", () => {
     expect(screen.queryByText(/for research/i)).not.toBeInTheDocument();
   });
 
-  it("keeps Bet Slip when the league switch flips", () => {
+  it("highlights Bet Slip on the slip page", () => {
     navigationMocks.usePathname.mockReturnValue("/betslip");
     renderWithProviders(
       <AppShell>
@@ -260,8 +190,6 @@ describe("AppShell", () => {
 
     const primary = screen.getByRole("navigation", { name: "Primary" });
     expect(within(primary).getByRole("link", { name: /bet slip/i })).toHaveAttribute("aria-current", "page");
-    for (const group of screen.getAllByRole("group", { name: "League" })) {
-      expect(within(group).getByRole("link", { name: "WNBA" })).toHaveAttribute("href", "/wnba/betslip");
-    }
+    expect(within(primary).getByRole("link", { name: /bet slip/i })).toHaveAttribute("href", "/betslip");
   });
 });

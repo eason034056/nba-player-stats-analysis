@@ -1,5 +1,5 @@
 /**
- * /about — Method, shared by NBA and WNBA.
+ * /about — Method.
  *
  * The blend copy mirrors backend/app/services/pick_signals.py and
  * pick_signal_constants.py. Change them together.
@@ -91,7 +91,7 @@ export default function AboutPage() {
           <h2 className="text-xl font-bold">Blend the signals</h2>
         </div>
         <p className="text-[15px] leading-relaxed text-ink">
-          On NBA the market price is the starting point. Recent form, the all-game hit rate,
+          The market price is the starting point. Recent form, the all-game hit rate,
           and the opponent&apos;s defense nudge it up or down. Each nudge is capped, and so is
           their sum, so no single number overrides the market. On a game page each signal also
           says whether it supports the side.
@@ -110,7 +110,6 @@ export default function AboutPage() {
         </div>
         <p className="text-sm leading-6 text-muted">
           a and b are fit on past regular-season games. A player listed Out gets no number.
-          WNBA picks have no market blend yet, so their percent is the historical hit rate.
         </p>
       </section>
 
@@ -120,8 +119,7 @@ export default function AboutPage() {
           <h2 className="text-xl font-bold">Read the tier</h2>
         </div>
         <p className="text-[15px] leading-relaxed">
-          The tier is a bucket on the percent you see: the combined probability on NBA, the
-          historical hit rate on WNBA. The API sends it with each read.
+          The tier is a bucket on the combined probability you see. The API sends it with each read.
         </p>
         <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2 lg:grid-cols-4">
           <Tier name="Strong play" range="≥ 70%" className="bg-accent text-brand-ink" />
@@ -136,29 +134,18 @@ export default function AboutPage() {
       </section>
 
       <section className="rounded-3xl border border-line bg-white p-5 md:p-7">
-        <h2 className="text-lg font-bold">NBA and WNBA</h2>
+        <h2 className="text-lg font-bold">Where to look</h2>
         <p className="mt-3 text-sm leading-6 text-muted">
-          Both leagues use the same no-vig formula. NBA blends it with the player&apos;s
-          numbers. WNBA shows the historical hit rate. Picks and slips stay on separate routes.
+          The same no-vig formula is blended with the player&apos;s numbers. Picks and the
+          slip stay on their own routes.
         </p>
         <ul className="mt-4 space-y-2 text-sm">
           <li>
-            <span className="font-bold">NBA:</span>{" "}
             <Link href="/picks" className="font-semibold text-brand hover:underline">
               Daily Picks
             </Link>
             {" · "}
             <Link href="/betslip" className="font-semibold text-brand hover:underline">
-              Bet Slip
-            </Link>
-          </li>
-          <li>
-            <span className="font-bold">WNBA:</span>{" "}
-            <Link href="/wnba/picks" className="font-semibold text-brand hover:underline">
-              Daily Picks
-            </Link>
-            {" · "}
-            <Link href="/wnba/betslip" className="font-semibold text-brand hover:underline">
               Bet Slip
             </Link>
           </li>

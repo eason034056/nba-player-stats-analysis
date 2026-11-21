@@ -16,10 +16,9 @@ import {
 } from "./injury-tag";
 import { metricToMarket } from "./metric-to-market";
 import { boardRate, nbaTierFace } from "./nba-card";
-import { formatPercent } from "./player-dd";
 import type { DailyPick } from "./schemas";
 import { teamAbbr } from "./team-abbr";
-import { boardClock, metricShort, readTier, type ReadTierName } from "./today-board";
+import { boardClock, metricShort, type ReadTierName } from "./today-board";
 
 export type ConfidenceFilter = "all" | "strong" | "playable";
 
@@ -45,13 +44,6 @@ const METRIC_PHRASE: Record<string, string> = {
   ftm: "free throws",
   fgm: "field goals",
   dd: "double-double",
-};
-
-const TIER_SHORT: Record<ReadTierName, string> = {
-  strong: "Strong",
-  playable: "Playable",
-  lean: "Lean",
-  pass: "Pass",
 };
 
 export interface PickTag {
@@ -211,15 +203,15 @@ export function pickTags(pick: DailyPick): PickTag[] {
   return tags;
 }
 
-export function pickTeamCode(pick: DailyPick, league: LeagueSegment): string {
+export function pickTeamCode(pick: DailyPick, _league?: LeagueSegment): string {
   const code = pick.player_team_code?.trim();
   if (code && code.length <= 4) return code.toUpperCase();
-  return teamAbbr(pick.player_team, league);
+  return teamAbbr(pick.player_team);
 }
 
-export function pickMatchup(pick: DailyPick, league: LeagueSegment): string {
-  const away = teamAbbr(pick.away_team, league) || pick.away_team;
-  const home = teamAbbr(pick.home_team, league) || pick.home_team;
+export function pickMatchup(pick: DailyPick, _league?: LeagueSegment): string {
+  const away = teamAbbr(pick.away_team) || pick.away_team;
+  const home = teamAbbr(pick.home_team) || pick.home_team;
   const time = boardClock(pick.commence_time);
   const teams = `${away} @ ${home}`;
   return time ? `${teams} · ${time}` : teams;
@@ -253,9 +245,9 @@ export function buildPickRows(
 ): PickRowModel[] {
   return sortPicks(picks, league).map((pick, index) => {
     const out = isOutPick(pick);
-    const face = league === "nba" ? nbaTierFace(pick) : null;
-    let tier = face ? face.tier : readTier(pick.probability);
-    let probabilityText = face ? face.probabilityText : formatPercent(pick.probability);
+    const face = nbaTierFace(pick);
+    let tier = face.tier;
+    let probabilityText = face.probabilityText;
     let barRate = boardRate(pick, league);
     let tags = pickTags(pick);
     if (out) {
@@ -268,13 +260,13 @@ export function buildPickRows(
     return {
       key: `${pick.event_id}-${pick.player_name}-${pick.metric}-${pick.direction}`,
       rank: String(index + 1).padStart(2, "0"),
-      team: pickTeamCode(pick, league),
+      team: pickTeamCode(pick),
       player: pick.player_name,
-      matchup: pickMatchup(pick, league),
+      matchup: pickMatchup(pick),
       propText: propPhrase(pick),
       probabilityText,
       barPercent: bar,
-      tierShort: tier ? (league === "nba" ? tier.label : TIER_SHORT[tier.name]) : null,
+      tierShort: tier ? tier.label : null,
       tierName: tier?.name ?? null,
       tags,
       dimmed: out,
@@ -284,7 +276,6 @@ export function buildPickRows(
         player: pick.player_name,
         market: metricToMarket(pick.metric),
         threshold: pick.threshold,
-        league,
       }),
     };
   });
