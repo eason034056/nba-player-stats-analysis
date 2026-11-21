@@ -242,7 +242,11 @@ async def test_cli_exports_form_labels_and_parquet(
     assert meta["rows_before_label_filter"] == 10
     assert meta["label_drop_count"] == 2
     assert meta["info_source"] == "pregame"
-    assert meta["feature_sources"] == ["games", "player_game_stats"]
+    assert meta["feature_sources"] == [
+        "games",
+        "player_game_stats",
+        "game_odds_snapshots",
+    ]
     assert set(frame["season"].astype(int)) == {2015}
     assert set(frame["info_source"]) == {"pregame"}
     assert "home_score" not in frame.columns

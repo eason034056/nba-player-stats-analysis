@@ -8,10 +8,6 @@
 .env.local
 .env.*.local
 
-# nba_lineup_rag 子專案（明確排除）
-nba_lineup_rag/.env
-nba_lineup_rag/data/
-
 # ==================== Python ====================
 __pycache__/
 *.py[cod]
@@ -60,8 +56,7 @@ yarn-error.log*
 # ==================== Next.js ====================
 .next/
 .next-dev/
-# Also covers scripts/agents/evaluation/out/, the opt-in row dump from
-# `backtest.py --save-rows`. Those CSVs are large and stay untracked.
+# Next.js export directory.
 out/
 .vercel
 
@@ -96,16 +91,6 @@ coverage/
 # ==================== 其他 ====================
 *.local
 Thumbs.db
-
-# ==================== SPO-100 generated / local junk ====================
-# RAG evaluation exports. Source of truth stays tracked:
-# nba_lineup_rag/notebooks/RAG_evaluation.ipynb
-nba_lineup_rag/RAG_evaluation.html
-nba_lineup_rag/RAG_evaluation.pdf
-
-# Written by RAG_evaluation.ipynb. Nothing in the runtime reads these back.
-outputs/notebook_results_*.json
-nba_lineup_rag/outputs/notebook_results_*.json
 
 # tsc incremental cache. frontend/.gitignore already lists the frontend file
 # by basename; this covers every package from the repo root.
