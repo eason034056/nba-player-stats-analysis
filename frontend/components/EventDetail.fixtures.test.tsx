@@ -3,6 +3,7 @@ import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { EventDetail } from "@/components/EventDetail";
+import { AGENT_CHAT_UI_ENABLED } from "@/lib/agent-chat-ui";
 import { formatPercent } from "@/lib/player-dd";
 import {
   csvPlayersResponseSchema,
@@ -141,8 +142,7 @@ describe("EventDetail fixtures", () => {
     apiMocks.useEventBulkProps.mockReturnValue({ data: undefined });
   });
 
-  it("reads the NBA game from the fixture payloads and opens the agent", async () => {
-    const user = userEvent.setup();
+  it("reads the NBA game from the fixture payloads", async () => {
     renderWithProviders(<EventDetail league="nba" />, { withAgentWidget: true });
 
     expect(
@@ -167,20 +167,26 @@ describe("EventDetail fixtures", () => {
     expect(apiMocks.getWNBATeamLineup).not.toHaveBeenCalled();
     expect(apiMocks.getWNBAPlayerHistory).not.toHaveBeenCalled();
 
-    await user.click(screen.getByRole("button", { name: "Ask the agent" }));
-    expect(screen.getByRole("button", { name: "Close betting agent" })).toBeInTheDocument();
-    await waitFor(() => {
-      const stored = JSON.parse(window.sessionStorage.getItem("agent_widget_state") ?? "{}");
-      expect(stored.pageContext.route).toBe("/event/evt-mia-bos");
-      expect(stored.selectedPickContext).toMatchObject({
-        player_name: "Bam Adebayo",
-        event_id: "evt-mia-bos",
-        metric: "points",
-        threshold: 18.5,
-        direction: "over",
-        probability: 0.72,
+    if (AGENT_CHAT_UI_ENABLED) {
+      const user = userEvent.setup();
+      await user.click(screen.getByRole("button", { name: "Ask the agent" }));
+      expect(screen.getByRole("button", { name: "Close betting agent" })).toBeInTheDocument();
+      await waitFor(() => {
+        const stored = JSON.parse(window.sessionStorage.getItem("agent_widget_state") ?? "{}");
+        expect(stored.pageContext.route).toBe("/event/evt-mia-bos");
+        expect(stored.selectedPickContext).toMatchObject({
+          player_name: "Bam Adebayo",
+          event_id: "evt-mia-bos",
+          metric: "points",
+          threshold: 18.5,
+          direction: "over",
+          probability: 0.72,
+        });
       });
-    });
+    } else {
+      expect(screen.queryByRole("button", { name: "Ask the agent" })).not.toBeInTheDocument();
+      expect(screen.queryByRole("button", { name: /^ask$/i })).not.toBeInTheDocument();
+    }
   });
 
   it("keeps a loading NBA read distinct from a player who has no read", async () => {
@@ -314,13 +320,18 @@ describe("EventDetail fixtures", () => {
       ]);
     });
     expect(JSON.parse(window.localStorage.getItem("betslip_picks") ?? "[]")).toEqual([]);
-    await user.click(screen.getByRole("button", { name: "Ask the agent" }));
-    await waitFor(() => {
-      const stored = JSON.parse(window.sessionStorage.getItem("agent_widget_state") ?? "{}");
-      expect(stored.pageContext.route).toBe("/wnba/event/evt-lva-nyl");
-      expect(stored.selectedPickContext.player_name).toBe("A'ja Wilson");
-      expect(stored.selectedPickContext.probability).toBe(0.68);
-    });
+    if (AGENT_CHAT_UI_ENABLED) {
+      await user.click(screen.getByRole("button", { name: "Ask the agent" }));
+      await waitFor(() => {
+        const stored = JSON.parse(window.sessionStorage.getItem("agent_widget_state") ?? "{}");
+        expect(stored.pageContext.route).toBe("/wnba/event/evt-lva-nyl");
+        expect(stored.selectedPickContext.player_name).toBe("A'ja Wilson");
+        expect(stored.selectedPickContext.probability).toBe(0.68);
+      });
+    } else {
+      expect(screen.queryByRole("button", { name: "Ask the agent" })).not.toBeInTheDocument();
+      expect(screen.queryByRole("button", { name: /^ask$/i })).not.toBeInTheDocument();
+    }
   });
 
   it("keeps the selected stat and line when the mobile tabs change", async () => {

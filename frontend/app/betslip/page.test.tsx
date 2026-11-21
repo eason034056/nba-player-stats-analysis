@@ -4,6 +4,7 @@ import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import BetSlipPage from "@/app/betslip/page";
+import { AGENT_CHAT_UI_ENABLED } from "@/lib/agent-chat-ui";
 import {
   clearBetSlip,
   createBetSlipPick,
@@ -140,7 +141,23 @@ describe("BetSlipPage", () => {
     ).toBeInTheDocument();
   });
 
-  it("reviews the current slip through the agent widget", async () => {
+  it.skipIf(AGENT_CHAT_UI_ENABLED)("hides Review with agent when chat UI is off", async () => {
+    seedBetSlip([createBetSlipPick()]);
+
+    renderWithProviders(<BetSlipPage />, { withAgentWidget: true });
+
+    await waitFor(() => {
+      expect(
+        screen.getByRole("heading", { level: 2, name: /your picks/i }),
+      ).toBeInTheDocument();
+    });
+
+    expect(screen.queryByRole("button", { name: /review with agent/i })).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /download png/i })).toBeInTheDocument();
+    expect(apiMocks.sendAgentChat).not.toHaveBeenCalled();
+  });
+
+  it.skipIf(!AGENT_CHAT_UI_ENABLED)("reviews the current slip through the agent widget", async () => {
     const user = userEvent.setup();
     seedBetSlip([createBetSlipPick()]);
 
