@@ -17,8 +17,9 @@ Without one definition, every query re-derives "newest" and "settled" its own wa
 
 1. **The 14 tables of 002 do not change.** `004_read_layer.sql` adds one table and four views (version 003 is SPO-138g's `003_bdl_game_gaps.sql`).
 2. **`predictions`** holds one row per model run for a game, player, and market (`model_version`, `predicted_value`, nullable `distribution`).
-   - `predicted_at` is the insert's transaction time. A trigger overwrites whatever the writer sends.
-   - An insert at or after `games.datetime_utc` is refused, and so is one for a game with no `datetime_utc`.
+   - `predicted_at` is the transaction start time (`now()`). A trigger overwrites whatever the writer sends.
+   - An insert is refused when the wall clock at the INSERT (`clock_timestamp()`) is at or after `games.datetime_utc`, and so is one for a game with no `datetime_utc`. A stored row proves the INSERT itself ran before tip-off.
+   - The primary key includes `predicted_at`. A second insert in the same transaction with a different `predicted_value` (same league, game, player, market, and `model_version`) collides on that key, because both rows get the same `now()`. `ON CONFLICT DO NOTHING` drops the new value and raises nothing. The replay test covers only two inserts of the same value. The future writer commits once per run, or it does not use `ON CONFLICT DO NOTHING` to change a value.
    - UPDATE and DELETE are refused.
    - No line, book, or price is stored; the model never reads prop odds.
    - `player_double_double` and `player_triple_double` store a probability (at most 1). `distribution` is a JSON object that only Python reads, per `model_version`.
@@ -43,7 +44,7 @@ Without one definition, every query re-derives "newest" and "settled" its own wa
 
 - *Star schema or feature tables in Postgres.* Rejected. RDS is `db.t4g.micro`, rolling features are awkward in SQL, and the history is small enough (about 0.92 million stat rows) to export and build in Python.
 - *Prop lines as model features.* Rejected. A model that sees the line learns to copy the market and never finds a disagreement to bet. Line history also starts only in 2024-25, while stats start in 2000-01.
-- *A writer-supplied `predicted_at` with a "before tip-off" check.* Rejected. A backtest could write any earlier time. With the trigger removed, the 003 test for a post-tip insert passes only because the writer's old timestamp is accepted.
+- *A writer-supplied `predicted_at` with a "before tip-off" check.* Rejected. A backtest could write any earlier time. With the trigger removed, the 004 test for a post-tip insert passes only because the writer's old timestamp is accepted.
 - *A foreign key from `predictions` to a prop snapshot.* Rejected. Live snapshots are downsampled after 14 days (§9 Q3 in `data-model.md`), so the key would break. Each prediction is a self-contained receipt.
 - *A `current_props` view.* Not built. The frontend did not ask for line movement.
 
@@ -51,5 +52,6 @@ Without one definition, every query re-derives "newest" and "settled" its own wa
 
 - The stand-ins make backtests optimistic. Training sees only `p_out` of 0 or 1, while live inputs see 0.5. The gap is measured once enough `pregame` rows exist.
 - `predictions` cannot hold backtest output. Backtests write files instead.
+- The primary key includes `predicted_at`, which the trigger sets to `now()` (transaction start). A second insert in the same transaction with a different `predicted_value` (same league, game, player, market, and `model_version`) collides on that key. `ON CONFLICT DO NOTHING` silently drops the new value. The replay test only covers the same-value case. The future `predictions` writer either commits per run or does not rely on `ON CONFLICT DO NOTHING` to update a value.
 - `prop_actuals` looks columns up by name. `test_every_stat_column_name_is_an_integer_column` guards against a seed row with a typo, which would otherwise turn a market into NULLs.
 - `prop_actuals` builds one JSON object per stat line. A full scan pays for that, so readers filter by player, game, or season.

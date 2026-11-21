@@ -628,7 +628,7 @@ Open questions for Eason (they don't block approval): whether to stop the backen
 
 | Object | Kind | Read by |
 |---|---|---|
-| `predictions` | Append-only table. `predicted_at` is the insert time; inserts at or after tip-off are refused | Frontend predictions and record; model grading |
+| `predictions` | Append-only table. `predicted_at` is the transaction start time; the tip-off check is the wall clock at the INSERT | Frontend predictions and record; model grading |
 | `current_predictions` | View: newest run per game, player, market, and model version | Frontend |
 | `prop_actuals` | View: the result of every market for each stat line of a final game. NULL is void (`dnp`) or unknown | Model label; grading |
 | `current_injuries` | View: each player's newest row, kept only if still listed | Frontend |

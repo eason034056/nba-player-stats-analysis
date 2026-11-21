@@ -25,8 +25,10 @@ CREATE TABLE predictions (
 CREATE INDEX predictions_player_market_idx
     ON predictions (league, bdl_player_id, market, predicted_at);
 
--- predicted_at is the insert's transaction time, whatever the writer sends, so
--- a stored row proves it existed before tip-off. A backtest cannot write here.
+-- predicted_at is the insert's transaction start time, whatever the writer
+-- sends. The tip-off refusal uses the wall clock at the INSERT, not now(), so
+-- a stored row proves the INSERT itself ran before tip-off. A backtest cannot
+-- write here.
 CREATE FUNCTION predictions_check_insert() RETURNS trigger
 LANGUAGE plpgsql AS $$
 DECLARE
@@ -46,7 +48,7 @@ BEGIN
         RAISE EXCEPTION 'predictions: game % has no datetime_utc to check against', NEW.bdl_game_id
             USING ERRCODE = 'check_violation';
     END IF;
-    IF NEW.predicted_at >= tip THEN
+    IF clock_timestamp() >= tip THEN
         RAISE EXCEPTION 'predictions: game % tipped off at %', NEW.bdl_game_id, tip
             USING ERRCODE = 'check_violation';
     END IF;
