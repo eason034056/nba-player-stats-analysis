@@ -6,7 +6,6 @@ in this module builds an odds, injury, or lineup HTTP body.
 
 from __future__ import annotations
 
-import asyncio
 import importlib.util
 import json
 import os
@@ -20,7 +19,6 @@ import pytest
 _BACKEND = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 _REPO = os.path.dirname(_BACKEND)
 sys.path.insert(0, _BACKEND)
-sys.path.insert(0, os.path.join(_REPO, "scripts", "agents"))
 
 from app.services.csv_player_history import (  # noqa: E402
     CSVPlayerHistoryService,
@@ -63,12 +61,6 @@ def _sample_contexts():
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
     return module
-
-
-def _historical():
-    import tools.historical as historical
-
-    return historical
 
 
 class TestNameKeyEdges:
@@ -235,69 +227,6 @@ class TestUnmatchedNameCallSites:
         assert "A'ja Wilson" not in mates
         assert wnba_service.get_player_opponents("Aja Wilson")
 
-    def test_historical_tools_when_nothing_matches(self):
-        historical = _historical()
-        for league in ("nba", "wnba"):
-            assert historical._games_for(_UNKNOWN, league=league) == []
-            assert historical._team_for(_UNKNOWN, "2026-02-09", league=league) == ""
-            opponent = asyncio.run(
-                historical._infer_opponent_from_schedule(
-                    _UNKNOWN, "2026-02-09", league=league
-                )
-            )
-            assert opponent == "unknown"
-
-            availability = historical.get_availability_context(
-                _UNKNOWN, "2026-02-09", league=league
-            )
-            assert availability["signal"] == "unavailable"
-            assert availability["details"]["error"] == "no games"
-
-            impact = historical.auto_teammate_impact(
-                _UNKNOWN, "points", 10.5, league=league
-            )
-            assert impact["signal"] == "unavailable"
-            assert impact["details"]["error"] == "no data"
-
-            lineup = historical.get_lineup_context(
-                _UNKNOWN, "2026-02-09", league=league
-            )
-            assert lineup["signal"] == "unavailable"
-            assert lineup["details"]["error"] == "no data"
-
-            rotation = historical.get_rotation_absorption_map(
-                _UNKNOWN, "points", "2026-02-09", league=league
-            )
-            assert rotation["signal"] == "unavailable"
-            assert rotation["details"]["error"] == "no data"
-
-        assert historical._games_for("Smith", league="nba") == []
-        assert historical._games_for("Curry", league="nba") == []
-        assert historical._team_for("Smith", league="nba") == ""
-        assert historical._games_for("Wilson", league="wnba") == []
-        assert historical._team_for("Wilson", league="wnba") == ""
-
-    def test_player_lineup_context_passes_empty_team_when_unmatched(self, monkeypatch):
-        historical = _historical()
-        calls: list[tuple[str, str]] = []
-
-        async def _no_network(team, date="", league="nba"):
-            calls.append((team, league))
-            return historical._signal_payload(
-                "unavailable", 0, 0, 0.0, "today", "lineup_consensus", {}
-            )
-
-        monkeypatch.setattr(historical, "get_projected_lineup_consensus", _no_network)
-        for league in ("nba", "wnba"):
-            calls.clear()
-            payload = asyncio.run(
-                historical.get_player_lineup_context(_UNKNOWN, league=league)
-            )
-            assert calls == [("", league)]
-            assert payload["signal"] == "unavailable"
-            assert payload["details"]["player"] == _UNKNOWN
-            assert payload["details"]["canonical_player_name"] in (None, _UNKNOWN)
-
 
 class TestTradeDayTeams:
     """Event-day team, the prior club when that day has no game, and no logs."""
@@ -365,74 +294,6 @@ class TestTradeDayTeams:
         # is before every remaining log and resolves to Trail Blazers.
         chart = nba_service.get_player_stats("Jayson Kent", "points", 8.5)["game_logs"]
         assert team_from_game_logs(chart, commence) == "Trail Blazers"
-
-
-class TestHistoricalTeamCallSites:
-    def test_lineup_and_rotation_use_event_day_team(self):
-        historical = _historical()
-        early = historical.get_lineup_context("Buddy Hield", "2026-02-06", league="nba")
-        trade_day = historical.get_lineup_context(
-            "Buddy Hield", "2026-02-09", league="nba"
-        )
-        assert early["details"]["team"] == "Warriors"
-        assert trade_day["details"]["team"] == "Hawks"
-        assert "Buddy Hield" not in {
-            name for name, _count in trade_day["details"]["frequent_teammates"]
-        }
-
-        early_rot = historical.get_rotation_absorption_map(
-            "Buddy Hield", "points", "2025-11-01", league="nba"
-        )
-        late_rot = historical.get_rotation_absorption_map(
-            "Buddy Hield", "points", "2026-04-30", league="nba"
-        )
-        assert early_rot["details"]["team"] == "Warriors"
-        assert late_rot["details"]["team"] == "Hawks"
-
-        wings = historical.get_lineup_context(
-            "DiJonai Carrington", "2025-08-03", league="wnba"
-        )
-        lynx = historical.get_lineup_context(
-            "DiJonai Carrington", "2025-08-05", league="wnba"
-        )
-        assert wings["details"]["team"] == "Wings"
-        assert lynx["details"]["team"] == "Lynx"
-        mates = {name for name, _count in lynx["details"]["frequent_teammates"]}
-        assert "DiJonai Carrington" not in mates
-        wilson = historical.get_lineup_context("Aja Wilson", league="wnba")
-        wilson_mates = {name for name, _count in wilson["details"]["frequent_teammates"]}
-        assert "A'ja Wilson" not in wilson_mates
-        assert "Aja Wilson" not in wilson_mates
-
-    def test_auto_teammate_latest_team_without_a_date(self, monkeypatch):
-        historical = _historical()
-        monkeypatch.setattr(historical, "_fetch_injury_report_for_team", lambda _code, league="nba": [])
-        result = historical.auto_teammate_impact(
-            "Buddy Hield", "points", 15.5, league="nba"
-        )
-        assert result["details"]["team"] == "Hawks"
-
-    def test_lineup_sample_follows_the_event_day(self):
-        historical = _historical()
-        early = historical.get_lineup_context("Buddy Hield", "2025-11-01", league="nba")
-        latest = historical.get_lineup_context("Buddy Hield", league="nba")
-        assert early["details"]["team"] == "Warriors"
-        assert latest["details"]["team"] == "Hawks"
-        assert early["details"]["frequent_teammates"] != latest["details"]["frequent_teammates"]
-
-    def test_resolved_player_is_not_his_own_star(self, monkeypatch):
-        historical = _historical()
-        monkeypatch.setattr(historical, "_fetch_injury_report_for_team", lambda _code, league="nba": [])
-        impact = historical.auto_teammate_impact(
-            "Jaren Jackson Jr", "points", 12.5, league="nba"
-        )
-        rotation = historical.get_rotation_absorption_map(
-            "Jaren Jackson Jr", "points", league="nba"
-        )
-        impact_stars = [row["star"] for row in impact["details"]["teammate_chemistry"]]
-        rotation_stars = [row["absent_star"] for row in rotation["details"]["absorptions"]]
-        assert "Jaren Jackson, Jr." not in impact_stars
-        assert "Jaren Jackson, Jr." not in rotation_stars
 
 
 class TestRosterAndSampleContexts:
@@ -521,94 +382,11 @@ class TestReReviewEdges:
         assert team_from_game_logs(two_club, "2026-03-16T00:30:00Z") == "Remix"
         assert team_from_game_logs(logs, aware) == "Trail Blazers"
 
-    def test_eastern_evening_lineup_uses_the_converted_day(self):
-        historical = _historical()
-        evening = historical.get_lineup_context(
-            "Jayson Kent", "2026-03-16T00:30:00Z", league="nba"
-        )
-        next_day = historical.get_lineup_context(
-            "Jayson Kent", "2026-03-16", league="nba"
-        )
-        # The Remix row was G League and is not in the canonical file. The
-        # US game date (the 15th) is before every remaining game, so the
-        # lineup window is empty. The next calendar day is the Blazers game.
-        assert evening["details"].get("error") == "no data"
-        assert next_day["details"]["team"] == "Trail Blazers"
-        assert team_from_game_logs(_kent_two_club_logs(), "2026-03-16T00:30:00Z") == "Remix"
 
     def test_date_before_every_wnba_log_is_the_earliest_club(self, wnba_service):
         logs = wnba_service._cache["DiJonai Carrington"]
         assert team_from_game_logs(logs, "2020-01-01") == "Wings"
 
-    def test_pacific_late_tip_stays_on_the_us_game_date(self, nba_service):
-        # 2026-03-16T05:30:00Z is 10:30pm Pacific on the 15th (PDT). The published
-        # file dropped that G League row, so the two-club log is what still
-        # has Remix that night. The UTC calendar day is the Blazers game.
-        logs = _kent_two_club_logs()
-        assert team_from_game_logs(logs, "2026-03-16T05:30:00Z") == "Remix"
-        pacific = datetime(2026, 3, 15, 22, 30, tzinfo=ZoneInfo("America/Los_Angeles"))
-        assert team_from_game_logs(logs, pacific) == "Remix"
-        assert team_from_game_logs(logs, "2026-03-16") == "Trail Blazers"
-        shipped = nba_service._cache["Jayson Kent"]
-        assert {row["team"] for row in shipped} == {"Trail Blazers"}
-        historical = _historical()
-        late = historical.get_lineup_context(
-            "Jayson Kent", "2026-03-16T05:30:00Z", league="nba"
-        )
-        # US game date is the 15th, before every remaining canonical game.
-        assert late["details"].get("error") == "no data"
-        utc_day = historical.get_lineup_context(
-            "Jayson Kent", "2026-03-16", league="nba"
-        )
-        assert utc_day["details"]["team"] == "Trail Blazers"
-
-    def test_star_list_matches_suffix_and_comma_variants(self, monkeypatch):
-        historical = _historical()
-        monkeypatch.setattr(historical, "_fetch_injury_report_for_team", lambda _code, league="nba": [])
-        queries = (
-            "Jaren Jackson Jr",
-            "Jaren Jackson Jr.",
-            "Jaren Jackson, Jr.",
-            "Jaren Jackson, Jr",
-            "JAREN JACKSON JR",
-        )
-        for query in queries:
-            impact = historical.auto_teammate_impact(
-                query, "points", 12.5, league="nba"
-            )
-            rotation = historical.get_rotation_absorption_map(
-                query, "points", league="nba"
-            )
-            impact_stars = [row["star"] for row in impact["details"]["teammate_chemistry"]]
-            rotation_stars = [row["absent_star"] for row in rotation["details"]["absorptions"]]
-            assert impact_stars == ["Lauri Markkanen"], query
-            assert rotation_stars == ["Lauri Markkanen"], query
-            assert "Jaren Jackson, Jr." not in impact_stars
-            assert "Jaren Jackson, Jr." not in rotation_stars
-
-    def test_injury_row_matches_suffix_and_comma_spelling(self, monkeypatch):
-        historical = _historical()
-
-        def _injuries(_code, league="nba"):
-            return [
-                {
-                    "player": "Jaren Jackson, Jr.",
-                    "position": "PF",
-                    "status": "Out",
-                    "injury": "ankle",
-                    "source": "test",
-                }
-            ]
-
-        monkeypatch.setattr(historical, "_fetch_injury_report_for_team", _injuries)
-        availability = historical.get_availability_context(
-            "Jaren Jackson Jr", "2026-03-01", league="nba"
-        )
-        assert availability["details"]["status"] == "Out"
-        # The odds-board scan uses this same helper on outcome descriptions.
-        assert historical._is_same_player("Nikola Jokić", "Nikola Jokic")
-        assert historical._is_same_player("Gary Trent, Jr.", "gary trent jr")
-        assert not historical._is_same_player("Nikola Jokić", "Nikola Jovic")
 
     def test_shared_team_code_initials_do_not_cross_leagues(self):
         from app.services.lineup_source_support import (
@@ -632,14 +410,3 @@ class TestReReviewEdges:
         assert wnba_resolved["resolution_status"] == "team_resolved"
         assert wnba_resolved["canonical_name"] == "Teonni Key"
 
-    def test_wnba_nickname_uses_the_wnba_team_code(self):
-        from app.services.daily_analysis import canonical_team_code
-
-        historical = _historical()
-        assert canonical_team_code("Lynx", league="wnba") == "MIN"
-        assert canonical_team_code("Wings", league="wnba") == "DAL"
-        assert historical._team_code_from_name("Lynx", league="wnba") == "MIN"
-        assert historical._team_code_from_name("Wings", league="wnba") == "DAL"
-        # The default league is NBA. Lynx is not a Timberwolves alias.
-        assert canonical_team_code("Lynx") != "MIN"
-        assert historical._team_code_from_name("Lynx") != "MIN"

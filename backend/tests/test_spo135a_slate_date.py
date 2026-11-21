@@ -19,11 +19,8 @@ import pytest
 from fastapi.testclient import TestClient
 
 _BACKEND = Path(__file__).resolve().parents[1]
-_REPO = _BACKEND.parent
-for _path in (_BACKEND, _REPO / "scripts" / "agents"):
-    text = str(_path)
-    if text not in sys.path:
-        sys.path.insert(0, text)
+if str(_BACKEND) not in sys.path:
+    sys.path.insert(0, str(_BACKEND))
 
 from app.main import app  # noqa: E402
 from app.middleware.rate_limit import limiter  # noqa: E402
@@ -160,21 +157,6 @@ async def test_run_daily_analysis_omitted_date_is_the_us_slate(
 
     assert nba.date == expected
     assert wnba.date == expected
-
-
-@pytest.mark.parametrize(("moment", "expected"), _SLATE_CASES)
-def test_agent_lineup_date_is_the_us_slate(monkeypatch, moment, expected):
-    import tools.historical as historical
-
-    class FrozenDateTime(datetime):
-        @classmethod
-        def now(cls, tz=None):
-            if tz is None:
-                return moment
-            return moment.astimezone(tz)
-
-    monkeypatch.setattr(historical, "datetime", FrozenDateTime)
-    assert historical._today_date_string() == expected
 
 
 def _patch_http(monkeypatch) -> list[tuple[str, str]]:

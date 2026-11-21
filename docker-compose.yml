@@ -20,7 +20,7 @@ services:
   backend:
     # 建置設定
     build:
-      context: .  # 需要包含 backend + scripts/agents + data
+      context: .  # 需要包含 backend + data
       dockerfile: ./backend/Dockerfile
     
     # 容器名稱
@@ -37,8 +37,7 @@ services:
       # The Odds API 設定
       - ODDS_API_KEY=${ODDS_API_KEY}
       - ODDS_API_BASE_URL=${ODDS_API_BASE_URL:-https://api.the-odds-api.com}
-      - OPENAI_API_KEY=${OPENAI_API_KEY:-}
-      
+
       # Redis 連線（指向同一 network 中的 redis 服務）
       - REDIS_URL=redis://redis:6379
       
