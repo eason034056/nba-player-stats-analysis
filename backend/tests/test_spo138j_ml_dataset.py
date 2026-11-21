@@ -485,7 +485,11 @@ def test_labels_do_not_change_feature_values() -> None:
     assert high.metadata["null_tip_fallback_count"] == 1
     assert high.rows[0]["as_of"] == prediction_instant(on, None).as_of
     assert high.metadata["info_source"] == "pregame"
-    assert high.metadata["feature_sources"] == ["games", "player_game_stats"]
+    assert high.metadata["feature_sources"] == [
+        "games",
+        "player_game_stats",
+        "game_odds_snapshots",
+    ]
     assert high.metadata["label_source"] == "prop_actuals"
     assert "player_prop_snapshots" not in high.metadata["feature_sources"]
 

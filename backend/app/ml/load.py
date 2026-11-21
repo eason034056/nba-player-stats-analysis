@@ -48,7 +48,22 @@ JOIN games g ON g.league = a.league AND g.bdl_game_id = a.bdl_game_id
 WHERE a.league = $1 AND g.season = $2
 """
 
-READ_QUERIES = (GAMES_SQL, STATS_SQL, ACTUALS_SQL)
+# Opening rows only. snapshot_at <= T is applied in Python with the same T as
+# the rest of the row. Doing it here would need a second copy of the NULL-tip
+# rule and would ignore a non-default --hours-before-tip.
+GAME_ODDS_SQL = """
+SELECT o.league, o.bdl_game_id, o.book_key, o.snapshot_kind, o.snapshot_at,
+       o.spread_home_value, o.total_value
+FROM game_odds_snapshots o
+JOIN games g ON g.league = o.league AND g.bdl_game_id = o.bdl_game_id
+WHERE o.league = $1
+  AND g.season = $2
+  AND o.snapshot_kind = 'opening'
+  AND o.snapshot_at IS NOT NULL
+ORDER BY o.bdl_game_id, o.book_key
+"""
+
+READ_QUERIES = (GAMES_SQL, STATS_SQL, ACTUALS_SQL, GAME_ODDS_SQL)
 
 
 class LoadError(RuntimeError):
@@ -86,6 +101,24 @@ class StatRecord:
     fg3m: int | None
     stl: int | None
     blk: int | None
+
+
+@dataclass(frozen=True, slots=True)
+class GameOddsRecord:
+    """One ``game_odds_snapshots`` row loaded for the opening-odds features.
+
+    ``spread_home_value`` and ``total_value`` are NULL when the book did not
+    post that number. A NULL is not a zero. ``snapshot_at`` may be NULL on
+    an opening row; the feature rule then drops the row.
+    """
+
+    league: str
+    bdl_game_id: int
+    book_key: str
+    snapshot_kind: str
+    snapshot_at: datetime | None
+    spread_home_value: float | None
+    total_value: float | None
 
 
 @dataclass(frozen=True, slots=True)
@@ -228,6 +261,12 @@ def _optional_int(value: object) -> int | None:
     return int(value)
 
 
+def _optional_float(value: object) -> float | None:
+    if value is None:
+        return None
+    return float(value)
+
+
 def _game(record: asyncpg.Record) -> GameRecord:
     return GameRecord(
         league=str(record["league"]),
@@ -256,6 +295,18 @@ def _stat(record: asyncpg.Record) -> StatRecord:
         fg3m=_optional_int(record["fg3m"]),
         stl=_optional_int(record["stl"]),
         blk=_optional_int(record["blk"]),
+    )
+
+
+def _game_odds(record: asyncpg.Record) -> GameOddsRecord:
+    return GameOddsRecord(
+        league=str(record["league"]),
+        bdl_game_id=int(record["bdl_game_id"]),
+        book_key=str(record["book_key"]),
+        snapshot_kind=str(record["snapshot_kind"]),
+        snapshot_at=record["snapshot_at"],
+        spread_home_value=_optional_float(record["spread_home_value"]),
+        total_value=_optional_float(record["total_value"]),
     )
 
 
@@ -290,6 +341,28 @@ async def load_feature_rows(
         for record in await _fetch(conn, STATS_SQL, league, season):
             stats.append(_stat(record))
     return games, stats
+
+
+async def load_opening_game_odds(
+    conn: asyncpg.Connection,
+    *,
+    league: str,
+    seasons: range,
+) -> list[GameOddsRecord]:
+    """Load opening game odds, one season at a time.
+
+    The allow-list is checked before any query. The SQL keeps
+    ``snapshot_kind = 'opening'`` and a non-NULL ``snapshot_at``. Rows after
+    T are still returned. :func:`app.ml.game_odds.opening_odds_features`
+    drops them with the same T as the rest of the row. Closing and live
+    rows are not selected. ``player_prop_snapshots`` is not queried.
+    """
+    require_feature_source("game_odds_snapshots")
+    rows: list[GameOddsRecord] = []
+    for season in seasons:
+        for record in await _fetch(conn, GAME_ODDS_SQL, league, season):
+            rows.append(_game_odds(record))
+    return rows
 
 
 async def load_labels(
