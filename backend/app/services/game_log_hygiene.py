@@ -13,11 +13,12 @@ schedule event on local date plus both team names, then:
 - keeps rows that do not join any event, labeled ``unclassified``, so a
   schedule that does not list a date cannot delete that game
 - collapses duplicate rows of the same game (a file can record
-  Maria Conde's 2026-05-08 game once per season dropdown)
+  the same player-game once per season dropdown)
 
 The schedule file is produced by ``scripts/explore_espn_schedule_api.py``.
 Raw team-schedule responses recorded with curl are folded in at load
-time from ``tests/fixtures/espn/`` and ``tests/fixtures/espn/recorded/``.
+time from ``tests/fixtures/espn/``. A ``recorded/`` directory next to
+that file is scanned when it is present.
 Nothing here invents a season boundary from a calendar constant.
 A blank ``GameType`` is regular season; that rule lives in
 :func:`coalesce_game_type`.
@@ -456,9 +457,8 @@ def _overlay_recorded_team_schedules(
     omitted or blank, each file's slug is that prefix and a warning is
     logged. A filename with no prefix raises ``ValueError``.
 
-    ``Path.glob`` is not recursive, so both the schedule directory and
-    its ``recorded/`` child are scanned. The Commissioner's Cup final
-    (ESPN event 401736430) lives under ``recorded/``.
+    ``Path.glob`` is not recursive, so the schedule directory is scanned,
+    and its ``recorded/`` child is scanned when that directory exists.
     """
     from app.services.espn_schedule import compact_event
 

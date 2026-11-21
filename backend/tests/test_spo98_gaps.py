@@ -48,7 +48,7 @@ def nba_service():
 
 
 class TestNameKeyEdges:
-    """Folding rules that the SPO-98 file only samples once, plus both leagues."""
+    """Folding rules that the SPO-98 file only samples once."""
 
     def test_diacritics_precomposed_and_combining(self):
         # č is U+010D. The combining form is c + caron (U+030C).

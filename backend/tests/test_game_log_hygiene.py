@@ -57,7 +57,6 @@ _GLEAGUE = "401693177"  # MEGA MIS at G League United
 _SIXERS = "401704632"  # Bucks at Philadelphia 76ers
 _NBA_SAME_NIGHT = "401810710"  # Lakers / Suns, NBA
 _GLEAGUE_SAME_NIGHT = "401819340"  # Lakers / Suns, G League
-_WNBA_REGULAR = "401856891"  # Mystics at Tempo
 _CELTICS_2027_RAW = "nba_team_2_schedule_2027_type_2.json"
 
 

@@ -3,8 +3,7 @@
 If the product rule is that only Out nulls the NBA blend, every other
 word keeps the same number as a plain Questionable row. The filtered
 board keeps Out with a null blend and applies the blend floor to the
-rest. top_read still skips only Out. WNBA coverage stays in the
-ticket's own test file.
+rest. top_read still skips only Out.
 
 Odds shells and injury names come from recorded fixtures. Tests only
 change a description or the status word on an already-normalized row.

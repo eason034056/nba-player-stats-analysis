@@ -3,8 +3,8 @@
 The recorded injury page stores Doubtful as status Doubtful (SPO-135i)
 and keeps raw_status Doubtful. The pick copies that raw_status with no
 case change and no trimming. injury_status stays the normalized word.
-Out still nulls the blend. Doubtful does not. WNBA stays null on both
-fields. A stored pick that omits injury_status_raw still validates.
+Out still nulls the blend. Doubtful does not. A stored pick that omits
+injury_status_raw still validates.
 
 Odds shells are the recorded player_points capture. Only description
 changes, and only so a recorded injury name is the posted player.

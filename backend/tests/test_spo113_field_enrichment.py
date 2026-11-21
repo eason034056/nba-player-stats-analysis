@@ -2,7 +2,6 @@
 
 Covers the ET clock, suggest/pick position, lineup confirmation, game-log
 venue, season hit rate, opponent-rank fill, and teammate games missed.
-WNBA stays on the previous payload: new fields are absent or null.
 """
 
 from __future__ import annotations
