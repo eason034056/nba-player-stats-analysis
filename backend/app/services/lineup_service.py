@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import logging
 import time
 from dataclasses import dataclass
 from datetime import date as date_type
@@ -10,9 +11,15 @@ from typing import Any
 
 from app.services.cache import cache_service
 from app.services.db import db_service
-from app.services.lineup_provider_rotogrinders import fetch_rotogrinders_lineups
-from app.services.lineup_provider_rotowire import fetch_rotowire_lineups
+from app.services.lineup_provider_bdl import (
+    LINEUP_SOURCE,
+    BdlLineupFetch,
+    ProjectedLineupWrite,
+    fetch_nba_lineups,
+)
 from app.settings import settings
+
+logger = logging.getLogger(__name__)
 
 
 def _build_lineups_key(date: str, league: str = "nba") -> str:
@@ -92,33 +99,11 @@ def _parse_iso_timestamp(value: str | None) -> datetime | None:
     return parsed
 
 
-def _first_snapshot(lineup: dict[str, Any] | None) -> dict[str, Any]:
-    snapshots = (lineup or {}).get("source_snapshots") or {}
-    if not isinstance(snapshots, dict) or not snapshots:
-        return {}
-    return next(iter(snapshots.values()))
-
-
-def _canonical_starters(lineup: dict[str, Any] | None) -> list[str]:
-    snapshot = _first_snapshot(lineup)
-    canonical = list(snapshot.get("canonical_starters") or [])
-    if canonical:
-        return canonical
-    return list((lineup or {}).get("starters") or [])
-
-
-def _unresolved_starters(lineup: dict[str, Any] | None) -> list[str]:
-    snapshot = _first_snapshot(lineup)
-    return list(snapshot.get("unresolved_starters") or [])
-
-
 def confirmation_status(lineup: dict[str, Any] | None) -> str | None:
-    """Consensus confirmation for one team lineup.
+    """Confirmation for one team lineup.
 
     ``confirmed`` when any ``source_snapshots`` entry has
-    ``status == "confirmed"``. One trusted confirmation is enough.
-    RotoGrinders always writes ``projected`` and must not veto a
-    RotoWire ``confirmed``.
+    ``status == "confirmed"``. One confirmation is enough.
 
     ``projected`` when the record has a snapshot or a starter and
     nobody reported confirmed. ``expected`` falls here.
@@ -148,109 +133,14 @@ def confirmation_status(lineup: dict[str, Any] | None) -> str | None:
     return None
 
 
-def build_consensus_lineups(
-    *,
-    date: str,
-    primary_source: dict[str, dict[str, Any]],
-    secondary_source: dict[str, dict[str, Any]],
-) -> dict[str, dict[str, Any]]:
-    teams = sorted(set(primary_source) | set(secondary_source))
-    consensus: dict[str, dict[str, Any]] = {}
-
-    for team in teams:
-        primary = primary_source.get(team)
-        secondary = secondary_source.get(team)
-        base = primary or secondary
-        if not base:
-            continue
-
-        primary_starters = list((primary or {}).get("starters") or [])
-        secondary_starters = list((secondary or {}).get("starters") or [])
-        primary_canonical = _canonical_starters(primary)
-        secondary_canonical = _canonical_starters(secondary)
-        primary_unresolved = _unresolved_starters(primary)
-        secondary_unresolved = _unresolved_starters(secondary)
-        starters = primary_starters or secondary_starters
-        bench_candidates = list(
-            dict.fromkeys((base.get("bench_candidates") or []) + (secondary or {}).get("bench_candidates", []))
-        )
-        updated_candidates = [
-            value
-            for value in (
-                (primary or {}).get("updated_at"),
-                (secondary or {}).get("updated_at"),
-            )
-            if value
-        ]
-        updated_at = max(updated_candidates) if updated_candidates else None
-
-        sources = []
-        snapshots: dict[str, Any] = {}
-        if primary:
-            sources.extend(primary.get("sources") or ["rotowire"])
-            snapshots.update(primary.get("source_snapshots") or {})
-        if secondary:
-            sources.extend(secondary.get("sources") or ["rotogrinders"])
-            snapshots.update(secondary.get("source_snapshots") or {})
-        sources = list(dict.fromkeys(sources))
-
-        has_primary = len(primary_starters) == 5
-        has_secondary = len(secondary_starters) == 5
-        has_primary_canonical = len(primary_canonical) == 5 and not primary_unresolved
-        has_secondary_canonical = len(secondary_canonical) == 5 and not secondary_unresolved
-        has_unresolved = bool(primary_unresolved or secondary_unresolved)
-        if has_unresolved:
-            source_disagreement = False
-            confidence = "low"
-        elif has_primary_canonical and has_secondary_canonical:
-            difference_count = len(set(primary_canonical) ^ set(secondary_canonical))
-            source_disagreement = difference_count > 0
-            if difference_count == 0:
-                confidence = "high"
-            elif difference_count <= 2:
-                confidence = "medium"
-            else:
-                confidence = "low"
-        elif has_primary or has_secondary:
-            source_disagreement = False
-            confidence = "low"
-        else:
-            source_disagreement = False
-            confidence = "low"
-
-        if has_unresolved:
-            status = "partial" if starters else "unavailable"
-        elif len(starters) == 5:
-            status = "projected"
-        elif starters:
-            status = "partial"
-        else:
-            status = "unavailable"
-
-        consensus[team] = {
-            "date": date,
-            "team": team,
-            "opponent": base.get("opponent", ""),
-            "home_or_away": base.get("home_or_away", ""),
-            "status": status,
-            "starters": starters[:5],
-            "bench_candidates": bench_candidates[:7],
-            "sources": sources,
-            "source_disagreement": source_disagreement,
-            "confidence": confidence,
-            "updated_at": updated_at,
-            "source_snapshots": snapshots,
-        }
-
-    return consensus
-
-
 class LineupConsensusService:
-    """NBA lineup consensus from RotoWire and RotoGrinders.
+    """NBA lineups from BALLDONTLIE projected lineups.
 
-    The two sources are merged and stored in Redis. PostgreSQL receives
-    the same slate. ``league`` must be ``nba``; it is stored on the
-    fetch log so the row matches the ``league`` column.
+    One fetch is stored in Redis and in ``team_lineup_snapshots``.
+    ``league`` must be ``nba``; it is stored on the fetch log so the row
+    matches the ``league`` column. When ``games``, ``teams``, and
+    ``players`` rows already exist, the same poll also writes
+    ``projected_lineups``. A missing parent does not fail the live fetch.
     """
 
     def __init__(self, max_stale_minutes: int = 20, league: str = "nba"):
@@ -290,10 +180,10 @@ class LineupConsensusService:
             return LineupReadResult(date=date, lineups={}, fetched_at=None, cache_state="fresh")
 
     async def peek_lineups(self, date: str) -> dict[str, dict[str, Any]]:
-        """Lineups already stored for ``date``. Does not scrape.
+        """Lineups already stored for ``date``. Does not call BALLDONTLIE.
 
-        The events route reads this so a cold cache does not call
-        RotoWire or RotoGrinders while listing games. A Redis miss falls
+        The events route reads this so a cold cache does not fetch
+        projected lineups while listing games. A Redis miss falls
         through to PostgreSQL. Any failure is an empty slate, and the
         event's lineup status stays null.
         """
@@ -322,40 +212,30 @@ class LineupConsensusService:
         lineups: dict[str, dict[str, Any]] = {}
 
         try:
-            primary_source, secondary_source = await asyncio.gather(
-                asyncio.to_thread(fetch_rotowire_lineups, date),
-                asyncio.to_thread(fetch_rotogrinders_lineups, date),
-                return_exceptions=True,
-            )
-
-            if isinstance(primary_source, Exception):
-                source_statuses["rotowire"] = {"status": "error", "message": str(primary_source)}
-                primary_payload = {}
-            else:
-                source_statuses["rotowire"] = {"status": "success", "team_count": len(primary_source)}
-                primary_payload = primary_source
-
-            if isinstance(secondary_source, Exception):
-                source_statuses["rotogrinders"] = {"status": "error", "message": str(secondary_source)}
-                secondary_payload = {}
-            else:
-                source_statuses["rotogrinders"] = {"status": "success", "team_count": len(secondary_source)}
-                secondary_payload = secondary_source
-
-            lineups = build_consensus_lineups(
-                date=date,
-                primary_source=primary_payload,
-                secondary_source=secondary_payload,
-            )
-
-            if not lineups and not primary_payload and not secondary_payload:
-                raise RuntimeError("Both free lineup sources returned no usable data")
+            fetched = await fetch_nba_lineups(date)
+            lineups = fetched.lineups
+            source_statuses[LINEUP_SOURCE] = {
+                "status": "success",
+                "team_count": len(lineups),
+                "team_misses": fetched.misses,
+            }
 
             await self._write_to_redis(date, lineups)
             try:
                 await self._write_to_postgres(date, lineups)
+                await self._delete_omitted_snapshots(date, lineups)
             except Exception as exc:
-                print(f"⚠️ 寫入 lineup PostgreSQL 失敗（不影響主流程）: {exc}")
+                print(f"⚠️ 寫入 lineup PostgreSQL 失敗（不影響主流程）: {type(exc).__name__}")
+
+            try:
+                refresh = await self._write_projected_lineups(fetched)
+                source_statuses[LINEUP_SOURCE]["projected_rows_written"] = refresh["rows_written"]
+                source_statuses[LINEUP_SOURCE]["projected_misses"] = refresh["misses"]
+            except Exception as exc:
+                logger.warning(
+                    "projected_lineups dual-write skipped (%s)",
+                    type(exc).__name__,
+                )
 
             deleted = await cache_service.clear_daily_picks_cache(league="nba")
             if deleted > 0:
@@ -365,7 +245,11 @@ class LineupConsensusService:
 
         except Exception as exc:
             status = "error"
-            error_message = str(exc)
+            error_message = type(exc).__name__
+            source_statuses[LINEUP_SOURCE] = {
+                "status": "error",
+                "message": type(exc).__name__,
+            }
             raise
         finally:
             duration_ms = int((time.time() - started) * 1000)
@@ -442,6 +326,137 @@ class LineupConsensusService:
             )
 
         await db_service.executemany(UPSERT_LINEUP_SQL, args_list)
+
+    async def _delete_omitted_snapshots(self, date: str, lineups: dict[str, dict[str, Any]]) -> None:
+        """Drop NBA snapshot rows for teams this fetch did not return.
+
+        An empty slate deletes every NBA row for that date, so a later
+        cache miss does not keep a badge for a lineup BALLDONTLIE omitted.
+        """
+        if not db_service.is_connected:
+            return
+        await db_service.execute(
+            """
+            DELETE FROM team_lineup_snapshots
+            WHERE date = $1 AND league = 'nba' AND NOT (team = ANY($2::text[]))
+            """,
+            date_type.fromisoformat(date),
+            list(lineups.keys()),
+        )
+
+    async def _projected_parents_exist(self, row: ProjectedLineupWrite) -> bool:
+        """True when ``games``, ``teams``, and every starter ``players`` row exist."""
+        game = await db_service.fetchrow(
+            "SELECT 1 AS ok FROM games WHERE league = 'nba' AND bdl_game_id = $1",
+            row.game_id,
+        )
+        if game is None:
+            return False
+        team = await db_service.fetchrow(
+            "SELECT 1 AS ok FROM teams WHERE league = 'nba' AND bdl_team_id = $1",
+            row.team_id,
+        )
+        if team is None:
+            return False
+        if not row.players:
+            return True
+        player_ids = [player_id for player_id, _position in row.players]
+        found = await db_service.fetch(
+            """
+            SELECT bdl_player_id FROM players
+            WHERE league = 'nba' AND bdl_player_id = ANY($1::int[])
+            """,
+            player_ids,
+        )
+        return {item["bdl_player_id"] for item in found} == set(player_ids)
+
+    async def _insert_projected_version(self, row: ProjectedLineupWrite, seen_at: datetime) -> None:
+        """Insert one version. A replay keeps the original ``first_seen_at``."""
+        if db_service._pool is None:
+            return
+        async with db_service._pool.acquire() as conn:
+            async with conn.transaction():
+                await conn.execute(
+                    """
+                    INSERT INTO projected_lineups (
+                        league, bdl_game_id, bdl_team_id, updated_at, first_seen_at, status
+                    ) VALUES ('nba', $1, $2, $3, $4, $5)
+                    ON CONFLICT (league, bdl_game_id, bdl_team_id, updated_at) DO NOTHING
+                    """,
+                    row.game_id,
+                    row.team_id,
+                    row.updated_at,
+                    seen_at,
+                    row.status,
+                )
+                if row.players:
+                    await conn.executemany(
+                        """
+                        INSERT INTO projected_lineup_players (
+                            league, bdl_game_id, bdl_team_id, updated_at, bdl_player_id, position
+                        ) VALUES ('nba', $1, $2, $3, $4, $5)
+                        ON CONFLICT (league, bdl_game_id, bdl_team_id, updated_at, bdl_player_id)
+                        DO NOTHING
+                        """,
+                        [
+                            (row.game_id, row.team_id, row.updated_at, player_id, position)
+                            for player_id, position in row.players
+                        ],
+                    )
+
+    async def _write_projected_lineups(self, fetched: BdlLineupFetch) -> dict[str, int | bool]:
+        """Write 002 rows when parents exist. Never raises for a missing parent.
+
+        ``source_refreshes.complete`` is true only when every mapped row
+        was written. A poll that wrote nothing does not record
+        ``complete = true``. The live snapshot write has already finished.
+        """
+        seen = len(fetched.writes) + fetched.misses
+        if not db_service.is_connected or seen == 0:
+            return {"rows_seen": seen, "rows_written": 0, "misses": fetched.misses, "recorded": False}
+        written = 0
+        parent_misses = 0
+        seen_at = datetime.now(timezone.utc)
+        for row in fetched.writes:
+            try:
+                if not await self._projected_parents_exist(row):
+                    parent_misses += 1
+                    logger.info(
+                        "projected lineup parent miss game_id=%s team_id=%s",
+                        row.game_id,
+                        row.team_id,
+                    )
+                    continue
+                await self._insert_projected_version(row, seen_at)
+                written += 1
+            except Exception as exc:
+                parent_misses += 1
+                logger.warning(
+                    "projected lineup insert skipped game_id=%s (%s)",
+                    row.game_id,
+                    type(exc).__name__,
+                )
+        misses = parent_misses + fetched.misses
+        complete = misses == 0 and written == len(fetched.writes) and written > 0
+        error = None if complete else "projected lineup rows were not all written"
+        await db_service.execute(
+            """
+            INSERT INTO source_refreshes (
+                league, source, refreshed_at, complete, rows_seen, rows_written, error
+            ) VALUES ('nba', 'projected_lineups', $1, $2, $3, $4, $5)
+            """,
+            seen_at,
+            complete,
+            seen,
+            written,
+            error,
+        )
+        return {
+            "rows_seen": seen,
+            "rows_written": written,
+            "misses": misses,
+            "recorded": True,
+        }
 
     async def _read_from_postgres(self, date: str) -> dict[str, dict[str, Any]]:
         if not db_service.is_connected:

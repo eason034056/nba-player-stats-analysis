@@ -110,7 +110,7 @@ async def _events_with_top_reads(
 async def _with_event_fields(response: EventsResponse) -> EventsResponse:
     """Attach the ET clock and the lineup confirmation.
 
-    Lineups are read from cache only. A scrape belongs on
+    Lineups are read from cache only. The BALLDONTLIE fetch belongs on
     ``GET /api/nba/lineups``, not on the events list.
     """
     try:

@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import html
 import re
 from datetime import datetime, timezone
 from typing import Any
@@ -96,26 +95,6 @@ def now_iso() -> str:
     return datetime.now(timezone.utc).isoformat()
 
 
-def strip_html_lines(raw_html: str) -> list[str]:
-    cleaned = re.sub(r"(?is)<script.*?>.*?</script>", " ", raw_html)
-    cleaned = re.sub(r"(?is)<style.*?>.*?</style>", " ", cleaned)
-    cleaned = re.sub(r"(?i)<br\s*/?>", "\n", cleaned)
-    cleaned = re.sub(r"(?i)</(div|p|li|ul|ol|section|article|h1|h2|h3|h4|h5|tr|td|th)>", "\n", cleaned)
-    cleaned = re.sub(r"<[^>]+>", "\n", cleaned)
-    cleaned = html.unescape(cleaned)
-    cleaned = cleaned.replace("\xa0", " ")
-
-    lines: list[str] = []
-    for raw_line in cleaned.splitlines():
-        line = re.sub(r"\s+", " ", raw_line).strip()
-        if not line:
-            continue
-        if line.lower() in {"nba", "dfs"}:
-            continue
-        lines.append(line)
-    return lines
-
-
 def detect_team_code(raw_line: str, league: str = "nba") -> str | None:
     """Resolve a raw text line to an NBA team code.
 
@@ -138,30 +117,12 @@ def _is_non_player_line(line: str) -> bool:
     return any(pattern in lowered for pattern in IGNORE_LINE_PATTERNS)
 
 
-def _is_time_line(line: str) -> bool:
-    return bool(TIME_LINE_RE.fullmatch(line))
-
-
 def _is_position_token(token: str) -> bool:
     cleaned = token.upper().rstrip(",")
     if cleaned in POSITION_TOKENS:
         return True
     parts = [part for part in cleaned.split("/") if part]
     return bool(parts) and all(part in POSITION_TOKENS for part in parts)
-
-
-def is_control_line(line: str) -> bool:
-    if not line:
-        return True
-    if _is_non_player_line(line):
-        return True
-    if detect_team_code(line):
-        return True
-    if _is_time_line(line):
-        return True
-    if line in {"Expected Lineup", "Confirmed Lineup", "Starters", "Bench"}:
-        return True
-    return False
 
 
 def _normalize_spaces(value: str) -> str:
@@ -441,42 +402,3 @@ def make_source_lineup(
             }
         },
     }
-
-
-def parse_position_player_pairs(lines: list[str], start_index: int) -> tuple[list[str], int]:
-    starters: list[str] = []
-    index = start_index
-    while index < len(lines) and len(starters) < 5:
-        line = lines[index]
-        if is_control_line(line):
-            break
-        if line in POSITION_TOKENS and index + 1 < len(lines):
-            player = clean_player_name(lines[index + 1])
-            if player:
-                starters.append(player)
-            index += 2
-            continue
-        player = clean_player_name(line)
-        if player:
-            starters.append(player)
-        index += 1
-    return starters[:5], index
-
-
-def parse_named_player_block(lines: list[str], start_index: int, stop_tokens: set[str], limit: int) -> tuple[list[str], int]:
-    players: list[str] = []
-    index = start_index
-    while index < len(lines):
-        line = lines[index]
-        if line in stop_tokens or detect_team_code(line):
-            break
-        if _is_time_line(line):
-            break
-        player = clean_player_name(line)
-        if player:
-            players.append(player)
-            if len(players) >= limit:
-                index += 1
-                break
-        index += 1
-    return players[:limit], index

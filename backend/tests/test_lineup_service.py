@@ -1,11 +1,9 @@
 """
-Tests for LineupConsensusService methods and helper functions
-that are NOT already covered by test_lineup_consensus.py.
+Tests for LineupConsensusService methods and helper functions.
 
 Focuses on:
 - _build_lineups_key, _build_lineups_meta_key
 - _parse_iso_timestamp
-- _first_snapshot, _canonical_starters, _unresolved_starters
 - LineupReadResult dataclass
 - LineupConsensusService: get_lineups, get_team_lineup, fetch_and_store,
   _is_stale, _trigger_background_refresh, _write_to_redis,
@@ -24,16 +22,14 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
+from app.services.lineup_provider_bdl import BdlLineupFetch
 from app.services.lineup_service import (
     UPSERT_LINEUP_SQL,
     LineupConsensusService,
     LineupReadResult,
     _build_lineups_key,
     _build_lineups_meta_key,
-    _canonical_starters,
-    _first_snapshot,
     _parse_iso_timestamp,
-    _unresolved_starters,
 )
 
 
@@ -96,83 +92,7 @@ class TestParseIsoTimestamp:
 
 
 # ---------------------------------------------------------------------------
-# _first_snapshot  (lines 78-82)
-# ---------------------------------------------------------------------------
-
-class TestFirstSnapshot:
-    def test_none_lineup(self):
-        assert _first_snapshot(None) == {}
-
-    def test_empty_dict(self):
-        assert _first_snapshot({}) == {}
-
-    def test_no_source_snapshots_key(self):
-        assert _first_snapshot({"starters": []}) == {}
-
-    def test_source_snapshots_not_dict(self):
-        assert _first_snapshot({"source_snapshots": "bad"}) == {}
-
-    def test_source_snapshots_empty_dict(self):
-        assert _first_snapshot({"source_snapshots": {}}) == {}
-
-    def test_returns_first_value(self):
-        snap = {"rotowire": {"status": "confirmed"}, "rotogrinders": {"status": "projected"}}
-        result = _first_snapshot({"source_snapshots": snap})
-        assert result == {"status": "confirmed"}
-
-
-# ---------------------------------------------------------------------------
-# _canonical_starters  (lines 85-90)
-# ---------------------------------------------------------------------------
-
-class TestCanonicalStarters:
-    def test_none_lineup(self):
-        assert _canonical_starters(None) == []
-
-    def test_fallback_to_starters_field(self):
-        lineup = {"starters": ["A", "B"], "source_snapshots": {}}
-        assert _canonical_starters(lineup) == ["A", "B"]
-
-    def test_uses_canonical_from_snapshot(self):
-        lineup = {
-            "starters": ["raw1", "raw2"],
-            "source_snapshots": {
-                "rotowire": {"canonical_starters": ["Canon1", "Canon2"]},
-            },
-        }
-        assert _canonical_starters(lineup) == ["Canon1", "Canon2"]
-
-    def test_empty_canonical_falls_back(self):
-        lineup = {
-            "starters": ["A"],
-            "source_snapshots": {"rotowire": {"canonical_starters": []}},
-        }
-        assert _canonical_starters(lineup) == ["A"]
-
-
-# ---------------------------------------------------------------------------
-# _unresolved_starters  (lines 93-95)
-# ---------------------------------------------------------------------------
-
-class TestUnresolvedStarters:
-    def test_none_lineup(self):
-        assert _unresolved_starters(None) == []
-
-    def test_no_unresolved(self):
-        lineup = {"source_snapshots": {"rotowire": {}}}
-        assert _unresolved_starters(lineup) == []
-
-    def test_with_unresolved(self):
-        lineup = {
-            "source_snapshots": {
-                "rotowire": {"unresolved_starters": ["J. Williams"]},
-            },
-        }
-        assert _unresolved_starters(lineup) == ["J. Williams"]
-
-
-# ---------------------------------------------------------------------------
-# LineupReadResult dataclass  (lines 58-63)
+# LineupReadResult dataclass
 # ---------------------------------------------------------------------------
 
 class TestLineupReadResult:
@@ -780,44 +700,35 @@ class TestGetTeamLineup:
 # fetch_and_store  (lines 233-295)
 # ---------------------------------------------------------------------------
 
+def _fetched_slate() -> BdlLineupFetch:
+    return BdlLineupFetch(
+        lineups={
+            "GSW": {
+                "team": "GSW",
+                "starters": ["A", "B", "C", "D", "E"],
+                "sources": ["balldontlie"],
+            }
+        },
+        writes=(),
+        misses=0,
+    )
+
+
 class TestFetchAndStore:
     @pytest.mark.asyncio
     async def test_success_path(self, monkeypatch):
         svc = _make_service()
-
-        rotowire_data = {
-            "GSW": {
-                "starters": ["A", "B", "C", "D", "E"],
-                "bench_candidates": [],
-                "sources": ["rotowire"],
-                "source_snapshots": {},
-                "opponent": "LAL",
-                "home_or_away": "AWAY",
-                "updated_at": "2026-03-16T17:00:00+00:00",
-            }
-        }
-        rotogrinders_data = {
-            "GSW": {
-                "starters": ["A", "B", "C", "D", "E"],
-                "bench_candidates": [],
-                "sources": ["rotogrinders"],
-                "source_snapshots": {},
-                "opponent": "LAL",
-                "home_or_away": "AWAY",
-                "updated_at": "2026-03-16T17:00:00+00:00",
-            }
-        }
-
         monkeypatch.setattr(
-            "app.services.lineup_service.fetch_rotowire_lineups",
-            lambda date: rotowire_data,
-        )
-        monkeypatch.setattr(
-            "app.services.lineup_service.fetch_rotogrinders_lineups",
-            lambda date: rotogrinders_data,
+            "app.services.lineup_service.fetch_nba_lineups",
+            AsyncMock(return_value=_fetched_slate()),
         )
         monkeypatch.setattr(svc, "_write_to_redis", AsyncMock())
         monkeypatch.setattr(svc, "_write_to_postgres", AsyncMock())
+        monkeypatch.setattr(svc, "_delete_omitted_snapshots", AsyncMock())
+        monkeypatch.setattr(svc, "_write_projected_lineups", AsyncMock(return_value={
+            "rows_written": 0,
+            "misses": 0,
+        }))
         monkeypatch.setattr(svc, "_log_fetch", AsyncMock())
         monkeypatch.setattr(
             "app.services.lineup_service.cache_service.clear_daily_picks_cache",
@@ -831,29 +742,13 @@ class TestFetchAndStore:
         svc._log_fetch.assert_awaited_once()
 
     @pytest.mark.asyncio
-    async def test_primary_source_exception(self, monkeypatch):
+    async def test_fetch_failure_raises_and_logs(self, monkeypatch):
         svc = _make_service()
 
-        def bad_rotowire(date):
-            raise RuntimeError("rotowire down")
+        async def bad_fetch(date):
+            raise RuntimeError("BALLDONTLIE_API_KEY is unset")
 
-        rotogrinders_data = {
-            "GSW": {
-                "starters": ["A", "B", "C", "D", "E"],
-                "bench_candidates": [],
-                "sources": ["rotogrinders"],
-                "source_snapshots": {},
-                "opponent": "LAL",
-                "home_or_away": "AWAY",
-                "updated_at": "2026-03-16T17:00:00+00:00",
-            }
-        }
-
-        monkeypatch.setattr("app.services.lineup_service.fetch_rotowire_lineups", bad_rotowire)
-        monkeypatch.setattr(
-            "app.services.lineup_service.fetch_rotogrinders_lineups",
-            lambda date: rotogrinders_data,
-        )
+        monkeypatch.setattr("app.services.lineup_service.fetch_nba_lineups", bad_fetch)
         monkeypatch.setattr(svc, "_write_to_redis", AsyncMock())
         monkeypatch.setattr(svc, "_write_to_postgres", AsyncMock())
         monkeypatch.setattr(svc, "_log_fetch", AsyncMock())
@@ -862,134 +757,71 @@ class TestFetchAndStore:
             AsyncMock(return_value=0),
         )
 
-        result = await svc.fetch_and_store("2026-03-16")
-        assert "GSW" in result
-
-    @pytest.mark.asyncio
-    async def test_secondary_source_exception(self, monkeypatch):
-        svc = _make_service()
-
-        rotowire_data = {
-            "GSW": {
-                "starters": ["A", "B", "C", "D", "E"],
-                "bench_candidates": [],
-                "sources": ["rotowire"],
-                "source_snapshots": {},
-                "opponent": "LAL",
-                "home_or_away": "AWAY",
-                "updated_at": "2026-03-16T17:00:00+00:00",
-            }
-        }
-
-        def bad_rotogrinders(date):
-            raise RuntimeError("rotogrinders down")
-
-        monkeypatch.setattr(
-            "app.services.lineup_service.fetch_rotowire_lineups",
-            lambda date: rotowire_data,
-        )
-        monkeypatch.setattr("app.services.lineup_service.fetch_rotogrinders_lineups", bad_rotogrinders)
-        monkeypatch.setattr(svc, "_write_to_redis", AsyncMock())
-        monkeypatch.setattr(svc, "_write_to_postgres", AsyncMock())
-        monkeypatch.setattr(svc, "_log_fetch", AsyncMock())
-        monkeypatch.setattr(
-            "app.services.lineup_service.cache_service.clear_daily_picks_cache",
-            AsyncMock(return_value=0),
-        )
-
-        result = await svc.fetch_and_store("2026-03-16")
-        assert "GSW" in result
-
-    @pytest.mark.asyncio
-    async def test_both_sources_fail_raises(self, monkeypatch):
-        svc = _make_service()
-
-        def bad_rotowire(date):
-            raise RuntimeError("rotowire down")
-
-        def bad_rotogrinders(date):
-            raise RuntimeError("rotogrinders down")
-
-        monkeypatch.setattr("app.services.lineup_service.fetch_rotowire_lineups", bad_rotowire)
-        monkeypatch.setattr("app.services.lineup_service.fetch_rotogrinders_lineups", bad_rotogrinders)
-        monkeypatch.setattr(svc, "_write_to_redis", AsyncMock())
-        monkeypatch.setattr(svc, "_write_to_postgres", AsyncMock())
-        monkeypatch.setattr(svc, "_log_fetch", AsyncMock())
-        monkeypatch.setattr(
-            "app.services.lineup_service.cache_service.clear_daily_picks_cache",
-            AsyncMock(return_value=0),
-        )
-
-        with pytest.raises(RuntimeError, match="Both free lineup sources"):
+        with pytest.raises(RuntimeError):
             await svc.fetch_and_store("2026-03-16")
 
-        # _log_fetch should still be called in finally block
+        svc._write_to_redis.assert_not_awaited()
         svc._log_fetch.assert_awaited_once()
-        log_call = svc._log_fetch.call_args
-        assert log_call[1]["status"] == "error"
+        assert svc._log_fetch.call_args[1]["status"] == "error"
+        assert svc._log_fetch.call_args[1]["source_statuses"]["balldontlie"]["status"] == "error"
 
     @pytest.mark.asyncio
     async def test_postgres_write_failure_does_not_raise(self, monkeypatch):
         svc = _make_service()
-
-        rotowire_data = {
-            "GSW": {
-                "starters": ["A", "B", "C", "D", "E"],
-                "bench_candidates": [],
-                "sources": ["rotowire"],
-                "source_snapshots": {},
-                "opponent": "LAL",
-                "home_or_away": "AWAY",
-                "updated_at": "2026-03-16T17:00:00+00:00",
-            }
-        }
-
         monkeypatch.setattr(
-            "app.services.lineup_service.fetch_rotowire_lineups",
-            lambda date: rotowire_data,
-        )
-        monkeypatch.setattr(
-            "app.services.lineup_service.fetch_rotogrinders_lineups",
-            lambda date: {},
+            "app.services.lineup_service.fetch_nba_lineups",
+            AsyncMock(return_value=_fetched_slate()),
         )
         monkeypatch.setattr(svc, "_write_to_redis", AsyncMock())
         monkeypatch.setattr(svc, "_write_to_postgres", AsyncMock(side_effect=Exception("PG down")))
+        monkeypatch.setattr(svc, "_write_projected_lineups", AsyncMock(return_value={
+            "rows_written": 0,
+            "misses": 0,
+        }))
         monkeypatch.setattr(svc, "_log_fetch", AsyncMock())
         monkeypatch.setattr(
             "app.services.lineup_service.cache_service.clear_daily_picks_cache",
             AsyncMock(return_value=0),
         )
 
-        # Should not raise despite postgres failure
         result = await svc.fetch_and_store("2026-03-16")
         assert "GSW" in result
 
     @pytest.mark.asyncio
-    async def test_clears_daily_picks_cache(self, monkeypatch):
+    async def test_projected_write_failure_does_not_raise(self, monkeypatch):
         svc = _make_service()
-
-        rotowire_data = {
-            "GSW": {
-                "starters": ["A", "B", "C", "D", "E"],
-                "bench_candidates": [],
-                "sources": ["rotowire"],
-                "source_snapshots": {},
-                "opponent": "LAL",
-                "home_or_away": "AWAY",
-                "updated_at": "2026-03-16T17:00:00+00:00",
-            }
-        }
-
         monkeypatch.setattr(
-            "app.services.lineup_service.fetch_rotowire_lineups",
-            lambda date: rotowire_data,
-        )
-        monkeypatch.setattr(
-            "app.services.lineup_service.fetch_rotogrinders_lineups",
-            lambda date: {},
+            "app.services.lineup_service.fetch_nba_lineups",
+            AsyncMock(return_value=_fetched_slate()),
         )
         monkeypatch.setattr(svc, "_write_to_redis", AsyncMock())
         monkeypatch.setattr(svc, "_write_to_postgres", AsyncMock())
+        monkeypatch.setattr(svc, "_delete_omitted_snapshots", AsyncMock())
+        monkeypatch.setattr(svc, "_write_projected_lineups", AsyncMock(side_effect=Exception("no 002")))
+        monkeypatch.setattr(svc, "_log_fetch", AsyncMock())
+        monkeypatch.setattr(
+            "app.services.lineup_service.cache_service.clear_daily_picks_cache",
+            AsyncMock(return_value=0),
+        )
+
+        result = await svc.fetch_and_store("2026-03-16")
+        assert "GSW" in result
+        assert svc._log_fetch.call_args[1]["status"] == "success"
+
+    @pytest.mark.asyncio
+    async def test_clears_daily_picks_cache(self, monkeypatch):
+        svc = _make_service()
+        monkeypatch.setattr(
+            "app.services.lineup_service.fetch_nba_lineups",
+            AsyncMock(return_value=_fetched_slate()),
+        )
+        monkeypatch.setattr(svc, "_write_to_redis", AsyncMock())
+        monkeypatch.setattr(svc, "_write_to_postgres", AsyncMock())
+        monkeypatch.setattr(svc, "_delete_omitted_snapshots", AsyncMock())
+        monkeypatch.setattr(svc, "_write_projected_lineups", AsyncMock(return_value={
+            "rows_written": 0,
+            "misses": 0,
+        }))
         monkeypatch.setattr(svc, "_log_fetch", AsyncMock())
         clear_mock = AsyncMock(return_value=5)
         monkeypatch.setattr(
@@ -1003,29 +835,17 @@ class TestFetchAndStore:
     @pytest.mark.asyncio
     async def test_log_fetch_records_duration_and_source_statuses(self, monkeypatch):
         svc = _make_service()
-
-        rotowire_data = {
-            "GSW": {
-                "starters": ["A", "B", "C", "D", "E"],
-                "bench_candidates": [],
-                "sources": ["rotowire"],
-                "source_snapshots": {},
-                "opponent": "LAL",
-                "home_or_away": "AWAY",
-                "updated_at": "2026-03-16T17:00:00+00:00",
-            }
-        }
-
         monkeypatch.setattr(
-            "app.services.lineup_service.fetch_rotowire_lineups",
-            lambda date: rotowire_data,
-        )
-        monkeypatch.setattr(
-            "app.services.lineup_service.fetch_rotogrinders_lineups",
-            lambda date: {},
+            "app.services.lineup_service.fetch_nba_lineups",
+            AsyncMock(return_value=_fetched_slate()),
         )
         monkeypatch.setattr(svc, "_write_to_redis", AsyncMock())
         monkeypatch.setattr(svc, "_write_to_postgres", AsyncMock())
+        monkeypatch.setattr(svc, "_delete_omitted_snapshots", AsyncMock())
+        monkeypatch.setattr(svc, "_write_projected_lineups", AsyncMock(return_value={
+            "rows_written": 0,
+            "misses": 0,
+        }))
         monkeypatch.setattr(
             "app.services.lineup_service.cache_service.clear_daily_picks_cache",
             AsyncMock(return_value=0),
@@ -1042,7 +862,6 @@ class TestFetchAndStore:
         assert kwargs["status"] == "success"
         assert kwargs["error_message"] is None
         assert isinstance(kwargs["duration_ms"], int)
-        assert "rotowire" in kwargs["source_statuses"]
-        assert "rotogrinders" in kwargs["source_statuses"]
-        assert kwargs["source_statuses"]["rotowire"]["status"] == "success"
-        assert kwargs["source_statuses"]["rotogrinders"]["status"] == "success"
+        assert kwargs["source_statuses"]["balldontlie"]["status"] == "success"
+        assert "rotowire" not in kwargs["source_statuses"]
+        assert "rotogrinders" not in kwargs["source_statuses"]

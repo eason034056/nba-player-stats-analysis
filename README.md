@@ -6,7 +6,7 @@ The LangGraph chat package (`scripts/agents/`), the lineup RAG package (`nba_lin
 
 ## What the app does
 
-The browser talks to the Next.js app. That app proxies `/api/backend/...` to the FastAPI server. The server reads The Odds API, BALLDONTLIE, RotoWire, and RotoGrinders, and it scores daily picks from the cached odds, the injury snapshot, and the game-log CSVs. Redis holds the short-lived caches. PostgreSQL holds the odds snapshots and the backfill tables.
+The browser talks to the Next.js app. That app proxies `/api/backend/...` to the FastAPI server. The server reads The Odds API and BALLDONTLIE, and it scores daily picks from the cached odds, the injury snapshot, and the game-log CSVs. Redis holds the short-lived caches. PostgreSQL holds the odds snapshots, lineup snapshots, and the backfill tables.
 
 ## Project Features
 
@@ -166,7 +166,8 @@ curl http://localhost:8000/api/scheduler-status
 You do not need to manually download the following data files; the system fetches them live when running:
 
 - Real-time odds data: from `The Odds API`
-- Starting lineups and injury status: from `RotoWire` and `RotoGrinders`
+- Starting lineups: from BALLDONTLIE `projected_lineups`
+- Injury status: from BALLDONTLIE
 
 To fully use the project, make sure:
 

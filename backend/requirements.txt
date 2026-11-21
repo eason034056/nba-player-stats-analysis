@@ -27,12 +27,8 @@ pydantic-settings==2.4.0
 # ==================== HTTP 客戶端 ====================
 # HTTPX: 現代化的 HTTP 客戶端
 # - 支援 async/await
-# - 用於呼叫外部 Odds API
+# - 用於呼叫外部 Odds API 與 BALLDONTLIE
 httpx==0.27.0
-
-# requests: RotoWire 與 RotoGrinders 先發頁面。
-# 先前只因為 langgraph 的依賴被裝進來。先發抓取仍要它。
-requests==2.34.2
 
 # ==================== 快取 ====================
 # Redis: Redis 客戶端（異步版本）
