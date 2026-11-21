@@ -22,7 +22,7 @@ Every rule is relative to the pick's side (over or under).
 bounded adjustments from the other four signals, and applies Platt scaling
 to the adjustment total only. No market price, or an injury status of Out,
 returns None. Doubtful does not null the blend; it scores like
-Questionable. WNBA does not call this module.
+Questionable.
 """
 
 from __future__ import annotations
@@ -154,8 +154,7 @@ def injury_blocks_combined(status: str | None) -> bool:
     """True when the player is Out, ignoring case and whitespace.
 
     ``status`` is the word on the pick. Doubtful is not Out, whether it
-    comes from the BALLDONTLIE cache or elsewhere. WNBA does not call
-    this module.
+    comes from the BALLDONTLIE cache or elsewhere.
     """
     return _injury_word_blocks(status)
 

@@ -46,9 +46,8 @@ class _LeagueProviders(Mapping[str, Any]):
     Lookup is live, so a test can change the setting without rebuilding
     the table. NBA accepts ``theoddsapi`` (the default) and
     ``balldontlie``. The default does not switch: a blank value is
-    ``theoddsapi``, and WNBA always uses that client. ``balldontlie``
-    loads ``BdlOddsProvider`` here, not from a route or a job. Any other
-    league raises ``ValueError``.
+    ``theoddsapi``. ``balldontlie`` loads ``BdlOddsProvider`` here, not
+    from a route or a job. Any other league raises ``ValueError``.
     """
 
     def __getitem__(self, league: str) -> Any:
@@ -70,10 +69,9 @@ class _LeagueProviders(Mapping[str, Any]):
 
     def __iter__(self):
         yield "nba"
-        yield "wnba"
 
     def __len__(self) -> int:
-        return 2
+        return 1
 
 
 PROVIDERS: Mapping[str, Any] = _LeagueProviders()
@@ -135,8 +133,8 @@ class OddsMarketGateway:
     ) -> MarketSnapshotResult:
         """Shared snapshot for one event.
 
-        Pass ``league`` (``nba`` or ``wnba``). ``sport`` is only for a
-        hot-key member or test that still has an Odds API sport key.
+        Pass ``league`` (``nba``). ``sport`` is only for a hot-key
+        member or test that still has an Odds API sport key.
         When both are set, ``league`` is the one that is used.
         """
         resolved_league = self._resolve_league(league, sport)
@@ -321,10 +319,10 @@ class OddsMarketGateway:
             if member_league is None:
                 await self.cache.remove_sorted_set_member(HOT_KEYS_ZSET_KEY, member)
                 continue
-            # Hot keys are mixed NBA and WNBA. Skip the WNBA league while
-            # the flag is off so that job does not call the Odds API.
-            # _league_from_hot_key reads league, and sport on older members.
-            if member_league == "wnba" and not settings.wnba_jobs_enabled:
+            # A stored member whose league is wnba is not warmed.
+            # basketball_wnba is not a registered sport key, so
+            # _league_from_hot_key already dropped that shape above.
+            if member_league == "wnba":
                 continue
             normalized_markets = self._normalize_csv(context["markets"])
             normalized_books = self._normalize_bookmakers(context["bookmakers"])

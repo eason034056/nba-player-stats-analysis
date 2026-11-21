@@ -2,7 +2,7 @@
 
 This project is a web app for NBA player props. The front-end lets a user pick a game, read vig-free prices, lineups, and historical game logs.
 
-The LangGraph chat package (`scripts/agents/`), the lineup RAG package (`nba_lineup_rag/`), and the finetune and dataset trees were removed in SPO-142b. SPO-142a had already removed `POST /api/nba/agent/chat`. The decision record is `docs/decisions/SPO-142/decision_20261121_remove-agent-trees.md`. `sample_outputs.md` is a saved demo from the removed CLI.
+The LangGraph chat package (`scripts/agents/`), the lineup RAG package (`nba_lineup_rag/`), and the finetune and dataset trees were removed in SPO-142b. SPO-142a had already removed the chat routes. The decision record is `docs/decisions/SPO-142/decision_20261121_remove-agent-trees.md`. `sample_outputs.md` is a saved demo from the removed CLI. SPO-145a removed the WNBA backend. The record is `docs/decisions/SPO-145/decision_20261121_nba-only.md`.
 
 ## What the app does
 
@@ -212,10 +212,9 @@ npm test
 .
 ├── backend/                 # FastAPI backend
 │   └── app/api/
-│       └── nba.py           # /api/* — NBA events, props/no-vig, player-history, csv/*
+│       └── nba.py           # NBA events, props/no-vig, player-history, csv/*
 ├── frontend/                # Next.js frontend (App Router)
-│   └── app/
-│       └── (routes)         # /, /event/[eventId], /picks, /betslip, /about
+│   └── app/                 # /, /event/[eventId], /picks, /betslip, /about
 ├── scripts/                 # Exploration scripts, CSV hygiene, and ops helpers
 ├── data/                    # nba_player_game_logs.csv, star_players.json
 ├── docker-compose.yml       # Backend, Redis, PostgreSQL launch configuration

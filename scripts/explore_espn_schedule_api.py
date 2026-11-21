@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Record ESPN schedule payloads used to label game-log seasons.
 
-The NBA/WNBA CSVs are scraped from RealGM with a season string stamped on
+The NBA CSV is scraped from RealGM with a season string stamped on
 every row (see the upstream ``scrape_nba.py`` ``SEASON`` constant). That
 string is not the game's season, and the "All Games" filter mixes Summer
 League, preseason, regular season, playoffs, and G League. This script
@@ -47,12 +47,10 @@ USER_AGENT = "Mozilla/5.0 (compatible; sports-lab-schedule-fixture/1.0)"
 SITE_API = "https://site.api.espn.com/apis/site/v2/sports/basketball"
 CORE_API = "https://sports.core.api.espn.com/v2/sports/basketball/leagues"
 
-# league slug, ESPN season years (the year the season ends, except WNBA
-# where the year is the calendar season), seasontype ids observed on
-# /seasons/{year}/types.
+# league slug, ESPN season years (the year the season ends), seasontype
+# ids observed on /seasons/{year}/types.
 LEAGUE_REQUESTS: list[tuple[str, list[str], list[int]]] = [
     ("nba", ["2025", "2026", "2027"], [1, 2, 3, 5]),
-    ("wnba", ["2025", "2026"], [1, 2, 3]),
     ("nba-development", ["2025", "2026"], [1, 2, 3]),
     ("nba-summer-las-vegas", ["2021", "2024", "2025"], [1, 2]),
     ("nba-summer-california", ["2025"], [1, 2]),

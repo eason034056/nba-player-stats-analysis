@@ -31,12 +31,11 @@ logger = logging.getLogger(__name__)
 # The sport key is only used to build /v4/sports/{sport_key}/...
 SPORT_KEY_BY_LEAGUE: dict[str, str] = {
     "nba": "basketball_nba",
-    "wnba": "basketball_wnba",
 }
 
 
 def normalize_league(league: str) -> str:
-    """Return ``nba`` or ``wnba``. Raise ``ValueError`` for anything else."""
+    """Return ``nba``. Raise ``ValueError`` for anything else."""
     key = (league or "").strip().lower()
     if key not in SPORT_KEY_BY_LEAGUE:
         raise ValueError(
@@ -50,7 +49,7 @@ def sport_key_for_league(league: str) -> str:
     """Return the Odds API sport key for ``league``.
 
     Raises:
-        ValueError: ``league`` is not nba or wnba. The message says
+        ValueError: ``league`` is not nba. The message says
         ``Unsupported league`` so existing daily-analysis checks still match.
     """
     key = (league or "").strip().lower()

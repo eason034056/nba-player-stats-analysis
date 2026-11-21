@@ -730,40 +730,5 @@ def test_stale_cache_warns_once_and_leaves_injury_status_null(
     assert all(pick.combined_probability is not None for pick in picks)
 
 
-def test_wnba_pick_ignores_the_nba_snapshot() -> None:
-    out = _entry("Out")
-    service = DailyAnalysisService()
-    service._get_props_for_market = _async_return(_board_for(out["player"]))
-
-    class _WnbaCsv:
-        def get_player_stats(self, **_kwargs):
-            return {
-                "p_over": 0.7,
-                "p_under": 0.2,
-                "n_games": 20,
-                "game_logs": [{"team": "Liberty", "value": 18}],
-            }
-
-    import app.services.daily_analysis as daily_analysis
-
-    original = daily_analysis._resolve_csv_service
-    daily_analysis._resolve_csv_service = lambda league: _WnbaCsv()
-    try:
-        picks, _players, _props = asyncio.run(
-            service._analyze_single_event(
-                event_id="evt-w",
-                home_team="New York Liberty",
-                away_team="Connecticut Sun",
-                commence_time="2026-06-01T23:00:00Z",
-                league="wnba",
-                injury_entries=[out],
-            )
-        )
-    finally:
-        daily_analysis._resolve_csv_service = original
-    assert picks
-    assert all(pick.injury_status is None for pick in picks)
-    assert all(pick.lineup_confirmed is None for pick in picks)
-    assert all(pick.combined_probability is None for pick in picks)
 
 

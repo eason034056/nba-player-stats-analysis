@@ -1,6 +1,6 @@
 # Sports Lab — Project Context
 
-NBA and WNBA player props advisor. FastAPI backend and Next.js frontend. The site shows live odds, lineups, injuries, and historical game logs, and it scores daily picks from those inputs.
+NBA player props advisor. FastAPI backend and Next.js frontend. The site shows live odds, lineups, injuries, and historical game logs, and it scores daily picks from those inputs.
 
 The in-process LangGraph chat package, the lineup RAG package, and the finetune and dataset trees were removed in SPO-142b, after SPO-142a removed the chat HTTP routes. The record is `docs/decisions/SPO-142/decision_20261121_remove-agent-trees.md`.
 
@@ -12,7 +12,7 @@ Ticket prefix: `SPO`
 
 - `backend/` — FastAPI server, REST API, scheduler, DB models, odds gateway, integration tests
 - `frontend/` — Next.js 14 App Router, TanStack Query data layer, Tailwind UI. The Agent Widget and its tests stay in the frontend; this repo no longer has a chat route for them.
-- `data/` — `nba_player_game_logs.csv`, `wnba_player_game_logs.csv`, and `star_players.json`
+- `data/` — `nba_player_game_logs.csv` and `star_players.json`
 - `notebooks/` — exploratory analysis
 - `docker-compose.yml` — backend + Redis + Postgres dev stack
 - `scripts/` — exploration scripts, CSV hygiene, and ops helpers. The agent, dataset, and finetune directories are gone.
@@ -23,7 +23,7 @@ Key existing docs: `README.md`, `docs/dev-doc.md`, `docs/multi-agent-dev.md`, `d
 
 ### FastAPI Patterns
 
-- Routes under `backend/app/api/<domain>.py`. One router per domain (nba, wnba, lineups, picks, daily picks, odds history, health).
+- Routes under `backend/app/api/<domain>.py`. One router per domain (nba, lineups, picks, daily picks, odds history, health).
 - Use FastAPI `Depends` for cross-cutting concerns: DB session, current user, settings.
 - Async-first for any handler that does I/O (HTTPX outbound, DB query, Redis). No blocking calls in async handlers.
 - Request / response shapes: Pydantic v2 models in `backend/app/schemas/<domain>.py`. Never return raw dicts from a route.

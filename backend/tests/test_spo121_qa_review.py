@@ -193,15 +193,6 @@ class TestCombinedTierAndBoard:
         sort_stored_picks(picks, "nba")
         assert [pick.player_name for pick in picks] == ["blend", "history", "missing"]
 
-        wnba = [
-            _pick(probability=0.66, combined=None, name="lower"),
-            _pick(probability=0.80, combined=0.40, name="higher"),
-        ]
-        for pick in wnba:
-            pick.tier = read_tier(pick.probability)
-        sort_stored_picks(wnba, "wnba")
-        assert [pick.player_name for pick in wnba] == ["higher", "lower"]
-
     def test_signal_failure_leaves_a_null_tier_off_the_board(self, monkeypatch):
         def explode(*args, **kwargs):
             raise RuntimeError("signals failed")
@@ -219,22 +210,6 @@ class TestCombinedTierAndBoard:
         assert select_daily_picks(picks, min_probability=0.0, min_games=0) == []
 
 
-class TestWnbaUnchanged:
-    def test_wnba_board_ignores_combined(self):
-        pick = _pick(probability=0.66, combined=None)
-        pick.tier = read_tier(pick.probability)
-        assert select_daily_picks([pick], league="wnba") == [pick]
-        assert select_daily_picks([pick], league="WNBA") == [pick]
-        low = _pick(probability=0.64, combined=0.90)
-        assert select_daily_picks([low], league="wnba") == []
-
-    def test_wnba_signal_step_keeps_the_historical_tier(self):
-        pick = _pick(probability=0.72, combined=None)
-        pick.tier = read_tier(pick.probability)
-        out = _with_nba_signal_verdicts(pick, league="wnba", bookmakers_data=[], game_logs=[])
-        assert out.tier == "Strong play"
-        assert out.combined_probability is None
-        assert out.signals is None
 
 
 class TestRecordedCapture:
@@ -355,10 +330,6 @@ class TestReadsRoute:
         asyncio.run(get_event_reads(event_id, market="player_points"))
         assert cache.sets == [(event_reads_cache_key(event_id, "player_points"), 60)]
 
-    def test_wnba_routes_have_no_reads_endpoint(self):
-        paths = {getattr(route, "path", "") for route in app.routes}
-        assert "/api/nba/events/{event_id}/reads" in paths
-        assert not any(path.startswith("/api/wnba") and path.endswith("/reads") for path in paths)
 
 
 class TestRosterTeamOnEvent:

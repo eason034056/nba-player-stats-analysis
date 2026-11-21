@@ -565,8 +565,8 @@ async def get_events(
     characters from [A-Za-z0-9_-], starting with a letter or digit. A
     well-formed id that is not on that date's list is HTTP 404.
 
-    The body is one NBAEvent, the same model WNBA's event list uses,
-    with the fields GET /api/nba/events already adds for an NBA event
+    The body is one NBAEvent, with the fields GET /api/nba/events
+    already adds for an NBA event
     (commence_time_et, display_tz, lineup_status, top_read).
     """,
 )

@@ -78,7 +78,7 @@ class _RecordedSeasonClient:
 
     def __init__(self) -> None:
         self._docs: dict[str, dict] = {}
-        for league in ("nba", "wnba"):
+        for league in ("nba",):
             index = json.loads((_SEASONS / f"{league}_index.json").read_text(encoding="utf-8"))
             self._docs[f"{_CORE}/{league}/seasons?limit=100"] = index
             saved = {
@@ -144,21 +144,6 @@ class TestSeasonOverlap:
         assert await _covering("nba", {end}) == [2026]
         assert await _covering("nba", {_shift(end, 1)}) == []
 
-    @pytest.mark.asyncio
-    async def test_wnba_window_is_inclusive_and_does_not_use_the_nba_ending_year(self):
-        # WNBA season 2025 is the 2025 calendar season. A date on its first
-        # day must not come back as 2026.
-        opening = _season_doc("wnba", 2025)
-        assert opening["displayName"] == "2025"
-        start, end = _prefix(opening, "startDate"), _prefix(opening, "endDate")
-        assert await _covering("wnba", {start}) == [2025]
-        assert await _covering("wnba", {_shift(start, -1)}) == []
-        assert await _covering("wnba", {end}) == [2025]
-        assert await _covering("wnba", {_shift(end, 1)}) == []
-        following = _season_doc("wnba", 2026)
-        next_start = _prefix(following, "startDate")
-        assert await _covering("wnba", {next_start}) == [2026]
-        assert await _covering("wnba", {_shift(next_start, -1)}) == []
 
     @pytest.mark.asyncio
     async def test_one_nba_calendar_year_can_span_two_seasons(self):
@@ -170,14 +155,6 @@ class TestSeasonOverlap:
         assert {day[:4] for day in dates} == {"2026"}
         assert set(await _covering("nba", dates)) == {2026, 2027}
 
-    @pytest.mark.asyncio
-    async def test_a_wnba_csv_that_spans_two_seasons_returns_both_years(self):
-        # The last day of 2025 and the first day of 2026. Season 2027 is in
-        # the candidate set (calendar year + 1) and must not be selected.
-        ending = _season_doc("wnba", 2025)
-        starting = _season_doc("wnba", 2026)
-        dates = {_prefix(ending, "endDate"), _prefix(starting, "startDate")}
-        assert set(await _covering("wnba", dates)) == {2025, 2026}
 
 
 @pytest.mark.asyncio
@@ -280,33 +257,8 @@ def test_nba_cup_notes_keep_group_through_semifinals_regular():
         assert labelled[f"Cup {event_id}"] == game_type
 
 
-def test_wnba_commissioners_cup_group_games_stay_regular_season():
-    """Pool games count toward the WNBA regular season. Their type is Standard."""
-    event = _fever_event("401736156")
-    competition = event["competition"]
-    assert competition["type"]["abbreviation"] == "STD"
-    assert competition["type"]["slug"] == "standard"
-    headlines = [note["headline"] for note in competition["notes"]]
-    assert "WNBA Commissioner's Cup" in headlines
-    report = hygiene_rows([_joined_row(event, "Cup Group")], [event], league="wnba")
-    assert report.rows[0]["GameType"] == GAME_TYPE_REGULAR
-    assert report.rows[0]["Season"] == "2025"
 
 
-def test_wnba_commissioners_cup_championship_is_not_regular_season():
-    """The extra championship game must not count as a regular-season game."""
-    event = _fever_event("401736430")
-    competition = event["competition"]
-    assert competition["type"]["abbreviation"] == "CC"
-    assert competition["type"]["slug"] == "commissioners-cup"
-    assert event["seasonType"]["abbreviation"] == "reg"
-    headlines = [note["headline"] for note in competition["notes"]]
-    assert "WNBA Commissioner's Cup Championship" in headlines
-    report = hygiene_rows([_joined_row(event, "Cup Final", pts="30")], [event], league="wnba")
-    assert report.output_rows == 1
-    assert report.rows[0]["GameType"] != GAME_TYPE_REGULAR
-    assert report.rows[0]["GameType"] == "cup_championship"
-    assert report.rows[0]["GameType"] == GAME_TYPE_NBA_CUP
 
 
 def test_recorded_schedules_label_only_cc_finals_as_cup_championship():
@@ -321,7 +273,6 @@ def test_recorded_schedules_label_only_cc_finals_as_cup_championship():
         (_ESPN / "nba_team_15_schedule_2025_type_2.json", "nba"),
         (_ESPN / "nba_team_18_schedule_2026_type_2.json", "nba"),
         (_ESPN / "nba_team_2_schedule_2027_type_2.json", "nba"),
-        (_ESPN / "recorded" / "wnba_team_5_schedule_2025_type_2.json", "wnba"),
     )
     cup_ids: list[str] = []
     for path, league in sources:
@@ -348,7 +299,7 @@ def test_recorded_schedules_label_only_cc_finals_as_cup_championship():
                 assert slug == "standard"
                 assert "championship" not in text
                 assert game_type == GAME_TYPE_REGULAR
-    assert cup_ids == ["401734908", "401809839", "401736430"]
+    assert cup_ids == ["401734908", "401809839"]
 
 
 def test_recorded_team_schedules_match_their_urls_and_isolate_the_cup_final():

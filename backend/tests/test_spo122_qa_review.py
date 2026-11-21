@@ -36,11 +36,6 @@ def excerpt_service(monkeypatch: pytest.MonkeyPatch) -> CSVPlayerHistoryService:
     return service
 
 
-@pytest.fixture(scope="module")
-def wnba_service() -> CSVPlayerHistoryService:
-    service = CSVPlayerHistoryService("wnba")
-    service.load_csv()
-    return service
 
 
 @pytest.fixture(scope="module")
@@ -181,40 +176,3 @@ class TestPlayerStatsScope:
         assert "Anfernee Simons" in scoped["teammates"]
 
 
-class TestWnbaUnchanged:
-    def test_wnba_nickname_matches_wnba_event_names(self, wnba_service):
-        logs = wnba_service._cache["Napheesa Collier"]
-        latest = team_from_game_logs(logs)
-        assert latest == "Lynx"
-        assert team_on_event(logs, None, "Minnesota Lynx", "Chicago Sky", league="wnba") == "Lynx"
-        assert team_on_event(logs, None, "Las Vegas Aces", "Seattle Storm", league="wnba") == ""
-
-    def test_lynx_is_not_the_timberwolves(self, wnba_service):
-        logs = wnba_service._cache["Napheesa Collier"]
-        assert team_on_event(
-            logs, None, "Minnesota Timberwolves", "Chicago Bulls", league="nba"
-        ) == ""
-
-    def test_wnba_unscoped_teammates_match_the_previous_list(self, wnba_service):
-        stats = wnba_service.get_player_stats("Napheesa Collier", "points", 20.5)
-        assert stats["teammates"] == wnba_service.get_teammates("Napheesa Collier")
-        assert stats["teammates"]
-
-    def test_wnba_scoped_teammates_keep_the_in_game_club(self, wnba_service):
-        scoped = wnba_service.get_player_stats(
-            "Napheesa Collier",
-            "points",
-            20.5,
-            home_team="Minnesota Lynx",
-            away_team="Chicago Sky",
-        )
-        assert scoped["teammates"] == wnba_service.get_teammates("Napheesa Collier", only_team="Lynx")
-        assert scoped["teammates"]
-        off = wnba_service.get_player_stats(
-            "Napheesa Collier",
-            "points",
-            20.5,
-            home_team="Las Vegas Aces",
-            away_team="Seattle Storm",
-        )
-        assert off["teammates"] == []

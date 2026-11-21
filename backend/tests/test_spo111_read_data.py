@@ -289,16 +289,6 @@ class TestStoredCandidates:
         names = {pick.player_name for pick in picks}
         assert names == {_BOARD_OVER, _BOARD_UNDER}
 
-    def test_wnba_storage_does_not_keep_lean_or_short_samples(self, monkeypatch):
-        monkeypatch.setattr(
-            "app.services.daily_analysis.wnba_csv_player_service.get_player_stats",
-            MagicMock(
-                side_effect=lambda player_name, metric, threshold, n=0, exclude_dnp=True: _PLAYERS[player_name]
-            ),
-        )
-        picks, _, _ = _analyze(league="wnba")
-        assert {pick.player_name for pick in picks} == {_BOARD_OVER, _BOARD_UNDER}
-        assert all(pick.p_over is not None and pick.p_under is not None for pick in picks)
 
     def test_published_count_stays_the_board_while_storage_is_wider(self, monkeypatch):
         service = DailyAnalysisService()

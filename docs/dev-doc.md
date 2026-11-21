@@ -4,6 +4,14 @@
 
 以下是一份早期的開發文檔（PRD + Tech Spec）。內容以 **Python/FastAPI 後端 + Next.js 前端** 為主，並包含資料流、API 設計、資料結構、去水算法、快取策略、錯誤處理、部署與測試要求。
 
+---
+
+> **【架構更新註記｜2026-11｜SPO-145a】**
+>
+> 後端只服務 NBA。`/api/wnba`、WNBA 排程、WNBA CSV 與 RotoWire WNBA parser 已移除。SQL `league` 欄位仍可存 `'wnba'`，因為 BALLDONTLIE id 會重疊；這支 PR 沒有 DELETE。`odds_theoddsapi.py` 與 `ODDS_API_KEY` 留到 130i。決定見 `docs/decisions/SPO-145/decision_20261121_nba-only.md`。下面各章若寫到已刪除的 agent 或 WNBA route，是當時的紀錄。
+
+---
+
 # 開發文檔：NBA 球員得分 Props「去水機率」網站
 
 ## 0. 一句話

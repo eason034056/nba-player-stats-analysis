@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import asyncio
 import json
-import logging
 import time
 from dataclasses import dataclass
 from datetime import date as date_type
@@ -15,21 +14,23 @@ from app.services.lineup_provider_rotogrinders import fetch_rotogrinders_lineups
 from app.services.lineup_provider_rotowire import fetch_rotowire_lineups
 from app.settings import settings
 
-logger = logging.getLogger(__name__)
-
 
 def _build_lineups_key(date: str, league: str = "nba") -> str:
-    """Redis namespace per league.
+    """Redis key for one NBA slate date.
 
-    Default `league="nba"` preserves the historical key shape so existing
-    NBA cache reads keep hitting the same entries after this change. Pass
-    `league="wnba"` for SPO-34's WNBA service instance.
+    The key is ``lineups:nba:{date}``. ``league`` must be ``nba``.
+
+    Raises:
+        ValueError: ``league`` is not ``nba``.
     """
-    return f"lineups:{league}:{date}"
+    if league != "nba":
+        raise ValueError(f"Unsupported league for lineup cache: {league!r}")
+    return f"lineups:nba:{date}"
 
 
 def _build_lineups_meta_key(date: str, league: str = "nba") -> str:
-    return f"lineups:{league}:{date}:meta"
+    """Redis meta key beside ``_build_lineups_key``."""
+    return f"{_build_lineups_key(date, league)}:meta"
 
 
 UPSERT_LINEUP_SQL = """
@@ -46,8 +47,9 @@ INSERT INTO team_lineup_snapshots (
 -- (date, team, league) — Postgres ON CONFLICT requires an exact
 -- column-tuple match. The league column is omitted from the column
 -- list above, so the DEFAULT 'nba' fills it in for NBA writes and
--- the inference resolves against the existing NBA row. WNBA writes
--- (SPO-34) will pass league='wnba' in their own column list.
+-- the inference resolves against the existing NBA row. The league
+-- column stays on the key because BALLDONTLIE ids can overlap. This
+-- writer does not insert a non-nba league.
 ON CONFLICT (date, team, league)
 DO UPDATE SET
     opponent = EXCLUDED.opponent,
@@ -244,26 +246,16 @@ def build_consensus_lineups(
 
 
 class LineupConsensusService:
-    """Lineup consensus fetcher keyed by league.
+    """NBA lineup consensus from RotoWire and RotoGrinders.
 
-    Default `league="nba"` keeps the existing two-source consensus
-    (RotoWire + RotoGrinders) and PostgreSQL persistence intact.
-
-    For `league="wnba"`:
-      - Only RotoWire is fetched. RotoGrinders WNBA is a JS-only React SPA
-        backed by a private AWS Lambda URL (see
-        docs/research/wnba-rollout/lineup_sources_comparison.md §3) — HTML
-        scraping is not feasible without headless browser infra, which is
-        out of scope for SPO-34.
-      - PostgreSQL persistence is skipped (the `team_lineup_snapshots`
-        table is PK'd on `(date, team)` and NBA/WNBA share several team
-        codes — CHI, IND, TOR, WAS, ATL, DAL, MIN, NYK, PHX). Adding a
-        `league` column requires a migration; tracked as a follow-up.
-        Redis cache + the in-memory fallback path still serve the WNBA
-        endpoint correctly.
+    The two sources are merged and stored in Redis. PostgreSQL receives
+    the same slate. ``league`` must be ``nba``; it is stored on the
+    fetch log so the row matches the ``league`` column.
     """
 
     def __init__(self, max_stale_minutes: int = 20, league: str = "nba"):
+        if league != "nba":
+            raise ValueError(f"Unsupported league for lineups: {league!r}")
         self.max_stale_minutes = max_stale_minutes
         self.league = league
         self._refresh_locks: set[str] = set()
@@ -274,19 +266,13 @@ class LineupConsensusService:
 
         cached_data = await cache_service.get(cache_key)
         cached_meta = await cache_service.get(meta_key)
-        # The write lives in fetch_and_store. This read skips that call
-        # when WNBA jobs are paused, and still returns a stored slate.
-        writes_paused = self.league == "wnba" and not settings.wnba_jobs_enabled
         if isinstance(cached_data, dict):
             fetched_at = (cached_meta or {}).get("fetched_at")
-            if self._is_stale(cached_meta) and not writes_paused:
+            if self._is_stale(cached_meta):
                 self._trigger_background_refresh(date)
                 return LineupReadResult(date=date, lineups=cached_data, fetched_at=fetched_at, cache_state="stale")
             state = "stale" if self._is_stale(cached_meta) else "fresh"
             return LineupReadResult(date=date, lineups=cached_data, fetched_at=fetched_at, cache_state=state)
-
-        if writes_paused:
-            return LineupReadResult(date=date, lineups={}, fetched_at=None, cache_state="fresh")
 
         try:
             lineups = await self.fetch_and_store(date)
@@ -329,16 +315,6 @@ class LineupConsensusService:
         return result.lineups.get(normalized_team), result.cache_state, result.fetched_at
 
     async def fetch_and_store(self, date: str) -> dict[str, dict[str, Any]]:
-        # One guard for the scrape, the Redis write, the Postgres upsert,
-        # and the fetch log. Any caller that reaches this method stops
-        # here. NBA is unchanged.
-        if self.league == "wnba" and not settings.wnba_jobs_enabled:
-            logger.info(
-                "WNBA_JOBS_ENABLED is false; lineup fetch skipped for %s",
-                date,
-            )
-            return {}
-
         started = time.time()
         status = "success"
         error_message = None
@@ -346,44 +322,25 @@ class LineupConsensusService:
         lineups: dict[str, dict[str, Any]] = {}
 
         try:
-            if self.league == "wnba":
-                # WNBA path: RotoWire only. RotoGrinders WNBA is a JS-only
-                # iframe SPA (see comparison doc §3). Calling its NBA
-                # scraper with the wrong URL would 4xx or silently parse
-                # 0 rows — neither is informative — so it is skipped.
-                rotowire_result = await asyncio.to_thread(
-                    fetch_rotowire_lineups, date, "wnba"
-                )
-                primary_payload = rotowire_result
-                source_statuses["rotowire"] = {
-                    "status": "success",
-                    "team_count": len(rotowire_result),
-                }
-                source_statuses["rotogrinders"] = {
-                    "status": "skipped",
-                    "message": "WNBA LineupHQ is a JS SPA — not scrape-able",
-                }
-                secondary_payload: dict[str, dict[str, Any]] = {}
+            primary_source, secondary_source = await asyncio.gather(
+                asyncio.to_thread(fetch_rotowire_lineups, date),
+                asyncio.to_thread(fetch_rotogrinders_lineups, date),
+                return_exceptions=True,
+            )
+
+            if isinstance(primary_source, Exception):
+                source_statuses["rotowire"] = {"status": "error", "message": str(primary_source)}
+                primary_payload = {}
             else:
-                primary_source, secondary_source = await asyncio.gather(
-                    asyncio.to_thread(fetch_rotowire_lineups, date),
-                    asyncio.to_thread(fetch_rotogrinders_lineups, date),
-                    return_exceptions=True,
-                )
+                source_statuses["rotowire"] = {"status": "success", "team_count": len(primary_source)}
+                primary_payload = primary_source
 
-                if isinstance(primary_source, Exception):
-                    source_statuses["rotowire"] = {"status": "error", "message": str(primary_source)}
-                    primary_payload = {}
-                else:
-                    source_statuses["rotowire"] = {"status": "success", "team_count": len(primary_source)}
-                    primary_payload = primary_source
-
-                if isinstance(secondary_source, Exception):
-                    source_statuses["rotogrinders"] = {"status": "error", "message": str(secondary_source)}
-                    secondary_payload = {}
-                else:
-                    source_statuses["rotogrinders"] = {"status": "success", "team_count": len(secondary_source)}
-                    secondary_payload = secondary_source
+            if isinstance(secondary_source, Exception):
+                source_statuses["rotogrinders"] = {"status": "error", "message": str(secondary_source)}
+                secondary_payload = {}
+            else:
+                source_statuses["rotogrinders"] = {"status": "success", "team_count": len(secondary_source)}
+                secondary_payload = secondary_source
 
             lineups = build_consensus_lineups(
                 date=date,
@@ -395,19 +352,11 @@ class LineupConsensusService:
                 raise RuntimeError("Both free lineup sources returned no usable data")
 
             await self._write_to_redis(date, lineups)
-            # WNBA team rows stay out of Postgres. The unique key is
-            # already (date, team, league), and WNBA is paused, so this
-            # writer still stores NBA snapshots only. The fetch log below
-            # records self.league for both leagues.
-            if self.league == "nba":
-                try:
-                    await self._write_to_postgres(date, lineups)
-                except Exception as exc:
-                    print(f"⚠️ 寫入 lineup PostgreSQL 失敗（不影響主流程）: {exc}")
+            try:
+                await self._write_to_postgres(date, lineups)
+            except Exception as exc:
+                print(f"⚠️ 寫入 lineup PostgreSQL 失敗（不影響主流程）: {exc}")
 
-            # SPO-35: this service only writes NBA lineups today. Scope the
-            # invalidation to NBA so a lineup refresh doesn't nuke the
-            # WNBA daily-picks cache (and the WNBA quota on regen).
             deleted = await cache_service.clear_daily_picks_cache(league="nba")
             if deleted > 0:
                 print(f"🗑️ lineup refresh cleared {deleted} daily picks cache keys")
@@ -497,11 +446,6 @@ class LineupConsensusService:
     async def _read_from_postgres(self, date: str) -> dict[str, dict[str, Any]]:
         if not db_service.is_connected:
             return {}
-        # WNBA snapshots are unread. The unique key includes league, and
-        # WNBA persistence stays paused, so a Redis miss returns an empty
-        # slate when the scrape also fails.
-        if self.league != "nba":
-            return {}
         rows = await db_service.fetch(
             """
             SELECT team, opponent, home_or_away, status, starters, bench_candidates,
@@ -559,12 +503,3 @@ class LineupConsensusService:
 
 
 lineup_service = LineupConsensusService(max_stale_minutes=settings.lineup_stale_minutes)
-
-# SPO-34: dedicated WNBA service instance. Same class, league="wnba"
-# switches: cache namespace → lineups:wnba:{date}; source set → RotoWire
-# only; PG read/write → no-op (see _read_from_postgres / fetch_and_store
-# above for the reasoning).
-wnba_lineup_service = LineupConsensusService(
-    max_stale_minutes=settings.lineup_stale_minutes,
-    league="wnba",
-)

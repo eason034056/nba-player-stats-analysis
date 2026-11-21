@@ -185,48 +185,6 @@ def test_missing_and_stale_snapshots_leave_both_fields_null() -> None:
     assert stale.combined_probability is not None
 
 
-def test_wnba_leaves_both_fields_null() -> None:
-    """WNBA does not copy the NBA snapshot, including a Doubtful row."""
-    doubtful = _entry("Doubtful")
-    from app.services.daily_analysis import DailyAnalysisService
-    import app.services.daily_analysis as daily_analysis
-    from tests.test_spo135c_bdl_injury_status import _async_return
-
-    service = DailyAnalysisService()
-    service._get_props_for_market = _async_return(_board_for(doubtful["player"]))
-
-    class _WnbaCsv:
-        def get_player_stats(self, **_kwargs):
-            return {
-                "p_over": 0.7,
-                "p_under": 0.2,
-                "n_games": 20,
-                "game_logs": [{"team": "Liberty", "value": 18}],
-            }
-
-    original = daily_analysis._resolve_csv_service
-    daily_analysis._resolve_csv_service = lambda league: _WnbaCsv()
-    try:
-        picks, _players, _props = asyncio.run(
-            service._analyze_single_event(
-                event_id="evt-w",
-                home_team="New York Liberty",
-                away_team="Connecticut Sun",
-                commence_time="2026-06-01T23:00:00Z",
-                league="wnba",
-                injury_entries=[doubtful],
-            )
-        )
-    finally:
-        daily_analysis._resolve_csv_service = original
-
-    assert picks
-    row = _points(picks, doubtful["player"])
-    assert row.injury_status is None
-    assert row.injury_status_raw is None
-    assert row.combined_probability is None
-    assert row.signals is None
-    assert select_daily_picks([row], league="wnba") == [row]
 
 
 def test_legacy_payload_without_the_field_validates_as_null() -> None:
@@ -290,8 +248,8 @@ def test_a_row_without_a_source_string_keeps_the_normalized_status() -> None:
     assert recorded == _page_status(_entry("Out"))
 
 
-def test_nba_cache_keys_are_versioned_and_wnba_keys_are_not() -> None:
-    """Old NBA payloads are not read. WNBA key names stay put."""
+def test_nba_cache_keys_are_versioned() -> None:
+    """Old NBA payloads are not read. The key is the v2 NBA key."""
     from app.services.daily_analysis import daily_picks_cache_key
     from app.services.event_reads import event_reads_cache_key
 
@@ -303,11 +261,8 @@ def test_nba_cache_keys_are_versioned_and_wnba_keys_are_not() -> None:
         daily_picks_cache_key("NBA", "2026-11-10", -300)
         == "daily_picks:nba:v2:2026-11-10:tz-300"
     )
-    assert (
+    with pytest.raises(ValueError):
         daily_picks_cache_key("wnba", "2026-11-10", 480)
-        == "daily_picks:wnba:2026-11-10:tz480"
-    )
-    assert "v2" not in daily_picks_cache_key("wnba", "2026-05-14", 0)
     assert (
         event_reads_cache_key("evt-1", "player_points")
         == "nba:event-reads:v2:evt-1:m=player_points"
@@ -316,37 +271,6 @@ def test_nba_cache_keys_are_versioned_and_wnba_keys_are_not() -> None:
     assert "v1" not in event_reads_cache_key("evt-1", None)
 
 
-def test_nba_flush_clears_versioned_keys_and_leaves_wnba() -> None:
-    """``daily_picks:nba:*`` drops v2 and the previous NBA key. WNBA stays."""
-    import fnmatch
-
-    from app.services.cache import CacheService
-
-    class _Fake:
-        def __init__(self) -> None:
-            self.store = {
-                "daily_picks:nba:v2:2026-11-10:tz480": "new",
-                "daily_picks:nba:2026-11-10:tz480": "old",
-                "daily_picks:wnba:2026-11-10:tz480": "wnba",
-            }
-
-        async def scan_iter(self, match=None, count=100):
-            for key in list(self.store):
-                if match is None or fnmatch.fnmatch(key, match):
-                    yield key
-
-        async def delete(self, key):
-            self.store.pop(key, None)
-
-    service = CacheService()
-    fake = _Fake()
-    service._client = fake
-    deleted = asyncio.run(service.clear_daily_picks_cache(league="nba"))
-    assert deleted == 2
-    assert fake.store == {"daily_picks:wnba:2026-11-10:tz480": "wnba"}
-    wnba_deleted = asyncio.run(service.clear_daily_picks_cache(league="wnba"))
-    assert wnba_deleted == 1
-    assert fake.store == {}
 
 
 def test_nba_cache_route_deletes_the_versioned_key(monkeypatch, _open_limiter) -> None:
@@ -508,28 +432,3 @@ def test_nba_daily_picks_route_returns_both_fields(monkeypatch, _open_limiter) -
     assert all(row["injury_status_raw"] is None for row in others)
 
 
-def test_wnba_daily_picks_route_returns_both_fields_null(monkeypatch, _open_limiter) -> None:
-    """GET /api/wnba/daily-picks leaves both fields null beside a Doubtful row."""
-    doubtful = _entry("Doubtful")
-    _install_route(monkeypatch, doubtful["player"], [doubtful])
-    import app.services.daily_analysis as daily_analysis
-
-    monkeypatch.setattr(
-        daily_analysis, "_resolve_csv_service", lambda _league: _Csv()
-    )
-    response = _get(
-        "/api/wnba/daily-picks",
-        {
-            "date": "2026-11-10",
-            "tz_offset": 480,
-            "min_probability": 0.5,
-            "min_games": 5,
-        },
-    )
-    assert response.status_code == 200
-    body = response.json()
-    matched = [row for row in body["picks"] if row["player_name"] == doubtful["player"]]
-    assert matched
-    assert all(row["injury_status"] is None for row in matched)
-    assert all(row["injury_status_raw"] is None for row in matched)
-    assert all(row["combined_probability"] is None for row in matched)

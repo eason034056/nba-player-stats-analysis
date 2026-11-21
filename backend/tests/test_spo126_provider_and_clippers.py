@@ -182,15 +182,6 @@ class TestLaTeamCodes:
     def test_lakers_spellings_map_to_lal(self, spelling: str):
         assert canonical_team_code(spelling) == "LAL"
 
-    def test_wnba_codes_stay_on_the_wnba_table(self):
-        assert canonical_team_code("Lynx", league="wnba") == "MIN"
-        assert canonical_team_code("Wings", league="wnba") == "DAL"
-        assert canonical_team_code("LA Sparks", league="wnba") == "LAS"
-        assert canonical_team_code("Los Angeles Sparks", league="wnba") == "LAS"
-        assert canonical_team_code("Lynx") != "MIN"
-        assert canonical_team_code("LA Sparks") == "LASPARKS"
-        assert canonical_team_code("Sparks") == "SPARKS"
-        assert canonical_team_code("LA") == "LA"
 
 
 class TestTeamOnEventClippers:

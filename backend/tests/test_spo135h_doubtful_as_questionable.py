@@ -9,16 +9,12 @@ stays on the board.
 
 Odds shells are the recorded player_points capture. Only description
 changes, and only so a recorded injury name is the posted player.
-WNBA does not read this snapshot. A literal Doubtful word, the status
-on the recorded page, stays on the WNBA path exactly as this head
-already treats it.
 """
 
 from __future__ import annotations
 
 import asyncio
 
-from app.api.wnba import router as wnba_router
 from app.services.daily_analysis import (
     _with_nba_signal_verdicts,
     select_daily_picks,
@@ -200,83 +196,3 @@ def test_reads_still_null_an_out_player(monkeypatch) -> None:
     assert {item.combined_probability for item in blocked} == {None}
     assert all(item.signals is not None for item in blocked)
 
-
-def test_wnba_literal_doubtful_keeps_todays_blend_board_and_reads() -> None:
-    """WNBA still ignores a Doubtful word. These are the current values.
-
-    The odds capture is the recorded player_points body. Only the
-    description changes, to the recorded Doubtful player's name. The
-    word itself is that page's status. WNBA analysis does not copy it
-    onto the pick. The board still uses the historical rate. There is
-    still no WNBA reads route.
-    """
-    word = _recorded_doubtful_word()
-    doubtful = _entry("Doubtful")
-    assert doubtful["raw_status"] == word
-
-    from app.services.daily_analysis import DailyAnalysisService
-    import app.services.daily_analysis as daily_analysis
-    from tests.test_spo135c_bdl_injury_status import _async_return
-
-    service = DailyAnalysisService()
-    service._get_props_for_market = _async_return(_board_for(doubtful["player"]))
-
-    class _WnbaCsv:
-        def get_player_stats(self, **_kwargs):
-            return {
-                "p_over": 0.7,
-                "p_under": 0.2,
-                "n_games": 20,
-                "game_logs": [{"team": "Liberty", "value": 18}],
-            }
-
-    original = daily_analysis._resolve_csv_service
-    daily_analysis._resolve_csv_service = lambda league: _WnbaCsv()
-    try:
-        picks, _players, _props = asyncio.run(
-            service._analyze_single_event(
-                event_id="evt-w",
-                home_team="New York Liberty",
-                away_team="Connecticut Sun",
-                commence_time="2026-06-01T23:00:00Z",
-                league="wnba",
-                injury_entries=[
-                    {
-                        "player": doubtful["player"],
-                        "status": word,
-                        "position": doubtful.get("position") or "",
-                        "injury": doubtful.get("injury") or "",
-                        "source": "espn",
-                    }
-                ],
-            )
-        )
-    finally:
-        daily_analysis._resolve_csv_service = original
-
-    assert picks
-    points = _points(picks, doubtful["player"])
-    assert points.injury_status is None
-    assert points.combined_probability is None
-    assert points.signals is None
-    assert points.lineup_confirmed is None
-    assert points.probability == 0.7
-    assert select_daily_picks([points], league="wnba") == [points]
-
-    labeled = points.model_copy(update={"injury_status": word})
-    returned = _with_nba_signal_verdicts(
-        labeled,
-        league="wnba",
-        bookmakers_data=_board_for(doubtful["player"]),
-        game_logs=[{"team": "Liberty", "value": 18}],
-    )
-    assert returned.injury_status == word
-    assert returned.combined_probability is None
-    assert returned.signals is None
-    assert select_daily_picks([returned], league="wnba") == [returned]
-    low = returned.model_copy(update={"probability": 0.64})
-    assert select_daily_picks([low], league="wnba") == []
-
-    paths = [getattr(route, "path", "") for route in wnba_router.routes]
-    assert paths
-    assert not any(path.endswith("/reads") for path in paths)

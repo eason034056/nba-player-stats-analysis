@@ -196,32 +196,27 @@ class CacheService:
         When the CSV data is updated, or a lineup refresh lands, clear
         the picks cache so the next request parses the latest inputs.
 
-        SPO-35 added league scoping. WNBA keys stay
-        ``daily_picks:wnba:{date}:tz{offset}``. NBA keys are
-        ``daily_picks:nba:v2:{date}:tz{offset}``. The NBA sweep is
-        ``daily_picks:nba:*``, so v2 and the previous unversioned NBA
-        keys both match, and WNBA keys do not.
+        NBA keys are ``daily_picks:nba:v2:{date}:tz{offset}``. The NBA
+        sweep is ``daily_picks:nba:*``, so v2 and the previous
+        unversioned NBA keys both match. A key whose segment is not
+        ``nba`` and does not start with a digit is left in place.
 
-        Before SPO-35, NBA daily picks lived under
+        Before league scoping, NBA daily picks lived under
         ``daily_picks:{date}:tz{offset}`` and ``daily_picks:{date}``
         (no league segment). The date-scoped NBA delete route already
         removes those keys for one date. Callers of this method did
         not. An NBA clear therefore also scans ``daily_picks:[0-9]*``.
         The segment after ``daily_picks:`` must start with a digit, so
-        ``daily_picks:nba:*`` and ``daily_picks:wnba:*`` do not match
-        that second pattern. ``delete_pattern`` forwards the pattern
-        as Redis ``SCAN MATCH``. The test fake matches it with
-        ``fnmatch``, which honors ``[0-9]``.
+        ``daily_picks:nba:*`` does not match that second pattern.
+        ``delete_pattern`` forwards the pattern as Redis ``SCAN MATCH``.
+        The test fake matches it with ``fnmatch``, which honors ``[0-9]``.
 
-        A WNBA clear stays ``daily_picks:wnba:*`` only. ``league=None``
-        stays ``daily_picks:*``, which still deletes every league and
-        every pre-league key.
+        ``league=None`` stays ``daily_picks:*``.
 
         Args:
-            league: If provided (``"nba"`` / ``"wnba"``), restrict the
-                    sweep to that league. ``"nba"`` also drops the
-                    pre-league date keys. If ``None``, clear every
-                    ``daily_picks:*`` key.
+            league: ``"nba"`` sweeps NBA keys and the pre-league date
+                    keys. ``None`` clears every ``daily_picks:*`` key.
+                    Any other value raises ``ValueError``.
 
         Returns:
             int: number of keys deleted
@@ -229,10 +224,11 @@ class CacheService:
         if league is None:
             return await self.delete_pattern("daily_picks:*")
         normalized = league.lower()
-        deleted = await self.delete_pattern(f"daily_picks:{normalized}:*")
-        if normalized == "nba":
-            # Digit after the prefix is a date, not a league name.
-            deleted += await self.delete_pattern("daily_picks:[0-9]*")
+        if normalized != "nba":
+            raise ValueError(f"Unsupported league for daily-picks cache: {league!r}")
+        deleted = await self.delete_pattern("daily_picks:nba:*")
+        # Digit after the prefix is a date, not a league name.
+        deleted += await self.delete_pattern("daily_picks:[0-9]*")
         return deleted
 
     async def close(self):
@@ -311,29 +307,26 @@ class CacheService:
         """
         Construct the cache key for the event list.
 
-        Format: events:{league}:{date}:{regions}
-
-        The league segment isolates Redis namespaces between NBA / WNBA / future
-        leagues so the same date+region request for two leagues doesn't collide.
-        Default ``league="nba"`` preserves the historical NBA-only key shape —
-        every existing NBA caller continues to produce ``events:nba:...`` keys
-        with no source-code change.
+        Format: events:nba:{date}:{regions}
 
         Args:
             date: date string (YYYY-MM-DD)
             regions: region code (e.g., "us")
-            league: league segment, default "nba". Pass "wnba" for WNBA.
+            league: Must be ``nba``. The default is ``nba``.
 
         Returns:
             cache key
 
+        Raises:
+            ValueError: ``league`` is not ``nba``.
+
         Example:
             >>> CacheService.build_events_key("2026-01-14", "us")
             "events:nba:2026-01-14:us"
-            >>> CacheService.build_events_key("2026-05-13", "us", league="wnba")
-            "events:wnba:2026-05-13:us"
         """
-        return f"events:{league}:{date}:{regions}"
+        if league.lower() != "nba":
+            raise ValueError(f"Unsupported league for events cache: {league!r}")
+        return f"events:nba:{date}:{regions}"
 
     @staticmethod
     def build_props_key(

@@ -418,7 +418,7 @@ class BdlOddsProvider:
 
     @staticmethod
     def _require_nba(league: str) -> None:
-        """This provider does not serve WNBA. WNBA stays on The Odds API."""
+        """This provider serves NBA. Any other league raises."""
         key = (league or "").strip().lower()
         if key != "nba":
             raise ValueError(f"BdlOddsProvider only serves nba, not {league!r}")

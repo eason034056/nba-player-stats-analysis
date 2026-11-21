@@ -408,11 +408,8 @@ async def test_prewarm_skips_hot_keys_that_are_still_fresh():
 
 
 @pytest.mark.asyncio
-async def test_prewarm_skips_wnba_keys_when_the_flag_is_off(monkeypatch):
-    """WNBA hot keys stay in the set. The Odds API call is the part that stops."""
-    from app.settings import settings
-
-    monkeypatch.setattr(settings, "wnba_jobs_enabled", False)
+async def test_prewarm_drops_unregistered_league_members(monkeypatch):
+    """A hot member for an unregistered league is removed and not fetched."""
     cache = FakeCache()
     provider = FakeProvider([_recorded_gateway_payload(), _recorded_gateway_payload()])
     gateway = OddsMarketGateway(
@@ -451,5 +448,6 @@ async def test_prewarm_skips_wnba_keys_when_the_flag_is_off(monkeypatch):
 
     assert warmed == 1
     assert [call["sport"] for call in provider.calls] == ["basketball_nba"]
-    assert wnba_member in cache.zsets[HOT_KEYS_ZSET_KEY]
-    assert wnba_league_member in cache.zsets[HOT_KEYS_ZSET_KEY]
+    assert wnba_member not in cache.zsets[HOT_KEYS_ZSET_KEY]
+    assert wnba_league_member not in cache.zsets[HOT_KEYS_ZSET_KEY]
+    assert nba_member in cache.zsets[HOT_KEYS_ZSET_KEY]

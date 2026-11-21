@@ -508,20 +508,6 @@ class TestHistoryFields:
         assert any(log.home_or_away == "home" for log in response.game_logs)
         assert response.teammate_context
 
-    def test_wnba_history_does_not_gain_the_nba_fields(self, tmp_path):
-        path = tmp_path / "wnba.csv"
-        _write_csv(
-            path,
-            [_row("A'ja Wilson", "2025", "6/1/2025", "Aces", "Mercury", "30", pos="F")],
-        )
-        service = _service(path, league="wnba")
-        stats = service.get_player_stats("A'ja Wilson", "points", 20.0)
-        assert "season" not in stats
-        assert "season_mean" not in stats
-        assert "teammate_context" not in stats
-        assert "home_or_away" not in stats["game_logs"][0]
-        assert stats["n_games"] == 1
-        assert stats["teammates"] == []
 
 
 class TestDefenseRanks:

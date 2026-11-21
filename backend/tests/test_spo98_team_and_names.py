@@ -38,11 +38,6 @@ def nba_service():
     return service
 
 
-@pytest.fixture(scope="module")
-def wnba_service():
-    service = CSVPlayerHistoryService(league="wnba")
-    service.load_csv()
-    return service
 
 
 def _first_and_last_team(logs):
@@ -132,15 +127,6 @@ class TestRealCsvNames:
     def test_steph_is_not_an_implicit_alias_for_stephen(self, nba_service):
         assert nba_service.resolve_player_name("Steph Curry") is None
 
-    def test_wnba_apostrophe_and_substring(self, wnba_service):
-        assert wnba_service.resolve_player_name("Aja Wilson") == "A'ja Wilson"
-        assert wnba_service.resolve_player_name("Wilson") is None
-        stats = wnba_service.get_player_stats("Aja Wilson", "points", 15.5)
-        assert stats["player"] == "A'ja Wilson"
-        assert stats["n_games"] > 0
-        dd = wnba_service.player_dd_history("Aja Wilson")
-        assert dd["player"] == "A'ja Wilson"
-        assert dd["games"] > 0
 
 
 class TestTeamAttribution:
@@ -187,23 +173,6 @@ class TestTeamAttribution:
         assert team_from_game_logs(logs, "2026-01-15") == "Raptors"
         assert team_from_game_logs(logs, "2026-03-05") == "Jazz"
 
-    def test_wnba_traded_player_event_day(self, wnba_service):
-        label_changes = 0
-        for logs in wnba_service._cache.values():
-            first, last, n_teams = _first_and_last_team(logs)
-            if n_teams > 1 and first != last:
-                label_changes += 1
-        # Preseason rows are out of the canonical file. 24 players still
-        # change club between their earliest and latest remaining game.
-        assert label_changes == 24
-
-        logs = wnba_service._cache["DiJonai Carrington"]
-        chart = list(reversed(logs))
-        assert chart[0]["team"] == "Wings"
-        assert team_from_game_logs(chart, "2025-05-02") == "Wings"
-        assert team_from_game_logs(chart, "2025-06-01") == "Wings"
-        assert team_from_game_logs(chart, "2025-08-05") == "Lynx"
-        assert team_from_game_logs(chart) == "Lynx"
 
     def test_undated_single_log_keeps_that_team(self):
         # daily_analysis fixtures pass one team and no date.

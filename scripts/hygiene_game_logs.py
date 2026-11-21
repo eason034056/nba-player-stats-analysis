@@ -30,10 +30,9 @@ from app.services.game_log_hygiene import hygiene_csv_file  # noqa: E402
 
 
 def main() -> None:
-    """Rewrite both league files and print the before/after counts."""
+    """Rewrite the NBA game-log file and print the before/after counts."""
     targets = [
         (_ROOT / "data" / "nba_player_game_logs.csv", "nba"),
-        (_ROOT / "data" / "wnba_player_game_logs.csv", "wnba"),
     ]
     for path, league in targets:
         if not path.exists():

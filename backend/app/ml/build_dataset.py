@@ -214,7 +214,7 @@ def build_parser() -> argparse.ArgumentParser:
         type=Path,
         help="Parquet path. Metadata is written to <file>.meta.json.",
     )
-    parser.add_argument("--league", default="nba", choices=("nba", "wnba"))
+    parser.add_argument("--league", default="nba", choices=("nba",))
     return parser
 
 

@@ -251,34 +251,6 @@ def test_downloader_keeps_games_the_fixture_does_not_list(tmp_path: Path):
     assert "Future Player" in written
 
 
-class TestWnbaFixtureParity:
-    """The same join, on recorded WNBA events."""
-
-    def test_preseason_drops_regular_and_playoffs_stay(self):
-        events = _schedule()
-        rows = [
-            _raw_row(_event(_WNBA_PRESEASON_2026_04_25), "Wnba Player", scraped_season="2025"),
-            _raw_row(
-                _event(_WNBA_REGULAR_2026_05_08),
-                "Wnba Player",
-                pts="8",
-                scraped_season="2025",
-            ),
-            _raw_row(
-                _event(_WNBA_PLAYOFFS_2025_09_14),
-                "Wnba Player",
-                pts="9",
-                scraped_season="2026",
-            ),
-        ]
-        report = hygiene_rows(rows, events, league="wnba")
-        assert report.dropped[GAME_TYPE_PRESEASON] == 1
-        by_type = {row["GameType"]: row for row in report.rows}
-        assert set(by_type) == {GAME_TYPE_REGULAR, GAME_TYPE_PLAYOFFS}
-        assert by_type[GAME_TYPE_REGULAR]["Season"] == "2026"
-        assert by_type[GAME_TYPE_REGULAR]["Team"] == "Mystics"
-        assert by_type[GAME_TYPE_PLAYOFFS]["Season"] == "2025"
-        assert by_type[GAME_TYPE_PLAYOFFS]["GameType"] == GAME_TYPE_PLAYOFFS
 
 
 class TestOptInFlags:
@@ -338,19 +310,6 @@ class TestOptInFlags:
         }
         assert both["n_games"] == 3
 
-    def test_wnba_stats_flags_match_nba(self, tmp_path, monkeypatch):
-        path, player = self._player_file(tmp_path, "wnba")
-        monkeypatch.setenv("WNBA_CSV_DATA_PATH", str(path))
-        service = CSVPlayerHistoryService(league="wnba")
-        default = service.get_player_stats(player, "points", 15)
-        opted = service.get_player_stats(player, "points", 15, include_playoffs=True)
-        assert default["n_games"] == 1
-        assert default["game_logs"][0]["game_type"] == GAME_TYPE_REGULAR
-        assert opted["n_games"] == 2
-        assert {log["game_type"] for log in opted["game_logs"]} == {
-            GAME_TYPE_REGULAR,
-            GAME_TYPE_PLAYOFFS,
-        }
 
     def test_daily_picks_ignore_playoff_points(self, tmp_path, monkeypatch):
         # Nine regular-season games sit under the line. Twenty playoff games
@@ -466,13 +425,3 @@ class TestLoadCsvSkipsDroppedTypes:
         assert stats["mean"] == 12
         assert stats["game_logs"][0]["game_type"] == GAME_TYPE_REGULAR
 
-    def test_wnba_loader_skips_the_same_tokens(self, tmp_path, monkeypatch):
-        rows, columns, player = self._rows_for("wnba")
-        path = tmp_path / "wnba_player_game_logs.csv"
-        _write_csv(path, rows, columns)
-        monkeypatch.setenv("WNBA_CSV_DATA_PATH", str(path))
-        service = CSVPlayerHistoryService(league="wnba")
-        stats = service.get_player_stats(player, "points", 20)
-        assert stats["n_games"] == 1
-        assert stats["mean"] == 12
-        assert service._cache[player][0]["game_type"] == GAME_TYPE_REGULAR

@@ -322,13 +322,12 @@ class TestClearDailyPicksCache:
         fake_client.store["daily_picks:wnba:2026-11-11:tz-360"] = "wnba"
 
     @pytest.mark.asyncio
-    async def test_nba_clear_drops_legacy_date_keys_and_keeps_wnba(
+    async def test_nba_clear_drops_legacy_date_keys_and_keeps_other_league(
         self, cache_service, fake_client
     ):
         """NBA flush deletes v2, the unversioned NBA key, and pre-league keys.
 
-        Pre-SPO-35 keys are ``daily_picks:{date}:tz{offset}`` and
-        ``daily_picks:{date}``. ``daily_picks:wnba:*`` stays.
+        A leftover key under another league segment stays.
         """
         self._seed_mixed_daily_picks(fake_client)
 
@@ -337,24 +336,6 @@ class TestClearDailyPicksCache:
         assert deleted == 4
         assert fake_client.store == {
             "daily_picks:wnba:2026-11-11:tz-360": "wnba",
-        }
-
-    @pytest.mark.asyncio
-    async def test_wnba_clear_drops_only_the_wnba_key(
-        self, cache_service, fake_client
-    ):
-        """WNBA flush deletes ``daily_picks:wnba:*`` and leaves NBA and legacy keys."""
-        self._seed_mixed_daily_picks(fake_client)
-
-        deleted = await cache_service.clear_daily_picks_cache("wnba")
-
-        assert deleted == 1
-        assert "daily_picks:wnba:2026-11-11:tz-360" not in fake_client.store
-        assert fake_client.store == {
-            "daily_picks:2026-11-11:tz-360": "legacy-tz",
-            "daily_picks:2026-11-11": "legacy-date",
-            "daily_picks:nba:v2:2026-11-11:tz-360": "v2",
-            "daily_picks:nba:2026-11-11:tz-360": "nba",
         }
 
     @pytest.mark.asyncio
@@ -591,20 +572,13 @@ class TestBuildKeys:
             f"Default league must be 'nba'; got key={key!r}"
         )
 
-    def test_build_events_key_wnba_league(self):
-        """SPO-33: WNBA callers get a separate Redis namespace."""
-        key = CacheService.build_events_key("2026-05-13", "us", league="wnba")
-        assert key == "events:wnba:2026-05-13:us"
 
-    def test_build_events_key_league_namespace_isolation(self):
-        """
-        SPO-33: same date + region must NOT collide between leagues.
-        Without this, NBA + WNBA event-list caches would overwrite each
-        other in Redis whenever the same day has games in both leagues.
-        """
+    def test_build_events_key_rejects_an_unregistered_league(self):
+        """Only the NBA events key is built. Any other league raises."""
         nba_key = CacheService.build_events_key("2026-05-13", "us")
-        wnba_key = CacheService.build_events_key("2026-05-13", "us", league="wnba")
-        assert nba_key != wnba_key
+        assert nba_key == "events:nba:2026-05-13:us"
+        with pytest.raises(ValueError):
+            CacheService.build_events_key("2026-05-13", "us", league="other")
 
     def test_build_props_key_with_bookmakers(self):
         key = CacheService.build_props_key(

@@ -114,7 +114,7 @@ class NBAEvent(BaseModel):
     )
     lineup_status: Optional[EventLineupStatus] = Field(
         default=None,
-        description="Per-team confirmation for this event. Null on WNBA.",
+        description="Per-team confirmation for this event.",
     )
     top_read: Optional[TopRead] = Field(
         default=None,
@@ -306,7 +306,7 @@ class PlayerSuggestResponse(BaseModel):
     players: List[str] = Field(default_factory=list, description="List of player names")
     suggestions: List[PlayerSuggestion] = Field(
         default_factory=list,
-        description="Same order as players, with position. Empty on WNBA.",
+        description="Same order as players, with position.",
     )
     fetched_at: Optional[datetime] = Field(default=None, description="Cache data fetch time")
     data_age_seconds: Optional[int] = Field(default=None, description="Data age in seconds")
@@ -441,7 +441,7 @@ class PlayerHistoryResponse(BaseModel):
     teammates: List[str] = Field(default_factory=list, description="Teammate list (for star teammate selector)")
     teammate_context: List[TeammateContext] = Field(
         default_factory=list,
-        description="Same names as teammates, with games missed and a with/without split. Empty on WNBA.",
+        description="Same names as teammates, with games missed and a with/without split.",
     )
     opponent_filter: Optional[str] = Field(default=None, description="Current opponent filter")
     teammate_filter: Optional[List[str]] = Field(default=None, description="Current star teammate filter")
@@ -467,7 +467,7 @@ class PlayerHistoryResponse(BaseModel):
         description=(
             "Mean of the metric on the same season games as season_n_games. "
             "Ignores the threshold and the n window. Null when that season "
-            "has no games. Null on WNBA."
+            "has no games."
         ),
     )
     message: Optional[str] = Field(default=None, description="Additional message")
@@ -619,7 +619,7 @@ class DailyPick(BaseModel):
     player_team_code: str = Field(default="", description="Player's team code")
     position: Optional[str] = Field(
         default=None,
-        description="Pos on the player's most recent NBA game log. Null when unknown. Null on WNBA.",
+        description="Pos on the player's most recent NBA game log. Null when unknown.",
     )
     event_id: str = Field(..., description="Event ID")
     home_team: str = Field(..., description="Home team")
@@ -697,7 +697,7 @@ class DailyPick(BaseModel):
             "Out, Doubtful, Questionable, Probable, or Day-To-Day. Doubtful "
             "keeps the same blend as a Questionable row; only Out blocks it. "
             "Null when the snapshot is missing, stale, or "
-            "malformed, or when the name is missing or ambiguous. WNBA stays null. "
+            "malformed, or when the name is missing or ambiguous. "
             "The source word is injury_status_raw."
         ),
     )
@@ -708,8 +708,8 @@ class DailyPick(BaseModel):
             "Copied with no case change and no trimming, so Doubtful stays "
             "Doubtful. Null when that row is missing, which is the same "
             "cases that leave injury_status null: a missing, stale, or "
-            "malformed snapshot, or a missing or ambiguous name. WNBA stays "
-            "null. A stored payload that omits this field validates as null."
+            "malformed snapshot, or a missing or ambiguous name. "
+            "A stored payload that omits this field validates as null."
         ),
     )
     lineup_confirmed: Optional[bool] = Field(
@@ -721,12 +721,10 @@ class DailyPick(BaseModel):
     tier: Optional[Literal["Strong play", "Playable", "Lean"]] = Field(
         default=None,
         description=(
-            "Read tier. NBA uses combined_probability. "
+            "Read tier from combined_probability. "
             "Strong play >= 0.70, Playable >= 0.65 and below 0.70, "
             "Lean >= 0.56 and below 0.65. "
-            "Null when that probability is below 0.56, missing, or not finite. "
-            "WNBA has no combined_probability, so WNBA tier still uses "
-            "the historical probability and the same cutoffs."
+            "Null when that probability is below 0.56, missing, or not finite."
         ),
     )
     p_over: Optional[float] = Field(
@@ -742,19 +740,18 @@ class DailyPick(BaseModel):
         description=(
             "Mean of this metric in the current NBA season. Same games as "
             "player-history season_n_games. Ignores the line. Null when that "
-            "season has no games, and null on WNBA."
+            "season has no games."
         ),
     )
 
     # --- SPO-112 signal verdicts (self-contained; leave this block intact) ---
     # Separate from `probability` and from `tier`, `p_over`, and `p_under`.
-    # NBA picks carry four signals. The projection slot is omitted.
-    # WNBA leaves both fields null.
+    # Picks carry four signals. The projection slot is omitted.
     signals: list[PickSignal] | None = Field(
         default=None,
         description=(
-            "NBA signal verdicts in a fixed order. The projection slot is "
-            "omitted until a model writes one. None for WNBA"
+            "Signal verdicts in a fixed order. The projection slot is "
+            "omitted until a model writes one."
         ),
     )
     combined_probability: float | None = Field(
