@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import copy
 import json
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 from pathlib import Path
 
 import pytest
@@ -24,6 +24,10 @@ from app.services.lineup_provider_bdl import (
     slate_games_cache_key,
 )
 from app.services.lineup_service import confirmation_status, lineup_service
+from app.services.lineup_source_support import (
+    normalize_balldontlie_player_candidate,
+    normalize_rotogrinders_player_candidate,
+)
 
 FIXTURES = Path(__file__).resolve().parent / "fixtures" / "bdl"
 
@@ -232,6 +236,52 @@ async def test_unknown_starter_name_is_unresolved(monkeypatch):
     assert por["confidence"] == "low"
     assert por["status"] == "partial"
     assert por["source_disagreement"] is False
+
+
+@pytest.mark.asyncio
+async def test_balldontlie_name_keeps_a_position_token_and_a_digit(monkeypatch):
+    """A projected-lineup name is not cut by the RotoGrinders salary cleaner."""
+    position_name = "Tyrese Haliburton PG"
+    digit_name = "Shai Gilgeous-Alexander 2"
+    assert normalize_rotogrinders_player_candidate(position_name) == "Tyrese Haliburton"
+    assert normalize_balldontlie_player_candidate(position_name) == position_name
+    assert normalize_rotogrinders_player_candidate(digit_name) == "Shai Gilgeous-Alexander"
+    assert normalize_balldontlie_player_candidate(digit_name) == digit_name
+
+    lineups = copy.deepcopy(_response("projected_lineups_21718080.json"))
+    lineups["data"][0]["lineup"][0]["player"]["first_name"] = "Tyrese"
+    lineups["data"][0]["lineup"][0]["player"]["last_name"] = "Haliburton PG"
+    lineups["data"][1]["lineup"][0]["player"]["first_name"] = "Shai"
+    lineups["data"][1]["lineup"][0]["player"]["last_name"] = "Gilgeous-Alexander 2"
+    client = _FakeClient(_response("games_2026-11-10.json"), lineups)
+    _bind_client(monkeypatch, client)
+    _install_cache(monkeypatch, _MemoryCache())
+
+    fetched = await fetch_nba_lineups("2026-11-10")
+
+    assert position_name in fetched.lineups["POR"]["starters"]
+    assert digit_name in fetched.lineups["OKC"]["starters"]
+
+
+@pytest.mark.asyncio
+async def test_cached_empty_games_list_is_refetched(monkeypatch):
+    """A stored ``{"games": []}`` entry is a miss, not a 36-hour slate."""
+    client = _FakeClient(
+        _response("games_2026-11-10.json"),
+        _response("projected_lineups_21718080.json"),
+    )
+    cache = _MemoryCache()
+    cache.values[slate_games_cache_key("2026-11-10")] = {"games": []}
+    _bind_client(monkeypatch, client)
+    _install_cache(monkeypatch, cache)
+
+    fetched = await fetch_nba_lineups("2026-11-10")
+
+    assert len(client.game_calls) == 1
+    assert "POR" in fetched.lineups
+    stored = cache.values[slate_games_cache_key("2026-11-10")]
+    assert isinstance(stored, dict)
+    assert stored["games"]
 
 
 @pytest.mark.asyncio

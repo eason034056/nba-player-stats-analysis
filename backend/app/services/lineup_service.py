@@ -210,22 +210,30 @@ class LineupConsensusService:
         error_message = None
         source_statuses: dict[str, Any] = {}
         lineups: dict[str, dict[str, Any]] = {}
+        fetched_count = 0
 
         try:
             fetched = await fetch_nba_lineups(date)
             lineups = fetched.lineups
+            fetched_count = len(lineups)
             source_statuses[LINEUP_SOURCE] = {
                 "status": "success",
-                "team_count": len(lineups),
+                "team_count": fetched_count,
                 "team_misses": fetched.misses,
             }
 
-            await self._write_to_redis(date, lineups)
-            try:
-                await self._write_to_postgres(date, lineups)
-                await self._delete_omitted_snapshots(date, lineups)
-            except Exception as exc:
-                print(f"⚠️ 寫入 lineup PostgreSQL 失敗（不影響主流程）: {type(exc).__name__}")
+            # An empty games page or an empty projected_lineups page is
+            # "not published yet." Skip the Redis overwrite and the
+            # snapshot prune so a pre-release poll cannot wipe a slate
+            # that was already stored. Prune only when at least one team
+            # came back.
+            if lineups:
+                await self._write_to_redis(date, lineups)
+                try:
+                    await self._write_to_postgres(date, lineups)
+                    await self._delete_omitted_snapshots(date, lineups)
+                except Exception as exc:
+                    print(f"⚠️ 寫入 lineup PostgreSQL 失敗（不影響主流程）: {type(exc).__name__}")
 
             try:
                 refresh = await self._write_projected_lineups(fetched)
@@ -255,7 +263,7 @@ class LineupConsensusService:
             duration_ms = int((time.time() - started) * 1000)
             await self._log_fetch(
                 date=date,
-                team_count=len(lineups),
+                team_count=fetched_count,
                 status=status,
                 error_message=error_message,
                 duration_ms=duration_ms,
@@ -328,12 +336,13 @@ class LineupConsensusService:
         await db_service.executemany(UPSERT_LINEUP_SQL, args_list)
 
     async def _delete_omitted_snapshots(self, date: str, lineups: dict[str, dict[str, Any]]) -> None:
-        """Drop NBA snapshot rows for teams this fetch did not return.
+        """Drop NBA snapshot rows for teams a published fetch did not return.
 
-        An empty slate deletes every NBA row for that date, so a later
-        cache miss does not keep a badge for a lineup BALLDONTLIE omitted.
+        ``lineups`` has to name at least one team. An empty dict is an
+        unpublished slate, and deleting on it would remove every NBA row
+        for that date.
         """
-        if not db_service.is_connected:
+        if not db_service.is_connected or not lineups:
             return
         await db_service.execute(
             """

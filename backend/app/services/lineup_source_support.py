@@ -186,6 +186,26 @@ def normalize_rotowire_player_candidate(raw_name: str) -> str | None:
     return _normalize_spaces(" ".join(tokens))
 
 
+def normalize_balldontlie_player_candidate(raw_name: str) -> str | None:
+    """Keep a BALLDONTLIE ``first_name`` plus ``last_name`` whole.
+
+    The RotoGrinders cleaner stops at a position token or a digit. Those
+    cuts belong to a scraped salary table. A projected-lineup name is
+    already two fields joined by one space, so this only collapses
+    whitespace and rejects a string with no letter.
+
+    Args:
+        raw_name: Display name built from the recorded player object.
+
+    Returns:
+        The name, or ``None`` when nothing alphabetic remains.
+    """
+    candidate = _normalize_spaces(raw_name)
+    if not candidate or not re.search(r"[A-Za-z]", candidate):
+        return None
+    return candidate
+
+
 def normalize_rotogrinders_player_candidate(raw_name: str) -> str | None:
     candidate = clean_player_name(raw_name)
     if not candidate:
@@ -327,11 +347,12 @@ def normalize_source_players(
     warnings: list[str] = []
 
     for raw_name in raw_names:
-        candidate = (
-            normalize_rotowire_player_candidate(raw_name)
-            if source == "rotowire"
-            else normalize_rotogrinders_player_candidate(raw_name)
-        )
+        if source == "balldontlie":
+            candidate = normalize_balldontlie_player_candidate(raw_name)
+        elif source == "rotowire":
+            candidate = normalize_rotowire_player_candidate(raw_name)
+        else:
+            candidate = normalize_rotogrinders_player_candidate(raw_name)
         if not candidate:
             continue
 

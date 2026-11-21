@@ -8,11 +8,13 @@ add query parameters. The recorded ``game_ids[]`` request sends no
 slate of more than 12 games is split into calls of at most 12 ids (24
 team rows, under that page).
 
-A team missing from ``data`` produces no ``TeamLineup``. Names go through
-``normalize_source_players`` and ``make_source_lineup``. Confidence is
-``medium`` for a complete five with no unresolved name, and ``low``
-otherwise. There is no second source, so disagreement is false and
-confidence is never ``high``.
+A team missing from a published ``data`` list produces no ``TeamLineup``.
+An empty ``data`` list, or an empty games list, means the slate is not
+published yet: nothing is cached as "no games", and the caller leaves
+stored lineups in place. Names go through ``normalize_source_players``
+and ``make_source_lineup``. Confidence is ``medium`` for a complete five
+with no unresolved name, and ``low`` otherwise. There is no second
+source, so disagreement is false and confidence is never ``high``.
 """
 
 from __future__ import annotations
@@ -178,7 +180,12 @@ def games_from_payload(payload: object) -> list[dict[str, Any]]:
 
 
 def _parse_cached_games(raw: object) -> list[dict[str, Any]] | None:
-    """Return a cached slate, or None when the caller should read again."""
+    """Return a cached slate, or None when the caller should read again.
+
+    An empty list is not a slate. BALLDONTLIE returns that before the
+    day's games are published, and caching it would hide the real slate
+    for the rest of the TTL.
+    """
     if not isinstance(raw, dict):
         return None
     games = raw.get("games")
@@ -201,6 +208,8 @@ def _parse_cached_games(raw: object) -> list[dict[str, Any]] | None:
                 "away_code": away_code if isinstance(away_code, str) else "",
             }
         )
+    if not parsed:
+        return None
     return parsed
 
 
@@ -383,6 +392,8 @@ async def _load_slate_games(
         return parsed
     payload = await client.list_games(dates=[date], per_page=100)
     games = games_from_payload(payload)
+    if not games:
+        return games
     try:
         await cache.set(key, {"games": games}, SLATE_GAMES_CACHE_TTL_SECONDS)
     except Exception:
@@ -420,8 +431,8 @@ async def fetch_nba_lineups(
     A passed ``client`` is left open. The default client is closed here.
     A fresh slate-games cache skips ``list_games``. ``list_projected_lineups``
     still runs, because the lineup itself is not stored under that key.
-    An empty games list returns no lineups and does not call
-    ``list_projected_lineups``.
+    An empty games list returns no lineups, does not call
+    ``list_projected_lineups``, and is not written to the slate cache.
 
     Args:
         date: Eastern slate date, ``YYYY-MM-DD``.

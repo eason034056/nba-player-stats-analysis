@@ -20,7 +20,8 @@ A complete five with no unresolved name is `confidence = "medium"`. A short five
 | Scrapers | `lineup_provider_rotowire.py`, `lineup_provider_rotogrinders.py` | Deleted. |
 | Dependency | `backend/requirements.txt` | Removed the `requests` pin. Nothing else in the backend imports it. |
 | Fixture | `backend/tests/fixtures/bdl/projected_lineups_21718081.json` | Recorded empty body, copied unchanged. |
-| Tests | `backend/tests/test_spo130h_bdl_lineups.py` | Recorded OKC@POR, empty WAS@IND, chunking, unresolved name, parent / missing-parent writes. |
+| Tests | `backend/tests/test_spo130h_bdl_lineups.py` | Recorded OKC@POR, empty WAS@IND, chunking, unresolved name, parent / missing-parent writes, BDL name cleaner, empty slate-cache miss. |
+| Tests | `backend/tests/test_spo130h_qa_empty_snapshots.py` | Recorded empty projected_lineups page and recorded empty games page leave stored snapshots in place. |
 | Tests | `test_lineup_service.py`, `test_lineup_consensus.py`, `test_lineup_live_validation.py` | Scrape tests removed. Live call is `RUN_INTEGRATION=1` and does not print the key. |
 | Comment | `backend/app/api/nba.py` | Events list still uses `peek_lineups`. The comment no longer says scrape. |
 | Docs | `CLAUDE.md`, `README.md` | Live sources are The Odds API and BALLDONTLIE. |
@@ -38,7 +39,9 @@ The SPO-144 tip key stays `{status, tips_utc}`. Game ids sit on `lineup:v1:nba:s
 
 `team_lineup_snapshots` remains the live read. 002 is a second write for the point-in-time tables, and only when the foreign keys can succeed. `projected_lineup_players` references `players`, so a missing player skips that version the same way a missing game does. `source_refreshes.complete` is true only when every mapped version was written. An empty `data` list writes no 002 rows and does not mark the refresh complete. `game_lineups` is the post-game starter table and is not written here.
 
-A team absent from `data` gets no lineup row. Snapshot rows for that date that this fetch did not return are deleted, so a cold events read does not keep a badge after BALLDONTLIE has nothing. `"expected"` is still not `"confirmed"`. No recorded body contains that status, so the test builds a snapshot dict instead of an HTTP envelope.
+A published slate that names at least one team still drops the NBA teams that slate left out. An empty `projected_lineups` page, or an empty `list_games` page, is "not published yet." That poll does not overwrite Redis `lineups:nba:<date>` with `{}`, does not delete `team_lineup_snapshots`, does not insert `projected_lineups` or `source_refreshes`, and does not cache `{"games": []}`. A slate cache that is already `{"games": []}` is treated as a miss and refetched. `"expected"` is still not `"confirmed"`. No recorded body contains that status, so the test builds a snapshot dict instead of an HTTP envelope.
+
+BALLDONTLIE names go through `normalize_balldontlie_player_candidate`, which only collapses whitespace. The RotoGrinders cleaner still stops at a position token or a digit, and it is no longer used for `source="balldontlie"`.
 
 ## Tests
 
@@ -46,7 +49,7 @@ A team absent from `data` gets no lineup row. Snapshot rows for that date that t
 cd backend && DATABASE_URL=<local throwaway> python -m pytest -q --tb=line
 ```
 
-`1825 passed, 35 skipped, 4 xfailed, 0 failed` in 97.40s. The throwaway server is local. The suite was not pointed at `127.0.0.1:5434`.
+`1829 passed, 35 skipped, 4 xfailed, 0 failed` in 97.52s. The throwaway server is local. The suite was not pointed at `127.0.0.1:5434`.
 
 The new tests use `projected_lineups_21718080.json` with `games_2026-11-10.json`, and `projected_lineups_21718081.json` with `games_2026-11-11.json`. OKC and POR are confirmed fives, `sources` is `["balldontlie"]`, disagreement is false, and a `team_lineup_snapshots` row is written. The empty body leaves `/api/nba/lineups` empty and the WAS@IND badge null. An abbreviated name that is not on the roster lands in `unresolved_starters`. Thirteen copies of a recorded game are requested as 12 ids, then 1. A second fetch on the same slate does not call `list_games` again. With parents present, the poll writes 2 `projected_lineups` rows and 10 players and `source_refreshes.complete` is true. With the game missing, or with players missing, the live snapshot still has both teams, `projected_lineups` stays empty, and `complete` is false. `game_lineups` stays empty.
 
@@ -55,6 +58,11 @@ The new tests use `projected_lineups_21718080.json` with `games_2026-11-10.json`
 ```
 AssertionError: assert 'projected' == 'confirmed'
 ```
+
+QA follow-up, each mutation restored after the run:
+
+- Writing Redis `{}` and deleting omitted snapshots on an empty page failed both tests in `test_spo130h_qa_empty_snapshots.py`. The empty projected_lineups case deleted the IND and WAS rows (`snapshots` left POR and the WNBA NYK row) and set `redis_teams` to `[]`. The empty games case did the same delete and set `redis_lineups` to `{}`.
+- Sending `balldontlie` names through `normalize_rotogrinders_player_candidate` failed `test_balldontlie_name_keeps_a_position_token_and_a_digit`: `assert 'Tyrese Haliburton PG' in ['Tyrese Haliburton', ...]`.
 
 The live integration test is skipped unless `RUN_INTEGRATION=1` and `BALLDONTLIE_API_KEY` are set. It was not run here. It does not print the key.
 
@@ -71,4 +79,4 @@ The live integration test is skipped unless `RUN_INTEGRATION=1` and `BALLDONTLIE
 
 | 票 | PR | 結果 |
 |---|---|---|
-| SPO-130h | 本 PR | NBA 先發改讀 BALLDONTLIE `GET /nba/v1/projected_lineups`。RotoWire 與 RotoGrinders 刮頁刪除，沒有 fallback。`/api/nba/lineups` 和賽事 badge 仍讀 `team_lineup_snapshots`。002 的 `projected_lineups` 只在 `games`、`teams`、`players` 都已存在時寫入；缺 parent 不讓這次抓取失敗，也不把 `source_refreshes.complete` 記成 true。沒有改 001/002，沒有寫 `game_lineups`。單一來源的完整五人信心是 `medium`，人數不足或有未解析名字是 `low`。SPO-144 的三個 job 與 tip cache 沒動。 |
+| SPO-130h | 本 PR | NBA 先發改讀 BALLDONTLIE `GET /nba/v1/projected_lineups`。RotoWire 與 RotoGrinders 刮頁刪除，沒有 fallback。`/api/nba/lineups` 和賽事 badge 仍讀 `team_lineup_snapshots`。002 的 `projected_lineups` 只在 `games`、`teams`、`players` 都已存在時寫入；缺 parent 不讓這次抓取失敗，也不把 `source_refreshes.complete` 記成 true。空的 `projected_lineups` 或空的 `list_games` 代表尚未公布：不覆寫 Redis、不刪當天快照、不快取空賽程。已公布且至少有一隊時，才刪掉這次沒回傳的 NBA 球隊。沒有改 001/002，沒有寫 `game_lineups`。單一來源的完整五人信心是 `medium`，人數不足或有未解析名字是 `low`。BDL 人名不再走 RotoGrinders 的職位/數字裁切。SPO-144 的三個 job 與 tip cache 沒動。 |
