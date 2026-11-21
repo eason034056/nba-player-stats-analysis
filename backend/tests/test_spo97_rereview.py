@@ -1,9 +1,9 @@
 """SPO-97 re-review gaps: season windows, Cup notes, and sample leaks.
 
-Season documents and the Fever schedule are curl recordings. They live
-outside the ``*_team_*_schedule_*_type_*.json`` glob next to
-``schedule_events.json``, so loading them here does not change the
-schedule the hygiene script joins against.
+Season documents are curl recordings. They live outside the
+``*_team_*_schedule_*_type_*.json`` glob next to ``schedule_events.json``,
+so loading them here does not change the schedule the hygiene script
+joins against.
 """
 
 from __future__ import annotations
@@ -122,7 +122,7 @@ async def _covering(league: str, dates: set[str]) -> list[int]:
 
 
 class TestSeasonOverlap:
-    """Inclusive start/end, and the NBA ending-year vs WNBA calendar-year ids.
+    """Inclusive start/end on the NBA ending-year season ids.
 
     The recorded timestamps are early-morning UTC (``T07:00Z`` at the start,
     ``T06:59Z`` or ``T07:59Z`` at the end). The date prefix is therefore the
@@ -166,19 +166,13 @@ class TestSeasonOverlap:
 async def test_live_season_windows_match_the_recorded_boundaries():
     """The recorded start/end dates still select the same season years live."""
     nba_open = _prefix(_season_doc("nba", 2026), "startDate")
-    wnba_dates = {
-        _prefix(_season_doc("wnba", 2025), "endDate"),
-        _prefix(_season_doc("wnba", 2026), "startDate"),
-    }
     async with httpx.AsyncClient(
         timeout=30.0,
         headers={"User-Agent": USER_AGENT},
         follow_redirects=True,
     ) as client:
         nba_years = await _season_years_covering(client, "nba", {nba_open})
-        wnba_years = await _season_years_covering(client, "wnba", wnba_dates)
     assert nba_years == [2026]
-    assert set(wnba_years) == {2025, 2026}
 
 
 def _csv_date(event: dict) -> str:
@@ -217,18 +211,6 @@ def _joined_row(event: dict, player: str, *, pts: str = "10") -> dict[str, str]:
     }
 
 
-def _fever_event(event_id: str) -> dict:
-    """One compact event from the recorded Fever 2025 regular-season schedule."""
-    payload = json.loads(
-        (_ESPN / "recorded" / "wnba_team_5_schedule_2025_type_2.json").read_text(
-            encoding="utf-8"
-        )
-    )
-    assert str(payload["team"]["id"]) == "5"
-    raw = next(event for event in payload["events"] if str(event.get("id")) == event_id)
-    return compact_event("wnba", raw)
-
-
 def test_nba_cup_notes_keep_group_through_semifinals_regular():
     """A Cup headline is not enough. Only the CC championship leaves the sample.
 
@@ -264,10 +246,10 @@ def test_nba_cup_notes_keep_group_through_semifinals_regular():
 def test_recorded_schedules_label_only_cc_finals_as_cup_championship():
     """Pool games, quarterfinals, and semifinals stay regular season.
 
-    The three NBA curl files and the Fever recording are unmodified
-    site-API responses. A Standard competition that mentions the Cup
-    is not the final. Only abbreviation CC / slug commissioners-cup
-    becomes ``cup_championship``, and those ids are the three finals.
+    The three NBA curl files are unmodified site-API responses. A
+    Standard competition that mentions the Cup is not the final. Only
+    abbreviation CC / slug commissioners-cup becomes ``cup_championship``,
+    and those ids are the two finals in these files.
     """
     sources = (
         (_ESPN / "nba_team_15_schedule_2025_type_2.json", "nba"),

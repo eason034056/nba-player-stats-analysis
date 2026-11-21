@@ -1,7 +1,7 @@
 """Teammate absence, starter stand-in, and the player's own injury status.
 
-NBA only. A WNBA export keeps the older dataset columns and leaves these
-ones empty; this module does not grow a second league.
+NBA only. These columns are filled on an NBA row. This module does not
+grow a second league.
 
 ``team_absences`` is the one function for a training row and for a live
 read. The live caller passes the narrow bundle from

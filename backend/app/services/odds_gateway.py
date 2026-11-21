@@ -319,11 +319,6 @@ class OddsMarketGateway:
             if member_league is None:
                 await self.cache.remove_sorted_set_member(HOT_KEYS_ZSET_KEY, member)
                 continue
-            # A stored member whose league is wnba is not warmed.
-            # basketball_wnba is not a registered sport key, so
-            # _league_from_hot_key already dropped that shape above.
-            if member_league == "wnba":
-                continue
             normalized_markets = self._normalize_csv(context["markets"])
             normalized_books = self._normalize_bookmakers(context["bookmakers"])
             stored_provider = context.get("provider")

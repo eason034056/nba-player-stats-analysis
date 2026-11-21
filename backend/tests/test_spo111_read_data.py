@@ -2,7 +2,7 @@
 
 Default NBA storage still keeps a historical side at or above 0.56 and
 samples down to 5 games. The published board is now combined_probability
->= 0.65 and n_games >= 10 (SPO-121). WNBA storage stays on the old floors.
+>= 0.65 and n_games >= 10 (SPO-121).
 """
 
 import asyncio
