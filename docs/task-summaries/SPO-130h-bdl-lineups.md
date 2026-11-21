@@ -15,8 +15,8 @@ A complete five with no unresolved name is `confidence = "medium"`. A short five
 |---|---|---|
 | Provider | `backend/app/services/lineup_provider_bdl.py` | New. Calls existing `BdlClient.list_projected_lineups`. Chunks game ids at 12. Maps a recorded row onto `TeamLineup` through `normalize_source_players` / `make_source_lineup`. |
 | Slate ids | same file | Sibling Redis key `lineup:v1:nba:slate-games:<date>`, TTL 36 hours, filled by one `list_games(dates=[slate], per_page=100)`. The tip cache is unchanged. |
-| Live store | `backend/app/services/lineup_service.py` | `fetch_and_store` writes the BDL slate directly. Drops snapshot rows for teams this fetch did not return. Optional 002 write after the live write. |
-| Name helpers | `backend/app/services/lineup_source_support.py` | Kept. HTML-only scrape helpers removed. `TEAM_ALIASES` and the roster cache stay. |
+| Live store | `backend/app/services/lineup_service.py` | `fetch_and_store` writes the BDL slate directly. An empty page leaves Redis and snapshots alone. A published slate drops NBA teams it did not return. Optional 002 write after the live write. |
+| Name helpers | `backend/app/services/lineup_source_support.py` | Kept. HTML-only scrape helpers removed. BDL names use `normalize_balldontlie_player_candidate` and are not cut at a position token or a digit. |
 | Scrapers | `lineup_provider_rotowire.py`, `lineup_provider_rotogrinders.py` | Deleted. |
 | Dependency | `backend/requirements.txt` | Removed the `requests` pin. Nothing else in the backend imports it. |
 | Fixture | `backend/tests/fixtures/bdl/projected_lineups_21718081.json` | Recorded empty body, copied unchanged. |
@@ -49,7 +49,7 @@ BALLDONTLIE names go through `normalize_balldontlie_player_candidate`, which onl
 cd backend && DATABASE_URL=<local throwaway> python -m pytest -q --tb=line
 ```
 
-`1829 passed, 35 skipped, 4 xfailed, 0 failed` in 97.52s. The throwaway server is local. The suite was not pointed at `127.0.0.1:5434`.
+After merging `origin/dev` (`439cbe7`): `1833 passed, 35 skipped, 4 xfailed, 0 failed` in 94.83s. The same run before that merge, on the empty-page fix alone, was `1829 passed, 35 skipped, 4 xfailed`. The throwaway server is local. The suite was not pointed at `127.0.0.1:5434`.
 
 The new tests use `projected_lineups_21718080.json` with `games_2026-11-10.json`, and `projected_lineups_21718081.json` with `games_2026-11-11.json`. OKC and POR are confirmed fives, `sources` is `["balldontlie"]`, disagreement is false, and a `team_lineup_snapshots` row is written. The empty body leaves `/api/nba/lineups` empty and the WAS@IND badge null. An abbreviated name that is not on the roster lands in `unresolved_starters`. Thirteen copies of a recorded game are requested as 12 ids, then 1. A second fetch on the same slate does not call `list_games` again. With parents present, the poll writes 2 `projected_lineups` rows and 10 players and `source_refreshes.complete` is true. With the game missing, or with players missing, the live snapshot still has both teams, `projected_lineups` stays empty, and `complete` is false. `game_lineups` stays empty.
 
