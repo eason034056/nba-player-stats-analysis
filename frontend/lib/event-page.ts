@@ -120,20 +120,19 @@ function statusChip(
 }
 
 /**
- * NBA chips come from `NBAEvent.lineup_status`. WNBA keeps the lineup
- * snapshot word, because WNBA events do not carry `lineup_status`.
+ * Chips come from `NBAEvent.lineup_status`.
  */
 export function eventLineupChips(args: {
-  league: LeagueSegment;
+  league?: LeagueSegment;
   awayAbbr: string;
   homeAbbr: string;
   status: EventLineupStatus | null | undefined;
   awayLineup: TeamLineup | null;
   homeLineup: TeamLineup | null;
 }): LineupChipModel[] {
-  if (args.league !== "nba") {
-    return [lineupChip(args.awayAbbr, args.awayLineup), lineupChip(args.homeAbbr, args.homeLineup)];
-  }
+  void args.league;
+  void args.awayLineup;
+  void args.homeLineup;
   return [statusChip(args.awayAbbr, args.status?.away), statusChip(args.homeAbbr, args.status?.home)];
 }
 
@@ -152,24 +151,22 @@ function etDateLabel(iso: string): string | null {
 
 /**
  * Web clock is "Tue, Nov 10 · 7:30 PM ET" when the event carries an ET
- * face. WNBA and a payload with no `commence_time_et` keep `eventWhen`,
- * which does not invent a zone label.
+ * face. A payload with no `commence_time_et` keeps `eventWhen`, which
+ * does not invent a zone label.
  */
 export function eventClock(
   event: Pick<NBAEvent, "commence_time" | "commence_time_et" | "display_tz"> | null | undefined,
-  league: LeagueSegment,
+  _league?: LeagueSegment,
 ): { web: string | null; mobile: string | null } {
   if (!event) return { web: null, mobile: null };
-  if (league === "nba") {
-    const zone = event.display_tz?.trim().toUpperCase() ?? "";
-    const et = event.commence_time_et?.trim() ?? "";
-    if (et && (zone === "" || zone === "ET")) {
-      const clock = etWallClock(et);
-      const day = etDateLabel(et);
-      if (clock && day) {
-        const suffix = zone === "ET" ? " ET" : "";
-        return { web: `${day} · ${clock}${suffix}`, mobile: `${clock}${suffix}` };
-      }
+  const zone = event.display_tz?.trim().toUpperCase() ?? "";
+  const et = event.commence_time_et?.trim() ?? "";
+  if (et && (zone === "" || zone === "ET")) {
+    const clock = etWallClock(et);
+    const day = etDateLabel(et);
+    if (clock && day) {
+      const suffix = zone === "ET" ? " ET" : "";
+      return { web: `${day} · ${clock}${suffix}`, mobile: `${clock}${suffix}` };
     }
   }
   const web = eventWhen(event.commence_time);
@@ -416,7 +413,7 @@ function projectionSignal(input: SignalInput): Omit<ReadSignal, "verdict"> {
     return {
       key: "projection",
       label: "Projection",
-      detail: "Projection is not available for WNBA.",
+      detail: "Projection is not on this response.",
       value: null,
       meter: null,
     };
@@ -509,7 +506,7 @@ export interface EventPlayerRow {
   probability: number | null;
   /** True only when injury_status is Out. A raw word of "out" does not set this. */
   listedOut: boolean;
-  /** NBA injury chip. Null on WNBA and when the player has no status word. */
+  /** Injury chip. Null when the player has no status word. */
   injury: InjuryTag | null;
 }
 
@@ -654,12 +651,12 @@ export function eventPlayerRows(args: {
 
   const rows = names.map((name) => {
     const pick = byName.get(name.toLowerCase()) ?? null;
-    const read = args.league === "nba" ? readForPlayer(args.reads, name) : null;
-    const bulk = args.league === "nba" ? bulkForPlayer(args.bulkPlayers, name) : null;
+    const read = readForPlayer(args.reads, name);
+    const bulk = bulkForPlayer(args.bulkPlayers, name);
     const teamFromPick = pick?.player_team_code?.trim()
       ? pick.player_team_code
       : pick
-        ? teamAbbr(pick.player_team, args.league) || null
+        ? teamAbbr(pick.player_team) || null
         : null;
     const onAway = onRoster(name, args.awayLineup);
     const onHome = onRoster(name, args.homeLineup);
@@ -672,9 +669,9 @@ export function eventPlayerRows(args: {
     // team_code is held to the same rule.
     const team = lineupTeam || inGame(teamFromPick) || inGame(bulk?.team_code?.trim());
     const selected = namesMatch(name, args.selectedName);
-    const readsStatus = args.league === "nba" ? args.readsStatus ?? "ready" : "ready";
-    const sourcePick = args.league === "nba" ? pick : null;
-    const sourceRead = args.league === "nba" && sourcePick == null ? read : null;
+    const readsStatus = args.readsStatus ?? "ready";
+    const sourcePick = pick;
+    const sourceRead = sourcePick == null ? read : null;
     const line =
       sourcePick != null
         ? sourcePick.threshold
@@ -685,24 +682,23 @@ export function eventPlayerRows(args: {
             : selected && args.postedLine != null
               ? args.postedLine
               : null;
-    const out =
-      args.league === "nba" && isPlayerOutInGame(args.picks, args.eventId, name);
+    const out = isPlayerOutInGame(args.picks, args.eventId, name);
     const nba = out
       ? { text: "Out", rate: null }
       : sourcePick != null
         ? nbaLeanFromPick(sourcePick)
         : sourceRead != null
           ? nbaLeanFromRead(sourceRead)
-          : args.league === "nba" && readsStatus === "loading"
+          : readsStatus === "loading"
             ? { text: "Loading", rate: null }
-            : args.league === "nba" && readsStatus === "error"
+            : readsStatus === "error"
               ? { text: "Unavailable", rate: null }
               : null;
     const tier = out
       ? null
-      : args.league === "nba" && sourcePick
+      : sourcePick
         ? tierFromBackend(sourcePick.tier)
-        : args.league === "nba" && sourceRead
+        : sourceRead
           ? tierFromBackend(sourceRead.tier)
           : null;
     return {
@@ -711,23 +707,14 @@ export function eventPlayerRows(args: {
       position: pick?.position?.trim() || bulk?.position?.trim() || null,
       tier,
       lineText: line == null ? "—" : formatThreshold(line),
-      leanText: out
-        ? "Out"
-        : nba
-          ? nba.text
-          : pick
-            ? `${pick.direction === "under" ? "U" : "O"} ${formatPercent(pick.probability)}`
-            : "No read",
-      hasLean: out ? false : nba != null || pick != null,
-      probability: out ? null : nba?.rate ?? pick?.probability ?? null,
+      leanText: out ? "Out" : nba ? nba.text : "No read",
+      hasLean: out ? false : nba != null,
+      probability: out ? null : nba?.rate ?? null,
       listedOut: out,
-      injury:
-        args.league === "nba"
-          ? out
-            ? injuryTagForPlayer(args.picks, args.eventId, name)
-            : pick
-              ? injuryTag(pick.injury_status_raw, pick.injury_status)
-              : null
+      injury: out
+        ? injuryTagForPlayer(args.picks, args.eventId, name)
+        : pick
+          ? injuryTag(pick.injury_status_raw, pick.injury_status)
           : null,
     };
   });
@@ -915,7 +902,7 @@ export interface OurReadModel {
   leanProbability: number | null;
   /** The selected player is listed Out. Ask stays hidden. */
   listedOut: boolean;
-  /** NBA injury chip for this read. Null on WNBA. */
+  /** Injury chip for this read. Null when the player has no status word. */
   injury: InjuryTag | null;
 }
 
@@ -984,11 +971,11 @@ function opponentCode(
   pick: DailyPick,
   homeTeam: string,
   awayTeam: string,
-  league: LeagueSegment,
+  _league?: LeagueSegment,
 ): string | null {
-  const code = (pick.player_team_code || teamAbbr(pick.player_team, league) || "").toUpperCase();
-  const home = teamAbbr(homeTeam || pick.home_team, league);
-  const away = teamAbbr(awayTeam || pick.away_team, league);
+  const code = (pick.player_team_code || teamAbbr(pick.player_team) || "").toUpperCase();
+  const home = teamAbbr(homeTeam || pick.home_team);
+  const away = teamAbbr(awayTeam || pick.away_team);
   if (code && home && code === home) return away || null;
   if (code && away && code === away) return home || null;
   return null;
@@ -1002,7 +989,7 @@ function signalDetail(
   line: number,
   homeTeam: string,
   awayTeam: string,
-  league: LeagueSegment,
+  league?: LeagueSegment,
 ): string {
   if (key === "market") {
     const books = pick.bookmakers_count;
@@ -1041,7 +1028,7 @@ function signalsFromPick(
   pick: DailyPick,
   homeTeam: string,
   awayTeam: string,
-  league: LeagueSegment,
+  league?: LeagueSegment,
 ): ReadSignal[] | null {
   if (!pick.signals || pick.signals.length === 0) return null;
   const side = pick.direction === "under" ? "under" : pick.direction === "over" ? "over" : pick.direction;
@@ -1282,145 +1269,27 @@ export function buildOurRead(args: {
   consensus: SignalInput["consensus"];
   last10: GameLog[];
   history: PlayerHistoryResponse | null;
-  /** NBA uses stored signals and the backend tier. WNBA keeps the previous read. */
+  /** Stored signals and the backend tier. */
   league?: LeagueSegment;
   read?: PropRead | null;
   /** True when any pick for this player in the game is Out, including another line. */
   listedOut?: boolean;
 }): OurReadModel {
-  if (args.league === "nba") return buildNbaRead(args);
-  const signals = buildReadSignals({
-    binary: args.binary,
-    line: args.line,
-    consensus: args.consensus,
-    last10: args.last10,
-    history: args.history,
-    pick: args.pick,
-    market: args.market,
-  });
-  const metaParts = [args.position, args.team].filter((part): part is string => Boolean(part));
-  const bar = consensusSplit(args.consensus, args.binary) ?? (args.binary ? null : historySplit(args.history));
-  const metric = marketToMetric(args.market);
-  const base = {
-    player_name: args.player,
-    player_team: args.team ?? "",
-    event_id: args.eventId,
-    home_team: args.homeTeam,
-    away_team: args.awayTeam,
-    commence_time: args.commenceTime,
-    metric,
-  };
-
-  if (!args.player) {
-    return {
-      player: null,
-      meta: null,
-      headlineLead: "Choose a player",
-      headlineMarket: null,
-      caption: "The list is the players with a posted price for this stat.",
-      tier: null,
-      bar: null,
-      signals: [],
-      primary: null,
-      other: null,
-      leanProbability: null,
-      listedOut: false,
-      injury: null,
-    };
-  }
-
-  const pick = args.pick;
-  let primary: SlipSeed | null = null;
-  let other: SlipSeed | null = null;
-  let headlineLead = args.line == null ? "No posted line" : `Line ${formatThreshold(args.line)}`;
-  let caption = "No stored read for this player. Daily picks keep a side at 65% or higher.";
-  let tier: ReadTier | null = null;
-
-  if (pick) {
-    const direction = pick.direction === "under" ? "under" : "over";
-    const otherDirection = direction === "over" ? "under" : "over";
-    primary = {
-      ...base,
-      player_team: pick.player_team || base.player_team,
-      threshold: pick.threshold,
-      direction,
-      probability: pick.probability,
-      n_games: pick.n_games,
-    };
-    const otherSide = historySide(args.history, pick.threshold, otherDirection);
-    if (otherSide) {
-      other = {
-        ...base,
-        player_team: primary.player_team,
-        threshold: pick.threshold,
-        direction: otherDirection,
-        probability: otherSide.probability,
-        n_games: otherSide.nGames,
-      };
-    }
-    headlineLead = `${direction === "under" ? "Under" : "Over"} ${formatThreshold(pick.threshold)}`;
-    caption = `Historical hit rate ${formatPercent(pick.probability)} over ${pick.n_games} games. The tier is a display bucket on that rate.`;
-    tier = readTier(pick.probability);
-  } else if (args.line != null && !args.binary) {
-    const overSide = historySide(args.history, args.line, "over");
-    const underSide = historySide(args.history, args.line, "under");
-    if (overSide) {
-      primary = {
-        ...base,
-        threshold: args.line,
-        direction: "over",
-        probability: overSide.probability,
-        n_games: overSide.nGames,
-      };
-    }
-    if (underSide) {
-      const underSeed: SlipSeed = {
-        ...base,
-        threshold: args.line,
-        direction: "under",
-        probability: underSide.probability,
-        n_games: underSide.nGames,
-      };
-      if (primary) other = underSeed;
-      else primary = underSeed;
-    }
-  }
-
-  return {
-    player: args.player,
-    meta: metaParts.length ? metaParts.join(", ") : null,
-    headlineLead,
-    headlineMarket: args.marketName,
-    caption,
-    tier,
-    bar,
-    signals,
-    primary,
-    other,
-    leanProbability: primary?.probability ?? null,
-    listedOut: false,
-    injury: null,
-  };
+  void args.league;
+  return buildNbaRead(args);
 }
 
-export function webPrimaryCopy(seed: SlipSeed, inSlip: boolean, league: LeagueSegment): string {
+export function webPrimaryCopy(seed: SlipSeed, inSlip: boolean, _league?: LeagueSegment): string {
   const side = seed.direction === "under" ? "Under" : "Over";
   const line = formatThreshold(seed.threshold);
-  if (league === "nba") {
-    return inSlip ? `✓ ${side} ${line} in slip` : `Add ${side} ${line} to slip`;
-  }
-  return inSlip ? `In slip · ${side}` : `Add ${side} ${line}`;
+  return inSlip ? `✓ ${side} ${line} in slip` : `Add ${side} ${line} to slip`;
 }
 
-export function webOtherCopy(seed: SlipSeed, inSlip: boolean, league: LeagueSegment): string {
+export function webOtherCopy(seed: SlipSeed, inSlip: boolean, _league?: LeagueSegment): string {
   const side = seed.direction === "under" ? "Under" : "Over";
-  const line = formatThreshold(seed.threshold);
-  if (league === "nba") {
-    // seed.probability is 1 − combined_probability when the blend exists,
-    // otherwise the historical fallback. Whole percent, floored, matching the slip card.
-    return inSlip ? `✓ ${side} in slip` : `${side} instead (${formatTierPercent(seed.probability)})`;
-  }
-  return inSlip ? "Other side in slip" : `${side} ${line}`;
+  // seed.probability is 1 − combined_probability when the blend exists,
+  // otherwise the historical fallback. Whole percent, floored, matching the slip card.
+  return inSlip ? `✓ ${side} in slip` : `${side} instead (${formatTierPercent(seed.probability)})`;
 }
 
 /** Mobile bar. The percent uses the tier rounding only when a tier is shown. */
@@ -1444,16 +1313,16 @@ export function mobileOtherCopy(seed: SlipSeed): string {
   return `${side} ${formatTierPercent(seed.probability)}`;
 }
 
-/** Percent on the NBA action bar, beside the tier. WNBA keeps its short label. */
+/** Percent on the action bar, beside the tier. */
 export function actionBarPercent(
   seed: {
     probability?: number | null;
     combined_probability?: number | null;
     tier?: string | null;
   } | null,
-  league: LeagueSegment,
+  _league?: LeagueSegment,
 ): string | null {
-  if (league !== "nba" || !seed || !tierFromBackend(seed.tier)) return null;
+  if (!seed || !tierFromBackend(seed.tier)) return null;
   return formatTierPercent(tierProbability(seed));
 }
 

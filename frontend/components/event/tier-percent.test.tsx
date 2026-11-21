@@ -74,7 +74,7 @@ describe("tier percent on the game page", () => {
       renderWithProviders(
         <>
           <PlayerRail
-            league="nba"
+           
             rows={rows}
             selected="Bam Adebayo"
             onSelect={noop}
@@ -84,7 +84,7 @@ describe("tier percent on the game page", () => {
             onRetry={noop}
           />
           <OurRead
-            league="nba"
+           
             model={model}
             isLoading={false}
             isError={false}
@@ -96,7 +96,7 @@ describe("tier percent on the game page", () => {
             onAsk={noop}
           />
           <EventActionBar
-            league="nba"
+           
             model={model}
             primaryInSlip={false}
             otherInSlip={false}
@@ -131,7 +131,7 @@ describe("tier percent on the game page", () => {
     });
     renderWithProviders(
       <PlayerRail
-        league="nba"
+       
         rows={rows}
         selected="Bam Adebayo"
         onSelect={noop}
@@ -174,7 +174,7 @@ describe("tier percent on the game page", () => {
     renderWithProviders(
       <>
         <OurRead
-          league="nba"
+         
           model={model}
           isLoading={false}
           isError={false}
@@ -186,7 +186,7 @@ describe("tier percent on the game page", () => {
           onAsk={noop}
         />
         <EventActionBar
-          league="nba"
+         
           model={model}
           primaryInSlip={false}
           otherInSlip={false}

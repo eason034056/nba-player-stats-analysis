@@ -1,9 +1,8 @@
 /**
- * EventDetail — NBA and WNBA game page.
+ * EventDetail — NBA game page.
  *
- * One layout for both leagues. Numbers come from the events, odds,
- * daily-picks, history, and lineup routes. A missing field
- * is a labeled empty state.
+ * Numbers come from the events, odds, daily-picks, history, and lineup
+ * routes. A missing field is a labeled empty state.
  */
 
 "use client";
@@ -11,14 +10,12 @@
 import { useEffect, useState } from "react";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { useMutation, useQuery } from "@tanstack/react-query";
-import { useForm, Controller } from "react-hook-form";
+import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useAgentWidget } from "@/contexts/AgentWidgetContext";
 import { useBetSlip } from "@/contexts/BetSlipContext";
-import { useWnbaBetSlip } from "@/contexts/WnbaBetSlipContext";
 import {
   calculateNoVig,
-  calculateWNBANoVig,
   getCSVPlayers,
   getDailyPicks,
   getEvents,
@@ -26,13 +23,6 @@ import {
   getPlayerHistory,
   getPlayerSuggestions,
   getTeamLineup,
-  getWNBACSVPlayers,
-  getWNBAEvents,
-  getWNBAPlayerDDHistory,
-  getWNBAPlayerHistory,
-  getWNBAPlayerSuggestions,
-  getWNBATeamLineup,
-  getWnbaDailyPicks,
   useEventBulkProps,
   useEventReads,
 } from "@/lib/api";
@@ -61,25 +51,18 @@ import { EventTabs } from "@/components/event/EventTabs";
 import { FilterSheet } from "@/components/event/FilterSheet";
 import {
   activeFilterCount,
-  GameFilters,
   MoreFilters,
   type FilterState,
   type LogRange,
   type LogRole,
   type MateMode,
 } from "@/components/event/GameFilters";
-import { GameLogChart } from "@/components/event/GameLogChart";
 import { NbaGameLog } from "@/components/event/NbaGameLog";
 import { OurRead } from "@/components/event/OurRead";
 import { PlayerRail } from "@/components/event/PlayerRail";
 import { SportsbookPrices } from "@/components/event/SportsbookPrices";
 import { StatChips } from "@/components/event/StatChips";
-import { BookmakerSelect } from "@/components/BookmakerSelect";
-import { PlayerHistoryStats } from "@/components/PlayerHistoryStats";
-import { PlayerInput, type PlayerSuggestFn } from "@/components/PlayerInput";
-import { ResultsTable } from "@/components/ResultsTable";
-import { SectionUnavailable } from "@/components/SectionUnavailable";
-import { TeamLineupPanel } from "@/components/TeamLineupPanel";
+import type { PlayerSuggestFn } from "@/components/PlayerInput";
 import { isBinaryMarket, getMarketDisplayName, type MarketKey } from "@/components/MarketSelect";
 import {
   calculatorFormSchema,
@@ -91,11 +74,8 @@ import {
   type PlayerHistoryResponse,
 } from "@/lib/schemas";
 import { isPlayerOutInGame } from "@/lib/picks-board";
-import { formatPercent } from "@/lib/player-dd";
 import { teamAbbr, teamShortName } from "@/lib/team-abbr";
 import { getLocalDateString, getTodayString, cn } from "@/lib/utils";
-
-export type League = "nba" | "wnba";
 
 interface LeagueEventConfig {
   eventsQueryKey: string;
@@ -105,39 +85,24 @@ interface LeagueEventConfig {
   calculateNoVig: (request: NoVigRequest) => Promise<NoVigResponse>;
   suggestFn: PlayerSuggestFn;
   getLineup: (team: string, date?: string) => Promise<import("@/lib/schemas").TeamLineup>;
-  cacheNamespace: League;
+  cacheNamespace: "nba";
   getCSVPlayersFn: typeof getCSVPlayers;
   getPlayerHistoryFn: (request: PlayerHistoryRequest) => Promise<PlayerHistoryResponse>;
   getPlayerDDHistoryFn: typeof getPlayerDDHistory;
 }
 
-const LEAGUE_CONFIG: Record<League, LeagueEventConfig> = {
-  nba: {
-    eventsQueryKey: "events",
-    picksQueryKey: "daily-picks",
-    getEvents,
-    getPicks: (date) => getDailyPicks({ date }),
-    calculateNoVig,
-    suggestFn: getPlayerSuggestions,
-    getLineup: getTeamLineup,
-    cacheNamespace: "nba",
-    getCSVPlayersFn: getCSVPlayers,
-    getPlayerHistoryFn: getPlayerHistory,
-    getPlayerDDHistoryFn: getPlayerDDHistory,
-  },
-  wnba: {
-    eventsQueryKey: "wnba-events",
-    picksQueryKey: "wnba-daily-picks",
-    getEvents: getWNBAEvents,
-    getPicks: (date) => getWnbaDailyPicks({ date }),
-    calculateNoVig: calculateWNBANoVig,
-    suggestFn: getWNBAPlayerSuggestions,
-    getLineup: getWNBATeamLineup,
-    cacheNamespace: "wnba",
-    getCSVPlayersFn: getWNBACSVPlayers,
-    getPlayerHistoryFn: getWNBAPlayerHistory,
-    getPlayerDDHistoryFn: getWNBAPlayerDDHistory,
-  },
+const cfg: LeagueEventConfig = {
+  eventsQueryKey: "events",
+  picksQueryKey: "daily-picks",
+  getEvents,
+  getPicks: (date) => getDailyPicks({ date }),
+  calculateNoVig,
+  suggestFn: getPlayerSuggestions,
+  getLineup: getTeamLineup,
+  cacheNamespace: "nba",
+  getCSVPlayersFn: getCSVPlayers,
+  getPlayerHistoryFn: getPlayerHistory,
+  getPlayerDDHistoryFn: getPlayerDDHistory,
 };
 
 function historyRequest(
@@ -171,8 +136,7 @@ function historyRequest(
   };
 }
 
-export function EventDetail({ league }: { league: League }) {
-  const cfg = LEAGUE_CONFIG[league];
+export function EventDetail() {
   const params = useParams();
   const eventId = params.eventId as string;
   const searchParams = useSearchParams();
@@ -185,11 +149,9 @@ export function EventDetail({ league }: { league: League }) {
     requestedTab === "log" || requestedTab === "filters" || requestedTab === "odds" || requestedTab === "read"
       ? requestedTab
       : "read";
-  const startingTab: EventTab = league === "nba" && requested === "filters" ? "log" : requested;
+  const startingTab: EventTab = requested === "filters" ? "log" : requested;
   const router = useRouter();
-  const nbaSlip = useBetSlip();
-  const wnbaSlip = useWnbaBetSlip();
-  const slip = league === "wnba" ? wnbaSlip : nbaSlip;
+  const slip = useBetSlip();
   const { openWidget, setSelectedPickContext } = useAgentWidget();
 
   const [tab, setTab] = useState<EventTab>(startingTab);
@@ -252,8 +214,8 @@ export function EventDetail({ league }: { league: League }) {
     ? getLocalDateString(currentEvent.commence_time)
     : undefined;
   const picksDate = routeDate || gameDate || getTodayString();
-  const awayAbbr = currentEvent ? teamAbbr(currentEvent.away_team, league) : "";
-  const homeAbbr = currentEvent ? teamAbbr(currentEvent.home_team, league) : "";
+  const awayAbbr = currentEvent ? teamAbbr(currentEvent.away_team) : "";
+  const homeAbbr = currentEvent ? teamAbbr(currentEvent.home_team) : "";
   const eventHome = currentEvent?.home_team ?? "";
   const eventAway = currentEvent?.away_team ?? "";
   const eventAsOf = currentEvent?.commence_time ?? "";
@@ -261,12 +223,12 @@ export function EventDetail({ league }: { league: League }) {
   const readsQuery = useEventReads({
     eventId,
     market: selectedMarket,
-    enabled: league === "nba",
+    enabled: true,
   });
   const propsQuery = useEventBulkProps({
     eventId,
     market: selectedMarket,
-    enabled: league === "nba",
+    enabled: true,
   });
   const picksQuery = useQuery({
     queryKey: [cfg.picksQueryKey, picksDate],
@@ -378,25 +340,20 @@ export function EventDetail({ league }: { league: League }) {
     homeLineup: homeLineupQuery.data ?? null,
     awayAbbr,
     homeAbbr,
-    league,
+    league: "nba",
     reads: readsQuery.data?.reads,
-    readsStatus: league === "nba" ? nbaReadsStatus(readsQuery.isLoading, readsQuery.isError) : "ready",
+    readsStatus: nbaReadsStatus(readsQuery.isLoading, readsQuery.isError),
     bulkPlayers: propsQuery.data?.markets.find((market) => market.market === selectedMarket)?.players,
   });
   const selectedRow = rows.find((row) => row.name === playerName) ?? null;
   const selectedRead =
-    league === "nba"
-      ? readsQuery.data?.reads.find(
-          (read) => read.player.trim().toLowerCase() === playerName.trim().toLowerCase(),
-        ) ?? null
-      : null;
-  const position =
-    league === "nba" ? pick?.position?.trim() || selectedRow?.position || null : null;
+    readsQuery.data?.reads.find(
+      (read) => read.player.trim().toLowerCase() === playerName.trim().toLowerCase(),
+    ) ?? null;
+  const position = pick?.position?.trim() || selectedRow?.position || null;
   const eventPicks = picksQuery.data?.picks ?? [];
   const listedOut =
-    league === "nba" &&
-    playerName.trim().length > 0 &&
-    isPlayerOutInGame(eventPicks, eventId, playerName);
+    playerName.trim().length > 0 && isPlayerOutInGame(eventPicks, eventId, playerName);
   const model = buildOurRead({
     player: playerName.trim(),
     marketName: getMarketDisplayName(selectedMarket),
@@ -413,14 +370,12 @@ export function EventDetail({ league }: { league: League }) {
     consensus: result?.consensus ?? null,
     last10: last10Query.data?.game_logs ?? [],
     history: sampleQuery.data ?? null,
-    league,
+    league: "nba",
     read: selectedRead,
     listedOut,
   });
-  const readsNote =
-    league === "nba" ? nbaRequestNote("reads", nbaReadsStatus(readsQuery.isLoading, readsQuery.isError)) : null;
-  const propsNote =
-    league === "nba" ? nbaRequestNote("props", nbaReadsStatus(propsQuery.isLoading, propsQuery.isError)) : null;
+  const readsNote = nbaRequestNote("reads", nbaReadsStatus(readsQuery.isLoading, readsQuery.isError));
+  const propsNote = nbaRequestNote("props", nbaReadsStatus(propsQuery.isLoading, propsQuery.isError));
   const shownModel =
     readsNote && !pick && !model.listedOut ? { ...model, caption: readsNote, tier: null } : model;
   const chart = chartQuery.data ? gameLogChart(chartQuery.data.game_logs ?? [], activeLine) : null;
@@ -454,10 +409,8 @@ export function EventDetail({ league }: { league: League }) {
     const ids = Array.isArray(id) ? id : [id];
     return cn(!ids.includes(tab) && "max-md:hidden");
   };
-  const nba = league === "nba";
-  const clock = eventClock(currentEvent, league);
+  const clock = eventClock(currentEvent, "nba");
   const chips = eventLineupChips({
-    league,
     awayAbbr,
     homeAbbr,
     status: currentEvent?.lineup_status,
@@ -524,13 +477,8 @@ export function EventDetail({ league }: { league: League }) {
   return (
     <div className="mx-auto flex w-full min-w-0 max-w-[1200px] flex-col gap-5 px-4 py-6 md:px-8">
       <EventHeader
-        league={league}
-        awayName={
-          nba && currentEvent ? teamShortName(currentEvent.away_team, league) : currentEvent?.away_team ?? ""
-        }
-        homeName={
-          nba && currentEvent ? teamShortName(currentEvent.home_team, league) : currentEvent?.home_team ?? ""
-        }
+        awayName={currentEvent ? teamShortName(currentEvent.away_team) : ""}
+        homeName={currentEvent ? teamShortName(currentEvent.home_team) : ""}
         awayAbbr={awayAbbr}
         homeAbbr={homeAbbr}
         when={clock.web}
@@ -543,47 +491,14 @@ export function EventDetail({ league }: { league: League }) {
             ? errorText(eventsQuery.error)
             : "Game information not found"
         }
-        onBack={() => router.push(league === "wnba" ? "/wnba" : "/")}
+        onBack={() => router.push("/")}
         onRetry={() => eventsQuery.refetch()}
       />
 
-      {nba ? null : <EventTabs value={tab} onChange={setTab} />}
-
       <div className="flex flex-col gap-5 md:grid md:grid-cols-[minmax(280px,360px)_minmax(0,1fr)] md:items-start">
-        {!nba && currentEvent ? (
-          <details
-            className={cn(
-              "order-last rounded-[20px] border border-line bg-white px-4 py-3 md:order-first md:col-span-2",
-              tab !== "read" && "max-md:hidden",
-            )}
-          >
-            <summary className="cursor-pointer text-sm font-semibold text-ink">Starters</summary>
-            <div className="mt-4 grid gap-4 md:grid-cols-2">
-              <TeamLineupPanel
-                lineup={awayLineupQuery.data ?? null}
-                isLoading={awayLineupQuery.isLoading}
-                title={`${awayAbbr} lineup`}
-              />
-              <TeamLineupPanel
-                lineup={homeLineupQuery.data ?? null}
-                isLoading={homeLineupQuery.isLoading}
-                title={`${homeAbbr} lineup`}
-              />
-            </div>
-          </details>
-        ) : null}
-
         <div className="max-md:contents md:col-start-1 md:flex md:min-w-0 md:flex-col md:gap-5">
-          <aside
-            className={cn(
-              nba
-                ? "order-1 max-md:contents md:flex md:flex-col md:gap-5 md:rounded-[24px] md:border md:border-line md:bg-white md:p-5"
-                : "order-1 flex flex-col gap-5 rounded-[24px] border border-line bg-white p-4 md:p-5",
-              !nba && tab !== "read" && "max-md:hidden",
-            )}
-          >
+          <aside className="order-1 max-md:contents md:flex md:flex-col md:gap-5 md:rounded-[24px] md:border md:border-line md:bg-white md:p-5">
             <StatChips
-              league={league}
               value={selectedMarket}
               onChange={setSelectedMarket}
               disabled={mutation.isPending}
@@ -617,7 +532,6 @@ export function EventDetail({ league }: { league: League }) {
               </div>
             ) : null}
             <PlayerRail
-              league={league}
               rows={rows}
               selected={playerName}
               onSelect={(name) => setValue("player_name", name)}
@@ -627,43 +541,15 @@ export function EventDetail({ league }: { league: League }) {
               onRetry={() => suggestQuery.refetch()}
             />
           </aside>
-
-          {!nba ? (
-            <div
-              className={cn(
-                "order-3 rounded-[24px] border border-line bg-white p-4 md:p-5",
-                tab !== "read" && "max-md:hidden",
-              )}
-            >
-              <Controller
-                name="player_name"
-                control={control}
-                render={({ field }) => (
-                  <PlayerInput
-                    eventId={eventId}
-                    market={selectedMarket}
-                    value={field.value}
-                    onChange={field.onChange}
-                    disabled={mutation.isPending}
-                    suggestFn={cfg.suggestFn}
-                    cacheNamespace={cfg.cacheNamespace}
-                  />
-                )}
-              />
-            </div>
-          ) : null}
         </div>
 
         <div className="max-md:contents md:col-start-2 md:flex md:min-w-0 md:flex-col md:gap-5">
-          {nba ? (
-            <div className="order-1 md:hidden">
-              <EventTabs value={tab} onChange={setTab} tabs={NBA_EVENT_TABS} />
-            </div>
-          ) : null}
+          <div className="order-1 md:hidden">
+            <EventTabs value={tab} onChange={setTab} tabs={NBA_EVENT_TABS} />
+          </div>
 
           <div className={cn("order-2 min-w-0", show("read"))}>
             <OurRead
-              league={league}
               model={shownModel}
               isLoading={Boolean(playerName) && mutation.isPending && !pick && !result}
               isError={mutation.isError}
@@ -676,116 +562,33 @@ export function EventDetail({ league }: { league: League }) {
             />
           </div>
 
-          {nba ? (
-            <NbaGameLog
-              className={cn("order-4", show("log"))}
-              filters={filters}
-              note={logNote}
-              tiles={chartQuery.data && chartQuery.data.n_games > 0 ? gameLogTiles(chartQuery.data, activeLine) : null}
-              chart={chartProps}
-              activeFilters={activeFilters}
-              onOpenFilters={() => setFiltersOpen(true)}
-              onReset={activeFilters > 0 || lineSteps !== 0 ? resetFilters : null}
-            />
-          ) : (
-            <section className={cn("order-4 flex flex-col gap-5 rounded-[24px] border border-line bg-white p-4 md:p-7", show(["log", "filters"]))}>
-              <div className={show("log")}>
-                <GameLogChart {...chartProps} note={logNote} />
-                {chartQuery.data && chartQuery.data.n_games > 0 ? (
-                  <div className="mt-4 grid grid-cols-2 gap-2 md:grid-cols-4">
-                    <StatTile label="Over" value={formatPercent(chartQuery.data.p_over)} />
-                    <StatTile label="Under" value={formatPercent(chartQuery.data.p_under)} />
-                    <StatTile label="Average" value={chartQuery.data.mean == null ? "—" : chartQuery.data.mean.toFixed(1)} />
-                    <StatTile label="Games" value={String(chartQuery.data.n_games)} />
-                  </div>
-                ) : null}
-              </div>
-              <div className={show("filters")}>
-                <GameFilters {...filters} league={league} gameCount={chartQuery.data?.n_games ?? null} />
-              </div>
-            </section>
-          )}
+          <NbaGameLog
+            className={cn("order-4", show("log"))}
+            filters={filters}
+            note={logNote}
+            tiles={chartQuery.data && chartQuery.data.n_games > 0 ? gameLogTiles(chartQuery.data, activeLine) : null}
+            chart={chartProps}
+            activeFilters={activeFilters}
+            onOpenFilters={() => setFiltersOpen(true)}
+            onReset={activeFilters > 0 || lineSteps !== 0 ? resetFilters : null}
+          />
 
-          {nba ? (
-            <SportsbookPrices
-              className={cn("order-5", show("odds"))}
-              data={result}
-              isLoading={mutation.isPending}
-              isError={mutation.isError}
-              errorText={errorText(mutation.error)}
-            />
-          ) : (
-            <section
-              data-testid="odds-panel"
-              className={cn(
-                "order-5 min-w-0 max-w-full rounded-[24px] border border-line bg-white p-4 md:p-7",
-                show("odds"),
-              )}
-            >
-              <div className="mb-4 flex flex-wrap items-baseline justify-between gap-2">
-                <h3 className="text-lg font-bold text-ink">Sportsbook prices</h3>
-                <p className="text-[13px] text-muted">
-                  {result?.consensus
-                    ? `No-vig consensus ${binary ? "yes" : "over"} ${formatPercent(
-                        binary ? result.consensus.p_yes_fair : result.consensus.p_over_fair,
-                      )}`
-                    : "No-vig consensus is not on this response."}
-                </p>
-              </div>
-              <Controller
-                name="bookmakers"
-                control={control}
-                render={({ field }) => (
-                  <BookmakerSelect value={field.value} onChange={field.onChange} disabled={mutation.isPending} />
-                )}
-              />
-              <div className="mt-4">
-                <ResultsTable data={result} isLoading={mutation.isPending} />
-              </div>
-            </section>
-          )}
-
-          {!nba ? (
-            <div className={cn("order-6", show("log"))}>
-              <PlayerHistoryStats
-                eventId={eventId}
-                initialPlayer={playerName}
-                initialMarket={selectedMarket}
-                initialThreshold={line == null ? initialThreshold : String(line)}
-                onPlayerSelect={(name) => setValue("player_name", name)}
-                getCSVPlayersFn={cfg.getCSVPlayersFn}
-                getPlayerHistoryFn={cfg.getPlayerHistoryFn}
-                getPlayerDDHistoryFn={cfg.getPlayerDDHistoryFn}
-                calculateNoVigFn={cfg.calculateNoVig}
-                eventHome={eventHome}
-                eventAway={eventAway}
-                eventAsOf={eventAsOf}
-                cacheNamespace={cfg.cacheNamespace}
-              />
-            </div>
-          ) : null}
-
-          {league === "wnba" && playerName ? (
-            <div className={cn("order-7", show("read"))}>
-              <SectionUnavailable
-                eyebrow="Today's Projection"
-                title="Player projection"
-                message="Projection modeling is not available for WNBA yet. This panel will populate once the WNBA projection source ships."
-              />
-            </div>
-          ) : null}
+          <SportsbookPrices
+            className={cn("order-5", show("odds"))}
+            data={result}
+            isLoading={mutation.isPending}
+            isError={mutation.isError}
+            errorText={errorText(mutation.error)}
+          />
         </div>
       </div>
 
-      {nba ? (
-        <FilterSheet open={filtersOpen} onClose={() => setFiltersOpen(false)}>
-          <MoreFilters {...filters} />
-        </FilterSheet>
-      ) : null}
+      <FilterSheet open={filtersOpen} onClose={() => setFiltersOpen(false)}>
+        <MoreFilters {...filters} />
+      </FilterSheet>
 
       {playerName && !model.listedOut ? (
         <EventActionBar
-          league={league}
           model={model}
           primaryInSlip={existing?.direction === model.primary?.direction}
           otherInSlip={existing?.direction === model.other?.direction}
@@ -794,15 +597,6 @@ export function EventDetail({ league }: { league: League }) {
           onAsk={askAgent}
         />
       ) : null}
-    </div>
-  );
-}
-
-function StatTile({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="rounded-2xl bg-[#F7F6F9] px-3.5 py-3">
-      <div className="text-xs font-semibold text-[#4A4458]">{label}</div>
-      <div className="font-mono text-2xl font-bold leading-tight text-ink">{value}</div>
     </div>
   );
 }

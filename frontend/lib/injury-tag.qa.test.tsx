@@ -145,7 +145,7 @@ describe("a raw Out word on a pick the backend did not store as Out", () => {
     expect(rows[0].hasLean).toBe(true);
     renderWithProviders(
       <PlayerRail
-        league="nba"
+       
         rows={rows}
         selected=""
         onSelect={vi.fn()}

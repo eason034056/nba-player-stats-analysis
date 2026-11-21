@@ -68,7 +68,7 @@ function boardProps(picks: DailyPick[]): DailyPicksBoardProps {
   };
 }
 
-function nbaRead(pick: DailyPick, league: "nba" | "wnba" = "nba") {
+function nbaRead(pick: DailyPick, league: "nba" = "nba") {
   return buildOurRead({
     player: pick.player_name,
     marketName: "Points",
@@ -89,10 +89,9 @@ function nbaRead(pick: DailyPick, league: "nba" | "wnba" = "nba") {
   });
 }
 
-function renderRead(model: ReturnType<typeof nbaRead>, league: "nba" | "wnba") {
+function renderRead(model: ReturnType<typeof nbaRead>) {
   return renderWithProviders(
     <OurRead
-      league={league}
       model={model}
       isLoading={false}
       isError={false}
@@ -151,7 +150,7 @@ describe("QA: null fields render no tag on the picks board", () => {
 describe("QA: projection row on the read", () => {
   it("hides the null NBA projection row and keeps the other four signals", () => {
     const pick = parsed().picks[0];
-    renderRead(nbaRead(pick), "nba");
+    renderRead(nbaRead(pick));
     expect(screen.queryByTestId("signal-projection")).not.toBeInTheDocument();
     for (const key of ["market", "last10", "history", "defense"]) {
       expect(screen.getByTestId(`signal-${key}`)).toBeInTheDocument();
@@ -169,7 +168,7 @@ describe("QA: projection row on the read", () => {
         signal.key === "projection" ? { ...signal, value: "20.4", verdict: "supports" } : signal,
       ),
     };
-    renderRead(nbaRead(withValue), "nba");
+    renderRead(nbaRead(withValue));
     expect(screen.getByTestId("signal-projection")).toHaveTextContent("20.4");
   });
 
@@ -181,10 +180,4 @@ describe("QA: projection row on the read", () => {
     expect(model.caption).not.toMatch(/\b0 of\b/);
   });
 
-  it("WNBA still lists its projection row with the not-available note", () => {
-    const pick = parsed().picks[0];
-    const wnbaPick: DailyPick = { ...pick, signals: null, tier: null, combined_probability: null };
-    renderRead(nbaRead(wnbaPick, "wnba"), "wnba");
-    expect(screen.getByTestId("signal-projection")).toHaveTextContent("Projection is not available for WNBA.");
-  });
 });

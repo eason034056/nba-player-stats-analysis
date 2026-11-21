@@ -64,13 +64,13 @@ function historyBody(
 }
 
 describe("PlayerHistoryStats review fixes", () => {
-  it("labels the full season as 82 NBA games and 44 WNBA games", async () => {
+  it("labels the full season as 82 games", async () => {
     const user = userEvent.setup();
     const nbaHistory = vi.fn().mockResolvedValue(historyBody());
-    const { unmount } = renderWithProviders(
+    renderWithProviders(
       <PlayerHistoryStats
         eventId="evt-1"
-        initialPlayer="A'ja Wilson"
+        initialPlayer="Bam Adebayo"
         initialMarket="player_points"
         cacheNamespace="nba"
         getCSVPlayersFn={players}
@@ -88,31 +88,6 @@ describe("PlayerHistoryStats review fixes", () => {
     await waitFor(() => {
       expect(nbaHistory).toHaveBeenCalledWith(expect.objectContaining({ n: 82 }));
     });
-    unmount();
-
-    const wnbaHistory = vi.fn().mockResolvedValue(historyBody());
-    renderWithProviders(
-      <PlayerHistoryStats
-        eventId="evt-1"
-        initialPlayer="A'ja Wilson"
-        initialMarket="player_points"
-        cacheNamespace="wnba"
-        getCSVPlayersFn={players}
-        getPlayerHistoryFn={wnbaHistory}
-        calculateNoVigFn={vi.fn().mockResolvedValue(lineResponse(18.5, "player_points"))}
-      />,
-    );
-
-    expect(await screen.findByRole("option", { name: "Full Season (44 games)" })).toBeInTheDocument();
-    expect(screen.queryByRole("option", { name: "Full Season (82 games)" })).not.toBeInTheDocument();
-    await waitFor(() => {
-      expect(wnbaHistory).toHaveBeenCalledWith(expect.objectContaining({ n: 0 }));
-    });
-    await user.selectOptions(screen.getByRole("combobox", { name: "Game Range" }), "44");
-    await waitFor(() => {
-      expect(wnbaHistory).toHaveBeenCalledWith(expect.objectContaining({ n: 44 }));
-    });
-    expect(wnbaHistory).not.toHaveBeenCalledWith(expect.objectContaining({ n: 82 }));
   });
 
   it("does not compute an Over/Under rate against a placeholder when the board is empty", async () => {
@@ -130,7 +105,7 @@ describe("PlayerHistoryStats review fixes", () => {
         eventId="evt-1"
         initialPlayer="A'ja Wilson"
         initialMarket="player_frees_made"
-        cacheNamespace="wnba"
+        cacheNamespace="nba"
         getCSVPlayersFn={players}
         getPlayerHistoryFn={history}
         calculateNoVigFn={vi.fn().mockResolvedValue(emptyBoard)}
@@ -161,7 +136,7 @@ describe("PlayerHistoryStats review fixes", () => {
         eventId="evt-1"
         initialPlayer="A'ja Wilson"
         initialMarket="player_frees_made"
-        cacheNamespace="wnba"
+        cacheNamespace="nba"
         getCSVPlayersFn={players}
         getPlayerHistoryFn={history}
         calculateNoVigFn={vi.fn().mockRejectedValue(new Error("odds down"))}
@@ -192,7 +167,7 @@ describe("PlayerHistoryStats review fixes", () => {
         initialPlayer="A'ja Wilson"
         initialMarket="player_points"
         initialThreshold="18.5"
-        cacheNamespace="wnba"
+        cacheNamespace="nba"
         getCSVPlayersFn={players}
         getPlayerHistoryFn={history}
       />,

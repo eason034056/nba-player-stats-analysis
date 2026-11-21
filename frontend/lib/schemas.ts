@@ -43,7 +43,7 @@ export type HealthResponse = z.infer<typeof healthResponseSchema>;
  */
 /**
  * Per-team lineup confirmation. `confirmed` or `projected`.
- * Null when that club has no lineup for the date. WNBA leaves the object null.
+ * Null when that club has no lineup for the date.
  */
 export const eventLineupStatusSchema = z.object({
   home: z.enum(["confirmed", "projected"]).nullable().optional(),
@@ -73,7 +73,7 @@ export const nbaEventSchema = z.object({
   home_team: z.string(),     // 主場球隊名稱
   away_team: z.string(),     // 客場球隊名稱
   commence_time: z.string(), // 比賽開始時間（UTC ISO 8601）
-  // Same tip in America/New_York, with the offset. Absent on older payloads and on WNBA.
+  // Same tip in America/New_York, with the offset. Absent on older payloads.
   commence_time_et: z.string().nullable().optional(),
   // Label for commence_time_et. "ET" on NBA events.
   display_tz: z.string().nullable().optional(),
@@ -188,7 +188,7 @@ export const noVigResponseSchema = z.object({
   message: z.string().nullable().optional(),
   // 快照年齡必須留在 parse 結果裡。Zod 預設會丟掉 schema 沒列出的鍵，
   // 所以這四個鍵要寫在這裡，畫面才讀得到賠率有多舊。
-  // NBA 與 WNBA 的 /props/no-vig 共用這個 schema。
+  // /api/nba/props/no-vig 的快照年齡欄位。
   fetched_at: z.string().nullable().optional(),
   data_age_seconds: z.number().int().nullable().optional(),
   cache_state: z.string().nullable().optional(),
@@ -372,7 +372,7 @@ export type PlayerHistoryResponse = z.infer<typeof playerHistoryResponseSchema>;
 /**
  * Double-Double 歷史命中率
  *
- * GET /api/nba/player-dd-history 與 GET /api/wnba/player-dd-history
+ * GET /api/nba/player-dd-history
  * 對應後端 PlayerDDHistoryResponse（backend/app/models/schemas.py）。
  *
  * DD 是二元結果，沒有 threshold、沒有 p_over / p_under。
@@ -455,16 +455,11 @@ export type HistoryMetricKey = (typeof HISTORY_METRICS)[number]["key"];
  * 
  * 用於前端選擇要分析的場次範圍
  */
-export type SeasonLeague = "nba" | "wnba";
+/** Regular-season length. The NBA plays 82. */
+export const REGULAR_SEASON_GAMES = 82;
 
-/** Regular-season length. NBA plays 82, WNBA plays 44. */
-export const REGULAR_SEASON_GAMES: Record<SeasonLeague, number> = {
-  nba: 82,
-  wnba: 44,
-};
-
-export function recentGamesOptions(league: SeasonLeague) {
-  const games = REGULAR_SEASON_GAMES[league];
+export function recentGamesOptions() {
+  const games = REGULAR_SEASON_GAMES;
   return [
     { value: 0, label: "All Games" },
     { value: 10, label: "Last 10 Games" },
@@ -474,8 +469,7 @@ export function recentGamesOptions(league: SeasonLeague) {
   ] as const;
 }
 
-/** NBA list. Callers that know the league should use `recentGamesOptions`. */
-export const RECENT_GAMES_OPTIONS = recentGamesOptions("nba");
+export const RECENT_GAMES_OPTIONS = recentGamesOptions();
 
 
 // ==================== 每日高機率球員 ====================

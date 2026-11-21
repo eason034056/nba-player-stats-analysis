@@ -74,7 +74,7 @@ describe("an Out pick with a null blend", () => {
     });
     renderWithProviders(
       <OurRead
-        league="nba"
+       
         model={model}
         isLoading={false}
         isError={false}

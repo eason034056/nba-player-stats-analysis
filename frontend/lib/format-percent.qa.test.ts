@@ -8,8 +8,6 @@ import { todayGames, todayReads } from "@/lib/today-board";
 import { formatProbability, formatVig } from "@/lib/utils";
 import nbaEventsFixture from "@/test/fixtures/today/nba-events.json";
 import nbaPicksFixture from "@/test/fixtures/today/nba-daily-picks.json";
-import wnbaEventsFixture from "@/test/fixtures/today/wnba-events.json";
-import wnbaPicksFixture from "@/test/fixtures/today/wnba-daily-picks.json";
 
 /**
  * Whole-percent display edge cases (SPO-120a).
@@ -131,33 +129,17 @@ describe("agent widget percent helpers", () => {
 
 describe("Today keeps the backend tier next to the whole percent", () => {
   const nbaPicks = dailyPicksResponseSchema.parse(nbaPicksFixture);
-  const wnbaPicks = dailyPicksResponseSchema.parse(wnbaPicksFixture);
 
-  it("prints every fixture tier exactly as the API sent it, NBA and WNBA", () => {
-    for (const [picks, league] of [
-      [nbaPicks, "nba"],
-      [wnbaPicks, "wnba"],
-    ] as const) {
-      const reads = todayReads(picks.picks, league, picks.date, picks.picks.length);
-      for (const read of reads) {
-        const source = picks.picks.find((pick) => read.key.startsWith(`${pick.event_id}-${pick.player_name}-`));
-        expect(source).toBeDefined();
-        expect(read.tier).toEqual(tierFromBackend(source?.tier));
-        expect(read.probabilityText).toBe(
-          read.tier ? formatTierPercent(source?.probability) : formatPercent(source?.probability),
-        );
-        expect(read.href.startsWith(league === "wnba" ? "/wnba/" : "/")).toBe(true);
-      }
-    }
-  });
-
-  it("builds WNBA game cards from the WNBA fixtures without an ET clock", () => {
-    const events = eventsResponseSchema.parse(wnbaEventsFixture);
-    const games = todayGames(events.events, wnbaPicks.picks, "wnba", events.date);
-    expect(games.length).toBe(events.events.length);
-    for (const game of games) {
-      expect(game.href.startsWith("/wnba/")).toBe(true);
-      expect(game.topSource).not.toBe("event");
+  it("prints every fixture tier exactly as the API sent it", () => {
+    const reads = todayReads(nbaPicks.picks, "nba", nbaPicks.date, nbaPicks.picks.length);
+    for (const read of reads) {
+      const source = nbaPicks.picks.find((pick) => read.key.startsWith(`${pick.event_id}-${pick.player_name}-`));
+      expect(source).toBeDefined();
+      expect(read.tier).toEqual(tierFromBackend(source?.tier));
+      expect(read.probabilityText).toBe(
+        read.tier ? formatTierPercent(source?.probability) : formatPercent(source?.probability),
+      );
+      expect(read.href.startsWith("/event/")).toBe(true);
     }
   });
 

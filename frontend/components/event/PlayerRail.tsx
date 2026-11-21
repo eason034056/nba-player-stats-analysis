@@ -1,7 +1,6 @@
 "use client";
 
 import { InjuryStatusTag } from "@/components/InjuryStatusTag";
-import type { LeagueSegment } from "@/lib/event-detail-link";
 import { joinMeta, type EventPlayerRow } from "@/lib/event-page";
 import { canonicalInjuryTag } from "@/lib/injury-tag";
 import { playerLastName } from "@/lib/today-board";
@@ -21,7 +20,6 @@ export function PlayerRail({
   isError,
   errorText,
   onRetry,
-  league = "wnba",
 }: {
   rows: EventPlayerRow[];
   selected: string;
@@ -30,12 +28,10 @@ export function PlayerRail({
   isError: boolean;
   errorText: string | null;
   onRetry: () => void;
-  league?: LeagueSegment;
 }) {
-  const nba = league === "nba";
   return (
     <div data-testid="player-rail" className="flex flex-col gap-2.5">
-      <div className={cn("flex items-center justify-between gap-3", nba && "max-md:hidden")}>
+      <div className="flex items-center justify-between gap-3 max-md:hidden">
         <div className="text-xs font-bold uppercase tracking-[0.08em] text-muted">2 · Player</div>
         <div className="text-xs text-muted">Line · our lean</div>
       </div>
@@ -58,15 +54,11 @@ export function PlayerRail({
             const active = row.name === selected;
             const meta = joinMeta(row.position, row.team, " · ");
             const tierName = row.tier && row.tier.name !== "pass" ? row.tier.name : null;
-            const pill = nba
-              ? tierName
-                ? TIER_PILL[tierName]
-                : row.hasLean
-                  ? "bg-pass text-ink-2"
-                  : "bg-seg text-muted"
+            const pill = tierName
+              ? TIER_PILL[tierName]
               : row.hasLean
-                ? "bg-[#E2E2E2] text-ink"
-                : "bg-[#F3F1F6] text-muted";
+                ? "bg-pass text-ink-2"
+                : "bg-seg text-muted";
             return (
               <button
                 key={row.name}
@@ -76,12 +68,8 @@ export function PlayerRail({
                 data-testid={`player-row-${row.name}`}
                 className={cn(
                   "flex min-w-[118px] shrink-0 flex-col gap-1.5 rounded-2xl border px-3 py-2.5 text-left md:grid md:min-w-0 md:grid-cols-[minmax(0,1fr)_44px_148px] md:items-center md:gap-2.5 md:px-3.5 md:py-3",
-                  nba && active && "max-md:order-first",
-                  active
-                    ? "border-brand bg-brand-tint"
-                    : nba
-                      ? "border-divider bg-white"
-                      : "border-line bg-white",
+                  active && "max-md:order-first",
+                  active ? "border-brand bg-brand-tint" : "border-divider bg-white",
                 )}
               >
                 <span className="min-w-0">
