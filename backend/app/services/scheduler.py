@@ -47,11 +47,8 @@ from app.settings import settings
 
 logger = logging.getLogger(__name__)
 
-# NBA injury refresh shares the Chicago hours already used by the NBA
-# lineup jobs in this file:
-#   lineup_fetch_active_window  hour 11-21
-#   lineup_fetch_pre_tipoff     hour 22, 23, and 0
-# Together that is 11:00 through 00:59 America/Chicago.
+# NBA injury refresh window. These hours belong to this job.
+# They are 11:00 through 00:59 America/Chicago.
 # nba_slate_date uses America/New_York. Chicago stays one hour behind
 # Eastern in both standard and daylight time, so the same window is
 # 12:00 through 01:59 America/New_York.
@@ -80,9 +77,8 @@ def nba_injury_refresh_in_window(now: datetime | None = None) -> bool:
     """True when ``now`` falls in the NBA injury slate window.
 
     ``now`` defaults to the current time. A naive datetime is read as
-    UTC. The window is the Chicago hours of the existing NBA lineup
-    crons (11:00 through 00:59 America/Chicago). Outside that window
-    the scheduled job must not call BALLDONTLIE.
+    UTC. The window is 11:00 through 00:59 America/Chicago. Outside
+    that window the scheduled job must not call BALLDONTLIE.
 
     Args:
         now: Instant to test. None means the current time.
@@ -95,6 +91,315 @@ def nba_injury_refresh_in_window(now: datetime | None = None) -> bool:
         moment = moment.replace(tzinfo=timezone.utc)
     local = moment.astimezone(NBA_INJURY_REFRESH_TZ)
     return local.hour in NBA_INJURY_REFRESH_HOURS
+
+
+# Outer cron for the NBA and WNBA 5-minute pre-tipoff jobs. The handler
+# returns before the scrape unless now is in [tip - 2 hours, tip) for
+# some game on the slate. 09:00 Chicago covers a 12:30 PM ET matinee,
+# whose window opens at 09:30 CT. 22:55 is the last tick. No window
+# reaches 23:00 Chicago. The 15-minute registration below uses
+# LINEUP_ACTIVE_WINDOW_* and runs through 21:45.
+NBA_LINEUP_PRETIPOFF_TZ = ZoneInfo("America/Chicago")
+NBA_LINEUP_PRETIPOFF_LOOKBACK = timedelta(hours=2)
+NBA_LINEUP_PRETIPOFF_CRON_HOUR = "9-22"
+NBA_LINEUP_PRETIPOFF_CRON_MINUTE = "0,5,10,15,20,25,30,35,40,45,50,55"
+# Shared by lineup_fetch_active_window and wnba_lineup_fetch_active_window.
+# The 5-minute handlers skip a tick these fields already cover.
+LINEUP_ACTIVE_WINDOW_TZ = ZoneInfo("America/Chicago")
+LINEUP_ACTIVE_WINDOW_CRON_HOUR = "11-21"
+LINEUP_ACTIVE_WINDOW_CRON_MINUTE = "0,15,30,45"
+# One Eastern slate, including a restart later that same night. The next
+# slate date is a different key, so this does not have to expire at midnight.
+NBA_LINEUP_TIPS_CACHE_TTL_SECONDS = 36 * 60 * 60
+
+
+def _expand_cron_field(expr: str) -> frozenset[int]:
+    """Every integer a cron hour or minute field names.
+
+    ``11-21`` is 11 through 21. ``0,15,30,45`` is those four minutes.
+    A comma may mix ranges and single numbers. The 15-minute lineup
+    registration and ``lineup_active_window_covers`` both read the
+    expanded form of ``LINEUP_ACTIVE_WINDOW_CRON_HOUR`` and
+    ``LINEUP_ACTIVE_WINDOW_CRON_MINUTE``.
+
+    Args:
+        expr: One cron field, as passed to ``CronTrigger``.
+
+    Returns:
+        The values that field matches.
+    """
+    values: set[int] = set()
+    for part in expr.split(","):
+        if "-" in part:
+            start_s, end_s = part.split("-", 1)
+            values.update(range(int(start_s), int(end_s) + 1))
+        else:
+            values.add(int(part))
+    return frozenset(values)
+
+
+LINEUP_ACTIVE_WINDOW_HOURS = _expand_cron_field(LINEUP_ACTIVE_WINDOW_CRON_HOUR)
+LINEUP_ACTIVE_WINDOW_MINUTES = _expand_cron_field(LINEUP_ACTIVE_WINDOW_CRON_MINUTE)
+
+
+def lineup_active_window_covers(now: datetime) -> bool:
+    """True when the 15-minute lineup job already fires at this Chicago tick.
+
+    ``lineup_active_window_covers`` is the gate that keeps the 5-minute
+    pre-tipoff handler from scraping a minute the 15-minute job of the
+    same league scrapes. Both leagues register that job with
+    ``LINEUP_ACTIVE_WINDOW_CRON_HOUR`` and
+    ``LINEUP_ACTIVE_WINDOW_CRON_MINUTE``. A tick at 22:00 Chicago is
+    outside those hours, so the 5-minute job still scrapes it.
+
+    A naive ``now`` is read as UTC.
+
+    Args:
+        now: Instant to test.
+
+    Returns:
+        True when the Chicago hour and minute are both in the 15-minute cron.
+    """
+    moment = now if now.tzinfo is not None else now.replace(tzinfo=timezone.utc)
+    local = moment.astimezone(LINEUP_ACTIVE_WINDOW_TZ)
+    return local.hour in LINEUP_ACTIVE_WINDOW_HOURS and local.minute in LINEUP_ACTIVE_WINDOW_MINUTES
+
+
+def wnba_lineup_tips_cache_key(slate_date: str) -> str:
+    """Redis key for every usable WNBA tip on one Eastern slate date.
+
+    ``slate_date`` is ``nba_slate_date()[0]`` (``YYYY-MM-DD``). The
+    value is the status and the UTC tips. This key is not the NBA key.
+
+    Args:
+        slate_date: Eastern game date.
+
+    Returns:
+        ``lineup:v1:wnba:tips:<slate_date>``.
+    """
+    return f"lineup:v1:wnba:tips:{slate_date}"
+
+
+def nba_lineup_tips_cache_key(slate_date: str) -> str:
+    """Redis key for every usable NBA tip on one Eastern slate date.
+
+    ``slate_date`` is ``nba_slate_date()[0]`` (``YYYY-MM-DD``). The value
+    is the status and the UTC tips, not the games payload. The key is
+    ``tips``, not ``first_tip``, so an older single-tip value is not read.
+
+    Args:
+        slate_date: Eastern game date.
+
+    Returns:
+        ``lineup:v1:nba:tips:<slate_date>``.
+    """
+    return f"lineup:v1:nba:tips:{slate_date}"
+
+
+def _as_utc(moment: datetime) -> datetime:
+    """UTC form of ``moment``. A naive datetime is read as UTC."""
+    if moment.tzinfo is None:
+        return moment.replace(tzinfo=timezone.utc)
+    return moment.astimezone(timezone.utc)
+
+
+def nba_lineup_pretipoff_in_window(
+    now: datetime,
+    tips_utc: datetime | None | tuple[datetime, ...] | list[datetime],
+) -> bool:
+    """True when ``now`` is in ``[tip - 2 hours, tip)`` for any tip.
+
+    ``nba_lineup_pretipoff_in_window`` is the gate for the 5-minute NBA
+    lineup scrape. Call it with the clock you are deciding for and every
+    tip on that slate. One datetime is a one-game night. ``None`` or an
+    empty list is outside the window. Each end is exclusive, so the tick
+    at a tip does not scrape for that game. A later game on the same
+    night still opens its own window.
+
+    The 2 hours are ``NBA_LINEUP_PRETIPOFF_LOOKBACK``. A naive ``now``
+    or tip is read as UTC. The length does not depend on the league.
+    This function does not read a schedule. The WNBA 5-minute job
+    passes that league's tips.
+
+    Args:
+        now: Instant to test.
+        tips_utc: One tip, or every tip, UTC. None skips the scrape.
+
+    Returns:
+        True when ``now`` sits in at least one half-open window.
+    """
+    if tips_utc is None:
+        return False
+    if isinstance(tips_utc, datetime):
+        tips: tuple[datetime, ...] | list[datetime] = (tips_utc,)
+    else:
+        tips = tips_utc
+    moment = _as_utc(now)
+    for tip in tips:
+        tip_utc = _as_utc(tip)
+        start = tip_utc - NBA_LINEUP_PRETIPOFF_LOOKBACK
+        if start <= moment < tip_utc:
+            return True
+    return False
+
+
+def _parse_tip(value: object) -> datetime | None:
+    """Parse one ISO tip. ``Z`` means UTC. None when the text is unusable."""
+    if not isinstance(value, str) or not value.strip():
+        return None
+    text = value.strip()
+    if text.endswith("Z"):
+        text = text[:-1] + "+00:00"
+    try:
+        moment = datetime.fromisoformat(text)
+    except ValueError:
+        return None
+    if moment.tzinfo is None:
+        moment = moment.replace(tzinfo=timezone.utc)
+    return moment.astimezone(timezone.utc)
+
+
+def tips_from_games_payload(
+    payload: object,
+    slate_date: str,
+) -> tuple[str, tuple[datetime, ...]]:
+    """Every usable tip on ``slate_date`` from one ``GET /v1/games`` body.
+
+    ``tips_from_games_payload`` reads the ``data`` list. A postponed game
+    does not count. A game whose ``date`` is a different Eastern day does
+    not count. The tip is the game's ``datetime``. Duplicate instants
+    collapse to one, oldest first.
+
+    Args:
+        payload: The JSON object ``list_games`` returns (``data`` plus ``meta``).
+        slate_date: Eastern game date that was requested.
+
+    Returns:
+        ``("ok", tips)`` when at least one game will tip.
+        ``("no_games", ())`` when ``data`` is a list and nothing will tip.
+        ``("unreadable", ())`` when the body is not that object, or a
+        game that is not postponed has no usable tip and no other game does.
+    """
+    if not isinstance(payload, dict):
+        return ("unreadable", ())
+    data = payload.get("data")
+    if not isinstance(data, list):
+        return ("unreadable", ())
+    tips: list[datetime] = []
+    saw_unusable = False
+    for game in data:
+        if not isinstance(game, dict):
+            saw_unusable = True
+            continue
+        if game.get("postponed") is True:
+            continue
+        tip = _parse_tip(game.get("datetime"))
+        if tip is None:
+            saw_unusable = True
+            continue
+        game_date = game.get("date")
+        if isinstance(game_date, str) and game_date != slate_date:
+            continue
+        if nba_slate_date(tip)[0] != slate_date:
+            continue
+        tips.append(tip)
+    if tips:
+        return ("ok", tuple(sorted(set(tips))))
+    if saw_unusable:
+        return ("unreadable", ())
+    return ("no_games", ())
+
+
+def tips_from_events_payload(
+    payload: object,
+    slate_date: str,
+) -> tuple[str, tuple[datetime, ...]]:
+    """Every usable tip on ``slate_date`` from one events list.
+
+    ``tips_from_events_payload`` reads the list ``get_events`` returns.
+    The tip is ``commence_time``. An event whose Eastern slate date is
+    not ``slate_date`` does not count. Duplicate instants collapse to
+    one, oldest first.
+
+    Args:
+        payload: The list ``get_events(league="wnba")`` returns.
+        slate_date: Eastern game date.
+
+    Returns:
+        ``("ok", tips)`` when at least one event tips on that slate.
+        ``("no_games", ())`` when the list has no event on that slate.
+        ``("unreadable", ())`` when the body is not a list, or an event
+        has no usable ``commence_time`` and no other event on the slate does.
+    """
+    if not isinstance(payload, list):
+        return ("unreadable", ())
+    tips: list[datetime] = []
+    saw_unusable = False
+    for event in payload:
+        if not isinstance(event, dict):
+            saw_unusable = True
+            continue
+        tip = _parse_tip(event.get("commence_time"))
+        if tip is None:
+            saw_unusable = True
+            continue
+        if nba_slate_date(tip)[0] != slate_date:
+            continue
+        tips.append(tip)
+    if tips:
+        return ("ok", tuple(sorted(set(tips))))
+    if saw_unusable:
+        return ("unreadable", ())
+    return ("no_games", ())
+
+
+def _cached_tips(raw: object) -> tuple[str, tuple[datetime, ...]] | None:
+    """Decode a cached tip list. None means the caller should read again.
+
+    A body that only has ``first_tip_utc`` is not this shape, so it is
+    not used.
+    """
+    if not isinstance(raw, dict):
+        return None
+    status = raw.get("status")
+    if status == "ok":
+        raw_tips = raw.get("tips_utc")
+        if not isinstance(raw_tips, list) or not raw_tips:
+            return None
+        tips: list[datetime] = []
+        for item in raw_tips:
+            tip = _parse_tip(item)
+            if tip is None:
+                return None
+            tips.append(tip)
+        return ("ok", tuple(sorted(set(tips))))
+    if status in {"no_games", "unreadable"}:
+        return (status, ())
+    return None
+
+
+def _schedule_is_durable(status: str) -> bool:
+    """True when a slate status is kept for the rest of that slate.
+
+    ``ok``, ``no_games``, and ``unreadable`` are kept. ``unreadable`` is
+    a missing key or a body with no usable tip. ``transient`` is a failed
+    call. It is not kept, so the next tick reads again.
+
+    Args:
+        status: The status half of a tips result.
+
+    Returns:
+        True when the caller should write memory and Redis.
+    """
+    return status in {"ok", "no_games", "unreadable"}
+
+
+def _dump_tips(status: str, tips: tuple[datetime, ...]) -> dict[str, str | list[str] | None]:
+    """JSON-ready cache body. Each tip is UTC ISO text."""
+    return {
+        "status": status,
+        "tips_utc": [tip.isoformat() for tip in tips],
+    }
 
 
 def _snapshot_is_younger_than(raw: object, minutes: int) -> bool:
@@ -148,6 +453,15 @@ class SchedulerService:
         # slate window. A later start() on the same instance does not
         # schedule it again.
         self._injury_startup_fill_done = False
+        # NBA and WNBA tips already resolved in this process, keyed by
+        # Eastern slate date. Keeps a Redis miss from calling again
+        # on the next 5-minute tick. The two leagues do not share a dict.
+        self._nba_tips_memory: dict[str, tuple[str, tuple[datetime, ...]]] = {}
+        self._wnba_tips_memory: dict[str, tuple[str, tuple[datetime, ...]]] = {}
+        # A failed call is not stored. These sets keep that warning to
+        # one line per slate in this process. The next tick still reads.
+        self._nba_schedule_warned: set[str] = set()
+        self._wnba_schedule_warned: set[str] = set()
     
     def start(self):
         """
@@ -285,21 +599,24 @@ class SchedulerService:
         self._scheduler.add_job(
             self._run_lineup_fetch_job,
             trigger=CronTrigger(
-                hour="11-21",
-                minute="0,15,30,45",
-                timezone="America/Chicago",
+                hour=LINEUP_ACTIVE_WINDOW_CRON_HOUR,
+                minute=LINEUP_ACTIVE_WINDOW_CRON_MINUTE,
+                timezone=LINEUP_ACTIVE_WINDOW_TZ,
             ),
             id='lineup_fetch_active_window',
             name='Free Lineup Refresh (every 15 minutes)',
             replace_existing=True
         )
 
+        # Wide 5-minute grid through 22:55. The handler returns unless
+        # now is in [tip - 2h, tip) for some game, and it also returns
+        # on a minute the 15-minute job above already scrapes.
         self._scheduler.add_job(
-            self._run_lineup_fetch_job,
+            self._run_lineup_fetch_pre_tipoff_job,
             trigger=CronTrigger(
-                hour="22,23,0",
-                minute="0,5,10,15,20,25,30,35,40,45,50,55",
-                timezone="America/Chicago",
+                hour=NBA_LINEUP_PRETIPOFF_CRON_HOUR,
+                minute=NBA_LINEUP_PRETIPOFF_CRON_MINUTE,
+                timezone=NBA_LINEUP_PRETIPOFF_TZ,
             ),
             id='lineup_fetch_pre_tipoff',
             name='Free Lineup Refresh (every 5 minutes)',
@@ -308,15 +625,17 @@ class SchedulerService:
 
         # SPO-34: WNBA lineup jobs.
         #
-        # Cadence mirrors the NBA jobs above so WNBA tip-off boundaries
-        # (typically earlier than NBA — many 7:00pm ET starts) and the
-        # pre-tip refresh window are both covered. Independent job IDs
-        # ensure WNBA failures don't block NBA refreshes and vice versa.
+        # Opening and the 15-minute window match the NBA jobs above and
+        # always scrape. The 5-minute job uses the same Chicago grid as
+        # the NBA pre-tipoff job, through 22:55. Its handler returns on
+        # a minute the 15-minute job already scrapes, and it returns
+        # unless now is in [tip - 2h, tip) for some WNBA game.
+        # Independent job IDs ensure
+        # WNBA failures don't block NBA refreshes and vice versa.
         #
-        # The handler is a dedicated method (_run_wnba_lineup_fetch_job)
-        # rather than parameterising _run_lineup_fetch_job because the
-        # latter is wired to the NBA lineup_service singleton and changing
-        # it is out of "NBA path unchanged" scope.
+        # Opening and the 15-minute window call _run_wnba_lineup_fetch_job.
+        # The 5-minute job calls _run_wnba_lineup_fetch_pre_tipoff_job.
+        # The NBA handler stays on the NBA lineup service.
         # Same flag as wnba_daily_analysis_job. The skip line is logged once
         # above, so this branch only omits the three lineup registrations.
         if settings.wnba_jobs_enabled:
@@ -335,9 +654,9 @@ class SchedulerService:
             self._scheduler.add_job(
                 self._run_wnba_lineup_fetch_job,
                 trigger=CronTrigger(
-                    hour="11-21",
-                    minute="0,15,30,45",
-                    timezone="America/Chicago",
+                    hour=LINEUP_ACTIVE_WINDOW_CRON_HOUR,
+                    minute=LINEUP_ACTIVE_WINDOW_CRON_MINUTE,
+                    timezone=LINEUP_ACTIVE_WINDOW_TZ,
                 ),
                 id='wnba_lineup_fetch_active_window',
                 name='WNBA Lineup Refresh (every 15 minutes)',
@@ -345,11 +664,11 @@ class SchedulerService:
             )
 
             self._scheduler.add_job(
-                self._run_wnba_lineup_fetch_job,
+                self._run_wnba_lineup_fetch_pre_tipoff_job,
                 trigger=CronTrigger(
-                    hour="17,18,19",
-                    minute="0,5,10,15,20,25,30,35,40,45,50,55",
-                    timezone="America/Chicago",
+                    hour=NBA_LINEUP_PRETIPOFF_CRON_HOUR,
+                    minute=NBA_LINEUP_PRETIPOFF_CRON_MINUTE,
+                    timezone=NBA_LINEUP_PRETIPOFF_TZ,
                 ),
                 id='wnba_lineup_fetch_pre_tipoff',
                 name='WNBA Lineup Refresh (every 5 minutes, pre-tipoff)',
@@ -398,7 +717,9 @@ class SchedulerService:
         
         print("✅ Scheduler started")
         print("📅 Scheduled Jobs:")
-        print("   - Free Lineup Refresh: 09:30 (baseline) / 11:00-22:00 every 15min / 22:00-00:30 every 5min")
+        print("   - Free Lineup Refresh: 09:30 baseline / 11:00-21:45 every 15min / 5min in each game's last 2h")
+        if settings.wnba_jobs_enabled:
+            print("   - WNBA Lineup Refresh: 09:30 baseline / 11:00-21:45 every 15min / 5min in each game's last 2h")
         print("   - Projection Data Prefetch: Daily UTC 16:00, 22:00, 23:30")
         print("   - Odds Snapshot: Daily UTC 16:05, 22:05, 23:35")
         print("   - Hot Odds Key Prewarm: Every 30 seconds")
@@ -689,13 +1010,30 @@ class SchedulerService:
         except Exception as e:
             print(f"⚠️ Hot Odds Key prewarm failed: {e}")
 
-    async def _run_lineup_fetch_job(self):
+    async def _run_lineup_fetch_job(self, *, now: datetime | None = None) -> None:
+        """Scrape NBA lineups for the Eastern slate at ``now``.
+
+        ``_run_lineup_fetch_job`` is the opening job and the 15-minute
+        job. ``now`` defaults to the current time. A naive datetime is
+        read as UTC. The pre-tipoff job calls this only after the window
+        check passes, and passes the same clock.
+
+        Args:
+            now: Clock that picks ``nba_slate_date``. None is the current time.
+        """
         print("\n" + "=" * 50)
         print(f"🧾 Starting free lineup refresh: {datetime.now(timezone.utc).isoformat()}")
         print("=" * 50)
 
         try:
-            today = nba_slate_date()[0]
+            # No clock: nba_slate_date() reads its own now, which is what
+            # the opening job and the 15-minute job have always done.
+            # A passed clock is the pre-tipoff decision instant.
+            if now is None:
+                today = nba_slate_date()[0]
+            else:
+                moment = now if now.tzinfo is not None else now.replace(tzinfo=timezone.utc)
+                today = nba_slate_date(moment)[0]
             lineups = await lineup_service.fetch_and_store(today)
             print(f"✅ Free lineup refresh completed! {len(lineups)} teams")
         except Exception as e:
@@ -705,19 +1043,187 @@ class SchedulerService:
 
         print("=" * 50 + "\n")
 
-    async def _run_wnba_lineup_fetch_job(self):
+    async def _run_lineup_fetch_pre_tipoff_job(self, *, now: datetime | None = None) -> None:
+        """Scrape NBA lineups inside ``[tip - 2 hours, tip)`` for any game.
+
+        ``_run_lineup_fetch_pre_tipoff_job`` is the handler for
+        ``lineup_fetch_pre_tipoff``. The cron fires every 5 minutes from
+        09:00 through 22:55 Chicago. This method returns before
+        ``fetch_and_store`` when the Chicago minute is one the 15-minute
+        job already scrapes, when the clock is outside every game's
+        window, when the slate has no games, or when the schedule cannot
+        be read. The 15-minute job does not call this method, so it
+        still runs.
+
+        The slate's tips are read at most once per ``nba_slate_date``
+        and stored under ``lineup:v1:nba:tips:<date>`` when the read
+        returns a body. A failed call is not stored, so the next tick
+        tries again. A missing key, or a body with no usable tip, is
+        stored and skips the 5-minute window for the rest of that slate.
+        The source is one ``BdlClient.list_games(dates=[slate])`` call.
+
+        Args:
+            now: Clock for the windows and the slate date. None is the current time.
+        """
+        if now is None:
+            moment = datetime.now(timezone.utc)
+        elif now.tzinfo is None:
+            moment = now.replace(tzinfo=timezone.utc)
+        else:
+            moment = now
+        if lineup_active_window_covers(moment):
+            return
+        slate = nba_slate_date(moment)[0]
+        _status, tips = await self._nba_tips_for_slate(slate)
+        if not nba_lineup_pretipoff_in_window(moment, tips):
+            return
+        await self._run_lineup_fetch_job(now=moment)
+
+    def _warn_schedule_once(
+        self,
+        seen: set[str],
+        slate_date: str,
+        message: str,
+        *args: object,
+    ) -> None:
+        """Log ``message`` once per ``slate_date`` in this process.
+
+        ``_warn_schedule_once`` is for a failed schedule call. The call
+        is not stored, so later ticks would otherwise repeat the line.
+        ``seen`` is the league's set. A new process warns again, once.
+
+        Args:
+            seen: Slate dates already warned in this process.
+            slate_date: Eastern game date.
+            message: Warning template. The key is not part of it.
+            *args: Values for the template, such as an exception type name.
+        """
+        if slate_date in seen:
+            return
+        seen.add(slate_date)
+        logger.warning(message, *args)
+
+    async def _nba_tips_for_slate(
+        self,
+        slate_date: str,
+    ) -> tuple[str, tuple[datetime, ...]]:
+        """Every usable NBA tip on ``slate_date``, from memory, Redis, or one read.
+
+        ``_nba_tips_for_slate`` is how the 5-minute job learns each
+        game's window. A body is stored for the slate. A failed call
+        is not stored in this process or in Redis, so the next tick,
+        and another process, reads again.
+
+        Args:
+            slate_date: Eastern game date, ``YYYY-MM-DD``.
+
+        Returns:
+            ``("ok", tips)``, ``("no_games", ())``, ``("unreadable", ())``,
+            or ``("transient", ())`` when the call failed.
+        """
+        remembered = self._nba_tips_memory.get(slate_date)
+        if remembered is not None:
+            return remembered
+        from app.services.cache import cache_service
+
+        key = nba_lineup_tips_cache_key(slate_date)
+        cached = _cached_tips(await cache_service.get(key))
+        if cached is not None:
+            self._nba_tips_memory[slate_date] = cached
+            return cached
+        result = await self._read_nba_tips(slate_date)
+        if not _schedule_is_durable(result[0]):
+            return result
+        self._nba_tips_memory[slate_date] = result
+        await cache_service.set(
+            key,
+            _dump_tips(result[0], result[1]),
+            NBA_LINEUP_TIPS_CACHE_TTL_SECONDS,
+        )
+        return result
+
+    async def _read_nba_tips(self, slate_date: str) -> tuple[str, tuple[datetime, ...]]:
+        """One ``GET /v1/games?dates[]=`` for ``slate_date``.
+
+        An empty key logs one warning and returns ``unreadable``, which
+        the caller stores for the slate. A failed call logs one warning
+        per slate in this process and returns ``transient``, which the
+        caller does not store. The warning names the exception type, not
+        the key and not the response body. ``per_page`` is 100, which
+        covers one NBA date, so this does not follow a later page.
+
+        Args:
+            slate_date: Eastern game date.
+
+        Returns:
+            The same pair as ``tips_from_games_payload``,
+            ``("unreadable", ())`` when the key is missing or the body
+            was not returned, or ``("transient", ())`` when the call failed.
+        """
+        api_key = settings.balldontlie_api_key.get_secret_value().strip()
+        if not api_key:
+            logger.warning(
+                "lineup_fetch_pre_tipoff schedule unreadable (BALLDONTLIE_API_KEY is unset); "
+                "skipping the 5-minute window"
+            )
+            return ("unreadable", ())
+        from app.services.bdl_client import BdlClient
+
+        client = BdlClient(api_key=api_key)
+        payload: object = None
+        failed = False
+        try:
+            try:
+                payload = await client.list_games(dates=[slate_date], per_page=100)
+            except Exception as exc:
+                self._warn_schedule_once(
+                    self._nba_schedule_warned,
+                    slate_date,
+                    "lineup_fetch_pre_tipoff schedule unreadable (%s); skipping the 5-minute window",
+                    type(exc).__name__,
+                )
+                failed = True
+        finally:
+            try:
+                await client.aclose()
+            except Exception:
+                pass
+        if failed:
+            return ("transient", ())
+        if payload is None:
+            return ("unreadable", ())
+        status, tips = tips_from_games_payload(payload, slate_date)
+        if status == "unreadable":
+            logger.warning(
+                "lineup_fetch_pre_tipoff schedule unreadable (games payload); "
+                "skipping the 5-minute window"
+            )
+        return (status, tips)
+
+    async def _run_wnba_lineup_fetch_job(self, *, now: datetime | None = None) -> None:
         """SPO-34: WNBA lineup refresh.
 
         Independent from the NBA job so a failure here does not block
         NBA refreshes. RotoWire WNBA only (RotoGrinders WNBA is a JS-only
         SPA — see comparison doc §3).
+
+        Opening and the 15-minute job call this with no clock, so the
+        slate date is ``nba_slate_date()``. The 5-minute job passes the
+        decision instant after the window check.
+
+        Args:
+            now: Clock that picks ``nba_slate_date``. None is the current time.
         """
         print("\n" + "=" * 50)
         print(f"🧾 Starting WNBA lineup refresh: {datetime.now(timezone.utc).isoformat()}")
         print("=" * 50)
 
         try:
-            today = nba_slate_date()[0]
+            if now is None:
+                today = nba_slate_date()[0]
+            else:
+                moment = now if now.tzinfo is not None else now.replace(tzinfo=timezone.utc)
+                today = nba_slate_date(moment)[0]
             lineups = await wnba_lineup_service.fetch_and_store(today)
             print(f"✅ WNBA lineup refresh completed! {len(lineups)} teams")
         except Exception as e:
@@ -726,6 +1232,125 @@ class SchedulerService:
             traceback.print_exc()
 
         print("=" * 50 + "\n")
+
+    async def _run_wnba_lineup_fetch_pre_tipoff_job(self, *, now: datetime | None = None) -> None:
+        """Scrape WNBA lineups inside ``[tip - 2 hours, tip)`` for any game.
+
+        ``_run_wnba_lineup_fetch_pre_tipoff_job`` is the handler for
+        ``wnba_lineup_fetch_pre_tipoff``. The cron fires every 5 minutes
+        from 09:00 through 22:55 Chicago. This method returns before
+        ``fetch_and_store`` when the Chicago minute is one the 15-minute
+        WNBA job already scrapes, when the clock is outside every game's
+        window, when the slate has no games, or when the events list
+        cannot be read. The 15-minute WNBA job does not call this method.
+
+        The slate's tips are read at most once per ``nba_slate_date``
+        and stored under ``lineup:v1:wnba:tips:<date>`` when the read
+        returns a body. A failed call is not stored, so the next tick
+        tries again. A missing key, or a body with no usable tip, is
+        stored and skips the 5-minute window for the rest of that slate.
+        The source is one ``get_events(league="wnba")`` call.
+
+        Args:
+            now: Clock for the windows and the slate date. None is the current time.
+        """
+        if now is None:
+            moment = datetime.now(timezone.utc)
+        elif now.tzinfo is None:
+            moment = now.replace(tzinfo=timezone.utc)
+        else:
+            moment = now
+        if lineup_active_window_covers(moment):
+            return
+        slate = nba_slate_date(moment)[0]
+        _status, tips = await self._wnba_tips_for_slate(slate)
+        if not nba_lineup_pretipoff_in_window(moment, tips):
+            return
+        await self._run_wnba_lineup_fetch_job(now=moment)
+
+    async def _wnba_tips_for_slate(
+        self,
+        slate_date: str,
+    ) -> tuple[str, tuple[datetime, ...]]:
+        """Every usable WNBA tip on ``slate_date``, from memory, Redis, or one read.
+
+        ``_wnba_tips_for_slate`` is how the 5-minute WNBA job learns each
+        game's window. A body is stored for the slate. A failed call
+        is not stored in this process or in Redis, so the next tick,
+        and another process, reads again. The NBA tip key is not read.
+
+        Args:
+            slate_date: Eastern game date, ``YYYY-MM-DD``.
+
+        Returns:
+            ``("ok", tips)``, ``("no_games", ())``, ``("unreadable", ())``,
+            or ``("transient", ())`` when the call failed.
+        """
+        remembered = self._wnba_tips_memory.get(slate_date)
+        if remembered is not None:
+            return remembered
+        from app.services.cache import cache_service
+
+        key = wnba_lineup_tips_cache_key(slate_date)
+        cached = _cached_tips(await cache_service.get(key))
+        if cached is not None:
+            self._wnba_tips_memory[slate_date] = cached
+            return cached
+        result = await self._read_wnba_tips(slate_date)
+        if not _schedule_is_durable(result[0]):
+            return result
+        self._wnba_tips_memory[slate_date] = result
+        await cache_service.set(
+            key,
+            _dump_tips(result[0], result[1]),
+            NBA_LINEUP_TIPS_CACHE_TTL_SECONDS,
+        )
+        return result
+
+    async def _read_wnba_tips(self, slate_date: str) -> tuple[str, tuple[datetime, ...]]:
+        """One ``get_events(league="wnba")`` for ``slate_date``.
+
+        An empty Odds API key logs one warning and returns ``unreadable``,
+        which the caller stores for the slate. A failed call logs one
+        warning per slate in this process and returns ``transient``,
+        which the caller does not store. The warning names the exception
+        type, not the key and not the response body. Events whose Eastern
+        slate date is not ``slate_date`` are ignored.
+
+        Args:
+            slate_date: Eastern game date.
+
+        Returns:
+            The same pair as ``tips_from_events_payload``,
+            ``("unreadable", ())`` when the key is missing, or
+            ``("transient", ())`` when the call failed.
+        """
+        api_key = settings.odds_api_key.strip()
+        if not api_key:
+            logger.warning(
+                "wnba_lineup_fetch_pre_tipoff schedule unreadable (ODDS_API_KEY is unset); "
+                "skipping the 5-minute window"
+            )
+            return ("unreadable", ())
+        from app.services.odds_theoddsapi import odds_provider
+
+        try:
+            payload = await odds_provider.get_events(league="wnba")
+        except Exception as exc:
+            self._warn_schedule_once(
+                self._wnba_schedule_warned,
+                slate_date,
+                "wnba_lineup_fetch_pre_tipoff schedule unreadable (%s); skipping the 5-minute window",
+                type(exc).__name__,
+            )
+            return ("transient", ())
+        status, tips = tips_from_events_payload(payload, slate_date)
+        if status == "unreadable":
+            logger.warning(
+                "wnba_lineup_fetch_pre_tipoff schedule unreadable (events payload); "
+                "skipping the 5-minute window"
+            )
+        return (status, tips)
 
     async def trigger_odds_snapshot_now(self, date: Optional[str] = None) -> dict:
         """
