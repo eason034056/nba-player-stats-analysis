@@ -25,12 +25,23 @@ The keys are read from the environment and are never printed.
 Usage:
     PYTHONPATH=backend python3 scripts/record_bdl_odds_fixtures.py
     PYTHONPATH=backend python3 scripts/record_bdl_odds_fixtures.py --bdl-only
+    PYTHONPATH=backend python3 scripts/record_bdl_odds_fixtures.py --stats-only
+    PYTHONPATH=backend python3 scripts/record_bdl_odds_fixtures.py --from-fixtures
 
 Without ``--bdl-only`` both ``BALLDONTLIE_API_KEY`` and ``ODDS_API_KEY``
 are required, because the same-slate pair calls both providers.
 ``--bdl-only`` records only the BALLDONTLIE fixtures (an empty players
 page, an empty props page, and a 429 only when one actually happens)
 and reads ``BALLDONTLIE_API_KEY`` alone.
+
+``--stats-only`` fetches one live pregame pair the same way and prints
+agreement stats. It writes no fixture files. ``--from-fixtures`` prints
+those same stats from an already recorded pair and does not need a key.
+Either mode exits non-zero when the shared props agree below 90 percent,
+or when no prop is shared. The printed lines are the capture time, the
+shared count, the count and percent within 0.5, pass or fail, and the
+same three numbers per market. They do not include a key, a raw body,
+or a player name.
 """
 
 from __future__ import annotations
@@ -69,6 +80,8 @@ _ODDS_BASE = "https://api.the-odds-api.com"
 _BDL_BASE = "https://api.balldontlie.io"
 _PAIR_BUDGET_SECONDS = 150.0
 _RATE_HEADER_PREFIXES = ("x-ratelimit-", "x-requests-")
+_AGREEMENT_MIN = 0.90
+_DEFAULT_SAME_SLATE = "backend/tests/fixtures/same_slate"
 
 
 def public_url(url: str) -> str:
@@ -195,9 +208,16 @@ def _pair_prefix(slate_date: str, away_code: str, home_code: str) -> str:
     return f"{slate_date}_{away_code}@{home_code}"
 
 
-def _record_same_slate(bdl_key: str, odds_key: str) -> None:
-    """One pregame game from both providers, back to back."""
-    sys.path.insert(0, str(_REPO_ROOT / "backend"))
+def _ensure_backend_path() -> None:
+    """Let this script import the backend services."""
+    backend = str(_REPO_ROOT / "backend")
+    if backend not in sys.path:
+        sys.path.insert(0, backend)
+
+
+def _fetch_same_slate(bdl_key: str, odds_key: str) -> dict:
+    """One pregame pair from both providers. Does not write a file."""
+    _ensure_backend_path()
     from app.services.bdl_odds_provider import games_match, slate_date_et, team_code
 
     secrets = [bdl_key, odds_key]
@@ -315,17 +335,42 @@ def _record_same_slate(bdl_key: str, odds_key: str) -> None:
     away_code = team_code(str(away.get("full_name") or ""), str(away.get("abbreviation") or ""))
     home_code = team_code(str(home.get("full_name") or ""), str(home.get("abbreviation") or ""))
     slate = str(matched_game.get("date") or slate_date_et(str(matched_event.get("commence_time"))))
+    return {
+        "captured_at": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+        "events_capture": events_capture,
+        "odds_capture": odds_capture,
+        "games_capture": games_capture,
+        "props_capture": props_capture,
+        "player_captures": player_captures,
+        "matched_event": matched_event,
+        "matched_game": matched_game,
+        "away_code": away_code,
+        "home_code": home_code,
+        "slate": slate,
+        "elapsed": elapsed,
+    }
+
+
+def _write_same_slate(bundle: dict) -> None:
+    """Persist one fetched pair. The caller has already applied the time budget."""
+    slate = str(bundle["slate"])
+    away_code = str(bundle["away_code"])
+    home_code = str(bundle["home_code"])
     prefix = _pair_prefix(slate, away_code, home_code)
+    player_captures = list(bundle["player_captures"])
     _SAME_SLATE_DIR.mkdir(parents=True, exist_ok=True)
-    _write(_SAME_SLATE_DIR / f"{prefix}__odds_api_events.json", events_capture)
-    _write(_SAME_SLATE_DIR / f"{prefix}__odds_api_odds.json", odds_capture)
-    _write(_SAME_SLATE_DIR / f"{prefix}__bdl_games.json", games_capture)
-    _write(_SAME_SLATE_DIR / f"{prefix}__bdl_props.json", props_capture)
+    _write(_SAME_SLATE_DIR / f"{prefix}__odds_api_events.json", bundle["events_capture"])
+    _write(_SAME_SLATE_DIR / f"{prefix}__odds_api_odds.json", bundle["odds_capture"])
+    _write(_SAME_SLATE_DIR / f"{prefix}__bdl_games.json", bundle["games_capture"])
+    _write(_SAME_SLATE_DIR / f"{prefix}__bdl_props.json", bundle["props_capture"])
     for index, capture in enumerate(player_captures, start=1):
         suffix = "__bdl_players.json" if len(player_captures) == 1 else f"__bdl_players_{index}.json"
         _write(_SAME_SLATE_DIR / f"{prefix}{suffix}", capture)
+    matched_event = bundle["matched_event"]
+    matched_game = bundle["matched_game"]
+    elapsed = float(bundle["elapsed"])
     meta = {
-        "captured_at": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+        "captured_at": bundle["captured_at"],
         "odds_api_commence_time": matched_event.get("commence_time"),
         "bdl_commence_time": matched_game.get("datetime"),
         "slate_date": slate,
@@ -336,6 +381,188 @@ def _record_same_slate(bdl_key: str, odds_key: str) -> None:
     meta_path = _SAME_SLATE_DIR / f"{prefix}__meta.json"
     meta_path.write_text(json.dumps(meta, indent=2) + "\n")
     print(f"wrote {meta_path.relative_to(_REPO_ROOT)} elapsed={elapsed:.1f}s")
+
+
+def _record_same_slate(bdl_key: str, odds_key: str) -> None:
+    """One pregame game from both providers, back to back."""
+    _write_same_slate(_fetch_same_slate(bdl_key, odds_key))
+
+
+def _unwrap(payload: object) -> dict:
+    """Recorded wrapper or a raw JSON object. The body is not printed."""
+    if isinstance(payload, dict) and isinstance(payload.get("response"), dict):
+        return payload["response"]
+    if isinstance(payload, dict):
+        return payload
+    raise SystemExit("same-slate file is not an object")
+
+
+def _names_from_pages(pages: list[dict]) -> dict[int, str]:
+    """Player id to display name. The names are not printed."""
+    _ensure_backend_path()
+    from app.services.bdl_player_directory import bdl_player_name
+
+    names: dict[int, str] = {}
+    for page in pages:
+        for player in page.get("data") or []:
+            if isinstance(player, dict) and isinstance(player.get("id"), int):
+                names[player["id"]] = bdl_player_name(player)
+    return names
+
+
+def _print_agreement(
+    *,
+    captured_at: str,
+    bdl_lines: dict[tuple[str, str], float],
+    odds_lines: dict[tuple[str, str], float],
+) -> int:
+    """Print agreement stats only. Return 0 at or above 90 percent.
+
+    A player name is the first half of each consensus key and is not printed.
+    No shared prop is a failure, the same as a rate below 90 percent.
+    """
+    shared = [key for key in bdl_lines if key in odds_lines]
+
+    def measure(keys: list[tuple[str, str]]) -> tuple[int, int, float]:
+        total = len(keys)
+        if total == 0:
+            return 0, 0, 0.0
+        within = sum(
+            1
+            for player, market in keys
+            if abs(bdl_lines[(player, market)] - odds_lines[(player, market)]) <= 0.5 + 1e-9
+        )
+        return total, within, within / total
+
+    total, within, rate = measure(shared)
+    passed = bool(shared) and rate >= _AGREEMENT_MIN
+    lines = [
+        f"capture={captured_at}",
+        f"shared={total}",
+        f"within_0.5={within}",
+        f"percent={rate:.1%}",
+        f"result={'pass' if passed else 'fail'}",
+    ]
+    markets = sorted({market for _player, market in shared})
+    for market in markets:
+        market_keys = [key for key in shared if key[1] == market]
+        market_total, market_within, market_rate = measure(market_keys)
+        lines.append(
+            f"market={market} shared={market_total} within_0.5={market_within} percent={market_rate:.1%}"
+        )
+    print("\n".join(lines))
+    return 0 if passed else 1
+
+
+def _stats_from_bodies(
+    *,
+    captured_at: str,
+    odds_body: dict,
+    props_body: dict,
+    games_body: dict,
+    names: dict[int, str],
+    meta: dict | None = None,
+) -> int:
+    """Adapt the props with the shipping rule and print the agreement."""
+    _ensure_backend_path()
+    from app.services.bdl_odds_provider import games_match
+    from app.services.bdl_props_adapter import BdlPropsAdapter, consensus_lines
+
+    meta = meta or {}
+    commence = str(odds_body.get("commence_time") or meta.get("odds_api_commence_time") or "")
+    game = next(
+        (
+            item
+            for item in games_body.get("data") or []
+            if isinstance(item, dict)
+            and games_match(
+                odds_home=str(odds_body.get("home_team") or ""),
+                odds_away=str(odds_body.get("away_team") or ""),
+                odds_commence=commence,
+                bdl_game=item,
+            )
+        ),
+        None,
+    )
+    if not isinstance(game, dict):
+        return _print_agreement(captured_at=captured_at, bdl_lines={}, odds_lines={})
+    tip_text = game.get("datetime") if isinstance(game.get("datetime"), str) else ""
+    tip = datetime.fromisoformat(tip_text.replace("Z", "+00:00")) if tip_text else None
+    props_rows = props_body.get("data") if isinstance(props_body.get("data"), list) else []
+    books = BdlPropsAdapter().to_bookmakers(
+        [row for row in props_rows if isinstance(row, dict)],
+        names,
+        game_datetime=tip,
+    )
+    odds_books = odds_body.get("bookmakers") if isinstance(odds_body.get("bookmakers"), list) else []
+    return _print_agreement(
+        captured_at=captured_at,
+        bdl_lines=consensus_lines(books),
+        odds_lines=consensus_lines([book for book in odds_books if isinstance(book, dict)]),
+    )
+
+
+def _stats_from_live(bdl_key: str, odds_key: str) -> int:
+    """Fetch one pair, write nothing, and print the agreement."""
+    bundle = _fetch_same_slate(bdl_key, odds_key)
+    pages = [_unwrap(capture) for capture in bundle["player_captures"]]
+    return _stats_from_bodies(
+        captured_at=str(bundle["captured_at"]),
+        odds_body=_unwrap(bundle["odds_capture"]),
+        props_body=_unwrap(bundle["props_capture"]),
+        games_body=_unwrap(bundle["games_capture"]),
+        names=_names_from_pages(pages),
+        meta={
+            "odds_api_commence_time": bundle["matched_event"].get("commence_time"),
+        },
+    )
+
+
+def _read_json(path: Path) -> object:
+    """Load one recorded file. A bad file exits without printing its text."""
+    try:
+        return json.loads(path.read_text())
+    except (OSError, json.JSONDecodeError):
+        raise SystemExit(f"same-slate file is unreadable: {path.name}") from None
+
+
+def _stats_from_fixtures(directory: Path) -> int:
+    """Print agreement for the first recorded pair in ``directory``."""
+    if not directory.is_dir():
+        raise SystemExit("same-slate directory is missing")
+    metas = sorted(directory.glob("*__meta.json"))
+    if not metas:
+        raise SystemExit("same-slate directory has no recorded pair")
+    meta_path = metas[0]
+    meta = _read_json(meta_path)
+    if not isinstance(meta, dict):
+        raise SystemExit("same-slate meta file is not an object")
+    prefix = meta_path.name[: -len("__meta.json")]
+    odds_path = directory / f"{prefix}__odds_api_odds.json"
+    props_path = directory / f"{prefix}__bdl_props.json"
+    games_path = directory / f"{prefix}__bdl_games.json"
+    players_paths = sorted(directory.glob(f"{prefix}__bdl_players*.json"))
+    for path in (odds_path, props_path, games_path):
+        if not path.exists():
+            raise SystemExit(f"same-slate file missing: {path.name}")
+    if not players_paths:
+        raise SystemExit(f"same-slate players file missing for {prefix}")
+    pages = []
+    for path in players_paths:
+        page = _read_json(path)
+        pages.append(_unwrap(page))
+    odds_body = _unwrap(_read_json(odds_path))
+    props_body = _unwrap(_read_json(props_path))
+    games_body = _unwrap(_read_json(games_path))
+    captured_at = meta.get("captured_at") if isinstance(meta.get("captured_at"), str) else ""
+    return _stats_from_bodies(
+        captured_at=captured_at,
+        odds_body=odds_body,
+        props_body=props_body,
+        games_body=games_body,
+        names=_names_from_pages(pages),
+        meta=meta,
+    )
 
 
 def _record_empty_players(bdl_key: str) -> None:
@@ -380,12 +607,31 @@ def _record_empty_props(bdl_key: str) -> None:
 
 
 def _parse_args(argv: list[str] | None) -> argparse.Namespace:
-    """``--bdl-only`` skips The Odds API and the same-slate pair."""
+    """``--bdl-only`` skips The Odds API and the same-slate pair.
+
+    ``--stats-only`` prints agreement and writes nothing.
+    ``--from-fixtures`` reads a recorded pair instead of calling the APIs.
+    """
     parser = argparse.ArgumentParser(description="Record BALLDONTLIE odds fixtures from live responses.")
     parser.add_argument(
         "--bdl-only",
         action="store_true",
         help="Record only BALLDONTLIE fixtures. Requires BALLDONTLIE_API_KEY.",
+    )
+    parser.add_argument(
+        "--stats-only",
+        action="store_true",
+        help="Print same-slate agreement stats and write no fixture files.",
+    )
+    parser.add_argument(
+        "--from-fixtures",
+        nargs="?",
+        const=_DEFAULT_SAME_SLATE,
+        default=None,
+        help=(
+            "Print agreement stats from a recorded same-slate directory. "
+            f"Default directory is {_DEFAULT_SAME_SLATE}. No key is required."
+        ),
     )
     return parser.parse_args(argv)
 
@@ -393,10 +639,23 @@ def _parse_args(argv: list[str] | None) -> argparse.Namespace:
 def main(argv: list[str] | None = None) -> None:
     """Record what the live APIs actually return. Exit before writing a guessed body."""
     args = _parse_args(argv)
+    if args.from_fixtures is not None:
+        directory = Path(args.from_fixtures)
+        if not directory.is_absolute():
+            directory = Path.cwd() / directory
+        raise SystemExit(_stats_from_fixtures(directory))
     _load_env_file(_REPO_ROOT / ".env")
     _load_env_file(_REPO_ROOT / "backend" / ".env")
     bdl_key = os.environ.get("BALLDONTLIE_API_KEY", "").strip()
     odds_key = os.environ.get("ODDS_API_KEY", "").strip()
+    if args.stats_only:
+        if not bdl_key or not odds_key:
+            raise SystemExit("BALLDONTLIE_API_KEY and ODDS_API_KEY must both be set")
+        try:
+            code = _stats_from_live(bdl_key, odds_key)
+        except _Http429:
+            raise SystemExit("stats-only stopped on HTTP 429") from None
+        raise SystemExit(code)
     if args.bdl_only:
         if not bdl_key:
             raise SystemExit("BALLDONTLIE_API_KEY must be set")

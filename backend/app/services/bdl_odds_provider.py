@@ -152,8 +152,9 @@ class BdlOddsProvider:
 
     ``list_events`` remembers each game. ``get_event_props`` uses that
     game's ``datetime`` as the tip, so rows updated after tip are dropped.
-    A props call made before any ``list_events`` has no tip and keeps
-    every timestamp.
+    A props call made before any ``list_events`` loads that one game with
+    ``BdlClient.get_game`` and uses the same tip. A failed game fetch
+    raises. It does not keep the in-game rows.
     """
 
     name = "balldontlie"
@@ -366,6 +367,17 @@ class BdlOddsProvider:
         )
         names = await self._require_directory().names_for(player_ids) if player_ids else {}
         game = self._games.get(str(game_id))
+        if not isinstance(game, dict):
+            # A cold cache has no tip. Fetching the game here is what keeps
+            # an in-game snapshot from being stored as a pregame board.
+            # ``list_games`` needs a slate date this call does not have.
+            game_payload = await self._require_client().get_game(game_id=game_id)
+            fetched = game_payload.get("data") if isinstance(game_payload, dict) else None
+            if isinstance(fetched, dict):
+                self._games[str(game_id)] = fetched
+                game = fetched
+            else:
+                game = None
         tip = _parse_utc(game.get("datetime")) if isinstance(game, dict) else None
         books = self._adapter.to_bookmakers(
             dict_rows,

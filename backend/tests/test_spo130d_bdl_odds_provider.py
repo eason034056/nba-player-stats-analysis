@@ -9,6 +9,7 @@ same way other tests relabel a player on a recorded odds body.
 from __future__ import annotations
 
 import ast
+import copy
 import json
 import logging
 import os
@@ -22,12 +23,14 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 import fakeredis.aioredis
 
+from app.services.bdl_client import BdlApiError
 from app.services.bdl_odds_provider import (
     BdlOddsProvider,
     games_match,
+    odds_api_team_name,
 )
 from app.services.bdl_player_directory import BdlPlayerDirectory, bdl_player_name
-from app.services.bdl_props_adapter import BdlPropsAdapter
+from app.services.bdl_props_adapter import BdlPropsAdapter, consensus_lines
 from app.services.daily_analysis import DailyAnalysisService
 from app.services.odds_gateway import PROVIDERS
 from app.services.odds_snapshot_service import SNAPSHOT_MARKETS, OddsSnapshotService
@@ -152,6 +155,14 @@ class _FixtureClient:
         wanted = set(player_ids)
         data = [player for player in self.players["data"] if player["id"] in wanted]
         return {"data": data, "meta": dict(self.players.get("meta") or {})}
+
+    async def get_game(self, *, game_id: int):
+        """The recorded list-games object, wrapped in the by-id envelope."""
+        self.calls.append(("get_game", game_id))
+        for game in self.games["data"]:
+            if game["id"] == game_id:
+                return {"data": game}
+        raise AssertionError(f"recorded games file has no game {game_id}")
 
 
 def _provider(client: _FixtureClient | None = None) -> tuple[BdlOddsProvider, _FixtureClient]:
@@ -330,6 +341,47 @@ class TestAdapterRules:
         player = names[476]
         assert _points_for([_book(books, "betparx")], player) == [5.5]
 
+    def test_a_higher_alternate_loses_to_the_other_books_median(self):
+        """A cloned 40.5 is not the main when the other books sit on 33.5."""
+        rows = _rows("props_live_21718080_OKC@POR_pregame.json")
+        source = next(
+            row
+            for row in rows
+            if row["player_id"] == SHAI_ID
+            and row["vendor"] == "betparx"
+            and row["prop_type"] == "points"
+            and row["market"]["type"] == "over_under"
+            and float(row["line_value"]) == 33.5
+        )
+        clone = copy.deepcopy(source)
+        clone["line_value"] = "40.5"
+        clone["id"] = max(row["id"] for row in rows if isinstance(row.get("id"), int)) + 1
+        names = _names()
+        _adapter, books = _adapt([*rows, clone], markets=("player_points",))
+        betparx = _book(books, "betparx")
+        assert betparx is not None
+        assert _points_for([betparx], names[SHAI_ID]) == [33.5]
+        assert 40.5 not in _points_for(books, names[SHAI_ID])
+
+    def test_pair_without_other_books_keeps_the_higher_total(self):
+        """No other book leaves the old maximum rule. 33.5 stays, 10.5 goes."""
+        rows = [
+            row
+            for row in _rows("props_live_21718080_OKC@POR_pregame.json")
+            if row["player_id"] == SHAI_ID
+            and row["vendor"] in {"betparx", "ballybet"}
+            and row["prop_type"] == "points"
+            and isinstance(row.get("market"), dict)
+            and row["market"]["type"] == "over_under"
+            and float(row["line_value"]) in {10.5, 33.5}
+        ]
+        assert {float(row["line_value"]) for row in rows} == {10.5, 33.5}
+        assert {row["vendor"] for row in rows} <= {"betparx", "ballybet"}
+        names = _names()
+        _adapter, books = _adapt(rows, markets=("player_points",))
+        assert _points_for(books, names[SHAI_ID]) == [33.5]
+        assert 10.5 not in _points_for(books, names[SHAI_ID])
+
 
 class TestPlayerDirectory:
     """Unknown ids use the recorded BALLDONTLIE name and count a log line."""
@@ -432,12 +484,72 @@ class TestProvider:
         await provider.list_events("nba", start, end)
         board = await provider.get_event_props("nba", "21718080", ("player_points",))
         assert [call[0] for call in client.calls].count("get_player_props") == 1
+        assert [call[0] for call in client.calls].count("get_game") == 0
         assert board.provider == "balldontlie"
         assert board.fetched_at.tzinfo is timezone.utc
         assert board.player_ids["Shai Gilgeous-Alexander"] == SHAI_ID
         assert _points_for(board.bookmakers, "Shai Gilgeous-Alexander")
         assert 10.5 not in _points_for(board.bookmakers, "Shai Gilgeous-Alexander")
         assert _book(board.bookmakers, "ballybet") is None
+
+    @pytest.mark.asyncio
+    async def test_cold_cache_loads_the_tip_and_drops_the_post_tip_board(self):
+        """t2 without list_events still drops every row. The tip is get_game."""
+        client = _FixtureClient()
+        client.props = _load("props_live_21718080_OKC@POR_t2.json")["response"]
+        provider, client = _provider(client)
+        recorded = _game(OKC_GAME_ID)
+        assert recorded["datetime"] == "2026-11-11T04:00:00.000Z"
+        board = await provider.get_event_props("nba", str(OKC_GAME_ID), ("player_points",))
+        again = await provider.get_event_props("nba", str(OKC_GAME_ID), ("player_points",))
+        assert board.bookmakers == []
+        assert again.bookmakers == []
+        assert provider._adapter.post_tip_dropped == len(client.props["data"])
+        assert provider._games[str(OKC_GAME_ID)]["datetime"] == recorded["datetime"]
+        kinds = [call[0] for call in client.calls]
+        assert kinds.count("get_game") == 1
+        assert kinds.count("get_player_props") == 2
+        assert "list_games" not in kinds
+        assert ("get_game", OKC_GAME_ID) in client.calls
+
+    @pytest.mark.asyncio
+    async def test_cold_cache_odds_fill_commence_and_drop_the_post_tip_board(self):
+        """get_event_odds on t2 has no books, and the recorded tip fills the event."""
+        client = _FixtureClient()
+        client.props = _load("props_live_21718080_OKC@POR_t2.json")["response"]
+        provider, client = _provider(client)
+        recorded = _game(OKC_GAME_ID)
+        body = await provider.get_event_odds(
+            event_id=str(OKC_GAME_ID),
+            markets="player_points",
+            league="nba",
+        )
+        assert body["bookmakers"] == []
+        assert body["commence_time"] == "2026-11-11T04:00:00.000Z"
+        assert body["home_team"] == odds_api_team_name(recorded["home_team"]["full_name"])
+        assert body["away_team"] == odds_api_team_name(recorded["visitor_team"]["full_name"])
+        assert provider._adapter.post_tip_dropped == len(client.props["data"])
+        kinds = [call[0] for call in client.calls]
+        assert kinds.count("get_game") == 1
+        assert kinds.count("get_player_props") == 1
+        assert "list_games" not in kinds
+
+    @pytest.mark.asyncio
+    async def test_a_failed_game_fetch_is_not_treated_as_a_missing_tip(self):
+        """HTTP failure from get_game raises. The rows are not kept."""
+
+        class _FailingGame(_FixtureClient):
+            async def get_game(self, *, game_id: int):
+                self.calls.append(("get_game", game_id))
+                raise BdlApiError("BALLDONTLIE returned HTTP 502 for /v1/games/21718080", 502)
+
+        client = _FailingGame()
+        client.props = _load("props_live_21718080_OKC@POR_t2.json")["response"]
+        provider, client = _provider(client)
+        with pytest.raises(BdlApiError):
+            await provider.get_event_props("nba", str(OKC_GAME_ID), ("player_points",))
+        assert provider._games == {}
+        assert "list_games" not in [call[0] for call in client.calls]
 
     @pytest.mark.asyncio
     async def test_non_digit_id_and_other_league_do_not_call(self):
@@ -667,26 +779,12 @@ def _unwrap(payload: dict | list) -> dict:
 
 
 def _consensus(books: list[dict]) -> dict[tuple[str, str], float]:
-    """One consensus total per player and market, using the existing vote."""
-    from app.services.prob import calculate_mode_threshold
+    """One consensus total per player and market, using the existing vote.
 
-    service = DailyAnalysisService()
-    keys: list[str] = []
-    for book in books:
-        for market in book.get("markets") or []:
-            key = market.get("key")
-            if isinstance(key, str) and key not in keys and key != "player_double_double":
-                keys.append(key)
-    found: dict[tuple[str, str], float] = {}
-    for key in keys:
-        votes = service._group_main_votes(_only(books, key))
-        for player, pairs in votes.items():
-            lines = [line for line, _distance in pairs]
-            distances = [distance for _line, distance in pairs]
-            mode = calculate_mode_threshold(lines, distances)
-            if mode is not None:
-                found[(player, key)] = float(mode)
-    return found
+    The recorder imports ``consensus_lines`` from the adapter. This wrapper
+    keeps the same-slate test on that function.
+    """
+    return consensus_lines(books)
 
 
 def test_record_script_strips_the_key_and_uses_snapshot_markets():
@@ -727,6 +825,44 @@ def test_record_script_strips_the_key_and_uses_snapshot_markets():
     assert "--bdl-only" in text
 
 
+def _load_record_module():
+    """Import the recorder. Importing it must not print a key."""
+    import importlib.util
+
+    spec = importlib.util.spec_from_file_location("record_bdl_odds_fixtures", RECORD_SCRIPT)
+    assert spec is not None and spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def _recorded_pair_bundle() -> dict:
+    """Odds books are the adapter output of the recorded pregame props.
+
+    The game, props, and players objects are the recorded captures.
+    The odds event's teams and commence time are that recorded game,
+    so the date-and-code join matches it.
+    """
+    game = _game(OKC_GAME_ID)
+    rows = _rows("props_live_21718080_OKC@POR_pregame.json")
+    _adapter, books = _adapt(rows)
+    return {
+        "captured_at": "2026-11-21T04:00:00Z",
+        "odds_capture": {
+            "response": {
+                "home_team": game["home_team"]["full_name"],
+                "away_team": game["visitor_team"]["full_name"],
+                "commence_time": game["datetime"],
+                "bookmakers": books,
+            }
+        },
+        "props_capture": {"response": _load("props_live_21718080_OKC@POR_pregame.json")["response"]},
+        "games_capture": {"response": _load("games_2026-11-10.json")["response"]},
+        "player_captures": [{"response": _load("backend_players_batch45.json")["response"]}],
+        "matched_event": {"commence_time": game["datetime"]},
+    }
+
+
 def test_bdl_only_skips_the_odds_api(monkeypatch):
     """``--bdl-only`` records BALLDONTLIE fixtures and does not call The Odds API."""
     import importlib.util
@@ -749,3 +885,134 @@ def test_bdl_only_skips_the_odds_api(monkeypatch):
     with pytest.raises(SystemExit, match="must both be set"):
         module.main([])
     assert calls == []
+
+
+def test_stats_only_prints_agreement_and_does_not_write_or_print_a_key(monkeypatch, tmp_path, capsys):
+    """Live stats print the agreement and leave the fixture tree untouched."""
+    module = _load_record_module()
+    odds_secret = "odds-secret-value"
+    bdl_secret = "bdl-secret-value"
+    monkeypatch.setenv("ODDS_API_KEY", odds_secret)
+    monkeypatch.setenv("BALLDONTLIE_API_KEY", bdl_secret)
+    monkeypatch.setattr(module, "_BDL_DIR", tmp_path / "bdl")
+    monkeypatch.setattr(module, "_SAME_SLATE_DIR", tmp_path / "same_slate")
+    monkeypatch.setattr(module, "_REPO_ROOT", tmp_path)
+    writes: list[Path] = []
+    monkeypatch.setattr(module, "_write", lambda path, payload: writes.append(path))
+    bundle = _recorded_pair_bundle()
+
+    def fake_fetch(bdl_key: str, odds_key: str) -> dict:
+        assert bdl_key == bdl_secret
+        assert odds_key == odds_secret
+        return bundle
+
+    monkeypatch.setattr(module, "_fetch_same_slate", fake_fetch)
+    with pytest.raises(SystemExit) as caught:
+        module.main(["--stats-only"])
+    assert caught.value.code == 0
+    printed = capsys.readouterr()
+    text = printed.out + printed.err
+    assert odds_secret not in text
+    assert bdl_secret not in text
+    assert "Shai" not in text
+    assert "Gilgeous" not in text
+    assert "apiKey" not in text
+    assert "capture=2026-11-21T04:00:00Z" in printed.out
+    assert "shared=" in printed.out
+    assert "within_0.5=" in printed.out
+    assert "percent=" in printed.out
+    assert "result=pass" in printed.out
+    assert "market=player_points shared=" in printed.out
+    assert writes == []
+    assert list(tmp_path.rglob("*")) == []
+    source = RECORD_SCRIPT.read_text()
+    assert "--stats-only" in source
+    assert "--from-fixtures" in source
+
+
+def test_stats_only_exits_nonzero_when_nothing_is_shared(monkeypatch, capsys):
+    """No shared prop is a failed measurement, and the key is still hidden."""
+    module = _load_record_module()
+    odds_secret = "odds-secret-value"
+    bdl_secret = "bdl-secret-value"
+    monkeypatch.setenv("ODDS_API_KEY", odds_secret)
+    monkeypatch.setenv("BALLDONTLIE_API_KEY", bdl_secret)
+    bundle = _recorded_pair_bundle()
+    bundle["odds_capture"]["response"]["bookmakers"] = []
+
+    monkeypatch.setattr(module, "_fetch_same_slate", lambda *_args: bundle)
+    with pytest.raises(SystemExit) as caught:
+        module.main(["--stats-only"])
+    assert caught.value.code == 1
+    printed = capsys.readouterr()
+    text = printed.out + printed.err
+    assert odds_secret not in text
+    assert bdl_secret not in text
+    assert "Shai" not in text
+    assert "shared=0" in printed.out
+    assert "within_0.5=0" in printed.out
+    assert "result=fail" in printed.out
+
+
+def test_stats_only_requires_both_keys(monkeypatch):
+    """A live stats run does not start when either key is missing."""
+    module = _load_record_module()
+    monkeypatch.delenv("ODDS_API_KEY", raising=False)
+    monkeypatch.delenv("BALLDONTLIE_API_KEY", raising=False)
+    monkeypatch.setattr(module, "_load_env_file", lambda _path: None)
+    called: list[str] = []
+    monkeypatch.setattr(module, "_fetch_same_slate", lambda *_args: called.append("fetch"))
+    with pytest.raises(SystemExit, match="must both be set"):
+        module.main(["--stats-only"])
+    assert called == []
+
+
+def test_from_fixtures_prints_stats_without_keys_or_writes(monkeypatch, tmp_path, capsys):
+    """A recorded pair is scored in place. No key and no new file."""
+    import shutil
+
+    module = _load_record_module()
+    monkeypatch.delenv("ODDS_API_KEY", raising=False)
+    monkeypatch.delenv("BALLDONTLIE_API_KEY", raising=False)
+    monkeypatch.setattr(module, "_load_env_file", lambda _path: None)
+    slate = tmp_path / "same_slate"
+    slate.mkdir()
+    prefix = "2026-11-10_OKC@POR"
+    shutil.copy(
+        FIXTURE_DIR / "props_live_21718080_OKC@POR_pregame.json",
+        slate / f"{prefix}__bdl_props.json",
+    )
+    shutil.copy(FIXTURE_DIR / "games_2026-11-10.json", slate / f"{prefix}__bdl_games.json")
+    shutil.copy(FIXTURE_DIR / "backend_players_batch45.json", slate / f"{prefix}__bdl_players.json")
+    bundle = _recorded_pair_bundle()
+    (slate / f"{prefix}__odds_api_odds.json").write_text(
+        json.dumps(bundle["odds_capture"]) + "\n"
+    )
+    (slate / f"{prefix}__meta.json").write_text(
+        json.dumps(
+            {
+                "captured_at": "2026-11-21T04:00:00Z",
+                "odds_api_commence_time": bundle["matched_event"]["commence_time"],
+                "bdl_commence_time": "2026-11-11T04:00:00.000Z",
+                "slate_date": "2026-11-10",
+                "away_code": "OKC",
+                "home_code": "POR",
+                "elapsed_seconds": 1.0,
+            }
+        )
+        + "\n"
+    )
+    before = sorted(path.name for path in slate.iterdir())
+    with pytest.raises(SystemExit) as caught:
+        module.main(["--from-fixtures", str(slate)])
+    assert caught.value.code == 0
+    assert sorted(path.name for path in slate.iterdir()) == before
+    printed = capsys.readouterr()
+    text = printed.out + printed.err
+    assert "odds-secret-value" not in text
+    assert "bdl-secret-value" not in text
+    assert "Shai" not in text
+    assert "Gilgeous" not in text
+    assert "capture=2026-11-21T04:00:00Z" in printed.out
+    assert "result=pass" in printed.out
+    assert "market=player_points shared=" in printed.out

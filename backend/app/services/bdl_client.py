@@ -14,6 +14,7 @@ Paths below are the paths in the recorded captures under
 ``backend/tests/fixtures/bdl/``:
 
 - ``GET /v1/games``
+- ``GET /v1/games/{id}``
 - ``GET /v1/stats``
 - ``GET /v1/players`` (query key ``player_ids[]``, not ``ids[]``)
 - ``GET /v1/player_injuries``
@@ -188,6 +189,23 @@ async def _default_sleep(seconds: float) -> None:
     await asyncio.sleep(seconds)
 
 
+def _positive_game_id(game_id: object) -> int:
+    """A positive integer id, or ``BdlError`` before any HTTP call.
+
+    A digit string is accepted and parsed. ``0``, a negative number, a
+    boolean, and any other non-digit value are refused. The message does
+    not echo the caller's value.
+    """
+    if isinstance(game_id, str):
+        text = game_id.strip()
+        if text.isdigit() and int(text) > 0:
+            return int(text)
+        raise BdlError("get_game requires a positive game id")
+    if isinstance(game_id, bool) or not isinstance(game_id, int) or game_id <= 0:
+        raise BdlError("get_game requires a positive game id")
+    return game_id
+
+
 class BdlClient:
     """Async client for the BALLDONTLIE NBA endpoints used by Sports Lab.
 
@@ -348,6 +366,25 @@ class BdlClient:
         if season_type is not None:
             params.append(("season_type", season_type))
         return await self._get(_PATH_GAMES, _with_page(params, per_page=per_page, cursor=cursor))
+
+    async def get_game(self, *, game_id: int) -> dict[str, Any]:
+        """Fetch one NBA game by its BALLDONTLIE id.
+
+        Calls ``GET /v1/games/{game_id}`` with no query string. The recorded
+        captures are ``games__game*_record.json``. The body is
+        ``{"data": {game object}}``: ``data`` is one object, not a list.
+        The object has the same ``id``, ``date``, ``datetime``,
+        ``status_state``, ``home_team``, and ``visitor_team`` fields
+        ``list_games`` already returns inside its ``data`` array.
+
+        A non-digit id, or an id that is not a positive integer, raises
+        ``BdlError`` before a request is sent. A non-2xx response is
+        ``BdlApiError`` from ``_get``. This method does not invent a 404 body.
+
+        Returns the raw JSON object.
+        """
+        parsed = _positive_game_id(game_id)
+        return await self._get(f"{_PATH_GAMES}/{parsed}", [])
 
     async def list_stats(
         self,

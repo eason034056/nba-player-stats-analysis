@@ -376,6 +376,58 @@ async def test_get_player_props_is_the_recorded_unpaginated_call():
 
 
 @pytest.mark.asyncio
+async def test_get_game_returns_the_recorded_object_with_no_query():
+    """``GET /v1/games/1038278`` matches games__game1038278_record.json."""
+    capture = _load("games__game1038278_record.json")
+    path, query = _request_parts(capture)
+    assert path == "/v1/games/1038278"
+    assert query == {}
+    seen: list[httpx.Request] = []
+    clock = ManualClock(_MINUTE)
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen.append(request)
+        return _json_response(capture)
+
+    client = _client(handler, clock)
+    try:
+        body = await client.get_game(game_id=1038278)
+    finally:
+        await client.aclose()
+
+    assert body == capture["response"]
+    assert isinstance(body["data"], dict)
+    assert body["data"]["id"] == 1038278
+    request = seen[0]
+    assert request.url.path == "/v1/games/1038278"
+    assert request.url.query == b""
+    assert list(request.url.params.keys()) == []
+    assert clock.sleeps == []
+
+
+@pytest.mark.asyncio
+async def test_get_game_rejects_a_bad_id_before_http():
+    """Zero, a negative, a boolean, and a non-digit never reach the transport."""
+    clock = ManualClock(_MINUTE)
+    seen: list[httpx.Request] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen.append(request)
+        raise AssertionError("get_game sent HTTP")
+
+    client = _client(handler, clock)
+    try:
+        for game_id in (0, -1, True, "abc", "0", ""):
+            with pytest.raises(BdlError, match="positive game id"):
+                await client.get_game(game_id=game_id)  # type: ignore[arg-type]
+    finally:
+        await client.aclose()
+
+    assert seen == []
+    assert clock.sleeps == []
+
+
+@pytest.mark.asyncio
 async def test_list_odds_uses_the_recorded_v2_path():
     """Game lines are ``GET /v2/odds``, the path in odds_2026-11-11.json."""
     capture = _load("odds_2026-11-11.json")
