@@ -9,8 +9,7 @@ import { GameLogChart } from "@/components/event/GameLogChart";
 import { OurRead } from "@/components/event/OurRead";
 import { PlayerRail } from "@/components/event/PlayerRail";
 import { StatChips } from "@/components/event/StatChips";
-import { AGENT_CHAT_UI_ENABLED } from "@/lib/agent-chat-ui";
-import { buildOurRead, buildReadSignals, gameLogChart, lineupChip } from "@/lib/event-page";
+import { buildOurRead, gameLogChart, lineupChip } from "@/lib/event-page";
 import { dailyPicksResponseSchema, playerHistoryResponseSchema } from "@/lib/schemas";
 import edgesFixture from "@/test/fixtures/event/nba-history-threshold-edges.json";
 import nbaHistoryFixture from "@/test/fixtures/event/nba-history-bam.json";
@@ -269,36 +268,7 @@ describe("OurRead", () => {
     expect(screen.getByText("Odds request failed")).toBeInTheDocument();
   });
 
-  it.skipIf(!AGENT_CHAT_UI_ENABLED)("asks the agent", async () => {
-    const onAsk = vi.fn();
-    const user = userEvent.setup();
-    renderWithProviders(
-      <OurRead
-        model={model}
-        isLoading={false}
-        isError={false}
-        errorText={null}
-        primaryInSlip={false}
-        otherInSlip={false}
-        onAddPrimary={noop}
-        onAddOther={noop}
-        onAsk={onAsk}
-      />,
-    );
-    await user.click(screen.getByRole("button", { name: "Ask the agent" }));
-    expect(onAsk).toHaveBeenCalled();
-    expect(buildReadSignals({
-      binary: false,
-      line: null,
-      consensus: null,
-      last10: [],
-      history: null,
-      pick: null,
-      market: "player_points",
-    }).every((signal) => signal.value === null)).toBe(true);
-  });
-
-  it.skipIf(AGENT_CHAT_UI_ENABLED)("renders no Ask the agent control when chat UI is off", () => {
+  it("renders no Ask the agent control when chat UI is off", () => {
     const onAsk = vi.fn();
     renderWithProviders(
       <OurRead
@@ -508,25 +478,7 @@ describe("EventActionBar", () => {
     league: "wnba",
   });
 
-  it.skipIf(!AGENT_CHAT_UI_ENABLED)("asks from the mobile bar", async () => {
-    const onAsk = vi.fn();
-    const user = userEvent.setup();
-    renderWithProviders(
-      <EventActionBar
-        league="nba"
-        model={model}
-        primaryInSlip={false}
-        otherInSlip={false}
-        onAddPrimary={noop}
-        onAddOther={noop}
-        onAsk={onAsk}
-      />,
-    );
-    await user.click(screen.getByRole("button", { name: /^ask$/i }));
-    expect(onAsk).toHaveBeenCalled();
-  });
-
-  it.skipIf(AGENT_CHAT_UI_ENABLED)("renders no Ask control when chat UI is off", () => {
+  it("renders no Ask control when chat UI is off", () => {
     const onAsk = vi.fn();
     renderWithProviders(
       <EventActionBar

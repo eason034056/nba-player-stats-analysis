@@ -1,10 +1,8 @@
 import type { ReactNode } from "react";
 import { screen, waitFor, within } from "@testing-library/react";
-import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { AppShell } from "@/components/AppShell";
-import { AGENT_CHAT_UI_ENABLED } from "@/lib/agent-chat-ui";
 import {
   clearBetSlip,
   createBetSlipPick,
@@ -162,17 +160,7 @@ describe("AppShell", () => {
     };
   }
 
-  it.skipIf(!AGENT_CHAT_UI_ENABLED)("keeps an Ask control on every NBA and WNBA route", () => {
-    const showPath = renderShellPaths();
-    for (const path of shellPaths) {
-      showPath(path);
-      expect(screen.getByRole("button", { name: "Ask the agent" })).toBeInTheDocument();
-      expect(screen.getByRole("button", { name: "Ask agent" })).toBeInTheDocument();
-      expect(screen.queryByRole("button", { name: /ask the board/i })).not.toBeInTheDocument();
-    }
-  });
-
-  it.skipIf(AGENT_CHAT_UI_ENABLED)("renders no Ask controls on NBA or WNBA routes when chat UI is off", () => {
+  it("renders no Ask controls on NBA or WNBA routes when chat UI is off", () => {
     const showPath = renderShellPaths();
     for (const path of shellPaths) {
       showPath(path);
@@ -180,32 +168,6 @@ describe("AppShell", () => {
       expect(screen.queryByRole("button", { name: "Ask agent" })).not.toBeInTheDocument();
       expect(screen.queryByRole("button", { name: /^ask$/i })).not.toBeInTheDocument();
     }
-  });
-
-  it.skipIf(!AGENT_CHAT_UI_ENABLED)("opens the betting agent from Ask the agent", async () => {
-    const user = userEvent.setup();
-    renderWithProviders(
-      <AppShell>
-        <p>Board</p>
-      </AppShell>,
-      { withAgentWidget: true },
-    );
-
-    await user.click(screen.getByRole("button", { name: "Ask the agent" }));
-    expect(screen.getByRole("button", { name: "Close betting agent" })).toBeInTheDocument();
-  });
-
-  it.skipIf(!AGENT_CHAT_UI_ENABLED)("opens the betting agent from the compact Ask agent control", async () => {
-    const user = userEvent.setup();
-    renderWithProviders(
-      <AppShell>
-        <p>Board</p>
-      </AppShell>,
-      { withAgentWidget: true },
-    );
-
-    await user.click(screen.getByRole("button", { name: "Ask agent" }));
-    expect(screen.getByRole("button", { name: "Close betting agent" })).toBeInTheDocument();
   });
 
   it("keeps Method as one page and sends the league switch to Today", () => {
