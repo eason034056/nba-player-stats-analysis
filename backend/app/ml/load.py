@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import os
 import re
+from collections.abc import Sequence
 from dataclasses import dataclass
 from datetime import date, datetime
 from urllib.parse import urlsplit
@@ -19,12 +20,17 @@ from urllib.parse import urlsplit
 import asyncpg
 
 from app.dsn import redact_secrets
-from app.ml.sources import require_feature_source, require_label_source
+from app.ml.sources import (
+    require_absence_source,
+    require_feature_source,
+    require_label_source,
+)
 
 _URL_IN_TEXT = re.compile(r"[A-Za-z][A-Za-z0-9+.-]*://\S+")
 
 GAMES_SQL = """
-SELECT league, bdl_game_id, season, date, datetime_utc, season_type, home_team_id
+SELECT league, bdl_game_id, season, date, datetime_utc, season_type,
+       home_team_id, visitor_team_id
 FROM games
 WHERE league = $1 AND season = $2
 ORDER BY date, bdl_game_id
@@ -81,6 +87,7 @@ class GameRecord:
     datetime_utc: datetime | None
     season_type: str
     home_team_id: int | None
+    visitor_team_id: int | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -119,6 +126,68 @@ class GameOddsRecord:
     snapshot_at: datetime | None
     spread_home_value: float | None
     total_value: float | None
+
+
+@dataclass(frozen=True, slots=True)
+class InjuryRecord:
+    """One ``injury_snapshots`` row.
+
+    ``status`` is NULL when the row is a removal (``listed`` false) or when
+    the feed sent a blank status. This loader does not map the word to a
+    probability.
+    """
+
+    league: str
+    snapshot_at: datetime
+    bdl_player_id: int
+    listed: bool
+    status: str | None
+
+
+@dataclass(frozen=True, slots=True)
+class LineupRecord:
+    """One ``game_lineups`` row. ``starter`` is the actual tip-off flag."""
+
+    league: str
+    bdl_game_id: int
+    bdl_player_id: int
+    bdl_team_id: int | None
+    starter: bool
+
+
+@dataclass(frozen=True, slots=True)
+class ProjectedStarterRow:
+    """One projected starter on one published version.
+
+    ``updated_at`` is when the provider published the version.
+    ``first_seen_at`` is when this application stored it. An as-of read
+    keeps versions with ``first_seen_at <= T`` and then picks the newest
+    ``updated_at``.
+    """
+
+    league: str
+    bdl_game_id: int
+    bdl_team_id: int
+    updated_at: datetime
+    first_seen_at: datetime
+    bdl_player_id: int
+
+
+@dataclass(frozen=True, slots=True)
+class TeamAbsenceInputs:
+    """Rows a live ``team_absences`` call needs for one team and one game.
+
+    The stats are the team's last 10 games before the target date, each
+    candidate's latest earlier game (so a trade is visible), and the target
+    game's own rows. Injuries are every snapshot for those candidates,
+    including rows after T. The time cutoff is applied by ``team_absences``,
+    not here.
+    """
+
+    target_date: date
+    season: int
+    stats: tuple[StatRecord, ...]
+    injuries: tuple[InjuryRecord, ...]
 
 
 @dataclass(frozen=True, slots=True)
@@ -276,6 +345,7 @@ def _game(record: asyncpg.Record) -> GameRecord:
         datetime_utc=record["datetime_utc"],
         season_type=str(record["season_type"]),
         home_team_id=_optional_int(record["home_team_id"]),
+        visitor_team_id=_optional_int(record["visitor_team_id"]),
     )
 
 
@@ -382,3 +452,256 @@ async def load_labels(
         for record in await _fetch(conn, ACTUALS_SQL, league, season):
             actuals.append(_actual(record))
     return actuals
+
+
+# Season-scoped reads for the training export. snapshot_at and first_seen_at
+# are not filtered here: each row's T is applied in Python so a non-default
+# hours_before_tip and the NULL-tip midnight stay in one place.
+INJURIES_SQL = """
+SELECT league, snapshot_at, bdl_player_id, listed, status
+FROM injury_snapshots
+WHERE league = $1
+ORDER BY bdl_player_id, snapshot_at
+"""
+
+LINEUPS_SQL = """
+SELECT l.league, l.bdl_game_id, l.bdl_player_id, l.bdl_team_id, l.starter
+FROM game_lineups l
+JOIN games g ON g.league = l.league AND g.bdl_game_id = l.bdl_game_id
+WHERE l.league = $1 AND g.season = $2
+ORDER BY l.bdl_game_id, l.bdl_player_id
+"""
+
+PROJECTED_SQL = """
+SELECT l.league, l.bdl_game_id, l.bdl_team_id, l.updated_at, l.first_seen_at,
+       p.bdl_player_id
+FROM projected_lineups l
+JOIN games g ON g.league = l.league AND g.bdl_game_id = l.bdl_game_id
+JOIN projected_lineup_players p
+  ON p.league = l.league
+ AND p.bdl_game_id = l.bdl_game_id
+ AND p.bdl_team_id = l.bdl_team_id
+ AND p.updated_at = l.updated_at
+WHERE l.league = $1 AND g.season = $2
+ORDER BY l.bdl_game_id, l.bdl_team_id, l.updated_at, p.bdl_player_id
+"""
+
+COVERAGE_SQL = "SELECT to_regclass('public.source_covered') AS name"
+
+# Live path. One team, one game. The last-10 cutoff is the target game's
+# date, the same prior-date rule as the rest of the dataset. Injury rows are
+# not limited by snapshot_at in SQL.
+ABSENCE_GAME_SQL = """
+SELECT season, date
+FROM games
+WHERE league = $1 AND bdl_game_id = $2
+"""
+
+TEAM_WINDOW_SQL = """
+SELECT bdl_game_id
+FROM (
+    SELECT DISTINCT bdl_game_id, date
+    FROM player_game_stats
+    WHERE league = $1 AND bdl_team_id = $2 AND date < $3
+) team_games
+ORDER BY date DESC, bdl_game_id DESC
+LIMIT 10
+"""
+
+_STAT_COLUMNS = """
+league, bdl_game_id, bdl_player_id, bdl_team_id, season, date, dnp,
+seconds_played, pts, reb, ast, fg3m, stl, blk
+"""
+
+TEAM_WINDOW_STATS_SQL = f"""
+SELECT {_STAT_COLUMNS}
+FROM player_game_stats
+WHERE league = $1 AND bdl_team_id = $2 AND bdl_game_id = ANY($3::bigint[])
+"""
+
+LATEST_PRIOR_SQL = f"""
+SELECT DISTINCT ON (bdl_player_id) {_STAT_COLUMNS}
+FROM player_game_stats
+WHERE league = $1 AND bdl_player_id = ANY($2::integer[]) AND date < $3
+ORDER BY bdl_player_id, date DESC, bdl_game_id DESC
+"""
+
+TARGET_TEAM_STATS_SQL = f"""
+SELECT {_STAT_COLUMNS}
+FROM player_game_stats
+WHERE league = $1 AND bdl_game_id = $2 AND bdl_team_id = $3
+"""
+
+# No snapshot_at predicate. team_absences applies T, including the NULL-tip
+# midnight, so this query cannot drift from --hours-before-tip.
+PLAYER_INJURIES_SQL = """
+SELECT league, snapshot_at, bdl_player_id, listed, status
+FROM injury_snapshots
+WHERE league = $1 AND bdl_player_id = ANY($2::integer[])
+ORDER BY bdl_player_id, snapshot_at
+"""
+
+ABSENCE_QUERIES = (
+    INJURIES_SQL,
+    LINEUPS_SQL,
+    PROJECTED_SQL,
+    COVERAGE_SQL,
+    ABSENCE_GAME_SQL,
+    TEAM_WINDOW_SQL,
+    TEAM_WINDOW_STATS_SQL,
+    LATEST_PRIOR_SQL,
+    TARGET_TEAM_STATS_SQL,
+    PLAYER_INJURIES_SQL,
+)
+
+
+def _injury(record: asyncpg.Record) -> InjuryRecord:
+    status = record["status"]
+    return InjuryRecord(
+        league=str(record["league"]),
+        snapshot_at=record["snapshot_at"],
+        bdl_player_id=int(record["bdl_player_id"]),
+        listed=bool(record["listed"]),
+        status=None if status is None else str(status),
+    )
+
+
+def _lineup(record: asyncpg.Record) -> LineupRecord:
+    return LineupRecord(
+        league=str(record["league"]),
+        bdl_game_id=int(record["bdl_game_id"]),
+        bdl_player_id=int(record["bdl_player_id"]),
+        bdl_team_id=_optional_int(record["bdl_team_id"]),
+        starter=bool(record["starter"]),
+    )
+
+
+def _projected(record: asyncpg.Record) -> ProjectedStarterRow:
+    return ProjectedStarterRow(
+        league=str(record["league"]),
+        bdl_game_id=int(record["bdl_game_id"]),
+        bdl_team_id=int(record["bdl_team_id"]),
+        updated_at=record["updated_at"],
+        first_seen_at=record["first_seen_at"],
+        bdl_player_id=int(record["bdl_player_id"]),
+    )
+
+
+async def injury_coverage_status(conn: asyncpg.Connection) -> tuple[str, str]:
+    """Return ``(unknown, note)`` until ``source_covered`` has a reader.
+
+    Migration 005 is not on this branch. A missing relation and a relation
+    this module does not know how to read both mean the same thing: do not
+    treat a player with no injury row as healthy.
+
+    The note names the relation. It does not contain a DSN.
+    """
+    require_absence_source("injury_snapshots")
+    rows = await _fetch(conn, COVERAGE_SQL)
+    present = bool(rows) and rows[0]["name"] is not None
+    if not present:
+        return "unknown", "source_covered is not in the schema"
+    return "unknown", "source_covered is present but this export does not read its columns"
+
+
+async def load_injuries(conn: asyncpg.Connection, *, league: str) -> list[InjuryRecord]:
+    """Load every injury snapshot for the league.
+
+    The training export filters ``snapshot_at <= T`` per game afterwards.
+    """
+    require_absence_source("injury_snapshots")
+    return [_injury(record) for record in await _fetch(conn, INJURIES_SQL, league)]
+
+
+async def load_lineups(
+    conn: asyncpg.Connection,
+    *,
+    league: str,
+    seasons: range,
+) -> list[LineupRecord]:
+    """Load ``game_lineups`` one season at a time."""
+    require_absence_source("game_lineups")
+    rows: list[LineupRecord] = []
+    for season in seasons:
+        for record in await _fetch(conn, LINEUPS_SQL, league, season):
+            rows.append(_lineup(record))
+    return rows
+
+
+async def load_projected_starters(
+    conn: asyncpg.Connection,
+    *,
+    league: str,
+    seasons: range,
+) -> list[ProjectedStarterRow]:
+    """Load projected starters one season at a time.
+
+    Versions whose ``first_seen_at`` is after T stay in this list. The
+    starter rule drops them.
+    """
+    require_absence_source("projected_lineups")
+    require_absence_source("projected_lineup_players")
+    rows: list[ProjectedStarterRow] = []
+    for season in seasons:
+        for record in await _fetch(conn, PROJECTED_SQL, league, season):
+            rows.append(_projected(record))
+    return rows
+
+
+def _dedupe_stats(rows: Sequence[StatRecord]) -> tuple[StatRecord, ...]:
+    seen: set[tuple[int, int]] = set()
+    ordered: list[StatRecord] = []
+    for row in rows:
+        key = (row.bdl_game_id, row.bdl_player_id)
+        if key in seen:
+            continue
+        seen.add(key)
+        ordered.append(row)
+    return tuple(ordered)
+
+
+async def load_team_absence_inputs(
+    conn: asyncpg.Connection,
+    *,
+    league: str,
+    team: int,
+    game: int,
+) -> TeamAbsenceInputs:
+    """Load one team's absence inputs without the rest of the history.
+
+    This is the live path. It reads the target game, that team's last 10
+    earlier games, the latest earlier game of each player who appeared in
+    that window, the target game's rows for the team, and those players'
+    injury snapshots. It does not read other seasons as a block and it does
+    not filter injury rows by T.
+    """
+    require_feature_source("games")
+    require_feature_source("player_game_stats")
+    require_absence_source("injury_snapshots")
+    found = await _fetch(conn, ABSENCE_GAME_SQL, league, game)
+    if not found:
+        raise LoadError(f"game {game} was not found")
+    target_date = found[0]["date"]
+    season = int(found[0]["season"])
+    window = await _fetch(conn, TEAM_WINDOW_SQL, league, team, target_date)
+    game_ids = [int(record["bdl_game_id"]) for record in window]
+    stats: list[StatRecord] = []
+    if game_ids:
+        for record in await _fetch(conn, TEAM_WINDOW_STATS_SQL, league, team, game_ids):
+            stats.append(_stat(record))
+    candidate_ids = sorted({row.bdl_player_id for row in stats})
+    if candidate_ids:
+        for record in await _fetch(conn, LATEST_PRIOR_SQL, league, candidate_ids, target_date):
+            stats.append(_stat(record))
+    for record in await _fetch(conn, TARGET_TEAM_STATS_SQL, league, game, team):
+        stats.append(_stat(record))
+    injuries: list[InjuryRecord] = []
+    if candidate_ids:
+        for record in await _fetch(conn, PLAYER_INJURIES_SQL, league, candidate_ids):
+            injuries.append(_injury(record))
+    return TeamAbsenceInputs(
+        target_date=target_date,
+        season=season,
+        stats=_dedupe_stats(stats),
+        injuries=tuple(injuries),
+    )
