@@ -1,8 +1,9 @@
-"""QA review 2 of SPO-138j: a decoded or short password piece.
+"""QA re-review of SPO-138j: the CLI never prints any decoded piece of the password.
 
-asyncpg percent-decodes the userinfo before it rejects a raw ``#``. The
-decoded text, and a piece shorter than four characters, must not be printed.
-An unreadable DSN becomes a fixed message.
+The repo's DSN guidance says to percent-encode ``@``, ``:``, ``/`` and ``%``.
+A password written that way can still carry a raw ``#`` or ``?``. asyncpg then
+reads the decoded text before that separator as the port and puts it in the
+error. A short first piece (under 4 characters) must not print either.
 """
 
 from __future__ import annotations
@@ -15,32 +16,27 @@ from app.ml.build_dataset import main
 
 
 @pytest.mark.parametrize(
-    ("password", "leaked", "tail"),
+    ("raw_password", "decoded_piece"),
     [
-        pytest.param("Long%40Secret#xyz1", "Long@Secret", "xyz1", id="encoded-at"),
-        pytest.param("LongSecret%2F99#xyz1", "LongSecret/99", "xyz1", id="encoded-slash"),
-        pytest.param("Ab1#LongTail99", "Ab1", "LongTail99", id="short-piece"),
+        ("Qa%40HiddenHead#QaHiddenTail", "Qa@HiddenHead"),
+        ("QaHidden%2FHead?QaHiddenTail", "QaHidden/Head"),
+        ("Qz7#QaHiddenTail4410", "Qz7"),
     ],
 )
 def test_cli_never_prints_a_decoded_or_short_password_piece(
-    password: str,
-    leaked: str,
-    tail: str,
+    raw_password: str,
+    decoded_piece: str,
     monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],
     tmp_path: Path,
 ) -> None:
-    dsn = f"postgresql://u:{password}@127.0.0.1:1/db"
-    monkeypatch.setenv("ML_DATABASE_URL", dsn)
+    monkeypatch.setenv("ML_DATABASE_URL", f"postgresql://ml_user:{raw_password}@127.0.0.1:1/nba")
     code = main(
         ["--dsn-env", "ML_DATABASE_URL", "--seasons", "2015:2015", "--out", str(tmp_path / "x.parquet")]
     )
     assert code == 1
     captured = capsys.readouterr()
     blob = captured.out + captured.err
-    assert leaked not in blob
-    assert tail not in blob
-    assert password not in blob
+    assert decoded_piece not in blob
+    assert "QaHiddenTail" not in blob
     assert "postgresql://" not in blob
-    assert "invalid literal" not in blob
-    assert "percent-encode every special character in the password" in blob

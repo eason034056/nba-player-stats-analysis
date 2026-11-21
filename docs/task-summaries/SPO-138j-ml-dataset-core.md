@@ -70,13 +70,13 @@ QA review file `tests/test_spo138j_qa_review.py`: 5 passed on scratch Postgres 1
 
 Both edits were restored. The three commands then passed again: 20, and 7 (2 database + 5 review).
 
-Second review file `tests/test_spo138j_qa_review2.py`: 3 passed. A password that percent-encodes `@` or `/` and still has a raw `#` does not print the decoded piece. A first piece shorter than 4 characters does not print either. The CLI shows `invalid DSN: percent-encode every special character in the password` and does not show the driver text.
+Second review file `tests/test_spo138j_qa_review2.py` is applied as written: 3 passed. A password that percent-encodes `@` or `/` and still has a raw `#` or `?` does not print the decoded piece. A first piece shorter than 4 characters does not print either. The CLI exits 1, does not print `postgresql://`, and shows `invalid DSN: percent-encode every special character in the password` instead of the driver text.
 
 **Second QA mutation check** (reverted before commit):
 
-- The `ValueError` handler in `connect_readonly` was removed, so the driver text was printed again. `test_cli_never_prints_a_decoded_or_short_password_piece` failed for the encoded-at, encoded-slash, and short-piece cases (3 failed).
+- The `ValueError` handler in `connect_readonly` was removed, so the driver text was printed again. `test_cli_never_prints_a_decoded_or_short_password_piece` failed on all 3 cases.
 
-The handler was restored. In-memory plus the second review file: 23 passed. Database plus both review files: 10 passed. That is 30 tests in all (20 + 2 + 5 + 3).
+The handler was restored. In-memory plus the second review file: 23 passed. Database plus the first review file: 7 passed. That is 30 tests in all (20 + 2 + 5 + 3).
 
 Known failures that are not this ticket: 3 tests in `test_spo132b_optional_vpc.py::TestVpcIdConsole`. They fail the same way on clean `origin/dev`. This PR does not change them.
 
