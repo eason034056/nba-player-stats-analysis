@@ -1,8 +1,9 @@
-"""SPO-144: NBA 5-minute lineup refresh follows the night's first tip.
+"""SPO-144: NBA 5-minute lineup refresh follows each game's own tip.
 
-The window is ``[first_tip - 2 hours, first_tip)``. Clocks are fixed.
-Nothing here sleeps or calls the network. Game rows come from the
-recorded BALLDONTLIE captures under ``tests/fixtures/bdl/``.
+The window for a game is ``[that tip - 2 hours, that tip)``. A slate
+with several tips is open when ``now`` sits in any one of them. Clocks
+are fixed. Nothing here sleeps or calls the network. Game rows come
+from the recorded BALLDONTLIE captures under ``tests/fixtures/bdl/``.
 """
 
 from __future__ import annotations
@@ -28,13 +29,13 @@ from app.services.scheduler import (
     NBA_INJURY_REFRESH_CRON_HOUR,
     NBA_INJURY_REFRESH_CRON_MINUTE,
     NBA_INJURY_REFRESH_HOURS,
-    NBA_LINEUP_FIRST_TIP_CACHE_TTL_SECONDS,
     NBA_LINEUP_PRETIPOFF_CRON_HOUR,
     NBA_LINEUP_PRETIPOFF_CRON_MINUTE,
+    NBA_LINEUP_TIPS_CACHE_TTL_SECONDS,
     SchedulerService,
-    first_tip_from_games_payload,
-    nba_lineup_first_tip_cache_key,
     nba_lineup_pretipoff_in_window,
+    nba_lineup_tips_cache_key,
+    tips_from_games_payload,
 )
 from app.settings import settings
 
@@ -61,20 +62,45 @@ def _eastern_tip(year: int, month: int, day: int, hour: int, minute: int) -> dat
     return datetime(year, month, day, hour, minute, tzinfo=EASTERN).astimezone(timezone.utc)
 
 
+def _recorded_nov11_tips() -> tuple[datetime, ...]:
+    """Every usable tip on the recorded 2026-11-11 slate, oldest first."""
+    payload = _load("games_2026-11-11.json")["response"]
+    status, tips = tips_from_games_payload(payload, "2026-11-11")
+    assert status == "ok"
+    assert len(tips) > 1
+    return tips
+
+
 def _recorded_nov11_tip() -> datetime:
     """Earliest tip on the recorded 2026-11-11 slate. 7:00 PM ET."""
-    payload = _load("games_2026-11-11.json")["response"]
-    status, tip = first_tip_from_games_payload(payload, "2026-11-11")
-    assert status == "ok"
-    assert tip is not None
-    return tip
+    return _recorded_nov11_tips()[0]
+
+
+def _recorded_rows_at(*stamps: str) -> dict:
+    """Copy of the recorded page, keeping only rows with these ``datetime`` values.
+
+    The stamps are copied from ``games_2026-11-11.json``. This does not
+    invent a new response shape.
+    """
+    payload = deepcopy(_load("games_2026-11-11.json")["response"])
+    wanted = set(stamps)
+    payload["data"] = [game for game in payload["data"] if game.get("datetime") in wanted]
+    assert payload["data"]
+    assert {game["datetime"] for game in payload["data"]} == wanted
+    return payload
 
 
 # 7:00 PM ET on a standard-time night and on a daylight-time night.
-# Chicago stays one hour behind Eastern on both.
+# Chicago stays one hour behind Eastern on both. The second tip is
+# 9:30 PM ET, so the two windows are 4:00-6:00 PM CT and 6:30-8:30 PM CT.
 _STANDARD_TIP = _eastern_tip(2026, 1, 15, 19, 0)
+_STANDARD_LATE_TIP = _eastern_tip(2026, 1, 15, 21, 30)
 _DAYLIGHT_TIP = _eastern_tip(2026, 7, 15, 19, 0)
+_DAYLIGHT_LATE_TIP = _eastern_tip(2026, 7, 15, 21, 30)
 _MATINEE_TIP = _eastern_tip(2026, 12, 25, 12, 30)
+_MATINEE_NIGHT_TIP = _eastern_tip(2026, 12, 25, 19, 0)
+_RECORDED_EARLY = "2026-11-12T00:00:00.000Z"
+_RECORDED_LATE = "2026-11-12T02:30:00.000Z"
 
 
 class _GamesClient:
@@ -178,7 +204,7 @@ def test_matinee_1230pm_et_window_is_930_to_1130_ct(now: datetime, expected: boo
 
 
 def test_recorded_nov11_slate_opens_at_4pm_ct() -> None:
-    """The captured 2026-11-11 board's first tip is 7:00 PM ET."""
+    """One recorded tip is a one-game night: open at 4:00 PM CT, closed at that tip."""
     tip = _recorded_nov11_tip()
     eastern = tip.astimezone(EASTERN)
     assert eastern.hour == 19 and eastern.minute == 0
@@ -186,11 +212,92 @@ def test_recorded_nov11_slate_opens_at_4pm_ct() -> None:
     assert nba_lineup_pretipoff_in_window(_chicago(2026, 11, 11, 15, 55), tip) is False
     assert nba_lineup_pretipoff_in_window(_chicago(2026, 11, 11, 16, 0), tip) is True
     assert nba_lineup_pretipoff_in_window(_chicago(2026, 11, 11, 18, 0), tip) is False
+    assert nba_lineup_pretipoff_in_window(_chicago(2026, 11, 11, 16, 0), (tip,)) is True
+
+
+@pytest.mark.parametrize(
+    ("tips", "closed_before", "early_open", "gap", "late_open", "late_closed"),
+    [
+        (
+            (_STANDARD_TIP, _STANDARD_LATE_TIP),
+            _chicago(2026, 1, 15, 15, 55),
+            _chicago(2026, 1, 15, 16, 0),
+            _chicago(2026, 1, 15, 18, 15),
+            _chicago(2026, 1, 15, 18, 30),
+            _chicago(2026, 1, 15, 20, 30),
+        ),
+        (
+            (_DAYLIGHT_TIP, _DAYLIGHT_LATE_TIP),
+            _chicago(2026, 7, 15, 15, 55),
+            _chicago(2026, 7, 15, 16, 0),
+            _chicago(2026, 7, 15, 18, 15),
+            _chicago(2026, 7, 15, 18, 30),
+            _chicago(2026, 7, 15, 20, 30),
+        ),
+    ],
+)
+def test_each_game_keeps_its_own_two_hour_window(
+    tips: tuple[datetime, datetime],
+    closed_before: datetime,
+    early_open: datetime,
+    gap: datetime,
+    late_open: datetime,
+    late_closed: datetime,
+) -> None:
+    """7:00 PM ET and 9:30 PM ET. The gap between them does not scrape."""
+    assert nba_lineup_pretipoff_in_window(closed_before, tips) is False
+    assert nba_lineup_pretipoff_in_window(early_open, tips) is True
+    assert nba_lineup_pretipoff_in_window(_chicago(early_open.year, early_open.month, early_open.day, 17, 55), tips) is True
+    assert nba_lineup_pretipoff_in_window(_chicago(early_open.year, early_open.month, early_open.day, 18, 0), tips) is False
+    assert nba_lineup_pretipoff_in_window(gap, tips) is False
+    assert nba_lineup_pretipoff_in_window(late_open, tips) is True
+    assert nba_lineup_pretipoff_in_window(_chicago(late_open.year, late_open.month, late_open.day, 20, 25), tips) is True
+    assert nba_lineup_pretipoff_in_window(late_closed, tips) is False
+    assert nba_lineup_pretipoff_in_window(late_open, tips[0]) is False
+
+
+def test_matinee_and_evening_game_each_open_their_own_window() -> None:
+    """12:30 PM ET still opens 9:30 AM CT. The 7:00 PM ET game is a second window."""
+    tips = (_MATINEE_TIP, _MATINEE_NIGHT_TIP)
+    assert nba_lineup_pretipoff_in_window(_chicago(2026, 12, 25, 9, 25), tips) is False
+    assert nba_lineup_pretipoff_in_window(_chicago(2026, 12, 25, 9, 30), tips) is True
+    assert nba_lineup_pretipoff_in_window(_chicago(2026, 12, 25, 11, 30), tips) is False
+    assert nba_lineup_pretipoff_in_window(_chicago(2026, 12, 25, 15, 55), tips) is False
+    assert nba_lineup_pretipoff_in_window(_chicago(2026, 12, 25, 16, 0), tips) is True
+    assert nba_lineup_pretipoff_in_window(_chicago(2026, 12, 25, 18, 0), tips) is False
+
+
+def test_recorded_two_tip_subset_has_a_gap() -> None:
+    """Keep the recorded 7:00 PM ET and 9:30 PM ET rows. The gap is closed."""
+    payload = _recorded_rows_at(_RECORDED_EARLY, _RECORDED_LATE)
+    status, tips = tips_from_games_payload(payload, "2026-11-11")
+    assert status == "ok"
+    assert len(tips) == 2
+    assert nba_lineup_pretipoff_in_window(_chicago(2026, 11, 11, 16, 0), tips) is True
+    assert nba_lineup_pretipoff_in_window(_chicago(2026, 11, 11, 18, 0), tips) is False
+    assert nba_lineup_pretipoff_in_window(_chicago(2026, 11, 11, 18, 15), tips) is False
+    assert nba_lineup_pretipoff_in_window(_chicago(2026, 11, 11, 18, 30), tips) is True
+    assert nba_lineup_pretipoff_in_window(_chicago(2026, 11, 11, 20, 30), tips) is False
+
+
+def test_full_recorded_slate_stays_open_after_the_first_tip() -> None:
+    """Later recorded tips cover 6:00 PM CT. The last tip, 9:00 PM CT, is closed."""
+    tips = _recorded_nov11_tips()
+    assert tips[0] == datetime(2026, 11, 12, 0, 0, tzinfo=timezone.utc)
+    assert tips[-1] == datetime(2026, 11, 12, 3, 0, tzinfo=timezone.utc)
+    assert nba_lineup_pretipoff_in_window(_chicago(2026, 11, 11, 15, 55), tips) is False
+    assert nba_lineup_pretipoff_in_window(_chicago(2026, 11, 11, 16, 0), tips) is True
+    assert nba_lineup_pretipoff_in_window(_chicago(2026, 11, 11, 18, 0), tips) is True
+    assert nba_lineup_pretipoff_in_window(_chicago(2026, 11, 11, 20, 55), tips) is True
+    assert nba_lineup_pretipoff_in_window(_chicago(2026, 11, 11, 21, 0), tips) is False
 
 
 def test_missing_tip_is_outside_the_window() -> None:
     """No game, or a schedule that could not be read, does not open the window."""
-    assert nba_lineup_pretipoff_in_window(_chicago(2026, 11, 11, 16, 0), None) is False
+    now = _chicago(2026, 11, 11, 16, 0)
+    assert nba_lineup_pretipoff_in_window(now, None) is False
+    assert nba_lineup_pretipoff_in_window(now, ()) is False
+    assert nba_lineup_pretipoff_in_window(now, []) is False
 
 
 def test_naive_now_is_read_as_utc() -> None:
@@ -208,15 +315,15 @@ def test_naive_now_is_read_as_utc() -> None:
 
 def test_empty_recorded_page_is_no_games() -> None:
     payload = _load("games__season1900_empty.json")["response"]
-    status, tip = first_tip_from_games_payload(payload, "2026-11-11")
+    status, tips = tips_from_games_payload(payload, "2026-11-11")
     assert status == "no_games"
-    assert tip is None
+    assert tips == ()
 
 
 def test_non_object_payload_is_unreadable() -> None:
-    status, tip = first_tip_from_games_payload(None, "2026-11-11")
+    status, tips = tips_from_games_payload(None, "2026-11-11")
     assert status == "unreadable"
-    assert tip is None
+    assert tips == ()
 
 
 def test_postponed_earliest_games_do_not_set_the_tip() -> None:
@@ -226,18 +333,20 @@ def test_postponed_earliest_games_do_not_set_the_tip() -> None:
     for game in payload["data"]:
         if game["datetime"] == earliest:
             game["postponed"] = True
-    status, tip = first_tip_from_games_payload(payload, "2026-11-11")
+    status, tips = tips_from_games_payload(payload, "2026-11-11")
     assert status == "ok"
-    assert tip == datetime(2026, 11, 12, 1, 0, tzinfo=timezone.utc)
+    assert tips[0] == datetime(2026, 11, 12, 1, 0, tzinfo=timezone.utc)
+    assert datetime(2026, 11, 12, 0, 0, tzinfo=timezone.utc) not in tips
+    assert datetime(2026, 11, 12, 3, 0, tzinfo=timezone.utc) in tips
 
 
 def test_all_postponed_recorded_games_are_no_games() -> None:
     payload = deepcopy(_load("games_2026-11-11.json")["response"])
     for game in payload["data"]:
         game["postponed"] = True
-    status, tip = first_tip_from_games_payload(payload, "2026-11-11")
+    status, tips = tips_from_games_payload(payload, "2026-11-11")
     assert status == "no_games"
-    assert tip is None
+    assert tips == ()
 
 
 def test_recorded_game_on_another_date_is_ignored() -> None:
@@ -246,9 +355,10 @@ def test_recorded_game_on_another_date_is_ignored() -> None:
     for game in payload["data"]:
         if game["datetime"] == earliest:
             game["date"] = "2026-11-10"
-    status, tip = first_tip_from_games_payload(payload, "2026-11-11")
+    status, tips = tips_from_games_payload(payload, "2026-11-11")
     assert status == "ok"
-    assert tip == datetime(2026, 11, 12, 1, 0, tzinfo=timezone.utc)
+    assert tips[0] == datetime(2026, 11, 12, 1, 0, tzinfo=timezone.utc)
+    assert datetime(2026, 11, 12, 0, 0, tzinfo=timezone.utc) not in tips
 
 
 # ---------------------------------------------------------------------------
@@ -288,7 +398,7 @@ def test_handler_fires_only_inside_the_window(monkeypatch: pytest.MonkeyPatch) -
     async def _go() -> None:
         for moment in samples:
             slate = moment.astimezone(EASTERN).date().isoformat()
-            service._nba_first_tip_memory[slate] = ("ok", _tip_for_moment(moment))
+            service._nba_tips_memory[slate] = ("ok", (_tip_for_moment(moment),))
             await _run_pre_tipoff(service, moment)
 
     asyncio.run(_go())
@@ -329,31 +439,89 @@ def test_recorded_slate_is_read_once_and_cached(monkeypatch: pytest.MonkeyPatch)
 
     inside = _chicago(2026, 11, 11, 16, 0)
     outside = _chicago(2026, 11, 11, 15, 55)
-    at_tip = _chicago(2026, 11, 11, 18, 0)
+    later_game = _chicago(2026, 11, 11, 18, 30)
+    at_last_tip = _chicago(2026, 11, 11, 21, 0)
     seen: dict[str, object] = {}
 
     async def _go() -> None:
         first = SchedulerService()
         await _run_pre_tipoff(first, outside)
         await _run_pre_tipoff(first, inside)
-        await _run_pre_tipoff(first, at_tip)
+        await _run_pre_tipoff(first, later_game)
+        await _run_pre_tipoff(first, at_last_tip)
         second = SchedulerService()
-        await _run_pre_tipoff(second, inside)
-        key = nba_lineup_first_tip_cache_key("2026-11-11")
+        await _run_pre_tipoff(second, later_game)
+        key = nba_lineup_tips_cache_key("2026-11-11")
         seen["key"] = key
         seen["stored"] = await fake.get(key)
         seen["ttl"] = await fake.ttl(key)
+        seen["old"] = await fake.get("lineup:v1:nba:first_tip:2026-11-11")
 
     asyncio.run(_go())
 
     assert client.calls == [{"dates": ["2026-11-11"], "per_page": 100}]
     assert client.closed == 1
     assert client.init_kwargs[0]["api_key"] == _TEST_KEY
-    assert [call.args[0] for call in fetch.await_args_list] == ["2026-11-11", "2026-11-11"]
-    assert seen["key"] == "lineup:v1:nba:first_tip:2026-11-11"
-    assert seen["stored"] is not None
-    assert seen["ttl"] == NBA_LINEUP_FIRST_TIP_CACHE_TTL_SECONDS
-    assert NBA_LINEUP_FIRST_TIP_CACHE_TTL_SECONDS >= 24 * 60 * 60
+    assert [call.args[0] for call in fetch.await_args_list] == [
+        "2026-11-11",
+        "2026-11-11",
+        "2026-11-11",
+    ]
+    assert seen["key"] == "lineup:v1:nba:tips:2026-11-11"
+    assert seen["old"] is None
+    stored = json.loads(str(seen["stored"]))
+    assert stored["status"] == "ok"
+    assert "first_tip_utc" not in stored
+    assert stored["tips_utc"][0] == "2026-11-12T00:00:00+00:00"
+    assert stored["tips_utc"][-1] == "2026-11-12T03:00:00+00:00"
+    assert len(stored["tips_utc"]) == len(_recorded_nov11_tips())
+    assert seen["ttl"] == NBA_LINEUP_TIPS_CACHE_TTL_SECONDS
+    assert NBA_LINEUP_TIPS_CACHE_TTL_SECONDS >= 24 * 60 * 60
+
+
+def test_later_recorded_game_scrapes_after_the_first_tip(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The recorded 7:00 PM ET and 9:30 PM ET rows. The gap does not scrape."""
+    import asyncio
+
+    fake = _install_cache(monkeypatch)
+    payload = _recorded_rows_at(_RECORDED_EARLY, _RECORDED_LATE)
+    client = _GamesClient(payload=payload)
+    _patch_client(monkeypatch, client)
+    fetch = AsyncMock(return_value=[])
+    monkeypatch.setattr("app.services.scheduler.lineup_service.fetch_and_store", fetch)
+
+    async def _go() -> None:
+        await fake.set(
+            "lineup:v1:nba:first_tip:2026-11-11",
+            json.dumps(
+                {
+                    "status": "ok",
+                    "first_tip_utc": "2026-11-12T00:00:00+00:00",
+                }
+            ),
+        )
+        service = SchedulerService()
+        for moment in (
+            _chicago(2026, 11, 11, 15, 55),
+            _chicago(2026, 11, 11, 16, 0),
+            _chicago(2026, 11, 11, 18, 0),
+            _chicago(2026, 11, 11, 18, 15),
+            _chicago(2026, 11, 11, 18, 30),
+            _chicago(2026, 11, 11, 20, 25),
+            _chicago(2026, 11, 11, 20, 30),
+        ):
+            await _run_pre_tipoff(service, moment)
+
+    asyncio.run(_go())
+
+    assert client.calls == [{"dates": ["2026-11-11"], "per_page": 100}]
+    assert [call.args[0] for call in fetch.await_args_list] == [
+        "2026-11-11",
+        "2026-11-11",
+        "2026-11-11",
+    ]
 
 
 def test_no_games_does_not_run_the_five_minute_refresh(monkeypatch: pytest.MonkeyPatch) -> None:
