@@ -77,6 +77,21 @@ class _LeagueProviders(Mapping[str, Any]):
 PROVIDERS: Mapping[str, Any] = _LeagueProviders()
 
 
+def active_nba_provider_name() -> str:
+    """The NBA provider name a job should branch on.
+
+    ``balldontlie`` only when ``settings.nba_odds_provider`` says so.
+    Surrounding space and capital letters do not count. A blank value
+    stays ``theoddsapi``. This reads the setting. It does not build a
+    client, and it does not raise on an unknown value: jobs that need
+    the client still go through ``PROVIDERS``, which does raise.
+    """
+    selected = (settings.nba_odds_provider or "theoddsapi").strip().lower()
+    if selected == "balldontlie":
+        return "balldontlie"
+    return "theoddsapi"
+
+
 @dataclass(frozen=True)
 class MarketSnapshotResult:
     data: Dict[str, Any]
@@ -351,7 +366,16 @@ class OddsMarketGateway:
             normalized_markets = self._normalize_csv(context["markets"])
             normalized_books = self._normalize_bookmakers(context["bookmakers"])
             stored_provider = context.get("provider")
-            provider_name = stored_provider if isinstance(stored_provider, str) and stored_provider else None
+            provider_name = stored_provider if isinstance(stored_provider, str) and stored_provider.strip() else None
+            # A hot key belongs to the provider that recorded it. Refreshing
+            # a theoddsapi member while balldontlie is active would fetch
+            # the other feed, and the reverse is the same mistake. Leave
+            # the member in the set so a switch back inside the five-minute
+            # window can still warm it. A member with no provider is an
+            # older key and is warmed by whoever is active.
+            active_name = self._provider_name(member_league)
+            if provider_name is not None and provider_name.strip().lower() != active_name.strip().lower():
+                continue
             snapshot_key = self._build_snapshot_key(
                 league=member_league,
                 event_id=context["event_id"],

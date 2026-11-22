@@ -6,10 +6,11 @@ Used for Line Movement Tracking.
 
 Architecture:
     Scheduler → take_snapshot(date)
-            → odds_provider.get_events()           (1 API call)
-            → odds_provider.get_event_odds(...)     (N API calls, 4 markets batched)
+            → events for the NBA provider           (1 list call)
+            → odds_gateway.get_market_snapshot(...) (N calls, markets batched)
             → prob.py calculates no-vig
-            → db_service.executemany()              (bulk write to PostgreSQL)
+            → db_service.executemany()              (bulk write to odds_line_snapshots)
+            → 002 live rows when the provider is balldontlie and parents exist
             → _log_snapshot()                       (write to odds_snapshot_logs)
 
 Each snapshot will:
@@ -29,13 +30,19 @@ Usage:
     result = await odds_snapshot_service.take_snapshot()
 """
 
+import logging
 import time
 from datetime import datetime, timezone, timedelta
+from decimal import Decimal
 from typing import List, Dict, Any, Optional, Tuple
 
-from app.services.odds_gateway import odds_gateway
+from app.services.odds_gateway import (
+    PROVIDERS,
+    active_nba_provider_name,
+    odds_gateway,
+)
 from app.services.odds_theoddsapi import odds_provider
-from app.services.odds_provider import OddsAPIError
+from app.services.odds_provider import OddsAPIError, ProviderEvent
 from app.services.prob import (
     american_to_prob,
     posted_american_odds,
@@ -46,6 +53,8 @@ from app.services.prob import (
 )
 from app.services.db import db_service
 from app.services.slate_date import nba_slate_date, offset_for_us_game_date
+
+logger = logging.getLogger(__name__)
 
 
 # Supported market types for the periodic odds snapshot job.
@@ -150,6 +159,317 @@ INSERT INTO odds_snapshot_logs (
 ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
 """
 
+# One live prop row. A retry at the same snapshot_at updates that row
+# instead of adding a second tick. The WHERE clause matches the partial
+# unique index in 002_bdl_core.sql.
+UPSERT_LIVE_PROP_SQL = """
+INSERT INTO player_prop_snapshots (
+    league, snapshot_kind, bdl_game_id, bdl_player_id, book_key, market, market_type,
+    line, over_odds, under_odds, milestone_odds, snapshot_at, source_updated_at
+) VALUES (
+    'nba', 'live', $1, $2, $3, $4, $5,
+    $6, $7, $8, $9, $10, $11
+)
+ON CONFLICT (league, snapshot_kind, bdl_game_id, bdl_player_id, book_key, market, snapshot_at)
+WHERE snapshot_kind IN ('live', 'closing')
+DO UPDATE SET
+    market_type = EXCLUDED.market_type,
+    line = EXCLUDED.line,
+    over_odds = EXCLUDED.over_odds,
+    under_odds = EXCLUDED.under_odds,
+    milestone_odds = EXCLUDED.milestone_odds,
+    source_updated_at = EXCLUDED.source_updated_at
+"""
+
+# One live game line per book. Same retry rule as the prop tick key.
+UPSERT_LIVE_GAME_ODDS_SQL = """
+INSERT INTO game_odds_snapshots (
+    league, snapshot_kind, bdl_game_id, book_key, snapshot_at, source_updated_at,
+    spread_home_value, spread_home_odds, spread_away_value, spread_away_odds,
+    moneyline_home_odds, moneyline_away_odds,
+    total_value, total_over_odds, total_under_odds
+) VALUES (
+    'nba', 'live', $1, $2, $3, $4,
+    $5, $6, $7, $8,
+    $9, $10,
+    $11, $12, $13
+)
+ON CONFLICT (league, snapshot_kind, bdl_game_id, book_key, snapshot_at)
+WHERE snapshot_kind IN ('live', 'closing')
+DO UPDATE SET
+    source_updated_at = EXCLUDED.source_updated_at,
+    spread_home_value = EXCLUDED.spread_home_value,
+    spread_home_odds = EXCLUDED.spread_home_odds,
+    spread_away_value = EXCLUDED.spread_away_value,
+    spread_away_odds = EXCLUDED.spread_away_odds,
+    moneyline_home_odds = EXCLUDED.moneyline_home_odds,
+    moneyline_away_odds = EXCLUDED.moneyline_away_odds,
+    total_value = EXCLUDED.total_value,
+    total_over_odds = EXCLUDED.total_over_odds,
+    total_under_odds = EXCLUDED.total_under_odds
+"""
+
+
+def _parse_commence(value: Any) -> datetime | None:
+    """Parse one ISO timestamp. ``Z`` means UTC. Unusable values are None."""
+    if not isinstance(value, str) or not value.strip():
+        return None
+    try:
+        moment = datetime.fromisoformat(value.strip().replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    if moment.tzinfo is None:
+        moment = moment.replace(tzinfo=timezone.utc)
+    return moment.astimezone(timezone.utc)
+
+
+def _as_utc_now(now: datetime | None) -> datetime:
+    """``None`` is the current UTC time. A naive datetime is UTC."""
+    if now is None:
+        return datetime.now(timezone.utc)
+    if now.tzinfo is None:
+        return now.replace(tzinfo=timezone.utc)
+    return now.astimezone(timezone.utc)
+
+
+def _local_date_of(commence: datetime, tz_offset_minutes: int) -> str:
+    """Calendar date after adding a fixed minute offset to a UTC instant.
+
+    This is the same shift ``_get_events`` uses for The Odds API. It is
+    not a named-timezone conversion. ``-300`` turns 04:00Z into 23:00 on
+    the previous calendar date.
+    """
+    shifted = commence + timedelta(minutes=tz_offset_minutes)
+    return shifted.strftime("%Y-%m-%d")
+
+
+def _utc_window(date: str, tz_offset_minutes: int) -> tuple[datetime, datetime]:
+    """UTC search window for one local calendar date, widened by one hour.
+
+    The datetimes are naive. Callers that talk to BALLDONTLIE treat a
+    naive value as UTC, which is the same assumption ``get_events`` uses.
+    """
+    date_obj = datetime.strptime(date, "%Y-%m-%d")
+    local_start = datetime.combine(date_obj.date(), datetime.min.time())
+    utc_start = local_start - timedelta(minutes=tz_offset_minutes)
+    from datetime import time as dt_time
+    local_end = datetime.combine(date_obj.date(), dt_time(23, 59, 59))
+    utc_end = local_end - timedelta(minutes=tz_offset_minutes)
+    return utc_start - timedelta(hours=1), utc_end + timedelta(hours=1)
+
+
+def bdl_event_is_open(
+    event: ProviderEvent,
+    *,
+    date: str,
+    tz_offset_minutes: int,
+    now: datetime,
+) -> bool:
+    """True when this BALLDONTLIE game is still a pre-tip scheduled game on ``date``.
+
+    ``in_progress`` and ``final`` are skipped. A tip at or before ``now``
+    is skipped. A tip on another local date is skipped. ``now`` must be
+    timezone-aware.
+    """
+    if event.status != "scheduled":
+        return False
+    commence = _parse_commence(event.commence_time)
+    if commence is None or commence <= now:
+        return False
+    return _local_date_of(commence, tz_offset_minutes) == date
+
+
+async def list_bdl_events_for_local_date(
+    date: str,
+    tz_offset_minutes: int = 480,
+    now: datetime | None = None,
+) -> list[dict[str, Any]]:
+    """NBA games for one local date from ``odds_gateway.list_events``.
+
+    Use this when ``nba_odds_provider`` is ``balldontlie``. The Odds API
+    path stays on ``odds_provider.get_events`` so the existing snapshot
+    and daily-analysis tests still intercept that call.
+
+    Args:
+        date: Local game date, ``YYYY-MM-DD``.
+        tz_offset_minutes: Minutes east of UTC for that local date.
+        now: Instant used for the pre-tip check. None means the current
+            UTC time. Tests pass a fixed instant.
+
+    Returns:
+        Event dicts with ``id``, ``commence_time``, ``home_team``,
+        ``away_team``, and ``status``. ``id`` is the decimal game id.
+    """
+    date_from, date_to = _utc_window(date, tz_offset_minutes)
+    moment = _as_utc_now(now)
+    listed = await odds_gateway.list_events(
+        league="nba",
+        start_utc=date_from,
+        end_utc=date_to,
+    )
+    kept: list[dict[str, Any]] = []
+    for event in listed:
+        if not bdl_event_is_open(
+            event,
+            date=date,
+            tz_offset_minutes=tz_offset_minutes,
+            now=moment,
+        ):
+            continue
+        kept.append(
+            {
+                "id": event.event_id,
+                "sport_key": "basketball_nba",
+                "commence_time": event.commence_time,
+                "home_team": event.home_team,
+                "away_team": event.away_team,
+                "status": event.status,
+            }
+        )
+    return kept
+
+
+def _optional_int(value: Any) -> int | None:
+    """A whole-number price, or None when the field is missing or not an int."""
+    if isinstance(value, bool) or not isinstance(value, int):
+        return None
+    return value
+
+
+def _optional_decimal(value: Any) -> Decimal | None:
+    """A numeric line from a recorded string or number, or None."""
+    if value is None or isinstance(value, bool):
+        return None
+    if not isinstance(value, (int, float, str, Decimal)):
+        return None
+    text = str(value).strip()
+    if not text:
+        return None
+    try:
+        return Decimal(text)
+    except Exception:
+        return None
+
+
+def _live_prop_args(
+    game_id: int,
+    bookmakers: list[dict[str, Any]],
+    player_ids: dict[str, int],
+    snapshot_at: datetime,
+) -> list[tuple]:
+    """Main-line live prop tuples for one game.
+
+    Over/under rows carry both prices and no milestone price.
+    ``player_double_double`` is a milestone: the Yes price is
+    ``milestone_odds``, and both sides of an over/under are null. The
+    line on that row is ``0.5``, which is the line on the recorded
+    double-double rows. One tuple per player, book, and market. A
+    player with no id is kept here with ``player_id`` None so the
+    writer can count the miss instead of guessing an id.
+    """
+    from app.services.daily_analysis import _main_line_vote
+
+    by_key: dict[tuple[int, int | None, str, str], tuple] = {}
+    for book in bookmakers:
+        if not isinstance(book, dict):
+            continue
+        book_key = book.get("key")
+        if not isinstance(book_key, str) or not book_key:
+            continue
+        for market in book.get("markets") or []:
+            if not isinstance(market, dict):
+                continue
+            market_key = market.get("key")
+            if not isinstance(market_key, str):
+                continue
+            updated = _parse_commence(market.get("last_update")) if isinstance(market.get("last_update"), str) else None
+            outcomes = [item for item in (market.get("outcomes") or []) if isinstance(item, dict)]
+            if market_key == "player_double_double":
+                yes_price: dict[str, int] = {}
+                for outcome in outcomes:
+                    if str(outcome.get("name") or "").strip().lower() != "yes":
+                        continue
+                    name = outcome.get("description")
+                    price = _optional_int(outcome.get("price"))
+                    if isinstance(name, str) and name and price is not None and price != 0:
+                        yes_price[name] = price
+                for name, price in yes_price.items():
+                    player_id = player_ids.get(name)
+                    identity = player_id if isinstance(player_id, int) else name
+                    by_key[(game_id, identity, book_key, market_key)] = (
+                        game_id,
+                        player_id,
+                        book_key,
+                        market_key,
+                        "milestone",
+                        Decimal("0.5"),
+                        None,
+                        None,
+                        price,
+                        snapshot_at,
+                        updated,
+                    )
+                continue
+            if market_key not in OVER_UNDER_MARKET_KEYS:
+                continue
+            grouped: dict[str, list[dict[str, Any]]] = {}
+            for outcome in outcomes:
+                name = outcome.get("description")
+                if isinstance(name, str) and name:
+                    grouped.setdefault(name, []).append(outcome)
+            for name, player_outcomes in grouped.items():
+                vote = _main_line_vote(player_outcomes)
+                if vote is None:
+                    continue
+                point = vote[0]
+                over_price = None
+                under_price = None
+                for outcome in player_outcomes:
+                    try:
+                        posted = round(float(outcome.get("point")), 1)
+                    except (TypeError, ValueError):
+                        continue
+                    if posted != point:
+                        continue
+                    side = str(outcome.get("name") or "").strip().lower()
+                    price = _optional_int(outcome.get("price"))
+                    if price is None or price == 0:
+                        continue
+                    if side == "over":
+                        over_price = price
+                    elif side == "under":
+                        under_price = price
+                if over_price is None or under_price is None:
+                    continue
+                player_id = player_ids.get(name)
+                identity = player_id if isinstance(player_id, int) else name
+                by_key[(game_id, identity, book_key, market_key)] = (
+                    game_id,
+                    player_id,
+                    book_key,
+                    market_key,
+                    "over_under",
+                    Decimal(str(point)),
+                    over_price,
+                    under_price,
+                    None,
+                    snapshot_at,
+                    updated,
+                )
+    return list(by_key.values())
+
+
+def _player_id_map(data: dict[str, Any]) -> dict[str, int]:
+    """Description to player id from a cached BALLDONTLIE odds body."""
+    raw = data.get("player_ids")
+    if not isinstance(raw, dict):
+        return {}
+    found: dict[str, int] = {}
+    for name, player_id in raw.items():
+        if isinstance(name, str) and isinstance(player_id, int):
+            found[name] = player_id
+    return found
+
 
 class OddsSnapshotService:
     """
@@ -168,6 +488,8 @@ class OddsSnapshotService:
         self,
         date: Optional[str] = None,
         tz_offset_minutes: Optional[int] = None,
+        *,
+        now: Optional[datetime] = None,
     ) -> Dict[str, Any]:
         """
         Execute a complete odds snapshot
@@ -193,6 +515,9 @@ class OddsSnapshotService:
             date: US game date (YYYY-MM-DD). None means today in New York.
             tz_offset_minutes: Minutes east of UTC used to turn ``date`` into
                 a UTC window. None means the Eastern offset for ``date``.
+            now: Instant used to drop BALLDONTLIE games whose tip has
+                passed. None means the current UTC time. The Odds API
+                path does not read it. Tests pass a fixed instant.
 
         Returns:
             dict containing:
@@ -214,10 +539,21 @@ class OddsSnapshotService:
         total_lines = 0
         event_count = 0
         all_rows: List[tuple] = []
+        # Boards captured during _process_event when the NBA provider is
+        # balldontlie. The live-table write reads these instead of
+        # fetching props a second time.
+        self._bdl_boards: list[tuple[str, dict[str, Any]]] = []
 
         try:
             # 1. Get all events for the day
-            events = await self._get_events(date, tz_offset_minutes)
+            # Omit ``now`` when the caller did not pass one. Existing
+            # snapshot tests assert this exact two-argument call. The
+            # method's own default is the current UTC time, which is
+            # what a missing ``now`` means.
+            if now is None:
+                events = await self._get_events(date, tz_offset_minutes)
+            else:
+                events = await self._get_events(date, tz_offset_minutes, now=now)
             event_count = len(events)
 
             if not events:
@@ -225,12 +561,12 @@ class OddsSnapshotService:
                 await self._log_snapshot(
                     date, snapshot_at, 0, 0, "success", "No events", 0
                 )
-                return {
+                return self._with_bdl_misses({
                     "date": date,
                     "event_count": 0,
                     "total_lines": 0,
                     "duration_ms": 0,
-                }
+                }, 0)
 
             print(f"📸 [OddsSnapshot] Starting snapshot for {date}, {event_count} events")
 
@@ -273,6 +609,35 @@ class OddsSnapshotService:
             elif not db_service.is_connected:
                 print("⚠️ [OddsSnapshot] PostgreSQL not connected, skipping write")
 
+            # 3b. 002 live rows. A missing parent is a counted miss.
+            # It must not undo the odds_line_snapshots write above and
+            # must not fail this snapshot.
+            parent_misses = 0
+            if active_nba_provider_name() == "balldontlie" and events:
+                try:
+                    if db_service.is_connected:
+                        parent_misses = await self._write_bdl_live(
+                            events=events,
+                            date=date,
+                            snapshot_at=snapshot_at,
+                        )
+                    else:
+                        # The props call already happened. Count the game-odds
+                        # call here too, so a disconnected database does not
+                        # hide it. There is nothing to insert.
+                        kept_ids = {
+                            int(event["id"])
+                            for event in events
+                            if str(event.get("id") or "").isdigit()
+                        }
+                        await self._slate_game_odds(date, kept_ids)
+                except Exception as exc:
+                    parent_misses += 1
+                    logger.warning(
+                        "bdl live dual-write skipped (%s)",
+                        type(exc).__name__,
+                    )
+
             duration_ms = int((time.time() - start_time) * 1000)
 
             # 4. Log the snapshot
@@ -280,12 +645,12 @@ class OddsSnapshotService:
                 date, snapshot_at, event_count, total_lines, "success", None, duration_ms
             )
 
-            return {
+            return self._with_bdl_misses({
                 "date": date,
                 "event_count": event_count,
                 "total_lines": total_lines,
                 "duration_ms": duration_ms,
-            }
+            }, parent_misses)
 
         except Exception as e:
             duration_ms = int((time.time() - start_time) * 1000)
@@ -295,8 +660,25 @@ class OddsSnapshotService:
             )
             raise
 
+    @staticmethod
+    def _with_bdl_misses(result: Dict[str, Any], misses: int) -> Dict[str, Any]:
+        """Add the miss count only when the NBA provider is BALLDONTLIE.
+
+        The Odds API return shape stays the four keys callers already
+        read. ``misses`` is how many 002 inserts were skipped because a
+        parent row was missing, or because that insert raised.
+        """
+        if active_nba_provider_name() != "balldontlie":
+            return result
+        result["bdl_parent_misses"] = misses
+        return result
+
     async def _get_events(
-        self, date: str, tz_offset_minutes: int = 480
+        self,
+        date: str,
+        tz_offset_minutes: int = 480,
+        *,
+        now: datetime | None = None,
     ) -> List[Dict[str, Any]]:
         """
         Get NBA events for the specified date
@@ -309,10 +691,16 @@ class OddsSnapshotService:
         Args:
             date: event date (YYYY-MM-DD)
             tz_offset_minutes: timezone offset in minutes
+            now: Pre-tip cutoff for BALLDONTLIE. Ignored for The Odds API.
 
         Returns:
             List of events
         """
+        if active_nba_provider_name() == "balldontlie":
+            return await list_bdl_events_for_local_date(
+                date, tz_offset_minutes, now=now
+            )
+
         date_obj = datetime.strptime(date, "%Y-%m-%d")
 
         local_start = datetime.combine(date_obj.date(), datetime.min.time())
@@ -389,6 +777,10 @@ class OddsSnapshotService:
         )
 
         bookmakers_data = snapshot.data.get("bookmakers", [])
+        boards = getattr(self, "_bdl_boards", None)
+        if active_nba_provider_name() == "balldontlie" and isinstance(boards, list):
+            payload = snapshot.data if isinstance(snapshot.data, dict) else {}
+            boards.append((event_id, payload))
         return self.rows_from_bookmakers(
             bookmakers_data,
             event_id=event_id,
@@ -684,6 +1076,258 @@ class OddsSnapshotService:
                 continue
 
         return rows
+
+    async def _write_bdl_live(
+        self,
+        events: List[Dict[str, Any]],
+        date: str,
+        snapshot_at: datetime,
+    ) -> int:
+        """Write 002 ``live`` rows for this capture. Return the miss count.
+
+        ``odds_line_snapshots`` has already been written. This method
+        inserts ``player_prop_snapshots`` and ``game_odds_snapshots``
+        only when the parent ``games``, ``players``, ``books``, and
+        ``prop_markets`` rows exist. A missing parent is counted and
+        logged. It is not raised. A second call with the same
+        ``snapshot_at`` updates the live tick instead of adding a row.
+
+        Args:
+            events: Games this snapshot kept. ``id`` is the decimal game id.
+            date: US game date passed to ``list_odds`` as ``dates[]``.
+            snapshot_at: Job time stored on every live row.
+
+        Returns:
+            How many candidate inserts were skipped.
+        """
+        kept_ids: set[int] = set()
+        for event in events:
+            text = str(event.get("id") or "")
+            if text.isdigit():
+                kept_ids.add(int(text))
+
+        prop_args: list[tuple] = []
+        for event_id, payload in getattr(self, "_bdl_boards", []):
+            if not str(event_id).isdigit():
+                continue
+            game_id = int(event_id)
+            if game_id not in kept_ids:
+                continue
+            bookmakers = payload.get("bookmakers") if isinstance(payload, dict) else None
+            if not isinstance(bookmakers, list):
+                bookmakers = []
+            prop_args.extend(
+                _live_prop_args(
+                    game_id,
+                    bookmakers,
+                    _player_id_map(payload if isinstance(payload, dict) else {}),
+                    snapshot_at,
+                )
+            )
+
+        odds_rows = await self._slate_game_odds(date, kept_ids)
+        misses = 0
+        prop_ready, prop_misses = await self._props_with_parents(prop_args)
+        misses += prop_misses
+        odds_ready, odds_misses = await self._game_odds_with_parents(odds_rows, snapshot_at)
+        misses += odds_misses
+        prop_failed = await self._write_each(UPSERT_LIVE_PROP_SQL, prop_ready, "props")
+        odds_failed = await self._write_each(UPSERT_LIVE_GAME_ODDS_SQL, odds_ready, "game_odds")
+        misses += prop_failed + odds_failed
+        logger.info(
+            "bdl_live_dual_write props_written=%s game_odds_written=%s misses=%s",
+            len(prop_ready) - prop_failed,
+            len(odds_ready) - odds_failed,
+            misses,
+        )
+        return misses
+
+    async def _slate_game_odds(self, date: str, kept_ids: set[int]) -> list[dict[str, Any]]:
+        """Recorded game lines for the kept games, one row per book.
+
+        ``list_odds`` is the BALLDONTLIE ``/v2/odds`` call. A failure
+        here returns no rows. The prop write still runs. Pages follow
+        ``meta.next_cursor`` when that value is an int.
+        """
+        if not kept_ids:
+            return []
+        try:
+            provider = PROVIDERS["nba"]
+            client = provider._require_client()
+        except Exception as exc:
+            logger.warning("bdl live game odds skipped (%s)", type(exc).__name__)
+            return []
+
+        raw_rows: list[dict[str, Any]] = []
+        cursor: int | None = None
+        seen: set[int] = set()
+        try:
+            while True:
+                payload = await client.list_odds(dates=[date], cursor=cursor)
+                data = payload.get("data") if isinstance(payload, dict) else None
+                if isinstance(data, list):
+                    raw_rows.extend(item for item in data if isinstance(item, dict))
+                meta = payload.get("meta") if isinstance(payload, dict) else None
+                nxt = meta.get("next_cursor") if isinstance(meta, dict) else None
+                if not isinstance(nxt, int) or nxt in seen:
+                    break
+                seen.add(nxt)
+                cursor = nxt
+        except Exception as exc:
+            logger.warning("bdl live game odds skipped (%s)", type(exc).__name__)
+            return []
+
+        newest: dict[tuple[int, str], dict[str, Any]] = {}
+        for row in raw_rows:
+            game_id = row.get("game_id")
+            vendor = row.get("vendor")
+            if not isinstance(game_id, int) or game_id not in kept_ids:
+                continue
+            if not isinstance(vendor, str) or not vendor:
+                continue
+            key = (game_id, vendor)
+            previous = newest.get(key)
+            updated = row.get("updated_at") if isinstance(row.get("updated_at"), str) else ""
+            previous_updated = ""
+            if previous is not None and isinstance(previous.get("updated_at"), str):
+                previous_updated = previous["updated_at"]
+            if previous is None or updated >= previous_updated:
+                newest[key] = row
+        return list(newest.values())
+
+    async def _props_with_parents(self, args: list[tuple]) -> tuple[list[tuple], int]:
+        """Drop prop rows whose game, player, book, or market is missing."""
+        if not args:
+            return [], 0
+        games = await self._present_ids(
+            "SELECT bdl_game_id FROM games WHERE league = 'nba' AND bdl_game_id = ANY($1::bigint[])",
+            sorted({row[0] for row in args}),
+            "bdl_game_id",
+        )
+        player_values = sorted({row[1] for row in args if isinstance(row[1], int)})
+        players = await self._present_ids(
+            "SELECT bdl_player_id FROM players WHERE league = 'nba' AND bdl_player_id = ANY($1::int[])",
+            player_values,
+            "bdl_player_id",
+        )
+        books = await self._present_ids(
+            "SELECT book_key FROM books WHERE league = 'nba' AND book_key = ANY($1::text[])",
+            sorted({row[2] for row in args}),
+            "book_key",
+        )
+        markets = await self._present_ids(
+            "SELECT market FROM prop_markets WHERE league = 'nba' AND market = ANY($1::text[])",
+            sorted({row[3] for row in args}),
+            "market",
+        )
+        ready: list[tuple] = []
+        misses = 0
+        for row in args:
+            game_id, player_id, book_key, market = row[0], row[1], row[2], row[3]
+            if (
+                game_id not in games
+                or not isinstance(player_id, int)
+                or player_id not in players
+                or book_key not in books
+                or market not in markets
+            ):
+                misses += 1
+                continue
+            ready.append(row)
+        if misses:
+            logger.info("bdl_live_parent_miss kind=props count=%s", misses)
+        return ready, misses
+
+    async def _game_odds_with_parents(
+        self,
+        rows: list[dict[str, Any]],
+        snapshot_at: datetime,
+    ) -> tuple[list[tuple], int]:
+        """Drop game lines whose game or book parent is missing."""
+        if not rows:
+            return [], 0
+        games = await self._present_ids(
+            "SELECT bdl_game_id FROM games WHERE league = 'nba' AND bdl_game_id = ANY($1::bigint[])",
+            sorted({row["game_id"] for row in rows if isinstance(row.get("game_id"), int)}),
+            "bdl_game_id",
+        )
+        books = await self._present_ids(
+            "SELECT book_key FROM books WHERE league = 'nba' AND book_key = ANY($1::text[])",
+            sorted({row["vendor"] for row in rows if isinstance(row.get("vendor"), str)}),
+            "book_key",
+        )
+        ready: list[tuple] = []
+        misses = 0
+        for row in rows:
+            game_id = row.get("game_id")
+            vendor = row.get("vendor")
+            if not isinstance(game_id, int) or not isinstance(vendor, str):
+                misses += 1
+                continue
+            if game_id not in games or vendor not in books:
+                misses += 1
+                continue
+            ready.append(
+                (
+                    game_id,
+                    vendor,
+                    snapshot_at,
+                    _parse_commence(row.get("updated_at")) if isinstance(row.get("updated_at"), str) else None,
+                    _optional_decimal(row.get("spread_home_value")),
+                    _optional_int(row.get("spread_home_odds")),
+                    _optional_decimal(row.get("spread_away_value")),
+                    _optional_int(row.get("spread_away_odds")),
+                    _optional_int(row.get("moneyline_home_odds")),
+                    _optional_int(row.get("moneyline_away_odds")),
+                    _optional_decimal(row.get("total_value")),
+                    _optional_int(row.get("total_over_odds")),
+                    _optional_int(row.get("total_under_odds")),
+                )
+            )
+        if misses:
+            logger.info("bdl_live_parent_miss kind=game_odds count=%s", misses)
+        return ready, misses
+
+    @staticmethod
+    async def _present_ids(sql: str, values: list, column: str) -> set:
+        """Ids that already exist. An empty request does not query."""
+        if not values:
+            return set()
+        found = await db_service.fetch(sql, values)
+        return {row[column] for row in found}
+
+    @staticmethod
+    async def _write_each(sql: str, args: list[tuple], label: str) -> int:
+        """Insert every row. Return how many rows raised.
+
+        One ``executemany`` is the normal path. The conflict target is
+        the live tick, so a retry updates the same row. If the batch
+        raises, each row is tried alone. A bad row is a counted miss.
+        It does not escape this method.
+        """
+        if not args:
+            return 0
+        try:
+            await db_service.executemany(sql, args)
+            return 0
+        except Exception as exc:
+            logger.warning(
+                "bdl live %s batch skipped (%s); retrying per row",
+                label,
+                type(exc).__name__,
+            )
+        missed = 0
+        for row in args:
+            try:
+                await db_service.execute(sql, *row)
+            except Exception as row_exc:
+                missed += 1
+                logger.info(
+                    "bdl live %s row skipped (%s)",
+                    label,
+                    type(row_exc).__name__,
+                )
+        return missed
 
     async def _log_snapshot(
         self,

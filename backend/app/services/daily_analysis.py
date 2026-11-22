@@ -32,7 +32,7 @@ from pydantic import ValidationError
 
 logger = logging.getLogger(__name__)
 
-from app.services.odds_gateway import odds_gateway
+from app.services.odds_gateway import active_nba_provider_name, odds_gateway
 from app.services.slate_date import nba_slate_date
 from app.services.odds_theoddsapi import odds_provider
 from app.services.odds_provider import OddsAPIError
@@ -144,6 +144,39 @@ BINARY_MARKETS = [
 _METRIC_TO_MARKET_KEY: Dict[str, str] = {
     metric: market for market, metric in (*SUPPORTED_MARKETS, *BINARY_MARKETS)
 }
+
+
+def _bookmakers_for_market(
+    bookmakers: List[Dict[str, Any]],
+    market_key: str,
+) -> List[Dict[str, Any]]:
+    """Books that posted ``market_key``, with only that market kept.
+
+    A batch fetch returns every market in one payload. Each pass of
+    the analysis loop still wants the one-market shape
+    ``_group_main_votes`` already reads. The book dict from the payload
+    is not modified.
+
+    Args:
+        bookmakers: ``bookmakers`` array from one event snapshot.
+        market_key: Odds API market key, such as ``player_points``.
+
+    Returns:
+        A new list. Books with no outcomes for ``market_key`` are left out.
+    """
+    sliced: List[Dict[str, Any]] = []
+    for book in bookmakers:
+        if not isinstance(book, dict):
+            continue
+        markets = [
+            market
+            for market in (book.get("markets") or [])
+            if isinstance(market, dict) and market.get("key") == market_key
+        ]
+        if not markets:
+            continue
+        sliced.append({**book, "markets": markets})
+    return sliced
 
 
 def market_key_for_metric(metric: str | None) -> str | None:
@@ -1063,6 +1096,8 @@ class DailyAnalysisService:
         date: str,
         tz_offset_minutes: int = 480,
         league: str = "nba",
+        *,
+        now: datetime | None = None,
     ) -> List[Dict[str, Any]]:
         """
         Fetch all events for the specified date and league
@@ -1076,10 +1111,22 @@ class DailyAnalysisService:
                                Negative = west (like UTC-6 = -360)
             league: ``nba``. ``_resolve_sport_key`` maps it to
                     ``basketball_nba``.
+            now: Pre-tip cutoff used when the NBA provider is
+                BALLDONTLIE. None means the current UTC time. The Odds
+                API path does not read it.
 
         Returns:
             List of events
         """
+        if (league or "").lower() == "nba" and active_nba_provider_name() == "balldontlie":
+            from app.services.odds_snapshot_service import list_bdl_events_for_local_date
+
+            events = await list_bdl_events_for_local_date(
+                date, tz_offset_minutes, now=now
+            )
+            print(f"📊 [NBA/balldontlie] {len(events)} scheduled pre-tip events")
+            return events
+
         sport_key = _resolve_sport_key(league)
 
         # Parse date
@@ -1186,13 +1233,35 @@ class DailyAnalysisService:
             )
         csv_service = self.csv_service
 
+        # BALLDONTLIE prices one game in one props call. Asking for every
+        # snapshot market shares the gateway cache with the snapshot job,
+        # so a fresh snapshot is zero upstream calls. The Odds API path
+        # still requests one market at a time.
+        batched: List[Dict[str, Any]] | None = None
+        if active_nba_provider_name() == "balldontlie":
+            from app.services.odds_snapshot_service import SNAPSHOT_MARKETS
+
+            try:
+                batched = await self._get_props_for_market(
+                    event_id, SNAPSHOT_MARKETS, league=league
+                )
+            except OddsAPIError as e:
+                print(f"  ⚠️ Failed to fetch props: {e}")
+                batched = []
+            except Exception as e:
+                print(f"  ⚠️ Failed to fetch props: {e}")
+                batched = []
+
         # Analyze each metric
         for market_key, metric_key in SUPPORTED_MARKETS:
             try:
                 # Get all props for this market
-                props_data = await self._get_props_for_market(
-                    event_id, market_key, league=league
-                )
+                if batched is not None:
+                    props_data = _bookmakers_for_market(batched, market_key)
+                else:
+                    props_data = await self._get_props_for_market(
+                        event_id, market_key, league=league
+                    )
 
                 if not props_data:
                     continue
