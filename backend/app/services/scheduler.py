@@ -27,6 +27,7 @@ from datetime import datetime, timedelta, timezone
 from typing import Optional
 from zoneinfo import ZoneInfo
 
+from apscheduler.jobstores.base import ConflictingIdError
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.cron import CronTrigger
 from apscheduler.triggers.date import DateTrigger
@@ -465,6 +466,11 @@ class SchedulerService:
         # A failed call is not stored. This set keeps that warning to
         # one line per slate in this process. The next tick still reads.
         self._nba_schedule_warned: set[str] = set()
+        # Closing-line job ids this process has already handed to the
+        # scheduler. A one-shot job is removed after it fires. The next
+        # planner pass must not add that id again while it is still
+        # inside the misfire grace, or the close runs twice.
+        self._pretip_armed: set[str] = set()
     
     def start(self):
         """
@@ -1147,8 +1153,9 @@ class SchedulerService:
 
         Tips come from ``_nba_tips_for_slate``. That reader uses
         ``lineup:v1:nba:tips:<date>`` when the key is present. It calls
-        ``list_games`` only when the key is missing. A second pass with
-        the same tips replaces the same job ids. It does not add a copy.
+        ``list_games`` only when the key is missing. A second pass leaves
+        a job that is still waiting. It does not add again a job that
+        has already fired.
 
         A failed read (``transient``) leaves alarms already on the
         scheduler in place. ``no_games`` and ``unreadable`` clear this
@@ -1185,27 +1192,37 @@ class SchedulerService:
         slate_date: str,
         tips: tuple[datetime, ...],
     ) -> list[str]:
-        """Add or replace one ``DateTrigger`` per UTC tip minute.
+        """Add one ``DateTrigger`` per UTC tip minute that is not armed yet.
 
         ``schedule_pretip_closes`` is the part of the planner that talks
         to APScheduler. Each alarm fires at tip minus
         ``ODDS_PRETIP_LEAD`` (10 minutes). The id is
-        ``pretip_job_id``. ``replace_existing`` is true, so a second pass
-        updates that id. ``misfire_grace_time`` is
+        ``pretip_job_id``. ``misfire_grace_time`` is
         ``ODDS_PRETIP_MISFIRE_GRACE_SECONDS`` (8 minutes). That argument
         is required. Without it the scheduler's one-hour default would
         run the alarm after tip.
 
+        The first time this process sees an id, the job is added even
+        when its ``run_date`` is already a few minutes in the past. That
+        is how a restart still catches a close inside the grace window.
+        A job that is already on the scheduler is left as it is. It is
+        not replaced. After the one-shot job fires, APScheduler removes
+        it. The id stays in ``_pretip_armed``, so the next pass does not
+        add it again.
+
         Minutes that were scheduled earlier and are not in ``tips`` are
-        removed. A postponed game that disappears from the tip list does
-        not keep its alarm.
+        removed, including ones whose ``run_date`` is already past. A
+        tip that is still in the list stays in the wanted set, so this
+        cleanup does not remove an in-grace job that has not fired yet.
 
         Args:
             slate_date: Eastern game date, ``YYYY-MM-DD``.
             tips: Usable tips for that slate. Empty clears this slate's alarms.
 
         Returns:
-            The job ids now registered for ``slate_date``.
+            The job ids for ``slate_date``, in UTC ``HHMM`` order. An id
+            that already fired is included so the caller can see the
+            minute is still part of this slate.
         """
         if self._scheduler is None:
             return []
@@ -1220,23 +1237,35 @@ class SchedulerService:
         for hhmm in sorted(grouped):
             tip = grouped[hhmm]
             job_id = pretip_job_id(slate_date, tip)
-            self._scheduler.add_job(
-                self._run_odds_pretip_job,
-                trigger=DateTrigger(run_date=tip - ODDS_PRETIP_LEAD),
-                id=job_id,
-                name=f"Odds closing line {slate_date} {hhmm}",
-                replace_existing=True,
-                misfire_grace_time=ODDS_PRETIP_MISFIRE_GRACE_SECONDS,
-                max_instances=1,
-                coalesce=True,
-                kwargs={"slate_date": slate_date, "tip": tip.isoformat()},
-            )
+            if self._scheduler.get_job(job_id) is not None:
+                self._pretip_armed.add(job_id)
+                ids.append(job_id)
+                continue
+            if job_id in self._pretip_armed:
+                ids.append(job_id)
+                continue
+            try:
+                self._scheduler.add_job(
+                    self._run_odds_pretip_job,
+                    trigger=DateTrigger(run_date=tip - ODDS_PRETIP_LEAD),
+                    id=job_id,
+                    name=f"Odds closing line {slate_date} {hhmm}",
+                    replace_existing=False,
+                    misfire_grace_time=ODDS_PRETIP_MISFIRE_GRACE_SECONDS,
+                    max_instances=1,
+                    coalesce=True,
+                    kwargs={"slate_date": slate_date, "tip": tip.isoformat()},
+                )
+            except ConflictingIdError:
+                pass
+            self._pretip_armed.add(job_id)
             ids.append(job_id)
         wanted = set(ids)
         prefix = f"odds_pretip:{slate_date}:"
         for job in list(self._scheduler.get_jobs()):
             if job.id.startswith(prefix) and job.id not in wanted:
                 self._scheduler.remove_job(job.id)
+                self._pretip_armed.discard(job.id)
         return ids
 
     async def _run_odds_pretip_job(self, slate_date: str, tip: str) -> None:

@@ -1488,6 +1488,73 @@ class OddsSnapshotService:
         except Exception as e:
             print(f"⚠️ [OddsSnapshot] Failed writing snapshot log: {e}")
 
+    async def _closing_game_ids_already_stored(
+        self,
+        game_ids: list[int],
+        snapshot_at: datetime,
+    ) -> set[int]:
+        """Game ids that already have this closing stamp.
+
+        ``_closing_game_ids_already_stored`` looks at
+        ``player_prop_snapshots`` and ``game_odds_snapshots`` where
+        ``snapshot_kind`` is ``closing``, and at ``odds_line_snapshots``
+        for the same instant. The line table has no kind column. This
+        stamp is tip minus 10 minutes, so a line row there is this close.
+        Call it with the games this minute would fetch. An empty list,
+        or a database that is not connected, returns an empty set. A
+        read error is logged by exception type and also returns an empty
+        set, so the caller still attempts the write.
+
+        Args:
+            game_ids: Decimal BALLDONTLIE game ids still in this minute.
+            snapshot_at: The shared close time for the minute.
+
+        Returns:
+            The subset of ``game_ids`` that already have a stored close.
+        """
+        if not game_ids or not db_service.is_connected:
+            return set()
+        text_ids = [str(game_id) for game_id in game_ids]
+        try:
+            rows = await db_service.fetch(
+                """
+                SELECT bdl_game_id AS game_id
+                FROM player_prop_snapshots
+                WHERE league = 'nba'
+                  AND snapshot_kind = 'closing'
+                  AND snapshot_at = $1
+                  AND bdl_game_id = ANY($2::bigint[])
+                UNION
+                SELECT bdl_game_id AS game_id
+                FROM game_odds_snapshots
+                WHERE league = 'nba'
+                  AND snapshot_kind = 'closing'
+                  AND snapshot_at = $1
+                  AND bdl_game_id = ANY($2::bigint[])
+                UNION
+                SELECT event_id::bigint AS game_id
+                FROM odds_line_snapshots
+                WHERE snapshot_at = $1
+                  AND event_id = ANY($3::text[])
+                """,
+                snapshot_at,
+                game_ids,
+                text_ids,
+            )
+        except Exception as exc:
+            logger.warning("odds_pretip stored close unread (%s)", type(exc).__name__)
+            return set()
+        found: set[int] = set()
+        for row in rows:
+            raw = row["game_id"]
+            if isinstance(raw, bool) or raw is None:
+                continue
+            try:
+                found.add(int(raw))
+            except (TypeError, ValueError):
+                continue
+        return found
+
     async def take_closing_snapshot(
         self,
         slate_date: str,
@@ -1504,8 +1571,8 @@ class OddsSnapshotService:
         The Redis lock is ``pretip_lock_key``. A second replica that
         cannot take the lock returns without fetching or writing.
         ``snapshot_at`` is ``tip`` minus 10 minutes for every row in the
-        minute, so a retry updates those rows instead of adding another
-        close.
+        minute. A game that already has a row at that stamp is not
+        fetched again, so a later pass does not overwrite the close.
 
         A game is fetched only when ``closing_game_fate`` returns
         ``keep``: still scheduled, not postponed, and ``now`` is before
@@ -1585,9 +1652,7 @@ class OddsSnapshotService:
                 logger.warning("odds_pretip games unreadable")
                 return _result()
 
-            kept: list[dict[str, Any]] = []
-            boards: list[tuple[str, dict[str, Any]]] = []
-            all_rows: list[tuple] = []
+            pending: list[dict[str, Any]] = []
             for game in data:
                 fate = closing_game_fate(game, slate_date=slate_date, hhmm=hhmm, now=moment)
                 if fate == "other":
@@ -1611,6 +1676,19 @@ class OddsSnapshotService:
                     logger.info("odds_pretip_skip game_id=%s reason=tip_passed", game_id)
                     continue
                 if not isinstance(game_id, int):
+                    continue
+                pending.append(game)
+            stored = await self._closing_game_ids_already_stored(
+                [game["id"] for game in pending if isinstance(game.get("id"), int)],
+                stamp,
+            )
+            kept: list[dict[str, Any]] = []
+            boards: list[tuple[str, dict[str, Any]]] = []
+            all_rows: list[tuple] = []
+            for game in pending:
+                game_id = game["id"]
+                if game_id in stored:
+                    logger.info("odds_pretip_skip game_id=%s reason=already_stored", game_id)
                     continue
                 kept.append(game)
                 provider._games[str(game_id)] = game
