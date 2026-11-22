@@ -34,6 +34,7 @@ from tests.test_spo130g_nba_jobs_bdl import (
     _install,
     _kinds,
     _load,
+    _release_metrics_cache,
     _scalar,
     _seed_okc_parents,
     _upgrade,
@@ -249,10 +250,13 @@ async def test_metrics_quota_comes_from_providers_nba(monkeypatch):
         "app.services.bdl_odds_provider.get_bdl_odds_provider",
         lambda: Other(),
     )
-    body = await get_metrics()
-    assert body["odds_api_quota"]["remaining"] == 7
-    assert body["odds_api_quota"]["used"] == 1
-    assert body["odds_api_quota"]["total"] == 8
+    try:
+        body = await get_metrics()
+        assert body["odds_api_quota"]["remaining"] == 7
+        assert body["odds_api_quota"]["used"] == 1
+        assert body["odds_api_quota"]["total"] == 8
+    finally:
+        await _release_metrics_cache()
 
 
 @pytest.mark.asyncio

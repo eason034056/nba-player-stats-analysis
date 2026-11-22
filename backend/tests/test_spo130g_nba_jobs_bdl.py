@@ -102,6 +102,25 @@ async def _scalar(sql: str, *args):
     return next(iter(row.values()))
 
 
+async def _release_metrics_cache() -> None:
+    """Close the Redis client opened by ``get_metrics`` on this test's loop.
+
+    That client sits on the process-wide cache. A later ``TestClient``
+    shuts the app down on a different loop, and closing the old client
+    there raises ``RuntimeError``.
+    """
+    from app.services.cache import cache_service
+
+    client = cache_service._client
+    cache_service._client = None
+    if client is None:
+        return
+    try:
+        await client.close()
+    except RuntimeError:
+        return
+
+
 def _install(monkeypatch, client: _JobsClient | None = None):
     """Point NBA at one fixture provider and one in-memory gateway cache."""
     fixture = client or _JobsClient()
@@ -352,27 +371,30 @@ async def test_metrics_reads_rate_status_from_the_active_nba_provider(monkeypatc
 
     monkeypatch.setattr(settings, "nba_odds_provider", "theoddsapi")
     monkeypatch.setattr("app.services.odds_gateway.odds_provider", OddsProvider())
-    odds_body = await get_metrics()
-    assert odds_body["odds_api_quota"]["remaining"] == 80
-    assert odds_body["odds_api_quota"]["used"] == 20
-    assert odds_body["odds_api_quota"]["total"] == 100
-    assert set(odds_body["odds_api_quota"]) == {
-        "remaining",
-        "used",
-        "total",
-        "remaining_ratio",
-        "quota_protected",
-    }
+    try:
+        odds_body = await get_metrics()
+        assert odds_body["odds_api_quota"]["remaining"] == 80
+        assert odds_body["odds_api_quota"]["used"] == 20
+        assert odds_body["odds_api_quota"]["total"] == 100
+        assert set(odds_body["odds_api_quota"]) == {
+            "remaining",
+            "used",
+            "total",
+            "remaining_ratio",
+            "quota_protected",
+        }
 
-    monkeypatch.setattr(settings, "nba_odds_provider", "balldontlie")
-    monkeypatch.setattr(
-        "app.services.bdl_odds_provider.get_bdl_odds_provider",
-        lambda: BdlProvider(),
-    )
-    bdl_body = await get_metrics()
-    assert bdl_body["odds_api_quota"]["remaining"] == 4
-    assert bdl_body["odds_api_quota"]["used"] == 1
-    assert bdl_body["odds_api_quota"]["total"] == 5
+        monkeypatch.setattr(settings, "nba_odds_provider", "balldontlie")
+        monkeypatch.setattr(
+            "app.services.bdl_odds_provider.get_bdl_odds_provider",
+            lambda: BdlProvider(),
+        )
+        bdl_body = await get_metrics()
+        assert bdl_body["odds_api_quota"]["remaining"] == 4
+        assert bdl_body["odds_api_quota"]["used"] == 1
+        assert bdl_body["odds_api_quota"]["total"] == 5
+    finally:
+        await _release_metrics_cache()
 
 
 async def _upgrade(dsn: str) -> None:

@@ -189,13 +189,24 @@ def test_event_reads_from_the_recorded_snapshot_omit_a_projection(monkeypatch):
     transport = httpx.ASGITransport(app=app)
 
     async def _call():
-        async with httpx.AsyncClient(transport=transport, base_url="http://test") as http:
-            health = await http.get("/api/health")
-            reads = await http.get(
-                f"/api/nba/events/{points['id']}/reads",
-                params={"market": "player_points"},
-            )
-            return health, reads
+        try:
+            async with httpx.AsyncClient(transport=transport, base_url="http://test") as http:
+                health = await http.get("/api/health")
+                reads = await http.get(
+                    f"/api/nba/events/{points['id']}/reads",
+                    params={"market": "player_points"},
+                )
+                return health, reads
+        finally:
+            # Injury lookup uses the process cache. Close it before
+            # asyncio.run drops this loop, or the next TestClient
+            # shutdown closes that client on a dead loop.
+            from app.services.cache import cache_service
+
+            client = cache_service._client
+            cache_service._client = None
+            if client is not None:
+                await client.close()
 
     health, reads = asyncio.run(_call())
     assert health.status_code == 200
