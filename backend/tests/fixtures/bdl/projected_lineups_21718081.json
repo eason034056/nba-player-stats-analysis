@@ -1,0 +1,16 @@
+{
+ "request": "https://api.balldontlie.io/nba/v1/projected_lineups?game_ids%5B%5D=21718081",
+ "status": 200,
+ "elapsed_s": 0.28,
+ "rate_headers": {
+  "x-ratelimit-limit": "5",
+  "x-ratelimit-remaining": "2",
+  "x-ratelimit-reset": "1794370025"
+ },
+ "response": {
+  "data": [],
+  "meta": {
+   "per_page": 25
+  }
+ }
+}
