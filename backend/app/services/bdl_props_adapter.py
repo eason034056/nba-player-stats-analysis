@@ -15,6 +15,7 @@ player id. This module does not invent a name, a price, or a book.
 from __future__ import annotations
 
 import logging
+import statistics
 from collections import Counter, defaultdict
 from datetime import datetime, timezone
 from typing import Any
@@ -133,7 +134,8 @@ class BdlPropsAdapter:
     call only:
 
     - ``dropped_vendor_rows``: rows whose vendor is not on the allow-list
-    - ``fake_points_dropped``: BetParx / Bally Bet low points totals removed
+    - ``fake_points_dropped``: BetParx / Bally Bet points totals removed
+      because they were not the anchored main
     - ``post_tip_dropped``: rows whose ``updated_at`` is after the tip
     - ``missing_name_rows``: rows skipped because ``names`` had no id
     """
@@ -243,16 +245,31 @@ class BdlPropsAdapter:
         return self._drop_fake_low_points(selected)
 
     def _drop_fake_low_points(self, rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
-        """Remove the low points total BetParx and Bally Bet post together.
+        """Keep one points total for the BetParx / Bally Bet pair.
 
-        On the OKC at Portland board those two vendors post a points total
-        far below every other book, and BetParx also posts the real total.
-        The low total is not an alternate: Bally Bet posts only that total,
-        at the same price as BetParx's low total. When the pair has more
-        than one points total for one player, every total below the highest
-        is dropped. A player with one total keeps it. The snapshot parser
-        stores every two-sided rung, so the low total has to be gone before
-        ``to_bookmakers`` returns, not only ignored by the main-line vote.
+        Scope is ``prop_type == "points"`` over/under rows on that pair.
+        A player with one pair total is unchanged. Other vendors' rows are
+        not dropped here. The pair still collapses to one book afterwards.
+
+        When the pair has two or more distinct totals for one player:
+
+        1. ``other_mains`` is one numeric line per other allow-listed vendor
+           that posted a single points total for that player. A vendor with
+           two or more distinct totals is omitted. Its main is ambiguous.
+        2. If ``other_mains`` is non-empty, the consensus is the median of
+           those lines. An even count averages the two middle values. The
+           pair keeps the candidate closest to that median. A distance tie
+           keeps the candidate the other books posted more often, then the
+           lower total. Every other pair total for that player is dropped,
+           from both vendors.
+        3. If ``other_mains`` is empty, the pair keeps ``max(lines)``. With
+           no other book, a shared low total plus a higher singleton has
+           the same shape as a shared main plus a higher alternate, so
+           there is no signal that beats the maximum. The maximum still
+           drops the recorded isolated-low fake.
+
+        The snapshot parser stores every two-sided rung, so the rejected
+        total has to be gone before ``to_bookmakers`` returns.
         """
         grouped: dict[int, list[dict[str, Any]]] = defaultdict(list)
         for row in rows:
@@ -268,15 +285,16 @@ class BdlPropsAdapter:
                 grouped[player_id].append(row)
 
         drop_ids: set[int] = set()
-        for player_rows in grouped.values():
+        for player_id, player_rows in grouped.items():
             lines = [line for line in (_line_value(row) for row in player_rows) if line is not None]
-            if len(set(lines)) < 2:
+            distinct = set(lines)
+            if len(distinct) < 2:
                 continue
-            keep = max(lines)
+            keep = _choose_pair_total(distinct, _other_points_mains(rows, player_id))
             for row in player_rows:
                 line = _line_value(row)
                 row_id = row.get("id")
-                if line is None or line < keep:
+                if line is None or line != keep:
                     if isinstance(row_id, int):
                         drop_ids.add(row_id)
 
@@ -438,3 +456,94 @@ def _american(value: Any) -> int | None:
     if price == 0:
         return None
     return price
+
+
+def _other_points_mains(rows: list[dict[str, Any]], player_id: int) -> list[float]:
+    """One points total per non-paired vendor, skipping an ambiguous vendor.
+
+    A vendor that posted two or more distinct over/under totals for this
+    player is left out. This rule does not guess which of those totals
+    is the book's main.
+    """
+    by_vendor: dict[str, set[float]] = defaultdict(set)
+    for row in rows:
+        vendor = row.get("vendor")
+        if not isinstance(vendor, str) or vendor in PAIRED_VENDORS or vendor not in VENDOR_TITLES:
+            continue
+        if row.get("prop_type") != "points" or row.get("player_id") != player_id:
+            continue
+        market = row.get("market")
+        if not isinstance(market, dict) or market.get("type") != "over_under":
+            continue
+        line = _line_value(row)
+        if line is not None:
+            by_vendor[vendor].add(line)
+    mains: list[float] = []
+    for lines in by_vendor.values():
+        if len(lines) == 1:
+            mains.append(next(iter(lines)))
+    return mains
+
+
+def _choose_pair_total(candidates: set[float], other_mains: list[float]) -> float:
+    """The pair total to keep for one player.
+
+    With other books, keep the candidate closest to their median. Ties
+    prefer the total those books posted more often, then the lower total.
+    With no other main, keep the highest candidate.
+    """
+    if not other_mains:
+        return max(candidates)
+    consensus = float(statistics.median(other_mains))
+    counts = Counter(other_mains)
+
+    def rank(line: float) -> tuple[float, int, float]:
+        return (abs(line - consensus), -counts[line], line)
+
+    return min(candidates, key=rank)
+
+
+def consensus_lines(books: list[dict[str, Any]]) -> dict[tuple[str, str], float]:
+    """One consensus total per player and market.
+
+    The vote is ``DailyAnalysisService._group_main_votes`` plus
+    ``calculate_mode_threshold``, one market at a time.
+    ``player_double_double`` has no total, so it is not a key. The
+    same-slate test and ``scripts/record_bdl_odds_fixtures.py`` both call
+    this function so the definition cannot drift.
+    """
+    from app.services.daily_analysis import DailyAnalysisService
+    from app.services.prob import calculate_mode_threshold
+
+    service = DailyAnalysisService()
+    keys: list[str] = []
+    for book in books:
+        if not isinstance(book, dict):
+            continue
+        for market in book.get("markets") or []:
+            if not isinstance(market, dict):
+                continue
+            key = market.get("key")
+            if isinstance(key, str) and key not in keys and key != "player_double_double":
+                keys.append(key)
+    found: dict[tuple[str, str], float] = {}
+    for key in keys:
+        sliced: list[dict[str, Any]] = []
+        for book in books:
+            if not isinstance(book, dict):
+                continue
+            markets = [
+                item
+                for item in (book.get("markets") or [])
+                if isinstance(item, dict) and item.get("key") == key
+            ]
+            if markets:
+                sliced.append({**book, "markets": markets})
+        votes = service._group_main_votes(sliced)
+        for player, pairs in votes.items():
+            lines = [line for line, _distance in pairs]
+            distances = [distance for _line, distance in pairs]
+            mode = calculate_mode_threshold(lines, distances)
+            if mode is not None:
+                found[(str(player), key)] = float(mode)
+    return found
