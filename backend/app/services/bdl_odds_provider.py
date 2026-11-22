@@ -313,6 +313,15 @@ class BdlOddsProvider:
             body["commence_time"] = event.commence_time
             body["home_team"] = event.home_team
             body["away_team"] = event.away_team
+        # Description -> BALLDONTLIE player id. The gateway caches this
+        # body, so a later live-table write can still see the id after
+        # the props call itself is done. Parsers that only read
+        # ``bookmakers`` ignore the extra key.
+        body["player_ids"] = {
+            name: player_id
+            for name, player_id in board.player_ids.items()
+            if isinstance(name, str) and isinstance(player_id, int)
+        }
         return body
 
     async def get_event_odds_with_usage(
