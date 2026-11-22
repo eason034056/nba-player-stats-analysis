@@ -112,6 +112,20 @@ LINEUP_ACTIVE_WINDOW_CRON_MINUTE = "0,15,30,45"
 # slate date is a different key, so this does not have to expire at midnight.
 NBA_LINEUP_TIPS_CACHE_TTL_SECONDS = 36 * 60 * 60
 
+# Pre-tip closing line. The alarm is ten minutes before tip. The memory
+# job store forgets alarms when the process stops, so the planner builds
+# them again on start. Eight minutes of grace is inside that ten-minute
+# gap. The scheduler default is one hour. Leaving the default in place
+# would run a missed alarm after tip and store in-game prices as the close.
+ODDS_PRETIP_LEAD = timedelta(minutes=10)
+ODDS_PRETIP_MISFIRE_GRACE_SECONDS = 8 * 60
+ODDS_PRETIP_LOCK_TTL_SECONDS = 8 * 60
+# Once a day, before the evening slate, on a minute the other jobs do not use.
+ODDS_PRETIP_PLANNER_DAILY_HOUR = 8
+ODDS_PRETIP_PLANNER_DAILY_MINUTE = 2
+ODDS_PRETIP_PLANNER_DAILY_TZ = "America/New_York"
+ODDS_PRETIP_PLANNER_INTERVAL_MINUTES = 30
+
 
 def _expand_cron_field(expr: str) -> frozenset[int]:
     """Every integer a cron hour or minute field names.
@@ -340,6 +354,57 @@ def _dump_tips(status: str, tips: tuple[datetime, ...]) -> dict[str, str | list[
         "status": status,
         "tips_utc": [tip.isoformat() for tip in tips],
     }
+
+
+def pretip_hhmm(tip: datetime) -> str:
+    """UTC ``HHMM`` of one tip.
+
+    ``pretip_hhmm`` is the minute written on the pre-tip job id and on
+    the Redis lock. ``HHMM`` means hour and minute, zero-padded, in UTC.
+    Games that tip in that same UTC minute share one alarm. A naive
+    ``tip`` is read as UTC.
+
+    Args:
+        tip: The game's tip instant.
+
+    Returns:
+        Four characters, such as ``0000`` for 00:00 UTC.
+    """
+    return _as_utc(tip).strftime("%H%M")
+
+
+def pretip_job_id(slate_date: str, tip: datetime) -> str:
+    """Scheduler id for one slate minute.
+
+    ``pretip_job_id`` builds ``odds_pretip:<date>:<HHMM>``. The date is
+    the Eastern slate date, not the UTC date of the tip. Replacing a job
+    with this id updates the alarm instead of adding a second one.
+
+    Args:
+        slate_date: Eastern game date, ``YYYY-MM-DD``.
+        tip: Any tip in that UTC minute. The minute comes from ``pretip_hhmm``.
+
+    Returns:
+        The job id string.
+    """
+    return f"odds_pretip:{slate_date}:{pretip_hhmm(tip)}"
+
+
+def pretip_lock_key(slate_date: str, tip: datetime) -> str:
+    """Redis lock for one slate minute.
+
+    ``pretip_lock_key`` is ``odds:v1:pretip-lock:<date>:<HHMM>``. ``v1``
+    is the key version. Two replicas that run the same minute both try
+    this key. Only the replica that sets it writes the close.
+
+    Args:
+        slate_date: Eastern game date, ``YYYY-MM-DD``.
+        tip: Any tip in that UTC minute.
+
+    Returns:
+        The lock key. The caller chooses the TTL.
+    """
+    return f"odds:v1:pretip-lock:{slate_date}:{pretip_hhmm(tip)}"
 
 
 def _snapshot_is_younger_than(raw: object, minutes: int) -> bool:
@@ -589,6 +654,46 @@ class SchedulerService:
                 coalesce=True,
             )
 
+        # Pre-tip closing lines. The daily cron, the 30-minute interval,
+        # and the one-second startup alarm all call the same planner.
+        # The planner reads the slate tip cache and adds one DateTrigger
+        # per tip minute. Those triggers set their own 8-minute grace.
+        # They do not inherit the one-hour default above.
+        self._scheduler.add_job(
+            self.plan_odds_pretip_closes,
+            trigger=CronTrigger(
+                hour=ODDS_PRETIP_PLANNER_DAILY_HOUR,
+                minute=ODDS_PRETIP_PLANNER_DAILY_MINUTE,
+                timezone=ODDS_PRETIP_PLANNER_DAILY_TZ,
+            ),
+            id="odds_pretip_planner_daily",
+            name="Odds closing-line planner (daily)",
+            replace_existing=True,
+            max_instances=1,
+            coalesce=True,
+        )
+        self._scheduler.add_job(
+            self.plan_odds_pretip_closes,
+            trigger=IntervalTrigger(minutes=ODDS_PRETIP_PLANNER_INTERVAL_MINUTES),
+            id="odds_pretip_planner",
+            name="Odds closing-line planner (every 30 minutes)",
+            replace_existing=True,
+            max_instances=1,
+            coalesce=True,
+        )
+        self._scheduler.add_job(
+            self.plan_odds_pretip_closes,
+            trigger=DateTrigger(
+                run_date=datetime.now(timezone.utc) + timedelta(seconds=1)
+            ),
+            id="odds_pretip_planner_startup",
+            name="Odds closing-line planner (process start)",
+            replace_existing=True,
+            misfire_grace_time=60,
+            max_instances=1,
+            coalesce=True,
+        )
+
         # Start the scheduler
         self._scheduler.start()
         self._is_running = True
@@ -598,6 +703,10 @@ class SchedulerService:
         print("   - Free Lineup Refresh: 09:30 baseline / 11:00-21:45 every 15min / 5min in each game's last 2h")
         print("   - Projection Data Prefetch: Daily UTC 16:00, 22:00, 23:30")
         print("   - Odds Snapshot: Daily 11:05, 17:05, 18:35 America/New_York")
+        print(
+            "   - Odds closing line: 10 minutes before each tip "
+            "(planner daily, every 30 minutes, and on start)"
+        )
         print("   - Hot Odds Key Prewarm: Every 30 seconds")
         print("   - Daily Analysis (NBA): Daily UTC 12:00")
         print("   - CSV Download: Daily 10:00 Chicago time")
@@ -1027,6 +1136,141 @@ class SchedulerService:
                 "skipping the 5-minute window"
             )
         return (status, tips)
+
+    async def plan_odds_pretip_closes(self, *, now: datetime | None = None) -> list[str]:
+        """Rebuild one closing-line alarm per tip minute on the current slate.
+
+        ``plan_odds_pretip_closes`` is the planner. The daily cron, the
+        30-minute interval, and the process-start alarm all call it.
+        Call it again after a restart. The memory job store is empty
+        then, so this method is what puts the alarms back.
+
+        Tips come from ``_nba_tips_for_slate``. That reader uses
+        ``lineup:v1:nba:tips:<date>`` when the key is present. It calls
+        ``list_games`` only when the key is missing. A second pass with
+        the same tips replaces the same job ids. It does not add a copy.
+
+        A failed read (``transient``) leaves alarms already on the
+        scheduler in place. ``no_games`` and ``unreadable`` clear this
+        slate's alarms, because there is nothing to close.
+
+        Args:
+            now: Clock for the Eastern slate date. None is the current time.
+                A naive datetime is UTC.
+
+        Returns:
+            The job ids scheduled for this slate, in UTC ``HHMM`` order.
+            An empty list when the scheduler is not running or the slate
+            has no usable tip.
+        """
+        if self._scheduler is None:
+            return []
+        moment = now if now is not None else datetime.now(timezone.utc)
+        if moment.tzinfo is None:
+            moment = moment.replace(tzinfo=timezone.utc)
+        slate = nba_slate_date(moment)[0]
+        status, tips = await self._nba_tips_for_slate(slate)
+        if status == "transient":
+            logger.info("odds_pretip planner left existing alarms in place")
+            prefix = f"odds_pretip:{slate}:"
+            return sorted(
+                job.id for job in self._scheduler.get_jobs() if job.id.startswith(prefix)
+            )
+        if status != "ok":
+            tips = ()
+        return self.schedule_pretip_closes(slate, tips)
+
+    def schedule_pretip_closes(
+        self,
+        slate_date: str,
+        tips: tuple[datetime, ...],
+    ) -> list[str]:
+        """Add or replace one ``DateTrigger`` per UTC tip minute.
+
+        ``schedule_pretip_closes`` is the part of the planner that talks
+        to APScheduler. Each alarm fires at tip minus
+        ``ODDS_PRETIP_LEAD`` (10 minutes). The id is
+        ``pretip_job_id``. ``replace_existing`` is true, so a second pass
+        updates that id. ``misfire_grace_time`` is
+        ``ODDS_PRETIP_MISFIRE_GRACE_SECONDS`` (8 minutes). That argument
+        is required. Without it the scheduler's one-hour default would
+        run the alarm after tip.
+
+        Minutes that were scheduled earlier and are not in ``tips`` are
+        removed. A postponed game that disappears from the tip list does
+        not keep its alarm.
+
+        Args:
+            slate_date: Eastern game date, ``YYYY-MM-DD``.
+            tips: Usable tips for that slate. Empty clears this slate's alarms.
+
+        Returns:
+            The job ids now registered for ``slate_date``.
+        """
+        if self._scheduler is None:
+            return []
+        grouped: dict[str, datetime] = {}
+        for tip in tips:
+            utc = _as_utc(tip)
+            hhmm = pretip_hhmm(utc)
+            current = grouped.get(hhmm)
+            if current is None or utc < current:
+                grouped[hhmm] = utc
+        ids: list[str] = []
+        for hhmm in sorted(grouped):
+            tip = grouped[hhmm]
+            job_id = pretip_job_id(slate_date, tip)
+            self._scheduler.add_job(
+                self._run_odds_pretip_job,
+                trigger=DateTrigger(run_date=tip - ODDS_PRETIP_LEAD),
+                id=job_id,
+                name=f"Odds closing line {slate_date} {hhmm}",
+                replace_existing=True,
+                misfire_grace_time=ODDS_PRETIP_MISFIRE_GRACE_SECONDS,
+                max_instances=1,
+                coalesce=True,
+                kwargs={"slate_date": slate_date, "tip": tip.isoformat()},
+            )
+            ids.append(job_id)
+        wanted = set(ids)
+        prefix = f"odds_pretip:{slate_date}:"
+        for job in list(self._scheduler.get_jobs()):
+            if job.id.startswith(prefix) and job.id not in wanted:
+                self._scheduler.remove_job(job.id)
+        return ids
+
+    async def _run_odds_pretip_job(self, slate_date: str, tip: str) -> None:
+        """Save the closing line for one tip minute.
+
+        ``_run_odds_pretip_job`` is the function the ``DateTrigger``
+        calls. ``tip`` is the UTC ISO text stored on the job. The
+        snapshot service checks that each game is still scheduled and
+        that the clock is still before tip. A failure logs the
+        exception type only. The message does not include the response
+        body or a database URL.
+
+        Args:
+            slate_date: Eastern game date, ``YYYY-MM-DD``.
+            tip: ISO-8601 tip instant. ``Z`` is accepted by the parser
+                used when the planner stored ``isoformat``.
+        """
+        parsed = _parse_tip(tip)
+        if parsed is None:
+            logger.warning("odds_pretip skipped; tip text is unusable")
+            return
+        try:
+            result = await odds_snapshot_service.take_closing_snapshot(slate_date, parsed)
+        except Exception as exc:
+            logger.warning("odds_pretip failed (%s)", type(exc).__name__)
+            return
+        logger.info(
+            "odds_pretip done slate=%s games=%s lines=%s misses=%s locked=%s",
+            result.get("date"),
+            result.get("event_count"),
+            result.get("total_lines"),
+            result.get("bdl_parent_misses"),
+            result.get("locked"),
+        )
 
     async def trigger_odds_snapshot_now(self, date: Optional[str] = None) -> dict:
         """
