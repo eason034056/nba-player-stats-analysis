@@ -13,6 +13,10 @@ Architecture:
             → 002 live rows when the provider is balldontlie and parents exist
             → _log_snapshot()                       (write to odds_snapshot_logs)
 
+    The pre-tip job calls take_closing_snapshot. That path always uses
+    BALLDONTLIE. It does not read nba_odds_provider. It writes the same
+    002 tables with snapshot_kind 'closing', and it writes odds_line_snapshots.
+
 Each snapshot will:
 1. Retrieve all NBA games for the day
 2. For each game, fetch odds for 4 markets in a single API call
@@ -39,6 +43,7 @@ from typing import List, Dict, Any, Optional, Tuple
 from app.services.odds_gateway import (
     PROVIDERS,
     active_nba_provider_name,
+    balldontlie_nba_provider,
     odds_gateway,
 )
 from app.services.odds_theoddsapi import odds_provider
@@ -159,16 +164,20 @@ INSERT INTO odds_snapshot_logs (
 ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
 """
 
-# One live prop row. A retry at the same snapshot_at updates that row
+# One live or closing prop row. ``$1`` through ``$11`` are the live tuple
+# (game, player, book, market, and the prices). ``$12`` is
+# ``snapshot_kind`` (``live`` or ``closing``), appended so the book stays
+# the third value. A retry at the same snapshot_at updates that row
 # instead of adding a second tick. The WHERE clause matches the partial
-# unique index in 002_bdl_core.sql.
+# unique index in 002_bdl_core.sql. Opening rows use a different conflict
+# target and are not written here.
 UPSERT_LIVE_PROP_SQL = """
 INSERT INTO player_prop_snapshots (
     league, snapshot_kind, bdl_game_id, bdl_player_id, book_key, market, market_type,
     line, over_odds, under_odds, milestone_odds, snapshot_at, source_updated_at
 ) VALUES (
-    'nba', 'live', $1, $2, $3, $4, $5,
-    $6, $7, $8, $9, $10, $11
+    'nba', $12, $1, $2, $3, $4, $5, $6,
+    $7, $8, $9, $10, $11
 )
 ON CONFLICT (league, snapshot_kind, bdl_game_id, bdl_player_id, book_key, market, snapshot_at)
 WHERE snapshot_kind IN ('live', 'closing')
@@ -181,7 +190,9 @@ DO UPDATE SET
     source_updated_at = EXCLUDED.source_updated_at
 """
 
-# One live game line per book. Same retry rule as the prop tick key.
+# One live or closing game line per book. ``$1`` through ``$13`` are the
+# live tuple. ``$14`` is ``snapshot_kind``, appended the same way as the
+# prop row. Same retry rule as the prop tick key.
 UPSERT_LIVE_GAME_ODDS_SQL = """
 INSERT INTO game_odds_snapshots (
     league, snapshot_kind, bdl_game_id, book_key, snapshot_at, source_updated_at,
@@ -189,7 +200,7 @@ INSERT INTO game_odds_snapshots (
     moneyline_home_odds, moneyline_away_odds,
     total_value, total_over_odds, total_under_odds
 ) VALUES (
-    'nba', 'live', $1, $2, $3, $4,
+    'nba', $14, $1, $2, $3, $4,
     $5, $6, $7, $8,
     $9, $10,
     $11, $12, $13
@@ -457,6 +468,64 @@ def _live_prop_args(
                     updated,
                 )
     return list(by_key.values())
+
+
+def closing_game_fate(
+    game: object,
+    *,
+    slate_date: str,
+    hhmm: str,
+    now: datetime,
+) -> str:
+    """Decide what the closing job does with one ``list_games`` row.
+
+    ``closing_game_fate`` returns ``keep`` when the row is still scheduled,
+    it belongs to this UTC minute and this slate date, and ``now`` is
+    before its tip. ``other`` is a different minute or a different date.
+    The caller ignores ``other``. ``postponed``, ``not_scheduled``, and
+    ``tip_passed`` are skips the caller logs and does not fetch.
+
+    ``hhmm`` is the four-character UTC minute of the job. The game's
+    minute uses ``pretip_hhmm``, the same function as the job id.
+
+    Args:
+        game: One element of a games payload ``data`` list.
+        slate_date: Eastern game date the job was given.
+        hhmm: UTC hour and minute of this job, such as ``0000``.
+        now: Clock for the pre-tip check. Naive values are UTC.
+
+    Returns:
+        ``keep``, ``other``, ``postponed``, ``not_scheduled``, or ``tip_passed``.
+    """
+    from app.services.scheduler import pretip_hhmm
+
+    if not isinstance(game, dict):
+        return "other"
+    raw_tip = game.get("datetime")
+    game_tip = _parse_commence(raw_tip) if isinstance(raw_tip, str) else None
+    if game_tip is None or pretip_hhmm(game_tip) != hhmm:
+        return "other"
+    game_date = game.get("date")
+    if isinstance(game_date, str) and game_date != slate_date:
+        return "other"
+    if game.get("postponed") is True:
+        return "postponed"
+    if game.get("status_state") != "scheduled":
+        return "not_scheduled"
+    if game_tip <= _as_utc_now(now):
+        return "tip_passed"
+    return "keep"
+
+
+def _with_snapshot_kind(kind: str, rows: list[tuple]) -> list[tuple]:
+    """Append ``snapshot_kind`` to each live row for the shared upsert.
+
+    ``_live_prop_args`` and ``_game_odds_with_parents`` build the value
+    tuple without the kind. ``live`` and ``closing`` use the same SQL.
+    The kind is the last bound value. A prop row's third value stays the
+    book key.
+    """
+    return [(*row, kind) for row in rows]
 
 
 def _player_id_map(data: dict[str, Any]) -> dict[str, int]:
@@ -1082,32 +1151,57 @@ class OddsSnapshotService:
         events: List[Dict[str, Any]],
         date: str,
         snapshot_at: datetime,
+        *,
+        snapshot_kind: str = "live",
+        odds_client: Any = None,
+        odds_rows: list[dict[str, Any]] | None = None,
+        boards: list[tuple[str, dict[str, Any]]] | None = None,
     ) -> int:
-        """Write 002 ``live`` rows for this capture. Return the miss count.
+        """Write 002 tick rows for this capture. Return the miss count.
 
         ``odds_line_snapshots`` has already been written. This method
         inserts ``player_prop_snapshots`` and ``game_odds_snapshots``
         only when the parent ``games``, ``players``, ``books``, and
         ``prop_markets`` rows exist. A missing parent is counted and
         logged. It is not raised. A second call with the same
-        ``snapshot_at`` updates the live tick instead of adding a row.
+        ``snapshot_kind`` and ``snapshot_at`` updates that tick instead
+        of adding a row.
+
+        ``snapshot_kind`` is ``live`` for the scheduled snapshot and
+        ``closing`` for the pre-tip job. Both use the same SQL and the
+        same parent check. Opening rows are not written here.
 
         Args:
             events: Games this snapshot kept. ``id`` is the decimal game id.
             date: US game date passed to ``list_odds`` as ``dates[]``.
-            snapshot_at: Job time stored on every live row.
+            snapshot_at: Job time stored on every row of this tick.
+            snapshot_kind: ``live`` or ``closing``.
+            odds_client: BALLDONTLIE client for ``list_odds``. None uses
+                the active NBA provider, which is the live snapshot path.
+            odds_rows: Game-line rows already fetched. None fetches them.
+            boards: ``(event_id, props body)`` pairs already fetched.
+                None reads ``self._bdl_boards``, which the live snapshot
+                fills while it writes ``odds_line_snapshots``.
 
         Returns:
             How many candidate inserts were skipped.
+
+        Raises:
+            ValueError: ``snapshot_kind`` is not ``live`` or ``closing``.
         """
+        if snapshot_kind not in {"live", "closing"}:
+            raise ValueError(
+                f"snapshot_kind must be live or closing, not {snapshot_kind!r}"
+            )
         kept_ids: set[int] = set()
         for event in events:
             text = str(event.get("id") or "")
             if text.isdigit():
                 kept_ids.add(int(text))
 
+        source = boards if boards is not None else getattr(self, "_bdl_boards", [])
         prop_args: list[tuple] = []
-        for event_id, payload in getattr(self, "_bdl_boards", []):
+        for event_id, payload in source:
             if not str(event_id).isdigit():
                 continue
             game_id = int(event_id)
@@ -1125,38 +1219,59 @@ class OddsSnapshotService:
                 )
             )
 
-        odds_rows = await self._slate_game_odds(date, kept_ids)
+        if odds_rows is None:
+            odds_rows = await self._slate_game_odds(date, kept_ids, client=odds_client)
         misses = 0
         prop_ready, prop_misses = await self._props_with_parents(prop_args)
         misses += prop_misses
         odds_ready, odds_misses = await self._game_odds_with_parents(odds_rows, snapshot_at)
         misses += odds_misses
-        prop_failed = await self._write_each(UPSERT_LIVE_PROP_SQL, prop_ready, "props")
-        odds_failed = await self._write_each(UPSERT_LIVE_GAME_ODDS_SQL, odds_ready, "game_odds")
+        prop_failed = await self._write_each(
+            UPSERT_LIVE_PROP_SQL,
+            _with_snapshot_kind(snapshot_kind, prop_ready),
+            "props",
+        )
+        odds_failed = await self._write_each(
+            UPSERT_LIVE_GAME_ODDS_SQL,
+            _with_snapshot_kind(snapshot_kind, odds_ready),
+            "game_odds",
+        )
         misses += prop_failed + odds_failed
         logger.info(
-            "bdl_live_dual_write props_written=%s game_odds_written=%s misses=%s",
+            "bdl_live_dual_write snapshot_kind=%s props_written=%s game_odds_written=%s misses=%s",
+            snapshot_kind,
             len(prop_ready) - prop_failed,
             len(odds_ready) - odds_failed,
             misses,
         )
         return misses
 
-    async def _slate_game_odds(self, date: str, kept_ids: set[int]) -> list[dict[str, Any]]:
+    async def _slate_game_odds(
+        self,
+        date: str,
+        kept_ids: set[int],
+        client: Any = None,
+    ) -> list[dict[str, Any]]:
         """Recorded game lines for the kept games, one row per book.
 
         ``list_odds`` is the BALLDONTLIE ``/v2/odds`` call. A failure
         here returns no rows. The prop write still runs. Pages follow
         ``meta.next_cursor`` when that value is an int.
+
+        Args:
+            date: US game date passed as ``dates[]``.
+            kept_ids: Decimal game ids this capture is still writing.
+            client: BALLDONTLIE client. None uses the active NBA provider.
         """
         if not kept_ids:
             return []
-        try:
-            provider = PROVIDERS["nba"]
-            client = provider._require_client()
-        except Exception as exc:
-            logger.warning("bdl live game odds skipped (%s)", type(exc).__name__)
-            return []
+        if client is None:
+            try:
+                provider = PROVIDERS["nba"]
+                client = provider._require_client()
+            except Exception as exc:
+                logger.warning("bdl live game odds skipped (%s)", type(exc).__name__)
+                return []
 
         raw_rows: list[dict[str, Any]] = []
         cursor: int | None = None
@@ -1372,6 +1487,278 @@ class OddsSnapshotService:
             )
         except Exception as e:
             print(f"⚠️ [OddsSnapshot] Failed writing snapshot log: {e}")
+
+    async def _closing_game_ids_already_stored(
+        self,
+        game_ids: list[int],
+        snapshot_at: datetime,
+    ) -> set[int]:
+        """Game ids that already have this closing stamp.
+
+        ``_closing_game_ids_already_stored`` looks at
+        ``player_prop_snapshots`` and ``game_odds_snapshots`` where
+        ``snapshot_kind`` is ``closing``, and at ``odds_line_snapshots``
+        for the same instant. The line table has no kind column. This
+        stamp is tip minus 10 minutes, so a line row there is this close.
+        Call it with the games this minute would fetch. An empty list,
+        or a database that is not connected, returns an empty set. A
+        read error is logged by exception type and also returns an empty
+        set, so the caller still attempts the write.
+
+        Args:
+            game_ids: Decimal BALLDONTLIE game ids still in this minute.
+            snapshot_at: The shared close time for the minute.
+
+        Returns:
+            The subset of ``game_ids`` that already have a stored close.
+        """
+        if not game_ids or not db_service.is_connected:
+            return set()
+        text_ids = [str(game_id) for game_id in game_ids]
+        try:
+            rows = await db_service.fetch(
+                """
+                SELECT bdl_game_id AS game_id
+                FROM player_prop_snapshots
+                WHERE league = 'nba'
+                  AND snapshot_kind = 'closing'
+                  AND snapshot_at = $1
+                  AND bdl_game_id = ANY($2::bigint[])
+                UNION
+                SELECT bdl_game_id AS game_id
+                FROM game_odds_snapshots
+                WHERE league = 'nba'
+                  AND snapshot_kind = 'closing'
+                  AND snapshot_at = $1
+                  AND bdl_game_id = ANY($2::bigint[])
+                UNION
+                SELECT event_id::bigint AS game_id
+                FROM odds_line_snapshots
+                WHERE snapshot_at = $1
+                  AND event_id = ANY($3::text[])
+                """,
+                snapshot_at,
+                game_ids,
+                text_ids,
+            )
+        except Exception as exc:
+            logger.warning("odds_pretip stored close unread (%s)", type(exc).__name__)
+            return set()
+        found: set[int] = set()
+        for row in rows:
+            raw = row["game_id"]
+            if isinstance(raw, bool) or raw is None:
+                continue
+            try:
+                found.add(int(raw))
+            except (TypeError, ValueError):
+                continue
+        return found
+
+    async def take_closing_snapshot(
+        self,
+        slate_date: str,
+        tip: datetime,
+        *,
+        now: datetime | None = None,
+    ) -> dict[str, Any]:
+        """Save one pre-tip closing line for every game in this tip minute.
+
+        ``take_closing_snapshot`` is the DateTrigger job. It talks to
+        BALLDONTLIE only. It does not read ``nba_odds_provider``, so it
+        can store a close while the default provider is still The Odds API.
+
+        The Redis lock is ``pretip_lock_key``. A second replica that
+        cannot take the lock returns without fetching or writing.
+        ``snapshot_at`` is ``tip`` minus 10 minutes for every row in the
+        minute. A game that already has a row at that stamp is not
+        fetched again, so a later pass does not overwrite the close.
+
+        A game is fetched only when ``closing_game_fate`` returns
+        ``keep``: still scheduled, not postponed, and ``now`` is before
+        its tip. Props are fetched once per remaining game.
+        ``BdlPropsAdapter`` drops a prop whose ``updated_at`` is after
+        the tip. Game odds are one ``list_odds`` call for the slate date,
+        then filtered to the remaining games. ``odds_line_snapshots``
+        is written first. ``player_prop_snapshots`` and
+        ``game_odds_snapshots`` use ``_write_bdl_live`` with
+        ``snapshot_kind='closing'``. A missing parent is a counted miss.
+        It does not raise and it does not undo the line-table write.
+
+        Args:
+            slate_date: Eastern game date, ``YYYY-MM-DD``.
+            tip: Canonical tip for this minute. The earliest tip in the
+                minute is what the planner stores.
+            now: Clock for the pre-tip check. None is the current UTC time.
+                Tests pass a fixed instant. A naive datetime is UTC.
+
+        Returns:
+            ``date``, ``event_count``, ``total_lines``, ``snapshot_at``,
+            ``bdl_parent_misses``, ``locked``, and the three skip counts.
+        """
+        from app.services.cache import cache_service
+        from app.services.scheduler import (
+            ODDS_PRETIP_LEAD,
+            ODDS_PRETIP_LOCK_TTL_SECONDS,
+            pretip_hhmm,
+            pretip_lock_key,
+        )
+
+        moment = _as_utc_now(now)
+        stamp = _as_utc_now(tip) - ODDS_PRETIP_LEAD
+        hhmm = pretip_hhmm(tip)
+
+        def _result(
+            *,
+            event_count: int = 0,
+            total_lines: int = 0,
+            misses: int = 0,
+            locked: bool = False,
+            skipped_postponed: int = 0,
+            skipped_not_scheduled: int = 0,
+            skipped_tip_passed: int = 0,
+        ) -> dict[str, Any]:
+            return {
+                "date": slate_date,
+                "event_count": event_count,
+                "total_lines": total_lines,
+                "snapshot_at": stamp.isoformat(),
+                "bdl_parent_misses": misses,
+                "locked": locked,
+                "skipped_postponed": skipped_postponed,
+                "skipped_not_scheduled": skipped_not_scheduled,
+                "skipped_tip_passed": skipped_tip_passed,
+            }
+
+        lock_key = pretip_lock_key(slate_date, tip)
+        acquired = await cache_service.acquire_lock(lock_key, ODDS_PRETIP_LOCK_TTL_SECONDS)
+        if not acquired:
+            logger.info("odds_pretip_locked slate=%s hhmm=%s", slate_date, hhmm)
+            return _result(locked=True)
+
+        skipped_postponed = 0
+        skipped_not_scheduled = 0
+        skipped_tip_passed = 0
+        try:
+            provider = balldontlie_nba_provider()
+            client = provider._require_client()
+            try:
+                payload = await client.list_games(dates=[slate_date], per_page=100)
+            except Exception as exc:
+                logger.warning("odds_pretip games skipped (%s)", type(exc).__name__)
+                return _result()
+            data = payload.get("data") if isinstance(payload, dict) else None
+            if not isinstance(data, list):
+                logger.warning("odds_pretip games unreadable")
+                return _result()
+
+            pending: list[dict[str, Any]] = []
+            for game in data:
+                fate = closing_game_fate(game, slate_date=slate_date, hhmm=hhmm, now=moment)
+                if fate == "other":
+                    continue
+                game_id = game.get("id") if isinstance(game, dict) else None
+                if fate == "postponed":
+                    skipped_postponed += 1
+                    logger.info("odds_pretip_skip game_id=%s reason=postponed", game_id)
+                    continue
+                if fate == "not_scheduled":
+                    skipped_not_scheduled += 1
+                    status_state = game.get("status_state") if isinstance(game, dict) else None
+                    logger.info(
+                        "odds_pretip_skip game_id=%s reason=not_scheduled status=%s",
+                        game_id,
+                        status_state,
+                    )
+                    continue
+                if fate == "tip_passed":
+                    skipped_tip_passed += 1
+                    logger.info("odds_pretip_skip game_id=%s reason=tip_passed", game_id)
+                    continue
+                if not isinstance(game_id, int):
+                    continue
+                pending.append(game)
+            stored = await self._closing_game_ids_already_stored(
+                [game["id"] for game in pending if isinstance(game.get("id"), int)],
+                stamp,
+            )
+            kept: list[dict[str, Any]] = []
+            boards: list[tuple[str, dict[str, Any]]] = []
+            all_rows: list[tuple] = []
+            for game in pending:
+                game_id = game["id"]
+                if game_id in stored:
+                    logger.info("odds_pretip_skip game_id=%s reason=already_stored", game_id)
+                    continue
+                kept.append(game)
+                provider._games[str(game_id)] = game
+                try:
+                    body = await provider.get_event_odds(
+                        event_id=str(game_id),
+                        markets=SNAPSHOT_MARKETS,
+                    )
+                except Exception as exc:
+                    logger.warning(
+                        "odds_pretip props skipped game_id=%s (%s)",
+                        game_id,
+                        type(exc).__name__,
+                    )
+                    continue
+                described = provider._provider_event(game)
+                home = described.home_team if described is not None else ""
+                away = described.away_team if described is not None else ""
+                bookmakers = body.get("bookmakers") if isinstance(body, dict) else None
+                if not isinstance(bookmakers, list):
+                    bookmakers = []
+                payload_body = body if isinstance(body, dict) else {}
+                boards.append((str(game_id), payload_body))
+                all_rows.extend(
+                    self.rows_from_bookmakers(
+                        bookmakers,
+                        event_id=str(game_id),
+                        home_team=home,
+                        away_team=away,
+                        date=slate_date,
+                        snapshot_at=stamp,
+                    )
+                )
+
+            odds_rows: list[dict[str, Any]] = []
+            if kept:
+                odds_rows = await self._slate_game_odds(
+                    slate_date,
+                    {game["id"] for game in kept if isinstance(game.get("id"), int)},
+                    client=client,
+                )
+            misses = 0
+            if kept and db_service.is_connected and all_rows:
+                await db_service.executemany(UPSERT_LINE_SQL, all_rows)
+            if kept and db_service.is_connected:
+                try:
+                    misses = await self._write_bdl_live(
+                        [{"id": str(game["id"])} for game in kept if isinstance(game.get("id"), int)],
+                        slate_date,
+                        stamp,
+                        snapshot_kind="closing",
+                        odds_rows=odds_rows,
+                        boards=boards,
+                    )
+                except Exception as exc:
+                    misses += 1
+                    logger.warning(
+                        "odds_pretip closing rows skipped (%s)",
+                        type(exc).__name__,
+                    )
+            return _result(
+                event_count=len(kept),
+                total_lines=len(all_rows),
+                misses=misses,
+                skipped_postponed=skipped_postponed,
+                skipped_not_scheduled=skipped_not_scheduled,
+                skipped_tip_passed=skipped_tip_passed,
+            )
+        finally:
+            await cache_service.release_lock(lock_key)
 
 
 # Create global service instance

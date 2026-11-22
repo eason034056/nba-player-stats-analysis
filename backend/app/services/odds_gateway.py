@@ -77,6 +77,24 @@ class _LeagueProviders(Mapping[str, Any]):
 PROVIDERS: Mapping[str, Any] = _LeagueProviders()
 
 
+def balldontlie_nba_provider() -> Any:
+    """The BALLDONTLIE NBA provider, whatever ``nba_odds_provider`` says.
+
+    ``balldontlie_nba_provider`` is how the pre-tip closing job gets a
+    client without flipping the setting and without asking ``PROVIDERS``.
+    ``PROVIDERS["nba"]`` still follows the setting, so the scheduled
+    snapshot stays on The Odds API while that is the default. The
+    provider module is imported here, on the call, so a job file does
+    not name it.
+
+    Returns:
+        The process-wide BALLDONTLIE odds provider.
+    """
+    from app.services.bdl_odds_provider import get_bdl_odds_provider
+
+    return get_bdl_odds_provider()
+
+
 def active_nba_provider_name() -> str:
     """The NBA provider name a job should branch on.
 
