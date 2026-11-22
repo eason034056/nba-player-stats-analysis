@@ -1,0 +1,68 @@
+{
+  "request": "https://api.the-odds-api.com/v4/sports/basketball_nba/events",
+  "status": 200,
+  "elapsed_s": 0.18,
+  "rate_headers": {
+    "x-requests-remaining": "24",
+    "x-requests-last": "0",
+    "x-requests-used": "476"
+  },
+  "response": [
+    {
+      "id": "222a2887819bb18d9b9572aef63d9b9e",
+      "sport_key": "basketball_nba",
+      "sport_title": "NBA",
+      "commence_time": "2026-11-22T20:40:00Z",
+      "home_team": "Atlanta Hawks",
+      "away_team": "Detroit Pistons"
+    },
+    {
+      "id": "90da1cde4144fac00d41f2c0db2cc921",
+      "sport_key": "basketball_nba",
+      "sport_title": "NBA",
+      "commence_time": "2026-11-22T23:10:00Z",
+      "home_team": "Miami Heat",
+      "away_team": "Oklahoma City Thunder"
+    },
+    {
+      "id": "15a079f55e23d26237844224f258c972",
+      "sport_key": "basketball_nba",
+      "sport_title": "NBA",
+      "commence_time": "2026-11-23T00:10:00Z",
+      "home_team": "Chicago Bulls",
+      "away_team": "Denver Nuggets"
+    },
+    {
+      "id": "1e7b9477c6c55aea5efd9c1a47039f5c",
+      "sport_key": "basketball_nba",
+      "sport_title": "NBA",
+      "commence_time": "2026-11-23T00:10:00Z",
+      "home_team": "Utah Jazz",
+      "away_team": "Dallas Mavericks"
+    },
+    {
+      "id": "335ad5604b51b7742fd1dee92d78da35",
+      "sport_key": "basketball_nba",
+      "sport_title": "NBA",
+      "commence_time": "2026-11-23T00:10:00Z",
+      "home_team": "Washington Wizards",
+      "away_team": "Orlando Magic"
+    },
+    {
+      "id": "031fa761cc38e1b5afd9309b731b38b2",
+      "sport_key": "basketball_nba",
+      "sport_title": "NBA",
+      "commence_time": "2026-11-23T01:10:00Z",
+      "home_team": "New York Knicks",
+      "away_team": "Indiana Pacers"
+    },
+    {
+      "id": "b8c5bdb50209c7d050400c7d28c32e30",
+      "sport_key": "basketball_nba",
+      "sport_title": "NBA",
+      "commence_time": "2026-11-23T01:40:00Z",
+      "home_team": "Golden State Warriors",
+      "away_team": "Boston Celtics"
+    }
+  ]
+}

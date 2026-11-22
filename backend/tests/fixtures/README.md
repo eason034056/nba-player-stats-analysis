@@ -63,9 +63,21 @@ These four files were recorded on 2026-11-10 and 2026-11-11 from BALLDONTLIE `GE
 | `bdl/players_empty.json` | Recorded 2026-11-13 ~04:30Z with `--bdl-only`. `GET /v1/players?player_ids[]=0&per_page=100`. `data` is `[]`. |
 | `bdl/props_empty.json` | Recorded 2026-11-13 ~04:30Z with `--bdl-only`. `GET /v2/odds/player_props?game_id=21718193`. `data` is `[]`. |
 
-These files are not in the tree. Tests that need them skip. `scripts/record_bdl_odds_fixtures.py` writes them from a live response and does not invent a body. It strips `apiKey` and `Authorization`. A 429 file is written only when a response is actually 429. `--bdl-only` records the BALLDONTLIE files and needs only `BALLDONTLIE_API_KEY`. Without that flag the same-slate pair still needs both keys. The same-slate pair stays skipped until `ODDS_API_KEY` is available.
+`player_props_429.json` is not in the tree. The test that needs it skips. `scripts/record_bdl_odds_fixtures.py` writes a 429 file only when a response is actually 429, and it strips `apiKey` and `Authorization`.
 
 | File | What it is |
 |---|---|
 | `bdl/player_props_429.json` | A real `player_props` 429, if one occurs |
-| `same_slate/<date>_<away>@<home>__*.json` | One pregame game from both providers, plus `__meta.json`. Skipped until `ODDS_API_KEY` is available. |
+
+## Same-slate pair (OKC at Miami, 2026-11-22)
+
+Recorded 2026-11-22T21:53:15Z and copied byte-for-byte into `same_slate/`. The key is not in these files. `test_same_slate_consensus_agrees_within_half_a_point` reads `*__meta.json` here and does not need an API key.
+
+| File | What it is |
+|---|---|
+| `same_slate/2026-11-22_OKC@MIA__meta.json` | Capture clock, commence times, slate date, and the OKC and MIA codes |
+| `same_slate/2026-11-22_OKC@MIA__odds_api_events.json` | The Odds API events list for that slate |
+| `same_slate/2026-11-22_OKC@MIA__odds_api_odds.json` | The Odds API odds for this game |
+| `same_slate/2026-11-22_OKC@MIA__bdl_games.json` | BALLDONTLIE games for this date |
+| `same_slate/2026-11-22_OKC@MIA__bdl_props.json` | BALLDONTLIE player props for this game |
+| `same_slate/2026-11-22_OKC@MIA__bdl_players.json` | BALLDONTLIE player names used to label those props |
