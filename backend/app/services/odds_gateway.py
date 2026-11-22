@@ -233,6 +233,35 @@ class OddsMarketGateway:
         provider = self._provider_for(league)
         return await provider.list_events(league, start_utc, end_utc)
 
+    async def list_event_dicts(
+        self,
+        *,
+        league: str,
+        start_utc: datetime,
+        end_utc: datetime,
+        regions: str = "us",
+    ) -> list[dict[str, Any]]:
+        """Event dicts for ``league`` in the UTC window.
+
+        ``GET /api/nba/events`` reads ``id``, ``sport_key``, ``home_team``,
+        ``away_team``, and ``commence_time``. ``id`` is the provider's
+        event id: hex on The Odds API, the decimal game id on BALLDONTLIE.
+
+        ``regions`` is forwarded. The Odds API events request does not put
+        it on the query string. BALLDONTLIE ignores it. The route still
+        keeps ``regions`` on its Redis key.
+
+        The provider is the league's row. NBA follows ``nba_odds_provider``.
+        """
+        provider = self._provider_for(league)
+        events = await provider.get_events(
+            league=league,
+            regions=regions,
+            date_from=start_utc,
+            date_to=end_utc,
+        )
+        return events if isinstance(events, list) else []
+
     async def record_quota_usage(self, usage: QuotaUsage) -> None:
         await self.cache.set(
             QUOTA_USAGE_KEY,

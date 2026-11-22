@@ -38,6 +38,12 @@ services:
       - ODDS_API_KEY=${ODDS_API_KEY}
       - ODDS_API_BASE_URL=${ODDS_API_BASE_URL:-https://api.the-odds-api.com}
 
+      # NBA odds provider. Default stays theoddsapi. Placeholders only.
+      # The code default of BDL_RATE_LIMIT_PER_MIN stays 5.
+      - NBA_ODDS_PROVIDER=${NBA_ODDS_PROVIDER:-theoddsapi}
+      - BALLDONTLIE_API_KEY=${BALLDONTLIE_API_KEY:-}
+      - BDL_RATE_LIMIT_PER_MIN=${BDL_RATE_LIMIT_PER_MIN:-5}
+
       # Redis 連線（指向同一 network 中的 redis 服務）
       - REDIS_URL=redis://redis:6379
       

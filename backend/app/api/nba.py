@@ -47,6 +47,8 @@ from app.services.bulk_props import (
 )
 from app.services.event_reads import get_event_reads
 from app.services.daily_analysis import attach_top_reads, load_stored_top_reads
+# Route tests replace odds_provider.get_events on this binding. The default
+# gateway path calls that same object, so the name has to stay on this module.
 from app.services.odds_theoddsapi import odds_provider
 from app.services.odds_provider import OddsAPIError
 from app.services.cache import cache_service, CacheService
@@ -87,6 +89,42 @@ router = APIRouter(
 )
 
 logger = logging.getLogger(__name__)
+
+
+def events_list_cache_key(date: str, regions: str, offset_minutes: int) -> str:
+    """Redis key for one local-day NBA event list.
+
+    The default provider keeps ``events:nba:{date}:{regions}:tz{offset}``.
+    That is the string already stored by callers and by the route tests.
+    Any other ``nba_odds_provider`` appends ``:{provider}``. Hex ids and
+    digit ids must not be served from the same key after a flag flip.
+
+    Args:
+        date: Local date, ``YYYY-MM-DD``.
+        regions: Region code from the query. Default callers send ``us``.
+        offset_minutes: Minutes east of UTC. Omitted queries use 480.
+
+    Returns:
+        The cache key for this date, region, offset, and provider.
+    """
+    base = f"{CacheService.build_events_key(date, regions)}:tz{offset_minutes}"
+    provider = (settings.nba_odds_provider or "theoddsapi").strip().lower()
+    if provider == "theoddsapi":
+        return base
+    return f"{base}:{provider}"
+
+
+def _malformed_bdl_event_id(event_id: str) -> bool:
+    """True when BALLDONTLIE is selected and ``event_id`` is not a game id.
+
+    A BALLDONTLIE game id is 1 to 128 digits. A hex Odds API id is
+    well-formed for The Odds API and is not a game id. The default
+    provider skips this check, so those hex ids stay valid.
+    """
+    provider = (settings.nba_odds_provider or "theoddsapi").strip().lower()
+    if provider != "balldontlie":
+        return False
+    return not event_id.isdigit() or not event_id_is_well_formed(event_id)
 
 
 async def _events_with_top_reads(
@@ -387,7 +425,7 @@ async def get_events(
     Flow:
     1. Check Redis cache
     2. If cache hit, return directly
-    3. If cache miss, call The Odds API
+    3. If cache miss, ask the odds gateway for that local window
     4. Store result in cache
     5. Return result
 
@@ -440,8 +478,9 @@ async def get_events(
     except ValueError:
         raise HTTPException(status_code=422, detail="Invalid date")
 
-    # 1. Check cache (include timezone offset to distinguish different local time requests)
-    cache_key = f"{CacheService.build_events_key(date, regions)}:tz{offset_minutes}"
+    # 1. Check cache (include timezone offset to distinguish different local time requests).
+    # The default provider keeps the historical key. balldontlie appends its name.
+    cache_key = events_list_cache_key(date, regions, offset_minutes)
     cached_data = await cache_service.get(cache_key)
     
     if cached_data:
@@ -476,11 +515,13 @@ async def get_events(
         date_from = utc_start - timedelta(hours=1)
         date_to = utc_end + timedelta(hours=1)
         
-        raw_events = await odds_provider.get_events(
+        # The gateway selects the NBA provider. The default remains
+        # The Odds API, and the dict keys below are unchanged.
+        raw_events = await odds_gateway.list_event_dicts(
             league="nba",
+            start_utc=date_from,
+            end_utc=date_to,
             regions=regions,
-            date_from=date_from,
-            date_to=date_to
         )
         
         # 3. Transform and filter data by date
@@ -550,9 +591,10 @@ async def get_events(
     One game from the same list as GET /api/nba/events.
 
     The handler calls that list. A Redis hit for the same date, regions,
-    and tz_offset returns the stored list. A miss uses the same events
-    request the list uses, then stores that list. This route does not
-    call the per-event odds endpoint or the odds gateway.
+    tz_offset, and odds provider returns the stored list. A miss uses
+    the same events request the list uses, then stores that list. This
+    route does not call the per-event odds endpoint or
+    ``get_market_snapshot``.
 
     Pass the date and tz_offset you loaded this event with. Those two
     values are what the list stored under, so the cache key matches.
@@ -608,8 +650,8 @@ async def get_event(
 
     The handler checks the id with ``event_id_is_well_formed``, then
     calls ``get_events`` once. That function reads Redis and, on a miss,
-    ``odds_provider.get_events`` for that one local day. It does not
-    call ``odds_gateway``, and it does not try the next day.
+    ``odds_gateway.list_event_dicts`` for that one local day. It does
+    not call ``get_market_snapshot``, and it does not try the next day.
 
     Args:
         request: Incoming request. The slowapi limiter reads it. Same
@@ -843,7 +885,7 @@ async def calculate_no_vig(request: Request, body: NoVigRequest) -> NoVigRespons
 
     Flow:
     1. Check cache (using event_id + market + regions + bookmakers as key)
-    2. If cache miss, call The Odds API for props data
+    2. If cache miss, ask the odds gateway for props data
     3. Search for specified player in outcomes (fuzzy matching)
     4. For each bookmaker:
        a. Get line (threshold), over_odds, under_odds
@@ -874,6 +916,8 @@ async def calculate_no_vig(request: Request, body: NoVigRequest) -> NoVigRespons
             "bookmakers": ["draftkings", "fanduel"]
         }
     """
+    if _malformed_bdl_event_id(body.event_id):
+        raise HTTPException(status_code=404, detail="Malformed event_id")
     try:
         snapshot = await odds_gateway.get_market_snapshot(
             league="nba",
@@ -1052,7 +1096,7 @@ async def suggest_players(
 
     Flow:
     1. Check cache
-    2. If cache miss, call The Odds API for game props
+    2. If cache miss, ask the odds gateway for that game's props
     3. Extract all player names from outcomes
     4. Filter by keyword if given
     5. Store in cache and return
@@ -1070,6 +1114,8 @@ async def suggest_players(
             "players": ["Stephen Curry", "Seth Curry", "LeBron James"]
         }
     """
+    if _malformed_bdl_event_id(event_id):
+        raise HTTPException(status_code=404, detail="Malformed event_id")
     try:
         snapshot = await odds_gateway.get_market_snapshot(
             league="nba",
