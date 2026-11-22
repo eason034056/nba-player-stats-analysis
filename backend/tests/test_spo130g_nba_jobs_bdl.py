@@ -1,7 +1,8 @@
 """SPO-130g: NBA snapshot jobs and daily analysis on BALLDONTLIE.
 
-Bodies are the recorded files under tests/fixtures/bdl/. Nothing here
-types a response. One odds row is copied and its ``game_id`` is set to
+Bodies are the recorded files under tests/fixtures/bdl/. The prewarm
+stub loads ``odds_api_event_odds__player_points.json`` and sets only
+``id``. One odds row is copied and its ``game_id`` is set to
 the scheduled game on the 2026-11-10 slate, because the recorded odds
 file is the next day's slate. Every other field stays as recorded.
 """
@@ -28,6 +29,7 @@ from app.services.odds_gateway import HOT_KEYS_ZSET_KEY, OddsMarketGateway
 from app.services.odds_provider import RateStatus
 from app.services.odds_snapshot_service import SNAPSHOT_MARKETS, OddsSnapshotService
 from app.settings import settings
+from tests.fixtures.odds_api import load_odds_fixture
 from tests.test_odds_gateway import FakeCache
 
 FIXTURE_DIR = Path(__file__).resolve().parent / "fixtures" / "bdl"
@@ -276,7 +278,11 @@ class _NamedProvider:
 
     async def get_event_odds_with_usage(self, **kwargs):
         self.calls.append(kwargs)
-        return {"id": kwargs.get("event_id"), "bookmakers": []}, None
+        # Recorded player-points board. Only ``id`` changes, so the
+        # warmed event id is the one this call was asked for.
+        body = load_odds_fixture("odds_api_event_odds__player_points.json")
+        body["id"] = kwargs.get("event_id")
+        return body, None
 
 
 def _hot_member(provider_name: str, event_id: str) -> str:
