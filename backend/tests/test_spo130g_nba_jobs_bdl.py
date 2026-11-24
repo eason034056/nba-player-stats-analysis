@@ -125,7 +125,6 @@ def _install(monkeypatch, client: _JobsClient | None = None):
     """Point NBA at one fixture provider and one in-memory gateway cache."""
     fixture = client or _JobsClient()
     provider = BdlOddsProvider(fixture, directory=BdlPlayerDirectory(fixture, aliases={}))
-    monkeypatch.setattr(settings, "nba_odds_provider", "balldontlie")
     monkeypatch.setattr(
         "app.services.bdl_odds_provider.get_bdl_odds_provider",
         lambda: provider,
@@ -136,7 +135,6 @@ def _install(monkeypatch, client: _JobsClient | None = None):
         stale_ttl_seconds=900,
         lock_ttl_seconds=10,
         wait_for_refresh_ms=50,
-        quota_protect_percent=15,
         hot_keys_limit=10,
     )
     monkeypatch.setattr("app.services.odds_snapshot_service.odds_gateway", gateway)
@@ -245,32 +243,7 @@ async def test_daily_analysis_lists_only_the_open_game(monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_theoddsapi_daily_analysis_still_requests_each_market(monkeypatch):
-    """The default provider keeps one snapshot call per supported market."""
-    monkeypatch.setattr(settings, "nba_odds_provider", "theoddsapi")
-    calls: list[str] = []
-
-    async def snap(**kwargs):
-        calls.append(kwargs.get("markets") or "")
-        return SimpleNamespace(data={"bookmakers": []})
-
-    monkeypatch.setattr("app.services.daily_analysis.odds_gateway.get_market_snapshot", snap)
-    service = DailyAnalysisService()
-    service.csv_service = _quiet_csv()
-    await service._analyze_single_event(
-        "evt",
-        "Home",
-        "Away",
-        "2026-03-30T12:00:00Z",
-        league="nba",
-    )
-    assert calls == [market for market, _metric in SUPPORTED_MARKETS]
-    assert len(calls) == 11
-
-
-@pytest.mark.asyncio
 async def test_balldontlie_daily_analysis_requests_the_snapshot_market_set_once(monkeypatch):
-    monkeypatch.setattr(settings, "nba_odds_provider", "balldontlie")
     calls: list[str] = []
 
     async def snap(**kwargs):
@@ -323,8 +296,8 @@ def _hot_member(provider_name: str, event_id: str) -> str:
 @pytest.mark.parametrize(
     ("active", "warmed_id", "skipped_provider"),
     [
-        ("balldontlie", "21718080", "theoddsapi"),
-        ("theoddsapi", "abc123", "balldontlie"),
+        ("balldontlie", "21718080", "retired"),
+        ("sample", "21718080", "balldontlie"),
     ],
 )
 async def test_prewarm_skips_a_hot_key_from_the_other_provider(active, warmed_id, skipped_provider):
@@ -337,7 +310,6 @@ async def test_prewarm_skips_a_hot_key_from_the_other_provider(active, warmed_id
         stale_ttl_seconds=30,
         lock_ttl_seconds=10,
         wait_for_refresh_ms=50,
-        quota_protect_percent=15,
         hot_keys_limit=10,
     )
     seen = datetime.now(timezone.utc).isoformat()
@@ -356,43 +328,29 @@ async def test_prewarm_skips_a_hot_key_from_the_other_provider(active, warmed_id
 
 
 @pytest.mark.asyncio
-async def test_metrics_reads_rate_status_from_the_active_nba_provider(monkeypatch):
-    class OddsProvider:
-        name = "theoddsapi"
-
-        async def rate_status(self):
-            return RateStatus(provider=self.name, remaining=80, used=20, recorded=True)
-
+async def test_metrics_reads_bdl_rate_status(monkeypatch):
     class BdlProvider:
         name = "balldontlie"
 
         async def rate_status(self):
             return RateStatus(provider=self.name, remaining=4, used=1, recorded=True)
 
-    monkeypatch.setattr(settings, "nba_odds_provider", "theoddsapi")
-    monkeypatch.setattr("app.services.odds_gateway.odds_provider", OddsProvider())
+    monkeypatch.setattr(
+        "app.services.bdl_odds_provider.get_bdl_odds_provider",
+        lambda: BdlProvider(),
+    )
     try:
-        odds_body = await get_metrics()
-        assert odds_body["odds_api_quota"]["remaining"] == 80
-        assert odds_body["odds_api_quota"]["used"] == 20
-        assert odds_body["odds_api_quota"]["total"] == 100
-        assert set(odds_body["odds_api_quota"]) == {
+        body = await get_metrics()
+        assert set(body["bdl_rate"]) == {
             "remaining",
             "used",
             "total",
             "remaining_ratio",
-            "quota_protected",
         }
-
-        monkeypatch.setattr(settings, "nba_odds_provider", "balldontlie")
-        monkeypatch.setattr(
-            "app.services.bdl_odds_provider.get_bdl_odds_provider",
-            lambda: BdlProvider(),
-        )
-        bdl_body = await get_metrics()
-        assert bdl_body["odds_api_quota"]["remaining"] == 4
-        assert bdl_body["odds_api_quota"]["used"] == 1
-        assert bdl_body["odds_api_quota"]["total"] == 5
+        assert body["bdl_rate"]["remaining"] == 4
+        assert body["bdl_rate"]["used"] == 1
+        assert body["bdl_rate"]["total"] == 5
+        assert "quota_protected" not in body["bdl_rate"]
     finally:
         await _release_metrics_cache()
 

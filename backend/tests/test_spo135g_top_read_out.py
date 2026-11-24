@@ -121,7 +121,7 @@ def _props_for(books: list[dict]):
     """Return the recorded books only for the market they actually contain."""
 
     async def _inner(_event_id, market, league="nba"):
-        if market != "player_points":
+        if "player_points" not in {part.strip() for part in str(market).split(",")}:
             return []
         return books
 
@@ -315,7 +315,7 @@ def test_events_route_skips_out_without_calling_balldontlie(monkeypatch) -> None
             )
         )
     store = {
-        f"{CacheService.build_events_key(_DATE, 'us')}:tz{_OFFSET}": EventsResponse(
+        f"{CacheService.build_events_key(_DATE, 'us')}:tz{_OFFSET}:balldontlie": EventsResponse(
             date=_DATE,
             events=events,
         ).model_dump(mode="json"),

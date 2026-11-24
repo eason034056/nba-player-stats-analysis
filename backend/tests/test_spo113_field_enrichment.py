@@ -335,7 +335,7 @@ class TestPosition:
             "app.api.nba.odds_gateway.get_market_snapshot",
             AsyncMock(return_value=_Snapshot()),
         )
-        response = await suggest_players(event_id="evt-1", q="", market="player_points")
+        response = await suggest_players(event_id="21718080", q="", market="player_points")
         assert response.players == ["Nobody On The Log", "Stephen Curry"]
         by_name = {item.name: item.position for item in response.suggestions}
         assert by_name["Stephen Curry"] == "PG"
@@ -708,7 +708,7 @@ def _confirmed_slate() -> dict:
 
 
 def _events_cache_key() -> str:
-    return f"{CacheService.build_events_key('2026-11-10', 'us')}:tz0"
+    return f"{CacheService.build_events_key('2026-11-10', 'us')}:tz0:balldontlie"
 
 
 def _cached_events_body(event: dict, event_id: str) -> dict:

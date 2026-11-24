@@ -8,7 +8,7 @@
 
 > **【架構更新註記｜2026-11｜SPO-145a】**
 >
-> 後端只服務 NBA。`/api/wnba`、WNBA 排程、WNBA CSV 與 RotoWire WNBA parser 已移除。SQL `league` 欄位仍可存 `'wnba'`，因為 BALLDONTLIE id 會重疊；這支 PR 沒有 DELETE。`odds_theoddsapi.py` 與 `ODDS_API_KEY` 留到 130i。決定見 `docs/decisions/SPO-145/decision_20261121_nba-only.md`。下面各章若寫到已刪除的 agent 或 WNBA route，是當時的紀錄。
+> 後端只服務 NBA。`/api/wnba`、WNBA 排程、WNBA CSV 與 RotoWire WNBA parser 已移除。SQL `league` 欄位仍可存 `'wnba'`，因為 BALLDONTLIE id 會重疊；沒有 DELETE。NBA 賠率只走 BALLDONTLIE。決定見 `docs/decisions/SPO-145/decision_20261121_nba-only.md`。下面各章若寫到已刪除的 agent、WNBA route、或舊的賠率來源，是當時的紀錄。
 
 ---
 
@@ -342,8 +342,8 @@ MVP：平均
 
 ### 9.1 環境變數（後端）
 
-* `ODDS_API_KEY=...`
-* `ODDS_API_BASE_URL=https://api.the-odds-api.com`
+* `BALLDONTLIE_API_KEY=...`（NBA 賠率必填。不要把值寫進 repo）
+* `BDL_RATE_LIMIT_PER_MIN=600`（程式預設仍是 5。正式環境設 600）
 * `REDIS_URL=redis://...`
 * `CACHE_TTL_EVENTS=300`
 * `CACHE_TTL_PROPS=60`
@@ -373,7 +373,7 @@ backend/
       nba.py
     services/
       odds_provider.py      # adapter interface
-      odds_theoddsapi.py    # The Odds API implementation
+      bdl_odds_provider.py  # BALLDONTLIE NBA odds
       cache.py              # redis
       prob.py               # math
       normalize.py          # name normalization + matching

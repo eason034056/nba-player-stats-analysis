@@ -138,9 +138,35 @@ async def _connect_or_skip() -> None:
 
 
 def _window_contains(call: dict, tip: datetime) -> bool:
-    start = call["date_from"].replace(tzinfo=timezone.utc)
-    end = call["date_to"].replace(tzinfo=timezone.utc)
+    start = call["start_utc"]
+    end = call["end_utc"]
+    if start.tzinfo is None:
+        start = start.replace(tzinfo=timezone.utc)
+    if end.tzinfo is None:
+        end = end.replace(tzinfo=timezone.utc)
     return start <= tip <= end
+
+
+def _scheduled(rows: list[dict]):
+    """Recorded event rows as scheduled games for ``list_events``."""
+    from app.services.odds_provider import ProviderEvent
+
+    return [
+        ProviderEvent(
+            event_id=str(row["id"]),
+            commence_time=str(row["commence_time"]),
+            home_team=str(row.get("home_team") or ""),
+            away_team=str(row.get("away_team") or ""),
+            home_code="HOM",
+            away_code="AWY",
+            status="scheduled",
+            slate_date="2026-11-09",
+        )
+        for row in rows
+    ]
+
+
+_BEFORE_RECORDED_TIPS = datetime(2026, 11, 8, tzinfo=timezone.utc)
 
 
 def test_us_slate_clock_matches_the_recorded_evening():
@@ -170,20 +196,20 @@ async def test_taipei_offset_drops_the_recorded_slate_and_eastern_keeps_it(monke
 
     async def fake_get_events(**kwargs):
         calls.append(kwargs)
-        return events
+        return _scheduled(events)
 
     monkeypatch.setattr(
-        "app.services.odds_snapshot_service.odds_provider.get_events",
+        "app.services.odds_snapshot_service.odds_gateway.list_events",
         fake_get_events,
     )
     service = OddsSnapshotService()
 
-    dropped = await service._get_events("2026-11-09", 480)
+    dropped = await service._get_events("2026-11-09", 480, now=_BEFORE_RECORDED_TIPS)
     assert dropped == []
     assert not _window_contains(calls[-1], tip)
 
     game_date, offset = nba_slate_date(datetime(2026, 11, 9, 22, 5, tzinfo=timezone.utc))
-    kept = await service._get_events(game_date, offset)
+    kept = await service._get_events(game_date, offset, now=_BEFORE_RECORDED_TIPS)
     assert _window_contains(calls[-1], tip)
     expected = _eastern_ids(events, game_date)
     assert [event["id"] for event in kept] == expected
@@ -364,7 +390,7 @@ async def test_a_failed_write_is_logged_as_an_error(monkeypatch):
     monkeypatch.setattr("app.services.odds_snapshot_service.db_service", recording)
 
     with pytest.raises(RuntimeError, match="write failed"):
-        await service.take_snapshot("2026-11-09")
+        await service.take_snapshot("2026-11-09", now=_BEFORE_RECORDED_TIPS)
 
     statuses = [args[4] for args in recording.logs]
     assert statuses == ["error"]
@@ -381,7 +407,7 @@ async def test_take_snapshot_commits_the_recorded_ladder(monkeypatch):
 
     async def fake_get_events(**kwargs):
         assert _window_contains(kwargs, _tip(hawks))
-        return events
+        return _scheduled(events)
 
     async def fake_snapshot(**kwargs):
         if kwargs["event_id"] != hawks["id"]:
@@ -389,7 +415,7 @@ async def test_take_snapshot_commits_the_recorded_ladder(monkeypatch):
         return SimpleNamespace(data=points)
 
     monkeypatch.setattr(
-        "app.services.odds_snapshot_service.odds_provider.get_events",
+        "app.services.odds_snapshot_service.odds_gateway.list_events",
         fake_get_events,
     )
     monkeypatch.setattr(
@@ -411,7 +437,7 @@ async def test_take_snapshot_commits_the_recorded_ladder(monkeypatch):
             date="2026-11-09",
             snapshot_at=_STAMP,
         )
-        result = await service.take_snapshot("2026-11-09")
+        result = await service.take_snapshot("2026-11-09", now=_BEFORE_RECORDED_TIPS)
         assert result["date"] == "2026-11-09"
         assert result["event_count"] == len(_eastern_ids(events, "2026-11-09"))
         assert result["total_lines"] == len(parsed) > 0

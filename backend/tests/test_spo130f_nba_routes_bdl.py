@@ -1,8 +1,7 @@
-"""SPO-130f: NBA event routes read the odds gateway.
+"""NBA event routes read BALLDONTLIE through the odds gateway.
 
 Bodies are the recorded files under tests/fixtures/. Nothing here types
-an Odds API or BALLDONTLIE response. The default provider stays
-theoddsapi. balldontlie is set only inside a test.
+a response. Event ids are decimal game ids.
 """
 
 from __future__ import annotations
@@ -27,8 +26,6 @@ from app.services.bdl_player_directory import BdlPlayerDirectory
 from app.services.bdl_props_adapter import VENDOR_TITLES
 from app.services.bulk_props import event_id_is_well_formed
 from app.services.cache import CacheService, cache_service
-from app.services.odds_theoddsapi import TheOddsAPIProvider, odds_provider
-from app.settings import settings
 from tests.fixtures.odds_api import load_odds_fixture
 
 FIXTURE_DIR = Path(__file__).resolve().parent / "fixtures" / "bdl"
@@ -134,12 +131,6 @@ def _install_bdl(monkeypatch, props_name: str) -> _FixtureClient:
     directory = BdlPlayerDirectory(client, aliases={})
     provider = BdlOddsProvider(client, directory=directory)
     monkeypatch.setattr("app.services.bdl_odds_provider._SINGLETON", provider)
-    monkeypatch.setattr(settings, "nba_odds_provider", "balldontlie")
-
-    async def odds_api_must_not_run(*_args, **_kwargs):
-        raise AssertionError("odds_provider.get_events ran under balldontlie")
-
-    monkeypatch.setattr(odds_provider, "get_events", odds_api_must_not_run)
     return client
 
 
@@ -189,75 +180,7 @@ def _events_key(date: str, regions: str, offset: int) -> str:
 
 
 @pytest.mark.asyncio
-async def test_default_events_keep_the_odds_api_request_and_hex_ids(client, monkeypatch):
-    """Unset provider: same events URL and params, hex ids, historical cache key."""
-    cache = _install_cache(monkeypatch)
-    recorded = load_odds_fixture("odds_api_events__basketball_nba.json")
-    captured: dict = {"n": 0}
-
-    async def fake_request(_self, endpoint, params):
-        captured["n"] += 1
-        captured["endpoint"] = endpoint
-        captured["params"] = dict(params)
-        return copy.deepcopy(recorded), None
-
-    monkeypatch.setattr(TheOddsAPIProvider, "_make_request", fake_request)
-    date_from, date_to = _window(_SLATE, 0)
-
-    response = await client.get(
-        "/api/nba/events",
-        params={"date": _SLATE, "regions": "us", "tz_offset": 0},
-    )
-
-    assert response.status_code == 200
-    body = response.json()
-    assert body["date"] == _SLATE
-    expected_ids = [
-        event["id"]
-        for event in recorded
-        if _on_local_date(event["commence_time"], _SLATE, 0)
-    ]
-    assert expected_ids
-    assert [event["event_id"] for event in body["events"]] == expected_ids
-    assert all(not event_id.isdigit() for event_id in expected_ids)
-    assert captured["endpoint"] == "/v4/sports/basketball_nba/events"
-    assert set(captured["params"]) == {"commenceTimeFrom", "commenceTimeTo"}
-    assert captured["params"]["commenceTimeFrom"] == date_from.strftime("%Y-%m-%dT%H:%M:%SZ")
-    assert captured["params"]["commenceTimeTo"] == date_to.strftime("%Y-%m-%dT%H:%M:%SZ")
-    assert "apiKey" not in captured["params"]
-    assert list(cache.values) == [_events_key(_SLATE, "us", 0)]
-
-    again = await client.get(
-        "/api/nba/events",
-        params={"date": _SLATE, "regions": "us", "tz_offset": 0},
-    )
-    assert again.status_code == 200
-    assert again.json()["events"][0]["event_id"] == expected_ids[0]
-    assert captured["n"] == 1
-
-
-@pytest.mark.asyncio
-async def test_default_events_forward_regions_without_putting_them_on_the_query(client, monkeypatch):
-    cache = _install_cache(monkeypatch)
-    recorded = load_odds_fixture("odds_api_events__basketball_nba.json")
-    captured: dict = {}
-
-    async def fake_request(_self, endpoint, params):
-        captured["params"] = dict(params)
-        return copy.deepcopy(recorded), None
-
-    monkeypatch.setattr(TheOddsAPIProvider, "_make_request", fake_request)
-    response = await client.get(
-        "/api/nba/events",
-        params={"date": _SLATE, "regions": "uk", "tz_offset": 0},
-    )
-    assert response.status_code == 200
-    assert "regions" not in captured["params"]
-    assert list(cache.values) == [_events_key(_SLATE, "uk", 0)]
-
-
-@pytest.mark.asyncio
-async def test_bdl_slate_returns_digit_ids_and_does_not_read_the_odds_api_key(client, monkeypatch):
+async def test_bdl_slate_returns_digit_ids(client, monkeypatch):
     cache = _install_cache(monkeypatch)
     fixture = _install_bdl(monkeypatch, "props_live_21718080_OKC@POR_pregame.json")
     games = fixture.games["data"]
@@ -328,42 +251,6 @@ async def test_bdl_cache_does_not_serve_a_hex_payload(client, monkeypatch):
     assert _OKC_GAME_ID in ids
     assert cache.values[historical]["events"][0]["event_id"] == seeded["id"]
     assert _events_key(_SLATE, "us", _ET) + ":balldontlie" in cache.values
-
-
-@pytest.mark.asyncio
-async def test_default_cache_does_not_serve_a_digit_payload(client, monkeypatch):
-    cache = _install_cache(monkeypatch)
-    game = next(item for item in _load("games_2026-11-10.json")["response"]["data"] if str(item["id"]) == _OKC_GAME_ID)
-    bdl_key = _events_key(_SLATE, "us", 0) + ":balldontlie"
-    cache.values[bdl_key] = {
-        "date": _SLATE,
-        "events": [
-            {
-                "event_id": str(game["id"]),
-                "sport_key": "basketball_nba",
-                "home_team": game["home_team"]["full_name"],
-                "away_team": game["visitor_team"]["full_name"],
-                "commence_time": game["datetime"],
-            }
-        ],
-    }
-    recorded = load_odds_fixture("odds_api_events__basketball_nba.json")
-    calls = {"n": 0}
-
-    async def fake_request(_self, endpoint, params):
-        calls["n"] += 1
-        return copy.deepcopy(recorded), None
-
-    monkeypatch.setattr(TheOddsAPIProvider, "_make_request", fake_request)
-    response = await client.get(
-        "/api/nba/events",
-        params={"date": _SLATE, "regions": "us", "tz_offset": 0},
-    )
-    assert response.status_code == 200
-    ids = [event["event_id"] for event in response.json()["events"]]
-    assert _OKC_GAME_ID not in ids
-    assert calls["n"] == 1
-    assert cache.values[bdl_key]["events"][0]["event_id"] == _OKC_GAME_ID
 
 
 @pytest.mark.asyncio
@@ -476,43 +363,3 @@ async def test_bdl_non_digit_id_on_props_routes_is_404(client, monkeypatch):
     assert suggest.status_code == 404
     assert suggest.json()["detail"] == "Malformed event_id"
     assert all(call[0] != "get_player_props" for call in fixture.calls)
-
-
-@pytest.mark.asyncio
-async def test_default_no_vig_and_suggest_use_the_recorded_odds_api_board(client, monkeypatch):
-    _install_cache(monkeypatch)
-    board = load_odds_fixture("odds_api_event_odds__player_points.json")
-    assert not str(board["id"]).isdigit()
-
-    async def fake_odds(**_kwargs):
-        return copy.deepcopy(board), None
-
-    # Patch the instance. An earlier test can leave this attribute on the
-    # singleton, and a class assignment would not replace it.
-    monkeypatch.setattr(odds_provider, "get_event_odds_with_usage", fake_odds)
-    player = "Luka Doncic"
-    assert any(
-        outcome.get("description") == player
-        for book in board["bookmakers"]
-        for market in book["markets"]
-        for outcome in market["outcomes"]
-    )
-    books = {book["key"] for book in board["bookmakers"]}
-
-    no_vig = await client.post(
-        "/api/nba/props/no-vig",
-        json={"event_id": board["id"], "player_name": player, "market": "player_points"},
-    )
-    assert no_vig.status_code == 200, no_vig.text
-    body = no_vig.json()
-    assert body["event_id"] == board["id"]
-    assert body["player_name"] == player
-    assert body["results"]
-    assert {result["bookmaker"] for result in body["results"]} <= books
-
-    suggest = await client.get(
-        "/api/nba/players/suggest",
-        params={"event_id": board["id"], "q": "luka", "market": "player_points"},
-    )
-    assert suggest.status_code == 200, suggest.text
-    assert player in suggest.json()["players"]

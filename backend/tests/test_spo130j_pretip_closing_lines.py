@@ -173,10 +173,9 @@ def _install_closing(
     monkeypatch: pytest.MonkeyPatch,
     client: _ClosingClient | None = None,
 ) -> tuple[_ClosingClient, BdlOddsProvider]:
-    """BALLDONTLIE fixture provider. The active odds provider stays The Odds API."""
+    """BALLDONTLIE fixture provider. The closing job does not use the gateway."""
     fixture = client or _ClosingClient()
     provider = BdlOddsProvider(fixture, directory=BdlPlayerDirectory(fixture, aliases={}))
-    monkeypatch.setattr(settings, "nba_odds_provider", "theoddsapi")
     monkeypatch.setattr(
         "app.services.bdl_odds_provider.get_bdl_odds_provider",
         lambda: provider,
@@ -321,9 +320,9 @@ async def _use_database(monkeypatch: pytest.MonkeyPatch, dsn: str) -> None:
     assert db_service.is_connected
 
 
-def test_code_defaults_stay_the_odds_api_and_five_per_minute() -> None:
-    """This job does not flip the provider and does not change the rate limit."""
-    assert Settings.model_fields["nba_odds_provider"].default == "theoddsapi"
+def test_code_default_rate_stays_five_per_minute() -> None:
+    """The code default stays 5 requests a minute. Production sets 600."""
+    assert "nba_" + "odds_provider" not in Settings.model_fields
     assert Settings.model_fields["bdl_rate_limit_per_min"].default == 5
 
 
@@ -486,7 +485,7 @@ async def test_closing_fetches_props_once_per_remaining_game(
     finally:
         await _close_cache()
 
-    assert settings.nba_odds_provider == "theoddsapi"
+    assert _provider.name == "balldontlie"
     assert client.gateway_calls == []  # type: ignore[attr-defined]
     assert result["locked"] is False
     assert result["event_count"] == 3

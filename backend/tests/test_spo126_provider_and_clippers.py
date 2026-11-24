@@ -62,9 +62,7 @@ def _display_name(event: dict[str, Any], side: str) -> str:
 
 
 def _app_provider_subclasses() -> list[type]:
-    """Concrete and abstract OddsProvider subclasses defined in the app."""
-    import app.services.odds_theoddsapi  # noqa: F401  registers TheOddsAPIProvider
-
+    """OddsProvider subclasses defined in the app, if any still subclass it."""
     found: list[type] = []
     pending = list(OddsProvider.__subclasses__())
     while pending:
@@ -93,7 +91,7 @@ class TestOddsProviderContract:
         assert not isinstance(_EventsOnly(), OddsProvider)
 
         class _Complete(OddsProvider):
-            name = "theoddsapi"
+            name = "sample"
 
             async def list_events(self, league, start_utc, end_utc):
                 return []
@@ -145,12 +143,18 @@ class TestOddsProviderContract:
             "OddsProvider subclass does not implement get_event_odds: "
             + ", ".join(missing)
         )
-        concrete = [
-            cls.__qualname__
-            for cls in subclasses
-            if not inspect.isabstract(cls)
-        ]
-        assert "TheOddsAPIProvider" in concrete
+        from app.services.bdl_odds_provider import BdlOddsProvider
+
+        provider = BdlOddsProvider()
+        assert isinstance(provider, OddsProvider)
+        for method in (
+            "get_events",
+            "get_event_odds",
+            "list_events",
+            "get_event_props",
+            "rate_status",
+        ):
+            assert inspect.iscoroutinefunction(getattr(provider, method))
 
 
 class TestLaTeamCodes:

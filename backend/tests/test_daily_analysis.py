@@ -290,14 +290,10 @@ class TestAnalyzeSingleEvent:
         )
 
         assert player_count == 1
-        # 11 supported markets after SPO-16 Phase 1 expansion (4 baseline +
-        # 7 new continuous: 3PM, STL, FTM, FGM, R+A, P+R, P+A). DD is binary
-        # and lives in BINARY_MARKETS, not SUPPORTED_MARKETS, so it is NOT
-        # counted here. The mock _get_props_for_market returns the same
-        # bookmaker payload for every metric, so each market produces a pick.
-        from app.services.daily_analysis import SUPPORTED_MARKETS
-        assert prop_count == len(SUPPORTED_MARKETS) == 11
-        assert len(picks) == 11
+        # One batched fetch. This payload only has player_points, so the
+        # slice keeps one pick. The team still comes from the game log.
+        assert prop_count == 1
+        assert len(picks) == 1
         assert all(p.player_team == "Warriors" for p in picks)
         assert all(p.player_team_code == "GSW" for p in picks)
         points_pick = [p for p in picks if p.metric == "points"][0]
@@ -862,6 +858,33 @@ class TestRunDailyAnalysis:
 # 18. _get_events_for_date
 # ===========================================================================
 
+def _patch_open_events(monkeypatch, rows):
+    """Serve these rows from ``list_events`` as scheduled games."""
+    from app.services.odds_provider import ProviderEvent
+
+    listed = [
+        ProviderEvent(
+            event_id=str(row["id"]),
+            commence_time=str(row["commence_time"]),
+            home_team=str(row.get("home_team") or "Home"),
+            away_team=str(row.get("away_team") or "Away"),
+            home_code="HOM",
+            away_code="AWY",
+            status="scheduled",
+            slate_date="2026-03-30",
+        )
+        for row in rows
+    ]
+
+    async def list_events(**_kwargs):
+        return listed
+
+    monkeypatch.setattr(
+        "app.services.odds_snapshot_service.odds_gateway.list_events",
+        list_events,
+    )
+
+
 class TestGetEventsForDate:
     """Tests for timezone-aware event filtering."""
 
@@ -880,13 +903,14 @@ class TestGetEventsForDate:
             {"id": "e4", "commence_time": "2026-03-29T16:30:00Z", "home_team": "G", "away_team": "H"},
         ]
 
-        monkeypatch.setattr(
-            "app.services.daily_analysis.odds_provider.get_events",
-            AsyncMock(return_value=raw_events),
-        )
+        _patch_open_events(monkeypatch, raw_events)
 
         result = asyncio.run(
-            service._get_events_for_date("2026-03-30", tz_offset_minutes=480)
+            service._get_events_for_date(
+                "2026-03-30",
+                tz_offset_minutes=480,
+                now=datetime(2026, 3, 29, 16, 0, tzinfo=timezone.utc),
+            )
         )
 
         result_ids = [e["id"] for e in result]
@@ -910,13 +934,14 @@ class TestGetEventsForDate:
             {"id": "e4", "commence_time": "2026-03-31T05:30:00Z", "home_team": "G", "away_team": "H"},
         ]
 
-        monkeypatch.setattr(
-            "app.services.daily_analysis.odds_provider.get_events",
-            AsyncMock(return_value=raw_events),
-        )
+        _patch_open_events(monkeypatch, raw_events)
 
         result = asyncio.run(
-            service._get_events_for_date("2026-03-30", tz_offset_minutes=-300)
+            service._get_events_for_date(
+                "2026-03-30",
+                tz_offset_minutes=-300,
+                now=datetime(2026, 3, 30, 5, 0, tzinfo=timezone.utc),
+            )
         )
 
         result_ids = [e["id"] for e in result]
@@ -934,13 +959,14 @@ class TestGetEventsForDate:
             {"id": "e2", "commence_time": "2026-03-31T00:30:00Z", "home_team": "C", "away_team": "D"},
         ]
 
-        monkeypatch.setattr(
-            "app.services.daily_analysis.odds_provider.get_events",
-            AsyncMock(return_value=raw_events),
-        )
+        _patch_open_events(monkeypatch, raw_events)
 
         result = asyncio.run(
-            service._get_events_for_date("2026-03-30", tz_offset_minutes=0)
+            service._get_events_for_date(
+                "2026-03-30",
+                tz_offset_minutes=0,
+                now=datetime(2026, 3, 30, 11, 0, tzinfo=timezone.utc),
+            )
         )
 
         result_ids = [e["id"] for e in result]
@@ -950,10 +976,7 @@ class TestGetEventsForDate:
     def test_no_events_returned_from_api(self, monkeypatch):
         service = _make_service()
 
-        monkeypatch.setattr(
-            "app.services.daily_analysis.odds_provider.get_events",
-            AsyncMock(return_value=[]),
-        )
+        _patch_open_events(monkeypatch, [])
 
         result = asyncio.run(
             service._get_events_for_date("2026-03-30", tz_offset_minutes=480)
@@ -970,13 +993,14 @@ class TestGetEventsForDate:
             {"id": "e2", "commence_time": "2026-03-30T10:00:00Z", "home_team": "C", "away_team": "D"},
         ]
 
-        monkeypatch.setattr(
-            "app.services.daily_analysis.odds_provider.get_events",
-            AsyncMock(return_value=raw_events),
-        )
+        _patch_open_events(monkeypatch, raw_events)
 
         result = asyncio.run(
-            service._get_events_for_date("2026-03-30", tz_offset_minutes=480)
+            service._get_events_for_date(
+                "2026-03-30",
+                tz_offset_minutes=480,
+                now=datetime(2026, 3, 30, 9, 0, tzinfo=timezone.utc),
+            )
         )
 
         # e1 skipped due to parse error, e2 needs to be checked

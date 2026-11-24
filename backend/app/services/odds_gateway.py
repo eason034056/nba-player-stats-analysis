@@ -5,7 +5,6 @@ Centralized management for expensive event odds requests, providing:
 - Shared snapshot cache
 - Stale-while-revalidate
 - Single-flight deduplication
-- Quota protection
 - Recording and prewarming hot keys
 """
 
@@ -20,11 +19,12 @@ from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, Literal, Optional
 
 from app.services.cache import cache_service
-from app.services.odds_provider import OddsAPIError, ProviderEvent, QuotaUsage
-from app.services.odds_theoddsapi import (
+from app.services.odds_provider import (
+    OddsAPIError,
+    ProviderEvent,
+    QuotaUsage,
     league_for_sport_key,
     normalize_league,
-    odds_provider,
     sport_key_for_league,
 )
 from app.settings import settings
@@ -35,37 +35,23 @@ CacheState = Literal["fresh", "stale", "refreshed"]
 SnapshotSource = Literal["snapshot_cache", "upstream"]
 RequestPriority = Literal["interactive", "background"]
 
-QUOTA_USAGE_KEY = "odds:quota_usage:v1"
 HOT_KEYS_ZSET_KEY = "odds:hot_keys:v1"
 HOT_KEY_LAST_SEEN_PREFIX = "odds:hot_seen:v1:"
 
 
 class _LeagueProviders(Mapping[str, Any]):
-    """League → provider. The NBA entry reads ``settings.nba_odds_provider``.
+    """League → provider. NBA is the BALLDONTLIE odds provider.
 
-    Lookup is live, so a test can change the setting without rebuilding
-    the table. NBA accepts ``theoddsapi`` (the default) and
-    ``balldontlie``. The default does not switch: a blank value is
-    ``theoddsapi``. ``balldontlie`` loads ``BdlOddsProvider`` here, not
-    from a route or a job. Any other league raises ``ValueError``.
+    There is no other NBA feed. An unknown league raises ``ValueError``
+    from ``normalize_league`` before a client is built. The provider
+    module is imported on the lookup, not when this module is imported.
     """
 
     def __getitem__(self, league: str) -> Any:
-        key = normalize_league(league)
-        if key == "nba":
-            selected = (settings.nba_odds_provider or "theoddsapi").strip().lower()
-            if selected == "balldontlie":
-                # Imported here so the default NBA path does not load the
-                # BALLDONTLIE provider when this module is imported.
-                from app.services.bdl_odds_provider import get_bdl_odds_provider
+        normalize_league(league)
+        from app.services.bdl_odds_provider import get_bdl_odds_provider
 
-                return get_bdl_odds_provider()
-            if selected != "theoddsapi":
-                raise ValueError(
-                    f"Unsupported nba_odds_provider: {settings.nba_odds_provider!r}. "
-                    "Allowed: 'theoddsapi', 'balldontlie'"
-                )
-        return odds_provider
+        return get_bdl_odds_provider()
 
     def __iter__(self):
         yield "nba"
@@ -78,14 +64,10 @@ PROVIDERS: Mapping[str, Any] = _LeagueProviders()
 
 
 def balldontlie_nba_provider() -> Any:
-    """The BALLDONTLIE NBA provider, whatever ``nba_odds_provider`` says.
+    """The process-wide BALLDONTLIE NBA provider.
 
-    ``balldontlie_nba_provider`` is how the pre-tip closing job gets a
-    client without flipping the setting and without asking ``PROVIDERS``.
-    ``PROVIDERS["nba"]`` still follows the setting, so the scheduled
-    snapshot stays on The Odds API while that is the default. The
-    provider module is imported here, on the call, so a job file does
-    not name it.
+    Same object as ``PROVIDERS["nba"]``. The closing job calls this
+    name. The provider module is imported on the call.
 
     Returns:
         The process-wide BALLDONTLIE odds provider.
@@ -93,21 +75,6 @@ def balldontlie_nba_provider() -> Any:
     from app.services.bdl_odds_provider import get_bdl_odds_provider
 
     return get_bdl_odds_provider()
-
-
-def active_nba_provider_name() -> str:
-    """The NBA provider name a job should branch on.
-
-    ``balldontlie`` only when ``settings.nba_odds_provider`` says so.
-    Surrounding space and capital letters do not count. A blank value
-    stays ``theoddsapi``. This reads the setting. It does not build a
-    client, and it does not raise on an unknown value: jobs that need
-    the client still go through ``PROVIDERS``, which does raise.
-    """
-    selected = (settings.nba_odds_provider or "theoddsapi").strip().lower()
-    if selected == "balldontlie":
-        return "balldontlie"
-    return "theoddsapi"
 
 
 @dataclass(frozen=True)
@@ -136,7 +103,6 @@ class OddsMarketGateway:
         stale_ttl_seconds: Optional[int] = None,
         lock_ttl_seconds: Optional[int] = None,
         wait_for_refresh_ms: Optional[int] = None,
-        quota_protect_percent: Optional[int] = None,
         hot_keys_limit: Optional[int] = None,
     ):
         # None: pick the provider from PROVIDERS on each call.
@@ -147,7 +113,6 @@ class OddsMarketGateway:
         self.stale_ttl_seconds = stale_ttl_seconds or settings.cache_ttl_market_stale
         self.lock_ttl_seconds = lock_ttl_seconds or settings.odds_refresh_lock_ttl
         self.wait_for_refresh_ms = wait_for_refresh_ms or settings.odds_wait_for_refresh_ms
-        self.quota_protect_percent = quota_protect_percent or settings.odds_quota_protect_percent
         self.hot_keys_limit = hot_keys_limit or settings.odds_hot_keys_limit
         self._background_refreshes: set[str] = set()
 
@@ -203,32 +168,32 @@ class OddsMarketGateway:
             )
 
         cached_result = await self._read_cached_snapshot(snapshot_key, meta_key)
-        if cached_result:
-            if cached_result.data_age_seconds <= self.fresh_ttl_seconds:
-                return cached_result
+        if cached_result and cached_result.data_age_seconds <= self.fresh_ttl_seconds:
+            return cached_result
 
-            if cached_result.data_age_seconds <= self.stale_ttl_seconds:
-                if priority != "background" or not await self.is_quota_protected():
-                    self._trigger_background_refresh(
-                        league=resolved_league,
-                        event_id=event_id,
-                        regions=regions,
-                        markets=normalized_markets,
-                        odds_format=odds_format,
-                        bookmakers=normalized_books,
-                    )
-
-                return MarketSnapshotResult(
-                    data=cached_result.data,
-                    fetched_at=cached_result.fetched_at,
-                    data_age_seconds=cached_result.data_age_seconds,
-                    cache_state="stale",
-                    source="snapshot_cache",
-                    usage=cached_result.usage,
-                )
-
-        if priority == "background" and await self.is_quota_protected():
-            raise OddsAPIError("Quota protection active for background refresh", 503)
+        # An interactive caller gets the stale body now and refreshes
+        # behind it. A background caller is the refresh, so it fetches.
+        if (
+            cached_result
+            and cached_result.data_age_seconds <= self.stale_ttl_seconds
+            and priority != "background"
+        ):
+            self._trigger_background_refresh(
+                league=resolved_league,
+                event_id=event_id,
+                regions=regions,
+                markets=normalized_markets,
+                odds_format=odds_format,
+                bookmakers=normalized_books,
+            )
+            return MarketSnapshotResult(
+                data=cached_result.data,
+                fetched_at=cached_result.fetched_at,
+                data_age_seconds=cached_result.data_age_seconds,
+                cache_state="stale",
+                source="snapshot_cache",
+                usage=cached_result.usage,
+            )
 
         lock_acquired = await self.cache.acquire_lock(lock_key, self.lock_ttl_seconds)
         if not lock_acquired:
@@ -277,14 +242,12 @@ class OddsMarketGateway:
         """Event dicts for ``league`` in the UTC window.
 
         ``GET /api/nba/events`` reads ``id``, ``sport_key``, ``home_team``,
-        ``away_team``, and ``commence_time``. ``id`` is the provider's
-        event id: hex on The Odds API, the decimal game id on BALLDONTLIE.
+        ``away_team``, and ``commence_time``.         ``id`` is the decimal BALLDONTLIE game id.
 
-        ``regions`` is forwarded. The Odds API events request does not put
-        it on the query string. BALLDONTLIE ignores it. The route still
+        ``regions`` is forwarded. BALLDONTLIE ignores it. The route still
         keeps ``regions`` on its Redis key.
 
-        The provider is the league's row. NBA follows ``nba_odds_provider``.
+        The provider is the league's row. NBA is BALLDONTLIE.
         """
         provider = self._provider_for(league)
         events = await provider.get_events(
@@ -295,61 +258,7 @@ class OddsMarketGateway:
         )
         return events if isinstance(events, list) else []
 
-    async def record_quota_usage(self, usage: QuotaUsage) -> None:
-        await self.cache.set(
-            QUOTA_USAGE_KEY,
-            {
-                "remaining": usage.remaining,
-                "used": usage.used,
-                "last": usage.last,
-                "recorded_at": datetime.now(timezone.utc).isoformat(),
-            },
-            ttl=24 * 60 * 60,
-        )
-        self._check_quota_alerts(usage)
-
-    async def get_quota_usage(self) -> Optional[QuotaUsage]:
-        cached_usage = await self.cache.get(QUOTA_USAGE_KEY)
-        if not cached_usage:
-            return None
-        return QuotaUsage(
-            remaining=cached_usage.get("remaining"),
-            used=cached_usage.get("used"),
-            last=cached_usage.get("last"),
-        )
-
-    async def is_quota_protected(self) -> bool:
-        usage = await self.get_quota_usage()
-        if not usage:
-            return False
-
-        remaining_ratio = usage.remaining_ratio
-        if remaining_ratio is None:
-            return False
-
-        return remaining_ratio < (self.quota_protect_percent / 100)
-
-    @staticmethod
-    def _check_quota_alerts(usage: QuotaUsage) -> None:
-        ratio = usage.remaining_ratio
-        if ratio is None:
-            return
-        pct = round(ratio * 100, 1)
-        if pct <= settings.odds_quota_critical_percent:
-            logger.critical(
-                "odds_api_quota_critical remaining=%s%% used=%s remaining=%s",
-                pct, usage.used, usage.remaining,
-            )
-        elif pct <= settings.odds_quota_warn_percent:
-            logger.warning(
-                "odds_api_quota_warning remaining=%s%% used=%s remaining=%s",
-                pct, usage.used, usage.remaining,
-            )
-
     async def prewarm_hot_keys(self) -> int:
-        if await self.is_quota_protected():
-            return 0
-
         members = await self.cache.get_top_sorted_set_members(HOT_KEYS_ZSET_KEY, self.hot_keys_limit * 3)
         now = datetime.now(timezone.utc)
         warmed = 0
@@ -385,12 +294,10 @@ class OddsMarketGateway:
             normalized_books = self._normalize_bookmakers(context["bookmakers"])
             stored_provider = context.get("provider")
             provider_name = stored_provider if isinstance(stored_provider, str) and stored_provider.strip() else None
-            # A hot key belongs to the provider that recorded it. Refreshing
-            # a theoddsapi member while balldontlie is active would fetch
-            # the other feed, and the reverse is the same mistake. Leave
-            # the member in the set so a switch back inside the five-minute
-            # window can still warm it. A member with no provider is an
-            # older key and is warmed by whoever is active.
+            # A hot key belongs to the provider that recorded it. NBA is
+            # balldontlie. A member stored under another name is left in
+            # the set and is not fetched. A member with no provider is an
+            # older key and is warmed.
             active_name = self._provider_name(member_league)
             if provider_name is not None and provider_name.strip().lower() != active_name.strip().lower():
                 continue
@@ -465,19 +372,6 @@ class OddsMarketGateway:
         )
         lock_key = self._build_lock_key(snapshot_key)
 
-        if priority == "background" and await self.is_quota_protected():
-            stale_result = await self._read_cached_snapshot(snapshot_key, meta_key)
-            if stale_result and stale_result.data_age_seconds <= self.stale_ttl_seconds:
-                return MarketSnapshotResult(
-                    data=stale_result.data,
-                    fetched_at=stale_result.fetched_at,
-                    data_age_seconds=stale_result.data_age_seconds,
-                    cache_state="stale",
-                    source="snapshot_cache",
-                    usage=stale_result.usage,
-                )
-            raise OddsAPIError("Quota protection active for background refresh", 503)
-
         lock_acquired = await self.cache.acquire_lock(lock_key, self.lock_ttl_seconds)
         if not lock_acquired:
             return await self._wait_for_inflight_snapshot(snapshot_key, meta_key)
@@ -508,9 +402,8 @@ class OddsMarketGateway:
         bookmakers: Optional[list[str]],
     ) -> MarketSnapshotResult:
         provider = self._provider_for(league)
-        # Sport key is chosen here, inside the Odds API map, so the
-        # request path is /v4/sports/{sport_key}/events/{id}/odds with
-        # the same query the gateway sent before league= existed.
+        # ``sport`` is the league's sport key argument. BALLDONTLIE uses
+        # the decimal game id and does not call a /v4/sports odds path.
         data, usage = await provider.get_event_odds_with_usage(
             sport=sport_key_for_league(league),
             event_id=event_id,
@@ -519,9 +412,6 @@ class OddsMarketGateway:
             odds_format=odds_format,
             bookmakers=bookmakers,
         )
-
-        if usage:
-            await self.record_quota_usage(usage)
 
         fetched_at = datetime.now(timezone.utc)
         meta = {
@@ -743,7 +633,7 @@ class OddsMarketGateway:
         name = getattr(provider, "name", None)
         if isinstance(name, str) and name:
             return name
-        return "theoddsapi"
+        return "balldontlie"
 
     @staticmethod
     def _resolve_league(league: Optional[str], sport: Optional[str]) -> str:

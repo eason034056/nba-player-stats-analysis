@@ -1,9 +1,8 @@
 """
 bdl_odds_provider.py - BALLDONTLIE implementation of OddsProvider.
 
-``BdlOddsProvider`` is the NBA provider. The name matches
-``settings.nba_odds_provider`` when that value is ``balldontlie``. It
-composes the existing ``BdlClient`` (one HTTP layer, the shared limiter),
+``BdlOddsProvider`` is the only NBA odds provider. It composes the
+existing ``BdlClient`` (one HTTP layer, the shared limiter),
 ``BdlPropsAdapter``, and ``BdlPlayerDirectory``. It does not open a
 second HTTP client.
 
@@ -13,9 +12,7 @@ The Odds API for Boston at Philadelphia. ``list_events`` still filters
 the requested UTC window by the game's ``datetime``, after one
 ``/v1/games?dates[]=`` call for the Eastern dates that window covers.
 
-This module is not imported by a route or a job. The gateway imports it
-only when ``nba_odds_provider`` is ``balldontlie``. The default remains
-``theoddsapi``.
+``PROVIDERS["nba"]`` is this provider. Event ids are decimal game ids.
 """
 
 from __future__ import annotations
@@ -446,9 +443,13 @@ class BdlOddsProvider:
 
 
 def _game_id(event_id: str) -> int:
-    """Decimal game id. A hex Odds API id raises before HTTP."""
+    """Decimal game id. A non-ASCII or non-digit id raises before HTTP.
+
+    ``str.isdigit`` is true for digits such as ``١٢٣``. Those are not a
+    BALLDONTLIE game id, so the check also requires ASCII.
+    """
     text = str(event_id).strip()
-    if not text.isdigit():
+    if not text.isascii() or not text.isdigit():
         raise ValueError(f"BALLDONTLIE game id must be digits, not {event_id!r}")
     return int(text)
 

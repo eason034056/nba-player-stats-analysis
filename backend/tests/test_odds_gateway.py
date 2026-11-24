@@ -15,8 +15,8 @@ import pytest
 # 將專案根目錄加入 Python 路徑
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from app.services.odds_provider import OddsAPIError
-from app.services.odds_gateway import HOT_KEYS_ZSET_KEY, OddsMarketGateway, QuotaUsage
+from app.services.odds_provider import OddsAPIError, QuotaUsage
+from app.services.odds_gateway import HOT_KEYS_ZSET_KEY, OddsMarketGateway
 from tests.fixtures.odds_api import RECORDED_PLAYER_POINTS, load_odds_fixture
 
 
@@ -154,7 +154,6 @@ async def test_same_semantic_key_hits_upstream_once():
         stale_ttl_seconds=120,
         lock_ttl_seconds=10,
         wait_for_refresh_ms=300,
-        quota_protect_percent=15,
         hot_keys_limit=10,
     )
 
@@ -195,7 +194,6 @@ async def test_stale_snapshot_returns_cached_value_and_refreshes_in_background()
         stale_ttl_seconds=120,
         lock_ttl_seconds=10,
         wait_for_refresh_ms=300,
-        quota_protect_percent=15,
         hot_keys_limit=10,
     )
 
@@ -261,7 +259,6 @@ async def test_concurrent_requests_share_single_upstream_fetch():
         stale_ttl_seconds=120,
         lock_ttl_seconds=10,
         wait_for_refresh_ms=300,
-        quota_protect_percent=15,
         hot_keys_limit=10,
     )
 
@@ -282,9 +279,12 @@ async def test_concurrent_requests_share_single_upstream_fetch():
 
 
 @pytest.mark.asyncio
-async def test_background_priority_skips_upstream_when_quota_protected_and_stale_exists():
+async def test_background_refresh_runs_when_stale_quota_key_exists():
+    """A leftover quota key does not skip a background refresh."""
     cache = FakeCache()
-    provider = FakeProvider([_recorded_gateway_payload()])
+    provider = FakeProvider(
+        [_recorded_gateway_payload(), _derive_gateway_payload("Refreshed", 11.5)]
+    )
     gateway = OddsMarketGateway(
         provider=provider,
         cache=cache,
@@ -292,7 +292,6 @@ async def test_background_priority_skips_upstream_when_quota_protected_and_stale
         stale_ttl_seconds=120,
         lock_ttl_seconds=10,
         wait_for_refresh_ms=300,
-        quota_protect_percent=15,
         hot_keys_limit=10,
     )
 
@@ -304,7 +303,6 @@ async def test_background_priority_skips_upstream_when_quota_protected_and_stale
         odds_format="american",
         bookmakers=None,
     )
-
     meta_key = gateway._build_snapshot_meta_key(  # noqa: SLF001
         sport="basketball_nba",
         event_id="evt_123",
@@ -316,8 +314,11 @@ async def test_background_priority_skips_upstream_when_quota_protected_and_stale
     cache.values[meta_key]["fetched_at"] = (
         datetime.now(timezone.utc) - timedelta(seconds=60)
     ).isoformat()
-
-    await gateway.record_quota_usage(QuotaUsage(remaining=10, used=90, last=1))
+    cache.values["odds:quota_usage:v1"] = {
+        "remaining": 10,
+        "used": 90,
+        "last": 1,
+    }
 
     result = await gateway.get_market_snapshot(
         sport="basketball_nba",
@@ -329,9 +330,8 @@ async def test_background_priority_skips_upstream_when_quota_protected_and_stale
         priority="background",
     )
 
-    assert len(provider.calls) == 1
-    assert result.cache_state == "stale"
-    assert result.source == "snapshot_cache"
+    assert len(provider.calls) == 2
+    assert result.source == "upstream"
 
 
 @pytest.mark.asyncio
@@ -345,7 +345,6 @@ async def test_prewarm_cleans_expired_hot_keys():
         stale_ttl_seconds=120,
         lock_ttl_seconds=10,
         wait_for_refresh_ms=300,
-        quota_protect_percent=15,
         hot_keys_limit=10,
     )
 
@@ -387,7 +386,6 @@ async def test_prewarm_skips_hot_keys_that_are_still_fresh():
         stale_ttl_seconds=900,
         lock_ttl_seconds=10,
         wait_for_refresh_ms=300,
-        quota_protect_percent=15,
         hot_keys_limit=10,
     )
 
@@ -419,7 +417,6 @@ async def test_prewarm_drops_unregistered_league_members(monkeypatch):
         stale_ttl_seconds=120,
         lock_ttl_seconds=10,
         wait_for_refresh_ms=300,
-        quota_protect_percent=15,
         hot_keys_limit=10,
     )
     wnba_member = (

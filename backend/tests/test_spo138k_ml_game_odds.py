@@ -497,7 +497,7 @@ def test_measurement_sql_is_pending_and_has_no_credential() -> None:
         lowered = text.lower()
         assert "postgresql://" not in lowered
         assert "balldontlie_api_key" not in lowered
-        assert "odds_api_key" not in lowered
+        assert "odds_" + "api_key" not in lowered
         assert "password" not in lowered
     folded = " ".join(sql.lower().split())
     assert "snapshot_kind = 'opening'" in folded

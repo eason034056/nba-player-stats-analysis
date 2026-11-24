@@ -14,7 +14,7 @@ Main functions:
 - get_player_props_for_event(): Gets all player props for an event
 
 Dependencies:
-- odds_theoddsapi: Fetches sportsbook data
+- The NBA odds provider (BALLDONTLIE) fetches sportsbook data
 - csv_player_history: Calculates historical probabilities
 - prob: Calculates mode
 """
@@ -32,10 +32,9 @@ from pydantic import ValidationError
 
 logger = logging.getLogger(__name__)
 
-from app.services.odds_gateway import active_nba_provider_name, odds_gateway
+from app.services.odds_gateway import odds_gateway
 from app.services.slate_date import nba_slate_date
-from app.services.odds_theoddsapi import odds_provider
-from app.services.odds_provider import OddsAPIError
+from app.services.odds_provider import OddsAPIError, sport_key_for_league
 from app.services.csv_player_history import (
     csv_player_service,
     team_on_event,
@@ -81,12 +80,12 @@ _CSV_SERVICE_BY_LEAGUE: Dict[str, Any] = {
 }
 
 def _resolve_sport_key(league: str) -> str:
-    """Look up The Odds API sport key for a league, raising on unknown.
+    """Return the sport-key label for a league, raising on unknown.
 
-    The map lives on ``TheOddsAPIProvider``. This wrapper keeps the
-    daily-analysis call sites and their tests on one function.
+    NBA is ``basketball_nba``. Anything else raises ``ValueError``
+    with ``Unsupported league`` before cache or network work.
     """
-    return odds_provider.sport_key_for(league)
+    return sport_key_for_league(league)
 
 
 def _resolve_csv_service(league: str):
@@ -1111,81 +1110,20 @@ class DailyAnalysisService:
                                Negative = west (like UTC-6 = -360)
             league: ``nba``. ``_resolve_sport_key`` maps it to
                     ``basketball_nba``.
-            now: Pre-tip cutoff used when the NBA provider is
-                BALLDONTLIE. None means the current UTC time. The Odds
-                API path does not read it.
+            now: Pre-tip cutoff. None means the current UTC time.
+                A game that has already tipped is left out.
 
         Returns:
             List of events
         """
-        if (league or "").lower() == "nba" and active_nba_provider_name() == "balldontlie":
-            from app.services.odds_snapshot_service import list_bdl_events_for_local_date
+        _resolve_sport_key(league)
+        from app.services.odds_snapshot_service import list_bdl_events_for_local_date
 
-            events = await list_bdl_events_for_local_date(
-                date, tz_offset_minutes, now=now
-            )
-            print(f"📊 [NBA/balldontlie] {len(events)} scheduled pre-tip events")
-            return events
-
-        sport_key = _resolve_sport_key(league)
-
-        # Parse date
-        date_obj = datetime.strptime(date, "%Y-%m-%d")
-
-        # Calculate user-local date range in UTC
-        # Example: User at UTC+8 (Taipei) selects "2026-01-24"
-        # Local 2026-01-24 00:00:00 = UTC 2026-01-23 16:00:00
-        # Local 2026-01-24 23:59:59 = UTC 2026-01-24 15:59:59
-
-        # Local time 00:00:00 to UTC
-        local_start = datetime.combine(date_obj.date(), datetime.min.time())
-        utc_start = local_start - timedelta(minutes=tz_offset_minutes)
-
-        # Local time 23:59:59 to UTC
-        from datetime import time as dt_time
-        local_end = datetime.combine(date_obj.date(), dt_time(23, 59, 59))
-        utc_end = local_end - timedelta(minutes=tz_offset_minutes)
-
-        # Widen search range to cover edge cases
-        date_from = utc_start - timedelta(hours=1)
-        date_to = utc_end + timedelta(hours=1)
-
-        print(
-            f"📅 [{league.upper()}/{sport_key}] Query time range: "
-            f"{date_from.isoformat()} ~ {date_to.isoformat()} (UTC)"
+        events = await list_bdl_events_for_local_date(
+            date, tz_offset_minutes, now=now
         )
-
-        # Call Odds API
-        raw_events = await odds_provider.get_events(
-            league=league,
-            regions="us",
-            date_from=date_from,
-            date_to=date_to
-        )
-
-        # Filter: Only return events within the user-local day
-        filtered_events = []
-        for event in raw_events:
-            commence_time_str = event.get("commence_time", "")
-            if commence_time_str:
-                try:
-                    # Parse UTC time (e.g. 2026-01-17T00:10:00Z)
-                    commence_utc = datetime.fromisoformat(commence_time_str.replace('Z', '+00:00'))
-                    # Convert to user-local time
-                    commence_local = commence_utc + timedelta(minutes=tz_offset_minutes)
-                    # Get local date
-                    commence_local_date = commence_local.strftime("%Y-%m-%d")
-
-                    # Only return if local date matches user selection
-                    if commence_local_date == date:
-                        filtered_events.append(event)
-                except ValueError as e:
-                    print(f"⚠️ Failed to parse time {commence_time_str}: {e}")
-                    continue
-
-        print(f"📊 Found {len(raw_events)} events, filtered to {len(filtered_events)}")
-
-        return filtered_events
+        print(f"📊 [NBA/balldontlie] {len(events)} scheduled pre-tip events")
+        return events
 
     async def _analyze_single_event(
         self,
@@ -1233,35 +1171,25 @@ class DailyAnalysisService:
             )
         csv_service = self.csv_service
 
-        # BALLDONTLIE prices one game in one props call. Asking for every
-        # snapshot market shares the gateway cache with the snapshot job,
-        # so a fresh snapshot is zero upstream calls. The Odds API path
-        # still requests one market at a time.
-        batched: List[Dict[str, Any]] | None = None
-        if active_nba_provider_name() == "balldontlie":
-            from app.services.odds_snapshot_service import SNAPSHOT_MARKETS
+        # One props call covers every snapshot market. A fresh snapshot
+        # in the gateway cache means this call does not hit the network.
+        from app.services.odds_snapshot_service import SNAPSHOT_MARKETS
 
-            try:
-                batched = await self._get_props_for_market(
-                    event_id, SNAPSHOT_MARKETS, league=league
-                )
-            except OddsAPIError as e:
-                print(f"  ⚠️ Failed to fetch props: {e}")
-                batched = []
-            except Exception as e:
-                print(f"  ⚠️ Failed to fetch props: {e}")
-                batched = []
+        try:
+            batched = await self._get_props_for_market(
+                event_id, SNAPSHOT_MARKETS, league=league
+            )
+        except OddsAPIError as e:
+            print(f"  ⚠️ Failed to fetch props: {e}")
+            batched = []
+        except Exception as e:
+            print(f"  ⚠️ Failed to fetch props: {e}")
+            batched = []
 
         # Analyze each metric
         for market_key, metric_key in SUPPORTED_MARKETS:
             try:
-                # Get all props for this market
-                if batched is not None:
-                    props_data = _bookmakers_for_market(batched, market_key)
-                else:
-                    props_data = await self._get_props_for_market(
-                        event_id, market_key, league=league
-                    )
+                props_data = _bookmakers_for_market(batched, market_key)
 
                 if not props_data:
                     continue

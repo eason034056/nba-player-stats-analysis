@@ -47,10 +47,12 @@ from app.services.bulk_props import (
 )
 from app.services.event_reads import get_event_reads
 from app.services.daily_analysis import attach_top_reads, load_stored_top_reads
-# Route tests replace odds_provider.get_events on this binding. The default
-# gateway path calls that same object, so the name has to stay on this module.
-from app.services.odds_theoddsapi import odds_provider
+# Route tests replace get_events on this object. The gateway returns the
+# same process-wide provider, so the patch is the one the list route runs.
+from app.services.bdl_odds_provider import get_bdl_odds_provider
 from app.services.odds_provider import OddsAPIError
+
+odds_provider = get_bdl_odds_provider()
 from app.services.cache import cache_service, CacheService
 from app.services.odds_gateway import odds_gateway, MarketSnapshotResult
 from app.services.odds_snapshot_service import BINARY_MARKET_KEYS
@@ -94,10 +96,8 @@ logger = logging.getLogger(__name__)
 def events_list_cache_key(date: str, regions: str, offset_minutes: int) -> str:
     """Redis key for one local-day NBA event list.
 
-    The default provider keeps ``events:nba:{date}:{regions}:tz{offset}``.
-    That is the string already stored by callers and by the route tests.
-    Any other ``nba_odds_provider`` appends ``:{provider}``. Hex ids and
-    digit ids must not be served from the same key after a flag flip.
+    The key ends in ``:balldontlie``. Digit game ids are not read from
+    an older list that used another id shape.
 
     Args:
         date: Local date, ``YYYY-MM-DD``.
@@ -105,26 +105,21 @@ def events_list_cache_key(date: str, regions: str, offset_minutes: int) -> str:
         offset_minutes: Minutes east of UTC. Omitted queries use 480.
 
     Returns:
-        The cache key for this date, region, offset, and provider.
+        The cache key for this date, region, and offset.
     """
     base = f"{CacheService.build_events_key(date, regions)}:tz{offset_minutes}"
-    provider = (settings.nba_odds_provider or "theoddsapi").strip().lower()
-    if provider == "theoddsapi":
-        return base
-    return f"{base}:{provider}"
+    return f"{base}:balldontlie"
 
 
 def _malformed_bdl_event_id(event_id: str) -> bool:
-    """True when BALLDONTLIE is selected and ``event_id`` is not a game id.
+    """True when ``event_id`` is not a BALLDONTLIE game id.
 
-    A BALLDONTLIE game id is 1 to 128 digits. A hex Odds API id is
-    well-formed for The Odds API and is not a game id. The default
-    provider skips this check, so those hex ids stay valid.
+    A game id is 1 to 128 ASCII digits. ``str.isdigit`` is also true for
+    digits such as ``١٢٣``, so the check requires ASCII as well.
     """
-    provider = (settings.nba_odds_provider or "theoddsapi").strip().lower()
-    if provider != "balldontlie":
-        return False
-    return not event_id.isdigit() or not event_id_is_well_formed(event_id)
+    if not event_id.isascii() or not event_id.isdigit():
+        return True
+    return not event_id_is_well_formed(event_id)
 
 
 async def _events_with_top_reads(
@@ -515,8 +510,8 @@ async def get_events(
         date_from = utc_start - timedelta(hours=1)
         date_to = utc_end + timedelta(hours=1)
         
-        # The gateway selects the NBA provider. The default remains
-        # The Odds API, and the dict keys below are unchanged.
+        # The gateway asks the BALLDONTLIE NBA provider. ``id`` is the
+        # decimal game id.
         raw_events = await odds_gateway.list_event_dicts(
             league="nba",
             start_utc=date_from,
@@ -602,10 +597,10 @@ async def get_events(
     plus tz_offset minutes. Omitted tz_offset is 480. regions defaults
     to us. The list route treats an omitted date as the America/New_York slate date.
 
-    A malformed event_id is HTTP 404 and the list is not read. The id
-    rule is the same as GET /api/nba/events/{event_id}/props: 1–128
-    characters from [A-Za-z0-9_-], starting with a letter or digit. A
-    well-formed id that is not on that date's list is HTTP 404.
+    A non-digit event_id is HTTP 404 and the list is not read. A game
+    id is 1–128 ASCII digits. A digit id that is not on that date's
+    list is HTTP 404. GET /api/nba/events/{event_id}/props still
+    accepts a stored id of 1–128 characters from [A-Za-z0-9_-].
 
     The body is one NBAEvent, with the fields GET /api/nba/events
     already adds for an NBA event
@@ -648,7 +643,8 @@ async def get_event(
     minutes; omitted offset is 480). The list route's omitted date
     is the America/New_York slate date.
 
-    The handler checks the id with ``event_id_is_well_formed``, then
+    The handler checks the id with ``_malformed_bdl_event_id`` first.
+    A non-digit id is 404 and does not call the provider. A digit id
     calls ``get_events`` once. That function reads Redis and, on a miss,
     ``odds_gateway.list_event_dicts`` for that one local day. It does
     not call ``get_market_snapshot``, and it does not try the next day.
@@ -672,9 +668,9 @@ async def get_event(
     Raises:
         HTTPException: 404 when the id is malformed or not on the list.
             422 ``Invalid date`` when the calendar date is impossible.
-            Odds API errors from the list path pass through.
+            Provider errors from the list path pass through.
     """
-    if not event_id_is_well_formed(event_id):
+    if _malformed_bdl_event_id(event_id):
         raise HTTPException(status_code=404, detail="Malformed event_id")
 
     # Detail-only. get_events treats an omitted date as the

@@ -210,7 +210,8 @@ class TestDailyAnalysisWiring:
         }
 
         async def props_for_market(event_id, market, league="nba"):
-            if event_id != event["id"] or market != "player_points":
+            asked = {part.strip() for part in str(market).split(",")}
+            if event_id != event["id"] or "player_points" not in asked:
                 return []
             return event["bookmakers"]
 

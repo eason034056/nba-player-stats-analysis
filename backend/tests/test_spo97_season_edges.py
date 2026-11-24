@@ -366,6 +366,7 @@ class TestOptInFlags:
                     "key": "testbook",
                     "markets": [
                         {
+                            "key": "player_points",
                             "outcomes": [
                                 {"description": "Pick Player", "point": 10.5},
                                 {"description": "Pick Player", "point": 10.5},

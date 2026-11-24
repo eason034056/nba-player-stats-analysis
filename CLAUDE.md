@@ -46,9 +46,9 @@ Key existing docs: `README.md`, `docs/dev-doc.md`, `docs/multi-agent-dev.md`, `d
 
 > ⚠ This is the **authoritative anti-hallucination policy** for Sports Lab. Do not duplicate the rules elsewhere; cite this section.
 
-This codebase calls multiple live external APIs: **The Odds API** and **BALLDONTLIE** (games, injuries, and projected lineups). Each has rate limits, paid quotas, and a documented track record of silent schema drift. These rules exist because response shapes get assumed from memory without a call to the real endpoint, and a sports-betting product where the odds parser silently breaks is a product that loses money. NBA stat projections are not fetched. A later model may fill those fields.
+This codebase calls **BALLDONTLIE** for NBA odds, games, injuries, and projected lineups. It has a per-minute rate limit, a paid quota, and a documented track record of silent schema drift. These rules exist because response shapes get assumed from memory without a call to the real endpoint, and a sports-betting product where the odds parser silently breaks is a product that loses money. NBA stat projections are not fetched. A later model may fill those fields.
 
-1. **Exploration script first (engineer).** Before implementing `backend/app/services/<provider>_gateway.py` or any new external API client, create `scripts/explore_<provider>_api.py` that calls 2–3 real endpoints and pretty-prints raw responses. Commit this script alongside the client — it is the ground-truth reference for API shape and the first place to check when the API changes (e.g., when The Odds API renames a market key).
+1. **Exploration script first (engineer).** Before implementing `backend/app/services/<provider>_gateway.py` or any new external API client, create `scripts/explore_<provider>_api.py` that calls 2–3 real endpoints and pretty-prints raw responses. Commit this script alongside the client — it is the ground-truth reference for API shape and the first place to check when the API changes (e.g., when BALLDONTLIE renames a field).
 
 2. **Integration test required (engineer).** Every external API wrapper ships at least one `@pytest.mark.integration` test that hits the live endpoint. Gate CI execution behind `RUN_INTEGRATION=1` (default skip). The author runs that test locally before the PR. A pure-mock suite is not acceptable — a mock only proves the code runs against an assumed shape.
 
@@ -79,7 +79,7 @@ class Settings(BaseSettings):
         case_sensitive=False,
         extra="ignore",
     )
-    odds_api_key: str
+    balldontlie_api_key: str
     redis_url: str = "redis://localhost:6379/0"
     database_url: str = "postgresql+asyncpg://..."
     ...
@@ -132,7 +132,7 @@ These lenses apply to any change that touches odds, sizing, backtests, lineups, 
 - **Kelly criterion / fractional Kelly**: bankroll sizing must use fractional Kelly (≤ 0.25× full Kelly) — full Kelly assumes a perfectly calibrated edge, which we do not have.
 - **Backtest integrity**: no future leak (do not use post-game data for pre-game decisions). Out-of-sample evaluation required for any model claim.
 - **Lineup / injury validity**: a player marked questionable / OUT post-line-publish invalidates the prop entirely. Lineup data must be timestamped.
-- **API rate-limit / cost-per-call**: The Odds API quota is monthly and finite. Cache + dedupe before calling. Budget per query > 1 cent is a `[Major]` cost regression.
+- **API rate-limit / cost-per-call**: BALLDONTLIE is a per-minute budget. The code default is 5. Production sets `BDL_RATE_LIMIT_PER_MIN=600`. Cache + dedupe before calling. Budget per query > 1 cent is a `[Major]` cost regression.
 - **Bookmaker line freshness**: the same market can move 5+ points between books in 30 s. Cache TTL ≤ 30 s during game windows. Stale-line bets are not accurate EV.
 - **Bet legitimacy**: DNP, blowout (garbage time), stat-padding all distort props. Tools that compute "expected stat" must mark these explicitly.
 

@@ -61,7 +61,7 @@ def _stored_picks() -> list[DailyPick]:
     service = DailyAnalysisService()
 
     async def props(event_id, market_key, league="nba"):
-        if market_key != "player_points":
+        if "player_points" not in {part.strip() for part in str(market_key).split(",")}:
             return []
         return copy.deepcopy(payload["bookmakers"])
 
@@ -263,17 +263,18 @@ class TestReadsRoute:
         db = _FakeDB(rows)
         monkeypatch.setattr("app.services.event_reads.db_service", db)
         monkeypatch.setattr("app.services.event_reads.cache_service", cache)
+        from app.services.bdl_odds_provider import get_bdl_odds_provider
         from app.services.odds_gateway import odds_gateway
-        from app.services.odds_theoddsapi import odds_provider
 
+        provider = get_bdl_odds_provider()
         spies = {
             "gateway": AsyncMock(),
             "event_odds": AsyncMock(),
             "events": AsyncMock(),
         }
         monkeypatch.setattr(odds_gateway, "get_market_snapshot", spies["gateway"])
-        monkeypatch.setattr(odds_provider, "get_event_odds", spies["event_odds"])
-        monkeypatch.setattr(odds_provider, "get_events", spies["events"])
+        monkeypatch.setattr(provider, "get_event_odds", spies["event_odds"])
+        monkeypatch.setattr(provider, "get_events", spies["events"])
         return db, spies
 
     def _get(self, path, params=None):

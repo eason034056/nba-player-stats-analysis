@@ -34,15 +34,10 @@ services:
     # 環境變數
     # 可以在 .env 檔案中定義，或直接在這裡設定
     environment:
-      # The Odds API 設定
-      - ODDS_API_KEY=${ODDS_API_KEY}
-      - ODDS_API_BASE_URL=${ODDS_API_BASE_URL:-https://api.the-odds-api.com}
-
-      # NBA odds provider. Default stays theoddsapi. Placeholders only.
-      # The code default of BDL_RATE_LIMIT_PER_MIN stays 5.
-      - NBA_ODDS_PROVIDER=${NBA_ODDS_PROVIDER:-theoddsapi}
+      # NBA odds. The code default of the per-minute limit stays 5.
+      # Compose and production set 600. Do not put a real key in this file.
       - BALLDONTLIE_API_KEY=${BALLDONTLIE_API_KEY:-}
-      - BDL_RATE_LIMIT_PER_MIN=${BDL_RATE_LIMIT_PER_MIN:-5}
+      - BDL_RATE_LIMIT_PER_MIN=${BDL_RATE_LIMIT_PER_MIN:-600}
 
       # Redis 連線（指向同一 network 中的 redis 服務）
       - REDIS_URL=redis://redis:6379
@@ -55,7 +50,6 @@ services:
       - CACHE_TTL_MARKET_STALE=${CACHE_TTL_MARKET_STALE:-900}
       - ODDS_REFRESH_LOCK_TTL=${ODDS_REFRESH_LOCK_TTL:-10}
       - ODDS_WAIT_FOR_REFRESH_MS=${ODDS_WAIT_FOR_REFRESH_MS:-300}
-      - ODDS_QUOTA_PROTECT_PERCENT=${ODDS_QUOTA_PROTECT_PERCENT:-15}
       - ODDS_HOT_KEYS_LIMIT=${ODDS_HOT_KEYS_LIMIT:-10}
       
       # CORS 設定（允許前端來源）

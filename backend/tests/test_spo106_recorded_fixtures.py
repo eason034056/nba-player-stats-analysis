@@ -23,7 +23,6 @@ from tests.fixtures.odds_api import (  # noqa: E402
     load_odds_fixture,
     odds_fixture_exists,
 )
-from tests.fixtures.odds_api.record_fixtures import strip_api_key  # noqa: E402
 
 # Markets both FanDuel and DraftKings returned on the expanded capture.
 POSTED_EXPANDED_MARKETS = (
@@ -109,15 +108,3 @@ def test_expanded_nba_recording_matches_the_committed_body() -> None:
     assert set(meta["markets_returned_per_book"]["fanduel"]) == set(POSTED_EXPANDED_MARKETS)
     assert set(meta["markets_returned_per_book"]["draftkings"]) == set(POSTED_EXPANDED_MARKETS)
 
-
-def test_strip_api_key_removes_only_the_key() -> None:
-    """The recorder's only edit: the key bytes come out, the body stays."""
-    raw = b'{"id":"abc","note":"secret-key-value"}'
-    stripped = strip_api_key(raw, "secret-key-value")
-    assert stripped == b'{"id":"abc","note":""}'
-    assert strip_api_key(raw, "") == raw
-
-
-def test_strip_api_key_leaves_a_body_that_does_not_contain_the_key() -> None:
-    raw = b'{"id":"abc","sport_key":"basketball_nba"}'
-    assert strip_api_key(raw, "not-in-body") == raw

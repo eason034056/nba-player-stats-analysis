@@ -28,6 +28,15 @@ _BY_TEAMS = {(e["away_team"], e["home_team"]): e for e in _RECORDED}
 _BOS_PHI = _BY_TEAMS[("Boston Celtics", "Philadelphia 76ers")]
 # 2026-11-10T00:10:00Z: 19:10 ET on 2026-11-09.
 _LAL_ATL = _BY_TEAMS[("Los Angeles Lakers", "Atlanta Hawks")]
+# The recorded file uses 32-hex ids. The detail route serves digits, so
+# the stand-in list and the request use one digit id per recorded game.
+_DIGIT_BY_RECORDED = {
+    event["id"]: str(21718080 + index) for index, event in enumerate(_RECORDED)
+}
+
+
+def _did(event: dict) -> str:
+    return _DIGIT_BY_RECORDED[event["id"]]
 
 
 class _Calls:
@@ -43,7 +52,10 @@ def _install(monkeypatch, calls: _Calls, cache: dict, *, events_exc=None, slate=
         calls.events.append(kwargs)
         if events_exc is not None:
             raise events_exc
-        return copy.deepcopy(_RECORDED)
+        recorded = copy.deepcopy(_RECORDED)
+        for event in recorded:
+            event["id"] = _DIGIT_BY_RECORDED[event["id"]]
+        return recorded
 
     async def fake_gateway(*args, **kwargs):
         calls.gateway += 1
@@ -102,7 +114,7 @@ def test_every_recorded_odds_api_id_is_well_formed():
     for event in _RECORDED:
         assert event_id_is_well_formed(event["id"]), event["id"]
     assert not event_id_is_well_formed("")
-    assert not event_id_is_well_formed("-" + _BOS_PHI["id"])
+    assert not event_id_is_well_formed("-" + _did(_BOS_PHI))
     assert not event_id_is_well_formed("a" * 129)
     assert event_id_is_well_formed("a" * 128)
 
@@ -117,12 +129,12 @@ async def test_late_us_game_is_found_on_its_local_date(client, monkeypatch):
     _install(monkeypatch, calls, {})
     for tz in (-300, -360):
         response = await client.get(
-            f"/api/nba/events/{_BOS_PHI['id']}",
+            f"/api/nba/events/{_did(_BOS_PHI)}",
             params={"date": "2026-11-10", "regions": "us", "tz_offset": tz},
         )
         assert response.status_code == 200, tz
         body = response.json()
-        assert body["event_id"] == _BOS_PHI["id"]
+        assert body["event_id"] == _did(_BOS_PHI)
         assert body["commence_time_et"] == "2026-11-10T20:10:00-05:00"
 
 
@@ -131,7 +143,7 @@ async def test_late_us_game_is_404_on_the_utc_date_with_us_offset(client, monkey
     calls = _Calls()
     _install(monkeypatch, calls, {})
     response = await client.get(
-        f"/api/nba/events/{_BOS_PHI['id']}",
+        f"/api/nba/events/{_did(_BOS_PHI)}",
         params={"date": "2026-11-11", "regions": "us", "tz_offset": -300},
     )
     assert response.status_code == 404
@@ -144,11 +156,11 @@ async def test_previous_local_evening_game_is_not_on_next_local_date(client, mon
     calls = _Calls()
     _install(monkeypatch, calls, {})
     on_10 = await client.get(
-        f"/api/nba/events/{_LAL_ATL['id']}",
+        f"/api/nba/events/{_did(_LAL_ATL)}",
         params={"date": "2026-11-10", "tz_offset": -300},
     )
     on_09 = await client.get(
-        f"/api/nba/events/{_LAL_ATL['id']}",
+        f"/api/nba/events/{_did(_LAL_ATL)}",
         params={"date": "2026-11-09", "tz_offset": -300},
     )
     assert on_10.status_code == 404
@@ -169,20 +181,20 @@ async def test_omitted_date_is_the_callers_local_day(client, monkeypatch):
     _install(monkeypatch, calls, cache)
 
     response = await client.get(
-        f"/api/nba/events/{_BOS_PHI['id']}", params={"tz_offset": -360}
+        f"/api/nba/events/{_did(_BOS_PHI)}", params={"tz_offset": -360}
     )
 
-    local_key = f"{CacheService.build_events_key('2026-11-10', 'us')}:tz-360"
-    utc_key = f"{CacheService.build_events_key('2026-11-11', 'us')}:tz-360"
+    local_key = f"{CacheService.build_events_key('2026-11-10', 'us')}:tz-360:balldontlie"
+    utc_key = f"{CacheService.build_events_key('2026-11-11', 'us')}:tz-360:balldontlie"
     assert response.status_code == 200
-    assert response.json()["event_id"] == _BOS_PHI["id"]
+    assert response.json()["event_id"] == _did(_BOS_PHI)
     assert local_key in cache
     assert utc_key not in cache
     assert len(calls.events) == 1
     assert calls.gateway == 0 and calls.event_odds == 0
 
     with_date = await client.get(
-        f"/api/nba/events/{_BOS_PHI['id']}",
+        f"/api/nba/events/{_did(_BOS_PHI)}",
         params={"date": "2026-11-10", "tz_offset": -360},
     )
     assert with_date.status_code == 200
@@ -217,7 +229,7 @@ async def test_list_then_detail_share_one_cache_key(client, monkeypatch, params,
 
     assert detail.status_code == 200
     assert len(calls.events) == 1
-    expected_key = f"{CacheService.build_events_key(date, regions)}:tz{tz}"
+    expected_key = f"{CacheService.build_events_key(date, regions)}:tz{tz}:balldontlie"
     events_keys = [k for k in cache if k.startswith("events:")]
     assert events_keys == [expected_key]
     assert calls.event_odds == 0 and calls.gateway == 0
@@ -241,7 +253,7 @@ async def test_empty_day_list_is_cached_and_404s(client, monkeypatch):
     _install(monkeypatch, calls, {})
     params = {"date": "2026-07-01", "tz_offset": -300}
     for _ in range(2):
-        response = await client.get(f"/api/nba/events/{_BOS_PHI['id']}", params=params)
+        response = await client.get(f"/api/nba/events/{_did(_BOS_PHI)}", params=params)
         assert response.status_code == 404
     assert len(calls.events) == 1
 
@@ -257,7 +269,7 @@ async def test_detail_body_equals_the_list_item_with_top_read_and_lineups(client
         daily_picks_cache_key("nba", date, tz): {
             "picks": [
                 {
-                    "event_id": _BOS_PHI["id"],
+                    "event_id": _did(_BOS_PHI),
                     "player_name": "Jayson Tatum",
                     "metric": "points",
                     "direction": "over",
@@ -275,10 +287,10 @@ async def test_detail_body_equals_the_list_item_with_top_read_and_lineups(client
     params = {"date": date, "tz_offset": tz}
 
     listing = await client.get("/api/nba/events", params=params)
-    detail = await client.get(f"/api/nba/events/{_BOS_PHI['id']}", params=params)
+    detail = await client.get(f"/api/nba/events/{_did(_BOS_PHI)}", params=params)
 
     assert detail.status_code == 200
-    item = next(e for e in listing.json()["events"] if e["event_id"] == _BOS_PHI["id"])
+    item = next(e for e in listing.json()["events"] if e["event_id"] == _did(_BOS_PHI))
     assert detail.json() == item
     assert item["top_read"]["player"] == "Jayson Tatum"
     assert item["top_read"]["market"] == "player_points"
@@ -294,7 +306,7 @@ async def test_odds_api_error_passes_through_not_404(client, monkeypatch, status
     calls = _Calls()
     _install(monkeypatch, calls, {}, events_exc=OddsAPIError("upstream failed", status_code=status))
     response = await client.get(
-        f"/api/nba/events/{_BOS_PHI['id']}",
+        f"/api/nba/events/{_did(_BOS_PHI)}",
         params={"date": "2026-11-10", "tz_offset": -300},
     )
     assert response.status_code == status
@@ -307,7 +319,7 @@ async def test_unexpected_provider_error_is_500_and_nothing_is_cached(client, mo
     cache: dict = {}
     _install(monkeypatch, calls, cache, events_exc=RuntimeError("socket closed"))
     response = await client.get(
-        f"/api/nba/events/{_BOS_PHI['id']}",
+        f"/api/nba/events/{_did(_BOS_PHI)}",
         params={"date": "2026-11-10", "tz_offset": -300},
     )
     assert response.status_code == 500
@@ -323,7 +335,7 @@ async def test_impossible_calendar_date_is_422(client, monkeypatch):
     calls = _Calls()
     _install(monkeypatch, calls, {})
     response = await client.get(
-        f"/api/nba/events/{_BOS_PHI['id']}", params={"date": "2026-13-45"}
+        f"/api/nba/events/{_did(_BOS_PHI)}", params={"date": "2026-13-45"}
     )
     assert response.status_code == 422
     assert response.json()["detail"] == "Invalid date"
@@ -340,7 +352,7 @@ async def test_malformed_date_is_422_before_any_read(client, monkeypatch):
     calls = _Calls()
     _install(monkeypatch, calls, {})
     response = await client.get(
-        f"/api/nba/events/{_BOS_PHI['id']}", params={"date": "11/10/2026"}
+        f"/api/nba/events/{_did(_BOS_PHI)}", params={"date": "11/10/2026"}
     )
     assert response.status_code == 422
     assert calls.events == [] and calls.cache_gets == []

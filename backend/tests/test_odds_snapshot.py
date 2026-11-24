@@ -48,6 +48,33 @@ def _derive_listed_event(event_id, home, away, commence_time):
     return event
 
 
+def _patch_open_events(monkeypatch, rows):
+    """Serve these recorded rows from ``list_events`` as scheduled games."""
+    from app.services.odds_provider import ProviderEvent
+
+    listed = [
+        ProviderEvent(
+            event_id=str(row["id"]),
+            commence_time=str(row["commence_time"]),
+            home_team=str(row.get("home_team") or "Home"),
+            away_team=str(row.get("away_team") or "Away"),
+            home_code="HOM",
+            away_code="AWY",
+            status="scheduled",
+            slate_date="2026-03-01",
+        )
+        for row in rows
+    ]
+
+    async def list_events(**_kwargs):
+        return listed
+
+    monkeypatch.setattr(
+        "app.services.odds_snapshot_service.odds_gateway.list_events",
+        list_events,
+    )
+
+
 def _points_snapshot(book_keys: list[str], players: list[str]) -> dict[str, Any]:
     """Recorded ``player_points`` restricted to the named books and players.
 
@@ -330,11 +357,13 @@ async def test_get_events_filters_by_local_date(monkeypatch):
         _derive_listed_event("out_range", "C", "D", "2026-02-28T15:00:00Z"),
     ]
 
-    mock_provider = MagicMock()
-    mock_provider.get_events = AsyncMock(return_value=raw_events)
-    monkeypatch.setattr("app.services.odds_snapshot_service.odds_provider", mock_provider)
+    _patch_open_events(monkeypatch, raw_events)
 
-    result = await service._get_events("2026-03-01", tz_offset_minutes=480)
+    result = await service._get_events(
+        "2026-03-01",
+        tz_offset_minutes=480,
+        now=datetime(2026, 2, 28, 16, 0, tzinfo=timezone.utc),
+    )
 
     assert len(result) == 1
     assert result[0]["id"] == "in_range"
@@ -344,9 +373,7 @@ async def test_get_events_filters_by_local_date(monkeypatch):
 async def test_get_events_empty_when_no_events(monkeypatch):
     service = OddsSnapshotService()
 
-    mock_provider = MagicMock()
-    mock_provider.get_events = AsyncMock(return_value=[])
-    monkeypatch.setattr("app.services.odds_snapshot_service.odds_provider", mock_provider)
+    _patch_open_events(monkeypatch, [])
 
     result = await service._get_events("2026-03-01", tz_offset_minutes=480)
 
@@ -363,11 +390,13 @@ async def test_get_events_skips_invalid_commence_time(monkeypatch):
         _derive_listed_event("good", "C", "D", "2026-02-28T18:00:00Z"),
     ]
 
-    mock_provider = MagicMock()
-    mock_provider.get_events = AsyncMock(return_value=raw_events)
-    monkeypatch.setattr("app.services.odds_snapshot_service.odds_provider", mock_provider)
+    _patch_open_events(monkeypatch, raw_events)
 
-    result = await service._get_events("2026-03-01", tz_offset_minutes=480)
+    result = await service._get_events(
+        "2026-03-01",
+        tz_offset_minutes=480,
+        now=datetime(2026, 2, 28, 16, 0, tzinfo=timezone.utc),
+    )
 
     assert len(result) == 1
     assert result[0]["id"] == "good"

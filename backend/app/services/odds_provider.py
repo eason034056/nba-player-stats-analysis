@@ -1,9 +1,9 @@
 """
 odds_provider.py - Odds provider contract
 
-Callers ask for a league. A provider turns that league into whatever the
-upstream API needs and returns the shapes below. The Odds API client in
-``odds_theoddsapi.py`` is the only provider registered in this change.
+Callers ask for a league. The NBA provider is BALLDONTLIE. It returns
+the shapes below. ``sport_key`` on an event row is ``basketball_nba``.
+That string is a label on the row. It is not a request to another feed.
 """
 
 from __future__ import annotations
@@ -13,19 +13,68 @@ from datetime import datetime
 from typing import Any, Literal, Optional, Protocol, runtime_checkable
 
 
-# League key used by routes, jobs, and the gateway. Not an upstream sport key.
+# League key used by routes, jobs, and the gateway.
 League = Literal["nba"]
 
-# Game state on ProviderEvent. The Odds API events list has no status field,
-# so that provider reports "scheduled" for every row it returns.
+# Label stored on event rows. NBA odds are BALLDONTLIE game ids.
+SPORT_KEY_BY_LEAGUE: dict[str, str] = {
+    "nba": "basketball_nba",
+}
+
+# Game state on ProviderEvent.
 EventStatus = Literal["scheduled", "in_progress", "final"]
+
+
+def normalize_league(league: str) -> str:
+    """Return ``nba``. Raise ``ValueError`` for anything else."""
+    key = (league or "").strip().lower()
+    if key not in SPORT_KEY_BY_LEAGUE:
+        raise ValueError(
+            f"Unknown league: {league!r}. "
+            f"Registered: {sorted(SPORT_KEY_BY_LEAGUE)}"
+        )
+    return key
+
+
+def sport_key_for_league(league: str) -> str:
+    """Return the sport-key label for ``league``.
+
+    Raises:
+        ValueError: ``league`` is not nba. The message says
+        ``Unsupported league`` so daily-analysis checks still match.
+    """
+    key = (league or "").strip().lower()
+    try:
+        return SPORT_KEY_BY_LEAGUE[key]
+    except KeyError:
+        raise ValueError(
+            f"Unsupported league: {league!r}. "
+            f"Registered: {sorted(SPORT_KEY_BY_LEAGUE)}"
+        ) from None
+
+
+def league_for_sport_key(sport: str) -> str:
+    """Return the league for a stored sport-key label.
+
+    Hot-key members written earlier still carry ``sport``.
+
+    Raises:
+        ValueError: ``sport`` is not a registered sport key.
+    """
+    for league, sport_key in SPORT_KEY_BY_LEAGUE.items():
+        if sport_key == sport:
+            return league
+    raise ValueError(
+        f"Unknown sport: {sport!r}. "
+        f"Registered: {sorted(SPORT_KEY_BY_LEAGUE.values())}"
+    )
 
 
 @dataclass(frozen=True)
 class ProviderEvent:
     """One game, independent of which provider listed it.
 
-    ``event_id`` is the id callers already store (Odds API hex today).
+    ``event_id`` is the BALLDONTLIE decimal game id.
     ``home_team`` and ``away_team`` use the Odds API full-name spelling.
     ``home_code`` and ``away_code`` are the canonical team codes.
     ``commence_time`` is ISO UTC. ``slate_date`` is the America/New_York date.
@@ -89,8 +138,8 @@ class RateStatus:
 class OddsProvider(Protocol):
     """Provider operations keyed by league.
 
-    ``name`` is the cache-key segment (``theoddsapi`` for the client in
-    this change). ``list_events`` returns games in ``[start_utc, end_utc]``.
+    ``name`` is the cache-key segment (``balldontlie``). ``list_events``
+    returns games in ``[start_utc, end_utc]``.
     ``get_event_props`` returns the board for one event and the given
     market keys. ``rate_status`` is the quota reading /metrics shows.
     ``get_events`` and ``get_event_odds`` stay on the protocol so the

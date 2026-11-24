@@ -362,15 +362,18 @@ def _books_for(player: str) -> tuple[dict, list]:
 def _install_route(monkeypatch, player: str, entries: list[dict]) -> None:
     event, books = _books_for(player)
 
-    async def get_events(**_kwargs):
+    async def get_events(*_args, **_kwargs):
         return [event]
 
     async def snapshot(**kwargs):
-        if kwargs.get("markets") == "player_points":
+        if "player_points" in (kwargs.get("markets") or ""):
             return _Snap(books)
         return _Snap([])
 
-    monkeypatch.setattr("app.services.daily_analysis.odds_provider.get_events", get_events)
+    monkeypatch.setattr(
+        "app.services.odds_snapshot_service.list_bdl_events_for_local_date",
+        get_events,
+    )
     monkeypatch.setattr(
         "app.services.daily_analysis.odds_gateway.get_market_snapshot", snapshot
     )
