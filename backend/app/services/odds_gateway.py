@@ -5,7 +5,6 @@ Centralized management for expensive event odds requests, providing:
 - Shared snapshot cache
 - Stale-while-revalidate
 - Single-flight deduplication
-- Quota protection
 - Recording and prewarming hot keys
 """
 
@@ -36,7 +35,6 @@ CacheState = Literal["fresh", "stale", "refreshed"]
 SnapshotSource = Literal["snapshot_cache", "upstream"]
 RequestPriority = Literal["interactive", "background"]
 
-QUOTA_USAGE_KEY = "odds:quota_usage:v1"
 HOT_KEYS_ZSET_KEY = "odds:hot_keys:v1"
 HOT_KEY_LAST_SEEN_PREFIX = "odds:hot_seen:v1:"
 
@@ -105,7 +103,6 @@ class OddsMarketGateway:
         stale_ttl_seconds: Optional[int] = None,
         lock_ttl_seconds: Optional[int] = None,
         wait_for_refresh_ms: Optional[int] = None,
-        quota_protect_percent: Optional[int] = None,
         hot_keys_limit: Optional[int] = None,
     ):
         # None: pick the provider from PROVIDERS on each call.
@@ -116,10 +113,6 @@ class OddsMarketGateway:
         self.stale_ttl_seconds = stale_ttl_seconds or settings.cache_ttl_market_stale
         self.lock_ttl_seconds = lock_ttl_seconds or settings.odds_refresh_lock_ttl
         self.wait_for_refresh_ms = wait_for_refresh_ms or settings.odds_wait_for_refresh_ms
-        # Background refresh skips a new fetch when stored remaining
-        # ratio is under this percent. BALLDONTLIE does not write that
-        # object. A caller can still pass a percent for a test.
-        self.quota_protect_percent = 15 if quota_protect_percent is None else quota_protect_percent
         self.hot_keys_limit = hot_keys_limit or settings.odds_hot_keys_limit
         self._background_refreshes: set[str] = set()
 
@@ -175,32 +168,32 @@ class OddsMarketGateway:
             )
 
         cached_result = await self._read_cached_snapshot(snapshot_key, meta_key)
-        if cached_result:
-            if cached_result.data_age_seconds <= self.fresh_ttl_seconds:
-                return cached_result
+        if cached_result and cached_result.data_age_seconds <= self.fresh_ttl_seconds:
+            return cached_result
 
-            if cached_result.data_age_seconds <= self.stale_ttl_seconds:
-                if priority != "background" or not await self.is_quota_protected():
-                    self._trigger_background_refresh(
-                        league=resolved_league,
-                        event_id=event_id,
-                        regions=regions,
-                        markets=normalized_markets,
-                        odds_format=odds_format,
-                        bookmakers=normalized_books,
-                    )
-
-                return MarketSnapshotResult(
-                    data=cached_result.data,
-                    fetched_at=cached_result.fetched_at,
-                    data_age_seconds=cached_result.data_age_seconds,
-                    cache_state="stale",
-                    source="snapshot_cache",
-                    usage=cached_result.usage,
-                )
-
-        if priority == "background" and await self.is_quota_protected():
-            raise OddsAPIError("Quota protection active for background refresh", 503)
+        # An interactive caller gets the stale body now and refreshes
+        # behind it. A background caller is the refresh, so it fetches.
+        if (
+            cached_result
+            and cached_result.data_age_seconds <= self.stale_ttl_seconds
+            and priority != "background"
+        ):
+            self._trigger_background_refresh(
+                league=resolved_league,
+                event_id=event_id,
+                regions=regions,
+                markets=normalized_markets,
+                odds_format=odds_format,
+                bookmakers=normalized_books,
+            )
+            return MarketSnapshotResult(
+                data=cached_result.data,
+                fetched_at=cached_result.fetched_at,
+                data_age_seconds=cached_result.data_age_seconds,
+                cache_state="stale",
+                source="snapshot_cache",
+                usage=cached_result.usage,
+            )
 
         lock_acquired = await self.cache.acquire_lock(lock_key, self.lock_ttl_seconds)
         if not lock_acquired:
@@ -251,8 +244,7 @@ class OddsMarketGateway:
         ``GET /api/nba/events`` reads ``id``, ``sport_key``, ``home_team``,
         ``away_team``, and ``commence_time``.         ``id`` is the decimal BALLDONTLIE game id.
 
-        ``regions`` is forwarded. The Odds API events request does not put
-        it on the query string. BALLDONTLIE ignores it. The route still
+        ``regions`` is forwarded. BALLDONTLIE ignores it. The route still
         keeps ``regions`` on its Redis key.
 
         The provider is the league's row. NBA is BALLDONTLIE.
@@ -266,61 +258,7 @@ class OddsMarketGateway:
         )
         return events if isinstance(events, list) else []
 
-    async def record_quota_usage(self, usage: QuotaUsage) -> None:
-        await self.cache.set(
-            QUOTA_USAGE_KEY,
-            {
-                "remaining": usage.remaining,
-                "used": usage.used,
-                "last": usage.last,
-                "recorded_at": datetime.now(timezone.utc).isoformat(),
-            },
-            ttl=24 * 60 * 60,
-        )
-        self._check_quota_alerts(usage)
-
-    async def get_quota_usage(self) -> Optional[QuotaUsage]:
-        cached_usage = await self.cache.get(QUOTA_USAGE_KEY)
-        if not cached_usage:
-            return None
-        return QuotaUsage(
-            remaining=cached_usage.get("remaining"),
-            used=cached_usage.get("used"),
-            last=cached_usage.get("last"),
-        )
-
-    async def is_quota_protected(self) -> bool:
-        usage = await self.get_quota_usage()
-        if not usage:
-            return False
-
-        remaining_ratio = usage.remaining_ratio
-        if remaining_ratio is None:
-            return False
-
-        return remaining_ratio < (self.quota_protect_percent / 100)
-
-    @staticmethod
-    def _check_quota_alerts(usage: QuotaUsage) -> None:
-        ratio = usage.remaining_ratio
-        if ratio is None:
-            return
-        pct = round(ratio * 100, 1)
-        if pct <= 10:
-            logger.critical(
-                "odds_rate_critical remaining=%s%% used=%s remaining=%s",
-                pct, usage.used, usage.remaining,
-            )
-        elif pct <= 30:
-            logger.warning(
-                "odds_rate_warning remaining=%s%% used=%s remaining=%s",
-                pct, usage.used, usage.remaining,
-            )
-
     async def prewarm_hot_keys(self) -> int:
-        if await self.is_quota_protected():
-            return 0
-
         members = await self.cache.get_top_sorted_set_members(HOT_KEYS_ZSET_KEY, self.hot_keys_limit * 3)
         now = datetime.now(timezone.utc)
         warmed = 0
@@ -434,19 +372,6 @@ class OddsMarketGateway:
         )
         lock_key = self._build_lock_key(snapshot_key)
 
-        if priority == "background" and await self.is_quota_protected():
-            stale_result = await self._read_cached_snapshot(snapshot_key, meta_key)
-            if stale_result and stale_result.data_age_seconds <= self.stale_ttl_seconds:
-                return MarketSnapshotResult(
-                    data=stale_result.data,
-                    fetched_at=stale_result.fetched_at,
-                    data_age_seconds=stale_result.data_age_seconds,
-                    cache_state="stale",
-                    source="snapshot_cache",
-                    usage=stale_result.usage,
-                )
-            raise OddsAPIError("Quota protection active for background refresh", 503)
-
         lock_acquired = await self.cache.acquire_lock(lock_key, self.lock_ttl_seconds)
         if not lock_acquired:
             return await self._wait_for_inflight_snapshot(snapshot_key, meta_key)
@@ -477,9 +402,8 @@ class OddsMarketGateway:
         bookmakers: Optional[list[str]],
     ) -> MarketSnapshotResult:
         provider = self._provider_for(league)
-        # Sport key is chosen here, inside the Odds API map, so the
-        # request path is /v4/sports/{sport_key}/events/{id}/odds with
-        # the same query the gateway sent before league= existed.
+        # ``sport`` is the league's sport key argument. BALLDONTLIE uses
+        # the decimal game id and does not call a /v4/sports odds path.
         data, usage = await provider.get_event_odds_with_usage(
             sport=sport_key_for_league(league),
             event_id=event_id,
@@ -488,9 +412,6 @@ class OddsMarketGateway:
             odds_format=odds_format,
             bookmakers=bookmakers,
         )
-
-        if usage:
-            await self.record_quota_usage(usage)
 
         fetched_at = datetime.now(timezone.utc)
         meta = {

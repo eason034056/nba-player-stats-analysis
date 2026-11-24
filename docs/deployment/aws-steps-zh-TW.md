@@ -8,14 +8,17 @@
 
 ## SPO-130i：清掉本機 Redis 裡舊的賠率 key
 
-NBA 賠率現在是 BALLDONTLIE 的數字 game id。這次部署後，後端第一次啟動會用 `SCAN` 刪一次舊 key，並用 `SET NX` 寫下 `migrations:spo130i:odds_flush_done`。重啟和第二個 replica 不會再刪。Redis 出錯只記 log，不會擋住啟動。
+NBA 賠率現在是 BALLDONTLIE 的數字 game id。這次部署後，後端第一次啟動會先拿 60 秒的鎖，再用 `SCAN` 刪舊 key。全部刪成功之後才寫 `migrations:spo130i:odds_flush_done`。重啟看到這個標記就不再刪。另一個 replica 若看到鎖，就等下一次啟動再試。Redis 出錯會放掉鎖、不寫標記，只記 log，不會擋住啟動。
 
-想在行程起來之前自己刪，用下面這段。這一步不碰 RDS。
+`*:wnba:*` 也會刪掉留下的 `lineups:wnba:*` 和 `daily_picks:wnba:*`。
+
+想在行程起來之前自己刪，用下面這段。這一步不碰 RDS。刪完再設標記。
 
 ```bash
 docker exec no-vig-nba-redis sh -c '
   redis-cli --scan --pattern "daily_picks:nba*" | xargs -r redis-cli DEL
   redis-cli --scan --pattern "odds_snapshot:*" | xargs -r redis-cli DEL
+  redis-cli --scan --pattern "odds_snapshot_meta:v2:*" | xargs -r redis-cli DEL
   redis-cli --scan --pattern "events:nba:*" | xargs -r redis-cli DEL
   redis-cli --scan --pattern "*:wnba:*" | xargs -r redis-cli DEL
   redis-cli DEL odds:quota_usage:v1

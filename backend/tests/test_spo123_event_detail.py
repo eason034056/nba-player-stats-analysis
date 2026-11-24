@@ -35,6 +35,11 @@ _ON_DATE = [
 ]
 _FOUND = _ON_DATE[0]
 _FOUND_ID = _FOUND["id"]
+# The recorded file uses 32-hex ids. Live detail ids are digits, so the
+# test list and the request use a digit stand-in for each recorded id.
+_DIGIT_BY_RECORDED = {
+    event["id"]: str(21718080 + index) for index, event in enumerate(_RECORDED)
+}
 # Recorded, but its tip is not on _DATE, so the list filter drops it.
 _OTHER_DAY = next(
     event for event in _RECORDED if not str(event.get("commence_time", "")).startswith(_DATE)
@@ -51,7 +56,7 @@ def _cached_list() -> dict:
         "date": _DATE,
         "events": [
             {
-                "event_id": event["id"],
+                "event_id": _DIGIT_BY_RECORDED[event["id"]],
                 "sport_key": event["sport_key"],
                 "home_team": event["home_team"],
                 "away_team": event["away_team"],
@@ -72,7 +77,10 @@ class _Calls:
 def _install(monkeypatch, calls: _Calls, cache: dict) -> None:
     async def fake_events(**kwargs):
         calls.events += 1
-        return copy.deepcopy(_RECORDED)
+        recorded = copy.deepcopy(_RECORDED)
+        for event in recorded:
+            event["id"] = _DIGIT_BY_RECORDED[event["id"]]
+        return recorded
 
     async def fake_gateway(*args, **kwargs):
         calls.gateway += 1
@@ -110,7 +118,7 @@ def _assert_no_odds_gateway(calls: _Calls) -> None:
 
 def _assert_found_body(body: dict, raw: dict) -> None:
     assert set(body) == set(NBAEvent.model_fields)
-    assert body["event_id"] == raw["id"]
+    assert body["event_id"] == _DIGIT_BY_RECORDED[raw["id"]]
     assert body["sport_key"] == raw["sport_key"]
     assert body["home_team"] == raw["home_team"]
     assert body["away_team"] == raw["away_team"]
@@ -153,9 +161,10 @@ def test_event_detail_uses_the_props_rate_limit():
 async def test_found_event_comes_from_the_recorded_list(client, monkeypatch):
     calls = _Calls()
     _install(monkeypatch, calls, {})
-    assert event_id_is_well_formed(_FOUND_ID)
+    request_id = _DIGIT_BY_RECORDED[_FOUND_ID]
+    assert request_id.isdigit()
 
-    response = await client.get(f"/api/nba/events/{_FOUND_ID}", params=_QUERY)
+    response = await client.get(f"/api/nba/events/{request_id}", params=_QUERY)
 
     assert response.status_code == 200
     _assert_found_body(response.json(), _FOUND)
@@ -167,15 +176,34 @@ async def test_found_event_comes_from_the_recorded_list(client, monkeypatch):
 async def test_unknown_event_id_is_404(client, monkeypatch):
     calls = _Calls()
     _install(monkeypatch, calls, {})
-    event_id = _OTHER_DAY["id"]
-    assert event_id != _FOUND_ID
-    assert event_id_is_well_formed(event_id)
+    event_id = _DIGIT_BY_RECORDED[_OTHER_DAY["id"]]
+    assert event_id != _DIGIT_BY_RECORDED[_FOUND_ID]
+    assert event_id.isdigit()
 
     response = await client.get(f"/api/nba/events/{event_id}", params=_QUERY)
 
     assert response.status_code == 404
     assert response.json()["detail"] == "Event not found"
     assert calls.events == 1
+    _assert_no_odds_gateway(calls)
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "event_id",
+    ["90da1cde4144fac00d41f2c0db2cc921", "abc", "12a"],
+)
+async def test_non_digit_event_id_is_404_with_no_provider_call(client, monkeypatch, event_id):
+    """A hex, letter, or mixed id is 404 before any events fetch."""
+    calls = _Calls()
+    _install(monkeypatch, calls, {})
+    assert event_id_is_well_formed(event_id)
+
+    response = await client.get(f"/api/nba/events/{event_id}", params=_QUERY)
+
+    assert response.status_code == 404
+    assert response.json()["detail"] == "Malformed event_id"
+    assert calls.events == 0
     _assert_no_odds_gateway(calls)
 
 
@@ -200,7 +228,9 @@ async def test_cache_hit_does_not_call_the_gateway(client, monkeypatch):
     cache = {_events_cache_key(): _cached_list()}
     _install(monkeypatch, calls, cache)
 
-    response = await client.get(f"/api/nba/events/{_FOUND_ID}", params=_QUERY)
+    response = await client.get(
+        f"/api/nba/events/{_DIGIT_BY_RECORDED[_FOUND_ID]}", params=_QUERY
+    )
 
     assert response.status_code == 200
     _assert_found_body(response.json(), _FOUND)

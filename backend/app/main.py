@@ -10,6 +10,7 @@ main.py - FastAPI 應用程式主入口點
 """
 
 import logging
+import os
 from contextlib import asynccontextmanager
 from urllib.parse import urlsplit
 
@@ -26,6 +27,18 @@ from app.services.scheduler import scheduler_service
 from app.settings import settings
 
 logger = logging.getLogger(__name__)
+
+
+def _warn_ignored_odds_env() -> None:
+    """Log when a retired odds env var is still present.
+
+    The message names the variable. It does not include the value.
+    """
+    for name in ("NBA_ODDS_PROVIDER", "ODDS_API_KEY"):
+        raw = os.environ.get(name)
+        if raw is None or not str(raw).strip():
+            continue
+        logger.warning("%s is set but ignored. Remove it from the environment.", name)
 
 
 def _startup_secrets() -> tuple[str, ...]:
@@ -61,6 +74,7 @@ async def lifespan(app: FastAPI):
     # 啟動時執行
     setup_logging()
     print("🚀 Starting No-Vig NBA API...")
+    _warn_ignored_odds_env()
     if not settings.balldontlie_api_key.get_secret_value().strip():
         logger.warning(
             "BALLDONTLIE_API_KEY is empty. NBA odds calls will fail until it is set."
@@ -70,7 +84,8 @@ async def lifespan(app: FastAPI):
         logger.info("BALLDONTLIE_API_KEY is set")
     print(f"🔴 Redis URL: {mask_database_url(settings.redis_url)}")
     print(f"🐘 Database URL: {mask_database_url(settings.database_url)}")
-    # One-time SCAN of retired odds keys. A second start sees the marker
+    # One-time SCAN of retired odds keys. The done marker is written
+    # only after every delete succeeds. A second start sees that marker
     # and does not delete again. A Redis error is logged and does not
     # stop startup.
     try:

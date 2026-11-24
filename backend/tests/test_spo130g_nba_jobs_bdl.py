@@ -135,7 +135,6 @@ def _install(monkeypatch, client: _JobsClient | None = None):
         stale_ttl_seconds=900,
         lock_ttl_seconds=10,
         wait_for_refresh_ms=50,
-        quota_protect_percent=15,
         hot_keys_limit=10,
     )
     monkeypatch.setattr("app.services.odds_snapshot_service.odds_gateway", gateway)
@@ -311,7 +310,6 @@ async def test_prewarm_skips_a_hot_key_from_the_other_provider(active, warmed_id
         stale_ttl_seconds=30,
         lock_ttl_seconds=10,
         wait_for_refresh_ms=50,
-        quota_protect_percent=15,
         hot_keys_limit=10,
     )
     seen = datetime.now(timezone.utc).isoformat()

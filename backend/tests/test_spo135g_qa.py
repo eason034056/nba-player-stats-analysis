@@ -97,8 +97,16 @@ def test_event_detail_route_skips_out_the_same_way(monkeypatch) -> None:
     """GET /api/nba/events/{event_id} calls the list and keeps the skip."""
     out = _entry("Out")
     cached, nxt, _healthy = _pair(out["player"])
+    payload = _events_payload()
+    digit_id = "21718080"
+    for event in payload["events"]:
+        if event["event_id"] == _EVENT_ID:
+            event["event_id"] = digit_id
+    for pick in cached["picks"]:
+        if pick.get("event_id") == _EVENT_ID:
+            pick["event_id"] = digit_id
     store = {
-        f"{CacheService.build_events_key(_DATE, 'us')}:tz{_OFFSET}:balldontlie": _events_payload(),
+        f"{CacheService.build_events_key(_DATE, 'us')}:tz{_OFFSET}:balldontlie": payload,
         daily_picks_cache_key("nba", _DATE, _OFFSET): cached,
         NBA_INJURIES_CACHE_KEY: _fresh([out]),
     }
@@ -109,13 +117,13 @@ def test_event_detail_route_skips_out_the_same_way(monkeypatch) -> None:
     detail = asyncio.run(
         get_event.__wrapped__(
             request=None,
-            event_id=_EVENT_ID,
+            event_id=digit_id,
             date=_DATE,
             regions="us",
             tz_offset=_OFFSET,
         )
     )
-    assert detail.event_id == _EVENT_ID
+    assert detail.event_id == digit_id
     assert detail.top_read is not None
     assert detail.top_read.player == nxt
     assert detail.top_read.player != out["player"]

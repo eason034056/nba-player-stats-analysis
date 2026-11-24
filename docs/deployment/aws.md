@@ -8,14 +8,17 @@ Step-by-step for that Mac, in Traditional Chinese: [docs/deployment/aws-steps-zh
 
 ## SPO-130i: flush retired odds keys in local Redis
 
-NBA odds are BALLDONTLIE game ids. The first backend start after this deploy deletes the old lists once. It uses `SCAN`, then `SET NX` on `migrations:spo130i:odds_flush_done`, so a restart and a second replica do not flush again. A Redis error is logged and does not stop startup.
+NBA odds are BALLDONTLIE game ids. The first backend start after this deploy deletes the old lists once. It takes a 60-second lock, `SCAN`s, and writes `migrations:spo130i:odds_flush_done` only after every delete succeeds. A restart sees that marker and does not flush again. A second replica that finds the lock waits for the next start. A Redis error drops the lock, leaves the marker unset, and does not stop startup.
 
-Run the same delete by hand if you want it done before the process starts. This does not touch RDS.
+`*:wnba:*` also deletes leftover `lineups:wnba:*` and `daily_picks:wnba:*`.
+
+Run the same delete by hand if you want it done before the process starts. This does not touch RDS. Set the marker only after the deletes.
 
 ```bash
 docker exec no-vig-nba-redis sh -c '
   redis-cli --scan --pattern "daily_picks:nba*" | xargs -r redis-cli DEL
   redis-cli --scan --pattern "odds_snapshot:*" | xargs -r redis-cli DEL
+  redis-cli --scan --pattern "odds_snapshot_meta:v2:*" | xargs -r redis-cli DEL
   redis-cli --scan --pattern "events:nba:*" | xargs -r redis-cli DEL
   redis-cli --scan --pattern "*:wnba:*" | xargs -r redis-cli DEL
   redis-cli DEL odds:quota_usage:v1

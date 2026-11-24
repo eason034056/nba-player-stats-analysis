@@ -48,7 +48,6 @@ async def test_gateway_rejects_unknown_league_before_http():
         stale_ttl_seconds=120,
         lock_ttl_seconds=10,
         wait_for_refresh_ms=300,
-        quota_protect_percent=15,
         hot_keys_limit=10,
     )
     with pytest.raises(ValueError, match="Unknown league"):
@@ -69,7 +68,6 @@ def test_cache_key_uses_the_provider_name_and_rejects_other_leagues():
         stale_ttl_seconds=120,
         lock_ttl_seconds=10,
         wait_for_refresh_ms=300,
-        quota_protect_percent=15,
         hot_keys_limit=10,
     )
     shared = dict(

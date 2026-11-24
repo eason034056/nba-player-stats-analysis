@@ -443,9 +443,13 @@ class BdlOddsProvider:
 
 
 def _game_id(event_id: str) -> int:
-    """Decimal game id. A hex Odds API id raises before HTTP."""
+    """Decimal game id. A non-ASCII or non-digit id raises before HTTP.
+
+    ``str.isdigit`` is true for digits such as ``١٢٣``. Those are not a
+    BALLDONTLIE game id, so the check also requires ASCII.
+    """
     text = str(event_id).strip()
-    if not text.isdigit():
+    if not text.isascii() or not text.isdigit():
         raise ValueError(f"BALLDONTLIE game id must be digits, not {event_id!r}")
     return int(text)
 

@@ -28,10 +28,14 @@ async def get_metrics():
 
     # Last BALLDONTLIE rate-limit headers on the NBA provider.
     # ``recorded`` is false until a response has carried a header.
-    rate = await PROVIDERS["nba"].rate_status()
-
+    # A failure here is an empty rate, not a 500.
     rate_info = None
-    if rate.recorded:
+    try:
+        rate = await PROVIDERS["nba"].rate_status()
+    except Exception:
+        logger.warning("bdl rate status unavailable")
+        rate = None
+    if rate is not None and rate.recorded:
         rate_info = {
             "remaining": rate.remaining,
             "used": rate.used,
