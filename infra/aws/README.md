@@ -16,8 +16,9 @@ State is still local (`terraform.tfstate` in this directory) until the migration
 - Security group `${name_prefix}-rds`: inbound TCP 5432 from `${name_prefix}-app` and from each id in `rds_allowed_security_group_ids` (default empty), by security group id. Inbound TCP 5432 from `allowed_cidrs` only while that list is non-empty. `allowed_cidrs = []` removes the CIDR rules. Each set entry must be an IPv4 `/32`. `0.0.0.0/0`, `0.0.0.0/32`, duplicates, and every IPv6 CIDR are rejected. An empty list is allowed. For `dev`, the name is `sportslab-rds`.
 - S3 bucket: Block Public Access (all four), BucketOwnerEnforced, versioning, SSE-S3 (AES256), TLS-only bucket policy.
 - Lifecycle: current objects larger than 128 KB move to Standard-IA after 30 days and to Glacier Instant Retrieval (`GLACIER_IR`) after 90. Noncurrent versions expire after 30 days. Incomplete multipart uploads abort after 7 days. `pg-dumps/` current objects expire after `pg_dump_retention_days` (default 90).
-- Prefix objects: `bdl-raw/`, `bdl-archive/`, `bdl-samples/`, `pg-dumps/`.
+- Prefix objects: `bdl-raw/`, `bdl-archive/`, `bdl-samples/`, `nba-injury-pdf/`, `pg-dumps/`.
 - IAM user `${name_prefix}-runtime` with GetObject, PutObject, and ListBucket on those prefixes only. An empty `s3:prefix` is not allowed, so listing the bucket root is denied. No `s3:DeleteObject`. No access key. For `dev`, the user is `sportslab-runtime`.
+- `nba-injury-pdf/` is the private copy of official NBA injury-report PDFs. Adding it updates the inline policy in place and creates one empty prefix marker. It does not replace the bucket, RDS, or the VPC. Run `terraform plan` and confirm the plan destroys nothing before apply. The runtime user cannot delete objects in this prefix. If NBA blocks access or ends the agreement, stop the fetcher and have an admin delete the stored files.
 
 Redis stays on the local compose stack. It is not in this module.
 
@@ -179,7 +180,7 @@ Use this if you would rather click than run Terraform. Names match the module.
    - Noncurrent versions expire at 30 days. Abort incomplete multipart uploads at 7 days.
    - Prefix `pg-dumps/`: expire current objects at 90 days.
    - Permissions → Bucket policy: paste the TLS deny statement from `s3.tf` (`aws:SecureTransport` = false).
-   - Create empty prefix keys `bdl-raw/`, `bdl-archive/`, `bdl-samples/`, `pg-dumps/` if you want them visible before the first upload.
+   - Create empty prefix keys `bdl-raw/`, `bdl-archive/`, `bdl-samples/`, `nba-injury-pdf/`, `pg-dumps/` if you want them visible before the first upload. The runtime user still cannot delete `nba-injury-pdf/`. An admin deletes those objects if NBA blocks access or ends the agreement.
 5. IAM → Users → Create `sportslab-runtime` → attach the inline policy in `iam.tf` (or `terraform output runtime_s3_policy_json` from a plan that has not been applied yet will not exist; copy the statement from `iam.tf` and replace the bucket name). Security credentials → Create access key (CLI) → masked secret form only.
 
 ## Provisioner policy

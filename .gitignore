@@ -77,6 +77,8 @@ logs/
 *.cache
 # SPO-138 backfill: raw BALLDONTLIE pages, kept locally (python -m app.backfill --raw-dir).
 bdl-raw/
+# SPO-149: official NBA injury-report PDFs. Local cache only. Do not commit them.
+nba-injury-pdf/
 
 # ==================== 建置產物 ====================
 *.pyc

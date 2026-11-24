@@ -1,0 +1,12 @@
+{
+  "synthetic": true,
+  "why": "No recorded HTML 403 exists. The missing-file 403 is application/xml. This file is the HTML shape the fetcher treats as a block.",
+  "status_line": "HTTP/1.1 403 Forbidden",
+  "status": 403,
+  "headers": {
+    "Content-Type": "text/html"
+  },
+  "body_file": "block_page.body.html",
+  "body_sha256": "efbd4d7511ff81edc3ca719b4f32c9a5ea747701eca43edf98598e3dd061c7da",
+  "body_length": 46
+}

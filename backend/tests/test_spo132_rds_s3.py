@@ -525,6 +525,7 @@ exit 0
             "BDL_CACHE_DIR": str(cache),
             "BDL_ARCHIVE_DIR": str(archive),
             "BDL_SAMPLES_DIR": str(samples),
+            "INJURY_PDF_DIR": str(tmp_path / "missing-injury-pdf"),
         }
         result = _run(SYNC, env)
         assert result.returncode == 0, result.stderr
@@ -533,8 +534,47 @@ exit 0
         assert f"{cache}" in text and "s3://example-bucket/bdl-raw/" in text
         assert f"{archive}" in text and "s3://example-bucket/bdl-archive/" in text
         assert f"{samples}" in text and "s3://example-bucket/bdl-samples/" in text
+        assert "nba-injury-pdf/" not in text
         assert "*.pid" in text
+        assert "*.partial" in text
         assert text.splitlines().count("sync") == 3
+
+    def test_injury_pdf_prefix_syncs_without_delete(self, tmp_path: Path) -> None:
+        cache = tmp_path / "cache"
+        archive = tmp_path / "archive"
+        samples = tmp_path / "samples"
+        injury = tmp_path / "injury"
+        for directory in (cache, archive, samples, injury):
+            directory.mkdir()
+        log = tmp_path / "aws-log"
+        aws = tmp_path / "aws"
+        _write_executable(
+            aws,
+            f"""#!/bin/sh
+printf '%s\\n' "$@" >> "{log}"
+echo '---' >> "{log}"
+exit 0
+""",
+        )
+        env = {
+            "AWS_CLI": str(aws),
+            "S3_BUCKET": "example-bucket",
+            "AWS_ACCESS_KEY_ID": "EXAMPLE",
+            "AWS_SECRET_ACCESS_KEY": "EXAMPLE",
+            "AWS_REGION": "us-east-2",
+            "BDL_CACHE_DIR": str(cache),
+            "BDL_ARCHIVE_DIR": str(archive),
+            "BDL_SAMPLES_DIR": str(samples),
+            "INJURY_PDF_DIR": str(injury),
+        }
+        result = _run(SYNC, env)
+        assert result.returncode == 0, result.stderr
+        text = log.read_text()
+        assert "--delete" not in text
+        assert "*.partial" in text
+        assert f"{injury}" in text and "s3://example-bucket/nba-injury-pdf/" in text
+        assert "s3://example-bucket/bdl-raw/" in text
+        assert text.splitlines().count("sync") == 4
 
 
 class TestDumpScript:

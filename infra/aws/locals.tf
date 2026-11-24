@@ -8,6 +8,7 @@ locals {
     "bdl-raw/",
     "bdl-archive/",
     "bdl-samples/",
+    "nba-injury-pdf/",
     local.pg_dumps_prefix,
   ])
 }
