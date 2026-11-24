@@ -121,3 +121,12 @@ crash.*.log
 .ruff_cache/
 .coverage.*
 coverage.xml
+
+# SPO-158 baseline trainer. The short metrics file and the model card are
+# committed. Dataset exports, fitted models, per-player dumps, and official
+# injury PDFs stay local.
+*.parquet
+*.joblib
+*.pkl
+*.pdf
+**/player_level_predictions.*

@@ -1,0 +1,142 @@
+[
+  {
+    "league": "nba",
+    "bdl_game_id": 2501,
+    "bdl_player_id": 10,
+    "book_key": "draftkings",
+    "market": "player_points",
+    "snapshot_kind": "opening",
+    "snapshot_at": "2025-11-01T22:00:00+00:00",
+    "line": 9.5
+  },
+  {
+    "league": "nba",
+    "bdl_game_id": 2501,
+    "bdl_player_id": 10,
+    "book_key": "fanduel",
+    "market": "player_points",
+    "snapshot_kind": "live",
+    "snapshot_at": "2025-11-01T22:30:00+00:00",
+    "line": 9.5
+  },
+  {
+    "league": "nba",
+    "bdl_game_id": 2501,
+    "bdl_player_id": 10,
+    "book_key": "draftkings",
+    "market": "player_points",
+    "snapshot_kind": "live",
+    "snapshot_at": "2025-11-01T23:00:01+00:00",
+    "line": 100.0
+  },
+  {
+    "league": "nba",
+    "bdl_game_id": 2501,
+    "bdl_player_id": 10,
+    "book_key": "betmgm",
+    "market": "player_points",
+    "snapshot_kind": "opening",
+    "snapshot_at": null,
+    "line": 50.0
+  },
+  {
+    "league": "nba",
+    "bdl_game_id": 2501,
+    "bdl_player_id": 99,
+    "book_key": "draftkings",
+    "market": "player_points",
+    "snapshot_kind": "opening",
+    "snapshot_at": "2025-11-01T21:00:00+00:00",
+    "line": 1.0
+  },
+  {
+    "league": "nba",
+    "bdl_game_id": 2502,
+    "bdl_player_id": 10,
+    "book_key": "draftkings",
+    "market": "player_points",
+    "snapshot_kind": "opening",
+    "snapshot_at": "2025-11-02T22:00:00+00:00",
+    "line": 31.0
+  },
+  {
+    "league": "nba",
+    "bdl_game_id": 2502,
+    "bdl_player_id": 10,
+    "book_key": "fanduel",
+    "market": "player_points",
+    "snapshot_kind": "live",
+    "snapshot_at": "2025-11-02T22:00:00+00:00",
+    "line": 32.0
+  },
+  {
+    "league": "nba",
+    "bdl_game_id": 2503,
+    "bdl_player_id": 10,
+    "book_key": "draftkings",
+    "market": "player_points",
+    "snapshot_kind": "opening",
+    "snapshot_at": "2025-11-03T22:00:00+00:00",
+    "line": 10.0
+  },
+  {
+    "league": "nba",
+    "bdl_game_id": 2503,
+    "bdl_player_id": 10,
+    "book_key": "fanduel",
+    "market": "player_points",
+    "snapshot_kind": "live",
+    "snapshot_at": "2025-11-03T23:00:00+00:00",
+    "line": 10.0
+  },
+  {
+    "league": "nba",
+    "bdl_game_id": 2505,
+    "bdl_player_id": 10,
+    "book_key": "draftkings",
+    "market": "player_points",
+    "snapshot_kind": "opening",
+    "snapshot_at": "2025-11-05T21:00:00+00:00",
+    "line": 10.0
+  },
+  {
+    "league": "nba",
+    "bdl_game_id": 2505,
+    "bdl_player_id": 10,
+    "book_key": "draftkings",
+    "market": "player_points",
+    "snapshot_kind": "live",
+    "snapshot_at": "2025-11-05T22:00:00+00:00",
+    "line": 40.0
+  },
+  {
+    "league": "nba",
+    "bdl_game_id": 2505,
+    "bdl_player_id": 10,
+    "book_key": "fanduel",
+    "market": "player_points",
+    "snapshot_kind": "live",
+    "snapshot_at": "2025-11-05T22:00:00+00:00",
+    "line": 10.0
+  },
+  {
+    "league": "nba",
+    "bdl_game_id": 2506,
+    "bdl_player_id": 10,
+    "book_key": "draftkings",
+    "market": "player_points",
+    "snapshot_kind": "opening",
+    "snapshot_at": null,
+    "line": 18.0
+  },
+  {
+    "league": "nba",
+    "bdl_game_id": 2507,
+    "bdl_player_id": 10,
+    "book_key": "draftkings",
+    "market": "player_points",
+    "snapshot_kind": "live",
+    "snapshot_at": "2025-11-07T23:00:01+00:00",
+    "line": 12.0
+  }
+]
