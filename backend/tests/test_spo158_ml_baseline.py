@@ -351,10 +351,33 @@ def test_trainer_source_does_not_open_the_history_database() -> None:
 
 
 def test_importing_the_trainer_does_not_import_injury_ingest() -> None:
-    import app.ml.train_baseline  # noqa: F401
-
-    assert "app.services.injury_report_ingest" not in sys.modules
-    assert "app.services.injury_report_parser" not in sys.modules
+    """A fresh process imports the trainer. Earlier tests may already have
+    loaded the injury modules into this process, so ``sys.modules`` here
+    cannot prove what the trainer itself imports.
+    """
+    backend = Path(__file__).resolve().parents[1]
+    env = os.environ.copy()
+    env["DATABASE_URL"] = ""
+    env.pop("ML_DATABASE_URL", None)
+    script = (
+        "import app.ml.train_baseline, sys; "
+        "names = ("
+        "'app.services.injury_report_ingest', "
+        "'app.services.injury_report_parser'"
+        "); "
+        "bad = [name for name in names if name in sys.modules]; "
+        "print(bad); "
+        "raise SystemExit(1 if bad else 0)"
+    )
+    completed = subprocess.run(
+        [sys.executable, "-c", script],
+        cwd=backend,
+        env=env,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert completed.returncode == 0, completed.stdout + completed.stderr
 
 
 def test_importing_the_api_does_not_import_app_ml() -> None:
