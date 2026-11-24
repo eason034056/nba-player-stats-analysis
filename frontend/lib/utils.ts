@@ -258,18 +258,19 @@ export function getBookmakerDisplayName(key: string): string {
     fanduel: "FanDuel",
     betmgm: "BetMGM",
     caesars: "Caesars",
-    espnbet: "ESPN Bet",
+    betrivers: "BetRivers",
+    fanatics: "Fanatics",
     
     // 知名線上博彩
     bet365: "Bet365",
     pointsbetus: "PointsBet",
-    betrivers: "BetRivers",
     unibet_us: "Unibet",
-    williamhill_us: "William Hill",
     
     // 賭場/區域型
     hardrockbet: "Hard Rock Bet",
     borgata: "Borgata",
+    ballybet: "Bally Bet",
+    // 只做顯示。請求使用的 key 是 ballybet。
     bally_bet: "Bally Bet",
     sisportsbook: "SI Sportsbook",
     wynnbet: "WynnBet",
@@ -282,14 +283,13 @@ export function getBookmakerDisplayName(key: string): string {
     livescorebet_us: "LiveScore Bet",
     lowvig: "LowVig.ag",
     mybookieag: "MyBookie",
-    bovada: "Bovada",
-    betonlineag: "BetOnline.ag",
     superbook: "SuperBook",
     twinspires: "TwinSpires",
     betparx: "BetPARX",
     foxbet: "FOX Bet",
     sugarhouse: "SugarHouse",
     windcreek: "Wind Creek",
+    rebet: "Rebet",
   };
   
   return nameMap[key] || key;

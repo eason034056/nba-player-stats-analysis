@@ -44,8 +44,13 @@ describe("AboutPage", () => {
 
     expect(screen.getByText(/for informational and research purposes only/i)).toBeInTheDocument();
     expect(screen.getByText(/this is not betting advice/i)).toBeInTheDocument();
+    const odds = screen.getByRole("link", { name: "BALLDONTLIE" });
+    expect(odds).toHaveAttribute("href", "https://www.balldontlie.io");
+    expect(screen.queryByRole("link", { name: /odds api/i })).not.toBeInTheDocument();
+    expect(screen.queryByText(/the odds api/i)).not.toBeInTheDocument();
     const hrefs = screen.getAllByRole("link").map((link) => link.getAttribute("href"));
-    expect(hrefs).toEqual(expect.arrayContaining(["/picks", "/betslip"]));
+    expect(hrefs).toEqual(expect.arrayContaining(["/picks", "/betslip", "https://www.balldontlie.io"]));
     expect(hrefs.some((href) => href?.includes("/wnba"))).toBe(false);
+    expect(hrefs.some((href) => href?.includes("the-odds-api.com"))).toBe(false);
   });
 });
