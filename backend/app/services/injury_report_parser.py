@@ -671,6 +671,17 @@ def instant_from_filename(filename: str | None) -> datetime | None:
 
 
 def _eastern_instant(year: int, month: int, day: int, hour: int, minute: int, ampm: str) -> datetime | None:
+    """Eastern wall clock as UTC, or None when that minute is not real.
+
+    ``fold`` stays 0, so a repeated fall-back wall time keeps the earlier
+    offset. 11/03/24 01:30 AM is 05:30 UTC, not 06:30 UTC.
+
+    A spring-forward minute never happened. Building it with a zone still
+    returns a datetime, and that datetime's UTC instant is later than the
+    first real minute after the gap. Converting to UTC and back to Eastern
+    must keep the same hour and minute. If it does not, this returns None
+    instead of inventing an instant inside or past the gap.
+    """
     if year < 100:
         year += 2000
     marker = ampm.upper()
@@ -682,7 +693,11 @@ def _eastern_instant(year: int, month: int, day: int, hour: int, minute: int, am
         local = datetime(year, month, day, hour, minute, tzinfo=EASTERN)
     except ValueError:
         return None
-    return local.astimezone(UTC)
+    utc = local.astimezone(UTC)
+    back = utc.astimezone(EASTERN)
+    if back.hour != hour or back.minute != minute:
+        return None
+    return utc
 
 
 def _fallback_time(

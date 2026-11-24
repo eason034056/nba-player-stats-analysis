@@ -88,6 +88,8 @@ pyarrow==23.0.1
 
 # ==================== Official injury-report PDFs (SPO-150) ====================
 # pdfplumber reads a stored PDF into rows. MIT license.
-# reportlab is imported only by tests, to build a synthetic PDF.
+# Pillow and pypdfium2 are the runtime libraries that pdfplumber 0.11.11
+# installs. Pillow is MIT-CMU. pypdfium2 is BSD-3-Clause and Apache-2.0.
 pdfplumber==0.11.11
-reportlab==5.1.1
+Pillow==13.0.0
+pypdfium2==5.15.2

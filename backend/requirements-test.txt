@@ -1,0 +1,2 @@
+# Test-only. reportlab draws synthetic injury-report PDFs. The server image does not install this file.
+reportlab==5.1.1

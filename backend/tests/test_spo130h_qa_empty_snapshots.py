@@ -97,7 +97,7 @@ def _install_cache(monkeypatch, cache: _MemoryCache) -> None:
 async def migrated(scratch_conn):
     from app.migrations.runner import upgrade
 
-    assert await upgrade(scratch_conn) == ["001", "002", "003", "004", "005", "006"]
+    assert await upgrade(scratch_conn) == ["001", "002", "003", "004", "005", "006", "007"]
     return scratch_conn
 
 

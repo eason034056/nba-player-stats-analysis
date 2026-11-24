@@ -2,8 +2,13 @@
 
 ``ingest_report`` parses one stored PDF and inserts its rows.
 ``ingest_store`` does that for every PDF in the cache. A second call
-with the same PDF writes nothing new. A PDF that will not parse records
-``source_refreshes.complete = false`` and the batch continues.
+with the same PDF writes nothing new. A later PDF with the same title
+minute updates the columns a report can correct, including status and
+reason, and deletes rows for that minute that the new file does not
+name. A PDF that will not parse records an error on
+``source_refreshes``. The first failure for that minute is
+``complete = false``. A later failure keeps an earlier complete row
+complete and still stores the error. The batch continues.
 
 ``injury_rows_as_of`` reads the rows of the latest report with
 ``report_at <= T``. T is tip-off minus 3 hours when you omit ``as_of``.
@@ -13,6 +18,7 @@ There is no HTTP route. Nothing here publishes a player list.
 
 from __future__ import annotations
 
+import json
 import logging
 from dataclasses import dataclass
 from datetime import date, datetime, timezone
@@ -35,6 +41,10 @@ logger = logging.getLogger(__name__)
 # 'injuries' stays the BALLDONTLIE list.
 OFFICIAL_SOURCE = "injuries_nba_official"
 
+# Official injury PDFs are NBA. Bound into SQL so the league is not a literal.
+# There is no WNBA source here.
+LEAGUE = "nba"
+
 # BALLDONTLIE sometimes stores a shorter abbreviation than the PDF.
 _ABBR_ALIASES = {
     "GS": "GSW",
@@ -46,6 +56,11 @@ _ABBR_ALIASES = {
     "UTAH": "UTA",
 }
 
+# bdl_player_id and match_method stay null on insert and are not updated.
+# A later match must survive a re-ingest. A resolved game id stays when
+# this file cannot resolve the game: the written value is
+# COALESCE(EXCLUDED, stored). The WHERE compares that same value, so a
+# miss is not a change. An identical row makes RETURNING empty.
 _INSERT_ROW = """
 INSERT INTO nba_injury_report_rows (
     league, report_at, game_date, game_time_et, matchup, team_name,
@@ -53,26 +68,89 @@ INSERT INTO nba_injury_report_rows (
     status, reason, category, previous_status,
     not_yet_submitted, all_players_available
 ) VALUES (
-    'nba', $1, $2, $3, $4, $5,
-    $6, $7, $8, NULL, NULL,
-    $9, $10, $11, $12,
-    $13, $14
+    $1, $2, $3, $4, $5, $6,
+    $7, $8, $9, NULL, NULL,
+    $10, $11, $12, $13,
+    $14, $15
 )
-ON CONFLICT ON CONSTRAINT nba_injury_report_rows_natural_key DO NOTHING
+ON CONFLICT ON CONSTRAINT nba_injury_report_rows_natural_key DO UPDATE
+SET game_time_et = EXCLUDED.game_time_et,
+    bdl_game_id = COALESCE(EXCLUDED.bdl_game_id, nba_injury_report_rows.bdl_game_id),
+    bdl_team_id = COALESCE(EXCLUDED.bdl_team_id, nba_injury_report_rows.bdl_team_id),
+    status = EXCLUDED.status,
+    reason = EXCLUDED.reason,
+    category = EXCLUDED.category,
+    previous_status = EXCLUDED.previous_status,
+    all_players_available = EXCLUDED.all_players_available
+WHERE nba_injury_report_rows.game_time_et IS DISTINCT FROM EXCLUDED.game_time_et
+   OR nba_injury_report_rows.bdl_game_id IS DISTINCT FROM COALESCE(EXCLUDED.bdl_game_id, nba_injury_report_rows.bdl_game_id)
+   OR nba_injury_report_rows.bdl_team_id IS DISTINCT FROM COALESCE(EXCLUDED.bdl_team_id, nba_injury_report_rows.bdl_team_id)
+   OR nba_injury_report_rows.status IS DISTINCT FROM EXCLUDED.status
+   OR nba_injury_report_rows.reason IS DISTINCT FROM EXCLUDED.reason
+   OR nba_injury_report_rows.category IS DISTINCT FROM EXCLUDED.category
+   OR nba_injury_report_rows.previous_status IS DISTINCT FROM EXCLUDED.previous_status
+   OR nba_injury_report_rows.all_players_available IS DISTINCT FROM EXCLUDED.all_players_available
 RETURNING 1
 """
 
+# One row per (league, source, refreshed_at).
+# An incomplete row is replaced. A call that wrote rows replaces a
+# complete row and may clear error. A later failure (error set, zero
+# rows written) records error and leaves complete, rows_seen, and
+# rows_written alone. An identical retry matches none of those and
+# leaves the row in place.
 _INSERT_REFRESH = """
 INSERT INTO source_refreshes (
     league, source, refreshed_at, complete, rows_seen, rows_written, error
-) VALUES ('nba', $1, $2, $3, $4, $5, $6)
+) VALUES ($1, $2, $3, $4, $5, $6, $7)
 ON CONFLICT (league, source, refreshed_at) DO UPDATE
-SET complete = EXCLUDED.complete,
-    rows_seen = EXCLUDED.rows_seen,
-    rows_written = EXCLUDED.rows_written,
+SET complete = CASE
+        WHEN source_refreshes.complete AND EXCLUDED.rows_written = 0
+        THEN source_refreshes.complete
+        ELSE EXCLUDED.complete
+    END,
+    rows_seen = CASE
+        WHEN source_refreshes.complete AND EXCLUDED.rows_written = 0
+        THEN source_refreshes.rows_seen
+        ELSE EXCLUDED.rows_seen
+    END,
+    rows_written = CASE
+        WHEN source_refreshes.complete AND EXCLUDED.rows_written = 0
+        THEN source_refreshes.rows_written
+        ELSE EXCLUDED.rows_written
+    END,
     error = EXCLUDED.error
 WHERE source_refreshes.complete = false
+   OR EXCLUDED.rows_written > 0
+   OR EXCLUDED.error IS NOT NULL
 RETURNING complete
+"""
+
+# The newest successful file for one report minute replaces that minute.
+# A stored natural key that is absent from this file is deleted.
+# league and report_at are the same on every parsed row, so the other
+# five key columns decide which stored rows stay. Another report_at
+# is outside this DELETE.
+_DELETE_ABSENT = """
+DELETE FROM nba_injury_report_rows AS stored
+WHERE stored.league = $1
+  AND stored.report_at = $2
+  AND NOT EXISTS (
+      SELECT 1
+      FROM jsonb_to_recordset($3::jsonb) AS kept(
+          game_date date,
+          matchup text,
+          team_name text,
+          player_raw text,
+          not_yet_submitted boolean
+      )
+      WHERE kept.game_date = stored.game_date
+        AND kept.matchup = stored.matchup
+        AND kept.team_name = stored.team_name
+        AND kept.player_raw = stored.player_raw
+        AND kept.not_yet_submitted = stored.not_yet_submitted
+  )
+RETURNING 1
 """
 
 _GAMES_ON_DATES = """
@@ -83,7 +161,7 @@ SELECT g.date, g.bdl_game_id, g.home_team_id, g.visitor_team_id,
 FROM games g
 JOIN teams ht ON ht.league = g.league AND ht.bdl_team_id = g.home_team_id
 JOIN teams vt ON vt.league = g.league AND vt.bdl_team_id = g.visitor_team_id
-WHERE g.league = 'nba' AND g.date = ANY($1::date[])
+WHERE g.league = $1 AND g.date = ANY($2::date[])
 ORDER BY g.bdl_game_id
 """
 
@@ -95,8 +173,9 @@ class IngestOutcome:
     ``tag`` is ``stored`` (rows were written or a failure row was saved),
     ``unchanged`` (the same report was already stored), ``failed``
     (the PDF did not parse, or the write failed), or ``dry_run``
-    (parsed only). ``rows_written`` is how many injury rows this call
-    inserted. A second successful call reports 0.
+    (parsed only). ``rows_written`` counts rows this call inserted,
+    corrected, or deleted. An identical retry reports 0. A changed
+    status counts. A player missing from the new file counts.
     """
 
     tag: Literal["stored", "unchanged", "failed", "dry_run"]
@@ -124,17 +203,21 @@ async def ingest_report(
     stored: Stored,
     *,
     dry_run: bool = False,
+    league: str = LEAGUE,
 ) -> IngestOutcome:
     """Parse ``stored`` and insert its rows.
 
     ``ingest_report`` reads the PDF from ``stored.path``. Re-running it
-    for the same report inserts nothing new. ``dry_run`` true parses
-    and resolves game ids, then writes nothing.
+    for the same report inserts nothing new. A PDF that changes a
+    corrected column updates that row. A player or team note that the
+    new file drops is deleted for that same report minute. ``dry_run``
+    true parses and resolves game ids, then writes nothing.
 
     Args:
         conn: An open connection. The caller owns it.
         stored: A PDF the cache already saved.
         dry_run: When true, do not insert.
+        league: League code stored on each row. The default is ``nba``.
 
     Returns:
         An ``IngestOutcome``. A bad PDF returns ``tag="failed"`` and
@@ -150,6 +233,7 @@ async def ingest_report(
             report_at=_stamp(stored.last_modified_utc) or _stamp(stored.fetched_at),
             error=f"{type(exc).__name__}",
             dry_run=dry_run,
+            league=league,
         )
     parsed = parse_pdf(
         data,
@@ -164,8 +248,9 @@ async def ingest_report(
             report_at=report_at,
             error=parsed.error,
             dry_run=dry_run,
+            league=league,
         )
-    return await _write_report(conn, filename, parsed, dry_run=dry_run)
+    return await _write_report(conn, filename, parsed, dry_run=dry_run, league=league)
 
 
 async def ingest_store(
@@ -173,6 +258,7 @@ async def ingest_store(
     store: LocalInjuryReportStore,
     *,
     dry_run: bool = False,
+    league: str = LEAGUE,
 ) -> list[IngestOutcome]:
     """Ingest every stored PDF. One bad file does not stop the rest.
 
@@ -183,6 +269,7 @@ async def ingest_store(
         conn: An open connection.
         store: The SPO-149 cache.
         dry_run: When true, write nothing.
+        league: League code passed to each ``ingest_report``. The default is ``nba``.
 
     Returns:
         One outcome per stored PDF, in path order.
@@ -190,7 +277,7 @@ async def ingest_store(
     outcomes: list[IngestOutcome] = []
     for stored in store.iter_stored():
         try:
-            outcomes.append(await ingest_report(conn, stored, dry_run=dry_run))
+            outcomes.append(await ingest_report(conn, stored, dry_run=dry_run, league=league))
         except Exception as exc:
             logger.warning("injury report ingest failed (%s)", type(exc).__name__)
             outcomes.append(
@@ -248,7 +335,7 @@ async def injury_rows_as_of(
     conn: asyncpg.Connection,
     bdl_game_id: int,
     *,
-    league: str = "nba",
+    league: str = LEAGUE,
     as_of: datetime | None = None,
 ) -> list[asyncpg.Record]:
     """Rows from the latest official report with ``report_at <= T``.
@@ -287,8 +374,9 @@ async def _write_report(
     parsed: ParsedReport,
     *,
     dry_run: bool,
+    league: str = LEAGUE,
 ) -> IngestOutcome:
-    resolved = await _resolve(conn, parsed.rows)
+    resolved = await _resolve(conn, parsed.rows, league)
     if dry_run:
         return IngestOutcome(
             tag="dry_run",
@@ -304,6 +392,7 @@ async def _write_report(
             for row, ids in zip(parsed.rows, resolved, strict=True):
                 inserted = await conn.fetch(
                     _INSERT_ROW,
+                    league,
                     parsed.report_at,
                     row.game_date,
                     row.game_time_et,
@@ -320,8 +409,29 @@ async def _write_report(
                     row.all_players_available,
                 )
                 written += len(inserted)
+            # Same transaction as the upserts. dry_run returned above,
+            # so this DELETE does not run then. report_at is this file's
+            # minute only.
+            kept = json.dumps([
+                {
+                    "game_date": row.game_date.isoformat(),
+                    "matchup": row.matchup,
+                    "team_name": row.team_name,
+                    "player_raw": row.player_raw,
+                    "not_yet_submitted": row.not_yet_submitted,
+                }
+                for row in parsed.rows
+            ])
+            removed = await conn.fetch(
+                _DELETE_ABSENT,
+                league,
+                parsed.report_at,
+                kept,
+            )
+            written += len(removed)
             refresh = await conn.fetch(
                 _INSERT_REFRESH,
+                league,
                 OFFICIAL_SOURCE,
                 parsed.report_at,
                 True,
@@ -337,6 +447,7 @@ async def _write_report(
             report_at=parsed.report_at,
             error=type(exc).__name__,
             dry_run=False,
+            league=league,
         )
     if written == 0 and not refresh:
         tag: Literal["stored", "unchanged"] = "unchanged"
@@ -359,6 +470,7 @@ async def _record_failure(
     report_at: datetime | None,
     error: str,
     dry_run: bool,
+    league: str = LEAGUE,
 ) -> IngestOutcome:
     if report_at is None:
         return IngestOutcome(
@@ -372,6 +484,7 @@ async def _record_failure(
     if not dry_run:
         await conn.fetch(
             _INSERT_REFRESH,
+            league,
             OFFICIAL_SOURCE,
             report_at,
             False,
@@ -389,11 +502,13 @@ async def _record_failure(
     )
 
 
-async def _resolve(conn: asyncpg.Connection, rows: tuple[InjuryRow, ...]) -> list[_Resolved]:
+async def _resolve(
+    conn: asyncpg.Connection, rows: tuple[InjuryRow, ...], league: str
+) -> list[_Resolved]:
     dates = list({row.game_date for row in rows})
     found: dict[tuple[date, str, str], tuple[int, int, int, bool]] = {}
     if dates:
-        for game in await conn.fetch(_GAMES_ON_DATES, dates):
+        for game in await conn.fetch(_GAMES_ON_DATES, league, dates):
             key = (game["date"], canonical_abbr(game["away_abbr"] or ""), canonical_abbr(game["home_abbr"] or ""))
             current = found.get(key)
             postponed = bool(game["postponed"])
