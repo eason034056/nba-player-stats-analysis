@@ -236,53 +236,27 @@ export type CalculatorFormData = z.infer<typeof calculatorFormSchema>;
 // ==================== 博彩公司列表 ====================
 
 /**
- * 支援的博彩公司（US Region）
- * 
- * 這些是 The Odds API 在美國地區支援的博彩公司
- * key: API 使用的識別碼（必須與 The Odds API 的 bookmaker key 一致）
- * name: 顯示名稱
- * 
- * 資料來源：The Odds API v4
- * 文檔：https://the-odds-api.com/liveapi/guides/v4/
+ * NBA 博彩公司
+ *
+ * key: 請求帶給 API 的識別碼，與 BALLDONTLIE odds 的 vendor 字串一致。
+ *      順序跟 vendor allow-list 相同。請求只送這些 key，不送 bally_bet。
+ * name: 畫面上的名稱
+ *
+ * 資料來源：BALLDONTLIE
+ * 文檔：https://www.balldontlie.io
+ * API：https://api.balldontlie.io
  */
 export const BOOKMAKERS = [
-  // === 主流平台（市佔率高） ===
   { key: "draftkings", name: "DraftKings" },
   { key: "fanduel", name: "FanDuel" },
   { key: "betmgm", name: "BetMGM" },
   { key: "caesars", name: "Caesars" },
-  { key: "espnbet", name: "ESPN Bet" },
-  
-  // === 知名線上博彩 ===
-  { key: "bet365", name: "Bet365" },
-  { key: "pointsbetus", name: "PointsBet" },
   { key: "betrivers", name: "BetRivers" },
-  { key: "unibet_us", name: "Unibet" },
-  { key: "williamhill_us", name: "William Hill" },
-  
-  // === 賭場/區域型 ===
-  { key: "hardrockbet", name: "Hard Rock Bet" },
-  { key: "borgata", name: "Borgata" },
-  { key: "bally_bet", name: "Bally Bet" },
-  { key: "sisportsbook", name: "SI Sportsbook" },
-  { key: "wynnbet", name: "WynnBet" },
-  
-  // === 其他美國運彩平台 ===
-  { key: "betfred", name: "Betfred" },
-  { key: "betway", name: "Betway" },
-  { key: "circasports", name: "Circa Sports" },
-  { key: "fliff", name: "Fliff" },
-  { key: "livescorebet_us", name: "LiveScore Bet" },
-  { key: "lowvig", name: "LowVig.ag" },
-  { key: "mybookieag", name: "MyBookie" },
-  { key: "bovada", name: "Bovada" },
-  { key: "betonlineag", name: "BetOnline.ag" },
-  { key: "superbook", name: "SuperBook" },
-  { key: "twinspires", name: "TwinSpires" },
+  { key: "fanatics", name: "Fanatics" },
   { key: "betparx", name: "BetPARX" },
-  { key: "foxbet", name: "FOX Bet" },
-  { key: "sugarhouse", name: "SugarHouse" },
-  { key: "windcreek", name: "Wind Creek" },
+  { key: "ballybet", name: "Bally Bet" },
+  { key: "betway", name: "Betway" },
+  { key: "rebet", name: "Rebet" },
 ] as const;
 
 // 博彩公司 key 的類型

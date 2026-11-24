@@ -14,10 +14,20 @@ import { Check, Building2, ChevronDown, ChevronUp } from "lucide-react";
 import { BOOKMAKERS, type BookmakerKey } from "@/lib/schemas";
 import { cn } from "@/lib/utils";
 
-// Grouped: Featured vs Others
-const FEATURED_BOOKMAKERS = ["draftkings", "fanduel", "betmgm", "caesars", "espnbet", "bet365"];
-const featuredBooks = BOOKMAKERS.filter(b => FEATURED_BOOKMAKERS.includes(b.key));
-const otherBooks = BOOKMAKERS.filter(b => !FEATURED_BOOKMAKERS.includes(b.key));
+// Grouped: Featured vs Others. Order here is the order on screen.
+const FEATURED_BOOKMAKERS: readonly BookmakerKey[] = [
+  "draftkings",
+  "fanduel",
+  "betmgm",
+  "caesars",
+  "betrivers",
+  "fanatics",
+];
+const featuredBooks = FEATURED_BOOKMAKERS.flatMap((key) => {
+  const book = BOOKMAKERS.find((item) => item.key === key);
+  return book ? [book] : [];
+});
+const otherBooks = BOOKMAKERS.filter((book) => !FEATURED_BOOKMAKERS.includes(book.key));
 
 interface BookmakerSelectProps {
   value: string[];

@@ -107,6 +107,19 @@ const BetSlipContext = createContext<BetSlipContextType | undefined>(undefined);
 const STORAGE_KEY = "betslip_picks";
 /** Retired second slip. Removed on mount so a stale value is never parsed. */
 const RETIRED_WNBA_SLIP_KEY = "wnba_betslip_picks";
+/**
+ * The Odds API event id is 32 hex characters. BALLDONTLIE game ids are not.
+ * A stored pick with this id cannot be opened after the cutover.
+ */
+const LEGACY_ODDS_API_EVENT_ID = /^[0-9a-f]{32}$/i;
+
+function isLegacyOddsApiEventId(eventId: unknown): boolean {
+  return typeof eventId === "string" && LEGACY_ODDS_API_EVENT_ID.test(eventId);
+}
+
+function withoutLegacyOddsApiPicks(picks: BetSlipPick[]): BetSlipPick[] {
+  return picks.filter((pick) => !isLegacyOddsApiEventId(pick?.event_id));
+}
 
 // ==================== Provider 組件 ====================
 
@@ -128,9 +141,12 @@ export function BetSlipProvider({ children }: { children: ReactNode }) {
 
   /**
    * 初始化：從 localStorage 載入資料
-   * 
+   *
    * 使用 useEffect 確保只在客戶端執行
    * 這避免了 SSR/SSG 時的 hydration mismatch 問題
+   *
+   * 只刪 32-hex event id。明天的比賽、以及今天沒有賽事時的注單都留著。
+   * 這裡不打 /api/nba/events。
    */
   useEffect(() => {
       try {
@@ -138,18 +154,20 @@ export function BetSlipProvider({ children }: { children: ReactNode }) {
       } catch {
         // Storage can throw. Nothing else reads the retired key.
       }
+    let next: BetSlipPick[] = [];
     try {
       const stored = localStorage.getItem(STORAGE_KEY);
       if (stored) {
-        const parsed = JSON.parse(stored);
+        const parsed: unknown = JSON.parse(stored);
         // 驗證是否為陣列
         if (Array.isArray(parsed)) {
-          setPicks(parsed);
+          next = withoutLegacyOddsApiPicks(parsed as BetSlipPick[]);
         }
       }
     } catch (error) {
       console.error("Failed to load betslip from localStorage:", error);
     }
+    setPicks(next);
     setIsHydrated(true);
   }, []);
 

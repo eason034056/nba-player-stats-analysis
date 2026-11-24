@@ -153,12 +153,12 @@ export default function AboutPage() {
         <p className="mt-4 text-sm text-muted">
           Odds come from{" "}
           <a
-            href="https://the-odds-api.com"
+            href="https://www.balldontlie.io"
             target="_blank"
             rel="noopener noreferrer"
             className="font-semibold text-brand hover:underline"
           >
-            The Odds API
+            BALLDONTLIE
           </a>
           .
         </p>
