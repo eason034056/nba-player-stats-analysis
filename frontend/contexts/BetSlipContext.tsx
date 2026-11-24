@@ -21,18 +21,14 @@
 
 "use client";
 
-import { useQuery } from "@tanstack/react-query";
 import React, { 
   createContext, 
   useContext, 
   useState, 
   useCallback, 
   useEffect,
-  useRef,
   type ReactNode 
 } from "react";
-import { getEvents } from "@/lib/api";
-import { getTodayString } from "@/lib/utils";
 
 // ==================== 類型定義 ====================
 
@@ -140,30 +136,17 @@ export function BetSlipProvider({ children }: { children: ReactNode }) {
   
   // 標記：是否已從 localStorage 載入（避免 hydration 問題）
   const [isHydrated, setIsHydrated] = useState(false);
-  // Today's slate date, fixed for this mount so the query key matches TodayBoard.
-  const [slateDate] = useState(getTodayString);
-  // Picks read from storage, after the 32-hex ids are removed. Later adds are not in this list.
-  const hydratedPicksRef = useRef<BetSlipPick[]>([]);
-  // Membership is applied once, and only after today's events request succeeds.
-  const appliedLiveSlateRef = useRef(false);
-
-  // Same key TodayBoard uses for today, so the board and the slip share one request.
-  const eventsQuery = useQuery({
-    queryKey: ["events", slateDate],
-    queryFn: () => getEvents(slateDate),
-    staleTime: 60 * 1000,
-  });
 
   // ==================== localStorage 同步 ====================
 
   /**
    * 初始化：從 localStorage 載入資料
-   * 
+   *
    * 使用 useEffect 確保只在客戶端執行
    * 這避免了 SSR/SSG 時的 hydration mismatch 問題
    *
-   * 32-hex event ids are removed here, before the events request settles.
-   * A failed or still-loading events request must not remove any other pick.
+   * 只刪 32-hex event id。明天的比賽、以及今天沒有賽事時的注單都留著。
+   * 這裡不打 /api/nba/events。
    */
   useEffect(() => {
       try {
@@ -184,28 +167,9 @@ export function BetSlipProvider({ children }: { children: ReactNode }) {
     } catch (error) {
       console.error("Failed to load betslip from localStorage:", error);
     }
-    hydratedPicksRef.current = next;
     setPicks(next);
     setIsHydrated(true);
   }, []);
-
-  /**
-   * After today's events load, drop hydrated picks whose event is not on that slate.
-   * Picks added during this visit are left alone. A network error leaves the slip as-is.
-   */
-  useEffect(() => {
-    if (!isHydrated || appliedLiveSlateRef.current) return;
-    if (eventsQuery.isPending || !eventsQuery.isSuccess) return;
-    const liveIds = new Set(eventsQuery.data.events.map((event) => event.event_id));
-    const dropIds = new Set(
-      hydratedPicksRef.current
-        .filter((pick) => !liveIds.has(pick.event_id))
-        .map((pick) => pick.id),
-    );
-    appliedLiveSlateRef.current = true;
-    if (dropIds.size === 0) return;
-    setPicks((prev) => prev.filter((pick) => !dropIds.has(pick.id)));
-  }, [isHydrated, eventsQuery.isPending, eventsQuery.isSuccess, eventsQuery.data]);
 
   /**
    * 同步：當 picks 變化時儲存到 localStorage
