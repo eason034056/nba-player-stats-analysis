@@ -4,8 +4,11 @@
 ``ingest_store`` does that for every PDF in the cache. A second call
 with the same PDF writes nothing new. A later PDF with the same title
 minute updates the columns a report can correct, including status and
-reason. A PDF that will not parse records ``source_refreshes.complete
-= false`` and the batch continues.
+reason, and deletes rows for that minute that the new file does not
+name. A PDF that will not parse records an error on
+``source_refreshes``. The first failure for that minute is
+``complete = false``. A later failure keeps an earlier complete row
+complete and still stores the error. The batch continues.
 
 ``injury_rows_as_of`` reads the rows of the latest report with
 ``report_at <= T``. T is tip-off minus 3 hours when you omit ``as_of``.
@@ -15,6 +18,7 @@ There is no HTTP route. Nothing here publishes a player list.
 
 from __future__ import annotations
 
+import json
 import logging
 from dataclasses import dataclass
 from datetime import date, datetime, timezone
@@ -53,8 +57,10 @@ _ABBR_ALIASES = {
 }
 
 # bdl_player_id and match_method stay null on insert and are not updated.
-# A later match must survive a re-ingest. The WHERE skips an identical
-# row, so RETURNING is empty and the caller can report unchanged.
+# A later match must survive a re-ingest. A resolved game id stays when
+# this file cannot resolve the game: the written value is
+# COALESCE(EXCLUDED, stored). The WHERE compares that same value, so a
+# miss is not a change. An identical row makes RETURNING empty.
 _INSERT_ROW = """
 INSERT INTO nba_injury_report_rows (
     league, report_at, game_date, game_time_et, matchup, team_name,
@@ -69,16 +75,16 @@ INSERT INTO nba_injury_report_rows (
 )
 ON CONFLICT ON CONSTRAINT nba_injury_report_rows_natural_key DO UPDATE
 SET game_time_et = EXCLUDED.game_time_et,
-    bdl_game_id = EXCLUDED.bdl_game_id,
-    bdl_team_id = EXCLUDED.bdl_team_id,
+    bdl_game_id = COALESCE(EXCLUDED.bdl_game_id, nba_injury_report_rows.bdl_game_id),
+    bdl_team_id = COALESCE(EXCLUDED.bdl_team_id, nba_injury_report_rows.bdl_team_id),
     status = EXCLUDED.status,
     reason = EXCLUDED.reason,
     category = EXCLUDED.category,
     previous_status = EXCLUDED.previous_status,
     all_players_available = EXCLUDED.all_players_available
 WHERE nba_injury_report_rows.game_time_et IS DISTINCT FROM EXCLUDED.game_time_et
-   OR nba_injury_report_rows.bdl_game_id IS DISTINCT FROM EXCLUDED.bdl_game_id
-   OR nba_injury_report_rows.bdl_team_id IS DISTINCT FROM EXCLUDED.bdl_team_id
+   OR nba_injury_report_rows.bdl_game_id IS DISTINCT FROM COALESCE(EXCLUDED.bdl_game_id, nba_injury_report_rows.bdl_game_id)
+   OR nba_injury_report_rows.bdl_team_id IS DISTINCT FROM COALESCE(EXCLUDED.bdl_team_id, nba_injury_report_rows.bdl_team_id)
    OR nba_injury_report_rows.status IS DISTINCT FROM EXCLUDED.status
    OR nba_injury_report_rows.reason IS DISTINCT FROM EXCLUDED.reason
    OR nba_injury_report_rows.category IS DISTINCT FROM EXCLUDED.category
@@ -87,20 +93,64 @@ WHERE nba_injury_report_rows.game_time_et IS DISTINCT FROM EXCLUDED.game_time_et
 RETURNING 1
 """
 
-# A complete refresh is rewritten only when this call inserted or corrected
-# at least one row. An identical retry leaves the old refresh row in place.
+# One row per (league, source, refreshed_at).
+# An incomplete row is replaced. A call that wrote rows replaces a
+# complete row and may clear error. A later failure (error set, zero
+# rows written) records error and leaves complete, rows_seen, and
+# rows_written alone. An identical retry matches none of those and
+# leaves the row in place.
 _INSERT_REFRESH = """
 INSERT INTO source_refreshes (
     league, source, refreshed_at, complete, rows_seen, rows_written, error
 ) VALUES ($1, $2, $3, $4, $5, $6, $7)
 ON CONFLICT (league, source, refreshed_at) DO UPDATE
-SET complete = EXCLUDED.complete,
-    rows_seen = EXCLUDED.rows_seen,
-    rows_written = EXCLUDED.rows_written,
+SET complete = CASE
+        WHEN source_refreshes.complete AND EXCLUDED.rows_written = 0
+        THEN source_refreshes.complete
+        ELSE EXCLUDED.complete
+    END,
+    rows_seen = CASE
+        WHEN source_refreshes.complete AND EXCLUDED.rows_written = 0
+        THEN source_refreshes.rows_seen
+        ELSE EXCLUDED.rows_seen
+    END,
+    rows_written = CASE
+        WHEN source_refreshes.complete AND EXCLUDED.rows_written = 0
+        THEN source_refreshes.rows_written
+        ELSE EXCLUDED.rows_written
+    END,
     error = EXCLUDED.error
 WHERE source_refreshes.complete = false
    OR EXCLUDED.rows_written > 0
+   OR EXCLUDED.error IS NOT NULL
 RETURNING complete
+"""
+
+# The newest successful file for one report minute replaces that minute.
+# A stored natural key that is absent from this file is deleted.
+# league and report_at are the same on every parsed row, so the other
+# five key columns decide which stored rows stay. Another report_at
+# is outside this DELETE.
+_DELETE_ABSENT = """
+DELETE FROM nba_injury_report_rows AS stored
+WHERE stored.league = $1
+  AND stored.report_at = $2
+  AND NOT EXISTS (
+      SELECT 1
+      FROM jsonb_to_recordset($3::jsonb) AS kept(
+          game_date date,
+          matchup text,
+          team_name text,
+          player_raw text,
+          not_yet_submitted boolean
+      )
+      WHERE kept.game_date = stored.game_date
+        AND kept.matchup = stored.matchup
+        AND kept.team_name = stored.team_name
+        AND kept.player_raw = stored.player_raw
+        AND kept.not_yet_submitted = stored.not_yet_submitted
+  )
+RETURNING 1
 """
 
 _GAMES_ON_DATES = """
@@ -123,8 +173,9 @@ class IngestOutcome:
     ``tag`` is ``stored`` (rows were written or a failure row was saved),
     ``unchanged`` (the same report was already stored), ``failed``
     (the PDF did not parse, or the write failed), or ``dry_run``
-    (parsed only). ``rows_written`` counts rows this call inserted or
-    corrected. An identical retry reports 0. A changed status counts.
+    (parsed only). ``rows_written`` counts rows this call inserted,
+    corrected, or deleted. An identical retry reports 0. A changed
+    status counts. A player missing from the new file counts.
     """
 
     tag: Literal["stored", "unchanged", "failed", "dry_run"]
@@ -158,8 +209,9 @@ async def ingest_report(
 
     ``ingest_report`` reads the PDF from ``stored.path``. Re-running it
     for the same report inserts nothing new. A PDF that changes a
-    corrected column updates that row. ``dry_run`` true parses and
-    resolves game ids, then writes nothing.
+    corrected column updates that row. A player or team note that the
+    new file drops is deleted for that same report minute. ``dry_run``
+    true parses and resolves game ids, then writes nothing.
 
     Args:
         conn: An open connection. The caller owns it.
@@ -357,6 +409,26 @@ async def _write_report(
                     row.all_players_available,
                 )
                 written += len(inserted)
+            # Same transaction as the upserts. dry_run returned above,
+            # so this DELETE does not run then. report_at is this file's
+            # minute only.
+            kept = json.dumps([
+                {
+                    "game_date": row.game_date.isoformat(),
+                    "matchup": row.matchup,
+                    "team_name": row.team_name,
+                    "player_raw": row.player_raw,
+                    "not_yet_submitted": row.not_yet_submitted,
+                }
+                for row in parsed.rows
+            ])
+            removed = await conn.fetch(
+                _DELETE_ABSENT,
+                league,
+                parsed.report_at,
+                kept,
+            )
+            written += len(removed)
             refresh = await conn.fetch(
                 _INSERT_REFRESH,
                 league,

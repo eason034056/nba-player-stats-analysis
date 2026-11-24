@@ -199,7 +199,6 @@ def test_a_title_in_the_spring_forward_gap_is_not_the_report_clock() -> None:
     )
     assert from_name.tag == "failed"
     assert from_name.report_at is None
-    assert from_name.report_at != datetime(2024, 3, 10, 7, 30, tzinfo=UTC)
 
 
 def test_category_prefixes_and_a_split_reason() -> None:
@@ -512,7 +511,7 @@ async def test_wnba_asof_does_not_return_the_nba_rows_for_the_same_game_id(
 
 @pytest.mark.asyncio
 async def test_006_reverses_and_the_runner_applies_it_again(db: asyncpg.Connection) -> None:
-    """006 has no down file. These statements are the reverse, then upgrade() puts 006 back.
+    """006 has no down file. Reverse 007 first, then 006. upgrade() puts both back.
 
     The official source is allowed only while 006's check is in place.
     The six older sources stay allowed after the reverse.
@@ -526,6 +525,9 @@ async def test_006_reverses_and_the_runner_applies_it_again(db: asyncpg.Connecti
         moment,
     )
     await db.execute("DELETE FROM source_refreshes WHERE source = 'injuries_nba_official'")
+    # 007 replaced the read and the game index. Forget it before reversing
+    # 006, or upgrade() would skip 007 and leave 006's old objects in place.
+    await db.execute("DELETE FROM schema_migrations WHERE version = '007'")
     await db.execute("DROP FUNCTION injury_report_rows_asof(league_code, bigint, timestamptz)")
     await db.execute("DROP TABLE nba_injury_report_rows")
     await db.execute("ALTER TABLE source_refreshes DROP CONSTRAINT source_refreshes_source_check")
@@ -560,7 +562,7 @@ async def test_006_reverses_and_the_runner_applies_it_again(db: asyncpg.Connecti
         moment,
     )
     applied = await upgrade(db)
-    assert applied == ["006"]
+    assert applied == ["006", "007"]
     assert await db.fetchval("SELECT to_regclass('public.nba_injury_report_rows') IS NOT NULL")
     await db.execute(
         """
