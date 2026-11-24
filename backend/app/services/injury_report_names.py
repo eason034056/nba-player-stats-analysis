@@ -2,7 +2,8 @@
 
 The report prints ``Last, First``. BALLDONTLIE stores ``first_name`` and
 ``last_name``. The steps below are fixed so that the same surname is not
-enough: Jordan Miller must not become Baba Miller.
+enough: Jordan Miller must not become Baba Miller. A step that
+finds more than one player stops the search.
 
 Nothing here reads a PDF, calls the network, or writes a row.
 """
@@ -28,7 +29,7 @@ _ALIASES: dict[tuple[str, str], tuple[str, str]] = {
 }
 
 # rapidfuzz token_sort_ratio is 0 to 100. 88 is the floor from the
-# matching order. A tie, or two players at or above the floor, is no match.
+# matching order. Two players at or above the floor stop the match.
 FUZZY_MIN = 88
 
 EXACT_TEAM_SEASON = "exact_team_season"
@@ -101,10 +102,12 @@ class MatchDecision:
 
 
 def is_g_league(reason: str | None, category: str | None) -> bool:
-    """True when the reason or the category mentions the G League.
+    """True when the reason or the category contains ``g league``.
 
-    Two-way and on-assignment rows use that phrase. The check is the
-    folded text, so the hyphenation does not matter.
+    The two strings are joined and casefolded. Nothing else changes.
+    A hyphen is not a space, so ``G-League`` is false. ``G League``
+    and ``G League - Two-Way`` are true. Two-way and on-assignment
+    rows use the spaced phrase.
     """
     text = f"{category or ''} {reason or ''}".casefold()
     return "g league" in text
@@ -169,10 +172,11 @@ def match_report_name(
 ) -> MatchDecision:
     """Pick one catalog player, or an unmatched method.
 
-    Steps stop at the first step that has exactly one player. Two
-    players on the same step is a miss for that step, and the next step
-    runs. ``team_id`` or ``season`` of ``None`` skips the steps that
-    need that fact.
+    The steps run in a fixed order. A step with nobody lets the next
+    step run. A step with one player is that match, and later steps do
+    not run. A step with two or more players is unmatched, and later
+    steps do not run either. ``team_id`` or ``season`` of ``None`` skips
+    the steps that need that fact.
 
     Args:
         player_raw: The printed ``Last, First`` string.
@@ -183,43 +187,64 @@ def match_report_name(
             the unmatched method and keeps the row off the review list.
 
     Returns:
-        A ``MatchDecision``. The id is null when nothing matched.
+        A ``MatchDecision``. The id is null when nothing matched, and
+        when a step found more than one player.
     """
     keys = report_name_keys(player_raw)
     if not keys:
         return _unmatched(g_league)
     exact = {(key.first, key.last) for key in keys}
     if team_id is not None and season is not None:
-        hit = _exact(
-            catalog,
-            exact,
-            lambda player: team_id in teams_for_season(player, season),
+        decision = _decide_step(
+            _exact(
+                catalog,
+                exact,
+                lambda player: team_id in teams_for_season(player, season),
+            ),
+            EXACT_TEAM_SEASON,
+            g_league,
         )
-        if hit is not None:
-            return _hit(hit, EXACT_TEAM_SEASON)
+        if decision is not None:
+            return decision
     if season is not None:
-        hit = _exact(
-            catalog,
-            exact,
-            lambda player: bool(teams_for_season(player, season)),
+        decision = _decide_step(
+            _exact(
+                catalog,
+                exact,
+                lambda player: bool(teams_for_season(player, season)),
+            ),
+            EXACT_SEASON,
+            g_league,
         )
-        if hit is not None:
-            return _hit(hit, EXACT_SEASON)
+        if decision is not None:
+            return decision
     if team_id is not None and season is not None:
-        hit = _fuzzy(catalog, keys, team_id, season)
-        if hit is not None:
-            return _hit(hit, FUZZY_TEAM)
-        hit = _surname_initial(catalog, keys, team_id, season)
-        if hit is not None:
-            return _hit(hit, SURNAME_INITIAL)
-    if season is not None:
-        hit = _exact(
-            catalog,
-            exact,
-            lambda player: any(year != season for _team, year in player.memberships),
+        decision = _decide_step(
+            _fuzzy(catalog, keys, team_id, season),
+            FUZZY_TEAM,
+            g_league,
         )
-        if hit is not None:
-            return _hit(hit, EXACT_OTHER_SEASON)
+        if decision is not None:
+            return decision
+        decision = _decide_step(
+            _surname_initial(catalog, keys, team_id, season),
+            SURNAME_INITIAL,
+            g_league,
+        )
+        if decision is not None:
+            return decision
+    if season is not None:
+        decision = _decide_step(
+            _exact(
+                catalog,
+                exact,
+                lambda player: any(year != season for _team, year in player.memberships),
+            ),
+            EXACT_OTHER_SEASON,
+            g_league,
+        )
+        if decision is not None:
+            return decision
     return _unmatched(g_league)
 
 
@@ -301,8 +326,8 @@ def _exact(
     catalog: PlayerCatalog,
     keys: set[tuple[str, str]],
     pred,
-) -> CatalogPlayer | None:
-    """The one player whose folded name is in ``keys`` and ``pred`` is true."""
+) -> list[CatalogPlayer]:
+    """Players whose folded name is in ``keys`` and ``pred`` is true."""
     found: list[CatalogPlayer] = []
     seen: set[int] = set()
     for player in catalog.players:
@@ -313,9 +338,7 @@ def _exact(
             continue
         seen.add(player.bdl_player_id)
         found.append(player)
-    if len(found) == 1:
-        return found[0]
-    return None
+    return found
 
 
 def _fuzzy(
@@ -323,8 +346,8 @@ def _fuzzy(
     keys: tuple[NameKey, ...],
     team_id: int,
     season: int,
-) -> CatalogPlayer | None:
-    """One same-team player at or above ``FUZZY_MIN``. Two such players is none."""
+) -> list[CatalogPlayer]:
+    """Same-team players at or above ``FUZZY_MIN``."""
     found: list[CatalogPlayer] = []
     for player in catalog.players:
         if team_id not in teams_for_season(player, season):
@@ -335,9 +358,7 @@ def _fuzzy(
         score = max(fuzz.token_sort_ratio(key.full, name.full) for key in keys)
         if score >= FUZZY_MIN:
             found.append(player)
-    if len(found) == 1:
-        return found[0]
-    return None
+    return found
 
 
 def _surname_initial(
@@ -345,8 +366,8 @@ def _surname_initial(
     keys: tuple[NameKey, ...],
     team_id: int,
     season: int,
-) -> CatalogPlayer | None:
-    """One same-team player with the same surname and the same first letter.
+) -> list[CatalogPlayer]:
+    """Same-team players with the same surname and the same first letter.
 
     The first-letter compare is required. The same surname alone must
     not match, or Jordan Miller becomes Baba Miller.
@@ -362,9 +383,34 @@ def _surname_initial(
         if any(_initials_match(key, name) for key in keys):
             seen.add(player.bdl_player_id)
             found.append(player)
+    return found
+
+
+def _decide_step(
+    found: list[CatalogPlayer],
+    method: str,
+    g_league: bool,
+) -> MatchDecision | None:
+    """Turn one step's candidates into a decision.
+
+    ``found`` is every player this step accepted. An empty list returns
+    ``None``, and the caller tries the next step. One player is a hit
+    for ``method``. Two or more players is unmatched. The caller returns
+    that decision and does not try a later step.
+
+    Args:
+        found: Candidates from this step.
+        method: The ``match_method`` stored when ``found`` has one player.
+        g_league: Passed through when the step is ambiguous.
+
+    Returns:
+        ``None`` when this step found nobody. Otherwise a ``MatchDecision``.
+    """
+    if not found:
+        return None
     if len(found) == 1:
-        return found[0]
-    return None
+        return _hit(found[0], method)
+    return _unmatched(g_league)
 
 
 def _initials_match(left: NameKey, right: NameKey) -> bool:

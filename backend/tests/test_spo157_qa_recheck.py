@@ -175,7 +175,7 @@ async def test_a_missed_resolve_with_the_same_status_writes_nothing(
 
 
 @pytest.mark.asyncio
-async def test_a_successful_file_with_no_player_rows_keeps_that_minute(
+async def test_a_failed_empty_parse_keeps_that_minute(
     db: asyncpg.Connection, tmp_path: Path
 ) -> None:
     """A title and a header with no player lines must not wipe that minute.
