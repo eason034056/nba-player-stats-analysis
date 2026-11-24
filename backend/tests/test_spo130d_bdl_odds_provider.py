@@ -34,7 +34,6 @@ from app.services.bdl_props_adapter import BdlPropsAdapter, consensus_lines
 from app.services.daily_analysis import DailyAnalysisService
 from app.services.odds_gateway import PROVIDERS
 from app.services.odds_snapshot_service import SNAPSHOT_MARKETS, OddsSnapshotService
-from app.services.odds_theoddsapi import TheOddsAPIProvider
 from app.settings import settings
 
 FIXTURE_DIR = Path(__file__).resolve().parent / "fixtures" / "bdl"
@@ -43,7 +42,7 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 RECORD_SCRIPT = REPO_ROOT / "scripts" / "record_bdl_odds_fixtures.py"
 BACKEND_APP = Path(__file__).resolve().parents[1] / "app"
 
-# A 429 file exists only after a live 429. The same-slate pair needs ODDS_API_KEY.
+# A 429 file exists only after a live 429.
 MISSING_FIXTURES = (
     "player_props_429.json",
 )
@@ -575,45 +574,17 @@ class TestProvider:
 
 
 class TestRegistry:
-    """The setting accepts balldontlie. The default path stays The Odds API."""
+    """NBA odds are the BALLDONTLIE provider. There is no other row."""
 
-    def test_default_is_the_odds_api_for_nba(self):
-        assert settings.nba_odds_provider == "theoddsapi"
-        assert isinstance(PROVIDERS["nba"], TheOddsAPIProvider)
-        assert PROVIDERS["nba"].name == "theoddsapi"
+    def test_nba_provider_is_balldontlie(self):
+        assert "nba_" + "odds_provider" not in settings.model_fields
+        provider = PROVIDERS["nba"]
+        assert isinstance(provider, BdlOddsProvider)
+        assert provider.name == "balldontlie"
         with pytest.raises(ValueError):
             PROVIDERS["wnba"]
 
-    def test_balldontlie_is_accepted_for_nba(self, monkeypatch):
-        monkeypatch.setattr(settings, "nba_odds_provider", "balldontlie")
-        provider = PROVIDERS["nba"]
-        assert provider.name == "balldontlie"
-        assert type(provider).__name__ == "BdlOddsProvider"
-        monkeypatch.setattr(settings, "nba_odds_provider", "BallDontLie")
-        assert PROVIDERS["nba"].name == "balldontlie"
-
-    def test_an_unknown_nba_provider_still_raises(self, monkeypatch):
-        monkeypatch.setattr(settings, "nba_odds_provider", "other")
-        with pytest.raises(ValueError, match="nba_odds_provider"):
-            PROVIDERS["nba"]
-
-    def test_routes_and_jobs_do_not_import_the_new_modules(self):
-        forbidden = ("bdl_odds_provider", "bdl_props_adapter", "bdl_player_directory")
-        roots = [BACKEND_APP / "api"]
-        extra = [
-            BACKEND_APP / "services" / "scheduler.py",
-            BACKEND_APP / "services" / "daily_analysis.py",
-            BACKEND_APP / "services" / "odds_snapshot_service.py",
-            BACKEND_APP / "services" / "nba_injuries.py",
-        ]
-        files = [path for root in roots for path in root.rglob("*.py")] + extra
-        offenders: list[str] = []
-        for path in files:
-            text = path.read_text()
-            if any(name in text for name in forbidden):
-                offenders.append(str(path))
-        assert offenders == []
-
+    def test_gateway_imports_the_provider_inside_the_lookup(self):
         gateway = (BACKEND_APP / "services" / "odds_gateway.py").read_text()
         tree = ast.parse(gateway)
         for node in tree.body:
@@ -699,10 +670,7 @@ class TestMissingFixtures:
     def test_same_slate_consensus_agrees_within_half_a_point(self):
         metas = sorted(SAME_SLATE_DIR.glob("*__meta.json")) if SAME_SLATE_DIR.exists() else []
         if not metas:
-            pytest.skip(
-                "same-slate pair is not recorded. "
-                "ODDS_API_KEY is not available, so the pair stays skipped."
-            )
+            pytest.skip("same-slate pair is not recorded.")
         meta_path = metas[0]
         meta = json.loads(meta_path.read_text())
         prefix = meta_path.name[: -len("__meta.json")]
@@ -791,7 +759,6 @@ def test_record_script_strips_the_key_and_uses_snapshot_markets():
     """The recorder's market list is SNAPSHOT_MARKETS, and saved URLs drop apiKey."""
     text = RECORD_SCRIPT.read_text()
     assert "BALLDONTLIE_API_KEY" in text
-    assert "ODDS_API_KEY" in text
     tree = ast.parse(text)
     markets = None
     for node in tree.body:
@@ -812,11 +779,11 @@ def test_record_script_strips_the_key_and_uses_snapshot_markets():
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
     cleaned = module.public_url(
-        "https://api.the-odds-api.com/v4/sports/basketball_nba/events?apiKey=secret-value&regions=us"
+        "https://example.test/v1/games?apiKey=secret-value&dates[]=2026-11-10"
     )
     assert "secret-value" not in cleaned
     assert "apiKey" not in cleaned
-    assert "regions=us" in cleaned
+    assert "2026-11-10" in cleaned
     saved = module.public_headers(
         {"Authorization": "secret-value", "X-RateLimit-Remaining": "4"}
     )
@@ -863,106 +830,37 @@ def _recorded_pair_bundle() -> dict:
     }
 
 
-def test_bdl_only_skips_the_odds_api(monkeypatch):
-    """``--bdl-only`` records BALLDONTLIE fixtures and does not call The Odds API."""
-    import importlib.util
-
-    spec = importlib.util.spec_from_file_location("record_bdl_odds_fixtures", RECORD_SCRIPT)
-    assert spec is not None and spec.loader is not None
-    module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(module)
-
-    monkeypatch.setenv("BALLDONTLIE_API_KEY", "bdl-test-key")
-    monkeypatch.delenv("ODDS_API_KEY", raising=False)
-    calls: list[str] = []
-    monkeypatch.setattr(module, "_record_same_slate", lambda *_args: calls.append("slate"))
-    monkeypatch.setattr(module, "_record_empty_players", lambda *_args: calls.append("players"))
-    monkeypatch.setattr(module, "_record_empty_props", lambda *_args: calls.append("props"))
-    module.main(["--bdl-only"])
-    assert calls == ["players", "props"]
-
-    calls.clear()
-    with pytest.raises(SystemExit, match="must both be set"):
-        module.main([])
-    assert calls == []
-
-
-def test_stats_only_prints_agreement_and_does_not_write_or_print_a_key(monkeypatch, tmp_path, capsys):
-    """Live stats print the agreement and leave the fixture tree untouched."""
+def test_record_needs_the_bdl_key_and_records_empty_pages(monkeypatch):
+    """A bare run and ``--bdl-only`` both record BALLDONTLIE pages and nothing else."""
     module = _load_record_module()
-    odds_secret = "odds-secret-value"
-    bdl_secret = "bdl-secret-value"
-    monkeypatch.setenv("ODDS_API_KEY", odds_secret)
-    monkeypatch.setenv("BALLDONTLIE_API_KEY", bdl_secret)
-    monkeypatch.setattr(module, "_BDL_DIR", tmp_path / "bdl")
-    monkeypatch.setattr(module, "_SAME_SLATE_DIR", tmp_path / "same_slate")
-    monkeypatch.setattr(module, "_REPO_ROOT", tmp_path)
-    writes: list[Path] = []
-    monkeypatch.setattr(module, "_write", lambda path, payload: writes.append(path))
-    bundle = _recorded_pair_bundle()
-
-    def fake_fetch(bdl_key: str, odds_key: str) -> dict:
-        assert bdl_key == bdl_secret
-        assert odds_key == odds_secret
-        return bundle
-
-    monkeypatch.setattr(module, "_fetch_same_slate", fake_fetch)
-    with pytest.raises(SystemExit) as caught:
-        module.main(["--stats-only"])
-    assert caught.value.code == 0
-    printed = capsys.readouterr()
-    text = printed.out + printed.err
-    assert odds_secret not in text
-    assert bdl_secret not in text
-    assert "Shai" not in text
-    assert "Gilgeous" not in text
-    assert "apiKey" not in text
-    assert "capture=2026-11-21T04:00:00Z" in printed.out
-    assert "shared=" in printed.out
-    assert "within_0.5=" in printed.out
-    assert "percent=" in printed.out
-    assert "result=pass" in printed.out
-    assert "market=player_points shared=" in printed.out
-    assert writes == []
-    assert list(tmp_path.rglob("*")) == []
-    source = RECORD_SCRIPT.read_text()
-    assert "--stats-only" in source
-    assert "--from-fixtures" in source
-
-
-def test_stats_only_exits_nonzero_when_nothing_is_shared(monkeypatch, capsys):
-    """No shared prop is a failed measurement, and the key is still hidden."""
-    module = _load_record_module()
-    odds_secret = "odds-secret-value"
-    bdl_secret = "bdl-secret-value"
-    monkeypatch.setenv("ODDS_API_KEY", odds_secret)
-    monkeypatch.setenv("BALLDONTLIE_API_KEY", bdl_secret)
-    bundle = _recorded_pair_bundle()
-    bundle["odds_capture"]["response"]["bookmakers"] = []
-
-    monkeypatch.setattr(module, "_fetch_same_slate", lambda *_args: bundle)
-    with pytest.raises(SystemExit) as caught:
-        module.main(["--stats-only"])
-    assert caught.value.code == 1
-    printed = capsys.readouterr()
-    text = printed.out + printed.err
-    assert odds_secret not in text
-    assert bdl_secret not in text
-    assert "Shai" not in text
-    assert "shared=0" in printed.out
-    assert "within_0.5=0" in printed.out
-    assert "result=fail" in printed.out
-
-
-def test_stats_only_requires_both_keys(monkeypatch):
-    """A live stats run does not start when either key is missing."""
-    module = _load_record_module()
-    monkeypatch.delenv("ODDS_API_KEY", raising=False)
-    monkeypatch.delenv("BALLDONTLIE_API_KEY", raising=False)
     monkeypatch.setattr(module, "_load_env_file", lambda _path: None)
+    monkeypatch.delenv("BALLDONTLIE_API_KEY", raising=False)
+    with pytest.raises(SystemExit, match="BALLDONTLIE_API_KEY must be set"):
+        module.main([])
+
+    calls: list[tuple[str, str]] = []
+    monkeypatch.setenv("BALLDONTLIE_API_KEY", "bdl-test-key")
+    monkeypatch.setattr(module, "_record_empty_players", lambda key: calls.append(("players", key)))
+    monkeypatch.setattr(module, "_record_empty_props", lambda key: calls.append(("props", key)))
+    module.main([])
+    module.main(["--bdl-only"])
+    assert calls == [
+        ("players", "bdl-test-key"),
+        ("props", "bdl-test-key"),
+        ("players", "bdl-test-key"),
+        ("props", "bdl-test-key"),
+    ]
+
+
+def test_stats_only_scores_a_recorded_pair_without_a_key(monkeypatch, tmp_path):
+    """``--stats-only`` reads the recorded pair. It does not open a socket."""
+    module = _load_record_module()
+    monkeypatch.setattr(module, "_load_env_file", lambda _path: None)
+    monkeypatch.delenv("BALLDONTLIE_API_KEY", raising=False)
+    monkeypatch.setattr(module, "_DEFAULT_SAME_SLATE", str(tmp_path / "missing"))
     called: list[str] = []
-    monkeypatch.setattr(module, "_fetch_same_slate", lambda *_args: called.append("fetch"))
-    with pytest.raises(SystemExit, match="must both be set"):
+    monkeypatch.setattr(module, "_request", lambda *_args, **_kwargs: called.append("http"))
+    with pytest.raises(SystemExit, match="same-slate directory is missing"):
         module.main(["--stats-only"])
     assert called == []
 
@@ -972,7 +870,6 @@ def test_from_fixtures_prints_stats_without_keys_or_writes(monkeypatch, tmp_path
     import shutil
 
     module = _load_record_module()
-    monkeypatch.delenv("ODDS_API_KEY", raising=False)
     monkeypatch.delenv("BALLDONTLIE_API_KEY", raising=False)
     monkeypatch.setattr(module, "_load_env_file", lambda _path: None)
     slate = tmp_path / "same_slate"

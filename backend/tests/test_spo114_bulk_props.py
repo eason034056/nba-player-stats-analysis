@@ -249,10 +249,11 @@ def _disable_rate_limit():
 
 @pytest.fixture
 def odds_spies(monkeypatch):
-    """Patch every Odds API entry the process could use, and count calls."""
+    """Patch every live odds entry the process could use, and count calls."""
+    from app.services.bdl_odds_provider import BdlOddsProvider, get_bdl_odds_provider
     from app.services.odds_gateway import OddsMarketGateway, odds_gateway
-    from app.services.odds_theoddsapi import TheOddsAPIProvider, odds_provider
-    import app.services.odds_theoddsapi as odds_mod
+    import app.api.nba as nba_api
+    import app.services.bdl_client as bdl_client
 
     spies: dict[str, AsyncMock | MagicMock] = {}
 
@@ -265,16 +266,18 @@ def odds_spies(monkeypatch):
     event_odds = _async_spy("event_odds")
     events = _async_spy("events")
     usage = _async_spy("usage")
+    provider = get_bdl_odds_provider()
     monkeypatch.setattr(odds_gateway, "get_market_snapshot", gateway)
     monkeypatch.setattr(OddsMarketGateway, "get_market_snapshot", gateway)
-    monkeypatch.setattr(odds_provider, "get_event_odds", event_odds)
-    monkeypatch.setattr(odds_provider, "get_events", events)
-    monkeypatch.setattr(odds_provider, "get_event_odds_with_usage", usage)
-    monkeypatch.setattr(TheOddsAPIProvider, "get_event_odds", event_odds)
-    monkeypatch.setattr(TheOddsAPIProvider, "get_events", events)
-    monkeypatch.setattr(TheOddsAPIProvider, "get_event_odds_with_usage", usage)
+    for target in (provider, nba_api.odds_provider):
+        monkeypatch.setattr(target, "get_event_odds", event_odds)
+        monkeypatch.setattr(target, "get_events", events)
+        monkeypatch.setattr(target, "get_event_odds_with_usage", usage)
+    monkeypatch.setattr(BdlOddsProvider, "get_event_odds", event_odds)
+    monkeypatch.setattr(BdlOddsProvider, "get_events", events)
+    monkeypatch.setattr(BdlOddsProvider, "get_event_odds_with_usage", usage)
     http = MagicMock(name="AsyncClient")
-    monkeypatch.setattr(odds_mod.httpx, "AsyncClient", http)
+    monkeypatch.setattr(bdl_client.httpx, "AsyncClient", http)
     spies["httpx"] = http
     return spies
 
@@ -650,17 +653,19 @@ def test_bulk_props_module_does_not_reference_the_odds_api():
             imported.extend(alias.name for alias in node.names)
         elif isinstance(node, ast.ImportFrom) and node.module:
             imported.append(node.module)
+    retired_module = "app.services." + "odds_" + "the" + "oddsapi"
     banned_modules = {
         "app.services.odds_gateway",
         "app.services.odds_provider",
-        "app.services.odds_theoddsapi",
+        retired_module,
         "httpx",
     }
     assert banned_modules.isdisjoint(imported)
+    retired_host = "the-odds-" + "api"
     for token in (
         "get_market_snapshot",
         "get_event_odds",
-        "the-odds-api",
+        retired_host,
         "ODDS_API",
         "odds_gateway",
         "odds_provider",

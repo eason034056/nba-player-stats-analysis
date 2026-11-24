@@ -42,7 +42,7 @@ _OTHER_DAY = next(
 
 
 def _events_cache_key() -> str:
-    return f"{CacheService.build_events_key(_DATE, _REGIONS)}:tz{_TZ}"
+    return f"{CacheService.build_events_key(_DATE, _REGIONS)}:tz{_TZ}:balldontlie"
 
 
 def _cached_list() -> dict:

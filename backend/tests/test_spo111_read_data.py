@@ -157,7 +157,7 @@ def _analyze(league: str = "nba", explicit_threshold: float | None = None):
     recorded = _recorded_event()
 
     async def props(event_id, market_key, league="nba"):
-        if market_key != "player_points":
+        if "player_points" not in {part.strip() for part in str(market_key).split(",")}:
             return []
         return _books_for_roles()
 
@@ -303,7 +303,7 @@ class TestStoredCandidates:
         service._get_events_for_date = AsyncMock(return_value=[_recorded_event()])
 
         async def props(event_id, market_key, league="nba"):
-            if market_key != "player_points":
+            if "player_points" not in {part.strip() for part in str(market_key).split(",")}:
                 return []
             return _books_for_roles()
 
@@ -430,7 +430,7 @@ class TestDailyPicksRoute:
 
 
 class TestTopRead:
-    def test_market_key_matches_the_odds_api_key(self):
+    def test_market_key_matches_the_recorded_market(self):
         assert market_key_for_metric("points") == "player_points"
         assert market_key_for_metric("pra") == "player_points_rebounds_assists"
         assert market_key_for_metric("threes_made") == "player_threes"

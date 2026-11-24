@@ -20,11 +20,12 @@ from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, Literal, Optional
 
 from app.services.cache import cache_service
-from app.services.odds_provider import OddsAPIError, ProviderEvent, QuotaUsage
-from app.services.odds_theoddsapi import (
+from app.services.odds_provider import (
+    OddsAPIError,
+    ProviderEvent,
+    QuotaUsage,
     league_for_sport_key,
     normalize_league,
-    odds_provider,
     sport_key_for_league,
 )
 from app.settings import settings
@@ -41,31 +42,18 @@ HOT_KEY_LAST_SEEN_PREFIX = "odds:hot_seen:v1:"
 
 
 class _LeagueProviders(Mapping[str, Any]):
-    """League → provider. The NBA entry reads ``settings.nba_odds_provider``.
+    """League → provider. NBA is the BALLDONTLIE odds provider.
 
-    Lookup is live, so a test can change the setting without rebuilding
-    the table. NBA accepts ``theoddsapi`` (the default) and
-    ``balldontlie``. The default does not switch: a blank value is
-    ``theoddsapi``. ``balldontlie`` loads ``BdlOddsProvider`` here, not
-    from a route or a job. Any other league raises ``ValueError``.
+    There is no other NBA feed. An unknown league raises ``ValueError``
+    from ``normalize_league`` before a client is built. The provider
+    module is imported on the lookup, not when this module is imported.
     """
 
     def __getitem__(self, league: str) -> Any:
-        key = normalize_league(league)
-        if key == "nba":
-            selected = (settings.nba_odds_provider or "theoddsapi").strip().lower()
-            if selected == "balldontlie":
-                # Imported here so the default NBA path does not load the
-                # BALLDONTLIE provider when this module is imported.
-                from app.services.bdl_odds_provider import get_bdl_odds_provider
+        normalize_league(league)
+        from app.services.bdl_odds_provider import get_bdl_odds_provider
 
-                return get_bdl_odds_provider()
-            if selected != "theoddsapi":
-                raise ValueError(
-                    f"Unsupported nba_odds_provider: {settings.nba_odds_provider!r}. "
-                    "Allowed: 'theoddsapi', 'balldontlie'"
-                )
-        return odds_provider
+        return get_bdl_odds_provider()
 
     def __iter__(self):
         yield "nba"
@@ -78,14 +66,10 @@ PROVIDERS: Mapping[str, Any] = _LeagueProviders()
 
 
 def balldontlie_nba_provider() -> Any:
-    """The BALLDONTLIE NBA provider, whatever ``nba_odds_provider`` says.
+    """The process-wide BALLDONTLIE NBA provider.
 
-    ``balldontlie_nba_provider`` is how the pre-tip closing job gets a
-    client without flipping the setting and without asking ``PROVIDERS``.
-    ``PROVIDERS["nba"]`` still follows the setting, so the scheduled
-    snapshot stays on The Odds API while that is the default. The
-    provider module is imported here, on the call, so a job file does
-    not name it.
+    Same object as ``PROVIDERS["nba"]``. The closing job calls this
+    name. The provider module is imported on the call.
 
     Returns:
         The process-wide BALLDONTLIE odds provider.
@@ -93,21 +77,6 @@ def balldontlie_nba_provider() -> Any:
     from app.services.bdl_odds_provider import get_bdl_odds_provider
 
     return get_bdl_odds_provider()
-
-
-def active_nba_provider_name() -> str:
-    """The NBA provider name a job should branch on.
-
-    ``balldontlie`` only when ``settings.nba_odds_provider`` says so.
-    Surrounding space and capital letters do not count. A blank value
-    stays ``theoddsapi``. This reads the setting. It does not build a
-    client, and it does not raise on an unknown value: jobs that need
-    the client still go through ``PROVIDERS``, which does raise.
-    """
-    selected = (settings.nba_odds_provider or "theoddsapi").strip().lower()
-    if selected == "balldontlie":
-        return "balldontlie"
-    return "theoddsapi"
 
 
 @dataclass(frozen=True)
@@ -147,7 +116,10 @@ class OddsMarketGateway:
         self.stale_ttl_seconds = stale_ttl_seconds or settings.cache_ttl_market_stale
         self.lock_ttl_seconds = lock_ttl_seconds or settings.odds_refresh_lock_ttl
         self.wait_for_refresh_ms = wait_for_refresh_ms or settings.odds_wait_for_refresh_ms
-        self.quota_protect_percent = quota_protect_percent or settings.odds_quota_protect_percent
+        # Background refresh skips a new fetch when stored remaining
+        # ratio is under this percent. BALLDONTLIE does not write that
+        # object. A caller can still pass a percent for a test.
+        self.quota_protect_percent = 15 if quota_protect_percent is None else quota_protect_percent
         self.hot_keys_limit = hot_keys_limit or settings.odds_hot_keys_limit
         self._background_refreshes: set[str] = set()
 
@@ -277,14 +249,13 @@ class OddsMarketGateway:
         """Event dicts for ``league`` in the UTC window.
 
         ``GET /api/nba/events`` reads ``id``, ``sport_key``, ``home_team``,
-        ``away_team``, and ``commence_time``. ``id`` is the provider's
-        event id: hex on The Odds API, the decimal game id on BALLDONTLIE.
+        ``away_team``, and ``commence_time``.         ``id`` is the decimal BALLDONTLIE game id.
 
         ``regions`` is forwarded. The Odds API events request does not put
         it on the query string. BALLDONTLIE ignores it. The route still
         keeps ``regions`` on its Redis key.
 
-        The provider is the league's row. NBA follows ``nba_odds_provider``.
+        The provider is the league's row. NBA is BALLDONTLIE.
         """
         provider = self._provider_for(league)
         events = await provider.get_events(
@@ -335,14 +306,14 @@ class OddsMarketGateway:
         if ratio is None:
             return
         pct = round(ratio * 100, 1)
-        if pct <= settings.odds_quota_critical_percent:
+        if pct <= 10:
             logger.critical(
-                "odds_api_quota_critical remaining=%s%% used=%s remaining=%s",
+                "odds_rate_critical remaining=%s%% used=%s remaining=%s",
                 pct, usage.used, usage.remaining,
             )
-        elif pct <= settings.odds_quota_warn_percent:
+        elif pct <= 30:
             logger.warning(
-                "odds_api_quota_warning remaining=%s%% used=%s remaining=%s",
+                "odds_rate_warning remaining=%s%% used=%s remaining=%s",
                 pct, usage.used, usage.remaining,
             )
 
@@ -385,12 +356,10 @@ class OddsMarketGateway:
             normalized_books = self._normalize_bookmakers(context["bookmakers"])
             stored_provider = context.get("provider")
             provider_name = stored_provider if isinstance(stored_provider, str) and stored_provider.strip() else None
-            # A hot key belongs to the provider that recorded it. Refreshing
-            # a theoddsapi member while balldontlie is active would fetch
-            # the other feed, and the reverse is the same mistake. Leave
-            # the member in the set so a switch back inside the five-minute
-            # window can still warm it. A member with no provider is an
-            # older key and is warmed by whoever is active.
+            # A hot key belongs to the provider that recorded it. NBA is
+            # balldontlie. A member stored under another name is left in
+            # the set and is not fetched. A member with no provider is an
+            # older key and is warmed.
             active_name = self._provider_name(member_league)
             if provider_name is not None and provider_name.strip().lower() != active_name.strip().lower():
                 continue
@@ -743,7 +712,7 @@ class OddsMarketGateway:
         name = getattr(provider, "name", None)
         if isinstance(name, str) and name:
             return name
-        return "theoddsapi"
+        return "balldontlie"
 
     @staticmethod
     def _resolve_league(league: Optional[str], sport: Optional[str]) -> str:

@@ -68,7 +68,6 @@ jobs:
     env:
       REDIS_URL: redis://localhost:6379
       DATABASE_URL: postgresql://novig:novig@localhost:5432/novig_nba
-      ODDS_API_KEY: test-key
       # The real-docker verify test fails, instead of skipping, when
       # this is set and docker cannot run.
       REQUIRE_DOCKER_TESTS: "1"

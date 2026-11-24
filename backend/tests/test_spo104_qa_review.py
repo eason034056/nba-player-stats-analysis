@@ -118,6 +118,9 @@ def client():
 
 
 def _post(http: TestClient, module, path: str, odds: dict, body: dict):
+    body = dict(body)
+    if not str(body.get("event_id") or "").isdigit():
+        body["event_id"] = "21718080"
     snapshot = _snapshot(odds, body.get("_fetched_at", "2026-05-08T12:00:00Z"))
 
     async def _return_snapshot(**kwargs):

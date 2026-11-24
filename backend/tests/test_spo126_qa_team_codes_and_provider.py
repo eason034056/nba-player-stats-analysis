@@ -109,6 +109,10 @@ def _all_app_service_providers() -> list[type]:
         pending.extend(cls.__subclasses__())
         if cls.__module__.startswith("app."):
             found.append(cls)
+    from app.services.bdl_odds_provider import BdlOddsProvider
+
+    if BdlOddsProvider not in found:
+        found.append(BdlOddsProvider)
     return found
 
 
@@ -129,11 +133,12 @@ class TestProviderSignatures:
                 assert name in params, (cls.__qualname__, method, name)
                 assert params[name].kind == param.kind, (cls.__qualname__, name)
 
-    def test_the_odds_api_provider_still_constructs(self):
-        from app.services.odds_theoddsapi import TheOddsAPIProvider
+    def test_nba_provider_constructs(self):
+        from app.services.bdl_odds_provider import BdlOddsProvider
 
-        provider = TheOddsAPIProvider()
+        provider = BdlOddsProvider()
         assert isinstance(provider, OddsProvider)
+        assert provider.name == "balldontlie"
 
 
 class TestQuotaUsageValue:

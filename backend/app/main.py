@@ -21,6 +21,7 @@ from app.middleware.rate_limit import install_rate_limiter
 from app.dsn import mask_database_url, redact_secrets
 from app.services.cache import cache_service
 from app.services.db import SchemaNotAtHead, db_service
+from app.services.odds_cache_flush import flush_retired_odds_cache
 from app.services.scheduler import scheduler_service
 from app.settings import settings
 
@@ -60,9 +61,22 @@ async def lifespan(app: FastAPI):
     # 啟動時執行
     setup_logging()
     print("🚀 Starting No-Vig NBA API...")
-    print(f"📊 Odds API Base URL: {settings.odds_api_base_url}")
+    if not settings.balldontlie_api_key.get_secret_value().strip():
+        logger.warning(
+            "BALLDONTLIE_API_KEY is empty. NBA odds calls will fail until it is set."
+        )
+        print("⚠️ BALLDONTLIE_API_KEY is empty. NBA odds calls will fail until it is set.")
+    else:
+        logger.info("BALLDONTLIE_API_KEY is set")
     print(f"🔴 Redis URL: {mask_database_url(settings.redis_url)}")
     print(f"🐘 Database URL: {mask_database_url(settings.database_url)}")
+    # One-time SCAN of retired odds keys. A second start sees the marker
+    # and does not delete again. A Redis error is logged and does not
+    # stop startup.
+    try:
+        await flush_retired_odds_cache()
+    except Exception:
+        logger.exception("spo130i odds cache flush failed during startup")
 
     # 初始化 PostgreSQL 連線池。
     # 連不上（拒絕、逾時、DNS）時 init() 把 pool 留空，不往外丟。

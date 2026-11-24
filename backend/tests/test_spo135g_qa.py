@@ -74,7 +74,7 @@ def test_cached_events_list_rejoins_a_later_out_snapshot(monkeypatch) -> None:
     out = _entry("Out")
     cached, nxt, _healthy = _pair(out["player"])
     store = {
-        f"{CacheService.build_events_key(_DATE, 'us')}:tz{_OFFSET}": _events_payload(),
+        f"{CacheService.build_events_key(_DATE, 'us')}:tz{_OFFSET}:balldontlie": _events_payload(),
         daily_picks_cache_key("nba", _DATE, _OFFSET): cached,
     }
     _install(monkeypatch, store)
@@ -98,7 +98,7 @@ def test_event_detail_route_skips_out_the_same_way(monkeypatch) -> None:
     out = _entry("Out")
     cached, nxt, _healthy = _pair(out["player"])
     store = {
-        f"{CacheService.build_events_key(_DATE, 'us')}:tz{_OFFSET}": _events_payload(),
+        f"{CacheService.build_events_key(_DATE, 'us')}:tz{_OFFSET}:balldontlie": _events_payload(),
         daily_picks_cache_key("nba", _DATE, _OFFSET): cached,
         NBA_INJURIES_CACHE_KEY: _fresh([out]),
     }
@@ -183,7 +183,7 @@ def test_injury_redis_error_does_not_skip_or_raise(monkeypatch) -> None:
     out = _entry("Out")
     cached, _nxt, _healthy = _pair(out["player"])
     store = {
-        f"{CacheService.build_events_key(_DATE, 'us')}:tz{_OFFSET}": _events_payload(),
+        f"{CacheService.build_events_key(_DATE, 'us')}:tz{_OFFSET}:balldontlie": _events_payload(),
         daily_picks_cache_key("nba", _DATE, _OFFSET): cached,
     }
 
@@ -207,7 +207,7 @@ def test_injury_snapshot_is_read_once_per_events_request(monkeypatch) -> None:
     out = _entry("Out")
     cached, nxt, healthy = _pair(out["player"])
     store = {
-        f"{CacheService.build_events_key(_DATE, 'us')}:tz{_OFFSET}": _events_payload(),
+        f"{CacheService.build_events_key(_DATE, 'us')}:tz{_OFFSET}:balldontlie": _events_payload(),
         daily_picks_cache_key("nba", _DATE, _OFFSET): cached,
         NBA_INJURIES_CACHE_KEY: _fresh([out]),
     }

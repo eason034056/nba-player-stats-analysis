@@ -172,8 +172,8 @@ async def test_omitted_date_is_the_callers_local_day(client, monkeypatch):
         f"/api/nba/events/{_BOS_PHI['id']}", params={"tz_offset": -360}
     )
 
-    local_key = f"{CacheService.build_events_key('2026-11-10', 'us')}:tz-360"
-    utc_key = f"{CacheService.build_events_key('2026-11-11', 'us')}:tz-360"
+    local_key = f"{CacheService.build_events_key('2026-11-10', 'us')}:tz-360:balldontlie"
+    utc_key = f"{CacheService.build_events_key('2026-11-11', 'us')}:tz-360:balldontlie"
     assert response.status_code == 200
     assert response.json()["event_id"] == _BOS_PHI["id"]
     assert local_key in cache
@@ -217,7 +217,7 @@ async def test_list_then_detail_share_one_cache_key(client, monkeypatch, params,
 
     assert detail.status_code == 200
     assert len(calls.events) == 1
-    expected_key = f"{CacheService.build_events_key(date, regions)}:tz{tz}"
+    expected_key = f"{CacheService.build_events_key(date, regions)}:tz{tz}:balldontlie"
     events_keys = [k for k in cache if k.startswith("events:")]
     assert events_keys == [expected_key]
     assert calls.event_odds == 0 and calls.gateway == 0

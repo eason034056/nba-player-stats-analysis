@@ -546,7 +546,8 @@ class TestDoubleDouble:
 
         async def props_for_market(event_id, market, league="nba"):
             requested.append(market)
-            if market == "player_points":
+            asked = {part.strip() for part in str(market).split(",")}
+            if "player_points" in asked:
                 return event["bookmakers"]
             return []
 
@@ -570,8 +571,10 @@ class TestDoubleDouble:
                 projections={},
             )
         )
-        assert "player_double_double" not in requested
-        assert "player_points" in requested
+        from app.services.odds_snapshot_service import SNAPSHOT_MARKETS
+
+        assert requested == [SNAPSHOT_MARKETS]
+        assert "player_double_double" not in supported
 
 
 class TestLadderRows:
@@ -688,7 +691,7 @@ class TestPickSelectionRegression:
         assert all(after[player]["direction"] == "over" for player in overs)
 
         async def props_for_market(event_id, market, league="nba"):
-            if market != "player_points":
+            if "player_points" not in {part.strip() for part in str(market).split(",")}:
                 return []
             return event["bookmakers"]
 

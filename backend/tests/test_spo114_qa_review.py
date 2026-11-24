@@ -322,12 +322,12 @@ def _disable_rate_limit():
 
 @pytest.fixture
 def odds_spies(monkeypatch):
-    """Patch the live Odds API call sites and count every use."""
+    """Patch the live odds call sites and count every use."""
+    from app.services.bdl_odds_provider import BdlOddsProvider, get_bdl_odds_provider
     from app.services.odds_gateway import OddsMarketGateway, odds_gateway
-    from app.services.odds_theoddsapi import TheOddsAPIProvider, odds_provider
-    import app.services.odds_snapshot_service as snap_mod
-    import app.services.odds_theoddsapi as odds_mod
     import app.api.nba as nba_api
+    import app.services.bdl_client as bdl_client
+    import app.services.odds_snapshot_service as snap_mod
 
     spies: dict[str, AsyncMock | MagicMock] = {}
 
@@ -340,25 +340,26 @@ def odds_spies(monkeypatch):
     event_odds = _async_spy("event_odds")
     events = _async_spy("events")
     usage = _async_spy("usage")
+    provider = get_bdl_odds_provider()
     monkeypatch.setattr(odds_gateway, "get_market_snapshot", gateway)
     monkeypatch.setattr(OddsMarketGateway, "get_market_snapshot", gateway)
-    monkeypatch.setattr(odds_provider, "get_event_odds", event_odds)
-    monkeypatch.setattr(odds_provider, "get_events", events)
-    monkeypatch.setattr(odds_provider, "get_event_odds_with_usage", usage)
-    monkeypatch.setattr(TheOddsAPIProvider, "get_event_odds", event_odds)
-    monkeypatch.setattr(TheOddsAPIProvider, "get_events", events)
-    monkeypatch.setattr(TheOddsAPIProvider, "get_event_odds_with_usage", usage)
+    monkeypatch.setattr(provider, "get_event_odds", event_odds)
+    monkeypatch.setattr(provider, "get_events", events)
+    monkeypatch.setattr(provider, "get_event_odds_with_usage", usage)
+    monkeypatch.setattr(BdlOddsProvider, "get_event_odds", event_odds)
+    monkeypatch.setattr(BdlOddsProvider, "get_events", events)
+    monkeypatch.setattr(BdlOddsProvider, "get_event_odds_with_usage", usage)
+    monkeypatch.setattr(nba_api.odds_provider, "get_event_odds", event_odds)
+    monkeypatch.setattr(nba_api.odds_provider, "get_events", events)
+    monkeypatch.setattr(nba_api.odds_provider, "get_event_odds_with_usage", usage)
     http = MagicMock(name="AsyncClient")
-    monkeypatch.setattr(odds_mod.httpx, "AsyncClient", http)
+    monkeypatch.setattr(bdl_client.httpx, "AsyncClient", http)
     spies["httpx"] = http
     spies["sites"] = {
         "snapshot_gateway": snap_mod.odds_gateway.get_market_snapshot,
-        "snapshot_event_odds": snap_mod.odds_provider.get_event_odds,
-        "snapshot_events": snap_mod.odds_provider.get_events,
-        "snapshot_usage": snap_mod.odds_provider.get_event_odds_with_usage,
         "route_gateway": nba_api.odds_gateway.get_market_snapshot,
         "route_event_odds": nba_api.odds_provider.get_event_odds,
-        "httpx": odds_mod.httpx.AsyncClient,
+        "httpx": bdl_client.httpx.AsyncClient,
     }
     return spies
 
@@ -414,9 +415,6 @@ def _parse(service: OddsSnapshotService, payload: dict, snapshot_at: datetime) -
 def test_odds_spies_sit_on_the_live_call_sites(odds_spies):
     sites = odds_spies["sites"]
     assert sites["snapshot_gateway"] is odds_spies["gateway"]
-    assert sites["snapshot_event_odds"] is odds_spies["event_odds"]
-    assert sites["snapshot_events"] is odds_spies["events"]
-    assert sites["snapshot_usage"] is odds_spies["usage"]
     assert sites["route_gateway"] is odds_spies["gateway"]
     assert sites["route_event_odds"] is odds_spies["event_odds"]
     assert sites["httpx"] is odds_spies["httpx"]
@@ -447,19 +445,19 @@ def test_bulk_props_source_cannot_name_an_http_client():
     assert "httpx" not in source
     assert "wnba" not in source.lower()
     assert "basketball_wnba" not in source
+    retired_host = "the-odds-" + "api"
+    retired_module = "app.services." + "odds_" + "the" + "oddsapi"
     for token in (
         "get_market_snapshot",
         "get_event_odds",
-        "the-odds-api",
+        retired_host,
         "odds_gateway",
         "odds_provider",
         "httpx",
         "requests",
     ):
         assert token not in source
-    assert {"httpx", "app.services.odds_gateway", "app.services.odds_theoddsapi"}.isdisjoint(
-        imported
-    )
+    assert {"httpx", "app.services.odds_gateway", retired_module}.isdisjoint(imported)
 
 
 def test_latest_sql_keeps_only_the_max_snapshot_for_that_event():

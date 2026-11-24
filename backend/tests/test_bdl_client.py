@@ -180,7 +180,7 @@ def test_fixtures_match_recorded_paths_and_contain_no_key():
 
 
 def test_settings_reads_balldontlie_env(monkeypatch):
-    """The key and the per-minute limit use the same settings path as ODDS_API_KEY."""
+    """The key and the per-minute limit are read from the environment."""
     assert Settings.model_fields["balldontlie_api_key"].default.get_secret_value() == ""
     assert Settings.model_fields["bdl_rate_limit_per_min"].default == 5
     monkeypatch.setenv("BALLDONTLIE_API_KEY", "from-env")

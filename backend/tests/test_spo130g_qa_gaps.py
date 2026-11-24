@@ -244,7 +244,6 @@ async def test_metrics_quota_comes_from_providers_nba(monkeypatch):
         async def rate_status(self) -> RateStatus:
             return RateStatus(provider="other", remaining=4, used=1, recorded=True)
 
-    monkeypatch.setattr(settings, "nba_odds_provider", "balldontlie")
     monkeypatch.setattr("app.api.metrics.PROVIDERS", {"nba": Sentinel()})
     monkeypatch.setattr(
         "app.services.bdl_odds_provider.get_bdl_odds_provider",
@@ -252,54 +251,12 @@ async def test_metrics_quota_comes_from_providers_nba(monkeypatch):
     )
     try:
         body = await get_metrics()
-        assert body["odds_api_quota"]["remaining"] == 7
-        assert body["odds_api_quota"]["used"] == 1
-        assert body["odds_api_quota"]["total"] == 8
+        assert body["bdl_rate"]["remaining"] == 7
+        assert body["bdl_rate"]["used"] == 1
+        assert body["bdl_rate"]["total"] == 8
+        assert "quota_protected" not in body["bdl_rate"]
     finally:
         await _release_metrics_cache()
-
-
-@pytest.mark.asyncio
-async def test_theoddsapi_snapshot_does_not_write_live_rows(scratch_dsn, monkeypatch):
-    """A connected database on the default provider does not enter the 002 live writer."""
-    await _upgrade(scratch_dsn)
-    await _use_database(monkeypatch, scratch_dsn)
-    monkeypatch.setattr(settings, "nba_odds_provider", "theoddsapi")
-    recorded = load_odds_fixture(RECORDED_NBA_EVENTS)
-    event = copy.deepcopy(recorded[0])
-    commence = datetime.fromisoformat(event["commence_time"].replace("Z", "+00:00"))
-    slate = (commence + timedelta(minutes=EASTERN)).strftime("%Y-%m-%d")
-    calls: list[str] = []
-
-    async def get_events(**kwargs):
-        calls.append("get_events")
-        return [event]
-
-    async def no_rows(self, **kwargs):
-        return []
-
-    live_calls: list[str] = []
-
-    async def live(self, *args, **kwargs):
-        live_calls.append("live")
-        return 0
-
-    monkeypatch.setattr(
-        "app.services.odds_snapshot_service.odds_provider.get_events",
-        get_events,
-    )
-    monkeypatch.setattr(OddsSnapshotService, "_process_event", no_rows)
-    monkeypatch.setattr(OddsSnapshotService, "_write_bdl_live", live)
-    try:
-        result = await OddsSnapshotService().take_snapshot(slate, tz_offset_minutes=EASTERN)
-        assert calls == ["get_events"]
-        assert result["event_count"] == 1
-        assert live_calls == []
-        assert "bdl_parent_misses" not in result
-        assert await _scalar("SELECT count(*) AS n FROM player_prop_snapshots") == 0
-        assert await _scalar("SELECT count(*) AS n FROM game_odds_snapshots") == 0
-    finally:
-        await db_service.close()
 
 
 @pytest.mark.asyncio

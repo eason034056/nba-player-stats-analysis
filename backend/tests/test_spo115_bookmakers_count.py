@@ -265,7 +265,7 @@ class TestDailyPickConsumers:
         event = _event()
 
         async def props_for_market(event_id, market, league="nba"):
-            if market != "player_points":
+            if "player_points" not in {part.strip() for part in str(market).split(",")}:
                 return []
             return event["bookmakers"]
 

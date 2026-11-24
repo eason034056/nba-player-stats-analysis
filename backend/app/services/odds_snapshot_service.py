@@ -1,7 +1,7 @@
 """
 odds_snapshot_service.py - Odds Snapshot Service
 
-Periodically capture odds data from The Odds API, calculate no-vig, and write to PostgreSQL.
+Periodically capture NBA odds from BALLDONTLIE, calculate no-vig, and write to PostgreSQL.
 Used for Line Movement Tracking.
 
 Architecture:
@@ -13,9 +13,9 @@ Architecture:
             → 002 live rows when the provider is balldontlie and parents exist
             → _log_snapshot()                       (write to odds_snapshot_logs)
 
-    The pre-tip job calls take_closing_snapshot. That path always uses
-    BALLDONTLIE. It does not read nba_odds_provider. It writes the same
-    002 tables with snapshot_kind 'closing', and it writes odds_line_snapshots.
+    The pre-tip job calls take_closing_snapshot. That path uses
+    BALLDONTLIE. It writes the same 002 tables with snapshot_kind
+    'closing', and it writes odds_line_snapshots.
 
 Each snapshot will:
 1. Retrieve all NBA games for the day
@@ -42,11 +42,9 @@ from typing import List, Dict, Any, Optional, Tuple
 
 from app.services.odds_gateway import (
     PROVIDERS,
-    active_nba_provider_name,
     balldontlie_nba_provider,
     odds_gateway,
 )
-from app.services.odds_theoddsapi import odds_provider
 from app.services.odds_provider import OddsAPIError, ProviderEvent
 from app.services.prob import (
     american_to_prob,
@@ -297,9 +295,8 @@ async def list_bdl_events_for_local_date(
 ) -> list[dict[str, Any]]:
     """NBA games for one local date from ``odds_gateway.list_events``.
 
-    Use this when ``nba_odds_provider`` is ``balldontlie``. The Odds API
-    path stays on ``odds_provider.get_events`` so the existing snapshot
-    and daily-analysis tests still intercept that call.
+    Snapshot and daily analysis both use this list. A game is kept only
+    when it is still scheduled and the tip is ahead of ``now``.
 
     Args:
         date: Local game date, ``YYYY-MM-DD``.
@@ -682,7 +679,7 @@ class OddsSnapshotService:
             # It must not undo the odds_line_snapshots write above and
             # must not fail this snapshot.
             parent_misses = 0
-            if active_nba_provider_name() == "balldontlie" and events:
+            if events:
                 try:
                     if db_service.is_connected:
                         parent_misses = await self._write_bdl_live(
@@ -731,14 +728,11 @@ class OddsSnapshotService:
 
     @staticmethod
     def _with_bdl_misses(result: Dict[str, Any], misses: int) -> Dict[str, Any]:
-        """Add the miss count only when the NBA provider is BALLDONTLIE.
+        """Add how many 002 inserts were skipped.
 
-        The Odds API return shape stays the four keys callers already
-        read. ``misses`` is how many 002 inserts were skipped because a
-        parent row was missing, or because that insert raised.
+        ``misses`` counts a missing parent row, or an insert that raised.
+        The line-table write is already done when this number is attached.
         """
-        if active_nba_provider_name() != "balldontlie":
-            return result
         result["bdl_parent_misses"] = misses
         return result
 
@@ -760,51 +754,14 @@ class OddsSnapshotService:
         Args:
             date: event date (YYYY-MM-DD)
             tz_offset_minutes: timezone offset in minutes
-            now: Pre-tip cutoff for BALLDONTLIE. Ignored for The Odds API.
+            now: Pre-tip cutoff. None means the current UTC time.
 
         Returns:
             List of events
         """
-        if active_nba_provider_name() == "balldontlie":
-            return await list_bdl_events_for_local_date(
-                date, tz_offset_minutes, now=now
-            )
-
-        date_obj = datetime.strptime(date, "%Y-%m-%d")
-
-        local_start = datetime.combine(date_obj.date(), datetime.min.time())
-        utc_start = local_start - timedelta(minutes=tz_offset_minutes)
-
-        from datetime import time as dt_time
-        local_end = datetime.combine(date_obj.date(), dt_time(23, 59, 59))
-        utc_end = local_end - timedelta(minutes=tz_offset_minutes)
-
-        date_from = utc_start - timedelta(hours=1)
-        date_to = utc_end + timedelta(hours=1)
-
-        raw_events = await odds_provider.get_events(
-            league="nba",
-            regions="us",
-            date_from=date_from,
-            date_to=date_to,
+        return await list_bdl_events_for_local_date(
+            date, tz_offset_minutes, now=now
         )
-
-        # Filter: keep only events that occur on the local date
-        filtered = []
-        for event in raw_events:
-            commence_str = event.get("commence_time", "")
-            if commence_str:
-                try:
-                    commence_utc = datetime.fromisoformat(
-                        commence_str.replace("Z", "+00:00")
-                    )
-                    commence_local = commence_utc + timedelta(minutes=tz_offset_minutes)
-                    if commence_local.strftime("%Y-%m-%d") == date:
-                        filtered.append(event)
-                except ValueError:
-                    continue
-
-        return filtered
 
     async def _process_event(
         self,
@@ -847,7 +804,7 @@ class OddsSnapshotService:
 
         bookmakers_data = snapshot.data.get("bookmakers", [])
         boards = getattr(self, "_bdl_boards", None)
-        if active_nba_provider_name() == "balldontlie" and isinstance(boards, list):
+        if isinstance(boards, list):
             payload = snapshot.data if isinstance(snapshot.data, dict) else {}
             boards.append((event_id, payload))
         return self.rows_from_bookmakers(
@@ -1565,8 +1522,7 @@ class OddsSnapshotService:
         """Save one pre-tip closing line for every game in this tip minute.
 
         ``take_closing_snapshot`` is the DateTrigger job. It talks to
-        BALLDONTLIE only. It does not read ``nba_odds_provider``, so it
-        can store a close while the default provider is still The Odds API.
+        BALLDONTLIE only.
 
         The Redis lock is ``pretip_lock_key``. A second replica that
         cannot take the lock returns without fetching or writing.

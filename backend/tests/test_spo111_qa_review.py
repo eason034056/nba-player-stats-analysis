@@ -168,7 +168,8 @@ def _analyze(stats_for, *, league="nba", only=None, drop_under=False, null_under
     service = DailyAnalysisService()
 
     async def props(event_id, market_key, league="nba"):
-        if event_id != event["id"] or market_key != "player_points":
+        asked = {part.strip() for part in str(market_key).split(",")}
+        if event_id != event["id"] or "player_points" not in asked:
             return []
         return _books(
             event,

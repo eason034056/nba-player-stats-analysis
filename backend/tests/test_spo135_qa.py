@@ -103,15 +103,18 @@ def test_daily_picks_fill_csv_defense_ranks_on_the_recorded_slate(monkeypatch):
 
     points, event = _recorded_event()
 
-    async def events(**kwargs):
+    async def events(*_args, **_kwargs):
         return [event]
 
     async def snapshot(**kwargs):
-        if kwargs.get("markets") == "player_points":
+        if "player_points" in (kwargs.get("markets") or ""):
             return _Snap(points["bookmakers"])
         return _Snap([])
 
-    monkeypatch.setattr("app.services.daily_analysis.odds_provider.get_events", events)
+    monkeypatch.setattr(
+        "app.services.odds_snapshot_service.list_bdl_events_for_local_date",
+        events,
+    )
     monkeypatch.setattr(
         "app.services.daily_analysis.odds_gateway.get_market_snapshot", snapshot
     )

@@ -16,20 +16,13 @@ class Settings(BaseSettings):
     應用程式設定類別
     
     屬性名稱會自動對應到同名的環境變數
-    例如: odds_api_key 對應 ODDS_API_KEY 環境變數
+    例如: balldontlie_api_key 對應 BALLDONTLIE_API_KEY 環境變數
     """
-    
-    # The Odds API 設定
-    odds_api_key: str = ""  # The Odds API 的 API 金鑰
-    odds_api_base_url: str = "https://api.the-odds-api.com"  # API 基礎 URL
-    # NBA row of the odds provider table. "theoddsapi" (default) or
-    # "balldontlie". The default does not switch NBA off The Odds API.
-    nba_odds_provider: str = "theoddsapi"
 
-    # BALLDONTLIE. balldontlie_api_key 對應 BALLDONTLIE_API_KEY。SecretStr 讓
-    # Settings 的 repr 不印出金鑰。client 用 get_secret_value() 取出 str，
-    # 放進 Authorization，不要寫進日誌。路由不呼叫這個 client。排程的
-    # nba_injuries_refresh 會。
+    # BALLDONTLIE. balldontlie_api_key 對應 BALLDONTLIE_API_KEY。NBA 賠率
+    # 與傷兵都走這把 key。SecretStr 讓 Settings 的 repr 不印出金鑰。
+    # client 用 get_secret_value() 取出 str，放進 Authorization，不要寫進日誌。
+    # 空字串時啟動只記一行警告，不印出值。
     balldontlie_api_key: SecretStr = SecretStr("")
     # bdl_rate_limit_per_min 對應 BDL_RATE_LIMIT_PER_MIN。試用 key 是 5，付費 GOAT 是 600。
     # 真正送出請求後，如果回應帶 x-ratelimit-limit，共用預算改跟那個標頭。
@@ -54,7 +47,6 @@ class Settings(BaseSettings):
     cache_ttl_market_stale: int = 900
     odds_refresh_lock_ttl: int = 10
     odds_wait_for_refresh_ms: int = 300
-    odds_quota_protect_percent: int = 15
     odds_hot_keys_limit: int = 10
     lineup_stale_minutes: int = 20
     lineup_refresh_lock_ttl: int = 60
@@ -70,10 +62,6 @@ class Settings(BaseSettings):
     # Rate limiting (requests per window, slowapi format)
     rate_limit_default: str = "60/minute"
     rate_limit_props: str = "20/minute"
-
-    # Odds API quota alert thresholds (percent remaining)
-    odds_quota_warn_percent: int = 30
-    odds_quota_critical_percent: int = 10
 
     # Bot API keys (comma-separated)
     bot_api_keys: str = ""          # Free-tier bot API keys

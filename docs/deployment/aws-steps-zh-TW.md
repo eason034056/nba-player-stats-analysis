@@ -6,6 +6,25 @@
 
 允許連上 RDS 5432 的位址只有兩個 `/32`：真實的 box `/32`（只寫在 gitignore 的 `terraform.tfvars`；範例檔用 `198.51.100.10/32`），以及這台 Mac 目前的對外 IP。每天一份的 `pg-dumps/` 保留 90 天。
 
+## SPO-130i：清掉本機 Redis 裡舊的賠率 key
+
+NBA 賠率現在是 BALLDONTLIE 的數字 game id。這次部署後，後端第一次啟動會用 `SCAN` 刪一次舊 key，並用 `SET NX` 寫下 `migrations:spo130i:odds_flush_done`。重啟和第二個 replica 不會再刪。Redis 出錯只記 log，不會擋住啟動。
+
+想在行程起來之前自己刪，用下面這段。這一步不碰 RDS。
+
+```bash
+docker exec no-vig-nba-redis sh -c '
+  redis-cli --scan --pattern "daily_picks:nba*" | xargs -r redis-cli DEL
+  redis-cli --scan --pattern "odds_snapshot:*" | xargs -r redis-cli DEL
+  redis-cli --scan --pattern "events:nba:*" | xargs -r redis-cli DEL
+  redis-cli --scan --pattern "*:wnba:*" | xargs -r redis-cli DEL
+  redis-cli DEL odds:quota_usage:v1
+  redis-cli SET migrations:spo130i:odds_flush_done 1 NX
+'
+```
+
+正式環境必須設 `BALLDONTLIE_API_KEY`，以及 `BDL_RATE_LIMIT_PER_MIN=600`。程式裡的預設仍是 5。key 是空的時，啟動只記一行警告，不會把值印出來。
+
 ## SPO-145：清掉本機 Redis 裡留下的 WNBA key
 
 Redis 留在這台 Mac。compose 的服務名稱是 `redis`，容器名稱是 `no-vig-nba-redis`。NBA-only 後端部署之後，清掉還留在本機 Redis 的 WNBA 快取。這一步不碰 RDS。應用程式啟動時也不會自己清 Redis。

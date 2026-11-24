@@ -6,7 +6,7 @@ The LangGraph chat package (`scripts/agents/`), the lineup RAG package (`nba_lin
 
 ## What the app does
 
-The browser talks to the Next.js app. That app proxies `/api/backend/...` to the FastAPI server. The server reads The Odds API and BALLDONTLIE, and it scores daily picks from the cached odds, the injury snapshot, and the game-log CSVs. Redis holds the short-lived caches. PostgreSQL holds the odds snapshots, lineup snapshots, and the backfill tables.
+The browser talks to the Next.js app. That app proxies `/api/backend/...` to the FastAPI server. The server reads NBA odds from BALLDONTLIE, and it scores daily picks from the cached odds, the injury snapshot, and the game-log CSVs. Redis holds the short-lived caches. PostgreSQL holds the odds snapshots, lineup snapshots, and the backfill tables.
 
 ## Project Features
 
@@ -40,7 +40,7 @@ The browser talks to the Next.js app. That app proxies `/api/backend/...` to the
 - `Docker` and `Docker Compose`
 - `Node.js 18+`
 - `Python 3.11+`
-- `The Odds API` key: <https://the-odds-api.com/>
+- `BALLDONTLIE` key: <https://www.balldontlie.io/>
 
 ### Recommended: Start Backend with Docker, Frontend Locally
 
@@ -52,15 +52,17 @@ cp env.example .env
 
 2. Edit the root `.env` file
 
-At minimum, fill in the odds key:
+At minimum, fill in the odds key and the paid rate limit:
 
 ```bash
-ODDS_API_KEY=your_odds_api_key_here
+BALLDONTLIE_API_KEY=your_key_here
+BDL_RATE_LIMIT_PER_MIN=600
 ```
 
 Notes:
 
-- `ODDS_API_KEY` is used to fetch live odds data
+- `BALLDONTLIE_API_KEY` is required for NBA odds. Do not commit the value.
+- The code default of `bdl_rate_limit_per_min` stays 5. Production and Compose set 600.
 - NBA projections are not loaded. `has_projection` stays false until a model writes those fields.
 
 3. Start the backend, Redis, and PostgreSQL

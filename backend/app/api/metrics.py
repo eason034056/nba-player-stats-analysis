@@ -2,7 +2,7 @@
 metrics.py - Observability metrics endpoint.
 
 Exposes request counts, latency averages, error rates,
-Odds API quota status, and cache health in a single JSON payload.
+and the BALLDONTLIE rate status.
 """
 
 import logging
@@ -11,7 +11,7 @@ from datetime import datetime, timezone
 from fastapi import APIRouter
 
 from app.middleware.logging_config import get_metrics_snapshot
-from app.services.odds_gateway import PROVIDERS, odds_gateway
+from app.services.odds_gateway import PROVIDERS
 
 logger = logging.getLogger(__name__)
 
@@ -21,30 +21,26 @@ router = APIRouter(prefix="/api", tags=["observability"])
 @router.get(
     "/metrics",
     summary="Application Metrics",
-    description="Request stats, latency, error rates, and Odds API quota status",
+    description="Request stats, latency, error rates, and BALLDONTLIE rate status",
 )
 async def get_metrics():
     snapshot = get_metrics_snapshot()
 
-    # Quota for the NBA provider that is active right now. The Odds API
-    # row reads the Redis object the gateway writes. BALLDONTLIE reads
-    # the last rate-limit headers on its client. The JSON keys below
-    # stay the same either way.
-    quota_usage = await PROVIDERS["nba"].rate_status()
-    quota_protected = await odds_gateway.is_quota_protected()
+    # Last BALLDONTLIE rate-limit headers on the NBA provider.
+    # ``recorded`` is false until a response has carried a header.
+    rate = await PROVIDERS["nba"].rate_status()
 
-    quota_info = None
-    if quota_usage.recorded:
-        quota_info = {
-            "remaining": quota_usage.remaining,
-            "used": quota_usage.used,
-            "total": quota_usage.total,
+    rate_info = None
+    if rate.recorded:
+        rate_info = {
+            "remaining": rate.remaining,
+            "used": rate.used,
+            "total": rate.total,
             "remaining_ratio": (
-                round(quota_usage.remaining_ratio, 4)
-                if quota_usage.remaining_ratio is not None
+                round(rate.remaining_ratio, 4)
+                if rate.remaining_ratio is not None
                 else None
             ),
-            "quota_protected": quota_protected,
         }
 
     return {
@@ -53,5 +49,5 @@ async def get_metrics():
         "requests": snapshot["request_counts"],
         "errors": snapshot["error_counts"],
         "avg_latency_ms": snapshot["avg_latency_ms"],
-        "odds_api_quota": quota_info,
+        "bdl_rate": rate_info,
     }

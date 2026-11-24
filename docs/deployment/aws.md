@@ -6,6 +6,25 @@ The backend and Postgres both run on that Mac. Postgres is the `no-vig-nba-postg
 
 Step-by-step for that Mac, in Traditional Chinese: [docs/deployment/aws-steps-zh-TW.md](aws-steps-zh-TW.md).
 
+## SPO-130i: flush retired odds keys in local Redis
+
+NBA odds are BALLDONTLIE game ids. The first backend start after this deploy deletes the old lists once. It uses `SCAN`, then `SET NX` on `migrations:spo130i:odds_flush_done`, so a restart and a second replica do not flush again. A Redis error is logged and does not stop startup.
+
+Run the same delete by hand if you want it done before the process starts. This does not touch RDS.
+
+```bash
+docker exec no-vig-nba-redis sh -c '
+  redis-cli --scan --pattern "daily_picks:nba*" | xargs -r redis-cli DEL
+  redis-cli --scan --pattern "odds_snapshot:*" | xargs -r redis-cli DEL
+  redis-cli --scan --pattern "events:nba:*" | xargs -r redis-cli DEL
+  redis-cli --scan --pattern "*:wnba:*" | xargs -r redis-cli DEL
+  redis-cli DEL odds:quota_usage:v1
+  redis-cli SET migrations:spo130i:odds_flush_done 1 NX
+'
+```
+
+Production must set `BALLDONTLIE_API_KEY` and `BDL_RATE_LIMIT_PER_MIN=600`. The code default of the limit stays 5. An empty key logs a warning at startup and does not print the value.
+
 ## SPO-145: flush leftover WNBA keys in local Redis
 
 Redis stays on this Mac, in the compose service `redis` (container `no-vig-nba-redis`). After the NBA-only backend is deployed, flush the leftover WNBA cache. This step does not touch RDS. Application startup does not flush Redis.
@@ -44,6 +63,8 @@ State is still the local file until you migrate it to `sportslab/dev/aws.tfstate
 
 | Variable | Who reads it | Value |
 |---|---|---|
+| `BALLDONTLIE_API_KEY` | Backend | Required for NBA odds. Do not commit the value. Startup logs a warning when it is empty and does not print it. |
+| `BDL_RATE_LIMIT_PER_MIN` | Backend | **Set `600` in production.** The code default stays 5. Compose uses 600 when the variable is unset. |
 | `DATABASE_URL` | Backend, and `scripts/pg_dump_to_s3.sh` if `RDS_DATABASE_URL` is unset | App role DSN. SSL is part of the URL. |
 | `DATABASE_REQUIRED` | Backend startup | `false` for local tests and dev without Postgres. **Set `true` in production** so a bad URL or a blocked IP stops the process instead of serving with an empty pool. |
 | `AWS_ACCESS_KEY_ID` | `scripts/sync_raw_to_s3.sh`, `scripts/pg_dump_to_s3.sh` | Access key of the IAM user `sportslab-runtime`. Not an admin key. |

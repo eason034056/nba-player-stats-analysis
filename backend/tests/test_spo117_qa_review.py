@@ -40,6 +40,25 @@ def _payloads() -> list[dict]:
     return [load_odds_fixture(name) for name in _ODDS_FIXTURES]
 
 
+def _scheduled(rows: list[dict]):
+    """Recorded event rows as scheduled games for ``list_events``."""
+    from app.services.odds_provider import ProviderEvent
+
+    return [
+        ProviderEvent(
+            event_id=str(row["id"]),
+            commence_time=str(row["commence_time"]),
+            home_team=str(row.get("home_team") or ""),
+            away_team=str(row.get("away_team") or ""),
+            home_code="HOM",
+            away_code="AWY",
+            status="scheduled",
+            slate_date="2026-12-25",
+        )
+        for row in rows
+    ]
+
+
 def _rows(payload: dict) -> list[dict]:
     return [
         dict(zip(_COLUMNS, row))
@@ -133,9 +152,12 @@ async def test_late_recorded_tip_stays_on_its_eastern_slate(monkeypatch):
         .isoformat()
         == "2026-12-25"
     ]
+    async def list_events(**_kwargs):
+        return _scheduled(events)
+
     monkeypatch.setattr(
-        "app.services.odds_snapshot_service.odds_provider.get_events",
-        AsyncMock(return_value=events),
+        "app.services.odds_snapshot_service.odds_gateway.list_events",
+        list_events,
     )
     service = OddsSnapshotService()
     kept = await service._get_events("2026-12-25", offset_for_us_game_date("2026-12-25"))
@@ -151,24 +173,23 @@ async def test_snapshot_window_matches_daily_analysis_sign_convention(monkeypatc
     events = load_odds_fixture("odds_api_events__basketball_nba.json")
     calls: list[dict] = []
 
-    async def fake_get_events(**kwargs):
+    async def fake_list(**kwargs):
         calls.append(kwargs)
-        return events
+        return _scheduled(events)
 
     monkeypatch.setattr(
-        "app.services.odds_snapshot_service.odds_provider.get_events", fake_get_events
-    )
-    monkeypatch.setattr(
-        "app.services.daily_analysis.odds_provider.get_events", fake_get_events
+        "app.services.odds_snapshot_service.odds_gateway.list_events",
+        fake_list,
     )
     date, offset = nba_slate_date(_STAMP)
-    snap = await OddsSnapshotService()._get_events(date, offset)
-    daily = await DailyAnalysisService()._get_events_for_date(date, offset)
+    opened = datetime(2026, 11, 8, tzinfo=timezone.utc)
+    snap = await OddsSnapshotService()._get_events(date, offset, now=opened)
+    daily = await DailyAnalysisService()._get_events_for_date(date, offset, now=opened)
     assert [e["id"] for e in snap] == [e["id"] for e in daily]
-    assert calls[0]["date_from"] == calls[1]["date_from"]
-    assert calls[0]["date_to"] == calls[1]["date_to"]
+    assert calls[0]["start_utc"] == calls[1]["start_utc"]
+    assert calls[0]["end_utc"] == calls[1]["end_utc"]
     # -300 means local midnight is 05:00 UTC; the query widens one hour.
-    assert calls[0]["date_from"] == datetime(2026, 11, 9, 4, 0)
+    assert calls[0]["start_utc"] == datetime(2026, 11, 9, 4, 0)
 
 
 @pytest.mark.asyncio
@@ -183,7 +204,13 @@ async def test_no_events_is_logged_as_success_on_the_eastern_date(monkeypatch):
         lambda now=None: ("2026-11-09", -300),
     )
     result = await service.take_snapshot()
-    assert result == {"date": "2026-11-09", "event_count": 0, "total_lines": 0, "duration_ms": 0}
+    assert result == {
+        "date": "2026-11-09",
+        "event_count": 0,
+        "total_lines": 0,
+        "duration_ms": 0,
+        "bdl_parent_misses": 0,
+    }
     get_events.assert_awaited_once_with("2026-11-09", -300)
     args = log.await_args.args
     assert args[0] == "2026-11-09"

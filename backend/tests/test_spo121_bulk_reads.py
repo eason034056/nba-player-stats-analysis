@@ -564,13 +564,15 @@ class TestEventReads:
         cache = _FakeCache()
         monkeypatch.setattr("app.services.event_reads.db_service", db)
         monkeypatch.setattr("app.services.event_reads.cache_service", cache)
+        from app.services.bdl_odds_provider import get_bdl_odds_provider
         from app.services.odds_gateway import odds_gateway
-        from app.services.odds_theoddsapi import odds_provider
 
         gateway = AsyncMock()
+        provider = get_bdl_odds_provider()
+        event_odds = AsyncMock()
         monkeypatch.setattr(odds_gateway, "get_market_snapshot", gateway)
-        monkeypatch.setattr(odds_provider, "get_event_odds", AsyncMock())
-        monkeypatch.setattr(odds_provider, "get_events", AsyncMock())
+        monkeypatch.setattr(provider, "get_event_odds", event_odds)
+        monkeypatch.setattr(provider, "get_events", AsyncMock())
 
         transport = httpx.ASGITransport(app=app)
 
@@ -599,7 +601,7 @@ class TestEventReads:
         assert unknown.status_code == 400
         assert malformed.status_code == 404
         assert gateway.await_count == 0
-        assert odds_provider.get_event_odds.await_count == 0
+        assert event_odds.await_count == 0
 
         down = _FakeDB(rows, connected=False)
         monkeypatch.setattr("app.services.event_reads.db_service", down)
@@ -636,7 +638,7 @@ class TestEventReads:
             if isinstance(node, ast.ImportFrom) and node.module
         ]
         assert "app.services.odds_gateway" not in names
-        assert "app.services.odds_theoddsapi" not in names
+        assert "app.services." + "odds_" + "the" + "oddsapi" not in names
 
 
 def recorded_points_shift() -> dict:
@@ -650,7 +652,7 @@ def recorded_points_shift() -> dict:
     service = DailyAnalysisService()
 
     async def props(event_id, market_key, league="nba"):
-        if market_key != "player_points":
+        if "player_points" not in {part.strip() for part in str(market_key).split(",")}:
             return []
         return copy.deepcopy(payload["bookmakers"])
 
