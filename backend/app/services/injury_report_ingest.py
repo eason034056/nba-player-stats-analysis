@@ -5,7 +5,9 @@
 with the same PDF writes nothing new. A later PDF with the same title
 minute updates the columns a report can correct, including status and
 reason, and deletes rows for that minute that the new file does not
-name. A PDF that will not parse records an error on
+name. A parse with no player lines and no team note is a failure, so
+that DELETE does not run. A file that is only team notes is stored and
+the DELETE is skipped. A PDF that will not parse records an error on
 ``source_refreshes``. The first failure for that minute is
 ``complete = false``. A later failure keeps an earlier complete row
 complete and still stores the error. The batch continues.
@@ -22,10 +24,13 @@ import json
 import logging
 from dataclasses import dataclass
 from datetime import date, datetime, timezone
+from pathlib import Path
 from typing import Literal
 
 import asyncpg
 
+from app.services.injury_report_match import match_report_rows
+from app.services.injury_report_names import PlayerCatalog
 from app.services.injury_report_parser import (
     InjuryRow,
     ParseFailure,
@@ -56,8 +61,10 @@ _ABBR_ALIASES = {
     "UTAH": "UTA",
 }
 
-# bdl_player_id and match_method stay null on insert and are not updated.
-# A later match must survive a re-ingest. A resolved game id stays when
+# bdl_player_id and match_method stay null on insert and are not in the
+# DO UPDATE. A catalog passed to ingest_report fills a null match_method
+# in a later statement. A method that is already set survives a re-ingest.
+# A resolved game id stays when
 # this file cannot resolve the game: the written value is
 # COALESCE(EXCLUDED, stored). The WHERE compares that same value, so a
 # miss is not a change. An identical row makes RETURNING empty.
@@ -172,7 +179,8 @@ class IngestOutcome:
 
     ``tag`` is ``stored`` (rows were written or a failure row was saved),
     ``unchanged`` (the same report was already stored), ``failed``
-    (the PDF did not parse, or the write failed), or ``dry_run``
+    (the PDF did not parse, the parse named no player, or the write
+    failed), or ``dry_run``
     (parsed only). ``rows_written`` counts rows this call inserted,
     corrected, or deleted. An identical retry reports 0. A changed
     status counts. A player missing from the new file counts.
@@ -192,6 +200,15 @@ class _Resolved:
     bdl_team_id: int | None
 
 
+def _only_team_notes(parsed: ParsedReport) -> bool:
+    """True when every row is NOT YET SUBMITTED or ALL PLAYERS AVAILABLE."""
+    if parsed.player_rows or not parsed.rows:
+        return False
+    return all(
+        row.not_yet_submitted or row.all_players_available for row in parsed.rows
+    )
+
+
 def canonical_abbr(code: str) -> str:
     """Fold a team abbreviation to the PDF form. ``GS`` becomes ``GSW``."""
     text = (code or "").strip().upper()
@@ -204,20 +221,27 @@ async def ingest_report(
     *,
     dry_run: bool = False,
     league: str = LEAGUE,
+    catalog: PlayerCatalog | None = None,
+    review_path: Path | None = None,
 ) -> IngestOutcome:
     """Parse ``stored`` and insert its rows.
 
     ``ingest_report`` reads the PDF from ``stored.path``. Re-running it
     for the same report inserts nothing new. A PDF that changes a
     corrected column updates that row. A player or team note that the
-    new file drops is deleted for that same report minute. ``dry_run``
-    true parses and resolves game ids, then writes nothing.
+    new file drops is deleted for that same report minute, unless the
+    file names no player. ``dry_run`` true parses and resolves game
+    ids, then writes nothing. ``catalog`` fills null player ids after
+    a stored or unchanged write. ``None`` leaves those columns null.
 
     Args:
         conn: An open connection. The caller owns it.
         stored: A PDF the cache already saved.
         dry_run: When true, do not insert.
         league: League code stored on each row. The default is ``nba``.
+        catalog: BDL players to match. ``None`` does not match.
+        review_path: Optional file for non-G-League misses. ``None``
+            writes no file.
 
     Returns:
         An ``IngestOutcome``. A bad PDF returns ``tag="failed"`` and
@@ -250,7 +274,23 @@ async def ingest_report(
             dry_run=dry_run,
             league=league,
         )
-    return await _write_report(conn, filename, parsed, dry_run=dry_run, league=league)
+    outcome = await _write_report(conn, filename, parsed, dry_run=dry_run, league=league)
+    if (
+        catalog is not None
+        and outcome.tag in {"stored", "unchanged"}
+        and outcome.report_at is not None
+    ):
+        try:
+            await match_report_rows(
+                conn,
+                league=league,
+                report_at=outcome.report_at,
+                catalog=catalog,
+                review_path=review_path,
+            )
+        except Exception as exc:
+            logger.warning("injury report match failed (%s)", type(exc).__name__)
+    return outcome
 
 
 async def ingest_store(
@@ -259,6 +299,8 @@ async def ingest_store(
     *,
     dry_run: bool = False,
     league: str = LEAGUE,
+    catalog: PlayerCatalog | None = None,
+    review_path: Path | None = None,
 ) -> list[IngestOutcome]:
     """Ingest every stored PDF. One bad file does not stop the rest.
 
@@ -270,6 +312,8 @@ async def ingest_store(
         store: The SPO-149 cache.
         dry_run: When true, write nothing.
         league: League code passed to each ``ingest_report``. The default is ``nba``.
+        catalog: Forwarded to each ``ingest_report``. ``None`` does not match.
+        review_path: Forwarded to each ``ingest_report``.
 
     Returns:
         One outcome per stored PDF, in path order.
@@ -277,7 +321,16 @@ async def ingest_store(
     outcomes: list[IngestOutcome] = []
     for stored in store.iter_stored():
         try:
-            outcomes.append(await ingest_report(conn, stored, dry_run=dry_run, league=league))
+            outcomes.append(
+                await ingest_report(
+                    conn,
+                    stored,
+                    dry_run=dry_run,
+                    league=league,
+                    catalog=catalog,
+                    review_path=review_path,
+                )
+            )
         except Exception as exc:
             logger.warning("injury report ingest failed (%s)", type(exc).__name__)
             outcomes.append(
@@ -376,6 +429,15 @@ async def _write_report(
     dry_run: bool,
     league: str = LEAGUE,
 ) -> IngestOutcome:
+    if parsed.player_rows == 0 and not _only_team_notes(parsed):
+        return await _record_failure(
+            conn,
+            filename=filename,
+            report_at=parsed.report_at,
+            error="zero player lines",
+            dry_run=dry_run,
+            league=league,
+        )
     resolved = await _resolve(conn, parsed.rows, league)
     if dry_run:
         return IngestOutcome(
@@ -411,24 +473,26 @@ async def _write_report(
                 written += len(inserted)
             # Same transaction as the upserts. dry_run returned above,
             # so this DELETE does not run then. report_at is this file's
-            # minute only.
-            kept = json.dumps([
-                {
-                    "game_date": row.game_date.isoformat(),
-                    "matchup": row.matchup,
-                    "team_name": row.team_name,
-                    "player_raw": row.player_raw,
-                    "not_yet_submitted": row.not_yet_submitted,
-                }
-                for row in parsed.rows
-            ])
-            removed = await conn.fetch(
-                _DELETE_ABSENT,
-                league,
-                parsed.report_at,
-                kept,
-            )
-            written += len(removed)
+            # minute only. A file with no named player skips it: team
+            # notes are stored, and rows already at this minute stay.
+            if parsed.player_rows:
+                kept = json.dumps([
+                    {
+                        "game_date": row.game_date.isoformat(),
+                        "matchup": row.matchup,
+                        "team_name": row.team_name,
+                        "player_raw": row.player_raw,
+                        "not_yet_submitted": row.not_yet_submitted,
+                    }
+                    for row in parsed.rows
+                ])
+                removed = await conn.fetch(
+                    _DELETE_ABSENT,
+                    league,
+                    parsed.report_at,
+                    kept,
+                )
+                written += len(removed)
             refresh = await conn.fetch(
                 _INSERT_REFRESH,
                 league,
