@@ -1,0 +1,316 @@
+{
+  "request": "https://api.balldontlie.io/v1/players?player_ids%5B%5D=201&player_ids%5B%5D=17553994&player_ids%5B%5D=475&player_ids%5B%5D=1028027372&player_ids%5B%5D=1028037477&player_ids%5B%5D=1028036986&player_ids%5B%5D=1091351965&player_ids%5B%5D=443&player_ids%5B%5D=4&player_ids%5B%5D=377&player_ids%5B%5D=15&player_ids%5B%5D=480&player_ids%5B%5D=1091353486&per_page=100",
+  "status": 200,
+  "elapsed_s": 0.13,
+  "rate_headers": {
+    "x-ratelimit-limit": "600",
+    "x-ratelimit-remaining": "597",
+    "x-ratelimit-reset": "1795384455"
+  },
+  "response": {
+    "data": [
+      {
+        "id": 4,
+        "first_name": "Bam",
+        "last_name": "Adebayo",
+        "position": "C-F",
+        "height": "6-9",
+        "weight": "260",
+        "jersey_number": "13",
+        "college": "Kentucky",
+        "country": "USA",
+        "draft_year": 2017,
+        "draft_round": 1,
+        "draft_number": 14,
+        "team": {
+          "id": 16,
+          "conference": "East",
+          "division": "Southeast",
+          "city": "Miami",
+          "name": "Heat",
+          "full_name": "Miami Heat",
+          "abbreviation": "MIA"
+        }
+      },
+      {
+        "id": 15,
+        "first_name": "Giannis",
+        "last_name": "Antetokounmpo",
+        "position": "F",
+        "height": "6-11",
+        "weight": "250",
+        "jersey_number": "7",
+        "college": "Filathlitikos",
+        "country": "Greece",
+        "draft_year": 2013,
+        "draft_round": 1,
+        "draft_number": 15,
+        "team": {
+          "id": 16,
+          "conference": "East",
+          "division": "Southeast",
+          "city": "Miami",
+          "name": "Heat",
+          "full_name": "Miami Heat",
+          "abbreviation": "MIA"
+        }
+      },
+      {
+        "id": 201,
+        "first_name": "Isaiah",
+        "last_name": "Hartenstein",
+        "position": "F-C",
+        "height": "7-0",
+        "weight": "250",
+        "jersey_number": "55",
+        "college": "Zalgiris",
+        "country": "Germany",
+        "draft_year": 2017,
+        "draft_round": 2,
+        "draft_number": 43,
+        "team": {
+          "id": 21,
+          "conference": "West",
+          "division": "Northwest",
+          "city": "Oklahoma City",
+          "name": "Thunder",
+          "full_name": "Oklahoma City Thunder",
+          "abbreviation": "OKC"
+        }
+      },
+      {
+        "id": 377,
+        "first_name": "Bobby",
+        "last_name": "Portis",
+        "position": "F",
+        "height": "6-10",
+        "weight": "250",
+        "jersey_number": "95",
+        "college": "Arkansas",
+        "country": "USA",
+        "draft_year": 2015,
+        "draft_round": 1,
+        "draft_number": 22,
+        "team": {
+          "id": 16,
+          "conference": "East",
+          "division": "Southeast",
+          "city": "Miami",
+          "name": "Heat",
+          "full_name": "Miami Heat",
+          "abbreviation": "MIA"
+        }
+      },
+      {
+        "id": 443,
+        "first_name": "Klay",
+        "last_name": "Thompson",
+        "position": "G",
+        "height": "6-5",
+        "weight": "200",
+        "jersey_number": "31",
+        "college": "Washington State",
+        "country": "USA",
+        "draft_year": 2011,
+        "draft_round": 1,
+        "draft_number": 11,
+        "team": {
+          "id": 16,
+          "conference": "East",
+          "division": "Southeast",
+          "city": "Miami",
+          "name": "Heat",
+          "full_name": "Miami Heat",
+          "abbreviation": "MIA"
+        }
+      },
+      {
+        "id": 475,
+        "first_name": "Andrew",
+        "last_name": "Wiggins",
+        "position": "F-G",
+        "height": "6-6",
+        "weight": "210",
+        "jersey_number": "22",
+        "college": "Kansas",
+        "country": "Canada",
+        "draft_year": 2014,
+        "draft_round": 1,
+        "draft_number": 1,
+        "team": {
+          "id": 16,
+          "conference": "East",
+          "division": "Southeast",
+          "city": "Miami",
+          "name": "Heat",
+          "full_name": "Miami Heat",
+          "abbreviation": "MIA"
+        }
+      },
+      {
+        "id": 480,
+        "first_name": "Kenrich",
+        "last_name": "Williams",
+        "position": "G-F",
+        "height": "6-7",
+        "weight": "210",
+        "jersey_number": "34",
+        "college": "TCU",
+        "country": "USA",
+        "draft_year": null,
+        "draft_round": null,
+        "draft_number": null,
+        "team": {
+          "id": 21,
+          "conference": "West",
+          "division": "Northwest",
+          "city": "Oklahoma City",
+          "name": "Thunder",
+          "full_name": "Oklahoma City Thunder",
+          "abbreviation": "OKC"
+        }
+      },
+      {
+        "id": 17553994,
+        "first_name": "Davion",
+        "last_name": "Mitchell",
+        "position": "G",
+        "height": "6-0",
+        "weight": "200",
+        "jersey_number": "2",
+        "college": "Baylor",
+        "country": "USA",
+        "draft_year": 2021,
+        "draft_round": 1,
+        "draft_number": 9,
+        "team": {
+          "id": 16,
+          "conference": "East",
+          "division": "Southeast",
+          "city": "Miami",
+          "name": "Heat",
+          "full_name": "Miami Heat",
+          "abbreviation": "MIA"
+        }
+      },
+      {
+        "id": 1028027372,
+        "first_name": "Jared",
+        "last_name": "McCain",
+        "position": "G",
+        "height": "6-2",
+        "weight": "195",
+        "jersey_number": "3",
+        "college": "Duke",
+        "country": "USA",
+        "draft_year": 2024,
+        "draft_round": 1,
+        "draft_number": 16,
+        "team": {
+          "id": 21,
+          "conference": "West",
+          "division": "Northwest",
+          "city": "Oklahoma City",
+          "name": "Thunder",
+          "full_name": "Oklahoma City Thunder",
+          "abbreviation": "OKC"
+        }
+      },
+      {
+        "id": 1028036986,
+        "first_name": "Pelle",
+        "last_name": "Larsson",
+        "position": "G",
+        "height": "6-5",
+        "weight": "215",
+        "jersey_number": "9",
+        "college": "Arizona",
+        "country": "Sweden",
+        "draft_year": 2024,
+        "draft_round": 2,
+        "draft_number": 44,
+        "team": {
+          "id": 16,
+          "conference": "East",
+          "division": "Southeast",
+          "city": "Miami",
+          "name": "Heat",
+          "full_name": "Miami Heat",
+          "abbreviation": "MIA"
+        }
+      },
+      {
+        "id": 1028037477,
+        "first_name": "Ajay",
+        "last_name": "Mitchell",
+        "position": "G",
+        "height": "6-4",
+        "weight": "190",
+        "jersey_number": "25",
+        "college": "California-Santa Barbara",
+        "country": "Belgium",
+        "draft_year": 2024,
+        "draft_round": 2,
+        "draft_number": 38,
+        "team": {
+          "id": 21,
+          "conference": "West",
+          "division": "Northwest",
+          "city": "Oklahoma City",
+          "name": "Thunder",
+          "full_name": "Oklahoma City Thunder",
+          "abbreviation": "OKC"
+        }
+      },
+      {
+        "id": 1091351965,
+        "first_name": "Aday",
+        "last_name": "Mara",
+        "position": "C",
+        "height": "7-3",
+        "weight": "255",
+        "jersey_number": "15",
+        "college": "Michigan",
+        "country": "Spain",
+        "draft_year": 2026,
+        "draft_round": 1,
+        "draft_number": 12,
+        "team": {
+          "id": 21,
+          "conference": "West",
+          "division": "Northwest",
+          "city": "Oklahoma City",
+          "name": "Thunder",
+          "full_name": "Oklahoma City Thunder",
+          "abbreviation": "OKC"
+        }
+      },
+      {
+        "id": 1091353486,
+        "first_name": "Bennett",
+        "last_name": "Stirtz",
+        "position": "G",
+        "height": "6-3",
+        "weight": "180",
+        "jersey_number": "14",
+        "college": "Iowa",
+        "country": "USA",
+        "draft_year": 2026,
+        "draft_round": 1,
+        "draft_number": 16,
+        "team": {
+          "id": 21,
+          "conference": "West",
+          "division": "Northwest",
+          "city": "Oklahoma City",
+          "name": "Thunder",
+          "full_name": "Oklahoma City Thunder",
+          "abbreviation": "OKC"
+        }
+      }
+    ],
+    "meta": {
+      "per_page": 100
+    }
+  }
+}

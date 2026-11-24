@@ -5,5 +5,6 @@
 # the capture registry in test_bdl_client.py, not by reading them in review.
 # Hand-written fixtures (frontend/test/fixtures, copied API bodies) stay visible.
 backend/tests/fixtures/bdl/*.json       linguist-generated=true
+backend/tests/fixtures/same_slate/*.json linguist-generated=true
 backend/tests/fixtures/odds_api_*.json  linguist-generated=true
 tests/fixtures/espn/**/*.json           linguist-generated=true

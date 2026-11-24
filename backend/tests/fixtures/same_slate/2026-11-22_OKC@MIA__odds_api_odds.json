@@ -1,0 +1,4772 @@
+{
+  "request": "https://api.the-odds-api.com/v4/sports/basketball_nba/events/90da1cde4144fac00d41f2c0db2cc921/odds?regions=us&markets=player_points%2Cplayer_rebounds%2Cplayer_assists%2Cplayer_threes%2Cplayer_steals%2Cplayer_frees_made%2Cplayer_field_goals%2Cplayer_points_rebounds_assists%2Cplayer_rebounds_assists%2Cplayer_points_rebounds%2Cplayer_points_assists%2Cplayer_double_double&oddsFormat=american",
+  "status": 200,
+  "elapsed_s": 0.1,
+  "rate_headers": {
+    "x-requests-remaining": "14",
+    "x-requests-last": "10",
+    "x-requests-used": "486"
+  },
+  "response": {
+    "id": "90da1cde4144fac00d41f2c0db2cc921",
+    "sport_key": "basketball_nba",
+    "sport_title": "NBA",
+    "commence_time": "2026-11-22T23:10:00Z",
+    "home_team": "Miami Heat",
+    "away_team": "Oklahoma City Thunder",
+    "bookmakers": [
+      {
+        "key": "fanduel",
+        "title": "FanDuel",
+        "markets": [
+          {
+            "key": "player_assists",
+            "last_update": "2026-11-22T21:52:20Z",
+            "outcomes": [
+              {
+                "name": "Over",
+                "description": "Pelle Larsson",
+                "price": 118,
+                "point": 3.5
+              },
+              {
+                "name": "Under",
+                "description": "Pelle Larsson",
+                "price": -150,
+                "point": 3.5
+              },
+              {
+                "name": "Over",
+                "description": "Ajay Mitchell",
+                "price": -156,
+                "point": 4.5
+              },
+              {
+                "name": "Under",
+                "description": "Ajay Mitchell",
+                "price": 122,
+                "point": 4.5
+              },
+              {
+                "name": "Over",
+                "description": "Klay Thompson",
+                "price": -142,
+                "point": 1.5
+              },
+              {
+                "name": "Under",
+                "description": "Klay Thompson",
+                "price": 112,
+                "point": 1.5
+              },
+              {
+                "name": "Over",
+                "description": "Isaiah Hartenstein",
+                "price": -162,
+                "point": 4.5
+              },
+              {
+                "name": "Under",
+                "description": "Isaiah Hartenstein",
+                "price": 126,
+                "point": 4.5
+              },
+              {
+                "name": "Over",
+                "description": "Davion Mitchell",
+                "price": 110,
+                "point": 8.5
+              },
+              {
+                "name": "Under",
+                "description": "Davion Mitchell",
+                "price": -140,
+                "point": 8.5
+              },
+              {
+                "name": "Over",
+                "description": "Bam Adebayo",
+                "price": 108,
+                "point": 3.5
+              },
+              {
+                "name": "Under",
+                "description": "Bam Adebayo",
+                "price": -138,
+                "point": 3.5
+              },
+              {
+                "name": "Over",
+                "description": "Aday Mara",
+                "price": 112,
+                "point": 2.5
+              },
+              {
+                "name": "Under",
+                "description": "Aday Mara",
+                "price": -142,
+                "point": 2.5
+              },
+              {
+                "name": "Over",
+                "description": "Bobby Portis",
+                "price": 130,
+                "point": 1.5
+              },
+              {
+                "name": "Under",
+                "description": "Bobby Portis",
+                "price": -166,
+                "point": 1.5
+              },
+              {
+                "name": "Over",
+                "description": "Andrew Wiggins",
+                "price": 128,
+                "point": 1.5
+              },
+              {
+                "name": "Under",
+                "description": "Andrew Wiggins",
+                "price": -164,
+                "point": 1.5
+              },
+              {
+                "name": "Over",
+                "description": "Giannis Antetokounmpo",
+                "price": -148,
+                "point": 5.5
+              },
+              {
+                "name": "Under",
+                "description": "Giannis Antetokounmpo",
+                "price": 116,
+                "point": 5.5
+              },
+              {
+                "name": "Over",
+                "description": "Jared McCain",
+                "price": -113,
+                "point": 2.5
+              },
+              {
+                "name": "Under",
+                "description": "Jared McCain",
+                "price": -113,
+                "point": 2.5
+              }
+            ]
+          },
+          {
+            "key": "player_double_double",
+            "last_update": "2026-11-22T21:52:20Z",
+            "outcomes": [
+              {
+                "name": "Yes",
+                "description": "Giannis Antetokounmpo",
+                "price": -500
+              },
+              {
+                "name": "Yes",
+                "description": "Isaiah Hartenstein",
+                "price": 128
+              },
+              {
+                "name": "Yes",
+                "description": "Bam Adebayo",
+                "price": 124
+              },
+              {
+                "name": "Yes",
+                "description": "Aday Mara",
+                "price": 162
+              },
+              {
+                "name": "Yes",
+                "description": "Davion Mitchell",
+                "price": 235
+              },
+              {
+                "name": "Yes",
+                "description": "Ajay Mitchell",
+                "price": 850
+              },
+              {
+                "name": "Yes",
+                "description": "Kenrich Williams",
+                "price": 880
+              },
+              {
+                "name": "Yes",
+                "description": "Bobby Portis",
+                "price": 1200
+              },
+              {
+                "name": "Yes",
+                "description": "Jared McCain",
+                "price": 2500
+              },
+              {
+                "name": "Yes",
+                "description": "Pelle Larsson",
+                "price": 2800
+              }
+            ]
+          },
+          {
+            "key": "player_points",
+            "last_update": "2026-11-22T21:52:20Z",
+            "outcomes": [
+              {
+                "name": "Over",
+                "description": "Ajay Mitchell",
+                "price": -111,
+                "point": 23.5
+              },
+              {
+                "name": "Under",
+                "description": "Ajay Mitchell",
+                "price": -115,
+                "point": 23.5
+              },
+              {
+                "name": "Over",
+                "description": "Klay Thompson",
+                "price": -102,
+                "point": 14.5
+              },
+              {
+                "name": "Under",
+                "description": "Klay Thompson",
+                "price": -125,
+                "point": 14.5
+              },
+              {
+                "name": "Over",
+                "description": "Isaiah Hartenstein",
+                "price": -128,
+                "point": 9.5
+              },
+              {
+                "name": "Under",
+                "description": "Isaiah Hartenstein",
+                "price": 100,
+                "point": 9.5
+              },
+              {
+                "name": "Over",
+                "description": "Davion Mitchell",
+                "price": -104,
+                "point": 14.5
+              },
+              {
+                "name": "Under",
+                "description": "Davion Mitchell",
+                "price": -122,
+                "point": 14.5
+              },
+              {
+                "name": "Over",
+                "description": "Bam Adebayo",
+                "price": -115,
+                "point": 19.5
+              },
+              {
+                "name": "Under",
+                "description": "Bam Adebayo",
+                "price": -111,
+                "point": 19.5
+              },
+              {
+                "name": "Over",
+                "description": "Pelle Larsson",
+                "price": -115,
+                "point": 10.5
+              },
+              {
+                "name": "Under",
+                "description": "Pelle Larsson",
+                "price": -111,
+                "point": 10.5
+              },
+              {
+                "name": "Over",
+                "description": "Bobby Portis",
+                "price": 104,
+                "point": 8.5
+              },
+              {
+                "name": "Under",
+                "description": "Bobby Portis",
+                "price": -132,
+                "point": 8.5
+              },
+              {
+                "name": "Over",
+                "description": "Aday Mara",
+                "price": -113,
+                "point": 12.5
+              },
+              {
+                "name": "Under",
+                "description": "Aday Mara",
+                "price": -113,
+                "point": 12.5
+              },
+              {
+                "name": "Over",
+                "description": "Andrew Wiggins",
+                "price": 102,
+                "point": 9.5
+              },
+              {
+                "name": "Under",
+                "description": "Andrew Wiggins",
+                "price": -130,
+                "point": 9.5
+              },
+              {
+                "name": "Over",
+                "description": "Giannis Antetokounmpo",
+                "price": -128,
+                "point": 26.5
+              },
+              {
+                "name": "Under",
+                "description": "Giannis Antetokounmpo",
+                "price": 100,
+                "point": 26.5
+              },
+              {
+                "name": "Over",
+                "description": "Jared McCain",
+                "price": -113,
+                "point": 19.5
+              },
+              {
+                "name": "Under",
+                "description": "Jared McCain",
+                "price": -113,
+                "point": 19.5
+              },
+              {
+                "name": "Over",
+                "description": "Bennett Stirtz",
+                "price": 104,
+                "point": 12.5
+              },
+              {
+                "name": "Under",
+                "description": "Bennett Stirtz",
+                "price": -132,
+                "point": 12.5
+              },
+              {
+                "name": "Over",
+                "description": "Kenrich Williams",
+                "price": -128,
+                "point": 10.5
+              },
+              {
+                "name": "Under",
+                "description": "Kenrich Williams",
+                "price": 100,
+                "point": 10.5
+              }
+            ]
+          },
+          {
+            "key": "player_points_assists",
+            "last_update": "2026-11-22T21:52:20Z",
+            "outcomes": [
+              {
+                "name": "Over",
+                "description": "Klay Thompson",
+                "price": -130,
+                "point": 15.5
+              },
+              {
+                "name": "Under",
+                "description": "Klay Thompson",
+                "price": -102,
+                "point": 15.5
+              },
+              {
+                "name": "Over",
+                "description": "Ajay Mitchell",
+                "price": -118,
+                "point": 28.5
+              },
+              {
+                "name": "Under",
+                "description": "Ajay Mitchell",
+                "price": -112,
+                "point": 28.5
+              },
+              {
+                "name": "Over",
+                "description": "Isaiah Hartenstein",
+                "price": -104,
+                "point": 15.5
+              },
+              {
+                "name": "Under",
+                "description": "Isaiah Hartenstein",
+                "price": -128,
+                "point": 15.5
+              },
+              {
+                "name": "Over",
+                "description": "Davion Mitchell",
+                "price": -104,
+                "point": 23.5
+              },
+              {
+                "name": "Under",
+                "description": "Davion Mitchell",
+                "price": -128,
+                "point": 23.5
+              },
+              {
+                "name": "Over",
+                "description": "Bam Adebayo",
+                "price": -112,
+                "point": 23.5
+              },
+              {
+                "name": "Under",
+                "description": "Bam Adebayo",
+                "price": -118,
+                "point": 23.5
+              },
+              {
+                "name": "Over",
+                "description": "Pelle Larsson",
+                "price": -106,
+                "point": 14.5
+              },
+              {
+                "name": "Under",
+                "description": "Pelle Larsson",
+                "price": -125,
+                "point": 14.5
+              },
+              {
+                "name": "Over",
+                "description": "Bobby Portis",
+                "price": -114,
+                "point": 9.5
+              },
+              {
+                "name": "Under",
+                "description": "Bobby Portis",
+                "price": -114,
+                "point": 9.5
+              },
+              {
+                "name": "Over",
+                "description": "Andrew Wiggins",
+                "price": -114,
+                "point": 10.5
+              },
+              {
+                "name": "Under",
+                "description": "Andrew Wiggins",
+                "price": -114,
+                "point": 10.5
+              },
+              {
+                "name": "Over",
+                "description": "Giannis Antetokounmpo",
+                "price": -110,
+                "point": 33.5
+              },
+              {
+                "name": "Under",
+                "description": "Giannis Antetokounmpo",
+                "price": -120,
+                "point": 33.5
+              },
+              {
+                "name": "Over",
+                "description": "Jared McCain",
+                "price": -110,
+                "point": 22.5
+              },
+              {
+                "name": "Under",
+                "description": "Jared McCain",
+                "price": -118,
+                "point": 22.5
+              },
+              {
+                "name": "Over",
+                "description": "Aday Mara",
+                "price": -102,
+                "point": 15.5
+              },
+              {
+                "name": "Under",
+                "description": "Aday Mara",
+                "price": -130,
+                "point": 15.5
+              }
+            ]
+          },
+          {
+            "key": "player_points_rebounds",
+            "last_update": "2026-11-22T21:52:20Z",
+            "outcomes": [
+              {
+                "name": "Over",
+                "description": "Klay Thompson",
+                "price": -111,
+                "point": 16.5
+              },
+              {
+                "name": "Under",
+                "description": "Klay Thompson",
+                "price": -115,
+                "point": 16.5
+              },
+              {
+                "name": "Over",
+                "description": "Isaiah Hartenstein",
+                "price": -122,
+                "point": 20.5
+              },
+              {
+                "name": "Under",
+                "description": "Isaiah Hartenstein",
+                "price": -104,
+                "point": 20.5
+              },
+              {
+                "name": "Over",
+                "description": "Ajay Mitchell",
+                "price": -115,
+                "point": 27.5
+              },
+              {
+                "name": "Under",
+                "description": "Ajay Mitchell",
+                "price": -111,
+                "point": 27.5
+              },
+              {
+                "name": "Over",
+                "description": "Bam Adebayo",
+                "price": -120,
+                "point": 28.5
+              },
+              {
+                "name": "Under",
+                "description": "Bam Adebayo",
+                "price": -106,
+                "point": 28.5
+              },
+              {
+                "name": "Over",
+                "description": "Pelle Larsson",
+                "price": -106,
+                "point": 14.5
+              },
+              {
+                "name": "Under",
+                "description": "Pelle Larsson",
+                "price": -120,
+                "point": 14.5
+              },
+              {
+                "name": "Over",
+                "description": "Bobby Portis",
+                "price": -122,
+                "point": 12.5
+              },
+              {
+                "name": "Under",
+                "description": "Bobby Portis",
+                "price": -104,
+                "point": 12.5
+              },
+              {
+                "name": "Over",
+                "description": "Andrew Wiggins",
+                "price": -106,
+                "point": 12.5
+              },
+              {
+                "name": "Under",
+                "description": "Andrew Wiggins",
+                "price": -120,
+                "point": 12.5
+              },
+              {
+                "name": "Over",
+                "description": "Davion Mitchell",
+                "price": -106,
+                "point": 17.5
+              },
+              {
+                "name": "Under",
+                "description": "Davion Mitchell",
+                "price": -120,
+                "point": 17.5
+              },
+              {
+                "name": "Over",
+                "description": "Giannis Antetokounmpo",
+                "price": -115,
+                "point": 39.5
+              },
+              {
+                "name": "Under",
+                "description": "Giannis Antetokounmpo",
+                "price": -111,
+                "point": 39.5
+              },
+              {
+                "name": "Over",
+                "description": "Jared McCain",
+                "price": -113,
+                "point": 23.5
+              },
+              {
+                "name": "Under",
+                "description": "Jared McCain",
+                "price": -113,
+                "point": 23.5
+              },
+              {
+                "name": "Over",
+                "description": "Kenrich Williams",
+                "price": -115,
+                "point": 16.5
+              },
+              {
+                "name": "Under",
+                "description": "Kenrich Williams",
+                "price": -111,
+                "point": 16.5
+              },
+              {
+                "name": "Over",
+                "description": "Bennett Stirtz",
+                "price": -115,
+                "point": 14.5
+              },
+              {
+                "name": "Under",
+                "description": "Bennett Stirtz",
+                "price": -111,
+                "point": 14.5
+              },
+              {
+                "name": "Over",
+                "description": "Aday Mara",
+                "price": -120,
+                "point": 21.5
+              },
+              {
+                "name": "Under",
+                "description": "Aday Mara",
+                "price": -106,
+                "point": 21.5
+              }
+            ]
+          },
+          {
+            "key": "player_points_rebounds_assists",
+            "last_update": "2026-11-22T21:52:20Z",
+            "outcomes": [
+              {
+                "name": "Over",
+                "description": "Pelle Larsson",
+                "price": -120,
+                "point": 17.5
+              },
+              {
+                "name": "Under",
+                "description": "Pelle Larsson",
+                "price": -106,
+                "point": 17.5
+              },
+              {
+                "name": "Over",
+                "description": "Ajay Mitchell",
+                "price": -122,
+                "point": 32.5
+              },
+              {
+                "name": "Under",
+                "description": "Ajay Mitchell",
+                "price": -104,
+                "point": 32.5
+              },
+              {
+                "name": "Over",
+                "description": "Klay Thompson",
+                "price": -108,
+                "point": 18.5
+              },
+              {
+                "name": "Under",
+                "description": "Klay Thompson",
+                "price": -118,
+                "point": 18.5
+              },
+              {
+                "name": "Over",
+                "description": "Isaiah Hartenstein",
+                "price": -106,
+                "point": 26.5
+              },
+              {
+                "name": "Under",
+                "description": "Isaiah Hartenstein",
+                "price": -120,
+                "point": 26.5
+              },
+              {
+                "name": "Over",
+                "description": "Davion Mitchell",
+                "price": -104,
+                "point": 26.5
+              },
+              {
+                "name": "Under",
+                "description": "Davion Mitchell",
+                "price": -122,
+                "point": 26.5
+              },
+              {
+                "name": "Over",
+                "description": "Bam Adebayo",
+                "price": -115,
+                "point": 32.5
+              },
+              {
+                "name": "Under",
+                "description": "Bam Adebayo",
+                "price": -111,
+                "point": 32.5
+              },
+              {
+                "name": "Over",
+                "description": "Bobby Portis",
+                "price": -111,
+                "point": 14.5
+              },
+              {
+                "name": "Under",
+                "description": "Bobby Portis",
+                "price": -115,
+                "point": 14.5
+              },
+              {
+                "name": "Over",
+                "description": "Andrew Wiggins",
+                "price": -122,
+                "point": 13.5
+              },
+              {
+                "name": "Under",
+                "description": "Andrew Wiggins",
+                "price": -104,
+                "point": 13.5
+              },
+              {
+                "name": "Over",
+                "description": "Giannis Antetokounmpo",
+                "price": -120,
+                "point": 45.5
+              },
+              {
+                "name": "Under",
+                "description": "Giannis Antetokounmpo",
+                "price": -106,
+                "point": 45.5
+              },
+              {
+                "name": "Over",
+                "description": "Jared McCain",
+                "price": -111,
+                "point": 26.5
+              },
+              {
+                "name": "Under",
+                "description": "Jared McCain",
+                "price": -115,
+                "point": 26.5
+              },
+              {
+                "name": "Over",
+                "description": "Aday Mara",
+                "price": -111,
+                "point": 24.5
+              },
+              {
+                "name": "Under",
+                "description": "Aday Mara",
+                "price": -115,
+                "point": 24.5
+              }
+            ]
+          },
+          {
+            "key": "player_rebounds",
+            "last_update": "2026-11-22T21:52:20Z",
+            "outcomes": [
+              {
+                "name": "Over",
+                "description": "Klay Thompson",
+                "price": 140,
+                "point": 2.5
+              },
+              {
+                "name": "Under",
+                "description": "Klay Thompson",
+                "price": -180,
+                "point": 2.5
+              },
+              {
+                "name": "Over",
+                "description": "Ajay Mitchell",
+                "price": 120,
+                "point": 4.5
+              },
+              {
+                "name": "Under",
+                "description": "Ajay Mitchell",
+                "price": -154,
+                "point": 4.5
+              },
+              {
+                "name": "Over",
+                "description": "Isaiah Hartenstein",
+                "price": -130,
+                "point": 10.5
+              },
+              {
+                "name": "Under",
+                "description": "Isaiah Hartenstein",
+                "price": 102,
+                "point": 10.5
+              },
+              {
+                "name": "Over",
+                "description": "Bam Adebayo",
+                "price": -122,
+                "point": 8.5
+              },
+              {
+                "name": "Under",
+                "description": "Bam Adebayo",
+                "price": -104,
+                "point": 8.5
+              },
+              {
+                "name": "Over",
+                "description": "Pelle Larsson",
+                "price": 108,
+                "point": 3.5
+              },
+              {
+                "name": "Under",
+                "description": "Pelle Larsson",
+                "price": -136,
+                "point": 3.5
+              },
+              {
+                "name": "Over",
+                "description": "Bobby Portis",
+                "price": -111,
+                "point": 4.5
+              },
+              {
+                "name": "Under",
+                "description": "Bobby Portis",
+                "price": -115,
+                "point": 4.5
+              },
+              {
+                "name": "Over",
+                "description": "Andrew Wiggins",
+                "price": 130,
+                "point": 3.5
+              },
+              {
+                "name": "Under",
+                "description": "Andrew Wiggins",
+                "price": -166,
+                "point": 3.5
+              },
+              {
+                "name": "Over",
+                "description": "Giannis Antetokounmpo",
+                "price": -104,
+                "point": 12.5
+              },
+              {
+                "name": "Under",
+                "description": "Giannis Antetokounmpo",
+                "price": -122,
+                "point": 12.5
+              },
+              {
+                "name": "Over",
+                "description": "Davion Mitchell",
+                "price": -154,
+                "point": 2.5
+              },
+              {
+                "name": "Under",
+                "description": "Davion Mitchell",
+                "price": 120,
+                "point": 2.5
+              },
+              {
+                "name": "Over",
+                "description": "Jared McCain",
+                "price": -136,
+                "point": 3.5
+              },
+              {
+                "name": "Under",
+                "description": "Jared McCain",
+                "price": 106,
+                "point": 3.5
+              },
+              {
+                "name": "Over",
+                "description": "Aday Mara",
+                "price": 112,
+                "point": 9.5
+              },
+              {
+                "name": "Under",
+                "description": "Aday Mara",
+                "price": -142,
+                "point": 9.5
+              }
+            ]
+          },
+          {
+            "key": "player_rebounds_assists",
+            "last_update": "2026-11-22T21:52:20Z",
+            "outcomes": [
+              {
+                "name": "Over",
+                "description": "Pelle Larsson",
+                "price": -122,
+                "point": 6.5
+              },
+              {
+                "name": "Under",
+                "description": "Pelle Larsson",
+                "price": -104,
+                "point": 6.5
+              },
+              {
+                "name": "Over",
+                "description": "Ajay Mitchell",
+                "price": 102,
+                "point": 9.5
+              },
+              {
+                "name": "Under",
+                "description": "Ajay Mitchell",
+                "price": -130,
+                "point": 9.5
+              },
+              {
+                "name": "Over",
+                "description": "Klay Thompson",
+                "price": -162,
+                "point": 3.5
+              },
+              {
+                "name": "Under",
+                "description": "Klay Thompson",
+                "price": 126,
+                "point": 3.5
+              },
+              {
+                "name": "Over",
+                "description": "Isaiah Hartenstein",
+                "price": -130,
+                "point": 15.5
+              },
+              {
+                "name": "Under",
+                "description": "Isaiah Hartenstein",
+                "price": 102,
+                "point": 15.5
+              },
+              {
+                "name": "Over",
+                "description": "Davion Mitchell",
+                "price": 100,
+                "point": 11.5
+              },
+              {
+                "name": "Under",
+                "description": "Davion Mitchell",
+                "price": -128,
+                "point": 11.5
+              },
+              {
+                "name": "Over",
+                "description": "Bam Adebayo",
+                "price": -104,
+                "point": 12.5
+              },
+              {
+                "name": "Under",
+                "description": "Bam Adebayo",
+                "price": -122,
+                "point": 12.5
+              },
+              {
+                "name": "Over",
+                "description": "Bobby Portis",
+                "price": -138,
+                "point": 5.5
+              },
+              {
+                "name": "Under",
+                "description": "Bobby Portis",
+                "price": 108,
+                "point": 5.5
+              },
+              {
+                "name": "Over",
+                "description": "Andrew Wiggins",
+                "price": -113,
+                "point": 4.5
+              },
+              {
+                "name": "Under",
+                "description": "Andrew Wiggins",
+                "price": -113,
+                "point": 4.5
+              },
+              {
+                "name": "Over",
+                "description": "Giannis Antetokounmpo",
+                "price": -111,
+                "point": 18.5
+              },
+              {
+                "name": "Under",
+                "description": "Giannis Antetokounmpo",
+                "price": -115,
+                "point": 18.5
+              },
+              {
+                "name": "Over",
+                "description": "Jared McCain",
+                "price": -113,
+                "point": 6.5
+              },
+              {
+                "name": "Under",
+                "description": "Jared McCain",
+                "price": -113,
+                "point": 6.5
+              },
+              {
+                "name": "Over",
+                "description": "Aday Mara",
+                "price": -104,
+                "point": 11.5
+              },
+              {
+                "name": "Under",
+                "description": "Aday Mara",
+                "price": -122,
+                "point": 11.5
+              }
+            ]
+          },
+          {
+            "key": "player_steals",
+            "last_update": "2026-11-22T21:52:20Z",
+            "outcomes": [
+              {
+                "name": "Over",
+                "description": "Bam Adebayo",
+                "price": 118,
+                "point": 1.5
+              },
+              {
+                "name": "Under",
+                "description": "Bam Adebayo",
+                "price": -158,
+                "point": 1.5
+              },
+              {
+                "name": "Over",
+                "description": "Ajay Mitchell",
+                "price": 164,
+                "point": 1.5
+              },
+              {
+                "name": "Under",
+                "description": "Ajay Mitchell",
+                "price": -225,
+                "point": 1.5
+              },
+              {
+                "name": "Over",
+                "description": "Giannis Antetokounmpo",
+                "price": -205,
+                "point": 0.5
+              },
+              {
+                "name": "Under",
+                "description": "Giannis Antetokounmpo",
+                "price": 152,
+                "point": 0.5
+              }
+            ]
+          },
+          {
+            "key": "player_threes",
+            "last_update": "2026-11-22T21:52:20Z",
+            "outcomes": [
+              {
+                "name": "Over",
+                "description": "Pelle Larsson",
+                "price": -225,
+                "point": 0.5
+              },
+              {
+                "name": "Under",
+                "description": "Pelle Larsson",
+                "price": 172,
+                "point": 0.5
+              },
+              {
+                "name": "Over",
+                "description": "Klay Thompson",
+                "price": -128,
+                "point": 3.5
+              },
+              {
+                "name": "Under",
+                "description": "Klay Thompson",
+                "price": 100,
+                "point": 3.5
+              },
+              {
+                "name": "Over",
+                "description": "Ajay Mitchell",
+                "price": 142,
+                "point": 1.5
+              },
+              {
+                "name": "Under",
+                "description": "Ajay Mitchell",
+                "price": -184,
+                "point": 1.5
+              },
+              {
+                "name": "Over",
+                "description": "Davion Mitchell",
+                "price": 126,
+                "point": 2.5
+              },
+              {
+                "name": "Under",
+                "description": "Davion Mitchell",
+                "price": -162,
+                "point": 2.5
+              },
+              {
+                "name": "Over",
+                "description": "Bam Adebayo",
+                "price": 154,
+                "point": 1.5
+              },
+              {
+                "name": "Under",
+                "description": "Bam Adebayo",
+                "price": -200,
+                "point": 1.5
+              },
+              {
+                "name": "Over",
+                "description": "Bobby Portis",
+                "price": 144,
+                "point": 1.5
+              },
+              {
+                "name": "Under",
+                "description": "Bobby Portis",
+                "price": -186,
+                "point": 1.5
+              },
+              {
+                "name": "Over",
+                "description": "Andrew Wiggins",
+                "price": 116,
+                "point": 1.5
+              },
+              {
+                "name": "Under",
+                "description": "Andrew Wiggins",
+                "price": -148,
+                "point": 1.5
+              },
+              {
+                "name": "Over",
+                "description": "Jared McCain",
+                "price": 112,
+                "point": 3.5
+              },
+              {
+                "name": "Under",
+                "description": "Jared McCain",
+                "price": -140,
+                "point": 3.5
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "key": "betrivers",
+        "title": "BetRivers",
+        "markets": [
+          {
+            "key": "player_assists",
+            "last_update": "2026-11-22T21:52:29Z",
+            "outcomes": [
+              {
+                "name": "Over",
+                "description": "Ajay Mitchell",
+                "price": -136,
+                "point": 4.5
+              },
+              {
+                "name": "Under",
+                "description": "Ajay Mitchell",
+                "price": 100,
+                "point": 4.5
+              },
+              {
+                "name": "Over",
+                "description": "Aday Mara",
+                "price": 128,
+                "point": 2.5
+              },
+              {
+                "name": "Under",
+                "description": "Aday Mara",
+                "price": -177,
+                "point": 2.5
+              },
+              {
+                "name": "Over",
+                "description": "Isaiah Hartenstein",
+                "price": -122,
+                "point": 4.5
+              },
+              {
+                "name": "Under",
+                "description": "Isaiah Hartenstein",
+                "price": -110,
+                "point": 4.5
+              },
+              {
+                "name": "Over",
+                "description": "Giannis Antetokounmpo",
+                "price": 102,
+                "point": 6.5
+              },
+              {
+                "name": "Under",
+                "description": "Giannis Antetokounmpo",
+                "price": -139,
+                "point": 6.5
+              },
+              {
+                "name": "Over",
+                "description": "Bam Adebayo",
+                "price": -103,
+                "point": 3.5
+              },
+              {
+                "name": "Under",
+                "description": "Bam Adebayo",
+                "price": -134,
+                "point": 3.5
+              },
+              {
+                "name": "Over",
+                "description": "Klay Thompson",
+                "price": -141,
+                "point": 1.5
+              },
+              {
+                "name": "Under",
+                "description": "Klay Thompson",
+                "price": 104,
+                "point": 1.5
+              },
+              {
+                "name": "Over",
+                "description": "Pelle Larsson",
+                "price": 104,
+                "point": 3.5
+              },
+              {
+                "name": "Under",
+                "description": "Pelle Larsson",
+                "price": -139,
+                "point": 3.5
+              },
+              {
+                "name": "Over",
+                "description": "Jared McCain",
+                "price": -104,
+                "point": 2.5
+              },
+              {
+                "name": "Under",
+                "description": "Jared McCain",
+                "price": -130,
+                "point": 2.5
+              },
+              {
+                "name": "Over",
+                "description": "Davion Mitchell",
+                "price": -118,
+                "point": 8.5
+              },
+              {
+                "name": "Under",
+                "description": "Davion Mitchell",
+                "price": -114,
+                "point": 8.5
+              }
+            ]
+          },
+          {
+            "key": "player_points",
+            "last_update": "2026-11-22T21:52:29Z",
+            "outcomes": [
+              {
+                "name": "Over",
+                "description": "Jared McCain",
+                "price": -109,
+                "point": 19.5
+              },
+              {
+                "name": "Under",
+                "description": "Jared McCain",
+                "price": -124,
+                "point": 19.5
+              },
+              {
+                "name": "Over",
+                "description": "Kenrich Williams",
+                "price": -120,
+                "point": 10.5
+              },
+              {
+                "name": "Under",
+                "description": "Kenrich Williams",
+                "price": -113,
+                "point": 10.5
+              },
+              {
+                "name": "Over",
+                "description": "Ajay Mitchell",
+                "price": -112,
+                "point": 23.5
+              },
+              {
+                "name": "Under",
+                "description": "Ajay Mitchell",
+                "price": -121,
+                "point": 23.5
+              },
+              {
+                "name": "Over",
+                "description": "Aday Mara",
+                "price": -103,
+                "point": 12.5
+              },
+              {
+                "name": "Under",
+                "description": "Aday Mara",
+                "price": -132,
+                "point": 12.5
+              },
+              {
+                "name": "Over",
+                "description": "Davion Mitchell",
+                "price": -105,
+                "point": 14.5
+              },
+              {
+                "name": "Under",
+                "description": "Davion Mitchell",
+                "price": -129,
+                "point": 14.5
+              },
+              {
+                "name": "Over",
+                "description": "Pelle Larsson",
+                "price": -106,
+                "point": 10.5
+              },
+              {
+                "name": "Under",
+                "description": "Pelle Larsson",
+                "price": -129,
+                "point": 10.5
+              },
+              {
+                "name": "Over",
+                "description": "Giannis Antetokounmpo",
+                "price": -118,
+                "point": 26.5
+              },
+              {
+                "name": "Under",
+                "description": "Giannis Antetokounmpo",
+                "price": -114,
+                "point": 26.5
+              },
+              {
+                "name": "Over",
+                "description": "Bam Adebayo",
+                "price": -114,
+                "point": 19.5
+              },
+              {
+                "name": "Under",
+                "description": "Bam Adebayo",
+                "price": -118,
+                "point": 19.5
+              },
+              {
+                "name": "Over",
+                "description": "Klay Thompson",
+                "price": -110,
+                "point": 14.5
+              },
+              {
+                "name": "Under",
+                "description": "Klay Thompson",
+                "price": -122,
+                "point": 14.5
+              },
+              {
+                "name": "Over",
+                "description": "Isaiah Hartenstein",
+                "price": -110,
+                "point": 9.5
+              },
+              {
+                "name": "Under",
+                "description": "Isaiah Hartenstein",
+                "price": -122,
+                "point": 9.5
+              },
+              {
+                "name": "Over",
+                "description": "Andrew Wiggins",
+                "price": -120,
+                "point": 9.5
+              },
+              {
+                "name": "Under",
+                "description": "Andrew Wiggins",
+                "price": -113,
+                "point": 9.5
+              }
+            ]
+          },
+          {
+            "key": "player_points_assists",
+            "last_update": "2026-11-22T21:52:29Z",
+            "outcomes": [
+              {
+                "name": "Over",
+                "description": "Jared McCain",
+                "price": -103,
+                "point": 22.5
+              },
+              {
+                "name": "Over",
+                "description": "Isaiah Hartenstein",
+                "price": -103,
+                "point": 14.5
+              },
+              {
+                "name": "Over",
+                "description": "Davion Mitchell",
+                "price": -104,
+                "point": 23.5
+              },
+              {
+                "name": "Over",
+                "description": "Pelle Larsson",
+                "price": 106,
+                "point": 14.5
+              },
+              {
+                "name": "Over",
+                "description": "Ajay Mitchell",
+                "price": -112,
+                "point": 28.5
+              },
+              {
+                "name": "Over",
+                "description": "Aday Mara",
+                "price": -112,
+                "point": 14.5
+              },
+              {
+                "name": "Over",
+                "description": "Bam Adebayo",
+                "price": -104,
+                "point": 23.5
+              },
+              {
+                "name": "Over",
+                "description": "Giannis Antetokounmpo",
+                "price": -109,
+                "point": 33.5
+              },
+              {
+                "name": "Over",
+                "description": "Klay Thompson",
+                "price": -109,
+                "point": 16.5
+              }
+            ]
+          },
+          {
+            "key": "player_points_rebounds",
+            "last_update": "2026-11-22T21:52:29Z",
+            "outcomes": [
+              {
+                "name": "Over",
+                "description": "Giannis Antetokounmpo",
+                "price": -108,
+                "point": 39.5
+              },
+              {
+                "name": "Over",
+                "description": "Ajay Mitchell",
+                "price": -120,
+                "point": 27.5
+              },
+              {
+                "name": "Over",
+                "description": "Kenrich Williams",
+                "price": -114,
+                "point": 16.5
+              },
+              {
+                "name": "Over",
+                "description": "Pelle Larsson",
+                "price": 100,
+                "point": 14.5
+              },
+              {
+                "name": "Over",
+                "description": "Jared McCain",
+                "price": -110,
+                "point": 23.5
+              },
+              {
+                "name": "Over",
+                "description": "Aday Mara",
+                "price": -115,
+                "point": 21.5
+              },
+              {
+                "name": "Over",
+                "description": "Bam Adebayo",
+                "price": -112,
+                "point": 28.5
+              },
+              {
+                "name": "Over",
+                "description": "Andrew Wiggins",
+                "price": -107,
+                "point": 13.5
+              },
+              {
+                "name": "Over",
+                "description": "Isaiah Hartenstein",
+                "price": -110,
+                "point": 20.5
+              },
+              {
+                "name": "Over",
+                "description": "Davion Mitchell",
+                "price": -112,
+                "point": 17.5
+              }
+            ]
+          },
+          {
+            "key": "player_points_rebounds_assists",
+            "last_update": "2026-11-22T21:52:29Z",
+            "outcomes": [
+              {
+                "name": "Over",
+                "description": "Jared McCain",
+                "price": -105,
+                "point": 26.5
+              },
+              {
+                "name": "Under",
+                "description": "Jared McCain",
+                "price": -130,
+                "point": 26.5
+              },
+              {
+                "name": "Over",
+                "description": "Ajay Mitchell",
+                "price": -120,
+                "point": 32.5
+              },
+              {
+                "name": "Under",
+                "description": "Ajay Mitchell",
+                "price": -113,
+                "point": 32.5
+              },
+              {
+                "name": "Over",
+                "description": "Pelle Larsson",
+                "price": -113,
+                "point": 17.5
+              },
+              {
+                "name": "Under",
+                "description": "Pelle Larsson",
+                "price": -120,
+                "point": 17.5
+              },
+              {
+                "name": "Over",
+                "description": "Aday Mara",
+                "price": 100,
+                "point": 24.5
+              },
+              {
+                "name": "Under",
+                "description": "Aday Mara",
+                "price": -136,
+                "point": 24.5
+              },
+              {
+                "name": "Over",
+                "description": "Davion Mitchell",
+                "price": -109,
+                "point": 26.5
+              },
+              {
+                "name": "Under",
+                "description": "Davion Mitchell",
+                "price": -124,
+                "point": 26.5
+              },
+              {
+                "name": "Over",
+                "description": "Bam Adebayo",
+                "price": -105,
+                "point": 32.5
+              },
+              {
+                "name": "Under",
+                "description": "Bam Adebayo",
+                "price": -129,
+                "point": 32.5
+              },
+              {
+                "name": "Over",
+                "description": "Isaiah Hartenstein",
+                "price": -108,
+                "point": 25.5
+              },
+              {
+                "name": "Under",
+                "description": "Isaiah Hartenstein",
+                "price": -125,
+                "point": 25.5
+              },
+              {
+                "name": "Over",
+                "description": "Giannis Antetokounmpo",
+                "price": -115,
+                "point": 45.5
+              },
+              {
+                "name": "Under",
+                "description": "Giannis Antetokounmpo",
+                "price": -117,
+                "point": 45.5
+              }
+            ]
+          },
+          {
+            "key": "player_rebounds",
+            "last_update": "2026-11-22T21:52:29Z",
+            "outcomes": [
+              {
+                "name": "Over",
+                "description": "Kenrich Williams",
+                "price": -114,
+                "point": 5.5
+              },
+              {
+                "name": "Under",
+                "description": "Kenrich Williams",
+                "price": -118,
+                "point": 5.5
+              },
+              {
+                "name": "Over",
+                "description": "Ajay Mitchell",
+                "price": 108,
+                "point": 4.5
+              },
+              {
+                "name": "Under",
+                "description": "Ajay Mitchell",
+                "price": -148,
+                "point": 4.5
+              },
+              {
+                "name": "Over",
+                "description": "Andrew Wiggins",
+                "price": 105,
+                "point": 3.5
+              },
+              {
+                "name": "Under",
+                "description": "Andrew Wiggins",
+                "price": -141,
+                "point": 3.5
+              },
+              {
+                "name": "Over",
+                "description": "Bam Adebayo",
+                "price": -127,
+                "point": 8.5
+              },
+              {
+                "name": "Under",
+                "description": "Bam Adebayo",
+                "price": -107,
+                "point": 8.5
+              },
+              {
+                "name": "Over",
+                "description": "Davion Mitchell",
+                "price": 133,
+                "point": 3.5
+              },
+              {
+                "name": "Under",
+                "description": "Davion Mitchell",
+                "price": -182,
+                "point": 3.5
+              },
+              {
+                "name": "Over",
+                "description": "Aday Mara",
+                "price": 102,
+                "point": 9.5
+              },
+              {
+                "name": "Under",
+                "description": "Aday Mara",
+                "price": -137,
+                "point": 9.5
+              },
+              {
+                "name": "Over",
+                "description": "Jared McCain",
+                "price": -148,
+                "point": 3.5
+              },
+              {
+                "name": "Under",
+                "description": "Jared McCain",
+                "price": 108,
+                "point": 3.5
+              },
+              {
+                "name": "Over",
+                "description": "Giannis Antetokounmpo",
+                "price": 104,
+                "point": 12.5
+              },
+              {
+                "name": "Under",
+                "description": "Giannis Antetokounmpo",
+                "price": -141,
+                "point": 12.5
+              },
+              {
+                "name": "Over",
+                "description": "Pelle Larsson",
+                "price": -113,
+                "point": 3.5
+              },
+              {
+                "name": "Under",
+                "description": "Pelle Larsson",
+                "price": -120,
+                "point": 3.5
+              },
+              {
+                "name": "Over",
+                "description": "Isaiah Hartenstein",
+                "price": -125,
+                "point": 10.5
+              },
+              {
+                "name": "Under",
+                "description": "Isaiah Hartenstein",
+                "price": -108,
+                "point": 10.5
+              }
+            ]
+          },
+          {
+            "key": "player_rebounds_assists",
+            "last_update": "2026-11-22T21:52:29Z",
+            "outcomes": [
+              {
+                "name": "Over",
+                "description": "Aday Mara",
+                "price": -114,
+                "point": 11.5
+              },
+              {
+                "name": "Over",
+                "description": "Isaiah Hartenstein",
+                "price": -115,
+                "point": 15.5
+              },
+              {
+                "name": "Over",
+                "description": "Ajay Mitchell",
+                "price": 105,
+                "point": 9.5
+              },
+              {
+                "name": "Over",
+                "description": "Jared McCain",
+                "price": -108,
+                "point": 6.5
+              },
+              {
+                "name": "Over",
+                "description": "Davion Mitchell",
+                "price": -127,
+                "point": 11.5
+              },
+              {
+                "name": "Over",
+                "description": "Giannis Antetokounmpo",
+                "price": -115,
+                "point": 18.5
+              },
+              {
+                "name": "Over",
+                "description": "Pelle Larsson",
+                "price": 115,
+                "point": 7.5
+              },
+              {
+                "name": "Over",
+                "description": "Bam Adebayo",
+                "price": -105,
+                "point": 12.5
+              }
+            ]
+          },
+          {
+            "key": "player_threes",
+            "last_update": "2026-11-22T21:52:29Z",
+            "outcomes": [
+              {
+                "name": "Over",
+                "description": "Klay Thompson",
+                "price": -129,
+                "point": 3.5
+              },
+              {
+                "name": "Under",
+                "description": "Klay Thompson",
+                "price": -105,
+                "point": 3.5
+              },
+              {
+                "name": "Over",
+                "description": "Pelle Larsson",
+                "price": -225,
+                "point": 0.5
+              },
+              {
+                "name": "Under",
+                "description": "Pelle Larsson",
+                "price": 160,
+                "point": 0.5
+              },
+              {
+                "name": "Over",
+                "description": "Giannis Antetokounmpo",
+                "price": -112,
+                "point": 0.5
+              },
+              {
+                "name": "Under",
+                "description": "Giannis Antetokounmpo",
+                "price": -121,
+                "point": 0.5
+              },
+              {
+                "name": "Over",
+                "description": "Andrew Wiggins",
+                "price": 106,
+                "point": 1.5
+              },
+              {
+                "name": "Under",
+                "description": "Andrew Wiggins",
+                "price": -143,
+                "point": 1.5
+              },
+              {
+                "name": "Over",
+                "description": "Davion Mitchell",
+                "price": 120,
+                "point": 2.5
+              },
+              {
+                "name": "Under",
+                "description": "Davion Mitchell",
+                "price": -165,
+                "point": 2.5
+              },
+              {
+                "name": "Over",
+                "description": "Ajay Mitchell",
+                "price": 135,
+                "point": 1.5
+              },
+              {
+                "name": "Under",
+                "description": "Ajay Mitchell",
+                "price": -186,
+                "point": 1.5
+              },
+              {
+                "name": "Over",
+                "description": "Kenrich Williams",
+                "price": -118,
+                "point": 1.5
+              },
+              {
+                "name": "Under",
+                "description": "Kenrich Williams",
+                "price": -114,
+                "point": 1.5
+              },
+              {
+                "name": "Over",
+                "description": "Jared McCain",
+                "price": 115,
+                "point": 3.5
+              },
+              {
+                "name": "Under",
+                "description": "Jared McCain",
+                "price": -157,
+                "point": 3.5
+              },
+              {
+                "name": "Over",
+                "description": "Bam Adebayo",
+                "price": 143,
+                "point": 1.5
+              },
+              {
+                "name": "Under",
+                "description": "Bam Adebayo",
+                "price": -200,
+                "point": 1.5
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "key": "draftkings",
+        "title": "DraftKings",
+        "markets": [
+          {
+            "key": "player_assists",
+            "last_update": "2026-11-22T21:52:47Z",
+            "outcomes": [
+              {
+                "name": "Over",
+                "description": "Davion Mitchell",
+                "price": -108,
+                "point": 8.5
+              },
+              {
+                "name": "Under",
+                "description": "Davion Mitchell",
+                "price": -122,
+                "point": 8.5
+              },
+              {
+                "name": "Over",
+                "description": "Giannis Antetokounmpo",
+                "price": -143,
+                "point": 5.5
+              },
+              {
+                "name": "Under",
+                "description": "Giannis Antetokounmpo",
+                "price": 108,
+                "point": 5.5
+              },
+              {
+                "name": "Over",
+                "description": "Isaiah Hartenstein",
+                "price": -147,
+                "point": 4.5
+              },
+              {
+                "name": "Under",
+                "description": "Isaiah Hartenstein",
+                "price": 112,
+                "point": 4.5
+              },
+              {
+                "name": "Over",
+                "description": "Ajay Mitchell",
+                "price": -144,
+                "point": 4.5
+              },
+              {
+                "name": "Under",
+                "description": "Ajay Mitchell",
+                "price": 110,
+                "point": 4.5
+              },
+              {
+                "name": "Over",
+                "description": "Bam Adebayo",
+                "price": -104,
+                "point": 3.5
+              },
+              {
+                "name": "Under",
+                "description": "Bam Adebayo",
+                "price": -127,
+                "point": 3.5
+              },
+              {
+                "name": "Over",
+                "description": "Pelle Larsson",
+                "price": 114,
+                "point": 3.5
+              },
+              {
+                "name": "Under",
+                "description": "Pelle Larsson",
+                "price": -151,
+                "point": 3.5
+              },
+              {
+                "name": "Over",
+                "description": "Jared McCain",
+                "price": -117,
+                "point": 2.5
+              },
+              {
+                "name": "Under",
+                "description": "Jared McCain",
+                "price": -112,
+                "point": 2.5
+              },
+              {
+                "name": "Over",
+                "description": "Bennett Stirtz",
+                "price": -114,
+                "point": 2.5
+              },
+              {
+                "name": "Under",
+                "description": "Bennett Stirtz",
+                "price": -116,
+                "point": 2.5
+              },
+              {
+                "name": "Over",
+                "description": "Aday Mara",
+                "price": 134,
+                "point": 2.5
+              },
+              {
+                "name": "Under",
+                "description": "Aday Mara",
+                "price": -177,
+                "point": 2.5
+              },
+              {
+                "name": "Over",
+                "description": "Klay Thompson",
+                "price": -156,
+                "point": 1.5
+              },
+              {
+                "name": "Under",
+                "description": "Klay Thompson",
+                "price": 118,
+                "point": 1.5
+              }
+            ]
+          },
+          {
+            "key": "player_double_double",
+            "last_update": "2026-11-22T21:52:47Z",
+            "outcomes": [
+              {
+                "name": "Yes",
+                "description": "Giannis Antetokounmpo",
+                "price": -459
+              },
+              {
+                "name": "Yes",
+                "description": "Bam Adebayo",
+                "price": 107
+              },
+              {
+                "name": "Yes",
+                "description": "Isaiah Hartenstein",
+                "price": 123
+              },
+              {
+                "name": "Yes",
+                "description": "Aday Mara",
+                "price": 144
+              },
+              {
+                "name": "Yes",
+                "description": "Davion Mitchell",
+                "price": 205
+              },
+              {
+                "name": "Yes",
+                "description": "Ajay Mitchell",
+                "price": 1200
+              },
+              {
+                "name": "Yes",
+                "description": "Bobby Portis",
+                "price": 1240
+              },
+              {
+                "name": "Yes",
+                "description": "Pelle Larsson",
+                "price": 3300
+              },
+              {
+                "name": "Yes",
+                "description": "Jared McCain",
+                "price": 3500
+              }
+            ]
+          },
+          {
+            "key": "player_points",
+            "last_update": "2026-11-22T21:52:47Z",
+            "outcomes": [
+              {
+                "name": "Over",
+                "description": "Giannis Antetokounmpo",
+                "price": -110,
+                "point": 26.5
+              },
+              {
+                "name": "Under",
+                "description": "Giannis Antetokounmpo",
+                "price": -116,
+                "point": 26.5
+              },
+              {
+                "name": "Over",
+                "description": "Ajay Mitchell",
+                "price": -111,
+                "point": 23.5
+              },
+              {
+                "name": "Under",
+                "description": "Ajay Mitchell",
+                "price": -115,
+                "point": 23.5
+              },
+              {
+                "name": "Over",
+                "description": "Jared McCain",
+                "price": -115,
+                "point": 19.5
+              },
+              {
+                "name": "Under",
+                "description": "Jared McCain",
+                "price": -110,
+                "point": 19.5
+              },
+              {
+                "name": "Over",
+                "description": "Bam Adebayo",
+                "price": -113,
+                "point": 19.5
+              },
+              {
+                "name": "Under",
+                "description": "Bam Adebayo",
+                "price": -113,
+                "point": 19.5
+              },
+              {
+                "name": "Over",
+                "description": "Klay Thompson",
+                "price": -110,
+                "point": 14.5
+              },
+              {
+                "name": "Under",
+                "description": "Klay Thompson",
+                "price": -115,
+                "point": 14.5
+              },
+              {
+                "name": "Over",
+                "description": "Davion Mitchell",
+                "price": -109,
+                "point": 14.5
+              },
+              {
+                "name": "Under",
+                "description": "Davion Mitchell",
+                "price": -117,
+                "point": 14.5
+              },
+              {
+                "name": "Over",
+                "description": "Aday Mara",
+                "price": -105,
+                "point": 12.5
+              },
+              {
+                "name": "Under",
+                "description": "Aday Mara",
+                "price": -121,
+                "point": 12.5
+              },
+              {
+                "name": "Over",
+                "description": "Bennett Stirtz",
+                "price": -123,
+                "point": 11.5
+              },
+              {
+                "name": "Under",
+                "description": "Bennett Stirtz",
+                "price": -104,
+                "point": 11.5
+              },
+              {
+                "name": "Over",
+                "description": "Kenrich Williams",
+                "price": -113,
+                "point": 10.5
+              },
+              {
+                "name": "Under",
+                "description": "Kenrich Williams",
+                "price": -113,
+                "point": 10.5
+              },
+              {
+                "name": "Over",
+                "description": "Pelle Larsson",
+                "price": -103,
+                "point": 10.5
+              },
+              {
+                "name": "Under",
+                "description": "Pelle Larsson",
+                "price": -124,
+                "point": 10.5
+              },
+              {
+                "name": "Over",
+                "description": "Isaiah Hartenstein",
+                "price": -127,
+                "point": 9.5
+              },
+              {
+                "name": "Under",
+                "description": "Isaiah Hartenstein",
+                "price": 100,
+                "point": 9.5
+              },
+              {
+                "name": "Over",
+                "description": "Andrew Wiggins",
+                "price": -113,
+                "point": 9.5
+              },
+              {
+                "name": "Under",
+                "description": "Andrew Wiggins",
+                "price": -113,
+                "point": 9.5
+              },
+              {
+                "name": "Over",
+                "description": "Bobby Portis",
+                "price": -111,
+                "point": 8.5
+              },
+              {
+                "name": "Under",
+                "description": "Bobby Portis",
+                "price": -115,
+                "point": 8.5
+              }
+            ]
+          },
+          {
+            "key": "player_points_assists",
+            "last_update": "2026-11-22T21:52:47Z",
+            "outcomes": [
+              {
+                "name": "Over",
+                "description": "Giannis Antetokounmpo",
+                "price": -117,
+                "point": 32.5
+              },
+              {
+                "name": "Under",
+                "description": "Giannis Antetokounmpo",
+                "price": -113,
+                "point": 32.5
+              },
+              {
+                "name": "Over",
+                "description": "Ajay Mitchell",
+                "price": -114,
+                "point": 28.5
+              },
+              {
+                "name": "Under",
+                "description": "Ajay Mitchell",
+                "price": -115,
+                "point": 28.5
+              },
+              {
+                "name": "Over",
+                "description": "Davion Mitchell",
+                "price": -126,
+                "point": 22.5
+              },
+              {
+                "name": "Under",
+                "description": "Davion Mitchell",
+                "price": -104,
+                "point": 22.5
+              },
+              {
+                "name": "Over",
+                "description": "Bam Adebayo",
+                "price": -125,
+                "point": 22.5
+              },
+              {
+                "name": "Under",
+                "description": "Bam Adebayo",
+                "price": -106,
+                "point": 22.5
+              },
+              {
+                "name": "Over",
+                "description": "Jared McCain",
+                "price": -112,
+                "point": 22.5
+              },
+              {
+                "name": "Under",
+                "description": "Jared McCain",
+                "price": -117,
+                "point": 22.5
+              },
+              {
+                "name": "Over",
+                "description": "Klay Thompson",
+                "price": -115,
+                "point": 16.5
+              },
+              {
+                "name": "Under",
+                "description": "Klay Thompson",
+                "price": -114,
+                "point": 16.5
+              },
+              {
+                "name": "Over",
+                "description": "Isaiah Hartenstein",
+                "price": -123,
+                "point": 14.5
+              },
+              {
+                "name": "Under",
+                "description": "Isaiah Hartenstein",
+                "price": -107,
+                "point": 14.5
+              },
+              {
+                "name": "Over",
+                "description": "Aday Mara",
+                "price": -119,
+                "point": 14.5
+              },
+              {
+                "name": "Under",
+                "description": "Aday Mara",
+                "price": -110,
+                "point": 14.5
+              },
+              {
+                "name": "Over",
+                "description": "Bennett Stirtz",
+                "price": -115,
+                "point": 14.5
+              },
+              {
+                "name": "Under",
+                "description": "Bennett Stirtz",
+                "price": -114,
+                "point": 14.5
+              },
+              {
+                "name": "Over",
+                "description": "Pelle Larsson",
+                "price": -117,
+                "point": 13.5
+              },
+              {
+                "name": "Under",
+                "description": "Pelle Larsson",
+                "price": -113,
+                "point": 13.5
+              },
+              {
+                "name": "Over",
+                "description": "Andrew Wiggins",
+                "price": -102,
+                "point": 11.5
+              },
+              {
+                "name": "Under",
+                "description": "Andrew Wiggins",
+                "price": -129,
+                "point": 11.5
+              },
+              {
+                "name": "Over",
+                "description": "Bobby Portis",
+                "price": -125,
+                "point": 9.5
+              },
+              {
+                "name": "Under",
+                "description": "Bobby Portis",
+                "price": -105,
+                "point": 9.5
+              }
+            ]
+          },
+          {
+            "key": "player_points_rebounds",
+            "last_update": "2026-11-22T21:52:47Z",
+            "outcomes": [
+              {
+                "name": "Over",
+                "description": "Giannis Antetokounmpo",
+                "price": -109,
+                "point": 39.5
+              },
+              {
+                "name": "Under",
+                "description": "Giannis Antetokounmpo",
+                "price": -120,
+                "point": 39.5
+              },
+              {
+                "name": "Over",
+                "description": "Bam Adebayo",
+                "price": -117,
+                "point": 28.5
+              },
+              {
+                "name": "Under",
+                "description": "Bam Adebayo",
+                "price": -112,
+                "point": 28.5
+              },
+              {
+                "name": "Over",
+                "description": "Ajay Mitchell",
+                "price": -117,
+                "point": 27.5
+              },
+              {
+                "name": "Under",
+                "description": "Ajay Mitchell",
+                "price": -113,
+                "point": 27.5
+              },
+              {
+                "name": "Over",
+                "description": "Jared McCain",
+                "price": -116,
+                "point": 23.5
+              },
+              {
+                "name": "Under",
+                "description": "Jared McCain",
+                "price": -114,
+                "point": 23.5
+              },
+              {
+                "name": "Over",
+                "description": "Aday Mara",
+                "price": -127,
+                "point": 21.5
+              },
+              {
+                "name": "Under",
+                "description": "Aday Mara",
+                "price": -104,
+                "point": 21.5
+              },
+              {
+                "name": "Over",
+                "description": "Isaiah Hartenstein",
+                "price": -128,
+                "point": 20.5
+              },
+              {
+                "name": "Under",
+                "description": "Isaiah Hartenstein",
+                "price": -103,
+                "point": 20.5
+              },
+              {
+                "name": "Over",
+                "description": "Davion Mitchell",
+                "price": -112,
+                "point": 17.5
+              },
+              {
+                "name": "Under",
+                "description": "Davion Mitchell",
+                "price": -117,
+                "point": 17.5
+              },
+              {
+                "name": "Over",
+                "description": "Klay Thompson",
+                "price": -122,
+                "point": 16.5
+              },
+              {
+                "name": "Under",
+                "description": "Klay Thompson",
+                "price": -107,
+                "point": 16.5
+              },
+              {
+                "name": "Over",
+                "description": "Kenrich Williams",
+                "price": -109,
+                "point": 16.5
+              },
+              {
+                "name": "Under",
+                "description": "Kenrich Williams",
+                "price": -121,
+                "point": 16.5
+              },
+              {
+                "name": "Over",
+                "description": "Bennett Stirtz",
+                "price": -117,
+                "point": 14.5
+              },
+              {
+                "name": "Under",
+                "description": "Bennett Stirtz",
+                "price": -113,
+                "point": 14.5
+              },
+              {
+                "name": "Over",
+                "description": "Pelle Larsson",
+                "price": -119,
+                "point": 13.5
+              },
+              {
+                "name": "Under",
+                "description": "Pelle Larsson",
+                "price": -110,
+                "point": 13.5
+              },
+              {
+                "name": "Over",
+                "description": "Bobby Portis",
+                "price": -113,
+                "point": 13.5
+              },
+              {
+                "name": "Under",
+                "description": "Bobby Portis",
+                "price": -117,
+                "point": 13.5
+              },
+              {
+                "name": "Over",
+                "description": "Andrew Wiggins",
+                "price": -128,
+                "point": 12.5
+              },
+              {
+                "name": "Under",
+                "description": "Andrew Wiggins",
+                "price": -102,
+                "point": 12.5
+              }
+            ]
+          },
+          {
+            "key": "player_points_rebounds_assists",
+            "last_update": "2026-11-22T21:52:47Z",
+            "outcomes": [
+              {
+                "name": "Over",
+                "description": "Giannis Antetokounmpo",
+                "price": -114,
+                "point": 45.5
+              },
+              {
+                "name": "Under",
+                "description": "Giannis Antetokounmpo",
+                "price": -116,
+                "point": 45.5
+              },
+              {
+                "name": "Over",
+                "description": "Ajay Mitchell",
+                "price": -121,
+                "point": 32.5
+              },
+              {
+                "name": "Under",
+                "description": "Ajay Mitchell",
+                "price": -109,
+                "point": 32.5
+              },
+              {
+                "name": "Over",
+                "description": "Bam Adebayo",
+                "price": -110,
+                "point": 32.5
+              },
+              {
+                "name": "Under",
+                "description": "Bam Adebayo",
+                "price": -120,
+                "point": 32.5
+              },
+              {
+                "name": "Over",
+                "description": "Jared McCain",
+                "price": -113,
+                "point": 26.5
+              },
+              {
+                "name": "Under",
+                "description": "Jared McCain",
+                "price": -117,
+                "point": 26.5
+              },
+              {
+                "name": "Over",
+                "description": "Isaiah Hartenstein",
+                "price": -108,
+                "point": 26.5
+              },
+              {
+                "name": "Under",
+                "description": "Isaiah Hartenstein",
+                "price": -121,
+                "point": 26.5
+              },
+              {
+                "name": "Over",
+                "description": "Davion Mitchell",
+                "price": -104,
+                "point": 26.5
+              },
+              {
+                "name": "Under",
+                "description": "Davion Mitchell",
+                "price": -126,
+                "point": 26.5
+              },
+              {
+                "name": "Over",
+                "description": "Aday Mara",
+                "price": -110,
+                "point": 24.5
+              },
+              {
+                "name": "Under",
+                "description": "Aday Mara",
+                "price": -120,
+                "point": 24.5
+              },
+              {
+                "name": "Over",
+                "description": "Klay Thompson",
+                "price": -122,
+                "point": 18.5
+              },
+              {
+                "name": "Under",
+                "description": "Klay Thompson",
+                "price": -108,
+                "point": 18.5
+              },
+              {
+                "name": "Over",
+                "description": "Bennett Stirtz",
+                "price": -105,
+                "point": 17.5
+              },
+              {
+                "name": "Under",
+                "description": "Bennett Stirtz",
+                "price": -126,
+                "point": 17.5
+              },
+              {
+                "name": "Over",
+                "description": "Pelle Larsson",
+                "price": -105,
+                "point": 17.5
+              },
+              {
+                "name": "Under",
+                "description": "Pelle Larsson",
+                "price": -126,
+                "point": 17.5
+              },
+              {
+                "name": "Over",
+                "description": "Bobby Portis",
+                "price": -123,
+                "point": 14.5
+              },
+              {
+                "name": "Under",
+                "description": "Bobby Portis",
+                "price": -107,
+                "point": 14.5
+              },
+              {
+                "name": "Over",
+                "description": "Andrew Wiggins",
+                "price": -113,
+                "point": 14.5
+              },
+              {
+                "name": "Under",
+                "description": "Andrew Wiggins",
+                "price": -116,
+                "point": 14.5
+              }
+            ]
+          },
+          {
+            "key": "player_rebounds",
+            "last_update": "2026-11-22T21:52:47Z",
+            "outcomes": [
+              {
+                "name": "Over",
+                "description": "Giannis Antetokounmpo",
+                "price": -113,
+                "point": 12.5
+              },
+              {
+                "name": "Under",
+                "description": "Giannis Antetokounmpo",
+                "price": -116,
+                "point": 12.5
+              },
+              {
+                "name": "Over",
+                "description": "Isaiah Hartenstein",
+                "price": 102,
+                "point": 11.5
+              },
+              {
+                "name": "Under",
+                "description": "Isaiah Hartenstein",
+                "price": -134,
+                "point": 11.5
+              },
+              {
+                "name": "Over",
+                "description": "Aday Mara",
+                "price": -102,
+                "point": 9.5
+              },
+              {
+                "name": "Under",
+                "description": "Aday Mara",
+                "price": -129,
+                "point": 9.5
+              },
+              {
+                "name": "Over",
+                "description": "Bam Adebayo",
+                "price": 101,
+                "point": 9.5
+              },
+              {
+                "name": "Under",
+                "description": "Bam Adebayo",
+                "price": -132,
+                "point": 9.5
+              },
+              {
+                "name": "Over",
+                "description": "Kenrich Williams",
+                "price": -114,
+                "point": 5.5
+              },
+              {
+                "name": "Under",
+                "description": "Kenrich Williams",
+                "price": -115,
+                "point": 5.5
+              },
+              {
+                "name": "Over",
+                "description": "Bobby Portis",
+                "price": -127,
+                "point": 4.5
+              },
+              {
+                "name": "Under",
+                "description": "Bobby Portis",
+                "price": -104,
+                "point": 4.5
+              },
+              {
+                "name": "Over",
+                "description": "Ajay Mitchell",
+                "price": 115,
+                "point": 4.5
+              },
+              {
+                "name": "Under",
+                "description": "Ajay Mitchell",
+                "price": -151,
+                "point": 4.5
+              },
+              {
+                "name": "Over",
+                "description": "Jared McCain",
+                "price": -131,
+                "point": 3.5
+              },
+              {
+                "name": "Under",
+                "description": "Jared McCain",
+                "price": 100,
+                "point": 3.5
+              },
+              {
+                "name": "Over",
+                "description": "Pelle Larsson",
+                "price": 100,
+                "point": 3.5
+              },
+              {
+                "name": "Under",
+                "description": "Pelle Larsson",
+                "price": -132,
+                "point": 3.5
+              },
+              {
+                "name": "Over",
+                "description": "Andrew Wiggins",
+                "price": 109,
+                "point": 3.5
+              },
+              {
+                "name": "Under",
+                "description": "Andrew Wiggins",
+                "price": -144,
+                "point": 3.5
+              },
+              {
+                "name": "Over",
+                "description": "Davion Mitchell",
+                "price": -156,
+                "point": 2.5
+              },
+              {
+                "name": "Under",
+                "description": "Davion Mitchell",
+                "price": 118,
+                "point": 2.5
+              },
+              {
+                "name": "Over",
+                "description": "Bennett Stirtz",
+                "price": -108,
+                "point": 2.5
+              },
+              {
+                "name": "Under",
+                "description": "Bennett Stirtz",
+                "price": -121,
+                "point": 2.5
+              },
+              {
+                "name": "Over",
+                "description": "Klay Thompson",
+                "price": 127,
+                "point": 2.5
+              },
+              {
+                "name": "Under",
+                "description": "Klay Thompson",
+                "price": -167,
+                "point": 2.5
+              }
+            ]
+          },
+          {
+            "key": "player_rebounds_assists",
+            "last_update": "2026-11-22T21:52:47Z",
+            "outcomes": [
+              {
+                "name": "Over",
+                "description": "Giannis Antetokounmpo",
+                "price": -115,
+                "point": 18.5
+              },
+              {
+                "name": "Under",
+                "description": "Giannis Antetokounmpo",
+                "price": -114,
+                "point": 18.5
+              },
+              {
+                "name": "Over",
+                "description": "Isaiah Hartenstein",
+                "price": -104,
+                "point": 16.5
+              },
+              {
+                "name": "Under",
+                "description": "Isaiah Hartenstein",
+                "price": -126,
+                "point": 16.5
+              },
+              {
+                "name": "Over",
+                "description": "Bam Adebayo",
+                "price": -125,
+                "point": 12.5
+              },
+              {
+                "name": "Under",
+                "description": "Bam Adebayo",
+                "price": -105,
+                "point": 12.5
+              },
+              {
+                "name": "Over",
+                "description": "Aday Mara",
+                "price": -115,
+                "point": 11.5
+              },
+              {
+                "name": "Under",
+                "description": "Aday Mara",
+                "price": -114,
+                "point": 11.5
+              },
+              {
+                "name": "Over",
+                "description": "Davion Mitchell",
+                "price": -109,
+                "point": 11.5
+              },
+              {
+                "name": "Under",
+                "description": "Davion Mitchell",
+                "price": -121,
+                "point": 11.5
+              },
+              {
+                "name": "Over",
+                "description": "Ajay Mitchell",
+                "price": 102,
+                "point": 9.5
+              },
+              {
+                "name": "Under",
+                "description": "Ajay Mitchell",
+                "price": -134,
+                "point": 9.5
+              },
+              {
+                "name": "Over",
+                "description": "Pelle Larsson",
+                "price": -122,
+                "point": 6.5
+              },
+              {
+                "name": "Under",
+                "description": "Pelle Larsson",
+                "price": -108,
+                "point": 6.5
+              },
+              {
+                "name": "Over",
+                "description": "Jared McCain",
+                "price": -108,
+                "point": 6.5
+              },
+              {
+                "name": "Under",
+                "description": "Jared McCain",
+                "price": -122,
+                "point": 6.5
+              },
+              {
+                "name": "Over",
+                "description": "Bobby Portis",
+                "price": 110,
+                "point": 6.5
+              },
+              {
+                "name": "Under",
+                "description": "Bobby Portis",
+                "price": -145,
+                "point": 6.5
+              },
+              {
+                "name": "Over",
+                "description": "Bennett Stirtz",
+                "price": 110,
+                "point": 5.5
+              },
+              {
+                "name": "Under",
+                "description": "Bennett Stirtz",
+                "price": -145,
+                "point": 5.5
+              },
+              {
+                "name": "Over",
+                "description": "Andrew Wiggins",
+                "price": -126,
+                "point": 4.5
+              },
+              {
+                "name": "Under",
+                "description": "Andrew Wiggins",
+                "price": -104,
+                "point": 4.5
+              },
+              {
+                "name": "Over",
+                "description": "Klay Thompson",
+                "price": 112,
+                "point": 4.5
+              },
+              {
+                "name": "Under",
+                "description": "Klay Thompson",
+                "price": -148,
+                "point": 4.5
+              }
+            ]
+          },
+          {
+            "key": "player_steals",
+            "last_update": "2026-11-22T21:52:47Z",
+            "outcomes": [
+              {
+                "name": "Over",
+                "description": "Bam Adebayo",
+                "price": 111,
+                "point": 1.5
+              },
+              {
+                "name": "Under",
+                "description": "Bam Adebayo",
+                "price": -147,
+                "point": 1.5
+              },
+              {
+                "name": "Over",
+                "description": "Ajay Mitchell",
+                "price": 166,
+                "point": 1.5
+              },
+              {
+                "name": "Under",
+                "description": "Ajay Mitchell",
+                "price": -224,
+                "point": 1.5
+              }
+            ]
+          },
+          {
+            "key": "player_threes",
+            "last_update": "2026-11-22T21:52:47Z",
+            "outcomes": [
+              {
+                "name": "Over",
+                "description": "Klay Thompson",
+                "price": -130,
+                "point": 3.5
+              },
+              {
+                "name": "Under",
+                "description": "Klay Thompson",
+                "price": -101,
+                "point": 3.5
+              },
+              {
+                "name": "Over",
+                "description": "Jared McCain",
+                "price": 113,
+                "point": 3.5
+              },
+              {
+                "name": "Under",
+                "description": "Jared McCain",
+                "price": -149,
+                "point": 3.5
+              },
+              {
+                "name": "Over",
+                "description": "Davion Mitchell",
+                "price": 127,
+                "point": 2.5
+              },
+              {
+                "name": "Under",
+                "description": "Davion Mitchell",
+                "price": -168,
+                "point": 2.5
+              },
+              {
+                "name": "Over",
+                "description": "Bennett Stirtz",
+                "price": 141,
+                "point": 2.5
+              },
+              {
+                "name": "Under",
+                "description": "Bennett Stirtz",
+                "price": -187,
+                "point": 2.5
+              },
+              {
+                "name": "Over",
+                "description": "Kenrich Williams",
+                "price": -122,
+                "point": 1.5
+              },
+              {
+                "name": "Under",
+                "description": "Kenrich Williams",
+                "price": -107,
+                "point": 1.5
+              },
+              {
+                "name": "Over",
+                "description": "Andrew Wiggins",
+                "price": 102,
+                "point": 1.5
+              },
+              {
+                "name": "Under",
+                "description": "Andrew Wiggins",
+                "price": -135,
+                "point": 1.5
+              },
+              {
+                "name": "Over",
+                "description": "Ajay Mitchell",
+                "price": 129,
+                "point": 1.5
+              },
+              {
+                "name": "Under",
+                "description": "Ajay Mitchell",
+                "price": -170,
+                "point": 1.5
+              },
+              {
+                "name": "Over",
+                "description": "Bobby Portis",
+                "price": 136,
+                "point": 1.5
+              },
+              {
+                "name": "Under",
+                "description": "Bobby Portis",
+                "price": -180,
+                "point": 1.5
+              },
+              {
+                "name": "Over",
+                "description": "Bam Adebayo",
+                "price": 154,
+                "point": 1.5
+              },
+              {
+                "name": "Under",
+                "description": "Bam Adebayo",
+                "price": -206,
+                "point": 1.5
+              },
+              {
+                "name": "Over",
+                "description": "Pelle Larsson",
+                "price": -220,
+                "point": 0.5
+              },
+              {
+                "name": "Under",
+                "description": "Pelle Larsson",
+                "price": 164,
+                "point": 0.5
+              },
+              {
+                "name": "Over",
+                "description": "Giannis Antetokounmpo",
+                "price": -111,
+                "point": 0.5
+              },
+              {
+                "name": "Under",
+                "description": "Giannis Antetokounmpo",
+                "price": -119,
+                "point": 0.5
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "key": "betmgm",
+        "title": "BetMGM",
+        "markets": [
+          {
+            "key": "player_assists",
+            "last_update": "2026-11-22T21:52:44Z",
+            "outcomes": [
+              {
+                "name": "Over",
+                "description": "Giannis Antetokounmpo",
+                "price": -160,
+                "point": 5.5
+              },
+              {
+                "name": "Under",
+                "description": "Giannis Antetokounmpo",
+                "price": 120,
+                "point": 5.5
+              },
+              {
+                "name": "Over",
+                "description": "Davion Mitchell",
+                "price": 100,
+                "point": 8.5
+              },
+              {
+                "name": "Under",
+                "description": "Davion Mitchell",
+                "price": -135,
+                "point": 8.5
+              },
+              {
+                "name": "Over",
+                "description": "Pelle Larsson",
+                "price": 100,
+                "point": 3.5
+              },
+              {
+                "name": "Under",
+                "description": "Pelle Larsson",
+                "price": -135,
+                "point": 3.5
+              },
+              {
+                "name": "Over",
+                "description": "Klay Thompson",
+                "price": -165,
+                "point": 1.5
+              },
+              {
+                "name": "Under",
+                "description": "Klay Thompson",
+                "price": 125,
+                "point": 1.5
+              },
+              {
+                "name": "Over",
+                "description": "Bam Adebayo",
+                "price": -105,
+                "point": 3.5
+              },
+              {
+                "name": "Under",
+                "description": "Bam Adebayo",
+                "price": -125,
+                "point": 3.5
+              },
+              {
+                "name": "Over",
+                "description": "Ajay Mitchell",
+                "price": -150,
+                "point": 4.5
+              },
+              {
+                "name": "Under",
+                "description": "Ajay Mitchell",
+                "price": 110,
+                "point": 4.5
+              }
+            ]
+          },
+          {
+            "key": "player_double_double",
+            "last_update": "2026-11-22T21:52:44Z",
+            "outcomes": [
+              {
+                "name": "Yes",
+                "description": "Davion Mitchell",
+                "price": 200
+              },
+              {
+                "name": "Yes",
+                "description": "Pelle Larsson",
+                "price": 1650
+              },
+              {
+                "name": "Yes",
+                "description": "Giannis Antetokounmpo",
+                "price": -500
+              },
+              {
+                "name": "Yes",
+                "description": "Bam Adebayo",
+                "price": 120
+              },
+              {
+                "name": "Yes",
+                "description": "Ajay Mitchell",
+                "price": 850
+              }
+            ]
+          },
+          {
+            "key": "player_points",
+            "last_update": "2026-11-22T21:52:44Z",
+            "outcomes": [
+              {
+                "name": "Over",
+                "description": "Bam Adebayo",
+                "price": -105,
+                "point": 19.5
+              },
+              {
+                "name": "Under",
+                "description": "Bam Adebayo",
+                "price": -125,
+                "point": 19.5
+              },
+              {
+                "name": "Over",
+                "description": "Pelle Larsson",
+                "price": -115,
+                "point": 10.5
+              },
+              {
+                "name": "Under",
+                "description": "Pelle Larsson",
+                "price": -115,
+                "point": 10.5
+              },
+              {
+                "name": "Over",
+                "description": "Giannis Antetokounmpo",
+                "price": -125,
+                "point": 26.5
+              },
+              {
+                "name": "Under",
+                "description": "Giannis Antetokounmpo",
+                "price": -105,
+                "point": 26.5
+              },
+              {
+                "name": "Over",
+                "description": "Klay Thompson",
+                "price": -120,
+                "point": 14.5
+              },
+              {
+                "name": "Under",
+                "description": "Klay Thompson",
+                "price": -110,
+                "point": 14.5
+              },
+              {
+                "name": "Over",
+                "description": "Davion Mitchell",
+                "price": -130,
+                "point": 13.5
+              },
+              {
+                "name": "Under",
+                "description": "Davion Mitchell",
+                "price": -105,
+                "point": 13.5
+              },
+              {
+                "name": "Over",
+                "description": "Andrew Wiggins",
+                "price": -125,
+                "point": 8.5
+              },
+              {
+                "name": "Under",
+                "description": "Andrew Wiggins",
+                "price": -105,
+                "point": 8.5
+              },
+              {
+                "name": "Over",
+                "description": "Bobby Portis",
+                "price": -105,
+                "point": 8.5
+              },
+              {
+                "name": "Under",
+                "description": "Bobby Portis",
+                "price": -125,
+                "point": 8.5
+              },
+              {
+                "name": "Over",
+                "description": "Ajay Mitchell",
+                "price": -125,
+                "point": 22.5
+              },
+              {
+                "name": "Under",
+                "description": "Ajay Mitchell",
+                "price": -105,
+                "point": 22.5
+              }
+            ]
+          },
+          {
+            "key": "player_points_assists",
+            "last_update": "2026-11-22T21:52:44Z",
+            "outcomes": [
+              {
+                "name": "Over",
+                "description": "Giannis Antetokounmpo",
+                "price": -105,
+                "point": 33.5
+              },
+              {
+                "name": "Under",
+                "description": "Giannis Antetokounmpo",
+                "price": -125,
+                "point": 33.5
+              },
+              {
+                "name": "Over",
+                "description": "Davion Mitchell",
+                "price": -120,
+                "point": 22.5
+              },
+              {
+                "name": "Under",
+                "description": "Davion Mitchell",
+                "price": -110,
+                "point": 22.5
+              },
+              {
+                "name": "Over",
+                "description": "Bam Adebayo",
+                "price": -120,
+                "point": 22.5
+              },
+              {
+                "name": "Under",
+                "description": "Bam Adebayo",
+                "price": -110,
+                "point": 22.5
+              },
+              {
+                "name": "Over",
+                "description": "Klay Thompson",
+                "price": -120,
+                "point": 16.5
+              },
+              {
+                "name": "Under",
+                "description": "Klay Thompson",
+                "price": -110,
+                "point": 16.5
+              },
+              {
+                "name": "Over",
+                "description": "Pelle Larsson",
+                "price": 100,
+                "point": 14.5
+              },
+              {
+                "name": "Under",
+                "description": "Pelle Larsson",
+                "price": -135,
+                "point": 14.5
+              },
+              {
+                "name": "Over",
+                "description": "Ajay Mitchell",
+                "price": -105,
+                "point": 28.5
+              },
+              {
+                "name": "Under",
+                "description": "Ajay Mitchell",
+                "price": -125,
+                "point": 28.5
+              }
+            ]
+          },
+          {
+            "key": "player_points_rebounds",
+            "last_update": "2026-11-22T21:52:44Z",
+            "outcomes": [
+              {
+                "name": "Over",
+                "description": "Klay Thompson",
+                "price": -125,
+                "point": 16.5
+              },
+              {
+                "name": "Under",
+                "description": "Klay Thompson",
+                "price": -105,
+                "point": 16.5
+              },
+              {
+                "name": "Over",
+                "description": "Bam Adebayo",
+                "price": -110,
+                "point": 28.5
+              },
+              {
+                "name": "Under",
+                "description": "Bam Adebayo",
+                "price": -120,
+                "point": 28.5
+              },
+              {
+                "name": "Over",
+                "description": "Pelle Larsson",
+                "price": -105,
+                "point": 14.5
+              },
+              {
+                "name": "Under",
+                "description": "Pelle Larsson",
+                "price": -125,
+                "point": 14.5
+              },
+              {
+                "name": "Over",
+                "description": "Giannis Antetokounmpo",
+                "price": -120,
+                "point": 39.5
+              },
+              {
+                "name": "Under",
+                "description": "Giannis Antetokounmpo",
+                "price": -111,
+                "point": 39.5
+              },
+              {
+                "name": "Over",
+                "description": "Davion Mitchell",
+                "price": -125,
+                "point": 16.5
+              },
+              {
+                "name": "Under",
+                "description": "Davion Mitchell",
+                "price": -105,
+                "point": 16.5
+              },
+              {
+                "name": "Over",
+                "description": "Andrew Wiggins",
+                "price": -135,
+                "point": 11.5
+              },
+              {
+                "name": "Under",
+                "description": "Andrew Wiggins",
+                "price": 100,
+                "point": 11.5
+              },
+              {
+                "name": "Over",
+                "description": "Ajay Mitchell",
+                "price": -111,
+                "point": 27.5
+              },
+              {
+                "name": "Under",
+                "description": "Ajay Mitchell",
+                "price": -118,
+                "point": 27.5
+              }
+            ]
+          },
+          {
+            "key": "player_points_rebounds_assists",
+            "last_update": "2026-11-22T21:52:44Z",
+            "outcomes": [
+              {
+                "name": "Over",
+                "description": "Pelle Larsson",
+                "price": -125,
+                "point": 17.5
+              },
+              {
+                "name": "Under",
+                "description": "Pelle Larsson",
+                "price": -105,
+                "point": 17.5
+              },
+              {
+                "name": "Over",
+                "description": "Davion Mitchell",
+                "price": -115,
+                "point": 25.5
+              },
+              {
+                "name": "Under",
+                "description": "Davion Mitchell",
+                "price": -115,
+                "point": 25.5
+              },
+              {
+                "name": "Over",
+                "description": "Bam Adebayo",
+                "price": -155,
+                "point": 31.5
+              },
+              {
+                "name": "Under",
+                "description": "Bam Adebayo",
+                "price": 115,
+                "point": 31.5
+              },
+              {
+                "name": "Over",
+                "description": "Giannis Antetokounmpo",
+                "price": -120,
+                "point": 45.5
+              },
+              {
+                "name": "Under",
+                "description": "Giannis Antetokounmpo",
+                "price": -110,
+                "point": 45.5
+              },
+              {
+                "name": "Over",
+                "description": "Ajay Mitchell",
+                "price": -115,
+                "point": 32.5
+              },
+              {
+                "name": "Under",
+                "description": "Ajay Mitchell",
+                "price": -115,
+                "point": 32.5
+              }
+            ]
+          },
+          {
+            "key": "player_rebounds",
+            "last_update": "2026-11-22T21:52:44Z",
+            "outcomes": [
+              {
+                "name": "Over",
+                "description": "Davion Mitchell",
+                "price": -135,
+                "point": 2.5
+              },
+              {
+                "name": "Under",
+                "description": "Davion Mitchell",
+                "price": 100,
+                "point": 2.5
+              },
+              {
+                "name": "Over",
+                "description": "Giannis Antetokounmpo",
+                "price": -105,
+                "point": 12.5
+              },
+              {
+                "name": "Under",
+                "description": "Giannis Antetokounmpo",
+                "price": -125,
+                "point": 12.5
+              },
+              {
+                "name": "Over",
+                "description": "Pelle Larsson",
+                "price": -111,
+                "point": 3.5
+              },
+              {
+                "name": "Under",
+                "description": "Pelle Larsson",
+                "price": -120,
+                "point": 3.5
+              },
+              {
+                "name": "Over",
+                "description": "Bam Adebayo",
+                "price": -140,
+                "point": 8.5
+              },
+              {
+                "name": "Under",
+                "description": "Bam Adebayo",
+                "price": 105,
+                "point": 8.5
+              },
+              {
+                "name": "Over",
+                "description": "Ajay Mitchell",
+                "price": 110,
+                "point": 4.5
+              },
+              {
+                "name": "Under",
+                "description": "Ajay Mitchell",
+                "price": -150,
+                "point": 4.5
+              },
+              {
+                "name": "Over",
+                "description": "Andrew Wiggins",
+                "price": 125,
+                "point": 3.5
+              },
+              {
+                "name": "Under",
+                "description": "Andrew Wiggins",
+                "price": -165,
+                "point": 3.5
+              }
+            ]
+          },
+          {
+            "key": "player_rebounds_assists",
+            "last_update": "2026-11-22T21:52:44Z",
+            "outcomes": [
+              {
+                "name": "Over",
+                "description": "Davion Mitchell",
+                "price": -110,
+                "point": 11.5
+              },
+              {
+                "name": "Under",
+                "description": "Davion Mitchell",
+                "price": -120,
+                "point": 11.5
+              },
+              {
+                "name": "Over",
+                "description": "Klay Thompson",
+                "price": 125,
+                "point": 4.5
+              },
+              {
+                "name": "Under",
+                "description": "Klay Thompson",
+                "price": -165,
+                "point": 4.5
+              },
+              {
+                "name": "Over",
+                "description": "Bam Adebayo",
+                "price": -111,
+                "point": 12.5
+              },
+              {
+                "name": "Under",
+                "description": "Bam Adebayo",
+                "price": -118,
+                "point": 12.5
+              },
+              {
+                "name": "Over",
+                "description": "Giannis Antetokounmpo",
+                "price": -120,
+                "point": 18.5
+              },
+              {
+                "name": "Under",
+                "description": "Giannis Antetokounmpo",
+                "price": -111,
+                "point": 18.5
+              },
+              {
+                "name": "Over",
+                "description": "Pelle Larsson",
+                "price": 105,
+                "point": 7.5
+              },
+              {
+                "name": "Under",
+                "description": "Pelle Larsson",
+                "price": -145,
+                "point": 7.5
+              },
+              {
+                "name": "Over",
+                "description": "Ajay Mitchell",
+                "price": 100,
+                "point": 9.5
+              },
+              {
+                "name": "Under",
+                "description": "Ajay Mitchell",
+                "price": -135,
+                "point": 9.5
+              }
+            ]
+          },
+          {
+            "key": "player_threes",
+            "last_update": "2026-11-22T21:52:44Z",
+            "outcomes": [
+              {
+                "name": "Over",
+                "description": "Davion Mitchell",
+                "price": 125,
+                "point": 2.5
+              },
+              {
+                "name": "Under",
+                "description": "Davion Mitchell",
+                "price": -165,
+                "point": 2.5
+              },
+              {
+                "name": "Over",
+                "description": "Pelle Larsson",
+                "price": 175,
+                "point": 1.5
+              },
+              {
+                "name": "Under",
+                "description": "Pelle Larsson",
+                "price": -235,
+                "point": 1.5
+              },
+              {
+                "name": "Over",
+                "description": "Klay Thompson",
+                "price": -145,
+                "point": 3.5
+              },
+              {
+                "name": "Under",
+                "description": "Klay Thompson",
+                "price": 105,
+                "point": 3.5
+              },
+              {
+                "name": "Over",
+                "description": "Giannis Antetokounmpo",
+                "price": -105,
+                "point": 0.5
+              },
+              {
+                "name": "Under",
+                "description": "Giannis Antetokounmpo",
+                "price": -125,
+                "point": 0.5
+              },
+              {
+                "name": "Over",
+                "description": "Bam Adebayo",
+                "price": 125,
+                "point": 1.5
+              },
+              {
+                "name": "Under",
+                "description": "Bam Adebayo",
+                "price": -165,
+                "point": 1.5
+              },
+              {
+                "name": "Over",
+                "description": "Ajay Mitchell",
+                "price": 140,
+                "point": 1.5
+              },
+              {
+                "name": "Under",
+                "description": "Ajay Mitchell",
+                "price": -190,
+                "point": 1.5
+              },
+              {
+                "name": "Over",
+                "description": "Andrew Wiggins",
+                "price": 105,
+                "point": 1.5
+              },
+              {
+                "name": "Under",
+                "description": "Andrew Wiggins",
+                "price": -140,
+                "point": 1.5
+              },
+              {
+                "name": "Over",
+                "description": "Bobby Portis",
+                "price": 105,
+                "point": 1.5
+              },
+              {
+                "name": "Under",
+                "description": "Bobby Portis",
+                "price": -140,
+                "point": 1.5
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "key": "betonlineag",
+        "title": "BetOnline.ag",
+        "markets": [
+          {
+            "key": "player_assists",
+            "last_update": "2026-11-22T21:52:46Z",
+            "outcomes": [
+              {
+                "name": "Over",
+                "description": "Pelle Larsson",
+                "price": 112,
+                "point": 3.5
+              },
+              {
+                "name": "Under",
+                "description": "Pelle Larsson",
+                "price": -145,
+                "point": 3.5
+              },
+              {
+                "name": "Over",
+                "description": "Bam Adebayo",
+                "price": 102,
+                "point": 3.5
+              },
+              {
+                "name": "Under",
+                "description": "Bam Adebayo",
+                "price": -132,
+                "point": 3.5
+              },
+              {
+                "name": "Over",
+                "description": "Davion Mitchell",
+                "price": 102,
+                "point": 8.5
+              },
+              {
+                "name": "Under",
+                "description": "Davion Mitchell",
+                "price": -132,
+                "point": 8.5
+              },
+              {
+                "name": "Over",
+                "description": "Jared McCain",
+                "price": -114,
+                "point": 2.5
+              },
+              {
+                "name": "Under",
+                "description": "Jared McCain",
+                "price": -114,
+                "point": 2.5
+              },
+              {
+                "name": "Over",
+                "description": "Ajay Mitchell",
+                "price": -156,
+                "point": 4.5
+              },
+              {
+                "name": "Under",
+                "description": "Ajay Mitchell",
+                "price": 120,
+                "point": 4.5
+              },
+              {
+                "name": "Over",
+                "description": "Aday Mara",
+                "price": 115,
+                "point": 2.5
+              },
+              {
+                "name": "Under",
+                "description": "Aday Mara",
+                "price": -149,
+                "point": 2.5
+              },
+              {
+                "name": "Over",
+                "description": "Klay Thompson",
+                "price": -154,
+                "point": 1.5
+              },
+              {
+                "name": "Under",
+                "description": "Klay Thompson",
+                "price": 118,
+                "point": 1.5
+              },
+              {
+                "name": "Over",
+                "description": "Giannis Antetokounmpo",
+                "price": -149,
+                "point": 5.5
+              },
+              {
+                "name": "Under",
+                "description": "Giannis Antetokounmpo",
+                "price": 115,
+                "point": 5.5
+              },
+              {
+                "name": "Over",
+                "description": "Bobby Portis",
+                "price": 132,
+                "point": 1.5
+              },
+              {
+                "name": "Under",
+                "description": "Bobby Portis",
+                "price": -172,
+                "point": 1.5
+              },
+              {
+                "name": "Over",
+                "description": "Andrew Wiggins",
+                "price": 117,
+                "point": 1.5
+              },
+              {
+                "name": "Under",
+                "description": "Andrew Wiggins",
+                "price": -152,
+                "point": 1.5
+              },
+              {
+                "name": "Over",
+                "description": "Bennett Stirtz",
+                "price": -110,
+                "point": 2.5
+              },
+              {
+                "name": "Under",
+                "description": "Bennett Stirtz",
+                "price": -118,
+                "point": 2.5
+              }
+            ]
+          },
+          {
+            "key": "player_points",
+            "last_update": "2026-11-22T21:52:46Z",
+            "outcomes": [
+              {
+                "name": "Over",
+                "description": "Bam Adebayo",
+                "price": -109,
+                "point": 19.5
+              },
+              {
+                "name": "Under",
+                "description": "Bam Adebayo",
+                "price": -119,
+                "point": 19.5
+              },
+              {
+                "name": "Over",
+                "description": "Pelle Larsson",
+                "price": -112,
+                "point": 10.5
+              },
+              {
+                "name": "Under",
+                "description": "Pelle Larsson",
+                "price": -115,
+                "point": 10.5
+              },
+              {
+                "name": "Over",
+                "description": "Isaiah Hartenstein",
+                "price": -127,
+                "point": 9.5
+              },
+              {
+                "name": "Under",
+                "description": "Isaiah Hartenstein",
+                "price": -102,
+                "point": 9.5
+              },
+              {
+                "name": "Over",
+                "description": "Davion Mitchell",
+                "price": -108,
+                "point": 14.5
+              },
+              {
+                "name": "Under",
+                "description": "Davion Mitchell",
+                "price": -120,
+                "point": 14.5
+              },
+              {
+                "name": "Over",
+                "description": "Klay Thompson",
+                "price": -111,
+                "point": 14.5
+              },
+              {
+                "name": "Under",
+                "description": "Klay Thompson",
+                "price": -116,
+                "point": 14.5
+              },
+              {
+                "name": "Over",
+                "description": "Aday Mara",
+                "price": -112,
+                "point": 12.5
+              },
+              {
+                "name": "Under",
+                "description": "Aday Mara",
+                "price": -115,
+                "point": 12.5
+              },
+              {
+                "name": "Over",
+                "description": "Bobby Portis",
+                "price": -105,
+                "point": 8.5
+              },
+              {
+                "name": "Under",
+                "description": "Bobby Portis",
+                "price": -123,
+                "point": 8.5
+              },
+              {
+                "name": "Over",
+                "description": "Andrew Wiggins",
+                "price": -106,
+                "point": 9.5
+              },
+              {
+                "name": "Under",
+                "description": "Andrew Wiggins",
+                "price": -122,
+                "point": 9.5
+              },
+              {
+                "name": "Over",
+                "description": "Giannis Antetokounmpo",
+                "price": -122,
+                "point": 26.5
+              },
+              {
+                "name": "Under",
+                "description": "Giannis Antetokounmpo",
+                "price": -106,
+                "point": 26.5
+              },
+              {
+                "name": "Over",
+                "description": "Kenrich Williams",
+                "price": -122,
+                "point": 10.5
+              },
+              {
+                "name": "Under",
+                "description": "Kenrich Williams",
+                "price": -106,
+                "point": 10.5
+              },
+              {
+                "name": "Over",
+                "description": "Ajay Mitchell",
+                "price": -109,
+                "point": 23.5
+              },
+              {
+                "name": "Under",
+                "description": "Ajay Mitchell",
+                "price": -119,
+                "point": 23.5
+              },
+              {
+                "name": "Over",
+                "description": "Jared McCain",
+                "price": -118,
+                "point": 19.5
+              },
+              {
+                "name": "Under",
+                "description": "Jared McCain",
+                "price": -110,
+                "point": 19.5
+              },
+              {
+                "name": "Over",
+                "description": "Bennett Stirtz",
+                "price": -122,
+                "point": 11.5
+              },
+              {
+                "name": "Under",
+                "description": "Bennett Stirtz",
+                "price": -106,
+                "point": 11.5
+              }
+            ]
+          },
+          {
+            "key": "player_points_rebounds_assists",
+            "last_update": "2026-11-22T21:52:46Z",
+            "outcomes": [
+              {
+                "name": "Over",
+                "description": "Bam Adebayo",
+                "price": -111,
+                "point": 32.5
+              },
+              {
+                "name": "Under",
+                "description": "Bam Adebayo",
+                "price": -116,
+                "point": 32.5
+              },
+              {
+                "name": "Over",
+                "description": "Davion Mitchell",
+                "price": -105,
+                "point": 26.5
+              },
+              {
+                "name": "Under",
+                "description": "Davion Mitchell",
+                "price": -123,
+                "point": 26.5
+              },
+              {
+                "name": "Over",
+                "description": "Pelle Larsson",
+                "price": -115,
+                "point": 17.5
+              },
+              {
+                "name": "Under",
+                "description": "Pelle Larsson",
+                "price": -112,
+                "point": 17.5
+              },
+              {
+                "name": "Over",
+                "description": "Klay Thompson",
+                "price": -111,
+                "point": 18.5
+              },
+              {
+                "name": "Under",
+                "description": "Klay Thompson",
+                "price": -116,
+                "point": 18.5
+              },
+              {
+                "name": "Over",
+                "description": "Giannis Antetokounmpo",
+                "price": -118,
+                "point": 45.5
+              },
+              {
+                "name": "Under",
+                "description": "Giannis Antetokounmpo",
+                "price": -110,
+                "point": 45.5
+              },
+              {
+                "name": "Over",
+                "description": "Bobby Portis",
+                "price": -114,
+                "point": 14.5
+              },
+              {
+                "name": "Under",
+                "description": "Bobby Portis",
+                "price": -114,
+                "point": 14.5
+              },
+              {
+                "name": "Over",
+                "description": "Andrew Wiggins",
+                "price": -105,
+                "point": 14.5
+              },
+              {
+                "name": "Under",
+                "description": "Andrew Wiggins",
+                "price": -123,
+                "point": 14.5
+              },
+              {
+                "name": "Over",
+                "description": "Bennett Stirtz",
+                "price": -102,
+                "point": 17.5
+              },
+              {
+                "name": "Under",
+                "description": "Bennett Stirtz",
+                "price": -127,
+                "point": 17.5
+              },
+              {
+                "name": "Over",
+                "description": "Aday Mara",
+                "price": -108,
+                "point": 24.5
+              },
+              {
+                "name": "Under",
+                "description": "Aday Mara",
+                "price": -120,
+                "point": 24.5
+              },
+              {
+                "name": "Over",
+                "description": "Ajay Mitchell",
+                "price": -122,
+                "point": 32.5
+              },
+              {
+                "name": "Under",
+                "description": "Ajay Mitchell",
+                "price": -106,
+                "point": 32.5
+              },
+              {
+                "name": "Over",
+                "description": "Isaiah Hartenstein",
+                "price": -105,
+                "point": 26.5
+              },
+              {
+                "name": "Under",
+                "description": "Isaiah Hartenstein",
+                "price": -123,
+                "point": 26.5
+              },
+              {
+                "name": "Over",
+                "description": "Jared McCain",
+                "price": -110,
+                "point": 26.5
+              },
+              {
+                "name": "Under",
+                "description": "Jared McCain",
+                "price": -118,
+                "point": 26.5
+              }
+            ]
+          },
+          {
+            "key": "player_rebounds",
+            "last_update": "2026-11-22T21:52:46Z",
+            "outcomes": [
+              {
+                "name": "Over",
+                "description": "Pelle Larsson",
+                "price": -106,
+                "point": 3.5
+              },
+              {
+                "name": "Under",
+                "description": "Pelle Larsson",
+                "price": -122,
+                "point": 3.5
+              },
+              {
+                "name": "Over",
+                "description": "Bam Adebayo",
+                "price": -130,
+                "point": 8.5
+              },
+              {
+                "name": "Under",
+                "description": "Bam Adebayo",
+                "price": 100,
+                "point": 8.5
+              },
+              {
+                "name": "Over",
+                "description": "Jared McCain",
+                "price": -127,
+                "point": 3.5
+              },
+              {
+                "name": "Under",
+                "description": "Jared McCain",
+                "price": -102,
+                "point": 3.5
+              },
+              {
+                "name": "Over",
+                "description": "Davion Mitchell",
+                "price": -145,
+                "point": 2.5
+              },
+              {
+                "name": "Under",
+                "description": "Davion Mitchell",
+                "price": 112,
+                "point": 2.5
+              },
+              {
+                "name": "Over",
+                "description": "Ajay Mitchell",
+                "price": 115,
+                "point": 4.5
+              },
+              {
+                "name": "Under",
+                "description": "Ajay Mitchell",
+                "price": -149,
+                "point": 4.5
+              },
+              {
+                "name": "Over",
+                "description": "Isaiah Hartenstein",
+                "price": -128,
+                "point": 10.5
+              },
+              {
+                "name": "Under",
+                "description": "Isaiah Hartenstein",
+                "price": -101,
+                "point": 10.5
+              },
+              {
+                "name": "Over",
+                "description": "Giannis Antetokounmpo",
+                "price": -103,
+                "point": 12.5
+              },
+              {
+                "name": "Under",
+                "description": "Giannis Antetokounmpo",
+                "price": -125,
+                "point": 12.5
+              },
+              {
+                "name": "Over",
+                "description": "Klay Thompson",
+                "price": 132,
+                "point": 2.5
+              },
+              {
+                "name": "Under",
+                "description": "Klay Thompson",
+                "price": -172,
+                "point": 2.5
+              },
+              {
+                "name": "Over",
+                "description": "Bobby Portis",
+                "price": -116,
+                "point": 4.5
+              },
+              {
+                "name": "Under",
+                "description": "Bobby Portis",
+                "price": -111,
+                "point": 4.5
+              },
+              {
+                "name": "Over",
+                "description": "Andrew Wiggins",
+                "price": 126,
+                "point": 3.5
+              },
+              {
+                "name": "Under",
+                "description": "Andrew Wiggins",
+                "price": -164,
+                "point": 3.5
+              },
+              {
+                "name": "Over",
+                "description": "Bennett Stirtz",
+                "price": -101,
+                "point": 2.5
+              },
+              {
+                "name": "Under",
+                "description": "Bennett Stirtz",
+                "price": -128,
+                "point": 2.5
+              },
+              {
+                "name": "Over",
+                "description": "Kenrich Williams",
+                "price": -112,
+                "point": 5.5
+              },
+              {
+                "name": "Under",
+                "description": "Kenrich Williams",
+                "price": -115,
+                "point": 5.5
+              },
+              {
+                "name": "Over",
+                "description": "Aday Mara",
+                "price": 106,
+                "point": 9.5
+              },
+              {
+                "name": "Under",
+                "description": "Aday Mara",
+                "price": -137,
+                "point": 9.5
+              }
+            ]
+          },
+          {
+            "key": "player_threes",
+            "last_update": "2026-11-22T21:52:46Z",
+            "outcomes": [
+              {
+                "name": "Over",
+                "description": "Bam Adebayo",
+                "price": 144,
+                "point": 1.5
+              },
+              {
+                "name": "Under",
+                "description": "Bam Adebayo",
+                "price": -189,
+                "point": 1.5
+              },
+              {
+                "name": "Over",
+                "description": "Pelle Larsson",
+                "price": -213,
+                "point": 0.5
+              },
+              {
+                "name": "Under",
+                "description": "Pelle Larsson",
+                "price": 160,
+                "point": 0.5
+              },
+              {
+                "name": "Over",
+                "description": "Jared McCain",
+                "price": 113,
+                "point": 3.5
+              },
+              {
+                "name": "Under",
+                "description": "Jared McCain",
+                "price": -147,
+                "point": 3.5
+              },
+              {
+                "name": "Over",
+                "description": "Davion Mitchell",
+                "price": 128,
+                "point": 2.5
+              },
+              {
+                "name": "Under",
+                "description": "Davion Mitchell",
+                "price": -167,
+                "point": 2.5
+              },
+              {
+                "name": "Over",
+                "description": "Ajay Mitchell",
+                "price": 139,
+                "point": 1.5
+              },
+              {
+                "name": "Under",
+                "description": "Ajay Mitchell",
+                "price": -182,
+                "point": 1.5
+              },
+              {
+                "name": "Over",
+                "description": "Giannis Antetokounmpo",
+                "price": -102,
+                "point": 0.5
+              },
+              {
+                "name": "Under",
+                "description": "Giannis Antetokounmpo",
+                "price": -127,
+                "point": 0.5
+              },
+              {
+                "name": "Over",
+                "description": "Klay Thompson",
+                "price": -130,
+                "point": 3.5
+              },
+              {
+                "name": "Under",
+                "description": "Klay Thompson",
+                "price": 101,
+                "point": 3.5
+              },
+              {
+                "name": "Over",
+                "description": "Bobby Portis",
+                "price": 130,
+                "point": 1.5
+              },
+              {
+                "name": "Under",
+                "description": "Bobby Portis",
+                "price": -169,
+                "point": 1.5
+              },
+              {
+                "name": "Over",
+                "description": "Andrew Wiggins",
+                "price": 109,
+                "point": 1.5
+              },
+              {
+                "name": "Under",
+                "description": "Andrew Wiggins",
+                "price": -141,
+                "point": 1.5
+              },
+              {
+                "name": "Over",
+                "description": "Bennett Stirtz",
+                "price": 144,
+                "point": 2.5
+              },
+              {
+                "name": "Under",
+                "description": "Bennett Stirtz",
+                "price": -189,
+                "point": 2.5
+              },
+              {
+                "name": "Over",
+                "description": "Kenrich Williams",
+                "price": -114,
+                "point": 1.5
+              },
+              {
+                "name": "Under",
+                "description": "Kenrich Williams",
+                "price": -114,
+                "point": 1.5
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  }
+}
