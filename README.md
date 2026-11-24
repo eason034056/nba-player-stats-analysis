@@ -113,6 +113,7 @@ Notes:
 - If not using Docker, you should start `Redis` yourself
 - If PostgreSQL is not running, the upgrade command fails. With `DATABASE_REQUIRED` left false, uvicorn still starts and persistence stays off.
 - If PostgreSQL is reachable and `schema_migrations` is not at head, uvicorn does not start. `init()` logs one error naming the missing versions and `python -m app.migrations upgrade`, then raises. That includes a database whose tables came from `SCHEMA_SQL` and has no `schema_migrations` table yet.
+- Backend tests install both files: `pip install -r requirements.txt -r requirements-test.txt`. `requirements-test.txt` is reportlab, used only to draw synthetic PDFs. The Docker image installs `requirements.txt` only.
 
 #### Frontend
 

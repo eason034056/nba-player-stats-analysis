@@ -26,7 +26,7 @@ OLD_SOURCES = (
 @pytest_asyncio.fixture
 async def db(scratch_conn: asyncpg.Connection) -> asyncpg.Connection:
     applied = await upgrade(scratch_conn)
-    assert applied == ["001", "002", "003", "004", "005", "006"]
+    assert applied == ["001", "002", "003", "004", "005", "006", "007"]
     return scratch_conn
 
 
@@ -44,7 +44,7 @@ async def test_006_applies_on_001_through_005_and_a_second_pass_is_a_no_op(
 ) -> None:
     assert await upgrade(db) == []
     versions = await db.fetch("SELECT version FROM schema_migrations ORDER BY version")
-    assert [row["version"] for row in versions] == ["001", "002", "003", "004", "005", "006"]
+    assert [row["version"] for row in versions] == ["001", "002", "003", "004", "005", "006", "007"]
     assert await db.fetchval("SELECT to_regclass('public.nba_injury_report_rows') IS NOT NULL")
     indexdef = await db.fetchval(
         "SELECT indexdef FROM pg_indexes WHERE indexname = 'nba_injury_report_rows_game_report_idx'"
@@ -87,4 +87,6 @@ async def test_official_source_inserts_and_old_sources_still_insert(
 
 @pytest.mark.asyncio
 async def test_shipped_versions_include_006() -> None:
-    assert [migration.version for migration in discover()][-1] == "006"
+    versions = [migration.version for migration in discover()]
+    assert "006" in versions
+    assert versions[-1] == "007"

@@ -352,7 +352,8 @@ class TestLayouts:
 @pytest_asyncio.fixture
 async def db(scratch_conn: asyncpg.Connection) -> asyncpg.Connection:
     applied = await upgrade(scratch_conn)
-    assert applied[-1] == "006"
+    assert "006" in applied
+    assert applied[-1] == "007"
     await scratch_conn.execute(
         """
         INSERT INTO seasons (league, season_start_year, label)
@@ -465,12 +466,13 @@ async def test_a_broken_pdf_records_a_failure_and_the_batch_continues(
     assert failure["complete"] is False
     assert failure["error"]
     assert failure["rows_seen"] == 0
-    stored = await ingest_report(
+    again = await ingest_report(
         db,
         store.iter_stored()[0],
         dry_run=False,
     )
-    assert stored.tag in {"stored", "unchanged", "failed"}
+    assert again.filename == "Injury-Report_2024-01-15_01PM.pdf"
+    assert again.tag == "failed"
 
 
 T = datetime(2026, 1, 15, 23, 0, tzinfo=UTC)

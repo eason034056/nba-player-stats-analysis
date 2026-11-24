@@ -209,14 +209,14 @@ async def test_line_stays_nullable_and_in_the_legacy_unique_key(scratch_dsn: str
 
 @pytest.mark.asyncio
 async def test_upgrade_after_schema_sql_then_again_is_a_no_op(scratch_dsn: str) -> None:
-    """An existing six-table database takes 001 as a no-op, then 002 through 006, then nothing."""
+    """An existing six-table database takes 001 as a no-op, then 002 through 007, then nothing."""
     from app.migrations.runner import upgrade
 
     conn = await asyncpg.connect(scratch_dsn, timeout=5)
     try:
         await conn.execute(SCHEMA_SQL)
         before = await _catalog(conn)
-        assert await upgrade(conn) == ["001", "002", "003", "004", "005", "006"]
+        assert await upgrade(conn) == ["001", "002", "003", "004", "005", "006", "007"]
         legacy = await conn.fetch(
             """
             SELECT column_name, data_type, is_nullable
@@ -234,7 +234,7 @@ async def test_upgrade_after_schema_sql_then_again_is_a_no_op(scratch_dsn: str) 
         versions = await conn.fetch("SELECT version FROM schema_migrations ORDER BY version")
     finally:
         await conn.close()
-    assert [row["version"] for row in versions] == ["001", "002", "003", "004", "005", "006"]
+    assert [row["version"] for row in versions] == ["001", "002", "003", "004", "005", "006", "007"]
 
 
 @pytest.mark.asyncio

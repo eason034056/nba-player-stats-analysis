@@ -40,13 +40,13 @@ def _write(directory: Path, files: dict[str, str]) -> Path:
 
 @pytest.mark.asyncio
 async def test_upgrade_applies_the_shipped_files_once(scratch_conn: asyncpg.Connection) -> None:
-    assert await upgrade(scratch_conn) == ["001", "002", "003", "004", "005", "006"]
+    assert await upgrade(scratch_conn) == ["001", "002", "003", "004", "005", "006", "007"]
     assert await _has_table(scratch_conn, "odds_line_snapshots")
     assert await _has_table(scratch_conn, "player_game_stats")
-    assert await _versions(scratch_conn) == ["001", "002", "003", "004", "005", "006"]
+    assert await _versions(scratch_conn) == ["001", "002", "003", "004", "005", "006", "007"]
 
     assert await upgrade(scratch_conn) == []
-    assert await _versions(scratch_conn) == ["001", "002", "003", "004", "005", "006"]
+    assert await _versions(scratch_conn) == ["001", "002", "003", "004", "005", "006", "007"]
 
 
 @pytest.mark.asyncio
@@ -57,10 +57,10 @@ async def test_003_applies_on_a_database_that_already_ran_004(
     for migration in discover():
         if migration.version != "003":
             (tmp_path / migration.path.name).write_bytes(migration.path.read_bytes())
-    assert await upgrade(scratch_conn, tmp_path) == ["001", "002", "004", "005", "006"]
+    assert await upgrade(scratch_conn, tmp_path) == ["001", "002", "004", "005", "006", "007"]
 
     assert await upgrade(scratch_conn) == ["003"]
-    assert await _versions(scratch_conn) == ["001", "002", "003", "004", "005", "006"]
+    assert await _versions(scratch_conn) == ["001", "002", "003", "004", "005", "006", "007"]
     assert await _has_table(scratch_conn, "bdl_games_with_gaps")
 
 
@@ -104,7 +104,7 @@ async def test_file_and_its_record_commit_together(
 
 
 def test_shipped_files_are_in_version_order() -> None:
-    assert [migration.version for migration in discover()] == ["001", "002", "003", "004", "005", "006"]
+    assert [migration.version for migration in discover()] == ["001", "002", "003", "004", "005", "006", "007"]
 
 
 @pytest.mark.parametrize(
