@@ -1,0 +1,16 @@
+{
+  "url": "https://ak-static.cms.nba.com/referee/injury/Injury-Report_2024-11-14_10_00AM.pdf",
+  "status_line": "HTTP/1.1 403 Forbidden",
+  "status": 403,
+  "headers": {
+    "Content-Type": "application/xml",
+    "Server": "AmazonS3",
+    "Content-Length": "263",
+    "Date": "Tue, 24 Nov 2026 08:37:01 GMT",
+    "X-XSS-Protection": "1; mode=block",
+    "X-Content-Type-Options": "nosniff",
+    "Strict-Transport-Security": "max-age=86400"
+  },
+  "body_sha256": "fc52b223153d5749e72499e1d0586eba230824d5bb3a757b8b54341212011e9d",
+  "body_length": 263
+}

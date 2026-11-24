@@ -74,6 +74,12 @@ class Settings(BaseSettings):
     # A snapshot younger than this is not refreshed again.
     nba_injuries_refresh_minutes: int = 30
 
+    # Official NBA injury-report PDFs. Off unless this is true, so a deploy
+    # does not start fetching. The files stay in injury_pdf_dir. Nothing
+    # in the API serves them.
+    injury_pdf_fetch_enabled: bool = False
+    injury_pdf_dir: str = "/workspace/nba-injury-pdf"
+
     @property
     def allowed_origins_list(self) -> List[str]:
         """

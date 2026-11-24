@@ -63,11 +63,16 @@ services:
       - DATABASE_URL=${DATABASE_URL:-postgresql://novig:novig@postgres:5432/novig_nba}
       - DATABASE_REQUIRED=${DATABASE_REQUIRED:-false}
 
+      # Official injury-report PDFs. Default off so compose does not fetch.
+      - INJURY_PDF_FETCH_ENABLED=${INJURY_PDF_FETCH_ENABLED:-false}
+      - INJURY_PDF_DIR=${INJURY_PDF_DIR:-/workspace/nba-injury-pdf}
+
     # 掛載 data 目錄（CSV 檔案）
     # 將主機的 data 目錄掛載到容器的 /app/data 目錄
     # 移除 :ro 只讀限制，讓容器可以下載並更新 CSV 文件
     volumes:
       - ./data:/app/data
+      - nba-injury-pdf:/workspace/nba-injury-pdf
     
     # 依賴服務
     # 確保 redis 和 postgres 啟動後才啟動 backend
@@ -188,4 +193,7 @@ volumes:
     driver: local
   # PostgreSQL 資料持久化 volume
   pg-data:
+    driver: local
+  # Official injury-report PDFs. Not a bind mount, so they are not in the repo.
+  nba-injury-pdf:
     driver: local

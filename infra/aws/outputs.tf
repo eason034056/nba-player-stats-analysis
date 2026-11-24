@@ -29,6 +29,6 @@ output "public_subnet_ids" {
 }
 
 output "runtime_s3_policy_json" {
-  description = "Runtime IAM policy (Get/Put/List on the four prefixes, no delete). Access keys are not created here."
+  description = "Runtime IAM policy (Get/Put/List on the five prefixes, no delete). Access keys are not created here."
   value       = data.aws_iam_policy_document.runtime.json
 }

@@ -82,6 +82,15 @@ jobs:
       - name: Install PostgreSQL client
         run: sudo apt-get update && sudo apt-get install -y postgresql-client
       - run: pytest --tb=short -q
+      - name: Refuse tracked PDF files
+        working-directory: ${{ github.workspace }}
+        run: |
+          pdfs=$(git ls-files | grep -i -E '\.pdf$' || true)
+          if [ -n "$pdfs" ]; then
+            echo "$pdfs"
+            echo "tracked PDF files are not allowed"
+            exit 1
+          fi
 
   frontend-lint:
     name: Frontend Lint & Type Check

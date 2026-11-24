@@ -73,6 +73,11 @@ NBA_INJURY_REFRESH_CRON_MINUTE = "7,37"
 # the next scheduled tick is not also due.
 NBA_INJURY_REFRESH_MISFIRE_GRACE_SECONDS = 25 * 60
 
+# Official injury-report PDFs. Registered only when
+# INJURY_PDF_FETCH_ENABLED is true. The handler returns before any HTTP
+# call unless today's Eastern date has a non-postponed NBA game.
+INJURY_PDF_FETCH_CRON_MINUTE = "0,15,30,45"
+
 
 def nba_injury_refresh_in_window(now: datetime | None = None) -> bool:
     """True when ``now`` falls in the NBA injury slate window.
@@ -700,6 +705,20 @@ class SchedulerService:
             coalesce=True,
         )
 
+        # Official injury-report PDF for the current slot. Off unless
+        # INJURY_PDF_FETCH_ENABLED is set, so starting the process does
+        # not fetch. On a tick, the handler checks the game date first.
+        if settings.injury_pdf_fetch_enabled:
+            self._scheduler.add_job(
+                self._run_injury_pdf_fetch_job,
+                trigger=CronTrigger(minute=INJURY_PDF_FETCH_CRON_MINUTE),
+                id="injury_pdf_fetch_current",
+                name="Official NBA injury-report PDF (current slot)",
+                replace_existing=True,
+                max_instances=1,
+                coalesce=True,
+            )
+
         # Start the scheduler
         self._scheduler.start()
         self._is_running = True
@@ -719,6 +738,12 @@ class SchedulerService:
         print(
             "   - NBA Injury Refresh: Chicago 11:00-00:59 at :07 and :37"
         )
+        if settings.injury_pdf_fetch_enabled:
+            print(
+                "   - Injury-report PDFs: every 15 minutes on an NBA game day"
+            )
+        else:
+            print("   - Injury-report PDFs: off (INJURY_PDF_FETCH_ENABLED is false)")
         
         # List all scheduled jobs
         jobs = self._scheduler.get_jobs()
@@ -1300,6 +1325,63 @@ class SchedulerService:
             result.get("bdl_parent_misses"),
             result.get("locked"),
         )
+
+    async def _run_injury_pdf_fetch_job(self, *, now: datetime | None = None) -> None:
+        """Fetch the current official injury-report slot, on a game day only.
+
+        The cron passes no arguments. ``INJURY_PDF_FETCH_ENABLED`` false
+        returns before a database read and before any HTTP call. A day
+        with no non-postponed NBA game does the same. A database problem
+        or a fetch problem logs the exception type and does not raise,
+        so the rest of the scheduler keeps running.
+
+        Args:
+            now: Clock for the slate date and the report slot. None is
+                the current time. A naive datetime is read as UTC.
+        """
+        if not settings.injury_pdf_fetch_enabled:
+            logger.info("injury pdf fetch skipped; INJURY_PDF_FETCH_ENABLED is off")
+            return
+        moment = now if now is not None else datetime.now(timezone.utc)
+        if moment.tzinfo is None:
+            moment = moment.replace(tzinfo=timezone.utc)
+        try:
+            game_day = await self._injury_pdf_is_game_day(moment)
+        except Exception as exc:
+            logger.warning(
+                "injury pdf fetch skipped; game-day read failed (%s)",
+                type(exc).__name__,
+            )
+            return
+        if not game_day:
+            logger.info("injury pdf fetch skipped; not an NBA game day")
+            return
+        try:
+            from app.services.injury_report_fetcher import fetch_current_slot
+
+            report = await fetch_current_slot(moment)
+        except Exception as exc:
+            logger.warning("injury pdf fetch failed (%s)", type(exc).__name__)
+            return
+        if report.paused:
+            logger.warning("injury pdf fetch paused")
+
+    async def _injury_pdf_is_game_day(self, now: datetime) -> bool:
+        """True when ``now`` falls on an Eastern date that has an NBA game.
+
+        ``_injury_pdf_is_game_day`` is the gate for
+        ``injury_pdf_fetch_current``. It reads ``games`` through the
+        process pool. It does not call the NBA CDN.
+
+        Args:
+            now: Aware instant. The date is ``nba_slate_date``.
+
+        Returns:
+            True when that date has a non-postponed NBA row.
+        """
+        from app.services.injury_report_games import is_nba_game_day
+
+        return await is_nba_game_day(now)
 
     async def trigger_odds_snapshot_now(self, date: Optional[str] = None) -> dict:
         """

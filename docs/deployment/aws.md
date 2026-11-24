@@ -204,13 +204,23 @@ Run `terraform plan` again. Leave the variable unset to keep the default VPC. An
 - Before the backend is pointed at RDS: leave `.env` unset for `DATABASE_URL`. `docker compose` still uses `postgresql://novig:novig@postgres:5432/novig_nba`. Start the compose backend again.
 - After cutover: remove `DATABASE_URL` from `.env` (or set it back to that compose URL) and restart the compose backend. The compose Postgres port is not published, so a host process on the Mac should not be pointed at `localhost:5432`. Rows written to RDS after cutover are not in `pg-data` unless you dump RDS and restore locally with the same script and a PostgreSQL 16 client. Keep `pg-data` until RDS has run cleanly for two weeks.
 
+## Official injury-report PDFs
+
+`nba-injury-pdf/` holds official NBA injury-report PDFs. The runtime IAM user can list, get, and put objects under that prefix. The user cannot delete them. `INJURY_PDF_FETCH_ENABLED` defaults to false, so a deploy does not start fetching. There is no API route and no page that serves the files.
+
+`scripts/sync_raw_to_s3.sh` copies `INJURY_PDF_DIR` (default `/workspace/nba-injury-pdf`) to that prefix and does not pass `--delete`. If the directory is missing, the script still syncs the three Ball Don't Lie prefixes.
+
+If NBA blocks access or ends the agreement, set `INJURY_PDF_FETCH_ENABLED=false` and delete the stored PDFs. An admin has to delete them. The runtime IAM user cannot.
+
+Adding the prefix changes the runtime user's inline policy in place and adds one empty prefix marker. It does not replace the bucket, RDS, or the VPC. Before apply, run `terraform plan` in `infra/aws` and confirm the plan destroys nothing.
+
 ## Scripts
 
 | Script | Required environment | What it refuses to do |
 |---|---|---|
 | `scripts/db_migrate_to_rds.sh` | `LOCAL_DATABASE_URL`, `RDS_DATABASE_URL` | Print URLs or passwords. Run `pg_restore` when its major version is not 16 (override: `ALLOW_PG_RESTORE_MISMATCH=1`). Restore when the two URLs are identical. Default client is `docker exec no-vig-nba-postgres`. `PG_CLIENT=docker-run` uses `docker run --rm postgres:16`. Adds `sslmode=require` on the RDS URL when `sslmode` is absent. `--verify-only` skips the dump, the restore, and that version gate, and only compares row counts, `max(id)`, and sequence `last_value`. If verify failed after a restore, re-run with `--verify-only`. Zero public tables on either side exits 1. Zero sequences is allowed only when both sides list zero. |
 | `scripts/aws_update_my_ip.sh` | none (uses curl) | Call AWS by itself. It rewrites gitignored `terraform.tfvars` and prints `terraform apply`. `--apply` is the only way it launches terraform. |
-| `scripts/sync_raw_to_s3.sh` | `S3_BUCKET`, `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_REGION` | `--delete`. Paths default to `/workspace/bdl-cache`, `/workspace/bdl-archive`, `/workspace/bdl-eval/samples` and can be overridden with `BDL_CACHE_DIR`, `BDL_ARCHIVE_DIR`, `BDL_SAMPLES_DIR`. |
+| `scripts/sync_raw_to_s3.sh` | `S3_BUCKET`, `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_REGION` | `--delete`. Paths default to `/workspace/bdl-cache`, `/workspace/bdl-archive`, `/workspace/bdl-eval/samples`, and `/workspace/nba-injury-pdf`. Override with `BDL_CACHE_DIR`, `BDL_ARCHIVE_DIR`, `BDL_SAMPLES_DIR`, and `INJURY_PDF_DIR`. A missing injury directory is skipped. The other three directories are still required. |
 | `scripts/pg_dump_to_s3.sh` | Those AWS variables plus `RDS_DATABASE_URL` or `DATABASE_URL` | Print the database URL. `DUMP_DATE=YYYY-MM-DD` overrides the UTC date in the object key. The bucket keeps each current dump for 90 days; this script does not delete. |
 
 If a required variable is missing, the script prints help and a dry-run line and exits 2. It does not call `pg_dump`, `pg_restore`, or `aws`.
