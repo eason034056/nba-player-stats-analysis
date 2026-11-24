@@ -17,8 +17,10 @@ first output season is not cut off. Opening game odds for those seasons
 are aggregated at the same T (median home spread, median total, implied
 points). Absence features use that same T. They stay NULL on a pregame row
 when injury coverage is unknown, so a missing injury feed is not stored as
-zero. A row that used box-score absence or ``game_lineups.starter`` has
-``info_source = standin``. The file next to the Parquet is
+zero. When ``nba_injury_report_rows`` exists, ``source='reported'`` reads
+those rows at the same T instead of ``injury_snapshots``. A row that used
+box-score absence or ``game_lineups.starter`` has ``info_source = standin``.
+The file next to the Parquet is
 ``<file>.meta.json`` (``player_games.parquet`` -> ``player_games.meta.json``).
 
 This command does not write ``predictions`` and does not create a feature
@@ -45,17 +47,24 @@ from app.ml.absence import (
     INFO_PREGAME,
     INFO_STANDIN,
     NBA,
+    OFFICIAL_COUNT_COLUMNS,
     SOURCE_ACTUAL,
     SOURCE_REPORTED,
     STARTER_GAME_LINEUPS,
+    TEAM_READY,
     AbsenceIndex,
+    OfficialTeamRead,
     TeamAbsences,
     absence_feature_values,
     absence_features_known,
+    blank_official_counts,
     coverage_note,
     null_absence_features,
+    official_columns_for_player,
+    official_player_status,
     opponent_team,
     own_injury_status,
+    read_official_team,
     rows_for_final_scores,
     starter_for_player,
     team_absences,
@@ -79,6 +88,8 @@ from app.ml.load import (
     InjuryRecord,
     LineupRecord,
     LoadError,
+    OfficialRefresh,
+    OfficialReportRow,
     ProjectedStarterRow,
     StatRecord,
     connect_readonly,
@@ -88,6 +99,7 @@ from app.ml.load import (
     load_injuries,
     load_labels,
     load_lineups,
+    load_official_injury_inputs,
     load_opening_game_odds,
     load_projected_starters,
     load_span,
@@ -122,6 +134,7 @@ OUTPUT_COLUMNS = (
     + ODDS_COLUMNS
     + ABSENCE_FEATURE_COLUMNS
     + ("is_starter", "player_injury_status")
+    + OFFICIAL_COUNT_COLUMNS
     + label_column_names()
 )
 
@@ -135,7 +148,7 @@ INT_COLUMNS = (
     "dnp_last_10",
     "dnp_last_10_window",
     "days_rest",
-) + ODDS_COUNT_COLUMNS + label_column_names()
+) + ODDS_COUNT_COLUMNS + OFFICIAL_COUNT_COLUMNS + label_column_names()
 FLOAT_COLUMNS = form_column_names() + ODDS_VALUE_COLUMNS + ABSENCE_FEATURE_COLUMNS
 NULLABLE_BOOL_COLUMNS = ("is_home", "is_back_to_back", "is_starter")
 _OUTPUT_SET = frozenset(OUTPUT_COLUMNS)
@@ -364,6 +377,8 @@ class _AbsenceReader:
         league: str,
         source: str,
         coverage: str,
+        official_rows: Sequence[OfficialReportRow] | None = None,
+        official_refreshes: Sequence[OfficialRefresh] = (),
     ) -> None:
         self.league = league
         self.source = source
@@ -371,8 +386,11 @@ class _AbsenceReader:
         self.injuries = injuries
         self.lineups = lineups
         self.projected = projected
+        self.official_rows = official_rows
+        self.official_refreshes = tuple(official_refreshes)
         self.index = AbsenceIndex(stats) if league == NBA else None
         self.cache: dict[tuple[int, int], TeamAbsences] = {}
+        self._official_teams: dict[tuple[int, int, datetime], OfficialTeamRead] = {}
         self.unknown_status_count = 0
 
     def _for_team(
@@ -403,12 +421,83 @@ class _AbsenceReader:
         self.unknown_status_count += result.unknown_status_count
         return result
 
+    def _official_team(
+        self,
+        team_id: int,
+        game_id: int,
+        target_date: date,
+        as_of: datetime,
+    ) -> OfficialTeamRead:
+        key = (game_id, team_id, as_of)
+        cached = self._official_teams.get(key)
+        if cached is not None:
+            return cached
+        if self.index is None or self.official_rows is None:
+            raise DatasetError("official injury rows are missing")
+        read = read_official_team(
+            self.official_rows,
+            self.official_refreshes,
+            league=self.league,
+            team=team_id,
+            game=game_id,
+            as_of=as_of,
+            target_date=target_date,
+            stats=self.index.bundle(self.league, team_id, target_date, game_id),
+        )
+        if read.result is not None:
+            self.unknown_status_count += read.result.unknown_status_count
+        self._official_teams[key] = read
+        return read
+
+    def _official_columns(
+        self,
+        target: StatRecord,
+        as_of: datetime,
+        opp_id: int | None,
+    ) -> dict[str, object]:
+        if self.index is None or self.official_rows is None:
+            raise DatasetError("official injury rows are missing")
+        team_read = self._official_team(
+            target.bdl_team_id, target.bdl_game_id, target.game_date, as_of
+        )
+        opp_read = None
+        bundles = self.index.bundle(
+            self.league, target.bdl_team_id, target.game_date, target.bdl_game_id
+        )
+        if opp_id is not None:
+            opp_read = self._official_team(opp_id, target.bdl_game_id, target.game_date, as_of)
+            bundles = bundles + self.index.bundle(
+                self.league, opp_id, target.game_date, target.bdl_game_id
+            )
+        own_status = None
+        if team_read.kind == TEAM_READY:
+            own_status = official_player_status(
+                self.official_rows,
+                self.league,
+                target.bdl_game_id,
+                target.bdl_team_id,
+                target.bdl_player_id,
+                as_of,
+            )
+        return official_columns_for_player(
+            team_read,
+            opp_read,
+            stats=bundles,
+            league=self.league,
+            team=target.bdl_team_id,
+            opponent=opp_id,
+            target_date=target.game_date,
+            player_id=target.bdl_player_id,
+            own_status=own_status,
+        )
+
     def cell(self, target: StatRecord, game: GameRecord, as_of: datetime) -> _AbsenceCell:
         """Build absence columns for one row. T is ``as_of`` and is not rebuilt."""
         if self.league != NBA or self.index is None:
             values: dict[str, object] = dict(null_absence_features())
             values["is_starter"] = None
             values["player_injury_status"] = None
+            values.update(blank_official_counts())
             return _AbsenceCell(INFO_PREGAME, False, False, values)
         starter = starter_for_player(
             league=target.league,
@@ -423,6 +512,13 @@ class _AbsenceReader:
         used_actual = self.source == SOURCE_ACTUAL
         used_lineup = starter.source == STARTER_GAME_LINEUPS
         info = INFO_STANDIN if used_actual or used_lineup else INFO_PREGAME
+        if self.official_rows is not None and self.source == SOURCE_REPORTED:
+            opp_id = opponent_team(game.home_team_id, game.visitor_team_id, target.bdl_team_id)
+            columns = self._official_columns(target, as_of, opp_id)
+            if info == INFO_STANDIN:
+                columns["player_injury_status"] = None
+            columns["is_starter"] = starter.is_starter
+            return _AbsenceCell(info, False, used_lineup, columns)
         team_result = self._for_team(
             target.bdl_team_id, target.bdl_game_id, target.game_date, as_of
         )
@@ -456,6 +552,7 @@ class _AbsenceReader:
             columns["player_injury_status"] = own_injury_status(
                 self.injuries, target.league, target.bdl_player_id, as_of
             )
+        columns.update(blank_official_counts())
         return _AbsenceCell(info, used_actual, used_lineup, columns)
 
 
@@ -476,6 +573,8 @@ def assemble_dataset(
     absence_source: str = SOURCE_REPORTED,
     injury_coverage: str = COVERAGE_UNKNOWN,
     coverage_relation_note: str | None = None,
+    official_rows: Sequence[OfficialReportRow] | None = None,
+    official_refreshes: Sequence[OfficialRefresh] = (),
 ) -> Dataset:
     """Build dataset rows from already loaded records.
 
@@ -503,8 +602,14 @@ def assemble_dataset(
         absence_source: ``reported`` or ``actual``. ``actual`` is the
             box-score stand-in and marks every NBA row ``standin``.
         injury_coverage: ``unknown`` or ``covered``. Unknown does not emit
-            pregame zeros.
+            pregame zeros on the snapshot path.
         coverage_relation_note: Optional sentence from the schema check.
+        official_rows: Official report lines. None keeps the snapshot path.
+            A list, including an empty one, turns the official path on for
+            ``source='reported'``. Box-score ``source='actual'`` does not
+            read these rows and does not fill the official count columns.
+        official_refreshes: Complete ``injuries_nba_official`` refreshes.
+            Numbers are stored only when one of them covers that row's T.
         season_start: First output season, inclusive.
         season_end: Last output season, inclusive.
         hours_before_tip: Subtracted from tip-off. Defaults to 3.
@@ -533,6 +638,8 @@ def assemble_dataset(
         league=league,
         source=absence_source,
         coverage=injury_coverage,
+        official_rows=official_rows,
+        official_refreshes=official_refreshes,
     )
 
     kept: list[dict[str, object]] = []
@@ -627,7 +734,11 @@ def assemble_dataset(
         "league": league,
         "feature_sources": list(feature_source_names()),
         "absence_sources": list(absence_source_names()),
-        "absence_features": list(ABSENCE_FEATURE_COLUMNS) + ["is_starter", "player_injury_status"],
+        "absence_features": (
+            list(ABSENCE_FEATURE_COLUMNS)
+            + ["is_starter", "player_injury_status"]
+            + list(OFFICIAL_COUNT_COLUMNS)
+        ),
         "absence_coverage": injury_coverage,
         "absence_coverage_note": coverage_note(injury_coverage, coverage_relation_note),
         "unknown_injury_status_count": reader.unknown_status_count,
@@ -709,8 +820,11 @@ async def export_dataset(
         injuries = await load_injuries(conn, league=league)
         lineups = await load_lineups(conn, league=league, seasons=loaded_seasons)
         projected = await load_projected_starters(conn, league=league, seasons=loaded_seasons)
+        official = await load_official_injury_inputs(conn, league=league)
     finally:
         await conn.close()
+    official_rows = None if official is None else official[0]
+    official_refreshes = () if official is None else official[1]
     dataset = assemble_dataset(
         games,
         stats,
@@ -726,6 +840,8 @@ async def export_dataset(
         projected=projected,
         injury_coverage=coverage,
         coverage_relation_note=relation_note,
+        official_rows=official_rows,
+        official_refreshes=official_refreshes,
     )
     write_outputs(dataset, out)
     logger.info("wrote %s rows", dataset.metadata["row_count"])

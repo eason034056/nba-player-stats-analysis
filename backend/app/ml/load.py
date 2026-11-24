@@ -145,6 +145,43 @@ class InjuryRecord:
 
 
 @dataclass(frozen=True, slots=True)
+class OfficialReportRow:
+    """One ``nba_injury_report_rows`` line for one game.
+
+    A player line has a raw name and a status. A team line has an empty
+    ``player_raw``, a null status, and either ``not_yet_submitted`` or
+    ``all_players_available``. ``bdl_player_id`` is null when the name was
+    not matched. This record does not match names. ``report_at`` is the
+    report time, compared with T by the feature code, not by this loader.
+    """
+
+    league: str
+    report_at: datetime
+    bdl_game_id: int
+    bdl_team_id: int | None
+    player_raw: str
+    bdl_player_id: int | None
+    status: str | None
+    reason: str | None
+    category: str | None
+    not_yet_submitted: bool
+    all_players_available: bool
+
+
+@dataclass(frozen=True, slots=True)
+class OfficialRefresh:
+    """One ``source_refreshes`` row for ``injuries_nba_official``.
+
+    ``complete`` false does not prove coverage. ``refreshed_at`` is compared
+    with T by the feature code.
+    """
+
+    league: str
+    refreshed_at: datetime
+    complete: bool
+
+
+@dataclass(frozen=True, slots=True)
 class LineupRecord:
     """One ``game_lineups`` row. ``starter`` is the actual tip-off flag."""
 
@@ -541,6 +578,26 @@ WHERE league = $1 AND bdl_player_id = ANY($2::integer[])
 ORDER BY bdl_player_id, snapshot_at
 """
 
+# Official report lines. report_at <= T is applied in Python, per game, so
+# a NULL tip and a non-default hours_before_tip stay in one place. Rows with
+# no bdl_game_id cannot be attached to a game and are not selected.
+OFFICIAL_TABLE_SQL = "SELECT to_regclass('public.nba_injury_report_rows') AS name"
+
+OFFICIAL_ROWS_SQL = """
+SELECT league, report_at, bdl_game_id, bdl_team_id, player_raw, bdl_player_id,
+       status, reason, category, not_yet_submitted, all_players_available
+FROM nba_injury_report_rows
+WHERE league = $1 AND bdl_game_id IS NOT NULL
+ORDER BY bdl_game_id, report_at, bdl_team_id, player_raw
+"""
+
+OFFICIAL_REFRESH_SQL = """
+SELECT league, refreshed_at, complete
+FROM source_refreshes
+WHERE league = $1 AND source = 'injuries_nba_official'
+ORDER BY refreshed_at
+"""
+
 ABSENCE_QUERIES = (
     INJURIES_SQL,
     LINEUPS_SQL,
@@ -552,6 +609,9 @@ ABSENCE_QUERIES = (
     LATEST_PRIOR_SQL,
     TARGET_TEAM_STATS_SQL,
     PLAYER_INJURIES_SQL,
+    OFFICIAL_TABLE_SQL,
+    OFFICIAL_ROWS_SQL,
+    OFFICIAL_REFRESH_SQL,
 )
 
 
@@ -705,3 +765,60 @@ async def load_team_absence_inputs(
         stats=_dedupe_stats(stats),
         injuries=tuple(injuries),
     )
+
+
+def _official_row(record: asyncpg.Record) -> OfficialReportRow:
+    status = record["status"]
+    reason = record["reason"]
+    category = record["category"]
+    return OfficialReportRow(
+        league=str(record["league"]),
+        report_at=record["report_at"],
+        bdl_game_id=int(record["bdl_game_id"]),
+        bdl_team_id=_optional_int(record["bdl_team_id"]),
+        player_raw="" if record["player_raw"] is None else str(record["player_raw"]),
+        bdl_player_id=_optional_int(record["bdl_player_id"]),
+        status=None if status is None else str(status),
+        reason=None if reason is None else str(reason),
+        category=None if category is None else str(category),
+        not_yet_submitted=bool(record["not_yet_submitted"]),
+        all_players_available=bool(record["all_players_available"]),
+    )
+
+
+def _official_refresh(record: asyncpg.Record) -> OfficialRefresh:
+    return OfficialRefresh(
+        league=str(record["league"]),
+        refreshed_at=record["refreshed_at"],
+        complete=bool(record["complete"]),
+    )
+
+
+async def load_official_injury_inputs(
+    conn: asyncpg.Connection,
+    *,
+    league: str,
+) -> tuple[list[OfficialReportRow], list[OfficialRefresh]] | None:
+    """Load official report rows and their refreshes.
+
+    Returns None when ``nba_injury_report_rows`` is not in the database, so
+    an older schema keeps the snapshot absence path. An empty table returns
+    two empty lists, which means the official path is on and a game with no
+    row is a missing report.
+
+    ``report_at`` is not filtered here. The feature code applies each game's
+    T. Rows with a null ``bdl_game_id`` are not selected. Player names are
+    not matched.
+
+    Raises:
+        LoadError: the query fails. The message has no DSN.
+    """
+    require_absence_source("nba_injury_report_rows")
+    found = await _fetch(conn, OFFICIAL_TABLE_SQL)
+    if not found or found[0]["name"] is None:
+        return None
+    rows = [_official_row(record) for record in await _fetch(conn, OFFICIAL_ROWS_SQL, league)]
+    refreshes = [
+        _official_refresh(record) for record in await _fetch(conn, OFFICIAL_REFRESH_SQL, league)
+    ]
+    return rows, refreshes

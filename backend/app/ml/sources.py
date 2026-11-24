@@ -66,6 +66,9 @@ ABSENCE_SOURCES: dict[str, SourceSpec] = {
     "projected_lineup_players": SourceSpec(
         "projected_lineup_players", FEATURE, TIMESTAMP
     ),
+    # Official injury rows. Not part of feature_source_names(): that tuple
+    # stays the pregame allow-list (games, stats, opening odds).
+    "nba_injury_report_rows": SourceSpec("nba_injury_report_rows", FEATURE, TIMESTAMP),
 }
 
 # Named rejection, not a generic "unknown", so a props query cannot be

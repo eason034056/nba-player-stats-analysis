@@ -1,0 +1,256 @@
+{
+  "note": "Parsed rows for the CLE at BKN worked example. No PDF bytes. Team ids 5 (CLE) and 2 (BKN) are fixture ids. Minutes are the unrounded averages that the 138l formula needs in order to land on 62.67 and 51.83. The study printed Mitchell 31.0, Wade 20.8, and Ellis 21.7, which are those averages rounded to one decimal.",
+  "game": {
+    "league": "nba",
+    "bdl_game_id": 18447687,
+    "season": 2025,
+    "date": "2026-03-01",
+    "datetime_utc": "2026-03-01T20:30:00+00:00",
+    "t_utc": "2026-03-01T17:30:00+00:00",
+    "home_team_id": 2,
+    "visitor_team_id": 5
+  },
+  "refresh": {
+    "refreshed_at": "2026-03-01T17:15:05+00:00",
+    "complete": true,
+    "source": "injuries_nba_official"
+  },
+  "prior_games": [
+    {"bdl_game_id": 18447601, "date": "2026-02-20"},
+    {"bdl_game_id": 18447602, "date": "2026-02-21"},
+    {"bdl_game_id": 18447603, "date": "2026-02-22"},
+    {"bdl_game_id": 18447604, "date": "2026-02-23"},
+    {"bdl_game_id": 18447605, "date": "2026-02-24"}
+  ],
+  "minutes": [
+    {
+      "bdl_player_id": 322,
+      "name": "Mitchell, Donovan",
+      "team_id": 5,
+      "seconds_by_game": [1860, 1860, 1860, 1860, 1860],
+      "pts_by_game": [10, 10, 10, 10, 10],
+      "why": "5 games times 1860 seconds is 31.00 minutes. Out, weight 1."
+    },
+    {
+      "bdl_player_id": 666940,
+      "name": "Wade, Dean",
+      "team_id": 5,
+      "seconds_by_game": [1249, 1249, 1249, 1249, 1253],
+      "pts_by_game": [4, 4, 4, 4, 4],
+      "why": "6249 seconds over 5 games is 20.83 minutes. Out, weight 1."
+    },
+    {
+      "bdl_player_id": 38017714,
+      "name": "Ellis, Keon",
+      "team_id": 5,
+      "seconds_by_game": [1300, 1300, 1300, 1300, 1304],
+      "pts_by_game": [6, 6, 6, 6, 6],
+      "why": "6504 seconds over 5 games is 21.68 minutes. Questionable, weight 0.5, adds 10.84."
+    },
+    {
+      "bdl_player_id": 192,
+      "name": "Harden, James",
+      "team_id": 5,
+      "seconds_by_game": [1200, 1200, 1200, 1200, 1200],
+      "pts_by_game": [8, 8, 8, 8, 8],
+      "why": "20.00 minutes so he is rotation. He is the row, so his minutes are left out of his own team total."
+    },
+    {
+      "bdl_player_id": 666508,
+      "name": "Claxton, Nic",
+      "team_id": 2,
+      "seconds_by_game": [1680, 1680, 1680, 1680, 1680],
+      "pts_by_game": [8, 8, 8, 8, 8],
+      "why": "28.00 minutes. Out. Opponent total only."
+    },
+    {
+      "bdl_player_id": 1057266813,
+      "name": "Demin, Egor",
+      "team_id": 2,
+      "seconds_by_game": [1620, 1620, 1620, 1620, 1620],
+      "pts_by_game": [6, 6, 6, 6, 6],
+      "why": "27.00 minutes. Out. Opponent total only."
+    },
+    {
+      "bdl_player_id": 1057279425,
+      "name": "Powell, Drake",
+      "team_id": 2,
+      "seconds_by_game": [1200, 1200, 1200, 1200, 1200],
+      "pts_by_game": [4, 4, 4, 4, 4],
+      "why": "20.00 minutes. Out. Opponent total only. 28+27+20=75."
+    }
+  ],
+  "t_report": {
+    "name": "Injury-Report_2026-03-01_12_15PM",
+    "report_at": "2026-03-01T17:15:05+00:00",
+    "rows": [
+      {
+        "bdl_game_id": 999,
+        "team_id": 5,
+        "player_raw": "Mitchell, Donovan",
+        "bdl_player_id": 322,
+        "status": "Available",
+        "reason": "decoy row for a different game id",
+        "category": "Injury/Illness"
+      },
+      {
+        "team_id": 5,
+        "player_raw": "Ellis, Keon",
+        "bdl_player_id": 38017714,
+        "status": "Questionable",
+        "reason": "Injury/Illness - Left Index Finger; Fracture",
+        "category": "Injury/Illness"
+      },
+      {
+        "team_id": 5,
+        "player_raw": "Harden, James",
+        "bdl_player_id": 192,
+        "status": "Questionable",
+        "reason": "Injury/Illness - Right Thumb; Fracture",
+        "category": "Injury/Illness"
+      },
+      {
+        "team_id": 5,
+        "player_raw": "Minix, Riley",
+        "bdl_player_id": 1028245994,
+        "status": "Out",
+        "reason": "G League - Two-Way",
+        "category": "G League"
+      },
+      {
+        "team_id": 5,
+        "player_raw": "Mitchell, Donovan",
+        "bdl_player_id": 322,
+        "status": "Out",
+        "reason": "Injury/Illness - Right Groin; Strain",
+        "category": "Injury/Illness"
+      },
+      {
+        "team_id": 5,
+        "player_raw": "Strus, Max",
+        "bdl_player_id": 666908,
+        "status": "Out",
+        "reason": "Injury/Illness - Left Foot; Surgery - Jones Fracture",
+        "category": "Injury/Illness"
+      },
+      {
+        "team_id": 5,
+        "player_raw": "Wade, Dean",
+        "bdl_player_id": 666940,
+        "status": "Out",
+        "reason": "Injury/Illness - Right Ankle; Sprain",
+        "category": "Injury/Illness"
+      },
+      {
+        "team_id": 2,
+        "player_raw": "Claxton, Nic",
+        "bdl_player_id": 666508,
+        "status": "Out",
+        "reason": "Injury/Illness - Right Thumb; Sprain",
+        "category": "Injury/Illness"
+      },
+      {
+        "team_id": 2,
+        "player_raw": "Demin, Egor",
+        "bdl_player_id": 1057266813,
+        "status": "Out",
+        "reason": "Injury/Illness - Left Plantar Fascia; Injury Management",
+        "category": "Injury/Illness"
+      },
+      {
+        "team_id": 2,
+        "player_raw": "Etienne, Tyson",
+        "bdl_player_id": 900001,
+        "status": "Out",
+        "reason": "G League - Two-Way",
+        "category": "G League"
+      },
+      {
+        "team_id": 2,
+        "player_raw": "Johnson, Chaney",
+        "bdl_player_id": 900002,
+        "status": "Out",
+        "reason": "G League - Two-Way",
+        "category": "G League"
+      },
+      {
+        "team_id": 2,
+        "player_raw": "Liddell, E.J.",
+        "bdl_player_id": 900003,
+        "status": "Out",
+        "reason": "G League - Two-Way",
+        "category": "G League"
+      },
+      {
+        "team_id": 2,
+        "player_raw": "Powell, Drake",
+        "bdl_player_id": 1057279425,
+        "status": "Out",
+        "reason": "G League - On Assignment",
+        "category": "G League"
+      }
+    ]
+  },
+  "tip_report": {
+    "name": "Injury-Report_2026-03-01_03_15PM",
+    "report_at": "2026-03-01T20:15:05+00:00",
+    "rows": [
+      {
+        "team_id": 5,
+        "player_raw": "Ellis, Keon",
+        "bdl_player_id": 38017714,
+        "status": "Available",
+        "reason": "Injury/Illness - Left Index Finger; Fracture",
+        "category": "Injury/Illness"
+      },
+      {
+        "team_id": 5,
+        "player_raw": "Harden, James",
+        "bdl_player_id": 192,
+        "status": "Available",
+        "reason": "Injury/Illness - Right Thumb; Fracture",
+        "category": "Injury/Illness"
+      },
+      {
+        "team_id": 5,
+        "player_raw": "Mitchell, Donovan",
+        "bdl_player_id": 322,
+        "status": "Out",
+        "reason": "Injury/Illness - Right Groin; Strain",
+        "category": "Injury/Illness"
+      },
+      {
+        "team_id": 5,
+        "player_raw": "Wade, Dean",
+        "bdl_player_id": 666940,
+        "status": "Out",
+        "reason": "Injury/Illness - Right Ankle; Sprain",
+        "category": "Injury/Illness"
+      },
+      {
+        "team_id": 2,
+        "player_raw": "Claxton, Nic",
+        "bdl_player_id": 666508,
+        "status": "Out",
+        "reason": "Injury/Illness - Right Thumb; Sprain",
+        "category": "Injury/Illness"
+      },
+      {
+        "team_id": 2,
+        "player_raw": "Demin, Egor",
+        "bdl_player_id": 1057266813,
+        "status": "Out",
+        "reason": "Injury/Illness - Left Plantar Fascia; Injury Management",
+        "category": "Injury/Illness"
+      },
+      {
+        "team_id": 2,
+        "player_raw": "Powell, Drake",
+        "bdl_player_id": 1057279425,
+        "status": "Out",
+        "reason": "G League - On Assignment",
+        "category": "G League"
+      }
+    ]
+  }
+}
