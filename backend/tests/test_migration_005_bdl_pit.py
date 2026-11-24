@@ -80,8 +80,8 @@ VALUES ('nba', 104, 4, 10, 1, 2025, '2026-01-07', true);
 
 @pytest_asyncio.fixture
 async def db(scratch_conn: asyncpg.Connection) -> asyncpg.Connection:
-    """001 through 005 applied, plus a clean four-game stat seed."""
-    assert await upgrade(scratch_conn) == ["001", "002", "003", "004", "005"]
+    """001 through 006 applied, plus a clean four-game stat seed."""
+    assert await upgrade(scratch_conn) == ["001", "002", "003", "004", "005", "006"]
     await scratch_conn.execute(SEED)
     return scratch_conn
 
@@ -265,7 +265,7 @@ def test_005_does_not_alter_drop_or_comment_on_a_002_object() -> None:
 async def test_a_second_runner_pass_is_a_no_op(db: asyncpg.Connection) -> None:
     assert await upgrade(db) == []
     versions = await db.fetch("SELECT version FROM schema_migrations ORDER BY version")
-    assert [row["version"] for row in versions] == ["001", "002", "003", "004", "005"]
+    assert [row["version"] for row in versions] == ["001", "002", "003", "004", "005", "006"]
     assert await db.fetchval("SELECT to_regclass('public.bdl_games_with_gaps') IS NOT NULL")
     assert await db.fetchval("SELECT to_regclass('public.player_game_log') IS NOT NULL")
 
@@ -276,7 +276,7 @@ async def test_002_tables_keep_columns_types_and_constraints(
 ) -> None:
     """005 may add indexes and triggers. Columns, constraints, and comments stay put."""
     for migration in discover():
-        if migration.version != "005":
+        if migration.version < "005":
             (tmp_path / migration.path.name).write_bytes(migration.path.read_bytes())
     assert await upgrade(scratch_conn, tmp_path) == ["001", "002", "003", "004"]
 
@@ -294,7 +294,7 @@ async def test_002_tables_keep_columns_types_and_constraints(
         "FROM prop_markets ORDER BY 1, 2"
     )]
 
-    assert await upgrade(scratch_conn) == ["005"]
+    assert await upgrade(scratch_conn) == ["005", "006"]
 
     assert await _columns(scratch_conn) == before_columns
     assert await _constraints(scratch_conn) == before_constraints

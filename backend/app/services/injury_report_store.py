@@ -169,6 +169,35 @@ class LocalInjuryReportStore:
             from_cache=False,
         )
 
+    def iter_stored(self) -> list[Stored]:
+        """Every PDF this cache has stored, in path order.
+
+        ``iter_stored`` reads ``*.pdf.json`` sidecars and returns the
+        same ``Stored`` value ``get`` would return. A 403 sidecar, and
+        a 200 sidecar whose PDF file is missing, are skipped. This
+        method does not call the network and does not delete a file.
+
+        Returns:
+            Stored PDFs, oldest path first.
+        """
+        if not self.root.is_dir():
+            return []
+        found: list[Stored] = []
+        for sidecar in sorted(self.root.rglob("*.pdf.json")):
+            try:
+                loaded = json.loads(sidecar.read_text(encoding="utf-8"))
+            except (OSError, json.JSONDecodeError):
+                continue
+            if not isinstance(loaded, dict):
+                continue
+            url = loaded.get("url")
+            if not isinstance(url, str):
+                continue
+            got = self.get(url)
+            if isinstance(got, Stored):
+                found.append(got)
+        return found
+
     def put_missing(self, url: str, *, checked_at: datetime) -> Missing:
         """Record a 403. Does not create a PDF and does not delete one."""
         _pdf, sidecar = self.paths_for(url)

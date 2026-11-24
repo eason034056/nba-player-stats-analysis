@@ -1330,10 +1330,12 @@ class SchedulerService:
         """Fetch the current official injury-report slot, on a game day only.
 
         The cron passes no arguments. ``INJURY_PDF_FETCH_ENABLED`` false
-        returns before a database read and before any HTTP call. A day
-        with no non-postponed NBA game does the same. A database problem
-        or a fetch problem logs the exception type and does not raise,
-        so the rest of the scheduler keeps running.
+        returns before a database read, before any HTTP call, and before
+        a parse. A day with no non-postponed NBA game does the same.
+        After a fetch, stored PDFs are parsed into ``nba_injury_report_rows``.
+        A database problem, a fetch problem, or a parse problem logs the
+        exception type and does not raise, so the rest of the scheduler
+        keeps running.
 
         Args:
             now: Clock for the slate date and the report slot. None is
@@ -1365,6 +1367,16 @@ class SchedulerService:
             return
         if report.paused:
             logger.warning("injury pdf fetch paused")
+        # Parse whatever this tick stored. The job is registered only
+        # when INJURY_PDF_FETCH_ENABLED is true, so a deploy with the
+        # flag off never reaches this call. A parse error is logged
+        # and does not stop the scheduler.
+        try:
+            from app.services.injury_report_ingest import ingest_fetch_results
+
+            await ingest_fetch_results(report)
+        except Exception as exc:
+            logger.warning("injury report ingest failed (%s)", type(exc).__name__)
 
     async def _injury_pdf_is_game_day(self, now: datetime) -> bool:
         """True when ``now`` falls on an Eastern date that has an NBA game.
