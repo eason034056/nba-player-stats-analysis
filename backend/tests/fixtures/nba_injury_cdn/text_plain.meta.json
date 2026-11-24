@@ -1,0 +1,12 @@
+{
+  "synthetic": true,
+  "why": "No recorded text/plain error body exists. Tests that retry 429 and 5xx reuse this body and pass the status.",
+  "status_line": "HTTP/1.1 500 Internal Server Error",
+  "status": 500,
+  "headers": {
+    "Content-Type": "text/plain"
+  },
+  "body_file": "text_plain.body.bin",
+  "body_sha256": "b3cc0475bb78a5026098858e9889acf666d31062d513d303314eca31d36e72f2",
+  "body_length": 9
+}

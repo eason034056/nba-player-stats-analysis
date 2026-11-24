@@ -8,6 +8,7 @@ and a length. Tests replay those headers with synthetic PDF bytes.
 
 from __future__ import annotations
 
+import hashlib
 import json
 import subprocess
 import sys
@@ -47,7 +48,7 @@ import backend.scripts.fetch_injury_reports as cli
 
 ET = ZoneInfo("America/New_York")
 FIXTURES = Path(__file__).resolve().parent / "fixtures" / "nba_injury_cdn"
-SYNTHETIC = b"%PDF-1.4 synthetic"
+SYNTHETIC = (FIXTURES / "synthetic_body.bin").read_bytes()
 EXISTING_URL = (
     "https://ak-static.cms.nba.com/referee/injury/Injury-Report_2024-11-14_10AM.pdf"
 )
@@ -59,6 +60,30 @@ MISSING_URL = (
 
 def _load(name: str) -> dict:
     return json.loads((FIXTURES / name).read_text(encoding="utf-8"))
+
+
+def _cdn(
+    meta_name: str,
+    *,
+    status: int | None = None,
+    header_overrides: dict[str, str] | None = None,
+) -> httpx.Response:
+    """Build one CDN response from a fixture file.
+
+    Headers and the body come from ``fixtures/nba_injury_cdn``. A test
+    passes ``status`` when the same body is reused for 429 and 5xx, and
+    ``header_overrides`` when one recorded header is the thing under test.
+    """
+    meta = _load(meta_name)
+    body_name = meta.get("body_file") or meta.get("replay_body")
+    if not isinstance(body_name, str):
+        raise AssertionError(f"{meta_name} has no body file")
+    headers = {str(key): str(value) for key, value in meta["headers"].items()}
+    if header_overrides:
+        headers.update(header_overrides)
+    code = int(meta["status"] if status is None else status)
+    body = (FIXTURES / body_name).read_bytes()
+    return httpx.Response(code, headers=headers, content=body)
 
 
 class RecordingTransport(httpx.AsyncBaseTransport):
@@ -83,13 +108,6 @@ class RecordingTransport(httpx.AsyncBaseTransport):
 def _client(handler, clock: FakeClock) -> tuple[httpx.AsyncClient, RecordingTransport]:
     transport = RecordingTransport(handler, clock)
     return httpx.AsyncClient(transport=transport), transport
-
-
-def _pdf(headers: dict[str, str] | None = None, body: bytes = SYNTHETIC) -> httpx.Response:
-    merged = {"Content-Type": "application/pdf", "Content-Length": str(len(body))}
-    if headers:
-        merged.update(headers)
-    return httpx.Response(200, headers=merged, content=body)
 
 
 def _gaps(times: list[float]) -> list[float]:
@@ -265,6 +283,38 @@ class TestFixtures:
         assert missing["headers"]["Content-Type"] == "application/xml"
         assert "Set-Cookie" not in missing["headers"]
 
+    def test_recorded_403_body_matches_the_meta(self) -> None:
+        meta = _load("missing.meta.json")
+        body = (FIXTURES / meta["body_file"]).read_bytes()
+        assert hashlib.sha256(body).hexdigest() == meta["body_sha256"]
+        assert len(body) == meta["body_length"]
+        assert body.startswith(b"<?xml")
+
+    def test_replay_body_is_not_the_official_pdf(self) -> None:
+        meta = _load("existing.meta.json")
+        replay = (FIXTURES / meta["replay_body"]).read_bytes()
+        assert hashlib.sha256(replay).hexdigest() != meta["body_sha256"]
+        assert replay.startswith(b"%PDF-")
+        assert b"synthetic" in replay
+
+    def test_synthetic_metas_are_marked(self) -> None:
+        for name in ("block_page.meta.json", "html_403.meta.json", "text_plain.meta.json"):
+            meta = _load(name)
+            assert meta["synthetic"] is True
+            body = (FIXTURES / meta["body_file"]).read_bytes()
+            assert hashlib.sha256(body).hexdigest() == meta["body_sha256"]
+
+    def test_test_module_does_not_build_cdn_payloads_inline(self) -> None:
+        source = Path(__file__).read_text(encoding="utf-8")
+        # Split so this assertion is not itself an inline payload.
+        for needle in (
+            "headers" + "={",
+            "content=" + "b" + '"',
+            "content=" + "b" + "'",
+            '{"' + "Content-Type" + '"',
+        ):
+            assert needle not in source, needle
+
 
 # ---------------------------------------------------------------------------
 # Fetch behavior
@@ -281,12 +331,7 @@ class TestFetch:
         store = LocalInjuryReportStore(tmp_path)
 
         def handler(_request: httpx.Request) -> httpx.Response:
-            return _pdf(
-                {
-                    "Last-Modified": fixture["headers"]["Last-Modified"],
-                    "Content-Type": fixture["headers"]["Content-Type"],
-                }
-            )
+            return _cdn("existing.meta.json")
 
         client, transport = _client(handler, clock)
         report = await fetch_urls(
@@ -315,11 +360,7 @@ class TestFetch:
         store = LocalInjuryReportStore(tmp_path)
 
         def handler(_request: httpx.Request) -> httpx.Response:
-            return httpx.Response(
-                fixture["status"],
-                headers={"Content-Type": fixture["headers"]["Content-Type"]},
-                content=b"<?xml version='1.0'?><Error>synthetic</Error>",
-            )
+            return _cdn("missing.meta.json")
 
         client, transport = _client(handler, clock)
         report = await fetch_urls(
@@ -347,7 +388,7 @@ class TestFetch:
         assert len(urls) >= 11
 
         def handler(_request: httpx.Request) -> httpx.Response:
-            return _pdf()
+            return _cdn("existing.meta.json")
 
         client, transport = _client(handler, clock)
         report = await fetch_urls(urls, store=store, clock=clock, client=client)
@@ -371,8 +412,8 @@ class TestFetch:
         def handler(request: httpx.Request) -> httpx.Response:
             calls["n"] += 1
             if str(request.url) == MISSING_URL:
-                return httpx.Response(403, headers={"Content-Type": "application/xml"})
-            return _pdf({"Last-Modified": "Thu, 14 Nov 2024 15:30:04 GMT"})
+                return _cdn("missing.meta.json")
+            return _cdn("existing.meta.json")
 
         first, transport = _client(handler, clock)
         await fetch_urls(urls, store=store, clock=clock, client=first, recheck_missing=False)
@@ -395,7 +436,7 @@ class TestFetch:
         store = LocalInjuryReportStore(tmp_path)
 
         def handler(_request: httpx.Request) -> httpx.Response:
-            return httpx.Response(403, headers={"Content-Type": "application/xml"})
+            return _cdn("missing.meta.json")
 
         first, _transport = _client(handler, clock)
         await fetch_urls(
@@ -424,7 +465,7 @@ class TestFetch:
         ]
 
         def handler(_request: httpx.Request) -> httpx.Response:
-            return httpx.Response(status, headers={"Content-Type": "text/plain"}, content=b"no")
+            return _cdn("text_plain.meta.json", status=status)
 
         client, transport = _client(handler, clock)
         report = await fetch_urls(urls, store=store, clock=clock, client=client)
@@ -470,10 +511,8 @@ class TestFetch:
         def handler(_request: httpx.Request) -> httpx.Response:
             seen["n"] += 1
             if seen["n"] == 1:
-                return _pdf()
-            return httpx.Response(
-                200, headers={"Content-Type": "text/html"}, content=b"<html>blocked</html>"
-            )
+                return _cdn("existing.meta.json")
+            return _cdn("block_page.meta.json")
 
         client, transport = _client(handler, clock)
         report = await fetch_urls(urls, store=store, clock=clock, client=client)
@@ -493,7 +532,7 @@ class TestFetch:
         url = EXISTING_URL
 
         def ok(_request: httpx.Request) -> httpx.Response:
-            return _pdf({"Last-Modified": "Thu, 14 Nov 2024 15:30:04 GMT"})
+            return _cdn("existing.meta.json")
 
         client, _transport = _client(ok, clock)
         await fetch_urls([url], store=store, clock=clock, client=client)
@@ -502,7 +541,7 @@ class TestFetch:
         sidecar = store.paths_for(url)[1].read_bytes()
 
         def denied(_request: httpx.Request) -> httpx.Response:
-            return httpx.Response(403, headers={"Content-Type": "application/xml"})
+            return _cdn("missing.meta.json")
 
         again, transport = _client(denied, clock)
         report = await fetch_urls(
@@ -526,11 +565,7 @@ class TestFetch:
         urls = [_url(f"Injury-Report_2024-11-14_{hour:02d}AM.pdf") for hour in range(1, 13)]
 
         def handler(_request: httpx.Request) -> httpx.Response:
-            return httpx.Response(
-                403,
-                headers={"Content-Type": "application/xml"},
-                content=b"<?xml version='1.0'?><Error></Error>",
-            )
+            return _cdn("missing.meta.json")
 
         client, transport = _client(handler, clock)
         report = await fetch_urls(urls, store=store, clock=clock, client=client)
@@ -544,7 +579,7 @@ class TestFetch:
     async def test_requests_send_the_fetcher_user_agent(self, tmp_path: Path) -> None:
         clock = FakeClock()
         store = LocalInjuryReportStore(tmp_path)
-        client, transport = _client(lambda _request: _pdf(), clock)
+        client, transport = _client(lambda _request: _cdn("existing.meta.json"), clock)
         # The CLI client sets the header. This test sets it the same way.
         client.headers["User-Agent"] = USER_AGENT
         await fetch_urls(
@@ -555,6 +590,57 @@ class TestFetch:
         )
         await client.aclose()
         assert transport.user_agents == [USER_AGENT]
+
+    @pytest.mark.asyncio
+    async def test_malformed_last_modified_is_stored_and_the_next_url_is_fetched(
+        self, tmp_path: Path
+    ) -> None:
+        clock = FakeClock(datetime(2026, 11, 24, 8, 0, tzinfo=UTC))
+        store = LocalInjuryReportStore(tmp_path)
+        first = _url("Injury-Report_2024-11-14_01PM.pdf")
+        second = _url("Injury-Report_2024-11-14_02PM.pdf")
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            if str(request.url) == first:
+                return _cdn(
+                    "existing.meta.json",
+                    header_overrides={"Last-Modified": "not-a-date"},
+                )
+            return _cdn("existing.meta.json")
+
+        client, transport = _client(handler, clock)
+        report = await fetch_urls([first, second], store=store, clock=clock, client=client)
+        await client.aclose()
+        assert report.paused is False
+        assert report.requests_made == 2
+        assert transport.urls == [first, second]
+        assert [item.tag for item in report.results] == ["stored", "stored"]
+        stored = report.results[0]
+        assert stored.last_modified_raw == "not-a-date"
+        assert stored.last_modified_utc is None
+        sidecar = json.loads(stored.sidecar_path.read_text(encoding="utf-8"))
+        assert sidecar["last_modified_raw"] == "not-a-date"
+        assert sidecar["last_modified_utc"] is None
+
+    @pytest.mark.asyncio
+    async def test_first_seen_html_403_pauses(self, tmp_path: Path) -> None:
+        clock = FakeClock()
+        store = LocalInjuryReportStore(tmp_path)
+        urls = [MISSING_URL, _url("Injury-Report_2024-11-14_02PM.pdf")]
+
+        def handler(_request: httpx.Request) -> httpx.Response:
+            return _cdn("html_403.meta.json")
+
+        client, transport = _client(handler, clock)
+        report = await fetch_urls(urls, store=store, clock=clock, client=client)
+        await client.aclose()
+        assert report.paused is True
+        assert report.requests_made == 1
+        assert transport.urls == [urls[0]]
+        assert report.results[0].tag == "blocked"
+        pdf, sidecar = store.paths_for(urls[0])
+        assert not pdf.exists()
+        assert not sidecar.exists()
 
 
 # ---------------------------------------------------------------------------
@@ -596,6 +682,54 @@ class TestCli:
         lines = [line for line in capsys.readouterr().out.splitlines() if line]
         assert len(lines) == 2
         assert len(set(lines)) == 2
+
+    def test_dry_run_documents_when_postgres_opens(self) -> None:
+        text = Path(cli.__file__).read_text(encoding="utf-8")
+        assert "does not open a socket" not in text
+        assert "backfill --dry-run reads tip times from Postgres" in text
+        assert "does not open a database connection" in text
+        assert "does not open a CDN socket" in text
+        assert "print URLs from Postgres tips; no CDN" in text
+        assert "print the URL; no database and no CDN" in text
+
+    def test_current_dry_run_does_not_open_postgres(
+        self, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        import asyncpg
+
+        calls = {"n": 0}
+
+        async def connect(*_args: object, **_kwargs: object) -> None:
+            calls["n"] += 1
+            raise OSError("closed")
+
+        monkeypatch.setattr(asyncpg, "connect", connect)
+        code = cli.main(["current", "--dry-run", "--at", "2025-12-23T21:00:00Z"])
+        assert code == 0
+        assert calls["n"] == 0
+        assert "postgresql://" not in capsys.readouterr().err
+
+    def test_backfill_dry_run_opens_postgres_and_not_the_cdn(
+        self, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        import asyncpg
+
+        calls = {"n": 0}
+
+        async def connect(*_args: object, **_kwargs: object) -> None:
+            calls["n"] += 1
+            raise OSError("closed")
+
+        def fetched(*_args: object, **_kwargs: object) -> None:
+            raise AssertionError("dry-run called the CDN")
+
+        monkeypatch.setattr(asyncpg, "connect", connect)
+        monkeypatch.setattr(cli, "fetch_urls", fetched)
+        monkeypatch.setattr(cli, "build_client", fetched)
+        code = cli.main(["backfill", "--season", "2021-22", "--dry-run"])
+        assert code == 1
+        assert calls["n"] == 1
+        assert "postgresql://" not in capsys.readouterr().err
 
     def test_season_before_2021_22_exits_2(self, capsys: pytest.CaptureFixture[str]) -> None:
         assert cli.main(["backfill", "--season", "2020-21", "--dry-run"]) == 2

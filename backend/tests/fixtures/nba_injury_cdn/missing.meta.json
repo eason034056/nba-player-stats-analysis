@@ -6,11 +6,12 @@
     "Content-Type": "application/xml",
     "Server": "AmazonS3",
     "Content-Length": "263",
-    "Date": "Tue, 24 Nov 2026 08:37:01 GMT",
+    "Date": "Tue, 24 Nov 2026 09:23:52 GMT",
     "X-XSS-Protection": "1; mode=block",
     "X-Content-Type-Options": "nosniff",
     "Strict-Transport-Security": "max-age=86400"
   },
-  "body_sha256": "fc52b223153d5749e72499e1d0586eba230824d5bb3a757b8b54341212011e9d",
-  "body_length": 263
+  "body_sha256": "2962a18de1e93e26965ad116e06ebb8715350c5a14cd7372c3fe5a57055351f5",
+  "body_length": 263,
+  "body_file": "missing_403.body.xml"
 }

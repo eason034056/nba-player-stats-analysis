@@ -6,10 +6,12 @@ already recorded as 403, is not requested again during a backfill.
 The live current slot may check a recorded 403 again on a later call.
 That later call is the next 15-minute tick.
 
-HTTP 403 on a URL we have never stored means the file is not there.
-The CDN does not send 404. That 403 is recorded and is not retried in
-the same run. A run of those 403s is normal before a report is posted
-and does not pause the fetcher.
+HTTP 403 on a URL we have never stored means the file is not there
+when the body is the CDN's XML error. The CDN does not send 404. That
+403 is recorded and is not retried in the same run. A run of those
+403s is normal before a report is posted and does not pause the fetcher.
+A 403 whose body or content type is HTML is a possible block, including
+the first time that URL is seen.
 
 A 403 on a URL we already stored as a PDF, a 200 that is not a PDF,
 an HTML or XML body on a 200, or any other unexpected status is treated
@@ -170,12 +172,34 @@ def build_client() -> httpx.AsyncClient:
 
 
 def _parse_last_modified(raw: str | None) -> str | None:
+    """UTC stamp of a Last-Modified header.
+
+    An empty or unreadable value is None. The PDF is still stored, and
+    the rest of the run continues. ``parsedate_to_datetime`` raises
+    ``ValueError`` for a string that is not a date.
+    """
     if raw is None or not raw.strip():
         return None
-    parsed = parsedate_to_datetime(raw)
+    try:
+        parsed = parsedate_to_datetime(raw)
+    except (TypeError, ValueError):
+        return None
     if parsed.tzinfo is None:
         parsed = parsed.replace(tzinfo=UTC)
     return parsed.astimezone(UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+
+def _is_html(response: httpx.Response) -> bool:
+    """True when the content type or the body is HTML.
+
+    A first-seen 403 with an HTML body is a possible block. The recorded
+    missing file is ``application/xml`` and starts with ``<?xml``.
+    """
+    content_type = response.headers.get("content-type", "").lower()
+    if "html" in content_type:
+        return True
+    sample = response.content.lstrip()[:64].lower()
+    return sample.startswith((b"<html", b"<!doctype html"))
 
 
 def _is_pdf(response: httpx.Response) -> bool:
@@ -272,7 +296,7 @@ async def fetch_urls(
                 streak = 0
                 break
 
-            if status == 403 and not existed:
+            if status == 403 and not existed and not _is_html(response):
                 missing = store.put_missing(url, checked_at=clock.now())
                 results.append(missing)
                 # A string of 403s is a report that is not posted yet.
@@ -290,7 +314,9 @@ async def fetch_urls(
                 pending = limiter.retry_gap(streak)
                 continue
 
-            if status == 403 and existed:
+            if status == 403 and _is_html(response):
+                reason = "403 body was html"
+            elif status == 403 and existed:
                 reason = "stored report returned 403"
             elif status == 200:
                 reason = "response was not a pdf"

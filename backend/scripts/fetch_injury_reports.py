@@ -9,9 +9,12 @@ Run from the repository root::
 
 ``backfill`` reads tip times from Postgres for that one season (2021-22 or
 later), keeps one URL per shared tip, and fetches each URL once.
-``current`` fetches the slot for now. ``--dry-run`` prints the URLs and
-does not open a socket. ``--at`` sets the clock for ``current`` (an aware
-ISO timestamp). The database URL is never printed.
+``current`` fetches the slot for now. ``current --dry-run`` prints that
+one URL. It does not open a database connection and it does not open a
+CDN socket. backfill --dry-run reads tip times from Postgres, because
+those tips are what the URLs are built from, and then prints the URLs.
+It does not open a CDN socket. ``--at`` sets the clock for ``current``
+(an aware ISO timestamp). The database URL is never printed.
 
 Seasons before 2021-22 are refused. There is no HTTP route in this module.
 """
@@ -65,9 +68,17 @@ def _parser() -> argparse.ArgumentParser:
     sub = parser.add_subparsers(dest="command", required=True)
     backfill = sub.add_parser("backfill", help="one season of tip-minus-3-hour reports")
     backfill.add_argument("--season", required=True, help="2021-22 or a later season")
-    backfill.add_argument("--dry-run", action="store_true", help="print URLs, no network")
+    backfill.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="print URLs from Postgres tips; no CDN",
+    )
     current = sub.add_parser("current", help="the report slot for now")
-    current.add_argument("--dry-run", action="store_true", help="print the URL, no network")
+    current.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="print the URL; no database and no CDN",
+    )
     current.add_argument("--at", default=None, help="aware ISO time instead of now")
     return parser
 

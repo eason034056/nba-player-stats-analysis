@@ -42,7 +42,7 @@ There is no new HTTP route, page, or feed. No PDF bytes are committed. CI fails 
 | Infra | `infra/aws/locals.tf`, `outputs.tf`, `README.md`, `docs/deployment/aws.md` | Prefix `nba-injury-pdf/`. Get, Put, List. No delete |
 | Guard | `.github/workflows/ci.yml`, `.gitignore` | CI rejects a tracked PDF. Ignore `nba-injury-pdf/` only |
 | Tests | `backend/tests/test_spo149_injury_report_pdfs.py`, `test_spo132_rds_s3.py` | Behavior tests and the three-prefix sync case |
-| Fixtures | `backend/tests/fixtures/nba_injury_cdn/*.meta.json` | Status line and headers. Body replaced by sha256 and length |
+| Fixtures | `backend/tests/fixtures/nba_injury_cdn/` | Recorded headers, the real 403 XML body, synthetic replay bytes, README |
 
 ## Why
 
@@ -60,6 +60,7 @@ Throwaway PostgreSQL 16 on `127.0.0.1:5441`, database `test`. Not port 5434. Doc
 - **This ticket:** `pytest tests/test_spo149_injury_report_pdfs.py` — 47 passed, including the Postgres tip test.
 - **Sync script:** the three existing prefixes still sync when `INJURY_PDF_DIR` is missing, with no `--delete`. When the directory exists, the fourth prefix is added and `--delete` is still absent.
 - **Full backend suite:** `pytest -q` — **1926 passed, 11 skipped, 4 xfailed, 0 failed** (118.66s). `test_spo132b_optional_vpc.py::TestVpcIdConsole` passed here (3 tests). Those were the only failures the brief allowed, and they did not fail.
+- **Full backend suite after the QA fixes:** `pytest -q` on the same throwaway Postgres — **1935 passed, 11 skipped, 4 xfailed, 0 failed** (115.63s). `tests/test_spo149_injury_report_pdfs.py` is 59 passed. `git ls-files | grep -i '\.pdf$'` printed nothing.
 - **Terraform:** `terraform fmt -check` and `terraform validate` in `infra/aws` with Terraform 1.9.8. `terraform init -backend=false` only. No plan, no apply, no AWS credentials.
 - **CLI:** `python -m backend.scripts.fetch_injury_reports current --dry-run` printed one URL and did not open a connection to the CDN:
 
@@ -99,6 +100,8 @@ Each change was restored. The four tests passed again after the restore, and the
 | Compose and `env.example` | `INJURY_PDF_FETCH_ENABLED` defaults to false. |
 | Terraform | Prefix added to `local.s3_prefixes`. IAM policy is the same document, updated in place. One new empty prefix marker in `s3.tf` (`for_each` on that set). No `s3:DeleteObject`. Lifecycle still expires only current objects under `pg-dumps/`. Objects over 128KB can move to infrequent access; the sample PDF was 64977 bytes. |
 | `.gitignore` | `nba-injury-pdf/` only. A global `*.pdf` ignore would hide the `x.pdf` mutation from `git ls-files`. |
+| Sync excludes | `*.partial` is excluded on every prefix. The three-prefix sync still runs three times and still has no `--delete`. The injury prefix is still the fourth, still with no `--delete`. |
+| CLI exit codes | A season before 2021-22 is still 2. A Postgres failure on backfill is still 1. A bad `Last-Modified` no longer raises, so it is not exit 2. `current --dry-run` is 0 and does not connect. |
 | Public routes | None added. |
 
 ## Terms limits
@@ -117,6 +120,40 @@ Run `terraform plan` in `infra/aws` and confirm **0 to destroy**. The intended c
 
 If NBA blocks access or ends the agreement: set `INJURY_PDF_FETCH_ENABLED=false` and stop the CLI. An admin deletes the stored PDFs. The runtime IAM user cannot delete them, on purpose.
 
+## QA follow-up on #128
+
+Review `6036580948` at `09c1853`. One later commit. No amend.
+
+### Red runs, before the fixes
+
+| Test | Result |
+|---|---|
+| `test_test_module_does_not_build_cdn_payloads_inline` | Failed. The module still contained `headers={`. |
+| `test_malformed_last_modified_is_stored_and_the_next_url_is_fetched` | Failed. `ValueError: Invalid date value or format "not-a-date"` from `parsedate_to_datetime`. |
+| `test_first_seen_html_403_pauses` | Failed. `paused` was false. The HTML 403 was recorded as missing. |
+| `test_dry_run_documents_when_postgres_opens` | Failed. The docstring still said `does not open a socket`. |
+| `test_current_dry_run_does_not_open_postgres` | Passed before the edit. `current --dry-run` already skipped Postgres. |
+| `test_backfill_dry_run_opens_postgres_and_not_the_cdn` | Passed before the edit. The backfill dry-run already opened Postgres and did not call the CDN. The missing piece was the docstring. |
+| `test_sync_prefixes_and_no_delete` and `test_injury_pdf_prefix_syncs_without_delete` | Failed. The aws log had no `*.partial`. |
+
+### 403 body re-record
+
+One GET, after a one-second pause, `User-Agent: sportslab-injury-pdf/1.0`, to `Injury-Report_2024-11-14_10_00AM.pdf`. Status `403`, `Content-Type: application/xml`, 263 bytes. sha256 `2962a18de1e93e26965ad116e06ebb8715350c5a14cd7372c3fe5a57055351f5`. That does **not** match the earlier meta hash `fc52b223153d5749e72499e1d0586eba230824d5bb3a757b8b54341212011e9d`. The XML embeds a `RequestId` and a `HostId`, so a second response for the same URL is not the same bytes. The saved file is this response. `missing.meta.json` now uses this hash, and the fixture test checks the file against that hash. No second request.
+
+`synthetic_body.bin` is the replay body for the recorded `200` headers. It is not the official PDF. `block_page` and `text_plain` are marked `"synthetic": true` because the two recorded responses were a PDF and an XML 403. See `backend/tests/fixtures/nba_injury_cdn/README.md`.
+
+### What the fixes do
+
+- `_parse_last_modified` returns None on `ValueError` or `TypeError`. The raw header is stored, `last_modified_utc` is null, and the next URL is fetched. `main` no longer sees that `ValueError`, so it does not return 2 for a bad date.
+- A first-seen 403 whose content type or body is HTML pauses and writes nothing. The recorded XML 403 is still missing, one request, no pause.
+- `backfill --dry-run` still opens Postgres, because the tip times are the URLs. The docstring and the `--help` text say that. `current --dry-run` opens neither Postgres nor the CDN.
+- `scripts/sync_raw_to_s3.sh` excludes `*.partial` on every prefix, including the original three.
+
+### Mutation checks after the fix
+
+- Restored the bare `parsedate_to_datetime` call. `test_malformed_last_modified_is_stored_and_the_next_url_is_fetched` failed again with `ValueError: Invalid date value or format "not-a-date"`. Restored the `try`. The test passed.
+- Recorded a first-seen 403 without the HTML check. `test_first_seen_html_403_pauses` failed: `paused` was false. Restored `not _is_html`. The test passed.
+
 ## Follow-ups
 
 - [ ] Parse the PDFs (out of scope here).
@@ -126,7 +163,7 @@ If NBA blocks access or ends the agreement: set `INJURY_PDF_FETCH_ENABLED=false`
 
 ## Progress notes (for the docs PR)
 
-- SPO-149: fetch official NBA injury-report PDFs into a private cache and a private S3 prefix. One request per second, 403 recorded as missing, game-day refresh every 15 minutes and off by default. No public route. CI rejects a tracked PDF. The runtime IAM user cannot delete the prefix.
+- SPO-149: fetch official NBA injury-report PDFs into a private cache and a private S3 prefix. One request per second, an XML 403 recorded as missing, an HTML 403 pauses, game-day refresh every 15 minutes and off by default. No public route. CI rejects a tracked PDF. The runtime IAM user cannot delete the prefix. A bad Last-Modified date is stored as null and the run continues.
 
 ---
 

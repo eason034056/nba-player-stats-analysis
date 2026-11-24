@@ -1,0 +1,12 @@
+{
+  "synthetic": true,
+  "why": "No recorded HTML block page exists. The two CDN requests returned a PDF and an XML 403.",
+  "status_line": "HTTP/1.1 200 OK",
+  "status": 200,
+  "headers": {
+    "Content-Type": "text/html"
+  },
+  "body_file": "block_page.body.html",
+  "body_sha256": "efbd4d7511ff81edc3ca719b4f32c9a5ea747701eca43edf98598e3dd061c7da",
+  "body_length": 46
+}

@@ -62,7 +62,8 @@ sync_one() {
     --exclude '*.pid' \
     --exclude '*.lock' \
     --exclude '__pycache__/*' \
-    --exclude '*.nohup.out'
+    --exclude '*.nohup.out' \
+    --exclude '*.partial'
 }
 
 sync_one "$cache_dir" "bdl-raw/"

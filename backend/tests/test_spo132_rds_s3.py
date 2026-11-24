@@ -536,6 +536,7 @@ exit 0
         assert f"{samples}" in text and "s3://example-bucket/bdl-samples/" in text
         assert "nba-injury-pdf/" not in text
         assert "*.pid" in text
+        assert "*.partial" in text
         assert text.splitlines().count("sync") == 3
 
     def test_injury_pdf_prefix_syncs_without_delete(self, tmp_path: Path) -> None:
@@ -570,6 +571,7 @@ exit 0
         assert result.returncode == 0, result.stderr
         text = log.read_text()
         assert "--delete" not in text
+        assert "*.partial" in text
         assert f"{injury}" in text and "s3://example-bucket/nba-injury-pdf/" in text
         assert "s3://example-bucket/bdl-raw/" in text
         assert text.splitlines().count("sync") == 4

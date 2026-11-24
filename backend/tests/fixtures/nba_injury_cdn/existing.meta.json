@@ -16,5 +16,6 @@
     "Strict-Transport-Security": "max-age=86400"
   },
   "body_sha256": "47b5bb60d173b97f299a24ec2f6e8eba9571200e0c5edc4fa22c02b1af2157ea",
-  "body_length": 64977
+  "body_length": 64977,
+  "replay_body": "synthetic_body.bin"
 }
