@@ -193,7 +193,6 @@ def test_a_0200_title_is_not_stored_as_the_0300_instant() -> None:
         result = parse_pdf(_layout_b(title, body))
         assert result.tag == "failed", title
         assert result.report_at is None
-        assert result.report_at != GAP_07
 
     named = parse_pdf(
         _layout_b(None, body),

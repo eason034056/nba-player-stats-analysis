@@ -79,6 +79,8 @@ logs/
 bdl-raw/
 # SPO-149: official NBA injury-report PDFs. Local cache only. Do not commit them.
 nba-injury-pdf/
+# SPO-151: local unmatched-name review. Do not commit it.
+injury-report-unmatched/
 
 # ==================== 建置產物 ====================
 *.pyc

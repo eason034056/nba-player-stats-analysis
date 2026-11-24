@@ -17,6 +17,7 @@ Paths below are the paths in the recorded captures under
 - ``GET /v1/games/{id}``
 - ``GET /v1/stats``
 - ``GET /v1/players`` (query key ``player_ids[]``, not ``ids[]``)
+- ``GET /v1/players`` with no ``player_ids[]`` (``list_players_page``)
 - ``GET /v1/player_injuries``
 - ``GET /v2/odds/player_props``
 - ``GET /v2/odds``
@@ -428,7 +429,8 @@ class BdlClient:
 
         Returns the raw JSON object. An empty ``player_ids`` list raises
         ``BdlError`` before a budget slot is taken, because the API then
-        returns the first page of every player.
+        returns the first page of every player. That unfiltered page is
+        ``list_players_page``, not this method.
         """
         if not player_ids:
             raise BdlError("list_players requires at least one player_id")
@@ -438,6 +440,30 @@ class BdlClient:
         return await self._get(
             _PATH_PLAYERS,
             _with_page(params, per_page=per_page, cursor=cursor),
+        )
+
+    async def list_players_page(
+        self,
+        *,
+        per_page: int = 100,
+        cursor: int | None = None,
+    ) -> dict[str, Any]:
+        """One page of ``GET /v1/players`` with no ``player_ids[]``.
+
+        ``list_players`` still requires ids and still refuses an empty
+        list, so a caller cannot fetch the whole catalog by passing
+        ``[]``. This method is that walk. The player object is the one
+        in the recorded ``/v1/players`` captures (``id``, ``first_name``,
+        ``last_name``, ``team``, ``draft_year``). ``cursor`` is sent only
+        when the caller passes one. ``iter_pages`` follows
+        ``meta.next_cursor`` the same way it does for the other list
+        methods.
+
+        Returns the raw JSON object.
+        """
+        return await self._get(
+            _PATH_PLAYERS,
+            _with_page([], per_page=per_page, cursor=cursor),
         )
 
     async def list_player_injuries(
@@ -858,9 +884,9 @@ async def iter_pages(
     """Yield each page from a list method, following ``meta.next_cursor``.
 
     ``fetch`` is ``list_games``, ``list_stats``, ``list_players``,
-    ``list_player_injuries``, or ``list_odds``. Keyword arguments are
-    forwarded on every page (``dates``, ``seasons``, ``player_ids``,
-    ``per_page``). ``cursor`` may be passed to
+    ``list_players_page``, ``list_player_injuries``, or ``list_odds``.
+    Keyword arguments are forwarded on every page (``dates``,
+    ``seasons``, ``player_ids``, ``per_page``). ``cursor`` may be passed to
     start later than the first page.
 
     The loop stops when ``meta`` is missing, ``next_cursor`` is missing,
