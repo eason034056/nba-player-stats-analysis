@@ -86,6 +86,11 @@ python-dotenv==1.0.0
 pandas==3.0.1
 pyarrow==23.0.1
 
+# ==================== Baseline model (SPO-158) ====================
+# Offline trainer only (python -m app.ml.train_baseline).
+# HistGradientBoosting. The API process does not import app.ml.
+scikit-learn==1.9.1
+
 # ==================== Official injury-report PDFs (SPO-150) ====================
 # pdfplumber reads a stored PDF into rows. MIT license.
 # Pillow and pypdfium2 are the runtime libraries that pdfplumber 0.11.11
