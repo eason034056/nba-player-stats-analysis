@@ -25,13 +25,24 @@ row in the target game, or with a DNP row, has ``p_out`` 1. A player who
 played is not absent. Using this source makes the dataset row
 ``info_source='standin'``.
 
-``source='reported'`` reads ``injury_snapshots``. The newest row with
-``snapshot_at <= T`` is kept, and it counts only when that row is still
-``listed``. A newer ``listed = false`` row at or before T removes the
-player. That is the same order as ``current_injuries``. The starting scale
-is Out 1, Doubtful 0.75, Questionable 0.5, Day-To-Day 0.25, Probable 0.1.
-An unknown word or a blank status is not given a probability. It is counted
-and the player is left out of the absence list.
+``source='reported'`` reads ``injury_snapshots`` when the caller does not
+pass official report rows. The newest row with ``snapshot_at <= T`` is
+kept, and it counts only when that row is still ``listed``. A newer
+``listed = false`` row at or before T removes the player. That is the same
+order as ``current_injuries``. The starting scale is Out 1, Doubtful 0.75,
+Questionable 0.5, Day-To-Day 0.25, Probable 0.1. An unknown word or a blank
+status is not given a probability. It is counted and the player is left out
+of the absence list.
+
+Official ``nba_injury_report_rows`` replace that snapshot list for the same
+``source='reported'`` path. The rows are already matched or left unmatched.
+This module does not match names. For one game it keeps the latest report
+with ``report_at <= T``, and it ignores every other ``bdl_game_id``.
+``Available`` has ``p_out`` 0 on that path only. The other weights stay on
+the scale above. Numbers are written only when a complete
+``injuries_nba_official`` refresh covers T (the 90-minute
+``source_covered`` rule). No such report leaves the absence columns NULL
+and sets ``injury_report_missing`` to 1.
 
 Minutes and shares use earlier games only. They are weighted by ``p_out``.
 The row's own player is left out of his team's totals. He is not left out
@@ -48,10 +59,17 @@ from __future__ import annotations
 
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 
 from app.ml.labels import CATALOG_MARKETS
-from app.ml.load import InjuryRecord, LineupRecord, ProjectedStarterRow, StatRecord
+from app.ml.load import (
+    InjuryRecord,
+    LineupRecord,
+    OfficialRefresh,
+    OfficialReportRow,
+    ProjectedStarterRow,
+    StatRecord,
+)
 from app.services.injury_status import (
     DAY_TO_DAY,
     DOUBTFUL,
@@ -82,6 +100,22 @@ P_OUT_BY_STATUS: dict[str, float] = {
     DAY_TO_DAY: 0.25,
     PROBABLE: 0.1,
 }
+
+# Official reports use this word. The snapshot scale does not. p_out 0 means
+# the player is not absent. It is not an unknown word and it is not a guess.
+AVAILABLE = "Available"
+OFFICIAL_INJURY_SOURCE = "injuries_nba_official"
+OFFICIAL_STALENESS = timedelta(minutes=90)
+OFFICIAL_P_OUT_SCALE: dict[str, float] = {**P_OUT_BY_STATUS, AVAILABLE: 0.0}
+OFFICIAL_COUNT_COLUMNS: tuple[str, ...] = (
+    "rot_out_n",
+    "rot_q_n",
+    "unmatched_listed_n",
+    "injury_report_missing",
+)
+TEAM_MISSING = "missing"
+TEAM_NOT_SUBMITTED = "not_submitted"
+TEAM_READY = "ready"
 
 # Sum-rule markets use their stat columns. Double-double and triple-double
 # have no continuous stat, so the share uses the same counting columns the
@@ -172,6 +206,16 @@ def known_at(observed_at: datetime, as_of: datetime) -> bool:
     return observed_at <= as_of
 
 
+def _p_out_on_scale(status: str | None, scale: Mapping[str, float]) -> float | None:
+    """Return ``scale[word]`` after trimming, or None when the word is absent."""
+    if status is None:
+        return None
+    word = status.strip()
+    if not word:
+        return None
+    return scale.get(word)
+
+
 def p_out_for_status(status: str | None) -> float | None:
     """Map one listed status word to ``p_out``.
 
@@ -179,13 +223,19 @@ def p_out_for_status(status: str | None) -> float | None:
     The caller counts that None and does not invent a probability. The
     comparison uses the shared injury-status constants, including
     whitespace trimmed off the stored word. Doubtful stays Doubtful.
+    ``Available`` is not on this scale.
     """
-    if status is None:
-        return None
-    word = status.strip()
-    if not word:
-        return None
-    return P_OUT_BY_STATUS.get(word)
+    return _p_out_on_scale(status, P_OUT_BY_STATUS)
+
+
+def official_p_out(status: str | None) -> float | None:
+    """Map one official-report status word to ``p_out``.
+
+    ``Available`` is 0. Out, Doubtful, Questionable, Day-To-Day, and
+    Probable keep the starting weights. A blank or any other word returns
+    None. The caller counts that None and does not invent a probability.
+    """
+    return _p_out_on_scale(status, OFFICIAL_P_OUT_SCALE)
 
 
 def latest_listed_injury(
@@ -248,6 +298,7 @@ def team_absences(
     target_date: date,
     stats: Sequence[StatRecord],
     injuries: Sequence[InjuryRecord] = (),
+    p_out_scale: Mapping[str, float] | None = None,
 ) -> TeamAbsences:
     """Return ``(bdl_player_id, p_out)`` for one team's rotation.
 
@@ -272,6 +323,10 @@ def team_absences(
             will still look like this team's rotation player.
         injuries: Snapshots for ``reported``. Rows after T may be included;
             they are ignored. Unused by ``actual``.
+        p_out_scale: Status weights for ``reported``. None uses the starting
+            scale. The official path passes a scale that also maps
+            ``Available`` to 0. A mapped 0 is not absent, so that player is
+            omitted. He is not counted as an unknown word.
 
     Returns:
         The absence pairs and the count of listed statuses that were not
@@ -299,6 +354,7 @@ def team_absences(
     target_rows = _rows_for_game(stats, league, team, game) if source == SOURCE_ACTUAL else {}
     pairs: list[tuple[int, float]] = []
     unknown = 0
+    scale = P_OUT_BY_STATUS if p_out_scale is None else p_out_scale
     for player_id in sorted(candidates):
         if not _is_rotation_player(stats, league, team, target_date, player_id, window_set):
             continue
@@ -310,9 +366,11 @@ def team_absences(
         listed = latest_listed_injury(injuries, league, player_id, as_of)
         if listed is None:
             continue
-        p_out = p_out_for_status(listed.status)
+        p_out = _p_out_on_scale(listed.status, scale)
         if p_out is None:
             unknown += 1
+            continue
+        if p_out == 0:
             continue
         pairs.append((player_id, p_out))
     return TeamAbsences(pairs=tuple(pairs), unknown_status_count=unknown)
@@ -765,3 +823,359 @@ def _projected_starter_ids(
         return None
     newest = max(versions)
     return frozenset(versions[newest])
+
+
+@dataclass(frozen=True, slots=True)
+class OfficialTeamRead:
+    """One team's slice of the official report known at T.
+
+    ``kind`` is ``missing`` when no report is usable, ``not_submitted`` when
+    that team is NOT YET SUBMITTED, or ``ready`` when the report covers the
+    team. A team that the report simply does not mention is ``ready`` with
+    an empty absence list, which becomes 0 minutes. ``statuses`` is
+    ``(bdl_player_id, status word)`` for rotation players named on the
+    report. ``unmatched_listed_n`` is None unless the team is ready.
+    """
+
+    kind: str
+    result: TeamAbsences | None
+    statuses: tuple[tuple[int, str], ...]
+    unmatched_listed_n: int | None
+
+
+def blank_official_counts() -> dict[str, None]:
+    """The four official count columns, all NULL.
+
+    Used when this row is not on the official reported path, including a
+    box-score stand-in. A stand-in must not store a count in these columns.
+    """
+    return {name: None for name in OFFICIAL_COUNT_COLUMNS}
+
+
+def features_when_official_report_missing() -> dict[str, object]:
+    """Absence columns when no official report can be used at T.
+
+    Every minute, share, count, and status is NULL. ``injury_report_missing``
+    is 1. Minutes are not filled with 0: a missing report is not a healthy
+    team.
+    """
+    columns: dict[str, object] = dict(null_absence_features())
+    columns.update(blank_official_counts())
+    columns["injury_report_missing"] = 1
+    columns["player_injury_status"] = None
+    return columns
+
+
+def select_official_report(
+    rows: Sequence[OfficialReportRow],
+    league: str,
+    game_id: int,
+    as_of: datetime,
+) -> tuple[OfficialReportRow, ...] | None:
+    """Return every line of the latest official report for one game at T.
+
+    ``as_of`` is the row's existing T. This function does not subtract
+    hours. A line counts when ``report_at <= as_of``. Exactly T counts.
+    One second after T does not. Lines for another ``bdl_game_id`` are
+    ignored, even when they name the same player at the same timestamp.
+
+    Returns:
+        The lines of that one report, or None when this game has no report
+        at or before T.
+
+    Raises:
+        AbsenceError: a timestamp has no timezone.
+    """
+    _require_aware(as_of, "as_of")
+    chosen: datetime | None = None
+    for row in rows:
+        if row.league != league or row.bdl_game_id != game_id:
+            continue
+        _require_aware(row.report_at, "report_at")
+        if not known_at(row.report_at, as_of):
+            continue
+        if chosen is None or row.report_at > chosen:
+            chosen = row.report_at
+    if chosen is None:
+        return None
+    return tuple(
+        row
+        for row in rows
+        if row.league == league and row.bdl_game_id == game_id and row.report_at == chosen
+    )
+
+
+def official_source_covered(
+    refreshes: Sequence[OfficialRefresh],
+    league: str,
+    as_of: datetime,
+    *,
+    staleness: timedelta = OFFICIAL_STALENESS,
+) -> bool:
+    """Return whether ``injuries_nba_official`` was covered at T.
+
+    Same rule as ``source_covered``: the newest complete refresh at or
+    before T must be no older than ``staleness`` (default 90 minutes). An
+    incomplete refresh does not count. A refresh after T does not count.
+    False means the features stay NULL. It does not mean the team is healthy.
+
+    Raises:
+        AbsenceError: a timestamp has no timezone, or ``staleness`` is negative.
+    """
+    _require_aware(as_of, "as_of")
+    if staleness < timedelta(0):
+        raise AbsenceError("staleness must be >= 0")
+    latest: datetime | None = None
+    for row in refreshes:
+        if row.league != league or not row.complete:
+            continue
+        _require_aware(row.refreshed_at, "refreshed_at")
+        if not known_at(row.refreshed_at, as_of):
+            continue
+        if latest is None or row.refreshed_at > latest:
+            latest = row.refreshed_at
+    if latest is None:
+        return False
+    return latest >= as_of - staleness
+
+
+def official_player_status(
+    rows: Sequence[OfficialReportRow],
+    league: str,
+    game_id: int,
+    team: int,
+    player_id: int,
+    as_of: datetime,
+) -> str | None:
+    """Return the player's own status word on the report known at T.
+
+    A player who is not on that report returns None. The word is trimmed
+    and otherwise unchanged, including ``Available``.
+    """
+    report = select_official_report(rows, league, game_id, as_of)
+    if report is None:
+        return None
+    return _status_word(tuple(row for row in report if row.bdl_team_id == team), player_id)
+
+
+def read_official_team(
+    rows: Sequence[OfficialReportRow],
+    refreshes: Sequence[OfficialRefresh],
+    *,
+    league: str,
+    team: int,
+    game: int,
+    as_of: datetime,
+    target_date: date,
+    stats: Sequence[StatRecord],
+) -> OfficialTeamRead:
+    """Read one team's official absences at T through ``team_absences``.
+
+    No usable report returns ``missing`` and does not call ``team_absences``.
+    NOT YET SUBMITTED returns ``not_submitted`` and does not call it either.
+    Any other team, including one the report does not mention, calls
+    ``team_absences`` with the official scale. An empty list is a real zero,
+    not a missing feed.
+
+    Raises:
+        AbsenceError: ``team_absences`` rejects the inputs.
+    """
+    report = select_official_report(rows, league, game, as_of)
+    covered = official_source_covered(refreshes, league, as_of)
+    if report is None or not covered:
+        return OfficialTeamRead(TEAM_MISSING, None, (), None)
+    team_rows = tuple(row for row in report if row.bdl_team_id == team)
+    if any(row.not_yet_submitted for row in team_rows):
+        return OfficialTeamRead(TEAM_NOT_SUBMITTED, None, (), None)
+    result = team_absences(
+        league,
+        team,
+        game,
+        as_of,
+        SOURCE_REPORTED,
+        target_date=target_date,
+        stats=stats,
+        injuries=_injuries_from_official(team_rows),
+        p_out_scale=OFFICIAL_P_OUT_SCALE,
+    )
+    return OfficialTeamRead(
+        TEAM_READY,
+        result,
+        _rotation_statuses(stats, league, team, target_date, team_rows),
+        _unmatched_listed(team_rows),
+    )
+
+
+def official_columns_for_player(
+    team_read: OfficialTeamRead,
+    opponent_read: OfficialTeamRead | None,
+    *,
+    stats: Sequence[StatRecord],
+    league: str,
+    team: int,
+    opponent: int | None,
+    target_date: date,
+    player_id: int,
+    own_status: str | None,
+) -> dict[str, object]:
+    """Minute, share, and count columns for one player on the official path.
+
+    A missing report uses :func:`features_when_official_report_missing`.
+    A NOT YET SUBMITTED team leaves that team's columns NULL and still
+    fills the opponent when the opponent's read is ready. The player's own
+    id is left out of his team's minutes and out of ``rot_out_n`` and
+    ``rot_q_n``. He is not left out of the opponent's minutes.
+
+    ``stats`` must hold earlier games for both teams. The target date is
+    excluded by the same window ``absence_feature_values`` already uses.
+    """
+    if team_read.kind == TEAM_MISSING:
+        return features_when_official_report_missing()
+    columns: dict[str, object] = dict(null_absence_features())
+    columns.update(blank_official_counts())
+    columns["injury_report_missing"] = 0
+    columns["player_injury_status"] = own_status if team_read.kind == TEAM_READY else None
+    opp_ready = (
+        opponent_read is not None
+        and opponent_read.kind == TEAM_READY
+        and opponent_read.result is not None
+        and opponent is not None
+    )
+    opp_result = opponent_read.result if opp_ready and opponent_read is not None else None
+    if team_read.kind == TEAM_READY and team_read.result is not None:
+        values = absence_feature_values(
+            team_result=team_read.result,
+            opponent_result=opp_result,
+            stats=stats,
+            league=league,
+            team=team,
+            opponent=opponent if opp_result is not None else None,
+            target_date=target_date,
+            player_id=player_id,
+            known=True,
+        )
+        columns.update(values)
+        out_n, q_n = _rot_counts(team_read.statuses, player_id)
+        columns["rot_out_n"] = out_n
+        columns["rot_q_n"] = q_n
+        columns["unmatched_listed_n"] = team_read.unmatched_listed_n
+        return columns
+    if opp_result is not None and opponent is not None:
+        opp_values = absence_feature_values(
+            team_result=opp_result,
+            opponent_result=None,
+            stats=stats,
+            league=league,
+            team=opponent,
+            opponent=None,
+            target_date=target_date,
+            player_id=-1,
+            known=True,
+        )
+        columns["opp_missing_minutes"] = opp_values["team_missing_minutes"]
+    return columns
+
+
+def _injuries_from_official(rows: Sequence[OfficialReportRow]) -> tuple[InjuryRecord, ...]:
+    """Matched player lines as snapshot rows so ``team_absences`` can read them.
+
+    Unmatched names and team markers are omitted. They are counted elsewhere.
+    ``snapshot_at`` is the report time. ``listed`` stays true: an official
+    line is a listing, not a removal.
+    """
+    found: list[InjuryRecord] = []
+    for row in rows:
+        if row.bdl_player_id is None or row.status is None:
+            continue
+        if row.not_yet_submitted or row.all_players_available:
+            continue
+        found.append(
+            InjuryRecord(
+                league=row.league,
+                snapshot_at=row.report_at,
+                bdl_player_id=row.bdl_player_id,
+                listed=True,
+                status=row.status,
+            )
+        )
+    return tuple(found)
+
+
+def _status_word(rows: Sequence[OfficialReportRow], player_id: int) -> str | None:
+    for row in rows:
+        if row.bdl_player_id != player_id or row.status is None:
+            continue
+        word = row.status.strip()
+        if word:
+            return word
+    return None
+
+
+def _rotation_statuses(
+    stats: Sequence[StatRecord],
+    league: str,
+    team: int,
+    target_date: date,
+    team_rows: Sequence[OfficialReportRow],
+) -> tuple[tuple[int, str], ...]:
+    """Rotation players on this team and the status word the report gave them.
+
+    The rotation test is :func:`_is_rotation_player`. A rotation player the
+    report does not name is omitted. Omission is not a status.
+    """
+    window = set(_window_game_ids(stats, league, team, target_date))
+    candidates = {
+        row.bdl_player_id
+        for row in stats
+        if row.league == league and row.bdl_team_id == team and row.bdl_game_id in window
+    }
+    found: list[tuple[int, str]] = []
+    for player_id in sorted(candidates):
+        if not _is_rotation_player(stats, league, team, target_date, player_id, window):
+            continue
+        word = _status_word(team_rows, player_id)
+        if word is None:
+            continue
+        found.append((player_id, word))
+    return tuple(found)
+
+
+def _rot_counts(statuses: Sequence[tuple[int, str]], player_id: int) -> tuple[int, int]:
+    """Return ``(rot_out_n, rot_q_n)``, leaving out the row's own player.
+
+    Out and Doubtful count as out. Questionable is the other count.
+    Probable, Available, and any other word count as neither.
+    """
+    out_n = 0
+    q_n = 0
+    for pid, word in statuses:
+        if pid == player_id:
+            continue
+        if word in (OUT, DOUBTFUL):
+            out_n += 1
+        elif word == QUESTIONABLE:
+            q_n += 1
+    return out_n, q_n
+
+
+def _is_g_league(row: OfficialReportRow) -> bool:
+    text = " ".join(part for part in (row.category, row.reason) if part).casefold()
+    return "g league" in text or "g-league" in text
+
+
+def _unmatched_listed(rows: Sequence[OfficialReportRow]) -> int:
+    """Non-G-League player lines on this team that have no ``bdl_player_id``.
+
+    A G League line with no id is ignored. A matched id is not unmatched.
+    Team markers are not player lines.
+    """
+    count = 0
+    for row in rows:
+        if row.not_yet_submitted or row.all_players_available:
+            continue
+        if row.player_raw.strip() == "" or row.bdl_player_id is not None:
+            continue
+        if _is_g_league(row):
+            continue
+        count += 1
+    return count
