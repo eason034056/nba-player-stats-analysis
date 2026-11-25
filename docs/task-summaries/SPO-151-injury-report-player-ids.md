@@ -1,5 +1,7 @@
 # SPO-151 — Match injury-report names to BDL player ids
 
+Follow-up for an ambiguous name step: `docs/task-summaries/SPO-151-follow-up-ambiguous-name.md`.
+
 - **Ticket:** SPO-151
 - **Branch:** `feature/SPO-151-injury-report-player-ids`
 - **Base:** `dev` (`c7bf587`, #130)
