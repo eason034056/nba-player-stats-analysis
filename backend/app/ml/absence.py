@@ -29,20 +29,21 @@ played is not absent. Using this source makes the dataset row
 pass official report rows. The newest row with ``snapshot_at <= T`` is
 kept, and it counts only when that row is still ``listed``. A newer
 ``listed = false`` row at or before T removes the player. That is the same
-order as ``current_injuries``. The starting scale is Out 1, Doubtful 0.75,
-Questionable 0.5, Day-To-Day 0.25, Probable 0.1. An unknown word or a blank
-status is not given a probability. It is counted and the player is left out
-of the absence list.
+order as ``current_injuries``. Status weights for the four shared words
+are read from :data:`app.ml.injury_weights.P_OUT_BY_OFFICIAL_STATUS` when
+the call runs. Day-To-Day is not an official status. It keeps its own
+constant. An unknown word or a blank status is not given a probability.
+It is counted and the player is left out of the absence list.
 
 Official ``nba_injury_report_rows`` replace that snapshot list for the same
 ``source='reported'`` path. The rows are already matched or left unmatched.
 This module does not match names. For one game it keeps the latest report
 with ``report_at <= T``, and it ignores every other ``bdl_game_id``.
-``Available`` has ``p_out`` 0 on that path only. The other weights stay on
-the scale above. Numbers are written only when a complete
-``injuries_nba_official`` refresh covers T (the 90-minute
-``source_covered`` rule). No such report leaves the absence columns NULL
-and sets ``injury_report_missing`` to 1.
+The official path reads that same table, which also has ``Available``.
+There is no second copy of the five numbers in this file. Numbers are
+written only when a complete ``injuries_nba_official`` refresh covers T
+(the 90-minute ``source_covered`` rule). No such report leaves the absence
+columns NULL and sets ``injury_report_missing`` to 1.
 
 Minutes and shares use earlier games only. They are weighted by ``p_out``.
 The row's own player is left out of his team's totals. He is not left out
@@ -61,6 +62,7 @@ from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from datetime import date, datetime, timedelta
 
+from app.ml.injury_weights import AVAILABLE, official_scale, snapshot_scale
 from app.ml.labels import CATALOG_MARKETS
 from app.ml.load import (
     InjuryRecord,
@@ -70,13 +72,7 @@ from app.ml.load import (
     ProjectedStarterRow,
     StatRecord,
 )
-from app.services.injury_status import (
-    DAY_TO_DAY,
-    DOUBTFUL,
-    OUT,
-    PROBABLE,
-    QUESTIONABLE,
-)
+from app.services.injury_status import DOUBTFUL, OUT, QUESTIONABLE
 
 NBA = "nba"
 SOURCE_ACTUAL = "actual"
@@ -93,20 +89,13 @@ ROTATION_MIN_PLAYED = 3
 ROTATION_MIN_SECONDS = 15 * 60
 GAME_LINEUP_FIRST_SEASON = 2025
 
-P_OUT_BY_STATUS: dict[str, float] = {
-    OUT: 1.0,
-    DOUBTFUL: 0.75,
-    QUESTIONABLE: 0.5,
-    DAY_TO_DAY: 0.25,
-    PROBABLE: 0.1,
-}
-
-# Official reports use this word. The snapshot scale does not. p_out 0 means
-# the player is not absent. It is not an unknown word and it is not a guess.
-AVAILABLE = "Available"
+# Import-time copies of the one table, for readers that import the dict.
+# team_absences, p_out_for_status, and official_p_out call snapshot_scale
+# and official_scale so they see the table as it is at call time.
+P_OUT_BY_STATUS: dict[str, float] = snapshot_scale()
+OFFICIAL_P_OUT_SCALE: dict[str, float] = official_scale()
 OFFICIAL_INJURY_SOURCE = "injuries_nba_official"
 OFFICIAL_STALENESS = timedelta(minutes=90)
-OFFICIAL_P_OUT_SCALE: dict[str, float] = {**P_OUT_BY_STATUS, AVAILABLE: 0.0}
 OFFICIAL_COUNT_COLUMNS: tuple[str, ...] = (
     "rot_out_n",
     "rot_q_n",
@@ -219,23 +208,25 @@ def _p_out_on_scale(status: str | None, scale: Mapping[str, float]) -> float | N
 def p_out_for_status(status: str | None) -> float | None:
     """Map one listed status word to ``p_out``.
 
-    Blank text and a word that is not on the starting scale return None.
+    Blank text and a word that is not on the snapshot scale return None.
     The caller counts that None and does not invent a probability. The
     comparison uses the shared injury-status constants, including
     whitespace trimmed off the stored word. Doubtful stays Doubtful.
+    The four shared words are read from the official weight table.
     ``Available`` is not on this scale.
     """
-    return _p_out_on_scale(status, P_OUT_BY_STATUS)
+    return _p_out_on_scale(status, snapshot_scale())
 
 
 def official_p_out(status: str | None) -> float | None:
     """Map one official-report status word to ``p_out``.
 
-    ``Available`` is 0. Out, Doubtful, Questionable, Day-To-Day, and
-    Probable keep the starting weights. A blank or any other word returns
-    None. The caller counts that None and does not invent a probability.
+    The five official words are read from the single weight table at call
+    time. Day-To-Day is not in that table. It still maps, so an old snapshot
+    word on this path is not treated as unknown. A blank or any other word
+    returns None. The caller counts that None and does not invent a probability.
     """
-    return _p_out_on_scale(status, OFFICIAL_P_OUT_SCALE)
+    return _p_out_on_scale(status, official_scale())
 
 
 def latest_listed_injury(
@@ -323,10 +314,12 @@ def team_absences(
             will still look like this team's rotation player.
         injuries: Snapshots for ``reported``. Rows after T may be included;
             they are ignored. Unused by ``actual``.
-        p_out_scale: Status weights for ``reported``. None uses the starting
-            scale. The official path passes a scale that also maps
-            ``Available`` to 0. A mapped 0 is not absent, so that player is
-            omitted. He is not counted as an unknown word.
+        p_out_scale: Status weights for ``reported``. None uses
+            :func:`app.ml.injury_weights.snapshot_scale`, which reads the
+            official weight table. The official path passes
+            :func:`app.ml.injury_weights.official_scale`. A mapped 0 is not
+            absent, so that player is omitted. He is not counted as an
+            unknown word.
 
     Returns:
         The absence pairs and the count of listed statuses that were not
@@ -354,7 +347,7 @@ def team_absences(
     target_rows = _rows_for_game(stats, league, team, game) if source == SOURCE_ACTUAL else {}
     pairs: list[tuple[int, float]] = []
     unknown = 0
-    scale = P_OUT_BY_STATUS if p_out_scale is None else p_out_scale
+    scale = snapshot_scale() if p_out_scale is None else p_out_scale
     for player_id in sorted(candidates):
         if not _is_rotation_player(stats, league, team, target_date, player_id, window_set):
             continue
@@ -918,6 +911,9 @@ def official_source_covered(
     before T must be no older than ``staleness`` (default 90 minutes). An
     incomplete refresh does not count. A refresh after T does not count.
     False means the features stay NULL. It does not mean the team is healthy.
+    This matches SQL ``source_covered`` only together with the loader's
+    ``source = 'injuries_nba_official'`` filter, because ``OfficialRefresh``
+    has no source field.
 
     Raises:
         AbsenceError: a timestamp has no timezone, or ``staleness`` is negative.
@@ -950,12 +946,19 @@ def official_player_status(
     """Return the player's own status word on the report known at T.
 
     A player who is not on that report returns None. The word is trimmed
-    and otherwise unchanged, including ``Available``.
+    and otherwise unchanged, including ``Available``. ``select_official_report``
+    already drops a line after T. The ``known_at`` check below repeats that
+    cut so a line that reached this function late still does not count.
     """
     report = select_official_report(rows, league, game_id, as_of)
     if report is None:
         return None
-    return _status_word(tuple(row for row in report if row.bdl_team_id == team), player_id)
+    kept = tuple(
+        row
+        for row in report
+        if row.bdl_team_id == team and known_at(row.report_at, as_of)
+    )
+    return _status_word(kept, player_id)
 
 
 def read_official_team(
@@ -996,7 +999,7 @@ def read_official_team(
         target_date=target_date,
         stats=stats,
         injuries=_injuries_from_official(team_rows),
-        p_out_scale=OFFICIAL_P_OUT_SCALE,
+        p_out_scale=official_scale(),
     )
     return OfficialTeamRead(
         TEAM_READY,
