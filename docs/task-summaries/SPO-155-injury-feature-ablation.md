@@ -8,17 +8,19 @@
 
 `python -m app.ml.ablation_injury` scores four arms on one shared set of rows and writes aggregate JSON. The arms are `official`, `no_official`, `boxscore_standin`, and `naive_last10`. `no_official` calls `fit_baseline`. The other fitted arms use the same hyperparameters, the same drop-all-missing-in-train rule, and the same scorers. The production feature list stays the locked 28 names.
 
-When the validation rows have no official injury value, the official arm is `not_measurable` and the recommendation is the gated sentence. Equal errors are not reported as a gain. The real history export is that case. The checked-in result file is a one-line placeholder until that export is run.
+When the validation rows have no official injury value, the official arm is `not_measurable` and the recommendation is the gated sentence. Equal errors are not reported as a gain.
+
+The real history run (this branch at `c405221`, 85,089 rows in each of the two exports, seasons 2023 through 2025) has official coverage 0 of 26,623 validation rows and 0 of 26,251 train rows, so the official arm is not measurable. On the shared 26,100 rows, `no_official` matches `docs/decisions/SPO-158/baseline_metrics_real.json` on the sum markets and loses to the naive mean on all 10. `boxscore_standin` beats that mean on 8 of 10 sum markets and on double-double. Those minutes come from the box score after the game, so they are an upper bound, not a pregame feature. The recommendation is do not ship: keep the official path gated and re-run after the 2024-25 official reports are backfilled. The aggregate is in `docs/decisions/SPO-155/ablation_results.md`. The stand-in export's metadata note now says the minute and share columns are filled. The reported note is unchanged.
 
 ## Changes
 
 | Area | Files | Change |
 |---|---|---|
 | Ablation | `backend/app/ml/ablation_injury.py` | One CLI. Arms, protocol checks, scoring, recommendation. |
-| Export | `backend/app/ml/build_dataset.py` | `--absence-source` with default `reported`. `actual` writes the box-score stand-in. Output column names are unchanged. |
+| Export | `backend/app/ml/build_dataset.py` | `--absence-source` with default `reported`. `actual` writes the box-score stand-in. Its metadata note says the minute and share columns are filled. Output column names are unchanged. |
 | Fixtures | `backend/tests/fixtures/spo155/` | Synthetic JSON only. One file where official values carry the label, one stand-in twin, one file with every official value missing. |
 | Tests | `backend/tests/test_spo155_injury_feature_ablation.py` | Win, zero coverage, 2026-27, stand-in contamination, different row sets, CLI, and the unchanged export columns. |
-| Docs | `docs/decisions/SPO-155/ablation_protocol.md`, `ablation_results.md` | Protocol, and a placeholder for the real aggregate. |
+| Docs | `docs/decisions/SPO-155/ablation_protocol.md`, `ablation_results.md` | Protocol, and the real-history aggregate. |
 
 `train_baseline.py`, `baseline.py`, `load.py`, `absence.py`, and `injury_weights.py` are not in this diff. `docs/progress.md` is not edited.
 
@@ -87,8 +89,8 @@ Arm 3 needs the second export. `--absence-source` defaults to `reported`, so the
 
 ## Follow-ups
 
-- [ ] Run the two exports and the ablation on the real history database. Replace the one line in `docs/decisions/SPO-155/ablation_results.md` with the aggregate only.
-- [ ] If that run still has official coverage 0, leave the official path gated and re-run after the 2024-25 official reports are backfilled.
+- [x] The real-history aggregate is in `docs/decisions/SPO-155/ablation_results.md`. Official coverage was 0.
+- [ ] Re-run after the 2024-25 official reports are backfilled. Leave the official path gated until then.
 
 ## pstack steps
 
