@@ -9,9 +9,9 @@
 
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Check, Building2, ChevronDown, ChevronUp } from "lucide-react";
-import { BOOKMAKERS, type BookmakerKey } from "@/lib/schemas";
+import { BOOKMAKERS, canonicalBookmakerKey, type BookmakerKey } from "@/lib/schemas";
 import { cn } from "@/lib/utils";
 
 // Grouped: Featured vs Others. Order here is the order on screen.
@@ -43,12 +43,19 @@ export function BookmakerSelect({
   onChange,
   disabled = false,
 }: BookmakerSelectProps) {
-  const isAllSelected = value.length === 0;
+  const selectedKeys = value.map(canonicalBookmakerKey);
+  const isAllSelected = selectedKeys.length === 0;
   const [showOthers, setShowOthers] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
   const mobileSummary = isAllSelected
     ? `All ${BOOKMAKERS.length} bookmakers`
-    : `${value.length} of ${BOOKMAKERS.length} bookmakers`;
+    : `${selectedKeys.length} of ${BOOKMAKERS.length} bookmakers`;
+
+  useEffect(() => {
+    const next = value.map(canonicalBookmakerKey);
+    const aliasStored = next.some((key, index) => key !== value[index]);
+    if (aliasStored) onChange(next);
+  }, [onChange, value]);
 
   const toggleSelectAll = () => {
     if (isAllSelected) {
@@ -61,20 +68,20 @@ export function BookmakerSelect({
   const toggleBookmaker = (key: string) => {
     if (isAllSelected) {
       onChange(BOOKMAKERS.filter((b) => b.key !== key).map((b) => b.key));
-    } else if (value.includes(key)) {
-      const newValue = value.filter((v) => v !== key);
+    } else if (selectedKeys.includes(key)) {
+      const newValue = selectedKeys.filter((stored) => stored !== key);
       if (newValue.length === BOOKMAKERS.length - 1) {
         onChange([]);
       } else {
         onChange(newValue);
       }
     } else {
-      onChange([...value, key]);
+      onChange([...selectedKeys, key]);
     }
   };
 
   const isSelected = (key: string) => {
-    return isAllSelected || value.includes(key);
+    return isAllSelected || selectedKeys.includes(key);
   };
 
   return (

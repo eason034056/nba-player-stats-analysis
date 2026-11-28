@@ -108,13 +108,18 @@ const STORAGE_KEY = "betslip_picks";
 /** Retired second slip. Removed on mount so a stale value is never parsed. */
 const RETIRED_WNBA_SLIP_KEY = "wnba_betslip_picks";
 /**
- * The Odds API event id is 32 hex characters. BALLDONTLIE game ids are not.
- * A stored pick with this id cannot be opened after the cutover.
+ * Retired Odds API event ids only. This is the old id shape, not a
+ * BALLDONTLIE game id. A legacy id is 32 hex characters and includes at
+ * least one letter a-f. An id made only of digits is never legacy, even
+ * when it is 32 digits long. A stored pick with a legacy id cannot be
+ * opened after the cutover.
  */
 const LEGACY_ODDS_API_EVENT_ID = /^[0-9a-f]{32}$/i;
 
 function isLegacyOddsApiEventId(eventId: unknown): boolean {
-  return typeof eventId === "string" && LEGACY_ODDS_API_EVENT_ID.test(eventId);
+  if (typeof eventId !== "string") return false;
+  if (/^\d+$/.test(eventId)) return false;
+  return LEGACY_ODDS_API_EVENT_ID.test(eventId);
 }
 
 function withoutLegacyOddsApiPicks(picks: BetSlipPick[]): BetSlipPick[] {
@@ -145,7 +150,9 @@ export function BetSlipProvider({ children }: { children: ReactNode }) {
    * 使用 useEffect 確保只在客戶端執行
    * 這避免了 SSR/SSG 時的 hydration mismatch 問題
    *
-   * 只刪 32-hex event id。明天的比賽、以及今天沒有賽事時的注單都留著。
+   * 只刪舊 Odds API 的 32 字元 id，而且該 id 至少含一個 a-f。
+   * 純數字 id（含 32 碼）是 BALLDONTLIE，留著。
+   * 明天的比賽、以及今天沒有賽事時的注單都留著。
    * 這裡不打 /api/nba/events。
    */
   useEffect(() => {

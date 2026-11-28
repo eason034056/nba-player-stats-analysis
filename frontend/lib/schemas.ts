@@ -54,7 +54,7 @@ export type EventLineupStatus = z.infer<typeof eventLineupStatusSchema>;
 
 /**
  * Best stored daily pick for one event, joined by the events route.
- * `market` is an Odds API key (`player_points`), not the CSV metric (`points`).
+ * `market` is a BALLDONTLIE market key (`player_points`), not the CSV metric (`points`).
  * A broken object becomes null so one bad row does not drop the slate.
  */
 export const topReadSchema = z.object({
@@ -262,6 +262,31 @@ export const BOOKMAKERS = [
 // 博彩公司 key 的類型
 export type BookmakerKey = (typeof BOOKMAKERS)[number]["key"];
 
+/** Saved selections used the old key. Requests use the BOOKMAKERS key. */
+const BALLY_BET_CANONICAL: BookmakerKey = "ballybet";
+
+/**
+ * Map one stored bookmaker key onto the key this app sends.
+ *
+ * `bally_bet` becomes `ballybet`. Every other key is unchanged.
+ * Display code can still show the old key; this function is for reads
+ * that build a request.
+ */
+export function canonicalBookmakerKey(key: string): string {
+  if (key === "bally_bet") return BALLY_BET_CANONICAL;
+  return key;
+}
+
+/**
+ * Map a stored bookmaker list. `null` and `undefined` stay an empty filter.
+ */
+export function canonicalBookmakerList(
+  keys: readonly string[] | null | undefined,
+): string[] | null | undefined {
+  if (keys == null) return keys;
+  return keys.map(canonicalBookmakerKey);
+}
+
 
 // ==================== CSV 球員歷史數據 ====================
 
@@ -404,8 +429,9 @@ export interface PlayerHistoryRequest {
  * - 1 個 binary metric（dd）走 DD-only Yes/No 流程，前端必須以
  *   `marketKey === "player_double_double"` 分支處理（無 O/U threshold）
  *
- * ⚠ FGM 為「投籃命中」工作假設（working hypothesis），如後端 integration
- * test 顯示 The Odds API 實際回傳 FGA-attempted，需後端調整、前端不變。
+ * ⚠ FGM 為「投籃命中」工作假設（working hypothesis）。這句講的是已退役的
+ * The Odds API：當時的 integration test 顯示它回傳 FGA-attempted。現在盤口
+ * 來自 BALLDONTLIE。若出手機數要改，改後端，前端不變。
  */
 export const HISTORY_METRICS = [
   { key: "points", name: "Points (PTS)", description: "Points scored" },

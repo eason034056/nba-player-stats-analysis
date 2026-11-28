@@ -13,6 +13,7 @@
 import { useQuery } from "@tanstack/react-query";
 
 import {
+  canonicalBookmakerList,
   eventsResponseSchema,
   noVigResponseSchema,
   playerSuggestResponseSchema,
@@ -199,9 +200,13 @@ export async function getEvents(
 export async function calculateNoVig(
   request: NoVigRequest
 ): Promise<NoVigResponse> {
+  const payload: NoVigRequest = {
+    ...request,
+    bookmakers: canonicalBookmakerList(request.bookmakers),
+  };
   const data = await fetchApi<NoVigResponse>("/api/nba/props/no-vig", {
     method: "POST",
-    body: JSON.stringify(request),
+    body: JSON.stringify(payload),
   });
   
   // 驗證回應

@@ -20,7 +20,7 @@ import type {
 
 export type DDLeague = "nba";
 
-/** Odds API market key. Matches backend `BINARY_MARKET_KEYS`. */
+/** BALLDONTLIE market key. Matches backend `BINARY_MARKET_KEYS`. */
 export const PLAYER_DOUBLE_DOUBLE_MARKET = METRIC_TO_MARKET.dd;
 
 export interface UsePlayerDDTileDataArgs {

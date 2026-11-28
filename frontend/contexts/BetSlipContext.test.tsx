@@ -67,6 +67,21 @@ describe("bet slip hydrate", () => {
     expect(storedEventIds()).toEqual([DIGIT_EVENT_ID]);
   });
 
+  it("keeps an all-digit id that is 32 characters", async () => {
+    const numeric32 = "8".repeat(32);
+    seed([
+      createBetSlipPick({ id: "digits", event_id: numeric32 }),
+      createBetSlipPick({ id: "legacy", event_id: LEGACY_EVENT_ID }),
+    ]);
+
+    renderWithProviders(<SlipIds />);
+
+    await waitFor(() => {
+      expect(screen.getByTestId("slip-ids").textContent).toBe(numeric32);
+    });
+    expect(storedEventIds()).toEqual([numeric32]);
+  });
+
   it("removes the retired wnba slip key", async () => {
     window.localStorage.setItem("wnba_betslip_picks", "{not-json");
     seed([createBetSlipPick({ id: "digit", event_id: DIGIT_EVENT_ID })]);
