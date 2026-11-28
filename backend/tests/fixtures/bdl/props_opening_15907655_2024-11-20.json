@@ -1,0 +1,2563 @@
+{
+ "request": "https://api.balldontlie.io/nba/v2/odds/player_props/opening?game_id=15907655",
+ "status": 200,
+ "elapsed_s": 0.25,
+ "rate_headers": {
+  "x-ratelimit-limit": "5",
+  "x-ratelimit-remaining": "1",
+  "x-ratelimit-reset": "1794370185"
+ },
+ "response": {
+  "data": [
+   {
+    "id": 2250489802,
+    "game_id": 15907655,
+    "player_id": 322,
+    "vendor": "betmgm",
+    "deeplinks": null,
+    "prop_type": "assists",
+    "line_value": "4.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": -185,
+     "under_odds": 135
+    },
+    "opened_at": "2024-11-20T21:30:00.000Z"
+   },
+   {
+    "id": 2250489748,
+    "game_id": 15907655,
+    "player_id": 322,
+    "vendor": "caesars",
+    "deeplinks": null,
+    "prop_type": "assists",
+    "line_value": "4.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": -166,
+     "under_odds": 120
+    },
+    "opened_at": "2024-11-20T21:30:00.000Z"
+   },
+   {
+    "id": 2250489708,
+    "game_id": 15907655,
+    "player_id": 322,
+    "vendor": "draftkings",
+    "deeplinks": null,
+    "prop_type": "assists",
+    "line_value": "5.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": 120,
+     "under_odds": -154
+    },
+    "opened_at": "2024-11-20T21:30:00.000Z"
+   },
+   {
+    "id": 2250489681,
+    "game_id": 15907655,
+    "player_id": 322,
+    "vendor": "fanduel",
+    "deeplinks": null,
+    "prop_type": "assists",
+    "line_value": "4.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": -158,
+     "under_odds": 128
+    },
+    "opened_at": "2024-11-20T21:30:00.000Z"
+   },
+   {
+    "id": 2250489798,
+    "game_id": 15907655,
+    "player_id": 9,
+    "vendor": "betmgm",
+    "deeplinks": null,
+    "prop_type": "assists",
+    "line_value": "1.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": -120,
+     "under_odds": -110
+    },
+    "opened_at": "2024-11-20T21:30:00.000Z"
+   },
+   {
+    "id": 2250489749,
+    "game_id": 15907655,
+    "player_id": 9,
+    "vendor": "caesars",
+    "deeplinks": null,
+    "prop_type": "assists",
+    "line_value": "1.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": -137,
+     "under_odds": 100
+    },
+    "opened_at": "2024-11-20T21:30:00.000Z"
+   },
+   {
+    "id": 2250489799,
+    "game_id": 15907655,
+    "player_id": 666604,
+    "vendor": "betmgm",
+    "deeplinks": null,
+    "prop_type": "assists",
+    "line_value": "1.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": -175,
+     "under_odds": 130
+    },
+    "opened_at": "2024-11-20T21:30:00.000Z"
+   },
+   {
+    "id": 2250489747,
+    "game_id": 15907655,
+    "player_id": 666604,
+    "vendor": "caesars",
+    "deeplinks": null,
+    "prop_type": "assists",
+    "line_value": "1.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": -166,
+     "under_odds": 120
+    },
+    "opened_at": "2024-11-20T21:30:00.000Z"
+   },
+   {
+    "id": 2250489800,
+    "game_id": 15907655,
+    "player_id": 17896076,
+    "vendor": "betmgm",
+    "deeplinks": null,
+    "prop_type": "assists",
+    "line_value": "2.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": -110,
+     "under_odds": -120
+    },
+    "opened_at": "2024-11-20T21:30:00.000Z"
+   },
+   {
+    "id": 2250489745,
+    "game_id": 15907655,
+    "player_id": 17896076,
+    "vendor": "caesars",
+    "deeplinks": null,
+    "prop_type": "assists",
+    "line_value": "2.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": -125,
+     "under_odds": -109
+    },
+    "opened_at": "2024-11-20T21:30:00.000Z"
+   },
+   {
+    "id": 2250489709,
+    "game_id": 15907655,
+    "player_id": 17896076,
+    "vendor": "draftkings",
+    "deeplinks": null,
+    "prop_type": "assists",
+    "line_value": "2.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": -120,
+     "under_odds": -110
+    },
+    "opened_at": "2024-11-20T21:30:00.000Z"
+   },
+   {
+    "id": 2250489680,
+    "game_id": 15907655,
+    "player_id": 17896076,
+    "vendor": "fanduel",
+    "deeplinks": null,
+    "prop_type": "assists",
+    "line_value": "2.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": -124,
+     "under_odds": 102
+    },
+    "opened_at": "2024-11-20T21:30:00.000Z"
+   },
+   {
+    "id": 2250489801,
+    "game_id": 15907655,
+    "player_id": 1028027567,
+    "vendor": "betmgm",
+    "deeplinks": null,
+    "prop_type": "assists",
+    "line_value": "2.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": -145,
+     "under_odds": 105
+    },
+    "opened_at": "2024-11-20T21:30:00.000Z"
+   },
+   {
+    "id": 2250489746,
+    "game_id": 15907655,
+    "player_id": 1028027567,
+    "vendor": "caesars",
+    "deeplinks": null,
+    "prop_type": "assists",
+    "line_value": "2.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": -166,
+     "under_odds": 120
+    },
+    "opened_at": "2024-11-20T21:30:00.000Z"
+   },
+   {
+    "id": 2250489710,
+    "game_id": 15907655,
+    "player_id": 1028027567,
+    "vendor": "draftkings",
+    "deeplinks": null,
+    "prop_type": "assists",
+    "line_value": "2.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": -154,
+     "under_odds": 120
+    },
+    "opened_at": "2024-11-20T21:30:00.000Z"
+   },
+   {
+    "id": 2250489806,
+    "game_id": 15907655,
+    "player_id": 322,
+    "vendor": "betmgm",
+    "deeplinks": null,
+    "prop_type": "blocks",
+    "line_value": "0.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": 135,
+     "under_odds": -185
+    },
+    "opened_at": "2024-11-20T21:30:00.000Z"
+   },
+   {
+    "id": 2250489750,
+    "game_id": 15907655,
+    "player_id": 322,
+    "vendor": "caesars",
+    "deeplinks": null,
+    "prop_type": "blocks",
+    "line_value": "0.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": 133,
+     "under_odds": -184
+    },
+    "opened_at": "2024-11-20T21:30:00.000Z"
+   },
+   {
+    "id": 2250489807,
+    "game_id": 15907655,
+    "player_id": 9,
+    "vendor": "betmgm",
+    "deeplinks": null,
+    "prop_type": "blocks",
+    "line_value": "1.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": 155,
+     "under_odds": -210
+    },
+    "opened_at": "2024-11-20T21:30:00.000Z"
+   },
+   {
+    "id": 2250489752,
+    "game_id": 15907655,
+    "player_id": 9,
+    "vendor": "caesars",
+    "deeplinks": null,
+    "prop_type": "blocks",
+    "line_value": "1.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": 143,
+     "under_odds": -199
+    },
+    "opened_at": "2024-11-20T21:30:00.000Z"
+   },
+   {
+    "id": 2250489712,
+    "game_id": 15907655,
+    "player_id": 9,
+    "vendor": "draftkings",
+    "deeplinks": null,
+    "prop_type": "blocks",
+    "line_value": "1.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": 150,
+     "under_odds": -198
+    },
+    "opened_at": "2024-11-20T21:30:00.000Z"
+   },
+   {
+    "id": 2250489803,
+    "game_id": 15907655,
+    "player_id": 666604,
+    "vendor": "betmgm",
+    "deeplinks": null,
+    "prop_type": "blocks",
+    "line_value": "0.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": -115,
+     "under_odds": -120
+    },
+    "opened_at": "2024-11-20T21:30:00.000Z"
+   },
+   {
+    "id": 2250489753,
+    "game_id": 15907655,
+    "player_id": 666604,
+    "vendor": "caesars",
+    "deeplinks": null,
+    "prop_type": "blocks",
+    "line_value": "0.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": -117,
+     "under_odds": -117
+    },
+    "opened_at": "2024-11-20T21:30:00.000Z"
+   },
+   {
+    "id": 2250489805,
+    "game_id": 15907655,
+    "player_id": 17896076,
+    "vendor": "betmgm",
+    "deeplinks": null,
+    "prop_type": "blocks",
+    "line_value": "1.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": -135,
+     "under_odds": 100
+    },
+    "opened_at": "2024-11-20T21:30:00.000Z"
+   },
+   {
+    "id": 2250489754,
+    "game_id": 15907655,
+    "player_id": 17896076,
+    "vendor": "caesars",
+    "deeplinks": null,
+    "prop_type": "blocks",
+    "line_value": "1.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": -113,
+     "under_odds": -121
+    },
+    "opened_at": "2024-11-20T21:30:00.000Z"
+   },
+   {
+    "id": 2250489711,
+    "game_id": 15907655,
+    "player_id": 17896076,
+    "vendor": "draftkings",
+    "deeplinks": null,
+    "prop_type": "blocks",
+    "line_value": "1.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": -120,
+     "under_odds": -110
+    },
+    "opened_at": "2024-11-20T21:30:00.000Z"
+   },
+   {
+    "id": 2250489682,
+    "game_id": 15907655,
+    "player_id": 17896076,
+    "vendor": "fanduel",
+    "deeplinks": null,
+    "prop_type": "blocks",
+    "line_value": "1.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": -113,
+     "under_odds": -113
+    },
+    "opened_at": "2024-11-20T21:30:00.000Z"
+   },
+   {
+    "id": 2250489804,
+    "game_id": 15907655,
+    "player_id": 1028027567,
+    "vendor": "betmgm",
+    "deeplinks": null,
+    "prop_type": "blocks",
+    "line_value": "0.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": -200,
+     "under_odds": 145
+    },
+    "opened_at": "2024-11-20T21:30:00.000Z"
+   },
+   {
+    "id": 2250489751,
+    "game_id": 15907655,
+    "player_id": 1028027567,
+    "vendor": "caesars",
+    "deeplinks": null,
+    "prop_type": "blocks",
+    "line_value": "0.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": -184,
+     "under_odds": 133
+    },
+    "opened_at": "2024-11-20T21:30:00.000Z"
+   },
+   {
+    "id": 2250489812,
+    "game_id": 15907655,
+    "player_id": 322,
+    "vendor": "betmgm",
+    "deeplinks": null,
+    "prop_type": "double_double",
+    "line_value": "0.5",
+    "market": {
+     "type": "milestone",
+     "odds": 825
+    },
+    "opened_at": "2024-11-20T21:30:00.000Z"
+   },
+   {
+    "id": 2250489758,
+    "game_id": 15907655,
+    "player_id": 322,
+    "vendor": "caesars",
+    "deeplinks": null,
+    "prop_type": "double_double",
+    "line_value": "0.5",
+    "market": {
+     "type": "milestone",
+     "odds": 650
+    },
+    "opened_at": "2024-11-20T21:30:00.000Z"
+   },
+   {
+    "id": 2250489713,
+    "game_id": 15907655,
+    "player_id": 322,
+    "vendor": "draftkings",
+    "deeplinks": null,
+    "prop_type": "double_double",
+    "line_value": "0.5",
+    "market": {
+     "type": "milestone",
+     "odds": 750
+    },
+    "opened_at": "2024-11-20T21:30:00.000Z"
+   },
+   {
+    "id": 2250489686,
+    "game_id": 15907655,
+    "player_id": 322,
+    "vendor": "fanduel",
+    "deeplinks": null,
+    "prop_type": "double_double",
+    "line_value": "0.5",
+    "market": {
+     "type": "milestone",
+     "odds": 700
+    },
+    "opened_at": "2024-11-20T21:30:00.000Z"
+   },
+   {
+    "id": 2250489808,
+    "game_id": 15907655,
+    "player_id": 9,
+    "vendor": "betmgm",
+    "deeplinks": null,
+    "prop_type": "double_double",
+    "line_value": "0.5",
+    "market": {
+     "type": "milestone",
+     "odds": -120
+    },
+    "opened_at": "2024-11-20T21:30:00.000Z"
+   },
+   {
+    "id": 2250489755,
+    "game_id": 15907655,
+    "player_id": 9,
+    "vendor": "caesars",
+    "deeplinks": null,
+    "prop_type": "double_double",
+    "line_value": "0.5",
+    "market": {
+     "type": "milestone",
+     "odds": -133
+    },
+    "opened_at": "2024-11-20T21:30:00.000Z"
+   },
+   {
+    "id": 2250489715,
+    "game_id": 15907655,
+    "player_id": 9,
+    "vendor": "draftkings",
+    "deeplinks": null,
+    "prop_type": "double_double",
+    "line_value": "0.5",
+    "market": {
+     "type": "milestone",
+     "odds": -150
+    },
+    "opened_at": "2024-11-20T21:30:00.000Z"
+   },
+   {
+    "id": 2250489683,
+    "game_id": 15907655,
+    "player_id": 9,
+    "vendor": "fanduel",
+    "deeplinks": null,
+    "prop_type": "double_double",
+    "line_value": "0.5",
+    "market": {
+     "type": "milestone",
+     "odds": -125
+    },
+    "opened_at": "2024-11-20T21:30:00.000Z"
+   },
+   {
+    "id": 2250489809,
+    "game_id": 15907655,
+    "player_id": 666604,
+    "vendor": "betmgm",
+    "deeplinks": null,
+    "prop_type": "double_double",
+    "line_value": "0.5",
+    "market": {
+     "type": "milestone",
+     "odds": 875
+    },
+    "opened_at": "2024-11-20T21:30:00.000Z"
+   },
+   {
+    "id": 2250489759,
+    "game_id": 15907655,
+    "player_id": 666604,
+    "vendor": "caesars",
+    "deeplinks": null,
+    "prop_type": "double_double",
+    "line_value": "0.5",
+    "market": {
+     "type": "milestone",
+     "odds": 1000
+    },
+    "opened_at": "2024-11-20T21:30:00.000Z"
+   },
+   {
+    "id": 2250489716,
+    "game_id": 15907655,
+    "player_id": 666604,
+    "vendor": "draftkings",
+    "deeplinks": null,
+    "prop_type": "double_double",
+    "line_value": "0.5",
+    "market": {
+     "type": "milestone",
+     "odds": 1000
+    },
+    "opened_at": "2024-11-20T21:30:00.000Z"
+   },
+   {
+    "id": 2250489685,
+    "game_id": 15907655,
+    "player_id": 666604,
+    "vendor": "fanduel",
+    "deeplinks": null,
+    "prop_type": "double_double",
+    "line_value": "0.5",
+    "market": {
+     "type": "milestone",
+     "odds": 600
+    },
+    "opened_at": "2024-11-20T21:30:00.000Z"
+   },
+   {
+    "id": 2250489811,
+    "game_id": 15907655,
+    "player_id": 17896076,
+    "vendor": "betmgm",
+    "deeplinks": null,
+    "prop_type": "double_double",
+    "line_value": "0.5",
+    "market": {
+     "type": "milestone",
+     "odds": 180
+    },
+    "opened_at": "2024-11-20T21:30:00.000Z"
+   },
+   {
+    "id": 2250489756,
+    "game_id": 15907655,
+    "player_id": 17896076,
+    "vendor": "caesars",
+    "deeplinks": null,
+    "prop_type": "double_double",
+    "line_value": "0.5",
+    "market": {
+     "type": "milestone",
+     "odds": 175
+    },
+    "opened_at": "2024-11-20T21:30:00.000Z"
+   },
+   {
+    "id": 2250489714,
+    "game_id": 15907655,
+    "player_id": 17896076,
+    "vendor": "draftkings",
+    "deeplinks": null,
+    "prop_type": "double_double",
+    "line_value": "0.5",
+    "market": {
+     "type": "milestone",
+     "odds": 190
+    },
+    "opened_at": "2024-11-20T21:30:00.000Z"
+   },
+   {
+    "id": 2250489684,
+    "game_id": 15907655,
+    "player_id": 17896076,
+    "vendor": "fanduel",
+    "deeplinks": null,
+    "prop_type": "double_double",
+    "line_value": "0.5",
+    "market": {
+     "type": "milestone",
+     "odds": 155
+    },
+    "opened_at": "2024-11-20T21:30:00.000Z"
+   },
+   {
+    "id": 2250489810,
+    "game_id": 15907655,
+    "player_id": 1028027567,
+    "vendor": "betmgm",
+    "deeplinks": null,
+    "prop_type": "double_double",
+    "line_value": "0.5",
+    "market": {
+     "type": "milestone",
+     "odds": 325
+    },
+    "opened_at": "2024-11-20T21:30:00.000Z"
+   },
+   {
+    "id": 2250489757,
+    "game_id": 15907655,
+    "player_id": 1028027567,
+    "vendor": "caesars",
+    "deeplinks": null,
+    "prop_type": "double_double",
+    "line_value": "0.5",
+    "market": {
+     "type": "milestone",
+     "odds": 333
+    },
+    "opened_at": "2024-11-20T21:30:00.000Z"
+   },
+   {
+    "id": 2250489717,
+    "game_id": 15907655,
+    "player_id": 1028027567,
+    "vendor": "draftkings",
+    "deeplinks": null,
+    "prop_type": "double_double",
+    "line_value": "0.5",
+    "market": {
+     "type": "milestone",
+     "odds": 310
+    },
+    "opened_at": "2024-11-20T21:30:00.000Z"
+   },
+   {
+    "id": 2250489816,
+    "game_id": 15907655,
+    "player_id": 322,
+    "vendor": "betmgm",
+    "deeplinks": null,
+    "prop_type": "points",
+    "line_value": "26.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": -120,
+     "under_odds": -115
+    },
+    "opened_at": "2024-11-20T21:30:00.000Z"
+   },
+   {
+    "id": 2250489764,
+    "game_id": 15907655,
+    "player_id": 322,
+    "vendor": "caesars",
+    "deeplinks": null,
+    "prop_type": "points",
+    "line_value": "26.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": -117,
+     "under_odds": -117
+    },
+    "opened_at": "2024-11-20T21:30:00.000Z"
+   },
+   {
+    "id": 2250489718,
+    "game_id": 15907655,
+    "player_id": 322,
+    "vendor": "draftkings",
+    "deeplinks": null,
+    "prop_type": "points",
+    "line_value": "26.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": -115,
+     "under_odds": -115
+    },
+    "opened_at": "2024-11-20T21:30:00.000Z"
+   },
+   {
+    "id": 2250489689,
+    "game_id": 15907655,
+    "player_id": 322,
+    "vendor": "fanduel",
+    "deeplinks": null,
+    "prop_type": "points",
+    "line_value": "26.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": -105,
+     "under_odds": -115
+    },
+    "opened_at": "2024-11-20T21:30:00.000Z"
+   },
+   {
+    "id": 2250489813,
+    "game_id": 15907655,
+    "player_id": 9,
+    "vendor": "betmgm",
+    "deeplinks": null,
+    "prop_type": "points",
+    "line_value": "13.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": -135,
+     "under_odds": 100
+    },
+    "opened_at": "2024-11-20T21:30:00.000Z"
+   },
+   {
+    "id": 2250489761,
+    "game_id": 15907655,
+    "player_id": 9,
+    "vendor": "caesars",
+    "deeplinks": null,
+    "prop_type": "points",
+    "line_value": "13.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": -154,
+     "under_odds": 112
+    },
+    "opened_at": "2024-11-20T21:30:00.000Z"
+   },
+   {
+    "id": 2250489720,
+    "game_id": 15907655,
+    "player_id": 9,
+    "vendor": "draftkings",
+    "deeplinks": null,
+    "prop_type": "points",
+    "line_value": "14.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": -105,
+     "under_odds": -125
+    },
+    "opened_at": "2024-11-20T21:30:00.000Z"
+   },
+   {
+    "id": 2250489688,
+    "game_id": 15907655,
+    "player_id": 9,
+    "vendor": "fanduel",
+    "deeplinks": null,
+    "prop_type": "points",
+    "line_value": "14.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": -102,
+     "under_odds": -120
+    },
+    "opened_at": "2024-11-20T21:30:00.000Z"
+   },
+   {
+    "id": 2250489814,
+    "game_id": 15907655,
+    "player_id": 666604,
+    "vendor": "betmgm",
+    "deeplinks": null,
+    "prop_type": "points",
+    "line_value": "11.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": -130,
+     "under_odds": 100
+    },
+    "opened_at": "2024-11-20T21:30:00.000Z"
+   },
+   {
+    "id": 2250489763,
+    "game_id": 15907655,
+    "player_id": 666604,
+    "vendor": "caesars",
+    "deeplinks": null,
+    "prop_type": "points",
+    "line_value": "11.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": -133,
+     "under_odds": -103
+    },
+    "opened_at": "2024-11-20T21:30:00.000Z"
+   },
+   {
+    "id": 2250489721,
+    "game_id": 15907655,
+    "player_id": 666604,
+    "vendor": "draftkings",
+    "deeplinks": null,
+    "prop_type": "points",
+    "line_value": "12.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": -110,
+     "under_odds": -120
+    },
+    "opened_at": "2024-11-20T21:30:00.000Z"
+   },
+   {
+    "id": 2250489687,
+    "game_id": 15907655,
+    "player_id": 666604,
+    "vendor": "fanduel",
+    "deeplinks": null,
+    "prop_type": "points",
+    "line_value": "12.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": -105,
+     "under_odds": -115
+    },
+    "opened_at": "2024-11-20T21:30:00.000Z"
+   },
+   {
+    "id": 2250489817,
+    "game_id": 15907655,
+    "player_id": 17896076,
+    "vendor": "betmgm",
+    "deeplinks": null,
+    "prop_type": "points",
+    "line_value": "17.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": -135,
+     "under_odds": 100
+    },
+    "opened_at": "2024-11-20T21:30:00.000Z"
+   },
+   {
+    "id": 2250489762,
+    "game_id": 15907655,
+    "player_id": 17896076,
+    "vendor": "caesars",
+    "deeplinks": null,
+    "prop_type": "points",
+    "line_value": "17.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": -125,
+     "under_odds": -109
+    },
+    "opened_at": "2024-11-20T21:30:00.000Z"
+   },
+   {
+    "id": 2250489719,
+    "game_id": 15907655,
+    "player_id": 17896076,
+    "vendor": "draftkings",
+    "deeplinks": null,
+    "prop_type": "points",
+    "line_value": "17.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": -125,
+     "under_odds": -105
+    },
+    "opened_at": "2024-11-20T21:30:00.000Z"
+   },
+   {
+    "id": 2250489690,
+    "game_id": 15907655,
+    "player_id": 17896076,
+    "vendor": "fanduel",
+    "deeplinks": null,
+    "prop_type": "points",
+    "line_value": "17.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": -122,
+     "under_odds": 100
+    },
+    "opened_at": "2024-11-20T21:30:00.000Z"
+   },
+   {
+    "id": 2250489815,
+    "game_id": 15907655,
+    "player_id": 1028027567,
+    "vendor": "betmgm",
+    "deeplinks": null,
+    "prop_type": "points",
+    "line_value": "9.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": -110,
+     "under_odds": -120
+    },
+    "opened_at": "2024-11-20T21:30:00.000Z"
+   },
+   {
+    "id": 2250489760,
+    "game_id": 15907655,
+    "player_id": 1028027567,
+    "vendor": "caesars",
+    "deeplinks": null,
+    "prop_type": "points",
+    "line_value": "9.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": -117,
+     "under_odds": -117
+    },
+    "opened_at": "2024-11-20T21:30:00.000Z"
+   },
+   {
+    "id": 2250489722,
+    "game_id": 15907655,
+    "player_id": 1028027567,
+    "vendor": "draftkings",
+    "deeplinks": null,
+    "prop_type": "points",
+    "line_value": "9.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": -110,
+     "under_odds": -120
+    },
+    "opened_at": "2024-11-20T21:30:00.000Z"
+   },
+   {
+    "id": 2250489822,
+    "game_id": 15907655,
+    "player_id": 322,
+    "vendor": "betmgm",
+    "deeplinks": null,
+    "prop_type": "points_assists",
+    "line_value": "31.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": -135,
+     "under_odds": 100
+    },
+    "opened_at": "2024-11-20T21:30:00.000Z"
+   },
+   {
+    "id": 2250489769,
+    "game_id": 15907655,
+    "player_id": 322,
+    "vendor": "caesars",
+    "deeplinks": null,
+    "prop_type": "points_assists",
+    "line_value": "31.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": -117,
+     "under_odds": -117
+    },
+    "opened_at": "2024-11-20T21:30:00.000Z"
+   },
+   {
+    "id": 2250489723,
+    "game_id": 15907655,
+    "player_id": 322,
+    "vendor": "draftkings",
+    "deeplinks": null,
+    "prop_type": "points_assists",
+    "line_value": "31.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": -115,
+     "under_odds": -115
+    },
+    "opened_at": "2024-11-20T21:30:00.000Z"
+   },
+   {
+    "id": 2250489691,
+    "game_id": 15907655,
+    "player_id": 322,
+    "vendor": "fanduel",
+    "deeplinks": null,
+    "prop_type": "points_assists",
+    "line_value": "31.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": -118,
+     "under_odds": -108
+    },
+    "opened_at": "2024-11-20T21:30:00.000Z"
+   },
+   {
+    "id": 2250489818,
+    "game_id": 15907655,
+    "player_id": 9,
+    "vendor": "betmgm",
+    "deeplinks": null,
+    "prop_type": "points_assists",
+    "line_value": "15.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": -120,
+     "under_odds": -110
+    },
+    "opened_at": "2024-11-20T21:30:00.000Z"
+   },
+   {
+    "id": 2250489766,
+    "game_id": 15907655,
+    "player_id": 9,
+    "vendor": "caesars",
+    "deeplinks": null,
+    "prop_type": "points_assists",
+    "line_value": "15.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": -154,
+     "under_odds": 112
+    },
+    "opened_at": "2024-11-20T21:30:00.000Z"
+   },
+   {
+    "id": 2250489821,
+    "game_id": 15907655,
+    "player_id": 666604,
+    "vendor": "betmgm",
+    "deeplinks": null,
+    "prop_type": "points_assists",
+    "line_value": "13.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": -130,
+     "under_odds": 100
+    },
+    "opened_at": "2024-11-20T21:30:00.000Z"
+   },
+   {
+    "id": 2250489767,
+    "game_id": 15907655,
+    "player_id": 666604,
+    "vendor": "caesars",
+    "deeplinks": null,
+    "prop_type": "points_assists",
+    "line_value": "13.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": -121,
+     "under_odds": -113
+    },
+    "opened_at": "2024-11-20T21:30:00.000Z"
+   },
+   {
+    "id": 2250489819,
+    "game_id": 15907655,
+    "player_id": 17896076,
+    "vendor": "betmgm",
+    "deeplinks": null,
+    "prop_type": "points_assists",
+    "line_value": "19.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": -145,
+     "under_odds": 110
+    },
+    "opened_at": "2024-11-20T21:30:00.000Z"
+   },
+   {
+    "id": 2250489765,
+    "game_id": 15907655,
+    "player_id": 17896076,
+    "vendor": "caesars",
+    "deeplinks": null,
+    "prop_type": "points_assists",
+    "line_value": "20.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": -121,
+     "under_odds": -113
+    },
+    "opened_at": "2024-11-20T21:30:00.000Z"
+   },
+   {
+    "id": 2250489724,
+    "game_id": 15907655,
+    "player_id": 17896076,
+    "vendor": "draftkings",
+    "deeplinks": null,
+    "prop_type": "points_assists",
+    "line_value": "20.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": -115,
+     "under_odds": -115
+    },
+    "opened_at": "2024-11-20T21:30:00.000Z"
+   },
+   {
+    "id": 2250489692,
+    "game_id": 15907655,
+    "player_id": 17896076,
+    "vendor": "fanduel",
+    "deeplinks": null,
+    "prop_type": "points_assists",
+    "line_value": "21.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": -111,
+     "under_odds": -115
+    },
+    "opened_at": "2024-11-20T21:30:00.000Z"
+   },
+   {
+    "id": 2250489820,
+    "game_id": 15907655,
+    "player_id": 1028027567,
+    "vendor": "betmgm",
+    "deeplinks": null,
+    "prop_type": "points_assists",
+    "line_value": "12.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": -110,
+     "under_odds": -120
+    },
+    "opened_at": "2024-11-20T21:30:00.000Z"
+   },
+   {
+    "id": 2250489768,
+    "game_id": 15907655,
+    "player_id": 1028027567,
+    "vendor": "caesars",
+    "deeplinks": null,
+    "prop_type": "points_assists",
+    "line_value": "12.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": -117,
+     "under_odds": -117
+    },
+    "opened_at": "2024-11-20T21:30:00.000Z"
+   },
+   {
+    "id": 2250489725,
+    "game_id": 15907655,
+    "player_id": 1028027567,
+    "vendor": "draftkings",
+    "deeplinks": null,
+    "prop_type": "points_assists",
+    "line_value": "12.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": -110,
+     "under_odds": -120
+    },
+    "opened_at": "2024-11-20T21:30:00.000Z"
+   },
+   {
+    "id": 2250489827,
+    "game_id": 15907655,
+    "player_id": 322,
+    "vendor": "betmgm",
+    "deeplinks": null,
+    "prop_type": "points_rebounds",
+    "line_value": "30.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": -120,
+     "under_odds": -110
+    },
+    "opened_at": "2024-11-20T21:30:00.000Z"
+   },
+   {
+    "id": 2250489771,
+    "game_id": 15907655,
+    "player_id": 322,
+    "vendor": "caesars",
+    "deeplinks": null,
+    "prop_type": "points_rebounds",
+    "line_value": "30.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": -117,
+     "under_odds": -117
+    },
+    "opened_at": "2024-11-20T21:30:00.000Z"
+   },
+   {
+    "id": 2250489726,
+    "game_id": 15907655,
+    "player_id": 322,
+    "vendor": "draftkings",
+    "deeplinks": null,
+    "prop_type": "points_rebounds",
+    "line_value": "30.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": -115,
+     "under_odds": -115
+    },
+    "opened_at": "2024-11-20T21:30:00.000Z"
+   },
+   {
+    "id": 2250489694,
+    "game_id": 15907655,
+    "player_id": 322,
+    "vendor": "fanduel",
+    "deeplinks": null,
+    "prop_type": "points_rebounds",
+    "line_value": "30.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": -111,
+     "under_odds": -115
+    },
+    "opened_at": "2024-11-20T21:30:00.000Z"
+   },
+   {
+    "id": 2250489823,
+    "game_id": 15907655,
+    "player_id": 9,
+    "vendor": "betmgm",
+    "deeplinks": null,
+    "prop_type": "points_rebounds",
+    "line_value": "24.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": -135,
+     "under_odds": 100
+    },
+    "opened_at": "2024-11-20T21:30:00.000Z"
+   },
+   {
+    "id": 2250489770,
+    "game_id": 15907655,
+    "player_id": 9,
+    "vendor": "caesars",
+    "deeplinks": null,
+    "prop_type": "points_rebounds",
+    "line_value": "24.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": -137,
+     "under_odds": 100
+    },
+    "opened_at": "2024-11-20T21:30:00.000Z"
+   },
+   {
+    "id": 2250489728,
+    "game_id": 15907655,
+    "player_id": 9,
+    "vendor": "draftkings",
+    "deeplinks": null,
+    "prop_type": "points_rebounds",
+    "line_value": "24.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": -125,
+     "under_odds": -105
+    },
+    "opened_at": "2024-11-20T21:30:00.000Z"
+   },
+   {
+    "id": 2250489695,
+    "game_id": 15907655,
+    "player_id": 9,
+    "vendor": "fanduel",
+    "deeplinks": null,
+    "prop_type": "points_rebounds",
+    "line_value": "24.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": -120,
+     "under_odds": -106
+    },
+    "opened_at": "2024-11-20T21:30:00.000Z"
+   },
+   {
+    "id": 2250489825,
+    "game_id": 15907655,
+    "player_id": 666604,
+    "vendor": "betmgm",
+    "deeplinks": null,
+    "prop_type": "points_rebounds",
+    "line_value": "17.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": -120,
+     "under_odds": -110
+    },
+    "opened_at": "2024-11-20T21:30:00.000Z"
+   },
+   {
+    "id": 2250489772,
+    "game_id": 15907655,
+    "player_id": 666604,
+    "vendor": "caesars",
+    "deeplinks": null,
+    "prop_type": "points_rebounds",
+    "line_value": "17.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": -113,
+     "under_odds": -121
+    },
+    "opened_at": "2024-11-20T21:30:00.000Z"
+   },
+   {
+    "id": 2250489729,
+    "game_id": 15907655,
+    "player_id": 666604,
+    "vendor": "draftkings",
+    "deeplinks": null,
+    "prop_type": "points_rebounds",
+    "line_value": "18.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": -105,
+     "under_odds": -125
+    },
+    "opened_at": "2024-11-20T21:30:00.000Z"
+   },
+   {
+    "id": 2250489824,
+    "game_id": 15907655,
+    "player_id": 17896076,
+    "vendor": "betmgm",
+    "deeplinks": null,
+    "prop_type": "points_rebounds",
+    "line_value": "25.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": -135,
+     "under_odds": 100
+    },
+    "opened_at": "2024-11-20T21:30:00.000Z"
+   },
+   {
+    "id": 2250489774,
+    "game_id": 15907655,
+    "player_id": 17896076,
+    "vendor": "caesars",
+    "deeplinks": null,
+    "prop_type": "points_rebounds",
+    "line_value": "25.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": -125,
+     "under_odds": -109
+    },
+    "opened_at": "2024-11-20T21:30:00.000Z"
+   },
+   {
+    "id": 2250489727,
+    "game_id": 15907655,
+    "player_id": 17896076,
+    "vendor": "draftkings",
+    "deeplinks": null,
+    "prop_type": "points_rebounds",
+    "line_value": "26.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": -105,
+     "under_odds": -125
+    },
+    "opened_at": "2024-11-20T21:30:00.000Z"
+   },
+   {
+    "id": 2250489693,
+    "game_id": 15907655,
+    "player_id": 17896076,
+    "vendor": "fanduel",
+    "deeplinks": null,
+    "prop_type": "points_rebounds",
+    "line_value": "26.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": -122,
+     "under_odds": -104
+    },
+    "opened_at": "2024-11-20T21:30:00.000Z"
+   },
+   {
+    "id": 2250489826,
+    "game_id": 15907655,
+    "player_id": 1028027567,
+    "vendor": "betmgm",
+    "deeplinks": null,
+    "prop_type": "points_rebounds",
+    "line_value": "17.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": -105,
+     "under_odds": -130
+    },
+    "opened_at": "2024-11-20T21:30:00.000Z"
+   },
+   {
+    "id": 2250489773,
+    "game_id": 15907655,
+    "player_id": 1028027567,
+    "vendor": "caesars",
+    "deeplinks": null,
+    "prop_type": "points_rebounds",
+    "line_value": "17.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": -106,
+     "under_odds": -129
+    },
+    "opened_at": "2024-11-20T21:30:00.000Z"
+   },
+   {
+    "id": 2250489730,
+    "game_id": 15907655,
+    "player_id": 1028027567,
+    "vendor": "draftkings",
+    "deeplinks": null,
+    "prop_type": "points_rebounds",
+    "line_value": "17.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": -105,
+     "under_odds": -125
+    },
+    "opened_at": "2024-11-20T21:30:00.000Z"
+   },
+   {
+    "id": 2250489832,
+    "game_id": 15907655,
+    "player_id": 322,
+    "vendor": "betmgm",
+    "deeplinks": null,
+    "prop_type": "points_rebounds_assists",
+    "line_value": "35.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": -145,
+     "under_odds": 105
+    },
+    "opened_at": "2024-11-20T21:30:00.000Z"
+   },
+   {
+    "id": 2250489775,
+    "game_id": 15907655,
+    "player_id": 322,
+    "vendor": "caesars",
+    "deeplinks": null,
+    "prop_type": "points_rebounds_assists",
+    "line_value": "35.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": -121,
+     "under_odds": -113
+    },
+    "opened_at": "2024-11-20T21:30:00.000Z"
+   },
+   {
+    "id": 2250489731,
+    "game_id": 15907655,
+    "player_id": 322,
+    "vendor": "draftkings",
+    "deeplinks": null,
+    "prop_type": "points_rebounds_assists",
+    "line_value": "35.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": -120,
+     "under_odds": -110
+    },
+    "opened_at": "2024-11-20T21:30:00.000Z"
+   },
+   {
+    "id": 2250489696,
+    "game_id": 15907655,
+    "player_id": 322,
+    "vendor": "fanduel",
+    "deeplinks": null,
+    "prop_type": "points_rebounds_assists",
+    "line_value": "35.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": -118,
+     "under_odds": -108
+    },
+    "opened_at": "2024-11-20T21:30:00.000Z"
+   },
+   {
+    "id": 2250489828,
+    "game_id": 15907655,
+    "player_id": 9,
+    "vendor": "betmgm",
+    "deeplinks": null,
+    "prop_type": "points_rebounds_assists",
+    "line_value": "26.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": -105,
+     "under_odds": -130
+    },
+    "opened_at": "2024-11-20T21:30:00.000Z"
+   },
+   {
+    "id": 2250489779,
+    "game_id": 15907655,
+    "player_id": 9,
+    "vendor": "caesars",
+    "deeplinks": null,
+    "prop_type": "points_rebounds_assists",
+    "line_value": "26.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": -106,
+     "under_odds": -129
+    },
+    "opened_at": "2024-11-20T21:30:00.000Z"
+   },
+   {
+    "id": 2250489830,
+    "game_id": 15907655,
+    "player_id": 666604,
+    "vendor": "betmgm",
+    "deeplinks": null,
+    "prop_type": "points_rebounds_assists",
+    "line_value": "19.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": -125,
+     "under_odds": -105
+    },
+    "opened_at": "2024-11-20T21:30:00.000Z"
+   },
+   {
+    "id": 2250489777,
+    "game_id": 15907655,
+    "player_id": 666604,
+    "vendor": "caesars",
+    "deeplinks": null,
+    "prop_type": "points_rebounds_assists",
+    "line_value": "19.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": -109,
+     "under_odds": -125
+    },
+    "opened_at": "2024-11-20T21:30:00.000Z"
+   },
+   {
+    "id": 2250489829,
+    "game_id": 15907655,
+    "player_id": 17896076,
+    "vendor": "betmgm",
+    "deeplinks": null,
+    "prop_type": "points_rebounds_assists",
+    "line_value": "28.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": -130,
+     "under_odds": 100
+    },
+    "opened_at": "2024-11-20T21:30:00.000Z"
+   },
+   {
+    "id": 2250489778,
+    "game_id": 15907655,
+    "player_id": 17896076,
+    "vendor": "caesars",
+    "deeplinks": null,
+    "prop_type": "points_rebounds_assists",
+    "line_value": "28.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": -133,
+     "under_odds": -103
+    },
+    "opened_at": "2024-11-20T21:30:00.000Z"
+   },
+   {
+    "id": 2250489732,
+    "game_id": 15907655,
+    "player_id": 17896076,
+    "vendor": "draftkings",
+    "deeplinks": null,
+    "prop_type": "points_rebounds_assists",
+    "line_value": "28.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": -125,
+     "under_odds": -105
+    },
+    "opened_at": "2024-11-20T21:30:00.000Z"
+   },
+   {
+    "id": 2250489697,
+    "game_id": 15907655,
+    "player_id": 17896076,
+    "vendor": "fanduel",
+    "deeplinks": null,
+    "prop_type": "points_rebounds_assists",
+    "line_value": "29.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": -113,
+     "under_odds": -113
+    },
+    "opened_at": "2024-11-20T21:30:00.000Z"
+   },
+   {
+    "id": 2250489831,
+    "game_id": 15907655,
+    "player_id": 1028027567,
+    "vendor": "betmgm",
+    "deeplinks": null,
+    "prop_type": "points_rebounds_assists",
+    "line_value": "20.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": -110,
+     "under_odds": -125
+    },
+    "opened_at": "2024-11-20T21:30:00.000Z"
+   },
+   {
+    "id": 2250489776,
+    "game_id": 15907655,
+    "player_id": 1028027567,
+    "vendor": "caesars",
+    "deeplinks": null,
+    "prop_type": "points_rebounds_assists",
+    "line_value": "20.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": -103,
+     "under_odds": -133
+    },
+    "opened_at": "2024-11-20T21:30:00.000Z"
+   },
+   {
+    "id": 2250489733,
+    "game_id": 15907655,
+    "player_id": 1028027567,
+    "vendor": "draftkings",
+    "deeplinks": null,
+    "prop_type": "points_rebounds_assists",
+    "line_value": "20.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": -105,
+     "under_odds": -125
+    },
+    "opened_at": "2024-11-20T21:30:00.000Z"
+   },
+   {
+    "id": 2250489837,
+    "game_id": 15907655,
+    "player_id": 322,
+    "vendor": "betmgm",
+    "deeplinks": null,
+    "prop_type": "rebounds",
+    "line_value": "3.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": -160,
+     "under_odds": 125
+    },
+    "opened_at": "2024-11-20T21:30:00.000Z"
+   },
+   {
+    "id": 2250489782,
+    "game_id": 15907655,
+    "player_id": 322,
+    "vendor": "caesars",
+    "deeplinks": null,
+    "prop_type": "rebounds",
+    "line_value": "3.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": -166,
+     "under_odds": 120
+    },
+    "opened_at": "2024-11-20T21:30:00.000Z"
+   },
+   {
+    "id": 2250489734,
+    "game_id": 15907655,
+    "player_id": 322,
+    "vendor": "draftkings",
+    "deeplinks": null,
+    "prop_type": "rebounds",
+    "line_value": "3.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": -154,
+     "under_odds": 120
+    },
+    "opened_at": "2024-11-20T21:30:00.000Z"
+   },
+   {
+    "id": 2250489699,
+    "game_id": 15907655,
+    "player_id": 322,
+    "vendor": "fanduel",
+    "deeplinks": null,
+    "prop_type": "rebounds",
+    "line_value": "3.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": -130,
+     "under_odds": 106
+    },
+    "opened_at": "2024-11-20T21:30:00.000Z"
+   },
+   {
+    "id": 2250489833,
+    "game_id": 15907655,
+    "player_id": 9,
+    "vendor": "betmgm",
+    "deeplinks": null,
+    "prop_type": "rebounds",
+    "line_value": "10.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": 100,
+     "under_odds": -135
+    },
+    "opened_at": "2024-11-20T21:30:00.000Z"
+   },
+   {
+    "id": 2250489781,
+    "game_id": 15907655,
+    "player_id": 9,
+    "vendor": "caesars",
+    "deeplinks": null,
+    "prop_type": "rebounds",
+    "line_value": "10.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": -106,
+     "under_odds": -129
+    },
+    "opened_at": "2024-11-20T21:30:00.000Z"
+   },
+   {
+    "id": 2250489736,
+    "game_id": 15907655,
+    "player_id": 9,
+    "vendor": "draftkings",
+    "deeplinks": null,
+    "prop_type": "rebounds",
+    "line_value": "10.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": -110,
+     "under_odds": -120
+    },
+    "opened_at": "2024-11-20T21:30:00.000Z"
+   },
+   {
+    "id": 2250489701,
+    "game_id": 15907655,
+    "player_id": 9,
+    "vendor": "fanduel",
+    "deeplinks": null,
+    "prop_type": "rebounds",
+    "line_value": "10.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": 100,
+     "under_odds": -122
+    },
+    "opened_at": "2024-11-20T21:30:00.000Z"
+   },
+   {
+    "id": 2250489836,
+    "game_id": 15907655,
+    "player_id": 666604,
+    "vendor": "betmgm",
+    "deeplinks": null,
+    "prop_type": "rebounds",
+    "line_value": "5.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": -120,
+     "under_odds": -110
+    },
+    "opened_at": "2024-11-20T21:30:00.000Z"
+   },
+   {
+    "id": 2250489784,
+    "game_id": 15907655,
+    "player_id": 666604,
+    "vendor": "caesars",
+    "deeplinks": null,
+    "prop_type": "rebounds",
+    "line_value": "5.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": -125,
+     "under_odds": -109
+    },
+    "opened_at": "2024-11-20T21:30:00.000Z"
+   },
+   {
+    "id": 2250489737,
+    "game_id": 15907655,
+    "player_id": 666604,
+    "vendor": "draftkings",
+    "deeplinks": null,
+    "prop_type": "rebounds",
+    "line_value": "5.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": -125,
+     "under_odds": -105
+    },
+    "opened_at": "2024-11-20T21:30:00.000Z"
+   },
+   {
+    "id": 2250489700,
+    "game_id": 15907655,
+    "player_id": 666604,
+    "vendor": "fanduel",
+    "deeplinks": null,
+    "prop_type": "rebounds",
+    "line_value": "5.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": -128,
+     "under_odds": 104
+    },
+    "opened_at": "2024-11-20T21:30:00.000Z"
+   },
+   {
+    "id": 2250489834,
+    "game_id": 15907655,
+    "player_id": 17896076,
+    "vendor": "betmgm",
+    "deeplinks": null,
+    "prop_type": "rebounds",
+    "line_value": "8.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": 110,
+     "under_odds": -145
+    },
+    "opened_at": "2024-11-20T21:30:00.000Z"
+   },
+   {
+    "id": 2250489783,
+    "game_id": 15907655,
+    "player_id": 17896076,
+    "vendor": "caesars",
+    "deeplinks": null,
+    "prop_type": "rebounds",
+    "line_value": "8.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": -106,
+     "under_odds": -129
+    },
+    "opened_at": "2024-11-20T21:30:00.000Z"
+   },
+   {
+    "id": 2250489735,
+    "game_id": 15907655,
+    "player_id": 17896076,
+    "vendor": "draftkings",
+    "deeplinks": null,
+    "prop_type": "rebounds",
+    "line_value": "8.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": 105,
+     "under_odds": -135
+    },
+    "opened_at": "2024-11-20T21:30:00.000Z"
+   },
+   {
+    "id": 2250489698,
+    "game_id": 15907655,
+    "player_id": 17896076,
+    "vendor": "fanduel",
+    "deeplinks": null,
+    "prop_type": "rebounds",
+    "line_value": "8.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": 112,
+     "under_odds": -138
+    },
+    "opened_at": "2024-11-20T21:30:00.000Z"
+   },
+   {
+    "id": 2250489835,
+    "game_id": 15907655,
+    "player_id": 1028027567,
+    "vendor": "betmgm",
+    "deeplinks": null,
+    "prop_type": "rebounds",
+    "line_value": "7.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": -120,
+     "under_odds": -110
+    },
+    "opened_at": "2024-11-20T21:30:00.000Z"
+   },
+   {
+    "id": 2250489780,
+    "game_id": 15907655,
+    "player_id": 1028027567,
+    "vendor": "caesars",
+    "deeplinks": null,
+    "prop_type": "rebounds",
+    "line_value": "7.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": -125,
+     "under_odds": -109
+    },
+    "opened_at": "2024-11-20T21:30:00.000Z"
+   },
+   {
+    "id": 2250489738,
+    "game_id": 15907655,
+    "player_id": 1028027567,
+    "vendor": "draftkings",
+    "deeplinks": null,
+    "prop_type": "rebounds",
+    "line_value": "7.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": -120,
+     "under_odds": -110
+    },
+    "opened_at": "2024-11-20T21:30:00.000Z"
+   },
+   {
+    "id": 2250489838,
+    "game_id": 15907655,
+    "player_id": 322,
+    "vendor": "betmgm",
+    "deeplinks": null,
+    "prop_type": "rebounds_assists",
+    "line_value": "8.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": -165,
+     "under_odds": 125
+    },
+    "opened_at": "2024-11-20T21:30:00.000Z"
+   },
+   {
+    "id": 2250489789,
+    "game_id": 15907655,
+    "player_id": 322,
+    "vendor": "caesars",
+    "deeplinks": null,
+    "prop_type": "rebounds_assists",
+    "line_value": "8.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": -142,
+     "under_odds": 104
+    },
+    "opened_at": "2024-11-20T21:30:00.000Z"
+   },
+   {
+    "id": 2250489739,
+    "game_id": 15907655,
+    "player_id": 322,
+    "vendor": "draftkings",
+    "deeplinks": null,
+    "prop_type": "rebounds_assists",
+    "line_value": "9.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": 110,
+     "under_odds": -142
+    },
+    "opened_at": "2024-11-20T21:30:00.000Z"
+   },
+   {
+    "id": 2250489702,
+    "game_id": 15907655,
+    "player_id": 322,
+    "vendor": "fanduel",
+    "deeplinks": null,
+    "prop_type": "rebounds_assists",
+    "line_value": "9.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": 110,
+     "under_odds": -140
+    },
+    "opened_at": "2024-11-20T21:30:00.000Z"
+   },
+   {
+    "id": 2250489841,
+    "game_id": 15907655,
+    "player_id": 9,
+    "vendor": "betmgm",
+    "deeplinks": null,
+    "prop_type": "rebounds_assists",
+    "line_value": "11.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": -140,
+     "under_odds": 105
+    },
+    "opened_at": "2024-11-20T21:30:00.000Z"
+   },
+   {
+    "id": 2250489788,
+    "game_id": 15907655,
+    "player_id": 9,
+    "vendor": "caesars",
+    "deeplinks": null,
+    "prop_type": "rebounds_assists",
+    "line_value": "11.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": -137,
+     "under_odds": 100
+    },
+    "opened_at": "2024-11-20T21:30:00.000Z"
+   },
+   {
+    "id": 2250489840,
+    "game_id": 15907655,
+    "player_id": 666604,
+    "vendor": "betmgm",
+    "deeplinks": null,
+    "prop_type": "rebounds_assists",
+    "line_value": "7.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": -125,
+     "under_odds": -105
+    },
+    "opened_at": "2024-11-20T21:30:00.000Z"
+   },
+   {
+    "id": 2250489786,
+    "game_id": 15907655,
+    "player_id": 666604,
+    "vendor": "caesars",
+    "deeplinks": null,
+    "prop_type": "rebounds_assists",
+    "line_value": "7.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": -121,
+     "under_odds": -113
+    },
+    "opened_at": "2024-11-20T21:30:00.000Z"
+   },
+   {
+    "id": 2250489842,
+    "game_id": 15907655,
+    "player_id": 17896076,
+    "vendor": "betmgm",
+    "deeplinks": null,
+    "prop_type": "rebounds_assists",
+    "line_value": "10.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": -135,
+     "under_odds": 100
+    },
+    "opened_at": "2024-11-20T21:30:00.000Z"
+   },
+   {
+    "id": 2250489787,
+    "game_id": 15907655,
+    "player_id": 17896076,
+    "vendor": "caesars",
+    "deeplinks": null,
+    "prop_type": "rebounds_assists",
+    "line_value": "10.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": -133,
+     "under_odds": -103
+    },
+    "opened_at": "2024-11-20T21:30:00.000Z"
+   },
+   {
+    "id": 2250489740,
+    "game_id": 15907655,
+    "player_id": 17896076,
+    "vendor": "draftkings",
+    "deeplinks": null,
+    "prop_type": "rebounds_assists",
+    "line_value": "10.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": -142,
+     "under_odds": 110
+    },
+    "opened_at": "2024-11-20T21:30:00.000Z"
+   },
+   {
+    "id": 2250489703,
+    "game_id": 15907655,
+    "player_id": 17896076,
+    "vendor": "fanduel",
+    "deeplinks": null,
+    "prop_type": "rebounds_assists",
+    "line_value": "11.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": 102,
+     "under_odds": -130
+    },
+    "opened_at": "2024-11-20T21:30:00.000Z"
+   },
+   {
+    "id": 2250489839,
+    "game_id": 15907655,
+    "player_id": 1028027567,
+    "vendor": "betmgm",
+    "deeplinks": null,
+    "prop_type": "rebounds_assists",
+    "line_value": "10.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": -135,
+     "under_odds": 100
+    },
+    "opened_at": "2024-11-20T21:30:00.000Z"
+   },
+   {
+    "id": 2250489785,
+    "game_id": 15907655,
+    "player_id": 1028027567,
+    "vendor": "caesars",
+    "deeplinks": null,
+    "prop_type": "rebounds_assists",
+    "line_value": "10.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": -133,
+     "under_odds": -103
+    },
+    "opened_at": "2024-11-20T21:30:00.000Z"
+   },
+   {
+    "id": 2250489741,
+    "game_id": 15907655,
+    "player_id": 1028027567,
+    "vendor": "draftkings",
+    "deeplinks": null,
+    "prop_type": "rebounds_assists",
+    "line_value": "10.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": -120,
+     "under_odds": -110
+    },
+    "opened_at": "2024-11-20T21:30:00.000Z"
+   },
+   {
+    "id": 2250489847,
+    "game_id": 15907655,
+    "player_id": 322,
+    "vendor": "betmgm",
+    "deeplinks": null,
+    "prop_type": "steals",
+    "line_value": "1.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": 120,
+     "under_odds": -160
+    },
+    "opened_at": "2024-11-20T21:30:00.000Z"
+   },
+   {
+    "id": 2250489793,
+    "game_id": 15907655,
+    "player_id": 322,
+    "vendor": "caesars",
+    "deeplinks": null,
+    "prop_type": "steals",
+    "line_value": "1.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": 112,
+     "under_odds": -154
+    },
+    "opened_at": "2024-11-20T21:30:00.000Z"
+   },
+   {
+    "id": 2250489742,
+    "game_id": 15907655,
+    "player_id": 322,
+    "vendor": "draftkings",
+    "deeplinks": null,
+    "prop_type": "steals",
+    "line_value": "1.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": 130,
+     "under_odds": -168
+    },
+    "opened_at": "2024-11-20T21:30:00.000Z"
+   },
+   {
+    "id": 2250489704,
+    "game_id": 15907655,
+    "player_id": 322,
+    "vendor": "fanduel",
+    "deeplinks": null,
+    "prop_type": "steals",
+    "line_value": "1.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": 128,
+     "under_odds": -164
+    },
+    "opened_at": "2024-11-20T21:30:00.000Z"
+   },
+   {
+    "id": 2250489843,
+    "game_id": 15907655,
+    "player_id": 9,
+    "vendor": "betmgm",
+    "deeplinks": null,
+    "prop_type": "steals",
+    "line_value": "0.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": -175,
+     "under_odds": 135
+    },
+    "opened_at": "2024-11-20T21:30:00.000Z"
+   },
+   {
+    "id": 2250489790,
+    "game_id": 15907655,
+    "player_id": 9,
+    "vendor": "caesars",
+    "deeplinks": null,
+    "prop_type": "steals",
+    "line_value": "0.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": -184,
+     "under_odds": 133
+    },
+    "opened_at": "2024-11-20T21:30:00.000Z"
+   },
+   {
+    "id": 2250489844,
+    "game_id": 15907655,
+    "player_id": 666604,
+    "vendor": "betmgm",
+    "deeplinks": null,
+    "prop_type": "steals",
+    "line_value": "1.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": 110,
+     "under_odds": -150
+    },
+    "opened_at": "2024-11-20T21:30:00.000Z"
+   },
+   {
+    "id": 2250489794,
+    "game_id": 15907655,
+    "player_id": 666604,
+    "vendor": "caesars",
+    "deeplinks": null,
+    "prop_type": "steals",
+    "line_value": "1.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": 112,
+     "under_odds": -154
+    },
+    "opened_at": "2024-11-20T21:30:00.000Z"
+   },
+   {
+    "id": 2250489705,
+    "game_id": 15907655,
+    "player_id": 666604,
+    "vendor": "fanduel",
+    "deeplinks": null,
+    "prop_type": "steals",
+    "line_value": "1.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": 128,
+     "under_odds": -164
+    },
+    "opened_at": "2024-11-20T21:30:00.000Z"
+   },
+   {
+    "id": 2250489846,
+    "game_id": 15907655,
+    "player_id": 17896076,
+    "vendor": "betmgm",
+    "deeplinks": null,
+    "prop_type": "steals",
+    "line_value": "0.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": -175,
+     "under_odds": 135
+    },
+    "opened_at": "2024-11-20T21:30:00.000Z"
+   },
+   {
+    "id": 2250489792,
+    "game_id": 15907655,
+    "player_id": 17896076,
+    "vendor": "caesars",
+    "deeplinks": null,
+    "prop_type": "steals",
+    "line_value": "0.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": -184,
+     "under_odds": 133
+    },
+    "opened_at": "2024-11-20T21:30:00.000Z"
+   },
+   {
+    "id": 2250489845,
+    "game_id": 15907655,
+    "player_id": 1028027567,
+    "vendor": "betmgm",
+    "deeplinks": null,
+    "prop_type": "steals",
+    "line_value": "0.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": -160,
+     "under_odds": 120
+    },
+    "opened_at": "2024-11-20T21:30:00.000Z"
+   },
+   {
+    "id": 2250489791,
+    "game_id": 15907655,
+    "player_id": 1028027567,
+    "vendor": "caesars",
+    "deeplinks": null,
+    "prop_type": "steals",
+    "line_value": "0.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": -166,
+     "under_odds": 120
+    },
+    "opened_at": "2024-11-20T21:30:00.000Z"
+   },
+   {
+    "id": 2250489849,
+    "game_id": 15907655,
+    "player_id": 322,
+    "vendor": "betmgm",
+    "deeplinks": null,
+    "prop_type": "threes",
+    "line_value": "3.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": -135,
+     "under_odds": 100
+    },
+    "opened_at": "2024-11-20T21:30:00.000Z"
+   },
+   {
+    "id": 2250489795,
+    "game_id": 15907655,
+    "player_id": 322,
+    "vendor": "caesars",
+    "deeplinks": null,
+    "prop_type": "threes",
+    "line_value": "3.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": -129,
+     "under_odds": -106
+    },
+    "opened_at": "2024-11-20T21:30:00.000Z"
+   },
+   {
+    "id": 2250489743,
+    "game_id": 15907655,
+    "player_id": 322,
+    "vendor": "draftkings",
+    "deeplinks": null,
+    "prop_type": "threes",
+    "line_value": "3.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": -130,
+     "under_odds": 100
+    },
+    "opened_at": "2024-11-20T21:30:00.000Z"
+   },
+   {
+    "id": 2250489707,
+    "game_id": 15907655,
+    "player_id": 322,
+    "vendor": "fanduel",
+    "deeplinks": null,
+    "prop_type": "threes",
+    "line_value": "3.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": -128,
+     "under_odds": 100
+    },
+    "opened_at": "2024-11-20T21:30:00.000Z"
+   },
+   {
+    "id": 2250489850,
+    "game_id": 15907655,
+    "player_id": 666604,
+    "vendor": "betmgm",
+    "deeplinks": null,
+    "prop_type": "threes",
+    "line_value": "1.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": 135,
+     "under_odds": -185
+    },
+    "opened_at": "2024-11-20T21:30:00.000Z"
+   },
+   {
+    "id": 2250489796,
+    "game_id": 15907655,
+    "player_id": 666604,
+    "vendor": "caesars",
+    "deeplinks": null,
+    "prop_type": "threes",
+    "line_value": "1.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": 126,
+     "under_odds": -174
+    },
+    "opened_at": "2024-11-20T21:30:00.000Z"
+   },
+   {
+    "id": 2250489744,
+    "game_id": 15907655,
+    "player_id": 666604,
+    "vendor": "draftkings",
+    "deeplinks": null,
+    "prop_type": "threes",
+    "line_value": "1.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": 140,
+     "under_odds": -182
+    },
+    "opened_at": "2024-11-20T21:30:00.000Z"
+   },
+   {
+    "id": 2250489706,
+    "game_id": 15907655,
+    "player_id": 666604,
+    "vendor": "fanduel",
+    "deeplinks": null,
+    "prop_type": "threes",
+    "line_value": "1.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": 140,
+     "under_odds": -180
+    },
+    "opened_at": "2024-11-20T21:30:00.000Z"
+   },
+   {
+    "id": 2250489848,
+    "game_id": 15907655,
+    "player_id": 17896076,
+    "vendor": "betmgm",
+    "deeplinks": null,
+    "prop_type": "threes",
+    "line_value": "0.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": -105,
+     "under_odds": -130
+    },
+    "opened_at": "2024-11-20T21:30:00.000Z"
+   },
+   {
+    "id": 2250489797,
+    "game_id": 15907655,
+    "player_id": 17896076,
+    "vendor": "caesars",
+    "deeplinks": null,
+    "prop_type": "threes",
+    "line_value": "0.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": -106,
+     "under_odds": -129
+    },
+    "opened_at": "2024-11-20T21:30:00.000Z"
+   }
+  ],
+  "meta": {
+   "per_page": 171
+  }
+ }
+}

@@ -1,0 +1,81 @@
+{
+ "request": "https://api.balldontlie.io/nba/v2/odds/opening?dates%5B%5D=2025-11-20&per_page=100",
+ "status": 200,
+ "elapsed_s": 0.2,
+ "rate_headers": {
+  "x-ratelimit-limit": "5",
+  "x-ratelimit-remaining": "3",
+  "x-ratelimit-reset": "1794369779"
+ },
+ "response": {
+  "data": [
+   {
+    "id": 2021072,
+    "game_id": 18447041,
+    "vendor": "betmgm",
+    "deeplinks": null,
+    "spread_home_value": "-6.5",
+    "spread_home_odds": -110,
+    "spread_away_value": "6.5",
+    "spread_away_odds": -110,
+    "moneyline_home_odds": -250,
+    "moneyline_away_odds": 200,
+    "total_value": "218.5",
+    "total_over_odds": -110,
+    "total_under_odds": -110,
+    "opened_at": "2025-11-21T00:00:00.000Z"
+   },
+   {
+    "id": 2021374,
+    "game_id": 18447044,
+    "vendor": "betmgm",
+    "deeplinks": null,
+    "spread_home_value": "-1.5",
+    "spread_home_odds": -110,
+    "spread_away_value": "1.5",
+    "spread_away_odds": -110,
+    "moneyline_home_odds": -118,
+    "moneyline_away_odds": -102,
+    "total_value": "233.5",
+    "total_over_odds": -110,
+    "total_under_odds": -110,
+    "opened_at": "2025-11-21T01:00:00.000Z"
+   },
+   {
+    "id": 2021375,
+    "game_id": 18447043,
+    "vendor": "betmgm",
+    "deeplinks": null,
+    "spread_home_value": "1.5",
+    "spread_home_odds": -110,
+    "spread_away_value": "-1.5",
+    "spread_away_odds": -110,
+    "moneyline_home_odds": 105,
+    "moneyline_away_odds": -130,
+    "total_value": "223.5",
+    "total_over_odds": -110,
+    "total_under_odds": -110,
+    "opened_at": "2025-11-21T01:00:00.000Z"
+   },
+   {
+    "id": 2021376,
+    "game_id": 18447042,
+    "vendor": "betmgm",
+    "deeplinks": null,
+    "spread_home_value": "-3.5",
+    "spread_home_odds": -110,
+    "spread_away_value": "3.5",
+    "spread_away_odds": -110,
+    "moneyline_home_odds": -155,
+    "moneyline_away_odds": 125,
+    "total_value": "234.5",
+    "total_over_odds": -110,
+    "total_under_odds": -110,
+    "opened_at": "2025-11-21T01:00:00.000Z"
+   }
+  ],
+  "meta": {
+   "per_page": 100
+  }
+ }
+}
