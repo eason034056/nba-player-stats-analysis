@@ -1,0 +1,8107 @@
+{
+ "request": "https://api.balldontlie.io/nba/v2/odds/player_props/opening?game_id=18447041",
+ "status": 200,
+ "elapsed_s": 0.63,
+ "rate_headers": {
+  "x-ratelimit-limit": "5",
+  "x-ratelimit-remaining": "0",
+  "x-ratelimit-reset": "1794369903"
+ },
+ "response": {
+  "data": [
+   {
+    "id": 2256823636,
+    "game_id": 18447041,
+    "player_id": 283,
+    "vendor": "betmgm",
+    "deeplinks": null,
+    "prop_type": "assists",
+    "line_value": "0.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": 125,
+     "under_odds": -165
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823283,
+    "game_id": 18447041,
+    "player_id": 283,
+    "vendor": "fanatics",
+    "deeplinks": null,
+    "prop_type": "assists",
+    "line_value": "0.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": 125,
+     "under_odds": -175
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823629,
+    "game_id": 18447041,
+    "player_id": 33,
+    "vendor": "betmgm",
+    "deeplinks": null,
+    "prop_type": "assists",
+    "line_value": "0.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": -210,
+     "under_odds": 155
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823281,
+    "game_id": 18447041,
+    "player_id": 33,
+    "vendor": "fanatics",
+    "deeplinks": null,
+    "prop_type": "assists",
+    "line_value": "0.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": -225,
+     "under_odds": 140
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823637,
+    "game_id": 18447041,
+    "player_id": 192,
+    "vendor": "betmgm",
+    "deeplinks": null,
+    "prop_type": "assists",
+    "line_value": "7.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": -150,
+     "under_odds": 110
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823385,
+    "game_id": 18447041,
+    "player_id": 192,
+    "vendor": "betrivers",
+    "deeplinks": null,
+    "prop_type": "assists",
+    "line_value": "7.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": -134,
+     "under_odds": 102
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823588,
+    "game_id": 18447041,
+    "player_id": 192,
+    "vendor": "caesars",
+    "deeplinks": null,
+    "prop_type": "assists",
+    "line_value": "7.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": -141,
+     "under_odds": 106
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823475,
+    "game_id": 18447041,
+    "player_id": 192,
+    "vendor": "draftkings",
+    "deeplinks": null,
+    "prop_type": "assists",
+    "line_value": "7.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": -146,
+     "under_odds": 111
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823272,
+    "game_id": 18447041,
+    "player_id": 192,
+    "vendor": "fanatics",
+    "deeplinks": null,
+    "prop_type": "assists",
+    "line_value": "7.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": -145,
+     "under_odds": 110
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823197,
+    "game_id": 18447041,
+    "player_id": 192,
+    "vendor": "fanduel",
+    "deeplinks": null,
+    "prop_type": "assists",
+    "line_value": "7.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": -136,
+     "under_odds": 106
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823630,
+    "game_id": 18447041,
+    "player_id": 53,
+    "vendor": "betmgm",
+    "deeplinks": null,
+    "prop_type": "assists",
+    "line_value": "2.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": -145,
+     "under_odds": 105
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823383,
+    "game_id": 18447041,
+    "player_id": 53,
+    "vendor": "betrivers",
+    "deeplinks": null,
+    "prop_type": "assists",
+    "line_value": "2.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": -150,
+     "under_odds": 112
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823583,
+    "game_id": 18447041,
+    "player_id": 53,
+    "vendor": "caesars",
+    "deeplinks": null,
+    "prop_type": "assists",
+    "line_value": "2.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": -145,
+     "under_odds": 110
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823479,
+    "game_id": 18447041,
+    "player_id": 53,
+    "vendor": "draftkings",
+    "deeplinks": null,
+    "prop_type": "assists",
+    "line_value": "2.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": -149,
+     "under_odds": 113
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823279,
+    "game_id": 18447041,
+    "player_id": 53,
+    "vendor": "fanatics",
+    "deeplinks": null,
+    "prop_type": "assists",
+    "line_value": "2.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": -145,
+     "under_odds": 110
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823632,
+    "game_id": 18447041,
+    "player_id": 139,
+    "vendor": "betmgm",
+    "deeplinks": null,
+    "prop_type": "assists",
+    "line_value": "2.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": 130,
+     "under_odds": -175
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823581,
+    "game_id": 18447041,
+    "player_id": 139,
+    "vendor": "caesars",
+    "deeplinks": null,
+    "prop_type": "assists",
+    "line_value": "2.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": 130,
+     "under_odds": -176
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823481,
+    "game_id": 18447041,
+    "player_id": 139,
+    "vendor": "draftkings",
+    "deeplinks": null,
+    "prop_type": "assists",
+    "line_value": "2.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": 129,
+     "under_odds": -171
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823274,
+    "game_id": 18447041,
+    "player_id": 139,
+    "vendor": "fanatics",
+    "deeplinks": null,
+    "prop_type": "assists",
+    "line_value": "2.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": 125,
+     "under_odds": -175
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823625,
+    "game_id": 18447041,
+    "player_id": 493,
+    "vendor": "betmgm",
+    "deeplinks": null,
+    "prop_type": "assists",
+    "line_value": "1.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": -165,
+     "under_odds": 125
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823589,
+    "game_id": 18447041,
+    "player_id": 493,
+    "vendor": "caesars",
+    "deeplinks": null,
+    "prop_type": "assists",
+    "line_value": "1.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": -170,
+     "under_odds": 124
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823482,
+    "game_id": 18447041,
+    "player_id": 493,
+    "vendor": "draftkings",
+    "deeplinks": null,
+    "prop_type": "assists",
+    "line_value": "1.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": -194,
+     "under_odds": 146
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823276,
+    "game_id": 18447041,
+    "player_id": 493,
+    "vendor": "fanatics",
+    "deeplinks": null,
+    "prop_type": "assists",
+    "line_value": "1.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": -190,
+     "under_odds": 130
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823627,
+    "game_id": 18447041,
+    "player_id": 85,
+    "vendor": "betmgm",
+    "deeplinks": null,
+    "prop_type": "assists",
+    "line_value": "1.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": -155,
+     "under_odds": 115
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823628,
+    "game_id": 18447041,
+    "player_id": 666442,
+    "vendor": "betmgm",
+    "deeplinks": null,
+    "prop_type": "assists",
+    "line_value": "1.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": 135,
+     "under_odds": -185
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823282,
+    "game_id": 18447041,
+    "player_id": 666442,
+    "vendor": "fanatics",
+    "deeplinks": null,
+    "prop_type": "assists",
+    "line_value": "1.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": 130,
+     "under_odds": -190
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823633,
+    "game_id": 18447041,
+    "player_id": 3547287,
+    "vendor": "betmgm",
+    "deeplinks": null,
+    "prop_type": "assists",
+    "line_value": "4.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": -165,
+     "under_odds": 125
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823386,
+    "game_id": 18447041,
+    "player_id": 3547287,
+    "vendor": "betrivers",
+    "deeplinks": null,
+    "prop_type": "assists",
+    "line_value": "4.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": -152,
+     "under_odds": 114
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823586,
+    "game_id": 18447041,
+    "player_id": 3547287,
+    "vendor": "caesars",
+    "deeplinks": null,
+    "prop_type": "assists",
+    "line_value": "4.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": -162,
+     "under_odds": 122
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823476,
+    "game_id": 18447041,
+    "player_id": 3547287,
+    "vendor": "draftkings",
+    "deeplinks": null,
+    "prop_type": "assists",
+    "line_value": "5.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": 115,
+     "under_odds": -151
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823280,
+    "game_id": 18447041,
+    "player_id": 3547287,
+    "vendor": "fanatics",
+    "deeplinks": null,
+    "prop_type": "assists",
+    "line_value": "5.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": 120,
+     "under_odds": -165
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823196,
+    "game_id": 18447041,
+    "player_id": 3547287,
+    "vendor": "fanduel",
+    "deeplinks": null,
+    "prop_type": "assists",
+    "line_value": "4.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": -156,
+     "under_odds": 122
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823634,
+    "game_id": 18447041,
+    "player_id": 17896026,
+    "vendor": "betmgm",
+    "deeplinks": null,
+    "prop_type": "assists",
+    "line_value": "4.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": 105,
+     "under_odds": -140
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823387,
+    "game_id": 18447041,
+    "player_id": 17896026,
+    "vendor": "betrivers",
+    "deeplinks": null,
+    "prop_type": "assists",
+    "line_value": "4.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": -105,
+     "under_odds": -127
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823584,
+    "game_id": 18447041,
+    "player_id": 17896026,
+    "vendor": "caesars",
+    "deeplinks": null,
+    "prop_type": "assists",
+    "line_value": "4.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": 104,
+     "under_odds": -137
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823478,
+    "game_id": 18447041,
+    "player_id": 17896026,
+    "vendor": "draftkings",
+    "deeplinks": null,
+    "prop_type": "assists",
+    "line_value": "4.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": 103,
+     "under_odds": -136
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823273,
+    "game_id": 18447041,
+    "player_id": 17896026,
+    "vendor": "fanatics",
+    "deeplinks": null,
+    "prop_type": "assists",
+    "line_value": "4.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": 110,
+     "under_odds": -145
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823195,
+    "game_id": 18447041,
+    "player_id": 17896026,
+    "vendor": "fanduel",
+    "deeplinks": null,
+    "prop_type": "assists",
+    "line_value": "4.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": -104,
+     "under_odds": -122
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823635,
+    "game_id": 18447041,
+    "player_id": 17896073,
+    "vendor": "betmgm",
+    "deeplinks": null,
+    "prop_type": "assists",
+    "line_value": "4.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": -145,
+     "under_odds": 105
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823384,
+    "game_id": 18447041,
+    "player_id": 17896073,
+    "vendor": "betrivers",
+    "deeplinks": null,
+    "prop_type": "assists",
+    "line_value": "5.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": 112,
+     "under_odds": -148
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823585,
+    "game_id": 18447041,
+    "player_id": 17896073,
+    "vendor": "caesars",
+    "deeplinks": null,
+    "prop_type": "assists",
+    "line_value": "4.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": -138,
+     "under_odds": 110
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823477,
+    "game_id": 18447041,
+    "player_id": 17896073,
+    "vendor": "draftkings",
+    "deeplinks": null,
+    "prop_type": "assists",
+    "line_value": "4.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": -147,
+     "under_odds": 111
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823275,
+    "game_id": 18447041,
+    "player_id": 17896073,
+    "vendor": "fanatics",
+    "deeplinks": null,
+    "prop_type": "assists",
+    "line_value": "4.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": -150,
+     "under_odds": 115
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823198,
+    "game_id": 18447041,
+    "player_id": 17896073,
+    "vendor": "fanduel",
+    "deeplinks": null,
+    "prop_type": "assists",
+    "line_value": "4.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": -142,
+     "under_odds": 112
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823631,
+    "game_id": 18447041,
+    "player_id": 56677827,
+    "vendor": "betmgm",
+    "deeplinks": null,
+    "prop_type": "assists",
+    "line_value": "2.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": -118,
+     "under_odds": -110
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823382,
+    "game_id": 18447041,
+    "player_id": 56677827,
+    "vendor": "betrivers",
+    "deeplinks": null,
+    "prop_type": "assists",
+    "line_value": "2.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": -124,
+     "under_odds": -107
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823587,
+    "game_id": 18447041,
+    "player_id": 56677827,
+    "vendor": "caesars",
+    "deeplinks": null,
+    "prop_type": "assists",
+    "line_value": "2.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": -122,
+     "under_odds": -109
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823480,
+    "game_id": 18447041,
+    "player_id": 56677827,
+    "vendor": "draftkings",
+    "deeplinks": null,
+    "prop_type": "assists",
+    "line_value": "2.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": -123,
+     "under_odds": -107
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823277,
+    "game_id": 18447041,
+    "player_id": 56677827,
+    "vendor": "fanatics",
+    "deeplinks": null,
+    "prop_type": "assists",
+    "line_value": "2.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": -125,
+     "under_odds": -105
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823626,
+    "game_id": 18447041,
+    "player_id": 1028025497,
+    "vendor": "betmgm",
+    "deeplinks": null,
+    "prop_type": "assists",
+    "line_value": "1.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": -110,
+     "under_odds": -118
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823582,
+    "game_id": 18447041,
+    "player_id": 1028025497,
+    "vendor": "caesars",
+    "deeplinks": null,
+    "prop_type": "assists",
+    "line_value": "1.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": -127,
+     "under_odds": -105
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823483,
+    "game_id": 18447041,
+    "player_id": 1028025497,
+    "vendor": "draftkings",
+    "deeplinks": null,
+    "prop_type": "assists",
+    "line_value": "1.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": -126,
+     "under_odds": -104
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823278,
+    "game_id": 18447041,
+    "player_id": 1028025497,
+    "vendor": "fanatics",
+    "deeplinks": null,
+    "prop_type": "assists",
+    "line_value": "1.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": -130,
+     "under_odds": 100
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823641,
+    "game_id": 18447041,
+    "player_id": 192,
+    "vendor": "betmgm",
+    "deeplinks": null,
+    "prop_type": "blocks",
+    "line_value": "0.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": 125,
+     "under_odds": -175
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823642,
+    "game_id": 18447041,
+    "player_id": 139,
+    "vendor": "betmgm",
+    "deeplinks": null,
+    "prop_type": "blocks",
+    "line_value": "0.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": 170,
+     "under_odds": -235
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823638,
+    "game_id": 18447041,
+    "player_id": 493,
+    "vendor": "betmgm",
+    "deeplinks": null,
+    "prop_type": "blocks",
+    "line_value": "0.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": -225,
+     "under_odds": 160
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823484,
+    "game_id": 18447041,
+    "player_id": 493,
+    "vendor": "draftkings",
+    "deeplinks": null,
+    "prop_type": "blocks",
+    "line_value": "0.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": -219,
+     "under_odds": 163
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823199,
+    "game_id": 18447041,
+    "player_id": 493,
+    "vendor": "fanduel",
+    "deeplinks": null,
+    "prop_type": "blocks",
+    "line_value": "1.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": 174,
+     "under_odds": -240
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823645,
+    "game_id": 18447041,
+    "player_id": 101,
+    "vendor": "betmgm",
+    "deeplinks": null,
+    "prop_type": "blocks",
+    "line_value": "0.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": -115,
+     "under_odds": -118
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823640,
+    "game_id": 18447041,
+    "player_id": 85,
+    "vendor": "betmgm",
+    "deeplinks": null,
+    "prop_type": "blocks",
+    "line_value": "0.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": -145,
+     "under_odds": 100
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823485,
+    "game_id": 18447041,
+    "player_id": 85,
+    "vendor": "draftkings",
+    "deeplinks": null,
+    "prop_type": "blocks",
+    "line_value": "0.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": -127,
+     "under_odds": -104
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823643,
+    "game_id": 18447041,
+    "player_id": 3547287,
+    "vendor": "betmgm",
+    "deeplinks": null,
+    "prop_type": "blocks",
+    "line_value": "0.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": 230,
+     "under_odds": -350
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823644,
+    "game_id": 18447041,
+    "player_id": 17896026,
+    "vendor": "betmgm",
+    "deeplinks": null,
+    "prop_type": "blocks",
+    "line_value": "0.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": 165,
+     "under_odds": -235
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823486,
+    "game_id": 18447041,
+    "player_id": 17896026,
+    "vendor": "draftkings",
+    "deeplinks": null,
+    "prop_type": "blocks",
+    "line_value": "0.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": 152,
+     "under_odds": -204
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823646,
+    "game_id": 18447041,
+    "player_id": 17896073,
+    "vendor": "betmgm",
+    "deeplinks": null,
+    "prop_type": "blocks",
+    "line_value": "0.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": -110,
+     "under_odds": -130
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823639,
+    "game_id": 18447041,
+    "player_id": 1028025497,
+    "vendor": "betmgm",
+    "deeplinks": null,
+    "prop_type": "blocks",
+    "line_value": "0.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": 225,
+     "under_odds": -325
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823650,
+    "game_id": 18447041,
+    "player_id": 192,
+    "vendor": "betmgm",
+    "deeplinks": null,
+    "prop_type": "double_double",
+    "line_value": "0.5",
+    "market": {
+     "type": "milestone",
+     "odds": 150
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823488,
+    "game_id": 18447041,
+    "player_id": 192,
+    "vendor": "draftkings",
+    "deeplinks": null,
+    "prop_type": "double_double",
+    "line_value": "0.5",
+    "market": {
+     "type": "milestone",
+     "odds": 134
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823286,
+    "game_id": 18447041,
+    "player_id": 192,
+    "vendor": "fanatics",
+    "deeplinks": null,
+    "prop_type": "double_double",
+    "line_value": "0.5",
+    "market": {
+     "type": "milestone",
+     "odds": 135
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823201,
+    "game_id": 18447041,
+    "player_id": 192,
+    "vendor": "fanduel",
+    "deeplinks": null,
+    "prop_type": "double_double",
+    "line_value": "0.5",
+    "market": {
+     "type": "milestone",
+     "odds": 135
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823496,
+    "game_id": 18447041,
+    "player_id": 53,
+    "vendor": "draftkings",
+    "deeplinks": null,
+    "prop_type": "double_double",
+    "line_value": "0.5",
+    "market": {
+     "type": "milestone",
+     "odds": 3900
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823647,
+    "game_id": 18447041,
+    "player_id": 493,
+    "vendor": "betmgm",
+    "deeplinks": null,
+    "prop_type": "double_double",
+    "line_value": "0.5",
+    "market": {
+     "type": "milestone",
+     "odds": -175
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823487,
+    "game_id": 18447041,
+    "player_id": 493,
+    "vendor": "draftkings",
+    "deeplinks": null,
+    "prop_type": "double_double",
+    "line_value": "0.5",
+    "market": {
+     "type": "milestone",
+     "odds": -185
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823287,
+    "game_id": 18447041,
+    "player_id": 493,
+    "vendor": "fanatics",
+    "deeplinks": null,
+    "prop_type": "double_double",
+    "line_value": "0.5",
+    "market": {
+     "type": "milestone",
+     "odds": -170
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823200,
+    "game_id": 18447041,
+    "player_id": 493,
+    "vendor": "fanduel",
+    "deeplinks": null,
+    "prop_type": "double_double",
+    "line_value": "0.5",
+    "market": {
+     "type": "milestone",
+     "odds": -155
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823653,
+    "game_id": 18447041,
+    "player_id": 101,
+    "vendor": "betmgm",
+    "deeplinks": null,
+    "prop_type": "double_double",
+    "line_value": "0.5",
+    "market": {
+     "type": "milestone",
+     "odds": 850
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823492,
+    "game_id": 18447041,
+    "player_id": 101,
+    "vendor": "draftkings",
+    "deeplinks": null,
+    "prop_type": "double_double",
+    "line_value": "0.5",
+    "market": {
+     "type": "milestone",
+     "odds": 720
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823204,
+    "game_id": 18447041,
+    "player_id": 101,
+    "vendor": "fanduel",
+    "deeplinks": null,
+    "prop_type": "double_double",
+    "line_value": "0.5",
+    "market": {
+     "type": "milestone",
+     "odds": 700
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823649,
+    "game_id": 18447041,
+    "player_id": 85,
+    "vendor": "betmgm",
+    "deeplinks": null,
+    "prop_type": "double_double",
+    "line_value": "0.5",
+    "market": {
+     "type": "milestone",
+     "odds": 220
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823489,
+    "game_id": 18447041,
+    "player_id": 85,
+    "vendor": "draftkings",
+    "deeplinks": null,
+    "prop_type": "double_double",
+    "line_value": "0.5",
+    "market": {
+     "type": "milestone",
+     "odds": 229
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823202,
+    "game_id": 18447041,
+    "player_id": 85,
+    "vendor": "fanduel",
+    "deeplinks": null,
+    "prop_type": "double_double",
+    "line_value": "0.5",
+    "market": {
+     "type": "milestone",
+     "odds": 200
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823494,
+    "game_id": 18447041,
+    "player_id": 666442,
+    "vendor": "draftkings",
+    "deeplinks": null,
+    "prop_type": "double_double",
+    "line_value": "0.5",
+    "market": {
+     "type": "milestone",
+     "odds": 1840
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823289,
+    "game_id": 18447041,
+    "player_id": 666442,
+    "vendor": "fanatics",
+    "deeplinks": null,
+    "prop_type": "double_double",
+    "line_value": "0.5",
+    "market": {
+     "type": "milestone",
+     "odds": 2500
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823207,
+    "game_id": 18447041,
+    "player_id": 666442,
+    "vendor": "fanduel",
+    "deeplinks": null,
+    "prop_type": "double_double",
+    "line_value": "0.5",
+    "market": {
+     "type": "milestone",
+     "odds": 2200
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823651,
+    "game_id": 18447041,
+    "player_id": 3547287,
+    "vendor": "betmgm",
+    "deeplinks": null,
+    "prop_type": "double_double",
+    "line_value": "0.5",
+    "market": {
+     "type": "milestone",
+     "odds": 950
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823491,
+    "game_id": 18447041,
+    "player_id": 3547287,
+    "vendor": "draftkings",
+    "deeplinks": null,
+    "prop_type": "double_double",
+    "line_value": "0.5",
+    "market": {
+     "type": "milestone",
+     "odds": 680
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823288,
+    "game_id": 18447041,
+    "player_id": 3547287,
+    "vendor": "fanatics",
+    "deeplinks": null,
+    "prop_type": "double_double",
+    "line_value": "0.5",
+    "market": {
+     "type": "milestone",
+     "odds": 700
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823205,
+    "game_id": 18447041,
+    "player_id": 3547287,
+    "vendor": "fanduel",
+    "deeplinks": null,
+    "prop_type": "double_double",
+    "line_value": "0.5",
+    "market": {
+     "type": "milestone",
+     "odds": 800
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823652,
+    "game_id": 18447041,
+    "player_id": 17896026,
+    "vendor": "betmgm",
+    "deeplinks": null,
+    "prop_type": "double_double",
+    "line_value": "0.5",
+    "market": {
+     "type": "milestone",
+     "odds": 525
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823490,
+    "game_id": 18447041,
+    "player_id": 17896026,
+    "vendor": "draftkings",
+    "deeplinks": null,
+    "prop_type": "double_double",
+    "line_value": "0.5",
+    "market": {
+     "type": "milestone",
+     "odds": 457
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823284,
+    "game_id": 18447041,
+    "player_id": 17896026,
+    "vendor": "fanatics",
+    "deeplinks": null,
+    "prop_type": "double_double",
+    "line_value": "0.5",
+    "market": {
+     "type": "milestone",
+     "odds": 475
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823203,
+    "game_id": 18447041,
+    "player_id": 17896026,
+    "vendor": "fanduel",
+    "deeplinks": null,
+    "prop_type": "double_double",
+    "line_value": "0.5",
+    "market": {
+     "type": "milestone",
+     "odds": 490
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823654,
+    "game_id": 18447041,
+    "player_id": 17896073,
+    "vendor": "betmgm",
+    "deeplinks": null,
+    "prop_type": "double_double",
+    "line_value": "0.5",
+    "market": {
+     "type": "milestone",
+     "odds": 775
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823493,
+    "game_id": 18447041,
+    "player_id": 17896073,
+    "vendor": "draftkings",
+    "deeplinks": null,
+    "prop_type": "double_double",
+    "line_value": "0.5",
+    "market": {
+     "type": "milestone",
+     "odds": 830
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823285,
+    "game_id": 18447041,
+    "player_id": 17896073,
+    "vendor": "fanatics",
+    "deeplinks": null,
+    "prop_type": "double_double",
+    "line_value": "0.5",
+    "market": {
+     "type": "milestone",
+     "odds": 1100
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823206,
+    "game_id": 18447041,
+    "player_id": 17896073,
+    "vendor": "fanduel",
+    "deeplinks": null,
+    "prop_type": "double_double",
+    "line_value": "0.5",
+    "market": {
+     "type": "milestone",
+     "odds": 1000
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823497,
+    "game_id": 18447041,
+    "player_id": 56677827,
+    "vendor": "draftkings",
+    "deeplinks": null,
+    "prop_type": "double_double",
+    "line_value": "0.5",
+    "market": {
+     "type": "milestone",
+     "odds": 4200
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823648,
+    "game_id": 18447041,
+    "player_id": 1028025497,
+    "vendor": "betmgm",
+    "deeplinks": null,
+    "prop_type": "double_double",
+    "line_value": "0.5",
+    "market": {
+     "type": "milestone",
+     "odds": 1650
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823495,
+    "game_id": 18447041,
+    "player_id": 1028025497,
+    "vendor": "draftkings",
+    "deeplinks": null,
+    "prop_type": "double_double",
+    "line_value": "0.5",
+    "market": {
+     "type": "milestone",
+     "odds": 3200
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823290,
+    "game_id": 18447041,
+    "player_id": 1028025497,
+    "vendor": "fanatics",
+    "deeplinks": null,
+    "prop_type": "double_double",
+    "line_value": "0.5",
+    "market": {
+     "type": "milestone",
+     "odds": 2500
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823208,
+    "game_id": 18447041,
+    "player_id": 1028025497,
+    "vendor": "fanduel",
+    "deeplinks": null,
+    "prop_type": "double_double",
+    "line_value": "0.5",
+    "market": {
+     "type": "milestone",
+     "odds": 2700
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823665,
+    "game_id": 18447041,
+    "player_id": 283,
+    "vendor": "betmgm",
+    "deeplinks": null,
+    "prop_type": "points",
+    "line_value": "6.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": 100,
+     "under_odds": -135
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823304,
+    "game_id": 18447041,
+    "player_id": 283,
+    "vendor": "fanatics",
+    "deeplinks": null,
+    "prop_type": "points",
+    "line_value": "6.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": -110,
+     "under_odds": -120
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823658,
+    "game_id": 18447041,
+    "player_id": 33,
+    "vendor": "betmgm",
+    "deeplinks": null,
+    "prop_type": "points",
+    "line_value": "4.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": -115,
+     "under_odds": -115
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823596,
+    "game_id": 18447041,
+    "player_id": 33,
+    "vendor": "caesars",
+    "deeplinks": null,
+    "prop_type": "points",
+    "line_value": "5.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": 117,
+     "under_odds": -157
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823293,
+    "game_id": 18447041,
+    "player_id": 33,
+    "vendor": "fanatics",
+    "deeplinks": null,
+    "prop_type": "points",
+    "line_value": "5.5",
+    "market": {
+     "type": "milestone",
+     "odds": 100
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823667,
+    "game_id": 18447041,
+    "player_id": 192,
+    "vendor": "betmgm",
+    "deeplinks": null,
+    "prop_type": "points",
+    "line_value": "27.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": -125,
+     "under_odds": -105
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823422,
+    "game_id": 18447041,
+    "player_id": 192,
+    "vendor": "betrivers",
+    "deeplinks": null,
+    "prop_type": "points",
+    "line_value": "25.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": -143,
+     "under_odds": 107
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823390,
+    "game_id": 18447041,
+    "player_id": 192,
+    "vendor": "betrivers",
+    "deeplinks": null,
+    "prop_type": "points",
+    "line_value": "26.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": -121,
+     "under_odds": -110
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823407,
+    "game_id": 18447041,
+    "player_id": 192,
+    "vendor": "betrivers",
+    "deeplinks": null,
+    "prop_type": "points",
+    "line_value": "27.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": -103,
+     "under_odds": -130
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823421,
+    "game_id": 18447041,
+    "player_id": 192,
+    "vendor": "betrivers",
+    "deeplinks": null,
+    "prop_type": "points",
+    "line_value": "28.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": 114,
+     "under_odds": -155
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823591,
+    "game_id": 18447041,
+    "player_id": 192,
+    "vendor": "caesars",
+    "deeplinks": null,
+    "prop_type": "points",
+    "line_value": "26.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": -138,
+     "under_odds": 102
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823498,
+    "game_id": 18447041,
+    "player_id": 192,
+    "vendor": "draftkings",
+    "deeplinks": null,
+    "prop_type": "points",
+    "line_value": "26.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": -118,
+     "under_odds": -108
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823303,
+    "game_id": 18447041,
+    "player_id": 192,
+    "vendor": "fanatics",
+    "deeplinks": null,
+    "prop_type": "points",
+    "line_value": "27.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": -105,
+     "under_odds": -125
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823215,
+    "game_id": 18447041,
+    "player_id": 192,
+    "vendor": "fanduel",
+    "deeplinks": null,
+    "prop_type": "points",
+    "line_value": "26.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": -122,
+     "under_odds": -104
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823663,
+    "game_id": 18447041,
+    "player_id": 53,
+    "vendor": "betmgm",
+    "deeplinks": null,
+    "prop_type": "points",
+    "line_value": "11.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": -110,
+     "under_odds": -125
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823406,
+    "game_id": 18447041,
+    "player_id": 53,
+    "vendor": "betrivers",
+    "deeplinks": null,
+    "prop_type": "points",
+    "line_value": "10.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": -148,
+     "under_odds": 108
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823391,
+    "game_id": 18447041,
+    "player_id": 53,
+    "vendor": "betrivers",
+    "deeplinks": null,
+    "prop_type": "points",
+    "line_value": "11.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": -114,
+     "under_odds": -117
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823420,
+    "game_id": 18447041,
+    "player_id": 53,
+    "vendor": "betrivers",
+    "deeplinks": null,
+    "prop_type": "points",
+    "line_value": "12.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": 110,
+     "under_odds": -148
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823590,
+    "game_id": 18447041,
+    "player_id": 53,
+    "vendor": "caesars",
+    "deeplinks": null,
+    "prop_type": "points",
+    "line_value": "11.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": -115,
+     "under_odds": -115
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823507,
+    "game_id": 18447041,
+    "player_id": 53,
+    "vendor": "draftkings",
+    "deeplinks": null,
+    "prop_type": "points",
+    "line_value": "11.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": -107,
+     "under_odds": -119
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823294,
+    "game_id": 18447041,
+    "player_id": 53,
+    "vendor": "fanatics",
+    "deeplinks": null,
+    "prop_type": "points",
+    "line_value": "11.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": -110,
+     "under_odds": -120
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823219,
+    "game_id": 18447041,
+    "player_id": 53,
+    "vendor": "fanduel",
+    "deeplinks": null,
+    "prop_type": "points",
+    "line_value": "11.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": -115,
+     "under_odds": -111
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823660,
+    "game_id": 18447041,
+    "player_id": 139,
+    "vendor": "betmgm",
+    "deeplinks": null,
+    "prop_type": "points",
+    "line_value": "7.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": -115,
+     "under_odds": -115
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823403,
+    "game_id": 18447041,
+    "player_id": 139,
+    "vendor": "betrivers",
+    "deeplinks": null,
+    "prop_type": "points",
+    "line_value": "7.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": -124,
+     "under_odds": -108
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823409,
+    "game_id": 18447041,
+    "player_id": 139,
+    "vendor": "betrivers",
+    "deeplinks": null,
+    "prop_type": "points",
+    "line_value": "8.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": 107,
+     "under_odds": -143
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823602,
+    "game_id": 18447041,
+    "player_id": 139,
+    "vendor": "caesars",
+    "deeplinks": null,
+    "prop_type": "points",
+    "line_value": "7.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": -113,
+     "under_odds": -118
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823508,
+    "game_id": 18447041,
+    "player_id": 139,
+    "vendor": "draftkings",
+    "deeplinks": null,
+    "prop_type": "points",
+    "line_value": "7.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": -108,
+     "under_odds": -119
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823295,
+    "game_id": 18447041,
+    "player_id": 139,
+    "vendor": "fanatics",
+    "deeplinks": null,
+    "prop_type": "points",
+    "line_value": "7.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": -115,
+     "under_odds": -115
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823211,
+    "game_id": 18447041,
+    "player_id": 139,
+    "vendor": "fanduel",
+    "deeplinks": null,
+    "prop_type": "points",
+    "line_value": "7.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": -104,
+     "under_odds": -122
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823666,
+    "game_id": 18447041,
+    "player_id": 493,
+    "vendor": "betmgm",
+    "deeplinks": null,
+    "prop_type": "points",
+    "line_value": "17.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": -105,
+     "under_odds": -125
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823401,
+    "game_id": 18447041,
+    "player_id": 493,
+    "vendor": "betrivers",
+    "deeplinks": null,
+    "prop_type": "points",
+    "line_value": "15.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": -165,
+     "under_odds": 118
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823404,
+    "game_id": 18447041,
+    "player_id": 493,
+    "vendor": "betrivers",
+    "deeplinks": null,
+    "prop_type": "points",
+    "line_value": "16.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": -124,
+     "under_odds": -107
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823389,
+    "game_id": 18447041,
+    "player_id": 493,
+    "vendor": "betrivers",
+    "deeplinks": null,
+    "prop_type": "points",
+    "line_value": "17.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": -103,
+     "under_odds": -129
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823592,
+    "game_id": 18447041,
+    "player_id": 493,
+    "vendor": "caesars",
+    "deeplinks": null,
+    "prop_type": "points",
+    "line_value": "17.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": 100,
+     "under_odds": -137
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823501,
+    "game_id": 18447041,
+    "player_id": 493,
+    "vendor": "draftkings",
+    "deeplinks": null,
+    "prop_type": "points",
+    "line_value": "16.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": -121,
+     "under_odds": -105
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823291,
+    "game_id": 18447041,
+    "player_id": 493,
+    "vendor": "fanatics",
+    "deeplinks": null,
+    "prop_type": "points",
+    "line_value": "16.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": -130,
+     "under_odds": 100
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823210,
+    "game_id": 18447041,
+    "player_id": 493,
+    "vendor": "fanduel",
+    "deeplinks": null,
+    "prop_type": "points",
+    "line_value": "17.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": 100,
+     "under_odds": -128
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823661,
+    "game_id": 18447041,
+    "player_id": 101,
+    "vendor": "betmgm",
+    "deeplinks": null,
+    "prop_type": "points",
+    "line_value": "13.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": -125,
+     "under_odds": -105
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823411,
+    "game_id": 18447041,
+    "player_id": 101,
+    "vendor": "betrivers",
+    "deeplinks": null,
+    "prop_type": "points",
+    "line_value": "12.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": -159,
+     "under_odds": 116
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823423,
+    "game_id": 18447041,
+    "player_id": 101,
+    "vendor": "betrivers",
+    "deeplinks": null,
+    "prop_type": "points",
+    "line_value": "13.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": -127,
+     "under_odds": -105
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823405,
+    "game_id": 18447041,
+    "player_id": 101,
+    "vendor": "betrivers",
+    "deeplinks": null,
+    "prop_type": "points",
+    "line_value": "14.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": -104,
+     "under_odds": -129
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823417,
+    "game_id": 18447041,
+    "player_id": 101,
+    "vendor": "betrivers",
+    "deeplinks": null,
+    "prop_type": "points",
+    "line_value": "15.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": 116,
+     "under_odds": -159
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823598,
+    "game_id": 18447041,
+    "player_id": 101,
+    "vendor": "caesars",
+    "deeplinks": null,
+    "prop_type": "points",
+    "line_value": "14.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": -108,
+     "under_odds": -124
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823503,
+    "game_id": 18447041,
+    "player_id": 101,
+    "vendor": "draftkings",
+    "deeplinks": null,
+    "prop_type": "points",
+    "line_value": "14.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": -101,
+     "under_odds": -126
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823297,
+    "game_id": 18447041,
+    "player_id": 101,
+    "vendor": "fanatics",
+    "deeplinks": null,
+    "prop_type": "points",
+    "line_value": "13.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": -130,
+     "under_odds": 100
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823209,
+    "game_id": 18447041,
+    "player_id": 101,
+    "vendor": "fanduel",
+    "deeplinks": null,
+    "prop_type": "points",
+    "line_value": "14.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": 100,
+     "under_odds": -128
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823656,
+    "game_id": 18447041,
+    "player_id": 85,
+    "vendor": "betmgm",
+    "deeplinks": null,
+    "prop_type": "points",
+    "line_value": "12.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": -125,
+     "under_odds": -105
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823424,
+    "game_id": 18447041,
+    "player_id": 85,
+    "vendor": "betrivers",
+    "deeplinks": null,
+    "prop_type": "points",
+    "line_value": "12.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": -130,
+     "under_odds": -103
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823395,
+    "game_id": 18447041,
+    "player_id": 85,
+    "vendor": "betrivers",
+    "deeplinks": null,
+    "prop_type": "points",
+    "line_value": "13.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": -104,
+     "under_odds": -129
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823396,
+    "game_id": 18447041,
+    "player_id": 85,
+    "vendor": "betrivers",
+    "deeplinks": null,
+    "prop_type": "points",
+    "line_value": "14.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": 120,
+     "under_odds": -167
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823594,
+    "game_id": 18447041,
+    "player_id": 85,
+    "vendor": "caesars",
+    "deeplinks": null,
+    "prop_type": "points",
+    "line_value": "12.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": -129,
+     "under_odds": -105
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823504,
+    "game_id": 18447041,
+    "player_id": 85,
+    "vendor": "draftkings",
+    "deeplinks": null,
+    "prop_type": "points",
+    "line_value": "12.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": -119,
+     "under_odds": -108
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823298,
+    "game_id": 18447041,
+    "player_id": 85,
+    "vendor": "fanatics",
+    "deeplinks": null,
+    "prop_type": "points",
+    "line_value": "13.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": 100,
+     "under_odds": -130
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823216,
+    "game_id": 18447041,
+    "player_id": 85,
+    "vendor": "fanduel",
+    "deeplinks": null,
+    "prop_type": "points",
+    "line_value": "13.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": 100,
+     "under_odds": -128
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823657,
+    "game_id": 18447041,
+    "player_id": 666442,
+    "vendor": "betmgm",
+    "deeplinks": null,
+    "prop_type": "points",
+    "line_value": "4.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": -125,
+     "under_odds": -105
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823593,
+    "game_id": 18447041,
+    "player_id": 666442,
+    "vendor": "caesars",
+    "deeplinks": null,
+    "prop_type": "points",
+    "line_value": "4.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": -130,
+     "under_odds": -103
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823509,
+    "game_id": 18447041,
+    "player_id": 666442,
+    "vendor": "draftkings",
+    "deeplinks": null,
+    "prop_type": "points",
+    "line_value": "4.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": -125,
+     "under_odds": -102
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823299,
+    "game_id": 18447041,
+    "player_id": 666442,
+    "vendor": "fanatics",
+    "deeplinks": null,
+    "prop_type": "points",
+    "line_value": "4.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": -125,
+     "under_odds": -105
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823668,
+    "game_id": 18447041,
+    "player_id": 3547287,
+    "vendor": "betmgm",
+    "deeplinks": null,
+    "prop_type": "points",
+    "line_value": "21.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": -105,
+     "under_odds": -125
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823412,
+    "game_id": 18447041,
+    "player_id": 3547287,
+    "vendor": "betrivers",
+    "deeplinks": null,
+    "prop_type": "points",
+    "line_value": "19.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": -139,
+     "under_odds": 105
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823425,
+    "game_id": 18447041,
+    "player_id": 3547287,
+    "vendor": "betrivers",
+    "deeplinks": null,
+    "prop_type": "points",
+    "line_value": "20.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": -117,
+     "under_odds": -114
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823410,
+    "game_id": 18447041,
+    "player_id": 3547287,
+    "vendor": "betrivers",
+    "deeplinks": null,
+    "prop_type": "points",
+    "line_value": "21.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": 102,
+     "under_odds": -136
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823418,
+    "game_id": 18447041,
+    "player_id": 3547287,
+    "vendor": "betrivers",
+    "deeplinks": null,
+    "prop_type": "points",
+    "line_value": "22.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": 120,
+     "under_odds": -167
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823595,
+    "game_id": 18447041,
+    "player_id": 3547287,
+    "vendor": "caesars",
+    "deeplinks": null,
+    "prop_type": "points",
+    "line_value": "20.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": -140,
+     "under_odds": 105
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823500,
+    "game_id": 18447041,
+    "player_id": 3547287,
+    "vendor": "draftkings",
+    "deeplinks": null,
+    "prop_type": "points",
+    "line_value": "20.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": -122,
+     "under_odds": -104
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823300,
+    "game_id": 18447041,
+    "player_id": 3547287,
+    "vendor": "fanatics",
+    "deeplinks": null,
+    "prop_type": "points",
+    "line_value": "20.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": -125,
+     "under_odds": -105
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823214,
+    "game_id": 18447041,
+    "player_id": 3547287,
+    "vendor": "fanduel",
+    "deeplinks": null,
+    "prop_type": "points",
+    "line_value": "20.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": -120,
+     "under_odds": -106
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823664,
+    "game_id": 18447041,
+    "player_id": 17896026,
+    "vendor": "betmgm",
+    "deeplinks": null,
+    "prop_type": "points",
+    "line_value": "23.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": -110,
+     "under_odds": -120
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823426,
+    "game_id": 18447041,
+    "player_id": 17896026,
+    "vendor": "betrivers",
+    "deeplinks": null,
+    "prop_type": "points",
+    "line_value": "22.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": -143,
+     "under_odds": 107
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823397,
+    "game_id": 18447041,
+    "player_id": 17896026,
+    "vendor": "betrivers",
+    "deeplinks": null,
+    "prop_type": "points",
+    "line_value": "23.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": -118,
+     "under_odds": -113
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823413,
+    "game_id": 18447041,
+    "player_id": 17896026,
+    "vendor": "betrivers",
+    "deeplinks": null,
+    "prop_type": "points",
+    "line_value": "24.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": 102,
+     "under_odds": -136
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823402,
+    "game_id": 18447041,
+    "player_id": 17896026,
+    "vendor": "betrivers",
+    "deeplinks": null,
+    "prop_type": "points",
+    "line_value": "25.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": 118,
+     "under_odds": -165
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823600,
+    "game_id": 18447041,
+    "player_id": 17896026,
+    "vendor": "caesars",
+    "deeplinks": null,
+    "prop_type": "points",
+    "line_value": "23.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": -115,
+     "under_odds": -115
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823499,
+    "game_id": 18447041,
+    "player_id": 17896026,
+    "vendor": "draftkings",
+    "deeplinks": null,
+    "prop_type": "points",
+    "line_value": "22.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": -124,
+     "under_odds": -103
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823296,
+    "game_id": 18447041,
+    "player_id": 17896026,
+    "vendor": "fanatics",
+    "deeplinks": null,
+    "prop_type": "points",
+    "line_value": "23.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": -105,
+     "under_odds": -125
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823218,
+    "game_id": 18447041,
+    "player_id": 17896026,
+    "vendor": "fanduel",
+    "deeplinks": null,
+    "prop_type": "points",
+    "line_value": "23.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": -106,
+     "under_odds": -120
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823662,
+    "game_id": 18447041,
+    "player_id": 17896073,
+    "vendor": "betmgm",
+    "deeplinks": null,
+    "prop_type": "points",
+    "line_value": "13.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": -130,
+     "under_odds": -105
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823399,
+    "game_id": 18447041,
+    "player_id": 17896073,
+    "vendor": "betrivers",
+    "deeplinks": null,
+    "prop_type": "points",
+    "line_value": "12.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": -167,
+     "under_odds": 120
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823394,
+    "game_id": 18447041,
+    "player_id": 17896073,
+    "vendor": "betrivers",
+    "deeplinks": null,
+    "prop_type": "points",
+    "line_value": "13.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": -129,
+     "under_odds": -104
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823408,
+    "game_id": 18447041,
+    "player_id": 17896073,
+    "vendor": "betrivers",
+    "deeplinks": null,
+    "prop_type": "points",
+    "line_value": "14.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": -104,
+     "under_odds": -129
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823415,
+    "game_id": 18447041,
+    "player_id": 17896073,
+    "vendor": "betrivers",
+    "deeplinks": null,
+    "prop_type": "points",
+    "line_value": "15.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": 118,
+     "under_odds": -165
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823597,
+    "game_id": 18447041,
+    "player_id": 17896073,
+    "vendor": "caesars",
+    "deeplinks": null,
+    "prop_type": "points",
+    "line_value": "13.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": -132,
+     "under_odds": 100
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823502,
+    "game_id": 18447041,
+    "player_id": 17896073,
+    "vendor": "draftkings",
+    "deeplinks": null,
+    "prop_type": "points",
+    "line_value": "14.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": -104,
+     "under_odds": -122
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823292,
+    "game_id": 18447041,
+    "player_id": 17896073,
+    "vendor": "fanatics",
+    "deeplinks": null,
+    "prop_type": "points",
+    "line_value": "14.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": -105,
+     "under_odds": -125
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823217,
+    "game_id": 18447041,
+    "player_id": 17896073,
+    "vendor": "fanduel",
+    "deeplinks": null,
+    "prop_type": "points",
+    "line_value": "14.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": 102,
+     "under_odds": -130
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823659,
+    "game_id": 18447041,
+    "player_id": 56677827,
+    "vendor": "betmgm",
+    "deeplinks": null,
+    "prop_type": "points",
+    "line_value": "11.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": -120,
+     "under_odds": -110
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823392,
+    "game_id": 18447041,
+    "player_id": 56677827,
+    "vendor": "betrivers",
+    "deeplinks": null,
+    "prop_type": "points",
+    "line_value": "10.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": -157,
+     "under_odds": 114
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823400,
+    "game_id": 18447041,
+    "player_id": 56677827,
+    "vendor": "betrivers",
+    "deeplinks": null,
+    "prop_type": "points",
+    "line_value": "11.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": -124,
+     "under_odds": -107
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823393,
+    "game_id": 18447041,
+    "player_id": 56677827,
+    "vendor": "betrivers",
+    "deeplinks": null,
+    "prop_type": "points",
+    "line_value": "12.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": -103,
+     "under_odds": -130
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823414,
+    "game_id": 18447041,
+    "player_id": 56677827,
+    "vendor": "betrivers",
+    "deeplinks": null,
+    "prop_type": "points",
+    "line_value": "13.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": 116,
+     "under_odds": -159
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823601,
+    "game_id": 18447041,
+    "player_id": 56677827,
+    "vendor": "caesars",
+    "deeplinks": null,
+    "prop_type": "points",
+    "line_value": "11.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": -121,
+     "under_odds": -110
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823506,
+    "game_id": 18447041,
+    "player_id": 56677827,
+    "vendor": "draftkings",
+    "deeplinks": null,
+    "prop_type": "points",
+    "line_value": "11.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": -119,
+     "under_odds": -107
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823301,
+    "game_id": 18447041,
+    "player_id": 56677827,
+    "vendor": "fanatics",
+    "deeplinks": null,
+    "prop_type": "points",
+    "line_value": "11.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": -115,
+     "under_odds": -115
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823213,
+    "game_id": 18447041,
+    "player_id": 56677827,
+    "vendor": "fanduel",
+    "deeplinks": null,
+    "prop_type": "points",
+    "line_value": "11.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": -120,
+     "under_odds": -106
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823655,
+    "game_id": 18447041,
+    "player_id": 1028025497,
+    "vendor": "betmgm",
+    "deeplinks": null,
+    "prop_type": "points",
+    "line_value": "11.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": -130,
+     "under_odds": -105
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823416,
+    "game_id": 18447041,
+    "player_id": 1028025497,
+    "vendor": "betrivers",
+    "deeplinks": null,
+    "prop_type": "points",
+    "line_value": "10.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": -159,
+     "under_odds": 116
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823388,
+    "game_id": 18447041,
+    "player_id": 1028025497,
+    "vendor": "betrivers",
+    "deeplinks": null,
+    "prop_type": "points",
+    "line_value": "11.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": -130,
+     "under_odds": -103
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823398,
+    "game_id": 18447041,
+    "player_id": 1028025497,
+    "vendor": "betrivers",
+    "deeplinks": null,
+    "prop_type": "points",
+    "line_value": "12.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": -109,
+     "under_odds": -122
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823419,
+    "game_id": 18447041,
+    "player_id": 1028025497,
+    "vendor": "betrivers",
+    "deeplinks": null,
+    "prop_type": "points",
+    "line_value": "13.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": 108,
+     "under_odds": -148
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823599,
+    "game_id": 18447041,
+    "player_id": 1028025497,
+    "vendor": "caesars",
+    "deeplinks": null,
+    "prop_type": "points",
+    "line_value": "11.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": -132,
+     "under_odds": 100
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823505,
+    "game_id": 18447041,
+    "player_id": 1028025497,
+    "vendor": "draftkings",
+    "deeplinks": null,
+    "prop_type": "points",
+    "line_value": "11.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": -128,
+     "under_odds": 100
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823302,
+    "game_id": 18447041,
+    "player_id": 1028025497,
+    "vendor": "fanatics",
+    "deeplinks": null,
+    "prop_type": "points",
+    "line_value": "12.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": -105,
+     "under_odds": -125
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823212,
+    "game_id": 18447041,
+    "player_id": 1028025497,
+    "vendor": "fanduel",
+    "deeplinks": null,
+    "prop_type": "points",
+    "line_value": "12.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": -102,
+     "under_odds": -125
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823316,
+    "game_id": 18447041,
+    "player_id": 283,
+    "vendor": "fanatics",
+    "deeplinks": null,
+    "prop_type": "points_assists",
+    "line_value": "7.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": 110,
+     "under_odds": -145
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823312,
+    "game_id": 18447041,
+    "player_id": 33,
+    "vendor": "fanatics",
+    "deeplinks": null,
+    "prop_type": "points_assists",
+    "line_value": "6.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": 105,
+     "under_odds": -140
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823676,
+    "game_id": 18447041,
+    "player_id": 192,
+    "vendor": "betmgm",
+    "deeplinks": null,
+    "prop_type": "points_assists",
+    "line_value": "36.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": -110,
+     "under_odds": -125
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823510,
+    "game_id": 18447041,
+    "player_id": 192,
+    "vendor": "draftkings",
+    "deeplinks": null,
+    "prop_type": "points_assists",
+    "line_value": "34.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": -123,
+     "under_odds": -107
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823308,
+    "game_id": 18447041,
+    "player_id": 192,
+    "vendor": "fanatics",
+    "deeplinks": null,
+    "prop_type": "points_assists",
+    "line_value": "35.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": -110,
+     "under_odds": -120
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823220,
+    "game_id": 18447041,
+    "player_id": 192,
+    "vendor": "fanduel",
+    "deeplinks": null,
+    "prop_type": "points_assists",
+    "line_value": "35.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": -110,
+     "under_odds": -120
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823516,
+    "game_id": 18447041,
+    "player_id": 53,
+    "vendor": "draftkings",
+    "deeplinks": null,
+    "prop_type": "points_assists",
+    "line_value": "14.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": -111,
+     "under_odds": -118
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823309,
+    "game_id": 18447041,
+    "player_id": 53,
+    "vendor": "fanatics",
+    "deeplinks": null,
+    "prop_type": "points_assists",
+    "line_value": "14.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": -110,
+     "under_odds": -120
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823671,
+    "game_id": 18447041,
+    "player_id": 139,
+    "vendor": "betmgm",
+    "deeplinks": null,
+    "prop_type": "points_assists",
+    "line_value": "9.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": -120,
+     "under_odds": -110
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823518,
+    "game_id": 18447041,
+    "player_id": 139,
+    "vendor": "draftkings",
+    "deeplinks": null,
+    "prop_type": "points_assists",
+    "line_value": "9.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": -118,
+     "under_odds": -111
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823310,
+    "game_id": 18447041,
+    "player_id": 139,
+    "vendor": "fanatics",
+    "deeplinks": null,
+    "prop_type": "points_assists",
+    "line_value": "10.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": 110,
+     "under_odds": -145
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823675,
+    "game_id": 18447041,
+    "player_id": 493,
+    "vendor": "betmgm",
+    "deeplinks": null,
+    "prop_type": "points_assists",
+    "line_value": "19.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": -105,
+     "under_odds": -125
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823514,
+    "game_id": 18447041,
+    "player_id": 493,
+    "vendor": "draftkings",
+    "deeplinks": null,
+    "prop_type": "points_assists",
+    "line_value": "18.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": -128,
+     "under_odds": -103
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823314,
+    "game_id": 18447041,
+    "player_id": 493,
+    "vendor": "fanatics",
+    "deeplinks": null,
+    "prop_type": "points_assists",
+    "line_value": "19.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": -105,
+     "under_odds": -125
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823672,
+    "game_id": 18447041,
+    "player_id": 101,
+    "vendor": "betmgm",
+    "deeplinks": null,
+    "prop_type": "points_assists",
+    "line_value": "14.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": -110,
+     "under_odds": -120
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823670,
+    "game_id": 18447041,
+    "player_id": 85,
+    "vendor": "betmgm",
+    "deeplinks": null,
+    "prop_type": "points_assists",
+    "line_value": "14.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": -110,
+     "under_odds": -120
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823313,
+    "game_id": 18447041,
+    "player_id": 666442,
+    "vendor": "fanatics",
+    "deeplinks": null,
+    "prop_type": "points_assists",
+    "line_value": "6.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": 105,
+     "under_odds": -140
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823677,
+    "game_id": 18447041,
+    "player_id": 3547287,
+    "vendor": "betmgm",
+    "deeplinks": null,
+    "prop_type": "points_assists",
+    "line_value": "26.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": -105,
+     "under_odds": -125
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823512,
+    "game_id": 18447041,
+    "player_id": 3547287,
+    "vendor": "draftkings",
+    "deeplinks": null,
+    "prop_type": "points_assists",
+    "line_value": "26.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": -107,
+     "under_odds": -123
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823311,
+    "game_id": 18447041,
+    "player_id": 3547287,
+    "vendor": "fanatics",
+    "deeplinks": null,
+    "prop_type": "points_assists",
+    "line_value": "26.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": -105,
+     "under_odds": -125
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823221,
+    "game_id": 18447041,
+    "player_id": 3547287,
+    "vendor": "fanduel",
+    "deeplinks": null,
+    "prop_type": "points_assists",
+    "line_value": "25.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": -128,
+     "under_odds": -104
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823674,
+    "game_id": 18447041,
+    "player_id": 17896026,
+    "vendor": "betmgm",
+    "deeplinks": null,
+    "prop_type": "points_assists",
+    "line_value": "27.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": -125,
+     "under_odds": -105
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823511,
+    "game_id": 18447041,
+    "player_id": 17896026,
+    "vendor": "draftkings",
+    "deeplinks": null,
+    "prop_type": "points_assists",
+    "line_value": "27.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": -114,
+     "under_odds": -115
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823306,
+    "game_id": 18447041,
+    "player_id": 17896026,
+    "vendor": "fanatics",
+    "deeplinks": null,
+    "prop_type": "points_assists",
+    "line_value": "27.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": -115,
+     "under_odds": -115
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823223,
+    "game_id": 18447041,
+    "player_id": 17896026,
+    "vendor": "fanduel",
+    "deeplinks": null,
+    "prop_type": "points_assists",
+    "line_value": "27.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": -122,
+     "under_odds": -108
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823673,
+    "game_id": 18447041,
+    "player_id": 17896073,
+    "vendor": "betmgm",
+    "deeplinks": null,
+    "prop_type": "points_assists",
+    "line_value": "19.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": -125,
+     "under_odds": -105
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823513,
+    "game_id": 18447041,
+    "player_id": 17896073,
+    "vendor": "draftkings",
+    "deeplinks": null,
+    "prop_type": "points_assists",
+    "line_value": "19.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": -110,
+     "under_odds": -120
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823305,
+    "game_id": 18447041,
+    "player_id": 17896073,
+    "vendor": "fanatics",
+    "deeplinks": null,
+    "prop_type": "points_assists",
+    "line_value": "19.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": -105,
+     "under_odds": -125
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823222,
+    "game_id": 18447041,
+    "player_id": 17896073,
+    "vendor": "fanduel",
+    "deeplinks": null,
+    "prop_type": "points_assists",
+    "line_value": "19.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": -102,
+     "under_odds": -128
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823515,
+    "game_id": 18447041,
+    "player_id": 56677827,
+    "vendor": "draftkings",
+    "deeplinks": null,
+    "prop_type": "points_assists",
+    "line_value": "14.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": -114,
+     "under_odds": -115
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823315,
+    "game_id": 18447041,
+    "player_id": 56677827,
+    "vendor": "fanatics",
+    "deeplinks": null,
+    "prop_type": "points_assists",
+    "line_value": "14.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": -105,
+     "under_odds": -125
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823669,
+    "game_id": 18447041,
+    "player_id": 1028025497,
+    "vendor": "betmgm",
+    "deeplinks": null,
+    "prop_type": "points_assists",
+    "line_value": "13.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": -118,
+     "under_odds": -110
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823517,
+    "game_id": 18447041,
+    "player_id": 1028025497,
+    "vendor": "draftkings",
+    "deeplinks": null,
+    "prop_type": "points_assists",
+    "line_value": "13.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": -124,
+     "under_odds": -106
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823307,
+    "game_id": 18447041,
+    "player_id": 1028025497,
+    "vendor": "fanatics",
+    "deeplinks": null,
+    "prop_type": "points_assists",
+    "line_value": "13.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": -125,
+     "under_odds": -105
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823329,
+    "game_id": 18447041,
+    "player_id": 283,
+    "vendor": "fanatics",
+    "deeplinks": null,
+    "prop_type": "points_rebounds",
+    "line_value": "9.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": 105,
+     "under_odds": -140
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823531,
+    "game_id": 18447041,
+    "player_id": 33,
+    "vendor": "draftkings",
+    "deeplinks": null,
+    "prop_type": "points_rebounds",
+    "line_value": "8.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": -103,
+     "under_odds": -127
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823320,
+    "game_id": 18447041,
+    "player_id": 33,
+    "vendor": "fanatics",
+    "deeplinks": null,
+    "prop_type": "points_rebounds",
+    "line_value": "8.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": -110,
+     "under_odds": -120
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823685,
+    "game_id": 18447041,
+    "player_id": 192,
+    "vendor": "betmgm",
+    "deeplinks": null,
+    "prop_type": "points_rebounds",
+    "line_value": "34.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": -110,
+     "under_odds": -120
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823519,
+    "game_id": 18447041,
+    "player_id": 192,
+    "vendor": "draftkings",
+    "deeplinks": null,
+    "prop_type": "points_rebounds",
+    "line_value": "33.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": -110,
+     "under_odds": -120
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823330,
+    "game_id": 18447041,
+    "player_id": 192,
+    "vendor": "fanatics",
+    "deeplinks": null,
+    "prop_type": "points_rebounds",
+    "line_value": "33.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": -115,
+     "under_odds": -115
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823231,
+    "game_id": 18447041,
+    "player_id": 192,
+    "vendor": "fanduel",
+    "deeplinks": null,
+    "prop_type": "points_rebounds",
+    "line_value": "33.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": -106,
+     "under_odds": -120
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823528,
+    "game_id": 18447041,
+    "player_id": 53,
+    "vendor": "draftkings",
+    "deeplinks": null,
+    "prop_type": "points_rebounds",
+    "line_value": "14.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": -128,
+     "under_odds": -103
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823318,
+    "game_id": 18447041,
+    "player_id": 53,
+    "vendor": "fanatics",
+    "deeplinks": null,
+    "prop_type": "points_rebounds",
+    "line_value": "14.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": -125,
+     "under_odds": -105
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823228,
+    "game_id": 18447041,
+    "player_id": 53,
+    "vendor": "fanduel",
+    "deeplinks": null,
+    "prop_type": "points_rebounds",
+    "line_value": "15.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": -106,
+     "under_odds": -120
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823681,
+    "game_id": 18447041,
+    "player_id": 139,
+    "vendor": "betmgm",
+    "deeplinks": null,
+    "prop_type": "points_rebounds",
+    "line_value": "9.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": -120,
+     "under_odds": -110
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823529,
+    "game_id": 18447041,
+    "player_id": 139,
+    "vendor": "draftkings",
+    "deeplinks": null,
+    "prop_type": "points_rebounds",
+    "line_value": "10.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": -107,
+     "under_odds": -123
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823326,
+    "game_id": 18447041,
+    "player_id": 139,
+    "vendor": "fanatics",
+    "deeplinks": null,
+    "prop_type": "points_rebounds",
+    "line_value": "10.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": -110,
+     "under_odds": -120
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823678,
+    "game_id": 18447041,
+    "player_id": 493,
+    "vendor": "betmgm",
+    "deeplinks": null,
+    "prop_type": "points_rebounds",
+    "line_value": "27.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": -130,
+     "under_odds": -105
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823521,
+    "game_id": 18447041,
+    "player_id": 493,
+    "vendor": "draftkings",
+    "deeplinks": null,
+    "prop_type": "points_rebounds",
+    "line_value": "28.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": -105,
+     "under_odds": -126
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823327,
+    "game_id": 18447041,
+    "player_id": 493,
+    "vendor": "fanatics",
+    "deeplinks": null,
+    "prop_type": "points_rebounds",
+    "line_value": "28.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": -105,
+     "under_odds": -125
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823224,
+    "game_id": 18447041,
+    "player_id": 493,
+    "vendor": "fanduel",
+    "deeplinks": null,
+    "prop_type": "points_rebounds",
+    "line_value": "27.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": -122,
+     "under_odds": -104
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823682,
+    "game_id": 18447041,
+    "player_id": 101,
+    "vendor": "betmgm",
+    "deeplinks": null,
+    "prop_type": "points_rebounds",
+    "line_value": "19.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": -110,
+     "under_odds": -118
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823524,
+    "game_id": 18447041,
+    "player_id": 101,
+    "vendor": "draftkings",
+    "deeplinks": null,
+    "prop_type": "points_rebounds",
+    "line_value": "20.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": -104,
+     "under_odds": -127
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823323,
+    "game_id": 18447041,
+    "player_id": 101,
+    "vendor": "fanatics",
+    "deeplinks": null,
+    "prop_type": "points_rebounds",
+    "line_value": "20.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": 100,
+     "under_odds": -130
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823230,
+    "game_id": 18447041,
+    "player_id": 101,
+    "vendor": "fanduel",
+    "deeplinks": null,
+    "prop_type": "points_rebounds",
+    "line_value": "20.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": -102,
+     "under_odds": -125
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823680,
+    "game_id": 18447041,
+    "player_id": 85,
+    "vendor": "betmgm",
+    "deeplinks": null,
+    "prop_type": "points_rebounds",
+    "line_value": "20.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": -120,
+     "under_odds": -110
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823523,
+    "game_id": 18447041,
+    "player_id": 85,
+    "vendor": "draftkings",
+    "deeplinks": null,
+    "prop_type": "points_rebounds",
+    "line_value": "21.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": -107,
+     "under_odds": -123
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823324,
+    "game_id": 18447041,
+    "player_id": 85,
+    "vendor": "fanatics",
+    "deeplinks": null,
+    "prop_type": "points_rebounds",
+    "line_value": "21.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": -115,
+     "under_odds": -115
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823229,
+    "game_id": 18447041,
+    "player_id": 85,
+    "vendor": "fanduel",
+    "deeplinks": null,
+    "prop_type": "points_rebounds",
+    "line_value": "21.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": -118,
+     "under_odds": -108
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823530,
+    "game_id": 18447041,
+    "player_id": 666442,
+    "vendor": "draftkings",
+    "deeplinks": null,
+    "prop_type": "points_rebounds",
+    "line_value": "9.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": -134,
+     "under_odds": 102
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823321,
+    "game_id": 18447041,
+    "player_id": 666442,
+    "vendor": "fanatics",
+    "deeplinks": null,
+    "prop_type": "points_rebounds",
+    "line_value": "9.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": -125,
+     "under_odds": -105
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823686,
+    "game_id": 18447041,
+    "player_id": 3547287,
+    "vendor": "betmgm",
+    "deeplinks": null,
+    "prop_type": "points_rebounds",
+    "line_value": "26.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": -105,
+     "under_odds": -125
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823522,
+    "game_id": 18447041,
+    "player_id": 3547287,
+    "vendor": "draftkings",
+    "deeplinks": null,
+    "prop_type": "points_rebounds",
+    "line_value": "25.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": -125,
+     "under_odds": -105
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823322,
+    "game_id": 18447041,
+    "player_id": 3547287,
+    "vendor": "fanatics",
+    "deeplinks": null,
+    "prop_type": "points_rebounds",
+    "line_value": "26.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": -105,
+     "under_odds": -125
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823233,
+    "game_id": 18447041,
+    "player_id": 3547287,
+    "vendor": "fanduel",
+    "deeplinks": null,
+    "prop_type": "points_rebounds",
+    "line_value": "25.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": -120,
+     "under_odds": -106
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823684,
+    "game_id": 18447041,
+    "player_id": 17896026,
+    "vendor": "betmgm",
+    "deeplinks": null,
+    "prop_type": "points_rebounds",
+    "line_value": "29.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": -125,
+     "under_odds": -105
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823520,
+    "game_id": 18447041,
+    "player_id": 17896026,
+    "vendor": "draftkings",
+    "deeplinks": null,
+    "prop_type": "points_rebounds",
+    "line_value": "29.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": -109,
+     "under_odds": -120
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823319,
+    "game_id": 18447041,
+    "player_id": 17896026,
+    "vendor": "fanatics",
+    "deeplinks": null,
+    "prop_type": "points_rebounds",
+    "line_value": "29.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": -115,
+     "under_odds": -115
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823226,
+    "game_id": 18447041,
+    "player_id": 17896026,
+    "vendor": "fanduel",
+    "deeplinks": null,
+    "prop_type": "points_rebounds",
+    "line_value": "29.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": -115,
+     "under_odds": -111
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823683,
+    "game_id": 18447041,
+    "player_id": 17896073,
+    "vendor": "betmgm",
+    "deeplinks": null,
+    "prop_type": "points_rebounds",
+    "line_value": "17.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": -130,
+     "under_odds": -105
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823525,
+    "game_id": 18447041,
+    "player_id": 17896073,
+    "vendor": "draftkings",
+    "deeplinks": null,
+    "prop_type": "points_rebounds",
+    "line_value": "18.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": -117,
+     "under_odds": -112
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823325,
+    "game_id": 18447041,
+    "player_id": 17896073,
+    "vendor": "fanatics",
+    "deeplinks": null,
+    "prop_type": "points_rebounds",
+    "line_value": "18.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": -115,
+     "under_odds": -115
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823225,
+    "game_id": 18447041,
+    "player_id": 17896073,
+    "vendor": "fanduel",
+    "deeplinks": null,
+    "prop_type": "points_rebounds",
+    "line_value": "18.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": -111,
+     "under_odds": -115
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823527,
+    "game_id": 18447041,
+    "player_id": 56677827,
+    "vendor": "draftkings",
+    "deeplinks": null,
+    "prop_type": "points_rebounds",
+    "line_value": "15.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": -115,
+     "under_odds": -115
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823328,
+    "game_id": 18447041,
+    "player_id": 56677827,
+    "vendor": "fanatics",
+    "deeplinks": null,
+    "prop_type": "points_rebounds",
+    "line_value": "15.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": -105,
+     "under_odds": -125
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823227,
+    "game_id": 18447041,
+    "player_id": 56677827,
+    "vendor": "fanduel",
+    "deeplinks": null,
+    "prop_type": "points_rebounds",
+    "line_value": "15.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": -115,
+     "under_odds": -111
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823679,
+    "game_id": 18447041,
+    "player_id": 1028025497,
+    "vendor": "betmgm",
+    "deeplinks": null,
+    "prop_type": "points_rebounds",
+    "line_value": "16.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": -115,
+     "under_odds": -115
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823526,
+    "game_id": 18447041,
+    "player_id": 1028025497,
+    "vendor": "draftkings",
+    "deeplinks": null,
+    "prop_type": "points_rebounds",
+    "line_value": "16.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": -113,
+     "under_odds": -117
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823317,
+    "game_id": 18447041,
+    "player_id": 1028025497,
+    "vendor": "fanatics",
+    "deeplinks": null,
+    "prop_type": "points_rebounds",
+    "line_value": "16.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": -115,
+     "under_odds": -115
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823232,
+    "game_id": 18447041,
+    "player_id": 1028025497,
+    "vendor": "fanduel",
+    "deeplinks": null,
+    "prop_type": "points_rebounds",
+    "line_value": "16.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": -115,
+     "under_odds": -111
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823697,
+    "game_id": 18447041,
+    "player_id": 283,
+    "vendor": "betmgm",
+    "deeplinks": null,
+    "prop_type": "points_rebounds_assists",
+    "line_value": "9.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": -110,
+     "under_odds": -120
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823340,
+    "game_id": 18447041,
+    "player_id": 283,
+    "vendor": "fanatics",
+    "deeplinks": null,
+    "prop_type": "points_rebounds_assists",
+    "line_value": "9.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": -115,
+     "under_odds": -115
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823690,
+    "game_id": 18447041,
+    "player_id": 33,
+    "vendor": "betmgm",
+    "deeplinks": null,
+    "prop_type": "points_rebounds_assists",
+    "line_value": "9.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": 100,
+     "under_odds": -135
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823338,
+    "game_id": 18447041,
+    "player_id": 33,
+    "vendor": "fanatics",
+    "deeplinks": null,
+    "prop_type": "points_rebounds_assists",
+    "line_value": "9.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": -110,
+     "under_odds": -120
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823699,
+    "game_id": 18447041,
+    "player_id": 192,
+    "vendor": "betmgm",
+    "deeplinks": null,
+    "prop_type": "points_rebounds_assists",
+    "line_value": "42.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": -105,
+     "under_odds": -125
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823442,
+    "game_id": 18447041,
+    "player_id": 192,
+    "vendor": "betrivers",
+    "deeplinks": null,
+    "prop_type": "points_rebounds_assists",
+    "line_value": "39.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": -155,
+     "under_odds": 112
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823427,
+    "game_id": 18447041,
+    "player_id": 192,
+    "vendor": "betrivers",
+    "deeplinks": null,
+    "prop_type": "points_rebounds_assists",
+    "line_value": "40.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": -132,
+     "under_odds": 100
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823453,
+    "game_id": 18447041,
+    "player_id": 192,
+    "vendor": "betrivers",
+    "deeplinks": null,
+    "prop_type": "points_rebounds_assists",
+    "line_value": "41.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": -117,
+     "under_odds": -114
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823444,
+    "game_id": 18447041,
+    "player_id": 192,
+    "vendor": "betrivers",
+    "deeplinks": null,
+    "prop_type": "points_rebounds_assists",
+    "line_value": "42.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": 100,
+     "under_odds": -132
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823447,
+    "game_id": 18447041,
+    "player_id": 192,
+    "vendor": "betrivers",
+    "deeplinks": null,
+    "prop_type": "points_rebounds_assists",
+    "line_value": "43.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": 112,
+     "under_odds": -155
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823532,
+    "game_id": 18447041,
+    "player_id": 192,
+    "vendor": "draftkings",
+    "deeplinks": null,
+    "prop_type": "points_rebounds_assists",
+    "line_value": "41.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": -112,
+     "under_odds": -117
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823333,
+    "game_id": 18447041,
+    "player_id": 192,
+    "vendor": "fanatics",
+    "deeplinks": null,
+    "prop_type": "points_rebounds_assists",
+    "line_value": "41.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": -120,
+     "under_odds": -110
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823235,
+    "game_id": 18447041,
+    "player_id": 192,
+    "vendor": "fanduel",
+    "deeplinks": null,
+    "prop_type": "points_rebounds_assists",
+    "line_value": "41.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": -113,
+     "under_odds": -113
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823691,
+    "game_id": 18447041,
+    "player_id": 53,
+    "vendor": "betmgm",
+    "deeplinks": null,
+    "prop_type": "points_rebounds_assists",
+    "line_value": "17.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": -140,
+     "under_odds": 105
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823441,
+    "game_id": 18447041,
+    "player_id": 53,
+    "vendor": "betrivers",
+    "deeplinks": null,
+    "prop_type": "points_rebounds_assists",
+    "line_value": "16.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": -167,
+     "under_odds": 120
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823456,
+    "game_id": 18447041,
+    "player_id": 53,
+    "vendor": "betrivers",
+    "deeplinks": null,
+    "prop_type": "points_rebounds_assists",
+    "line_value": "17.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": -136,
+     "under_odds": 102
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823435,
+    "game_id": 18447041,
+    "player_id": 53,
+    "vendor": "betrivers",
+    "deeplinks": null,
+    "prop_type": "points_rebounds_assists",
+    "line_value": "18.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": -115,
+     "under_odds": -115
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823452,
+    "game_id": 18447041,
+    "player_id": 53,
+    "vendor": "betrivers",
+    "deeplinks": null,
+    "prop_type": "points_rebounds_assists",
+    "line_value": "19.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": 102,
+     "under_odds": -136
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823439,
+    "game_id": 18447041,
+    "player_id": 53,
+    "vendor": "betrivers",
+    "deeplinks": null,
+    "prop_type": "points_rebounds_assists",
+    "line_value": "20.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": 117,
+     "under_odds": -162
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823539,
+    "game_id": 18447041,
+    "player_id": 53,
+    "vendor": "draftkings",
+    "deeplinks": null,
+    "prop_type": "points_rebounds_assists",
+    "line_value": "18.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": -104,
+     "under_odds": -127
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823335,
+    "game_id": 18447041,
+    "player_id": 53,
+    "vendor": "fanatics",
+    "deeplinks": null,
+    "prop_type": "points_rebounds_assists",
+    "line_value": "17.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": -125,
+     "under_odds": -105
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823236,
+    "game_id": 18447041,
+    "player_id": 53,
+    "vendor": "fanduel",
+    "deeplinks": null,
+    "prop_type": "points_rebounds_assists",
+    "line_value": "18.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": -106,
+     "under_odds": -120
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823693,
+    "game_id": 18447041,
+    "player_id": 139,
+    "vendor": "betmgm",
+    "deeplinks": null,
+    "prop_type": "points_rebounds_assists",
+    "line_value": "12.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": -125,
+     "under_odds": -105
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823540,
+    "game_id": 18447041,
+    "player_id": 139,
+    "vendor": "draftkings",
+    "deeplinks": null,
+    "prop_type": "points_rebounds_assists",
+    "line_value": "12.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": -116,
+     "under_odds": -113
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823341,
+    "game_id": 18447041,
+    "player_id": 139,
+    "vendor": "fanatics",
+    "deeplinks": null,
+    "prop_type": "points_rebounds_assists",
+    "line_value": "12.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": -120,
+     "under_odds": -110
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823239,
+    "game_id": 18447041,
+    "player_id": 139,
+    "vendor": "fanduel",
+    "deeplinks": null,
+    "prop_type": "points_rebounds_assists",
+    "line_value": "12.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": -113,
+     "under_odds": -113
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823698,
+    "game_id": 18447041,
+    "player_id": 493,
+    "vendor": "betmgm",
+    "deeplinks": null,
+    "prop_type": "points_rebounds_assists",
+    "line_value": "30.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": -105,
+     "under_odds": -130
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823535,
+    "game_id": 18447041,
+    "player_id": 493,
+    "vendor": "draftkings",
+    "deeplinks": null,
+    "prop_type": "points_rebounds_assists",
+    "line_value": "30.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": -109,
+     "under_odds": -121
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823336,
+    "game_id": 18447041,
+    "player_id": 493,
+    "vendor": "fanatics",
+    "deeplinks": null,
+    "prop_type": "points_rebounds_assists",
+    "line_value": "30.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": -105,
+     "under_odds": -125
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823240,
+    "game_id": 18447041,
+    "player_id": 493,
+    "vendor": "fanduel",
+    "deeplinks": null,
+    "prop_type": "points_rebounds_assists",
+    "line_value": "30.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": -102,
+     "under_odds": -125
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823696,
+    "game_id": 18447041,
+    "player_id": 101,
+    "vendor": "betmgm",
+    "deeplinks": null,
+    "prop_type": "points_rebounds_assists",
+    "line_value": "19.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": -125,
+     "under_odds": -105
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823688,
+    "game_id": 18447041,
+    "player_id": 85,
+    "vendor": "betmgm",
+    "deeplinks": null,
+    "prop_type": "points_rebounds_assists",
+    "line_value": "22.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": -120,
+     "under_odds": -110
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823689,
+    "game_id": 18447041,
+    "player_id": 666442,
+    "vendor": "betmgm",
+    "deeplinks": null,
+    "prop_type": "points_rebounds_assists",
+    "line_value": "10.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": -110,
+     "under_odds": -120
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823337,
+    "game_id": 18447041,
+    "player_id": 666442,
+    "vendor": "fanatics",
+    "deeplinks": null,
+    "prop_type": "points_rebounds_assists",
+    "line_value": "11.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": 105,
+     "under_odds": -140
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823700,
+    "game_id": 18447041,
+    "player_id": 3547287,
+    "vendor": "betmgm",
+    "deeplinks": null,
+    "prop_type": "points_rebounds_assists",
+    "line_value": "31.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": -105,
+     "under_odds": -125
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823434,
+    "game_id": 18447041,
+    "player_id": 3547287,
+    "vendor": "betrivers",
+    "deeplinks": null,
+    "prop_type": "points_rebounds_assists",
+    "line_value": "29.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": -152,
+     "under_odds": 112
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823455,
+    "game_id": 18447041,
+    "player_id": 3547287,
+    "vendor": "betrivers",
+    "deeplinks": null,
+    "prop_type": "points_rebounds_assists",
+    "line_value": "30.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": -130,
+     "under_odds": -103
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823430,
+    "game_id": 18447041,
+    "player_id": 3547287,
+    "vendor": "betrivers",
+    "deeplinks": null,
+    "prop_type": "points_rebounds_assists",
+    "line_value": "31.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": -113,
+     "under_odds": -118
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823448,
+    "game_id": 18447041,
+    "player_id": 3547287,
+    "vendor": "betrivers",
+    "deeplinks": null,
+    "prop_type": "points_rebounds_assists",
+    "line_value": "32.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": 104,
+     "under_odds": -137
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823449,
+    "game_id": 18447041,
+    "player_id": 3547287,
+    "vendor": "betrivers",
+    "deeplinks": null,
+    "prop_type": "points_rebounds_assists",
+    "line_value": "33.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": 117,
+     "under_odds": -162
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823534,
+    "game_id": 18447041,
+    "player_id": 3547287,
+    "vendor": "draftkings",
+    "deeplinks": null,
+    "prop_type": "points_rebounds_assists",
+    "line_value": "31.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": -109,
+     "under_odds": -121
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823331,
+    "game_id": 18447041,
+    "player_id": 3547287,
+    "vendor": "fanatics",
+    "deeplinks": null,
+    "prop_type": "points_rebounds_assists",
+    "line_value": "31.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": -115,
+     "under_odds": -115
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823237,
+    "game_id": 18447041,
+    "player_id": 3547287,
+    "vendor": "fanduel",
+    "deeplinks": null,
+    "prop_type": "points_rebounds_assists",
+    "line_value": "30.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": -122,
+     "under_odds": -104
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823694,
+    "game_id": 18447041,
+    "player_id": 17896026,
+    "vendor": "betmgm",
+    "deeplinks": null,
+    "prop_type": "points_rebounds_assists",
+    "line_value": "34.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": -110,
+     "under_odds": -120
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823445,
+    "game_id": 18447041,
+    "player_id": 17896026,
+    "vendor": "betrivers",
+    "deeplinks": null,
+    "prop_type": "points_rebounds_assists",
+    "line_value": "32.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": -167,
+     "under_odds": 120
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823437,
+    "game_id": 18447041,
+    "player_id": 17896026,
+    "vendor": "betrivers",
+    "deeplinks": null,
+    "prop_type": "points_rebounds_assists",
+    "line_value": "33.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": -148,
+     "under_odds": 108
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823436,
+    "game_id": 18447041,
+    "player_id": 17896026,
+    "vendor": "betrivers",
+    "deeplinks": null,
+    "prop_type": "points_rebounds_assists",
+    "line_value": "34.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": -125,
+     "under_odds": -107
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823431,
+    "game_id": 18447041,
+    "player_id": 17896026,
+    "vendor": "betrivers",
+    "deeplinks": null,
+    "prop_type": "points_rebounds_assists",
+    "line_value": "35.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": -109,
+     "under_odds": -122
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823446,
+    "game_id": 18447041,
+    "player_id": 17896026,
+    "vendor": "betrivers",
+    "deeplinks": null,
+    "prop_type": "points_rebounds_assists",
+    "line_value": "36.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": 106,
+     "under_odds": -143
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823443,
+    "game_id": 18447041,
+    "player_id": 17896026,
+    "vendor": "betrivers",
+    "deeplinks": null,
+    "prop_type": "points_rebounds_assists",
+    "line_value": "37.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": 120,
+     "under_odds": -167
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823533,
+    "game_id": 18447041,
+    "player_id": 17896026,
+    "vendor": "draftkings",
+    "deeplinks": null,
+    "prop_type": "points_rebounds_assists",
+    "line_value": "33.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": -120,
+     "under_odds": -110
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823342,
+    "game_id": 18447041,
+    "player_id": 17896026,
+    "vendor": "fanatics",
+    "deeplinks": null,
+    "prop_type": "points_rebounds_assists",
+    "line_value": "33.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": -120,
+     "under_odds": -110
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823234,
+    "game_id": 18447041,
+    "player_id": 17896026,
+    "vendor": "fanduel",
+    "deeplinks": null,
+    "prop_type": "points_rebounds_assists",
+    "line_value": "34.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": -106,
+     "under_odds": -120
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823695,
+    "game_id": 18447041,
+    "player_id": 17896073,
+    "vendor": "betmgm",
+    "deeplinks": null,
+    "prop_type": "points_rebounds_assists",
+    "line_value": "23.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": -125,
+     "under_odds": -105
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823433,
+    "game_id": 18447041,
+    "player_id": 17896073,
+    "vendor": "betrivers",
+    "deeplinks": null,
+    "prop_type": "points_rebounds_assists",
+    "line_value": "22.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": -150,
+     "under_odds": 110
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823428,
+    "game_id": 18447041,
+    "player_id": 17896073,
+    "vendor": "betrivers",
+    "deeplinks": null,
+    "prop_type": "points_rebounds_assists",
+    "line_value": "23.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": -127,
+     "under_odds": -106
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823450,
+    "game_id": 18447041,
+    "player_id": 17896073,
+    "vendor": "betrivers",
+    "deeplinks": null,
+    "prop_type": "points_rebounds_assists",
+    "line_value": "24.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": -107,
+     "under_odds": -124
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823440,
+    "game_id": 18447041,
+    "player_id": 17896073,
+    "vendor": "betrivers",
+    "deeplinks": null,
+    "prop_type": "points_rebounds_assists",
+    "line_value": "25.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": 108,
+     "under_odds": -143
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823536,
+    "game_id": 18447041,
+    "player_id": 17896073,
+    "vendor": "draftkings",
+    "deeplinks": null,
+    "prop_type": "points_rebounds_assists",
+    "line_value": "23.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": -121,
+     "under_odds": -109
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823334,
+    "game_id": 18447041,
+    "player_id": 17896073,
+    "vendor": "fanatics",
+    "deeplinks": null,
+    "prop_type": "points_rebounds_assists",
+    "line_value": "23.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": -115,
+     "under_odds": -115
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823241,
+    "game_id": 18447041,
+    "player_id": 17896073,
+    "vendor": "fanduel",
+    "deeplinks": null,
+    "prop_type": "points_rebounds_assists",
+    "line_value": "23.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": -115,
+     "under_odds": -111
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823692,
+    "game_id": 18447041,
+    "player_id": 56677827,
+    "vendor": "betmgm",
+    "deeplinks": null,
+    "prop_type": "points_rebounds_assists",
+    "line_value": "17.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": -125,
+     "under_odds": -105
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823432,
+    "game_id": 18447041,
+    "player_id": 56677827,
+    "vendor": "betrivers",
+    "deeplinks": null,
+    "prop_type": "points_rebounds_assists",
+    "line_value": "16.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": -157,
+     "under_odds": 114
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823438,
+    "game_id": 18447041,
+    "player_id": 56677827,
+    "vendor": "betrivers",
+    "deeplinks": null,
+    "prop_type": "points_rebounds_assists",
+    "line_value": "17.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": -132,
+     "under_odds": 100
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823454,
+    "game_id": 18447041,
+    "player_id": 56677827,
+    "vendor": "betrivers",
+    "deeplinks": null,
+    "prop_type": "points_rebounds_assists",
+    "line_value": "18.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": -115,
+     "under_odds": -115
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823429,
+    "game_id": 18447041,
+    "player_id": 56677827,
+    "vendor": "betrivers",
+    "deeplinks": null,
+    "prop_type": "points_rebounds_assists",
+    "line_value": "19.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": 100,
+     "under_odds": -134
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823451,
+    "game_id": 18447041,
+    "player_id": 56677827,
+    "vendor": "betrivers",
+    "deeplinks": null,
+    "prop_type": "points_rebounds_assists",
+    "line_value": "20.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": 114,
+     "under_odds": -157
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823537,
+    "game_id": 18447041,
+    "player_id": 56677827,
+    "vendor": "draftkings",
+    "deeplinks": null,
+    "prop_type": "points_rebounds_assists",
+    "line_value": "18.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": -109,
+     "under_odds": -121
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823339,
+    "game_id": 18447041,
+    "player_id": 56677827,
+    "vendor": "fanatics",
+    "deeplinks": null,
+    "prop_type": "points_rebounds_assists",
+    "line_value": "18.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": 100,
+     "under_odds": -130
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823242,
+    "game_id": 18447041,
+    "player_id": 56677827,
+    "vendor": "fanduel",
+    "deeplinks": null,
+    "prop_type": "points_rebounds_assists",
+    "line_value": "18.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": -115,
+     "under_odds": -111
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823687,
+    "game_id": 18447041,
+    "player_id": 1028025497,
+    "vendor": "betmgm",
+    "deeplinks": null,
+    "prop_type": "points_rebounds_assists",
+    "line_value": "18.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": -110,
+     "under_odds": -120
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823538,
+    "game_id": 18447041,
+    "player_id": 1028025497,
+    "vendor": "draftkings",
+    "deeplinks": null,
+    "prop_type": "points_rebounds_assists",
+    "line_value": "18.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": -105,
+     "under_odds": -125
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823332,
+    "game_id": 18447041,
+    "player_id": 1028025497,
+    "vendor": "fanatics",
+    "deeplinks": null,
+    "prop_type": "points_rebounds_assists",
+    "line_value": "18.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": -110,
+     "under_odds": -120
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823238,
+    "game_id": 18447041,
+    "player_id": 1028025497,
+    "vendor": "fanduel",
+    "deeplinks": null,
+    "prop_type": "points_rebounds_assists",
+    "line_value": "18.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": -113,
+     "under_odds": -113
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823713,
+    "game_id": 18447041,
+    "player_id": 283,
+    "vendor": "betmgm",
+    "deeplinks": null,
+    "prop_type": "rebounds",
+    "line_value": "2.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": -105,
+     "under_odds": -130
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823356,
+    "game_id": 18447041,
+    "player_id": 283,
+    "vendor": "fanatics",
+    "deeplinks": null,
+    "prop_type": "rebounds",
+    "line_value": "2.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": -115,
+     "under_odds": -115
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823705,
+    "game_id": 18447041,
+    "player_id": 33,
+    "vendor": "betmgm",
+    "deeplinks": null,
+    "prop_type": "rebounds",
+    "line_value": "3.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": 120,
+     "under_odds": -160
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823612,
+    "game_id": 18447041,
+    "player_id": 33,
+    "vendor": "caesars",
+    "deeplinks": null,
+    "prop_type": "rebounds",
+    "line_value": "3.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": 122,
+     "under_odds": -164
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823552,
+    "game_id": 18447041,
+    "player_id": 33,
+    "vendor": "draftkings",
+    "deeplinks": null,
+    "prop_type": "rebounds",
+    "line_value": "3.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": 110,
+     "under_odds": -144
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823346,
+    "game_id": 18447041,
+    "player_id": 33,
+    "vendor": "fanatics",
+    "deeplinks": null,
+    "prop_type": "rebounds",
+    "line_value": "3.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": 120,
+     "under_odds": -165
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823707,
+    "game_id": 18447041,
+    "player_id": 192,
+    "vendor": "betmgm",
+    "deeplinks": null,
+    "prop_type": "rebounds",
+    "line_value": "5.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": -175,
+     "under_odds": 130
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823459,
+    "game_id": 18447041,
+    "player_id": 192,
+    "vendor": "betrivers",
+    "deeplinks": null,
+    "prop_type": "rebounds",
+    "line_value": "5.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": -141,
+     "under_odds": 106
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823606,
+    "game_id": 18447041,
+    "player_id": 192,
+    "vendor": "caesars",
+    "deeplinks": null,
+    "prop_type": "rebounds",
+    "line_value": "6.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": 110,
+     "under_odds": -145
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823543,
+    "game_id": 18447041,
+    "player_id": 192,
+    "vendor": "draftkings",
+    "deeplinks": null,
+    "prop_type": "rebounds",
+    "line_value": "6.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": 107,
+     "under_odds": -141
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823350,
+    "game_id": 18447041,
+    "player_id": 192,
+    "vendor": "fanatics",
+    "deeplinks": null,
+    "prop_type": "rebounds",
+    "line_value": "6.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": 105,
+     "under_odds": -140
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823248,
+    "game_id": 18447041,
+    "player_id": 192,
+    "vendor": "fanduel",
+    "deeplinks": null,
+    "prop_type": "rebounds",
+    "line_value": "5.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": -150,
+     "under_odds": 118
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823706,
+    "game_id": 18447041,
+    "player_id": 53,
+    "vendor": "betmgm",
+    "deeplinks": null,
+    "prop_type": "rebounds",
+    "line_value": "3.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": -115,
+     "under_odds": -115
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823457,
+    "game_id": 18447041,
+    "player_id": 53,
+    "vendor": "betrivers",
+    "deeplinks": null,
+    "prop_type": "rebounds",
+    "line_value": "3.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": -122,
+     "under_odds": -109
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823609,
+    "game_id": 18447041,
+    "player_id": 53,
+    "vendor": "caesars",
+    "deeplinks": null,
+    "prop_type": "rebounds",
+    "line_value": "3.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": -110,
+     "under_odds": -121
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823551,
+    "game_id": 18447041,
+    "player_id": 53,
+    "vendor": "draftkings",
+    "deeplinks": null,
+    "prop_type": "rebounds",
+    "line_value": "3.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": -104,
+     "under_odds": -127
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823344,
+    "game_id": 18447041,
+    "player_id": 53,
+    "vendor": "fanatics",
+    "deeplinks": null,
+    "prop_type": "rebounds",
+    "line_value": "3.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": -105,
+     "under_odds": -125
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823251,
+    "game_id": 18447041,
+    "player_id": 53,
+    "vendor": "fanduel",
+    "deeplinks": null,
+    "prop_type": "rebounds",
+    "line_value": "3.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": -102,
+     "under_odds": -125
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823709,
+    "game_id": 18447041,
+    "player_id": 139,
+    "vendor": "betmgm",
+    "deeplinks": null,
+    "prop_type": "rebounds",
+    "line_value": "2.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": -125,
+     "under_odds": -105
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823466,
+    "game_id": 18447041,
+    "player_id": 139,
+    "vendor": "betrivers",
+    "deeplinks": null,
+    "prop_type": "rebounds",
+    "line_value": "2.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": -130,
+     "under_odds": -103
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823553,
+    "game_id": 18447041,
+    "player_id": 139,
+    "vendor": "draftkings",
+    "deeplinks": null,
+    "prop_type": "rebounds",
+    "line_value": "2.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": -134,
+     "under_odds": 102
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823354,
+    "game_id": 18447041,
+    "player_id": 139,
+    "vendor": "fanatics",
+    "deeplinks": null,
+    "prop_type": "rebounds",
+    "line_value": "2.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": -125,
+     "under_odds": -105
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823701,
+    "game_id": 18447041,
+    "player_id": 493,
+    "vendor": "betmgm",
+    "deeplinks": null,
+    "prop_type": "rebounds",
+    "line_value": "10.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": -135,
+     "under_odds": 100
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823458,
+    "game_id": 18447041,
+    "player_id": 493,
+    "vendor": "betrivers",
+    "deeplinks": null,
+    "prop_type": "rebounds",
+    "line_value": "10.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": -124,
+     "under_odds": -108
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823611,
+    "game_id": 18447041,
+    "player_id": 493,
+    "vendor": "caesars",
+    "deeplinks": null,
+    "prop_type": "rebounds",
+    "line_value": "10.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": -130,
+     "under_odds": -103
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823541,
+    "game_id": 18447041,
+    "player_id": 493,
+    "vendor": "draftkings",
+    "deeplinks": null,
+    "prop_type": "rebounds",
+    "line_value": "10.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": -141,
+     "under_odds": 107
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823349,
+    "game_id": 18447041,
+    "player_id": 493,
+    "vendor": "fanatics",
+    "deeplinks": null,
+    "prop_type": "rebounds",
+    "line_value": "10.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": -120,
+     "under_odds": -110
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823252,
+    "game_id": 18447041,
+    "player_id": 493,
+    "vendor": "fanduel",
+    "deeplinks": null,
+    "prop_type": "rebounds",
+    "line_value": "10.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": -122,
+     "under_odds": -104
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823712,
+    "game_id": 18447041,
+    "player_id": 101,
+    "vendor": "betmgm",
+    "deeplinks": null,
+    "prop_type": "rebounds",
+    "line_value": "5.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": -125,
+     "under_odds": -105
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823460,
+    "game_id": 18447041,
+    "player_id": 101,
+    "vendor": "betrivers",
+    "deeplinks": null,
+    "prop_type": "rebounds",
+    "line_value": "5.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": -129,
+     "under_odds": -104
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823610,
+    "game_id": 18447041,
+    "player_id": 101,
+    "vendor": "caesars",
+    "deeplinks": null,
+    "prop_type": "rebounds",
+    "line_value": "5.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": -129,
+     "under_odds": -104
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823545,
+    "game_id": 18447041,
+    "player_id": 101,
+    "vendor": "draftkings",
+    "deeplinks": null,
+    "prop_type": "rebounds",
+    "line_value": "5.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": -133,
+     "under_odds": 101
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823351,
+    "game_id": 18447041,
+    "player_id": 101,
+    "vendor": "fanatics",
+    "deeplinks": null,
+    "prop_type": "rebounds",
+    "line_value": "5.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": -130,
+     "under_odds": 100
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823245,
+    "game_id": 18447041,
+    "player_id": 101,
+    "vendor": "fanduel",
+    "deeplinks": null,
+    "prop_type": "rebounds",
+    "line_value": "5.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": -130,
+     "under_odds": 102
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823703,
+    "game_id": 18447041,
+    "player_id": 85,
+    "vendor": "betmgm",
+    "deeplinks": null,
+    "prop_type": "rebounds",
+    "line_value": "8.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": 115,
+     "under_odds": -155
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823465,
+    "game_id": 18447041,
+    "player_id": 85,
+    "vendor": "betrivers",
+    "deeplinks": null,
+    "prop_type": "rebounds",
+    "line_value": "8.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": -104,
+     "under_odds": -129
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823608,
+    "game_id": 18447041,
+    "player_id": 85,
+    "vendor": "caesars",
+    "deeplinks": null,
+    "prop_type": "rebounds",
+    "line_value": "8.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": 102,
+     "under_odds": -136
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823542,
+    "game_id": 18447041,
+    "player_id": 85,
+    "vendor": "draftkings",
+    "deeplinks": null,
+    "prop_type": "rebounds",
+    "line_value": "8.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": -101,
+     "under_odds": -131
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823343,
+    "game_id": 18447041,
+    "player_id": 85,
+    "vendor": "fanatics",
+    "deeplinks": null,
+    "prop_type": "rebounds",
+    "line_value": "8.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": 100,
+     "under_odds": -130
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823253,
+    "game_id": 18447041,
+    "player_id": 85,
+    "vendor": "fanduel",
+    "deeplinks": null,
+    "prop_type": "rebounds",
+    "line_value": "8.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": 102,
+     "under_odds": -130
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823704,
+    "game_id": 18447041,
+    "player_id": 666442,
+    "vendor": "betmgm",
+    "deeplinks": null,
+    "prop_type": "rebounds",
+    "line_value": "4.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": -130,
+     "under_odds": -105
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823614,
+    "game_id": 18447041,
+    "player_id": 666442,
+    "vendor": "caesars",
+    "deeplinks": null,
+    "prop_type": "rebounds",
+    "line_value": "4.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": -134,
+     "under_odds": 101
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823547,
+    "game_id": 18447041,
+    "player_id": 666442,
+    "vendor": "draftkings",
+    "deeplinks": null,
+    "prop_type": "rebounds",
+    "line_value": "4.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": -135,
+     "under_odds": 103
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823347,
+    "game_id": 18447041,
+    "player_id": 666442,
+    "vendor": "fanatics",
+    "deeplinks": null,
+    "prop_type": "rebounds",
+    "line_value": "4.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": -140,
+     "under_odds": 105
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823250,
+    "game_id": 18447041,
+    "player_id": 666442,
+    "vendor": "fanduel",
+    "deeplinks": null,
+    "prop_type": "rebounds",
+    "line_value": "4.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": -130,
+     "under_odds": 102
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823710,
+    "game_id": 18447041,
+    "player_id": 3547287,
+    "vendor": "betmgm",
+    "deeplinks": null,
+    "prop_type": "rebounds",
+    "line_value": "4.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": -150,
+     "under_odds": 110
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823463,
+    "game_id": 18447041,
+    "player_id": 3547287,
+    "vendor": "betrivers",
+    "deeplinks": null,
+    "prop_type": "rebounds",
+    "line_value": "4.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": -150,
+     "under_odds": 112
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823605,
+    "game_id": 18447041,
+    "player_id": 3547287,
+    "vendor": "caesars",
+    "deeplinks": null,
+    "prop_type": "rebounds",
+    "line_value": "4.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": -150,
+     "under_odds": 112
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823546,
+    "game_id": 18447041,
+    "player_id": 3547287,
+    "vendor": "draftkings",
+    "deeplinks": null,
+    "prop_type": "rebounds",
+    "line_value": "4.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": -139,
+     "under_odds": 105
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823353,
+    "game_id": 18447041,
+    "player_id": 3547287,
+    "vendor": "fanatics",
+    "deeplinks": null,
+    "prop_type": "rebounds",
+    "line_value": "4.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": -165,
+     "under_odds": 120
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823247,
+    "game_id": 18447041,
+    "player_id": 3547287,
+    "vendor": "fanduel",
+    "deeplinks": null,
+    "prop_type": "rebounds",
+    "line_value": "4.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": -148,
+     "under_odds": 116
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823711,
+    "game_id": 18447041,
+    "player_id": 17896026,
+    "vendor": "betmgm",
+    "deeplinks": null,
+    "prop_type": "rebounds",
+    "line_value": "6.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": 105,
+     "under_odds": -140
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823462,
+    "game_id": 18447041,
+    "player_id": 17896026,
+    "vendor": "betrivers",
+    "deeplinks": null,
+    "prop_type": "rebounds",
+    "line_value": "6.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": 108,
+     "under_odds": -143
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823603,
+    "game_id": 18447041,
+    "player_id": 17896026,
+    "vendor": "caesars",
+    "deeplinks": null,
+    "prop_type": "rebounds",
+    "line_value": "6.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": 108,
+     "under_odds": -145
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823544,
+    "game_id": 18447041,
+    "player_id": 17896026,
+    "vendor": "draftkings",
+    "deeplinks": null,
+    "prop_type": "rebounds",
+    "line_value": "6.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": 113,
+     "under_odds": -149
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823348,
+    "game_id": 18447041,
+    "player_id": 17896026,
+    "vendor": "fanatics",
+    "deeplinks": null,
+    "prop_type": "rebounds",
+    "line_value": "6.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": 115,
+     "under_odds": -150
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823243,
+    "game_id": 18447041,
+    "player_id": 17896026,
+    "vendor": "fanduel",
+    "deeplinks": null,
+    "prop_type": "rebounds",
+    "line_value": "6.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": 118,
+     "under_odds": -150
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823714,
+    "game_id": 18447041,
+    "player_id": 17896073,
+    "vendor": "betmgm",
+    "deeplinks": null,
+    "prop_type": "rebounds",
+    "line_value": "3.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": -190,
+     "under_odds": 140
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823464,
+    "game_id": 18447041,
+    "player_id": 17896073,
+    "vendor": "betrivers",
+    "deeplinks": null,
+    "prop_type": "rebounds",
+    "line_value": "4.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": 108,
+     "under_odds": -143
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823607,
+    "game_id": 18447041,
+    "player_id": 17896073,
+    "vendor": "caesars",
+    "deeplinks": null,
+    "prop_type": "rebounds",
+    "line_value": "4.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": 112,
+     "under_odds": -150
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823548,
+    "game_id": 18447041,
+    "player_id": 17896073,
+    "vendor": "draftkings",
+    "deeplinks": null,
+    "prop_type": "rebounds",
+    "line_value": "4.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": 107,
+     "under_odds": -141
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823355,
+    "game_id": 18447041,
+    "player_id": 17896073,
+    "vendor": "fanatics",
+    "deeplinks": null,
+    "prop_type": "rebounds",
+    "line_value": "4.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": 115,
+     "under_odds": -150
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823246,
+    "game_id": 18447041,
+    "player_id": 17896073,
+    "vendor": "fanduel",
+    "deeplinks": null,
+    "prop_type": "rebounds",
+    "line_value": "4.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": 114,
+     "under_odds": -146
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823708,
+    "game_id": 18447041,
+    "player_id": 56677827,
+    "vendor": "betmgm",
+    "deeplinks": null,
+    "prop_type": "rebounds",
+    "line_value": "3.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": -105,
+     "under_odds": -130
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823461,
+    "game_id": 18447041,
+    "player_id": 56677827,
+    "vendor": "betrivers",
+    "deeplinks": null,
+    "prop_type": "rebounds",
+    "line_value": "3.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": -110,
+     "under_odds": -121
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823604,
+    "game_id": 18447041,
+    "player_id": 56677827,
+    "vendor": "caesars",
+    "deeplinks": null,
+    "prop_type": "rebounds",
+    "line_value": "3.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": -121,
+     "under_odds": -110
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823550,
+    "game_id": 18447041,
+    "player_id": 56677827,
+    "vendor": "draftkings",
+    "deeplinks": null,
+    "prop_type": "rebounds",
+    "line_value": "3.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": -117,
+     "under_odds": -112
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823352,
+    "game_id": 18447041,
+    "player_id": 56677827,
+    "vendor": "fanatics",
+    "deeplinks": null,
+    "prop_type": "rebounds",
+    "line_value": "3.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": -120,
+     "under_odds": -110
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823244,
+    "game_id": 18447041,
+    "player_id": 56677827,
+    "vendor": "fanduel",
+    "deeplinks": null,
+    "prop_type": "rebounds",
+    "line_value": "3.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": -125,
+     "under_odds": -102
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823702,
+    "game_id": 18447041,
+    "player_id": 1028025497,
+    "vendor": "betmgm",
+    "deeplinks": null,
+    "prop_type": "rebounds",
+    "line_value": "4.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": 100,
+     "under_odds": -135
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823467,
+    "game_id": 18447041,
+    "player_id": 1028025497,
+    "vendor": "betrivers",
+    "deeplinks": null,
+    "prop_type": "rebounds",
+    "line_value": "4.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": 107,
+     "under_odds": -143
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823613,
+    "game_id": 18447041,
+    "player_id": 1028025497,
+    "vendor": "caesars",
+    "deeplinks": null,
+    "prop_type": "rebounds",
+    "line_value": "4.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": 110,
+     "under_odds": -148
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823549,
+    "game_id": 18447041,
+    "player_id": 1028025497,
+    "vendor": "draftkings",
+    "deeplinks": null,
+    "prop_type": "rebounds",
+    "line_value": "4.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": 110,
+     "under_odds": -145
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823345,
+    "game_id": 18447041,
+    "player_id": 1028025497,
+    "vendor": "fanatics",
+    "deeplinks": null,
+    "prop_type": "rebounds",
+    "line_value": "4.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": 105,
+     "under_odds": -140
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823249,
+    "game_id": 18447041,
+    "player_id": 1028025497,
+    "vendor": "fanduel",
+    "deeplinks": null,
+    "prop_type": "rebounds",
+    "line_value": "4.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": 114,
+     "under_odds": -146
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823368,
+    "game_id": 18447041,
+    "player_id": 283,
+    "vendor": "fanatics",
+    "deeplinks": null,
+    "prop_type": "rebounds_assists",
+    "line_value": "3.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": 125,
+     "under_odds": -175
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823367,
+    "game_id": 18447041,
+    "player_id": 33,
+    "vendor": "fanatics",
+    "deeplinks": null,
+    "prop_type": "rebounds_assists",
+    "line_value": "4.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": 110,
+     "under_odds": -145
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823723,
+    "game_id": 18447041,
+    "player_id": 192,
+    "vendor": "betmgm",
+    "deeplinks": null,
+    "prop_type": "rebounds_assists",
+    "line_value": "14.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": 105,
+     "under_odds": -140
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823554,
+    "game_id": 18447041,
+    "player_id": 192,
+    "vendor": "draftkings",
+    "deeplinks": null,
+    "prop_type": "rebounds_assists",
+    "line_value": "14.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": -108,
+     "under_odds": -122
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823360,
+    "game_id": 18447041,
+    "player_id": 192,
+    "vendor": "fanatics",
+    "deeplinks": null,
+    "prop_type": "rebounds_assists",
+    "line_value": "14.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": -115,
+     "under_odds": -115
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823254,
+    "game_id": 18447041,
+    "player_id": 192,
+    "vendor": "fanduel",
+    "deeplinks": null,
+    "prop_type": "rebounds_assists",
+    "line_value": "14.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": 106,
+     "under_odds": -136
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823559,
+    "game_id": 18447041,
+    "player_id": 53,
+    "vendor": "draftkings",
+    "deeplinks": null,
+    "prop_type": "rebounds_assists",
+    "line_value": "6.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": -109,
+     "under_odds": -121
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823358,
+    "game_id": 18447041,
+    "player_id": 53,
+    "vendor": "fanatics",
+    "deeplinks": null,
+    "prop_type": "rebounds_assists",
+    "line_value": "6.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": -105,
+     "under_odds": -125
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823718,
+    "game_id": 18447041,
+    "player_id": 139,
+    "vendor": "betmgm",
+    "deeplinks": null,
+    "prop_type": "rebounds_assists",
+    "line_value": "4.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": -155,
+     "under_odds": 120
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823562,
+    "game_id": 18447041,
+    "player_id": 139,
+    "vendor": "draftkings",
+    "deeplinks": null,
+    "prop_type": "rebounds_assists",
+    "line_value": "5.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": 121,
+     "under_odds": -160
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823365,
+    "game_id": 18447041,
+    "player_id": 139,
+    "vendor": "fanatics",
+    "deeplinks": null,
+    "prop_type": "rebounds_assists",
+    "line_value": "5.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": 125,
+     "under_odds": -175
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823715,
+    "game_id": 18447041,
+    "player_id": 493,
+    "vendor": "betmgm",
+    "deeplinks": null,
+    "prop_type": "rebounds_assists",
+    "line_value": "12.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": -125,
+     "under_odds": -105
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823555,
+    "game_id": 18447041,
+    "player_id": 493,
+    "vendor": "draftkings",
+    "deeplinks": null,
+    "prop_type": "rebounds_assists",
+    "line_value": "13.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": 102,
+     "under_odds": -134
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823361,
+    "game_id": 18447041,
+    "player_id": 493,
+    "vendor": "fanatics",
+    "deeplinks": null,
+    "prop_type": "rebounds_assists",
+    "line_value": "12.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": -125,
+     "under_odds": -105
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823721,
+    "game_id": 18447041,
+    "player_id": 101,
+    "vendor": "betmgm",
+    "deeplinks": null,
+    "prop_type": "rebounds_assists",
+    "line_value": "5.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": -145,
+     "under_odds": 110
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823717,
+    "game_id": 18447041,
+    "player_id": 85,
+    "vendor": "betmgm",
+    "deeplinks": null,
+    "prop_type": "rebounds_assists",
+    "line_value": "10.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": 100,
+     "under_odds": -135
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823366,
+    "game_id": 18447041,
+    "player_id": 666442,
+    "vendor": "fanatics",
+    "deeplinks": null,
+    "prop_type": "rebounds_assists",
+    "line_value": "6.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": 110,
+     "under_odds": -145
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823719,
+    "game_id": 18447041,
+    "player_id": 3547287,
+    "vendor": "betmgm",
+    "deeplinks": null,
+    "prop_type": "rebounds_assists",
+    "line_value": "9.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": -140,
+     "under_odds": 105
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823557,
+    "game_id": 18447041,
+    "player_id": 3547287,
+    "vendor": "draftkings",
+    "deeplinks": null,
+    "prop_type": "rebounds_assists",
+    "line_value": "10.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": 105,
+     "under_odds": -139
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823357,
+    "game_id": 18447041,
+    "player_id": 3547287,
+    "vendor": "fanatics",
+    "deeplinks": null,
+    "prop_type": "rebounds_assists",
+    "line_value": "10.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": 100,
+     "under_odds": -130
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823257,
+    "game_id": 18447041,
+    "player_id": 3547287,
+    "vendor": "fanduel",
+    "deeplinks": null,
+    "prop_type": "rebounds_assists",
+    "line_value": "9.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": -142,
+     "under_odds": 112
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823720,
+    "game_id": 18447041,
+    "player_id": 17896026,
+    "vendor": "betmgm",
+    "deeplinks": null,
+    "prop_type": "rebounds_assists",
+    "line_value": "10.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": -105,
+     "under_odds": -125
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823556,
+    "game_id": 18447041,
+    "player_id": 17896026,
+    "vendor": "draftkings",
+    "deeplinks": null,
+    "prop_type": "rebounds_assists",
+    "line_value": "10.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": -115,
+     "under_odds": -115
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823364,
+    "game_id": 18447041,
+    "player_id": 17896026,
+    "vendor": "fanatics",
+    "deeplinks": null,
+    "prop_type": "rebounds_assists",
+    "line_value": "10.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": -110,
+     "under_odds": -120
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823255,
+    "game_id": 18447041,
+    "player_id": 17896026,
+    "vendor": "fanduel",
+    "deeplinks": null,
+    "prop_type": "rebounds_assists",
+    "line_value": "10.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": -122,
+     "under_odds": -104
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823722,
+    "game_id": 18447041,
+    "player_id": 17896073,
+    "vendor": "betmgm",
+    "deeplinks": null,
+    "prop_type": "rebounds_assists",
+    "line_value": "8.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": -150,
+     "under_odds": 110
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823558,
+    "game_id": 18447041,
+    "player_id": 17896073,
+    "vendor": "draftkings",
+    "deeplinks": null,
+    "prop_type": "rebounds_assists",
+    "line_value": "9.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": -101,
+     "under_odds": -130
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823359,
+    "game_id": 18447041,
+    "player_id": 17896073,
+    "vendor": "fanatics",
+    "deeplinks": null,
+    "prop_type": "rebounds_assists",
+    "line_value": "9.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": 100,
+     "under_odds": -130
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823256,
+    "game_id": 18447041,
+    "player_id": 17896073,
+    "vendor": "fanduel",
+    "deeplinks": null,
+    "prop_type": "rebounds_assists",
+    "line_value": "9.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": 102,
+     "under_odds": -130
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823560,
+    "game_id": 18447041,
+    "player_id": 56677827,
+    "vendor": "draftkings",
+    "deeplinks": null,
+    "prop_type": "rebounds_assists",
+    "line_value": "6.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": -103,
+     "under_odds": -128
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823363,
+    "game_id": 18447041,
+    "player_id": 56677827,
+    "vendor": "fanatics",
+    "deeplinks": null,
+    "prop_type": "rebounds_assists",
+    "line_value": "6.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": -105,
+     "under_odds": -125
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823716,
+    "game_id": 18447041,
+    "player_id": 1028025497,
+    "vendor": "betmgm",
+    "deeplinks": null,
+    "prop_type": "rebounds_assists",
+    "line_value": "6.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": 115,
+     "under_odds": -155
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823561,
+    "game_id": 18447041,
+    "player_id": 1028025497,
+    "vendor": "draftkings",
+    "deeplinks": null,
+    "prop_type": "rebounds_assists",
+    "line_value": "5.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": -150,
+     "under_odds": 113
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823362,
+    "game_id": 18447041,
+    "player_id": 1028025497,
+    "vendor": "fanatics",
+    "deeplinks": null,
+    "prop_type": "rebounds_assists",
+    "line_value": "6.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": 115,
+     "under_odds": -150
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823567,
+    "game_id": 18447041,
+    "player_id": 192,
+    "vendor": "draftkings",
+    "deeplinks": null,
+    "prop_type": "steals",
+    "line_value": "0.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": -226,
+     "under_odds": 167
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823258,
+    "game_id": 18447041,
+    "player_id": 192,
+    "vendor": "fanduel",
+    "deeplinks": null,
+    "prop_type": "steals",
+    "line_value": "1.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": 194,
+     "under_odds": -270
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823563,
+    "game_id": 18447041,
+    "player_id": 139,
+    "vendor": "draftkings",
+    "deeplinks": null,
+    "prop_type": "steals",
+    "line_value": "1.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": -129,
+     "under_odds": -103
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823260,
+    "game_id": 18447041,
+    "player_id": 139,
+    "vendor": "fanduel",
+    "deeplinks": null,
+    "prop_type": "steals",
+    "line_value": "1.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": -122,
+     "under_odds": -108
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823568,
+    "game_id": 18447041,
+    "player_id": 493,
+    "vendor": "draftkings",
+    "deeplinks": null,
+    "prop_type": "steals",
+    "line_value": "0.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": -132,
+     "under_odds": -101
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823566,
+    "game_id": 18447041,
+    "player_id": 3547287,
+    "vendor": "draftkings",
+    "deeplinks": null,
+    "prop_type": "steals",
+    "line_value": "0.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": -229,
+     "under_odds": 169
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823565,
+    "game_id": 18447041,
+    "player_id": 17896026,
+    "vendor": "draftkings",
+    "deeplinks": null,
+    "prop_type": "steals",
+    "line_value": "1.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": 156,
+     "under_odds": -210
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823259,
+    "game_id": 18447041,
+    "player_id": 17896026,
+    "vendor": "fanduel",
+    "deeplinks": null,
+    "prop_type": "steals",
+    "line_value": "1.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": 178,
+     "under_odds": -245
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823564,
+    "game_id": 18447041,
+    "player_id": 17896073,
+    "vendor": "draftkings",
+    "deeplinks": null,
+    "prop_type": "steals",
+    "line_value": "1.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": 101,
+     "under_odds": -134
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823261,
+    "game_id": 18447041,
+    "player_id": 17896073,
+    "vendor": "fanduel",
+    "deeplinks": null,
+    "prop_type": "steals",
+    "line_value": "1.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": 116,
+     "under_odds": -154
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823735,
+    "game_id": 18447041,
+    "player_id": 283,
+    "vendor": "betmgm",
+    "deeplinks": null,
+    "prop_type": "threes",
+    "line_value": "0.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": -200,
+     "under_odds": 150
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823380,
+    "game_id": 18447041,
+    "player_id": 283,
+    "vendor": "fanatics",
+    "deeplinks": null,
+    "prop_type": "threes",
+    "line_value": "0.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": -225,
+     "under_odds": 140
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823725,
+    "game_id": 18447041,
+    "player_id": 33,
+    "vendor": "betmgm",
+    "deeplinks": null,
+    "prop_type": "threes",
+    "line_value": "1.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": 150,
+     "under_odds": -200
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823623,
+    "game_id": 18447041,
+    "player_id": 33,
+    "vendor": "caesars",
+    "deeplinks": null,
+    "prop_type": "threes",
+    "line_value": "1.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": 139,
+     "under_odds": -190
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823575,
+    "game_id": 18447041,
+    "player_id": 33,
+    "vendor": "draftkings",
+    "deeplinks": null,
+    "prop_type": "threes",
+    "line_value": "1.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": 137,
+     "under_odds": -182
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823370,
+    "game_id": 18447041,
+    "player_id": 33,
+    "vendor": "fanatics",
+    "deeplinks": null,
+    "prop_type": "threes",
+    "line_value": "1.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": 130,
+     "under_odds": -190
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823265,
+    "game_id": 18447041,
+    "player_id": 33,
+    "vendor": "fanduel",
+    "deeplinks": null,
+    "prop_type": "threes",
+    "line_value": "1.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": 148,
+     "under_odds": -192
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823727,
+    "game_id": 18447041,
+    "player_id": 192,
+    "vendor": "betmgm",
+    "deeplinks": null,
+    "prop_type": "threes",
+    "line_value": "3.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": 105,
+     "under_odds": -140
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823473,
+    "game_id": 18447041,
+    "player_id": 192,
+    "vendor": "betrivers",
+    "deeplinks": null,
+    "prop_type": "threes",
+    "line_value": "3.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": 120,
+     "under_odds": -159
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823621,
+    "game_id": 18447041,
+    "player_id": 192,
+    "vendor": "caesars",
+    "deeplinks": null,
+    "prop_type": "threes",
+    "line_value": "3.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": 110,
+     "under_odds": -148
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823569,
+    "game_id": 18447041,
+    "player_id": 192,
+    "vendor": "draftkings",
+    "deeplinks": null,
+    "prop_type": "threes",
+    "line_value": "3.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": 118,
+     "under_odds": -156
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823373,
+    "game_id": 18447041,
+    "player_id": 192,
+    "vendor": "fanatics",
+    "deeplinks": null,
+    "prop_type": "threes",
+    "line_value": "3.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": 125,
+     "under_odds": -175
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823266,
+    "game_id": 18447041,
+    "player_id": 192,
+    "vendor": "fanduel",
+    "deeplinks": null,
+    "prop_type": "threes",
+    "line_value": "3.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": 118,
+     "under_odds": -150
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823726,
+    "game_id": 18447041,
+    "player_id": 53,
+    "vendor": "betmgm",
+    "deeplinks": null,
+    "prop_type": "threes",
+    "line_value": "1.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": -150,
+     "under_odds": 110
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823471,
+    "game_id": 18447041,
+    "player_id": 53,
+    "vendor": "betrivers",
+    "deeplinks": null,
+    "prop_type": "threes",
+    "line_value": "1.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": -155,
+     "under_odds": 116
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823620,
+    "game_id": 18447041,
+    "player_id": 53,
+    "vendor": "caesars",
+    "deeplinks": null,
+    "prop_type": "threes",
+    "line_value": "1.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": -154,
+     "under_odds": 116
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823573,
+    "game_id": 18447041,
+    "player_id": 53,
+    "vendor": "draftkings",
+    "deeplinks": null,
+    "prop_type": "threes",
+    "line_value": "1.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": -153,
+     "under_odds": 116
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823376,
+    "game_id": 18447041,
+    "player_id": 53,
+    "vendor": "fanatics",
+    "deeplinks": null,
+    "prop_type": "threes",
+    "line_value": "1.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": -150,
+     "under_odds": 115
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823269,
+    "game_id": 18447041,
+    "player_id": 53,
+    "vendor": "fanduel",
+    "deeplinks": null,
+    "prop_type": "threes",
+    "line_value": "1.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": -154,
+     "under_odds": 120
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823729,
+    "game_id": 18447041,
+    "player_id": 139,
+    "vendor": "betmgm",
+    "deeplinks": null,
+    "prop_type": "threes",
+    "line_value": "0.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": -165,
+     "under_odds": 125
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823579,
+    "game_id": 18447041,
+    "player_id": 139,
+    "vendor": "draftkings",
+    "deeplinks": null,
+    "prop_type": "threes",
+    "line_value": "0.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": -188,
+     "under_odds": 142
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823379,
+    "game_id": 18447041,
+    "player_id": 139,
+    "vendor": "fanatics",
+    "deeplinks": null,
+    "prop_type": "threes",
+    "line_value": "0.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": -190,
+     "under_odds": 130
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823732,
+    "game_id": 18447041,
+    "player_id": 101,
+    "vendor": "betmgm",
+    "deeplinks": null,
+    "prop_type": "threes",
+    "line_value": "0.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": -225,
+     "under_odds": 165
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823470,
+    "game_id": 18447041,
+    "player_id": 101,
+    "vendor": "betrivers",
+    "deeplinks": null,
+    "prop_type": "threes",
+    "line_value": "1.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": 150,
+     "under_odds": -205
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823617,
+    "game_id": 18447041,
+    "player_id": 101,
+    "vendor": "caesars",
+    "deeplinks": null,
+    "prop_type": "threes",
+    "line_value": "1.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": 172,
+     "under_odds": -240
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823576,
+    "game_id": 18447041,
+    "player_id": 101,
+    "vendor": "draftkings",
+    "deeplinks": null,
+    "prop_type": "threes",
+    "line_value": "1.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": 171,
+     "under_odds": -229
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823371,
+    "game_id": 18447041,
+    "player_id": 101,
+    "vendor": "fanatics",
+    "deeplinks": null,
+    "prop_type": "threes",
+    "line_value": "1.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": 150,
+     "under_odds": -240
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823268,
+    "game_id": 18447041,
+    "player_id": 101,
+    "vendor": "fanduel",
+    "deeplinks": null,
+    "prop_type": "threes",
+    "line_value": "1.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": 162,
+     "under_odds": -210
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823724,
+    "game_id": 18447041,
+    "player_id": 85,
+    "vendor": "betmgm",
+    "deeplinks": null,
+    "prop_type": "threes",
+    "line_value": "0.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": -225,
+     "under_odds": 170
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823624,
+    "game_id": 18447041,
+    "player_id": 85,
+    "vendor": "caesars",
+    "deeplinks": null,
+    "prop_type": "threes",
+    "line_value": "1.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": 164,
+     "under_odds": -225
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823577,
+    "game_id": 18447041,
+    "player_id": 85,
+    "vendor": "draftkings",
+    "deeplinks": null,
+    "prop_type": "threes",
+    "line_value": "1.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": 179,
+     "under_odds": -240
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823375,
+    "game_id": 18447041,
+    "player_id": 85,
+    "vendor": "fanatics",
+    "deeplinks": null,
+    "prop_type": "threes",
+    "line_value": "1.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": 150,
+     "under_odds": -240
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823264,
+    "game_id": 18447041,
+    "player_id": 85,
+    "vendor": "fanduel",
+    "deeplinks": null,
+    "prop_type": "threes",
+    "line_value": "1.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": 162,
+     "under_odds": -210
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823730,
+    "game_id": 18447041,
+    "player_id": 3547287,
+    "vendor": "betmgm",
+    "deeplinks": null,
+    "prop_type": "threes",
+    "line_value": "2.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": 105,
+     "under_odds": -140
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823474,
+    "game_id": 18447041,
+    "player_id": 3547287,
+    "vendor": "betrivers",
+    "deeplinks": null,
+    "prop_type": "threes",
+    "line_value": "2.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": 110,
+     "under_odds": -143
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823615,
+    "game_id": 18447041,
+    "player_id": 3547287,
+    "vendor": "caesars",
+    "deeplinks": null,
+    "prop_type": "threes",
+    "line_value": "2.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": 111,
+     "under_odds": -148
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823570,
+    "game_id": 18447041,
+    "player_id": 3547287,
+    "vendor": "draftkings",
+    "deeplinks": null,
+    "prop_type": "threes",
+    "line_value": "2.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": 111,
+     "under_odds": -147
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823374,
+    "game_id": 18447041,
+    "player_id": 3547287,
+    "vendor": "fanatics",
+    "deeplinks": null,
+    "prop_type": "threes",
+    "line_value": "2.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": 110,
+     "under_odds": -145
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823263,
+    "game_id": 18447041,
+    "player_id": 3547287,
+    "vendor": "fanduel",
+    "deeplinks": null,
+    "prop_type": "threes",
+    "line_value": "2.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": 118,
+     "under_odds": -150
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823731,
+    "game_id": 18447041,
+    "player_id": 17896026,
+    "vendor": "betmgm",
+    "deeplinks": null,
+    "prop_type": "threes",
+    "line_value": "1.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": -135,
+     "under_odds": 100
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823472,
+    "game_id": 18447041,
+    "player_id": 17896026,
+    "vendor": "betrivers",
+    "deeplinks": null,
+    "prop_type": "threes",
+    "line_value": "1.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": -139,
+     "under_odds": 105
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823622,
+    "game_id": 18447041,
+    "player_id": 17896026,
+    "vendor": "caesars",
+    "deeplinks": null,
+    "prop_type": "threes",
+    "line_value": "1.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": -155,
+     "under_odds": 111
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823574,
+    "game_id": 18447041,
+    "player_id": 17896026,
+    "vendor": "draftkings",
+    "deeplinks": null,
+    "prop_type": "threes",
+    "line_value": "1.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": -134,
+     "under_odds": 102
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823377,
+    "game_id": 18447041,
+    "player_id": 17896026,
+    "vendor": "fanatics",
+    "deeplinks": null,
+    "prop_type": "threes",
+    "line_value": "1.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": -150,
+     "under_odds": 115
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823267,
+    "game_id": 18447041,
+    "player_id": 17896026,
+    "vendor": "fanduel",
+    "deeplinks": null,
+    "prop_type": "threes",
+    "line_value": "1.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": -142,
+     "under_odds": 112
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823733,
+    "game_id": 18447041,
+    "player_id": 17896073,
+    "vendor": "betmgm",
+    "deeplinks": null,
+    "prop_type": "threes",
+    "line_value": "2.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": 145,
+     "under_odds": -190
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823468,
+    "game_id": 18447041,
+    "player_id": 17896073,
+    "vendor": "betrivers",
+    "deeplinks": null,
+    "prop_type": "threes",
+    "line_value": "1.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": -195,
+     "under_odds": 143
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823619,
+    "game_id": 18447041,
+    "player_id": 17896073,
+    "vendor": "caesars",
+    "deeplinks": null,
+    "prop_type": "threes",
+    "line_value": "2.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": 145,
+     "under_odds": -197
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823571,
+    "game_id": 18447041,
+    "player_id": 17896073,
+    "vendor": "draftkings",
+    "deeplinks": null,
+    "prop_type": "threes",
+    "line_value": "1.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": -194,
+     "under_odds": 146
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823369,
+    "game_id": 18447041,
+    "player_id": 17896073,
+    "vendor": "fanatics",
+    "deeplinks": null,
+    "prop_type": "threes",
+    "line_value": "1.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": -210,
+     "under_odds": 135
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823270,
+    "game_id": 18447041,
+    "player_id": 17896073,
+    "vendor": "fanduel",
+    "deeplinks": null,
+    "prop_type": "threes",
+    "line_value": "1.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": -184,
+     "under_odds": 142
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823728,
+    "game_id": 18447041,
+    "player_id": 56677827,
+    "vendor": "betmgm",
+    "deeplinks": null,
+    "prop_type": "threes",
+    "line_value": "1.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": 170,
+     "under_odds": -235
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823616,
+    "game_id": 18447041,
+    "player_id": 56677827,
+    "vendor": "caesars",
+    "deeplinks": null,
+    "prop_type": "threes",
+    "line_value": "1.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": 175,
+     "under_odds": -240
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823578,
+    "game_id": 18447041,
+    "player_id": 56677827,
+    "vendor": "draftkings",
+    "deeplinks": null,
+    "prop_type": "threes",
+    "line_value": "1.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": 181,
+     "under_odds": -243
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823378,
+    "game_id": 18447041,
+    "player_id": 56677827,
+    "vendor": "fanatics",
+    "deeplinks": null,
+    "prop_type": "threes",
+    "line_value": "1.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": 155,
+     "under_odds": -250
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823734,
+    "game_id": 18447041,
+    "player_id": 1028025497,
+    "vendor": "betmgm",
+    "deeplinks": null,
+    "prop_type": "threes",
+    "line_value": "2.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": 150,
+     "under_odds": -200
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823469,
+    "game_id": 18447041,
+    "player_id": 1028025497,
+    "vendor": "betrivers",
+    "deeplinks": null,
+    "prop_type": "threes",
+    "line_value": "1.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": -177,
+     "under_odds": 132
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823618,
+    "game_id": 18447041,
+    "player_id": 1028025497,
+    "vendor": "caesars",
+    "deeplinks": null,
+    "prop_type": "threes",
+    "line_value": "1.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": -179,
+     "under_odds": 133
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823572,
+    "game_id": 18447041,
+    "player_id": 1028025497,
+    "vendor": "draftkings",
+    "deeplinks": null,
+    "prop_type": "threes",
+    "line_value": "1.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": -169,
+     "under_odds": 128
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823372,
+    "game_id": 18447041,
+    "player_id": 1028025497,
+    "vendor": "fanatics",
+    "deeplinks": null,
+    "prop_type": "threes",
+    "line_value": "1.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": -175,
+     "under_odds": 125
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823262,
+    "game_id": 18447041,
+    "player_id": 1028025497,
+    "vendor": "fanduel",
+    "deeplinks": null,
+    "prop_type": "threes",
+    "line_value": "1.5",
+    "market": {
+     "type": "over_under",
+     "over_odds": -162,
+     "under_odds": 126
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823736,
+    "game_id": 18447041,
+    "player_id": 192,
+    "vendor": "betmgm",
+    "deeplinks": null,
+    "prop_type": "triple_double",
+    "line_value": "0.5",
+    "market": {
+     "type": "milestone",
+     "odds": 775
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823580,
+    "game_id": 18447041,
+    "player_id": 192,
+    "vendor": "draftkings",
+    "deeplinks": null,
+    "prop_type": "triple_double",
+    "line_value": "0.5",
+    "market": {
+     "type": "milestone",
+     "odds": 700
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823381,
+    "game_id": 18447041,
+    "player_id": 192,
+    "vendor": "fanatics",
+    "deeplinks": null,
+    "prop_type": "triple_double",
+    "line_value": "0.5",
+    "market": {
+     "type": "milestone",
+     "odds": 850
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   },
+   {
+    "id": 2256823271,
+    "game_id": 18447041,
+    "player_id": 192,
+    "vendor": "fanduel",
+    "deeplinks": null,
+    "prop_type": "triple_double",
+    "line_value": "0.5",
+    "market": {
+     "type": "milestone",
+     "odds": 1000
+    },
+    "opened_at": "2025-11-20T21:00:00.000Z"
+   }
+  ],
+  "meta": {
+   "per_page": 542
+  }
+ }
+}

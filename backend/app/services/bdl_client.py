@@ -20,7 +20,9 @@ Paths below are the paths in the recorded captures under
 - ``GET /v1/players`` with no ``player_ids[]`` (``list_players_page``)
 - ``GET /v1/player_injuries``
 - ``GET /v2/odds/player_props``
+- ``GET /nba/v2/odds/player_props/opening``
 - ``GET /v2/odds``
+- ``GET /nba/v2/odds/opening``
 - ``GET /nba/v1/projected_lineups``
 
 The 429 capture is ``GET /nba/v1/lineups``. This client does not call that
@@ -55,7 +57,9 @@ _PATH_STATS = "/v1/stats"
 _PATH_PLAYERS = "/v1/players"
 _PATH_INJURIES = "/v1/player_injuries"
 _PATH_PLAYER_PROPS = "/v2/odds/player_props"
+_PATH_PLAYER_PROPS_OPENING = "/nba/v2/odds/player_props/opening"
 _PATH_ODDS = "/v2/odds"
+_PATH_ODDS_OPENING = "/nba/v2/odds/opening"
 _PATH_PROJECTED_LINEUPS = "/nba/v1/projected_lineups"
 
 # The /v1/games season_type values with a recorded capture
@@ -497,6 +501,21 @@ class BdlClient:
         """
         return await self._get(_PATH_PLAYER_PROPS, [("game_id", str(game_id))])
 
+    async def get_opening_props(self, *, game_id: int) -> dict[str, Any]:
+        """Fetch the opening player props BALLDONTLIE stored for one game.
+
+        Calls ``GET /nba/v2/odds/player_props/opening?game_id=``. That path
+        is the one in ``props_opening_15907655_2024-11-20.json``. The
+        recorded request sends ``game_id`` and nothing else: no
+        ``per_page`` and no ``cursor``. ``meta.per_page`` in the body is
+        the row count. Do not paginate this call.
+
+        A row carries ``opened_at``. It does not carry ``updated_at``.
+
+        Returns the raw JSON object.
+        """
+        return await self._get(_PATH_PLAYER_PROPS_OPENING, [("game_id", str(game_id))])
+
     async def list_odds(
         self,
         *,
@@ -519,6 +538,36 @@ class BdlClient:
         params = [("dates[]", date) for date in dates]
         return await self._get(_PATH_ODDS, _with_page(params, per_page=per_page, cursor=cursor))
 
+    async def list_opening_odds(
+        self,
+        *,
+        dates: list[str],
+        per_page: int = 100,
+        cursor: int | None = None,
+    ) -> dict[str, Any]:
+        """List opening game lines for one or more dates.
+
+        Calls ``GET /nba/v2/odds/opening``. That path is the one in
+        ``odds_opening_2024-11-20.json``, not ``/v2/odds``. The recorded
+        query uses repeated ``dates[]`` and ``per_page``. No recorded
+        opening request sends ``game_ids``, so this method does not either.
+
+        ``odds_opening_2026-03-10.json`` has ``meta.next_cursor``. Pass
+        that integer as ``cursor``. The query name is ``cursor``, the same
+        name ``list_odds`` sends and the same value ``meta.next_cursor``
+        already is. A row carries ``opened_at`` and does not carry
+        ``updated_at``.
+
+        Returns the raw JSON object. An empty ``dates`` list raises
+        ``BdlError`` before a budget slot is taken.
+        """
+        if not dates:
+            raise BdlError("list_opening_odds requires at least one date")
+        params = [("dates[]", day) for day in dates]
+        return await self._get(
+            _PATH_ODDS_OPENING, _with_page(params, per_page=per_page, cursor=cursor)
+        )
+
     async def list_projected_lineups(self, *, game_ids: list[int]) -> dict[str, Any]:
         """Fetch projected lineups for the given games.
 
@@ -538,11 +587,12 @@ class BdlClient:
     async def _get(self, path: str, params: list[tuple[str, str]]) -> dict[str, Any]:
         """GET ``path`` inside the shared budget, retrying 429 and 5xx.
 
-        The default policy allows three HTTP responses. A 429 sleeps until
-        ``x-ratelimit-reset`` (or 60 seconds when that header is missing
-        or already past) and then tries again. That wait, and the
-        ``remaining == 0`` pause, never exceed 65 seconds. A 5xx uses
-        that same wait. Any other non-2xx raises ``BdlApiError``
+        The default policy allows three HTTP responses. A 429 sleeps for
+        ``Retry-After`` when that header is a positive delay. Otherwise it
+        sleeps until ``x-ratelimit-reset``, or 60 seconds when that header
+        is missing or already past. That wait, and the ``remaining == 0``
+        pause, never exceed 65 seconds. A 5xx uses that same wait. Any
+        other non-2xx raises ``BdlApiError``
         immediately. A transport error waits 60 seconds and tries again.
         The wait is ``self._sleep``, so a test clock can skip the real delay.
 
@@ -651,7 +701,9 @@ class BdlClient:
     def _backoff_seconds(self, response: httpx.Response) -> float:
         """How long to wait before another try of this response.
 
-        A future ``x-ratelimit-reset`` is the server's window end, so the
+        ``Retry-After`` wins when it is a positive number of seconds or a
+        future HTTP date. The wait is still capped at 65 seconds. Otherwise
+        a future ``x-ratelimit-reset`` is the server's window end, so the
         wait ends there, but never later than 65 seconds. A missing header,
         or a reset that is not still in the future, waits 60 seconds. Zero
         is never returned: a tight retry loop would burn the shared key.
@@ -662,6 +714,9 @@ class BdlClient:
         """
         if self._rate_limit_policy == _INJURY_RATE_LIMIT_POLICY:
             return self._injury_backoff_seconds(response)
+        retry_after = _retry_after_delay(response.headers.get("retry-after"), self._clock())
+        if retry_after is not None:
+            return self._clamp_wait(retry_after)
         reset = _parse_header_int(response.headers.get("x-ratelimit-reset"))
         if reset is None:
             return _FALLBACK_BACKOFF_SECONDS

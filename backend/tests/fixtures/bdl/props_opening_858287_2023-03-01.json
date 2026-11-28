@@ -1,0 +1,16 @@
+{
+ "request": "https://api.balldontlie.io/nba/v2/odds/player_props/opening?game_id=858287",
+ "status": 200,
+ "elapsed_s": 0.14,
+ "rate_headers": {
+  "x-ratelimit-limit": "5",
+  "x-ratelimit-remaining": "3",
+  "x-ratelimit-reset": "1794370185"
+ },
+ "response": {
+  "data": [],
+  "meta": {
+   "per_page": 0
+  }
+ }
+}
