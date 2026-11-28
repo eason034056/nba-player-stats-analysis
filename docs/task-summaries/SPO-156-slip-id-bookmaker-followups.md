@@ -12,7 +12,7 @@ Frontend follow-up to #126. A stored bookmaker key `bally_bet` is rewritten to `
 | Read sites | `calculateNoVig` maps the list before `JSON.stringify`. `EventDetail` maps the form value before `mutate`. `BookmakerSelect` reads `value` through the same function, and writes the canonical list back when an alias is present. `getBookmakerDisplayName("bally_bet")` is still "Bally Bet". |
 | Slip ids | `isLegacyOddsApiEventId` returns false for any all-digit string, then keeps the 32-hex check. A 32-character id with a letter a-f is still dropped. |
 | Comments | `schemas.ts` top-read market, `today-board.ts` `marketShort`, and `use-player-dd.ts` now say BALLDONTLIE. The FGM note and the slip filter say they mean the retired Odds API. |
-| Tests | QA patch applied, then renamed off `*.qa.test.*`. Two expectations updated for the new behavior. One new case in `BetSlipContext.test.tsx`. |
+| Tests | QA patch applied, then renamed off `*.qa.test.*`. Two expectations updated for the new behavior. One new case in `BetSlipContext.test.tsx`. `BookmakerSelect.alias.test.tsx` checks that a saved `bally_bet` shows Bally Bet selected and reports `ballybet`. |
 
 ## Why
 
@@ -22,7 +22,7 @@ No `localStorage` key stores a bookmaker. `betslip_picks` has no bookmaker field
 
 ## Tests
 
-`cd frontend && npx vitest run`: **96 files, 690 tests, all passed.**
+`cd frontend && npx vitest run`: **97 files, 691 tests, all passed.** The first commit was 96 files and 690 tests. The alias test added the 691st.
 
 `npx tsc --noEmit`: passed, no output.
 
@@ -44,6 +44,15 @@ Fix 2 undone by removing the all-digit early return, so `/^[0-9a-f]{32}$/i` appl
 - **Still green:** the short digit id, the recorded BALLDONTLIE id, tomorrow's pick, the empty slate, the retired wnba key, and "drops a 32-hex event id".
 
 The digit check was restored. The same three files were re-run: **12 passed.**
+
+Follow-up on the picker. `BookmakerSelect.alias.test.tsx` renders `value={["bally_bet"]}` and checks `1 of 10 bookmakers`, that the Bally Bet chip has `control-chip-active`, and that `onChange` is called with `["ballybet"]`. Bally Bet sits under Other Bookmakers, so the test opens that group first.
+
+With the picker maps set back to the raw `value` (the request rewrite in `calculateNoVig` left in place): **1 failed, 3 passed.**
+
+- **Red:** "shows a saved bally_bet as selected and reports ballybet". `onChange` was not called.
+- **Still green:** the three request-key tests. The POST body is still rewritten in `calculateNoVig`.
+
+The picker maps were restored. The alias test was re-run: **1 passed.**
 
 ## Follow-ups
 
