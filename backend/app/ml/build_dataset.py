@@ -23,6 +23,10 @@ box-score absence or ``game_lineups.starter`` has ``info_source = standin``.
 The file next to the Parquet is
 ``<file>.meta.json`` (``player_games.parquet`` -> ``player_games.meta.json``).
 
+``--absence-source`` defaults to ``reported``. ``actual`` writes the same
+columns from the box-score stand-in (``info_source = standin``) and leaves
+the official count columns empty. The default column list does not change.
+
 This command does not write ``predictions`` and does not create a feature
 table. It is not imported by the API.
 """
@@ -228,6 +232,16 @@ def build_parser() -> argparse.ArgumentParser:
         help="Parquet path. Metadata is written to <file>.meta.json.",
     )
     parser.add_argument("--league", default="nba", choices=("nba",))
+    parser.add_argument(
+        "--absence-source",
+        choices=(SOURCE_REPORTED, SOURCE_ACTUAL),
+        default=SOURCE_REPORTED,
+        help=(
+            "Absence numbers to store. reported (default) is the pregame export. "
+            "actual is the box-score stand-in export: info_source is standin and "
+            "the official count columns stay empty. Output column names do not change."
+        ),
+    )
     return parser
 
 
@@ -802,10 +816,13 @@ async def export_dataset(
     out: Path,
     league: str = "nba",
     git_head: str | None = None,
+    absence_source: str = SOURCE_REPORTED,
 ) -> dict[str, object]:
     """Load one window and write Parquet plus metadata.
 
     The connection is read-only and is closed before the files are written.
+    ``absence_source`` defaults to ``reported``. ``actual`` is the box-score
+    stand-in export. It does not change the output column names.
     """
     dsn = dsn_from_env(dsn_env)
     conn = await connect_readonly(dsn)
@@ -842,6 +859,7 @@ async def export_dataset(
         coverage_relation_note=relation_note,
         official_rows=official_rows,
         official_refreshes=official_refreshes,
+        absence_source=absence_source,
     )
     write_outputs(dataset, out)
     logger.info("wrote %s rows", dataset.metadata["row_count"])
@@ -861,6 +879,7 @@ def main(argv: list[str] | None = None) -> int:
                 hours_before_tip=args.hours_before_tip,
                 out=args.out,
                 league=args.league,
+                absence_source=args.absence_source,
             )
         )
     except (LoadError, DatasetError, OSError, ValueError) as exc:
