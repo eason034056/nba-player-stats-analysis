@@ -66,6 +66,7 @@ import type { PlayerSuggestFn } from "@/components/PlayerInput";
 import { isBinaryMarket, getMarketDisplayName, type MarketKey } from "@/components/MarketSelect";
 import {
   calculatorFormSchema,
+  canonicalBookmakerList,
   type CalculatorFormData,
   type NBAEvent,
   type NoVigRequest,
@@ -182,12 +183,14 @@ export function EventDetail() {
   useEffect(() => {
     setResult(null);
     if (!playerName || playerName.trim().length < 2) return;
+    const storedBookmakers =
+      bookmakers != null && bookmakers.length > 0 ? bookmakers : null;
     mutation.mutate({
       event_id: eventId,
       player_name: playerName.trim(),
       market: selectedMarket,
       regions: "us",
-      bookmakers: bookmakers && bookmakers.length > 0 ? bookmakers : null,
+      bookmakers: canonicalBookmakerList(storedBookmakers) ?? null,
       odds_format: "american",
     });
     // The mutation object is not a trigger. The inputs above are.

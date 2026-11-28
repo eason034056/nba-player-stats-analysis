@@ -69,7 +69,7 @@ export function metricShort(metric: string): string {
 }
 
 /**
- * Short stat code for an Odds API market key.
+ * Short stat code for a BALLDONTLIE market key.
  * `player_points` is "PTS". An unknown key keeps its own name, uppercased,
  * so the card does not invent a code the API did not send.
  */
