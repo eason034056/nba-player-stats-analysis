@@ -43,7 +43,7 @@ METRICS = (
     / "docs"
     / "decisions"
     / "SPO-158"
-    / "baseline_metrics.json"
+    / "baseline_metrics_synthetic.json"
 )
 UTC = timezone.utc
 T = datetime(2025, 11, 1, 23, 0, tzinfo=UTC)
@@ -246,6 +246,10 @@ def test_synthetic_run_matches_the_hand_calculation(tmp_path: Path) -> None:
     assert metrics["hyperparameters"]["iterations_run"] == 100
     assert metrics["hyperparameters"]["regressor"]["early_stopping"] is False
     assert metrics["hyperparameters"]["regressor"]["min_samples_leaf"] == 20
+    assert metrics["features"] == list(headline_feature_names())
+    assert metrics["feature_count"] == 28
+    assert metrics["features_dropped_all_missing_in_train"] == []
+    assert metrics["features_actually_fit"] == metrics["features"]
 
     points = metrics["markets"]["player_points"]
     assert points["split"] == SPLIT_VALIDATION
@@ -338,6 +342,9 @@ def test_committed_metrics_file_matches_a_fresh_run(tmp_path: Path) -> None:
     assert committed["split"]["season_2026_27_used_for_training_or_selection"] is False
     assert committed["markets"]["player_points"] == fresh["markets"]["player_points"]
     assert committed["rows"] == fresh["rows"]
+    assert committed["features"] == fresh["features"]
+    assert committed["features_dropped_all_missing_in_train"] == []
+    assert committed["features_actually_fit"] == committed["features"]
 
 
 def test_trainer_source_does_not_open_the_history_database() -> None:

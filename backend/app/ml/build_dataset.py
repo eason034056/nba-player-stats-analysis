@@ -23,6 +23,12 @@ box-score absence or ``game_lineups.starter`` has ``info_source = standin``.
 The file next to the Parquet is
 ``<file>.meta.json`` (``player_games.parquet`` -> ``player_games.meta.json``).
 
+``--absence-source`` defaults to ``reported``. ``actual`` writes the same
+columns from the box-score stand-in (``info_source = standin``) and leaves
+the official count columns empty. The metadata note follows that source:
+``reported`` keeps the existing sentence, and ``actual`` says the minute
+and share columns are filled. The default column list does not change.
+
 This command does not write ``predictions`` and does not create a feature
 table. It is not imported by the API.
 """
@@ -228,6 +234,16 @@ def build_parser() -> argparse.ArgumentParser:
         help="Parquet path. Metadata is written to <file>.meta.json.",
     )
     parser.add_argument("--league", default="nba", choices=("nba",))
+    parser.add_argument(
+        "--absence-source",
+        choices=(SOURCE_REPORTED, SOURCE_ACTUAL),
+        default=SOURCE_REPORTED,
+        help=(
+            "Absence numbers to store. reported (default) is the pregame export. "
+            "actual is the box-score stand-in export: info_source is standin and "
+            "the official count columns stay empty. Output column names do not change."
+        ),
+    )
     return parser
 
 
@@ -556,6 +572,37 @@ class _AbsenceReader:
         return _AbsenceCell(info, used_actual, used_lineup, columns)
 
 
+def absence_coverage_note(
+    absence_source: str,
+    injury_coverage: str,
+    relation_note: str | None = None,
+) -> str:
+    """Sentence stored as ``absence_coverage_note`` in ``<file>.meta.json``.
+
+    ``reported`` returns the existing coverage sentence, so a default export
+    matches the previous note. ``actual`` fills the minute and share columns
+    from the box score, so the sentence must not say those features stay empty.
+    """
+    if absence_source != SOURCE_ACTUAL:
+        return coverage_note(injury_coverage, relation_note)
+    if injury_coverage == COVERAGE_COVERED:
+        coverage = "Injury coverage was marked covered."
+    elif relation_note and "present" in relation_note:
+        coverage = (
+            "source_covered is present but this export does not read its columns, "
+            "so official-report coverage stays unknown."
+        )
+    else:
+        coverage = (
+            "source_covered is not in the schema. An empty injury list is unknown, not healthy."
+        )
+    return (
+        f"{coverage} absence_source is actual. Minute and share columns are the "
+        "box-score stand-in (info_source standin) and are filled from who did not "
+        "play. Official count columns stay empty. These are not pregame features."
+    )
+
+
 def assemble_dataset(
     games: Sequence[GameRecord],
     stats: Sequence[StatRecord],
@@ -740,7 +787,9 @@ def assemble_dataset(
             + list(OFFICIAL_COUNT_COLUMNS)
         ),
         "absence_coverage": injury_coverage,
-        "absence_coverage_note": coverage_note(injury_coverage, coverage_relation_note),
+        "absence_coverage_note": absence_coverage_note(
+            absence_source, injury_coverage, coverage_relation_note
+        ),
         "unknown_injury_status_count": reader.unknown_status_count,
         "label_source": "prop_actuals",
         "game_odds_features": list(ODDS_COLUMNS),
@@ -802,10 +851,13 @@ async def export_dataset(
     out: Path,
     league: str = "nba",
     git_head: str | None = None,
+    absence_source: str = SOURCE_REPORTED,
 ) -> dict[str, object]:
     """Load one window and write Parquet plus metadata.
 
     The connection is read-only and is closed before the files are written.
+    ``absence_source`` defaults to ``reported``. ``actual`` is the box-score
+    stand-in export. It does not change the output column names.
     """
     dsn = dsn_from_env(dsn_env)
     conn = await connect_readonly(dsn)
@@ -842,6 +894,7 @@ async def export_dataset(
         coverage_relation_note=relation_note,
         official_rows=official_rows,
         official_refreshes=official_refreshes,
+        absence_source=absence_source,
     )
     write_outputs(dataset, out)
     logger.info("wrote %s rows", dataset.metadata["row_count"])
@@ -861,6 +914,7 @@ def main(argv: list[str] | None = None) -> int:
                 hours_before_tip=args.hours_before_tip,
                 out=args.out,
                 league=args.league,
+                absence_source=args.absence_source,
             )
         )
     except (LoadError, DatasetError, OSError, ValueError) as exc:
