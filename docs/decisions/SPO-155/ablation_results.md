@@ -3,7 +3,7 @@
 **Run:** branch `feature/SPO-155-injury-feature-ablation` @ c405221, 2026-11-27. Data: Eason's `nba_history` dump (migrations 001-005) restored read-only into a throwaway Postgres; two exports with `build_dataset --seasons 2023:2025 --hours-before-tip 3`, the second with `--absence-source actual`. 85,089 rows each, same keys. Season 2026 rows used: 0.
 **Split:** train 2024-25 regular season pregame (26,251 rows); validation 2025-26 regular season pregame (26,623 rows); every arm scored on the same 26,100 rows where the naive last-10/last-5 mean exists.
 
-**Recommendation: do not ship official injury features yet.** Official coverage is 0 of 26,623 validation rows and 0 of 26,251 train rows: the database has no official injury report rows, no `injury_snapshots`, and no `source_refreshes`. The official arm is not measurable. Keep the official path gated off and re-run this ablation after the 2024-25 official reports are backfilled.
+**Recommendation: do not ship official injury features yet.** Official coverage is 0 of 26,623 validation rows and 0 of 26,251 train rows: the database has no official injury report rows, no `injury_snapshots`, and no `source_refreshes`. The official arm is not measurable. Keep the official path gated off and re-run only after (a) migrations 006/007 are applied to the history database and (b) official injury reports are backfilled for both the 2024-25 training window and the 2025-26 validation window. The dump used (migrations 001-005) has no official report, injury, lineup, source_refreshes, or odds snapshot rows, so 0 coverage is structural, not a join bug; production was not checked.
 
 **What the other arms show (MAE, lower is better, 26,100 rows):**
 
@@ -13,7 +13,7 @@
 | rebounds | 1.956 | 1.916 | 1.944 |
 | assists | 1.388 | 1.366 | 1.377 |
 | threes | 0.950 | 0.934 | 0.906 |
-| steals | 0.740 | 0.728 | 0.739 |
+| steals | 0.740 | 0.728 | 0.738 |
 | blocks | 0.535 | 0.528 | 0.511 |
 | PR | 5.768 | 5.576 | 5.680 |
 | PA | 5.252 | 5.090 | 5.195 |
@@ -26,6 +26,14 @@
 - `boxscore_standin` beats the naive mean on 8 of 10 sum markets and on double-double, but not on threes, blocks, or triple-double.
 - **Caution:** the stand-in uses the actual box score to see who did not play. That is known only after the game, so it is an upper bound on what absence information could add, not a feature we can use before tip. It suggests absence information is worth getting at T; it does not justify turning on the official path.
 - Pinball loss is only at q=0.5 (half the MAE), because the trainer has no quantile model.
+
+## Independent check (Backtest)
+
+- Re-run reproduced the JSON and report byte-for-byte.
+- All arms share one row mask; the 523 dropped validation rows have fewer than 5 prior games. `naive_last10` recomputed from `player_game_stats`: 0 mismatches (12 columns x 85,089 rows); 484 rows fall back to last-5. Naive for double-double and triple-double is the train base rate.
+- Paired cluster bootstrap by game date (5,000 draws, 164 dates): stand-in vs naive is better on 8 of 10 sum markets with CIs excluding 0 (PRA -0.149, 95% CI -0.210 to -0.102) and significantly worse on threes (+0.028) and blocks (+0.017). In the first half of the dates, the points and assists CIs include 0. Stand-in vs `no_official` is better on all 10 sum markets in both halves (PRA -0.270, CI -0.314 to -0.232).
+- Shuffling the stand-in columns still moves PRA from 6.334 to 6.277, so about a fifth of the gain is extra model capacity, not information.
+- The 2024-25 fitted baseline loses to naive, so "stand-in beats naive" mostly shows after-the-fact absence information rescuing a weak fit.
 
 # SPO-155 injury-feature ablation
 
