@@ -214,6 +214,35 @@ def _labels(game_id: int, player: int) -> list[ActualRecord]:
 
 
 @pytest.mark.asyncio
+async def test_source_covered_function_is_reported_present(scratch_dsn: str) -> None:
+    """The coverage note follows the function, and the status stays unknown."""
+    conn = await asyncpg.connect(scratch_dsn, timeout=5)
+    try:
+        await conn.execute("CREATE DOMAIN league_code AS TEXT CHECK (VALUE IN ('nba', 'wnba'))")
+        await conn.execute(
+            """
+            CREATE FUNCTION source_covered(
+                p_league league_code,
+                p_source text,
+                p_as_of timestamptz,
+                p_max_staleness interval DEFAULT '90 minutes'
+            )
+            RETURNS boolean
+            LANGUAGE sql
+            STABLE
+            AS $$ SELECT FALSE $$
+            """
+        )
+        coverage, note = await injury_coverage_status(conn)
+    finally:
+        await conn.close()
+    assert coverage == "unknown"
+    assert "present" in note
+    assert "not in the schema" not in note
+    assert "://" not in note
+
+
+@pytest.mark.asyncio
 async def test_live_loader_and_training_history_call_team_absences(seeded: str) -> None:
     conn = await asyncpg.connect(seeded, timeout=5)
     try:
