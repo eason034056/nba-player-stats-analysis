@@ -1,6 +1,8 @@
 # Model card — SPO-158 baseline, no official injury features
 
-This is the fixed comparison model for a later ablation. It predicts each catalog stat from facts known at T. It does not use the official NBA injury report. The numbers in `baseline_metrics.json` are from a 17-row made-up sample. A run on the history database is **PENDING**. Do not read 9.25 as a real-season error.
+This is the fixed comparison model for a later ablation. It predicts each catalog stat from facts known at T. It does not use the official NBA injury report. The numbers in `baseline_metrics_synthetic.json` are synthetic fixture output from a 17-row made-up sample. Do not read 9.25 as a real-season error.
+
+Real-database metrics are added in this PR's next commit.
 
 ## Command
 
@@ -10,7 +12,7 @@ From `backend/`:
 DATABASE_URL="" python -m app.ml.train_baseline \
   --dataset tests/fixtures/spo158/synthetic_player_games.json \
   --lines tests/fixtures/spo158/synthetic_prop_lines.json \
-  --out ../docs/decisions/SPO-158/baseline_metrics.json
+  --out ../docs/decisions/SPO-158/baseline_metrics_synthetic.json
 ```
 
 A history export uses the same trainer on a Parquet file from the existing command. That file stays on disk and out of git:
@@ -50,6 +52,8 @@ Form, schedule, and opening game odds. All of these are on the existing export a
 
 `season_type` is a filter (regular season), not a column of the matrix. A short window stays null. It is not filled with zero.
 
+A column that is missing on every training row is left out of the fit. The locked `features` list still names all 28. `features_dropped_all_missing_in_train` names the ones left out. `features_actually_fit` names the ones the model saw. On this synthetic file the dropped list is empty: each of the 4 training rows has a number in every feature. The same kept list is used to score the 9 validation rows and the 1 side-table row.
+
 ## Left out of the matrix
 
 - Official injury: `nba_injury_report_rows`, `injuries_nba_official`, `current_injuries`, `source_covered`
@@ -73,7 +77,7 @@ Lines are for grading only. For one player, game, and market, keep rows with a n
 
 The checked-in sample has 4 training rows. A leaf needs 20 rows, so the trees do not split. Each model predicts its training mean. On a full season the same settings can split. The synthetic MAE is the distance from that mean, which is why it can be checked by hand.
 
-Checked on Python 3.11.18 with `pandas==3.0.1` and `pyarrow==23.0.1`.
+The synthetic file was regenerated with Python 3.12.3, `pandas==3.0.1`, `pyarrow==23.0.1`, and scikit-learn 1.9.1. The trees still do not split on 4 training rows, so the hand-checked MAE is unchanged.
 
 ## Synthetic validation (season 2025, regular season, pregame)
 
@@ -113,4 +117,4 @@ Opening prop lines in the data model start in 2024-25, and the historical odds b
 - It does not write the `predictions` table. Backtests write this JSON file.
 - It is not imported when the API process starts.
 - It does not train or pick a model on 2026-27.
-- Real-database metrics: **PENDING**.
+- Real-database metrics are added in this PR's next commit. Until that file is here, the history-database run is **PENDING**.

@@ -10,7 +10,7 @@ Run from ``backend/``::
     DATABASE_URL="" python -m app.ml.train_baseline \\
         --dataset tests/fixtures/spo158/synthetic_player_games.json \\
         --lines tests/fixtures/spo158/synthetic_prop_lines.json \\
-        --out ../docs/decisions/SPO-158/baseline_metrics.json
+        --out ../docs/decisions/SPO-158/baseline_metrics_synthetic.json
 
 A Parquet file from ``python -m app.ml.build_dataset`` is the same kind of
 input. This command does not open a database, does not write the
@@ -25,6 +25,7 @@ import logging
 import math
 import sys
 from collections.abc import Mapping, Sequence
+from dataclasses import dataclass
 from pathlib import Path
 
 import numpy as np
@@ -62,8 +63,25 @@ DOCUMENTED_COMMAND = (
     "DATABASE_URL=\"\" python -m app.ml.train_baseline "
     "--dataset tests/fixtures/spo158/synthetic_player_games.json "
     "--lines tests/fixtures/spo158/synthetic_prop_lines.json "
-    "--out ../docs/decisions/SPO-158/baseline_metrics.json"
+    "--out ../docs/decisions/SPO-158/baseline_metrics_synthetic.json"
 )
+
+
+@dataclass(frozen=True, slots=True)
+class FittedBaseline:
+    """Models fit on the training columns that were not entirely missing.
+
+    ``features_actually_fit`` is chosen from the training rows only. Validation
+    and the side table are scored with that same list.
+    ``features_dropped_all_missing_in_train`` names the headline columns that
+    were NaN on every training row. A zero stays. A number that shows up only
+    in validation does not put a dropped column back.
+    """
+
+    models: dict[str, object]
+    features_actually_fit: tuple[str, ...]
+    features_dropped_all_missing_in_train: tuple[str, ...]
+
 
 # sklearn defaults, with early stopping forced off. "auto" would hold out
 # part of a large training season. The 2025-26 season is never passed to fit.
@@ -90,6 +108,44 @@ def _params(base: Mapping[str, object], seed: int) -> dict[str, object]:
     values = dict(base)
     values["random_state"] = seed
     return values
+
+
+def _missing_columns(
+    matrix: np.ndarray,
+    names: Sequence[str],
+) -> tuple[tuple[str, ...], tuple[str, ...]]:
+    """Split ``names`` into kept columns and columns that are all NaN.
+
+    A column is missing when every row is NaN, or when the matrix has no
+    rows. A zero is not missing. ``matrix`` must be the training matrix.
+    This function does not look at validation.
+
+    Returns:
+        Kept names, then dropped names, each in ``names`` order.
+    """
+    kept: list[str] = []
+    dropped: list[str] = []
+    for index, name in enumerate(names):
+        column = matrix[:, index]
+        if column.size == 0 or bool(np.isnan(column).all()):
+            dropped.append(name)
+        else:
+            kept.append(name)
+    return tuple(kept), tuple(dropped)
+
+
+def _take_columns(matrix: np.ndarray, names: Sequence[str], kept: Sequence[str]) -> np.ndarray:
+    """Return ``matrix`` restricted to ``kept``, in that order.
+
+    Raises:
+        BaselineError: a name in ``kept`` is not a column of ``matrix``.
+    """
+    position = {name: index for index, name in enumerate(names)}
+    missing = [name for name in kept if name not in position]
+    if missing:
+        raise BaselineError("scoring columns are not in the feature matrix: " + ", ".join(missing))
+    indexes = [position[name] for name in kept]
+    return matrix[:, indexes]
 
 
 def load_dataset(path: Path) -> pd.DataFrame:
@@ -132,24 +188,28 @@ def load_prop_lines(path: Path | None) -> list[PropLine]:
     return [parse_prop_line(row) for row in rows]
 
 
-def fit_baseline(train: pd.DataFrame, seed: int) -> dict[str, object]:
+def fit_baseline(train: pd.DataFrame, seed: int) -> FittedBaseline:
     """Fit one model per catalog market on ``train`` only.
 
     Sum-rule markets use ``HistGradientBoostingRegressor``. Double-double
     and triple-double use ``HistGradientBoostingClassifier``. The validation
     season is not an argument. Season 2026 and a non-pregame row are refused.
 
+    A headline column that is NaN on every training row is left out of every
+    model. The kept names travel with the models so a later score uses the
+    same columns. The decision uses ``train`` only.
+
     Args:
         train: Headline training rows (season 2024, regular season, pregame).
         seed: ``random_state`` for every model.
 
     Returns:
-        A map of market name to the fitted estimator.
+        The fitted models and the column lists decided from ``train``.
 
     Raises:
         BaselineError: the season or the source is not the headline train
-            set, a sum-rule market has no labeled rows, or a yes/no market
-            has only one class.
+            set, every headline feature is missing, a sum-rule market has
+            no labeled rows, or a yes/no market has only one class.
     """
     if train.empty:
         raise BaselineError("the training split has no rows")
@@ -158,7 +218,11 @@ def fit_baseline(train: pd.DataFrame, seed: int) -> dict[str, object]:
         raise BaselineError("training rows must be info_source pregame")
     if not (train["season_type"].astype(str) == "regular_season").all():
         raise BaselineError("training rows must be regular_season")
-    matrix, _names = feature_matrix(train)
+    full, names = feature_matrix(train)
+    kept, dropped = _missing_columns(full, names)
+    if not kept:
+        raise BaselineError("every headline feature is missing on every training row")
+    matrix = _take_columns(full, names, kept)
     fitted: dict[str, object] = {}
     for market in SUM_MARKETS:
         y = label_column(train, market)
@@ -177,7 +241,11 @@ def fit_baseline(train: pd.DataFrame, seed: int) -> dict[str, object]:
         model = HistGradientBoostingClassifier(**_params(CLASSIFIER_PARAMS, seed))
         model.fit(matrix[mask], y[mask].astype(int))
         fitted[market] = model
-    return fitted
+    return FittedBaseline(
+        models=fitted,
+        features_actually_fit=kept,
+        features_dropped_all_missing_in_train=dropped,
+    )
 
 
 def _predict_regression(model: object, matrix: np.ndarray) -> np.ndarray:
@@ -196,14 +264,16 @@ def _predict_probability(model: object, matrix: np.ndarray) -> np.ndarray:
 
 def _score_frame(
     frame: pd.DataFrame,
-    models: Mapping[str, object],
+    fitted: FittedBaseline,
     grouped_lines: Mapping[tuple[str, int, int, str], Sequence[PropLine]],
     train: pd.DataFrame,
     split_name: str,
 ) -> dict[str, dict[str, object]]:
     if frame.empty:
         return {}
-    matrix, _names = feature_matrix(frame)
+    full, names = feature_matrix(frame)
+    matrix = _take_columns(full, names, fitted.features_actually_fit)
+    models = fitted.models
     markets: dict[str, dict[str, object]] = {}
     for market in SUM_MARKETS:
         markets[market] = score_regression(
@@ -268,11 +338,11 @@ def train_and_score(
     import sklearn
 
     split = split_dataset(dataset)
-    models = fit_baseline(split.train, seed)
+    fitted = fit_baseline(split.train, seed)
     grouped = index_prop_lines(lines)
-    validation = _score_frame(split.validation, models, grouped, split.train, SPLIT_VALIDATION)
-    side = _score_frame(split.side, models, grouped, split.train, SPLIT_SIDE)
-    points_model = models["player_points"]
+    validation = _score_frame(split.validation, fitted, grouped, split.train, SPLIT_VALIDATION)
+    side = _score_frame(split.side, fitted, grouped, split.train, SPLIT_SIDE)
+    points_model = fitted.models["player_points"]
     train_seasons = _season_used(split.train)
     validation_seasons = _season_used(split.validation)
     used_later = any(season >= 2026 for season in train_seasons + validation_seasons)
@@ -310,6 +380,8 @@ def train_and_score(
         "rows": _row_counts(split, int(len(dataset))),
         "features": features,
         "feature_count": len(features),
+        "features_dropped_all_missing_in_train": list(fitted.features_dropped_all_missing_in_train),
+        "features_actually_fit": list(fitted.features_actually_fit),
         "excluded_features": list(excluded_feature_names()),
         "hyperparameters": {
             "regressor": _params(REGRESSOR_PARAMS, seed),
