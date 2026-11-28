@@ -523,7 +523,13 @@ WHERE l.league = $1 AND g.season = $2
 ORDER BY l.bdl_game_id, l.bdl_team_id, l.updated_at, p.bdl_player_id
 """
 
-COVERAGE_SQL = "SELECT to_regclass('public.source_covered') AS name"
+# source_covered is a function (migration 005), not a table. to_regclass
+# only sees relations, so it stays NULL even when the function is installed.
+COVERAGE_SQL = (
+    "SELECT to_regprocedure("
+    "'public.source_covered(league_code,text,timestamptz,interval)'"
+    ") AS name"
+)
 
 # Live path. One team, one game. The last-10 cutoff is the target game's
 # date, the same prior-date rule as the rest of the dataset. Injury rows are
@@ -648,13 +654,16 @@ def _projected(record: asyncpg.Record) -> ProjectedStarterRow:
 
 
 async def injury_coverage_status(conn: asyncpg.Connection) -> tuple[str, str]:
-    """Return ``(unknown, note)`` until ``source_covered`` has a reader.
+    """Return ``(unknown, note)`` until this export calls ``source_covered``.
 
-    Migration 005 is not on this branch. A missing relation and a relation
-    this module does not know how to read both mean the same thing: do not
-    treat a player with no injury row as healthy.
+    Migration 005 creates ``source_covered(league_code, text, timestamptz,
+    interval)`` as a function. ``to_regclass`` cannot see a function, so
+    this check uses ``to_regprocedure``. A missing function and a function
+    this module does not call both return ``unknown``: a player with no
+    injury row is not treated as healthy. This does not decide coverage
+    for one game.
 
-    The note names the relation. It does not contain a DSN.
+    The note names the function. It does not contain a DSN.
     """
     require_absence_source("injury_snapshots")
     rows = await _fetch(conn, COVERAGE_SQL)
