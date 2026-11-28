@@ -27,9 +27,20 @@ from app.ml.ablation_injury import (
     main,
     run_ablation,
 )
-from app.ml.absence import ABSENCE_FEATURE_COLUMNS, OFFICIAL_COUNT_COLUMNS
+from app.ml.absence import (
+    ABSENCE_FEATURE_COLUMNS,
+    COVERAGE_NOTE_PRESENT,
+    OFFICIAL_COUNT_COLUMNS,
+    SOURCE_ACTUAL,
+)
 from app.ml.baseline import BINARY_MARKETS, SUM_MARKETS, headline_feature_names
-from app.ml.build_dataset import IDENTITY_COLUMNS, OUTPUT_COLUMNS, build_parser
+from app.ml.build_dataset import (
+    IDENTITY_COLUMNS,
+    OUTPUT_COLUMNS,
+    assemble_dataset,
+    build_parser,
+    write_outputs,
+)
 from app.ml.features import COUNT_COLUMNS, form_column_names
 from app.ml.game_odds import ODDS_COLUMNS
 from app.ml.labels import label_column_names
@@ -323,6 +334,51 @@ def test_absence_source_defaults_to_reported_and_output_columns_stay() -> None:
     assert actual.absence_source == "actual"
     assert len(OUTPUT_COLUMNS) == 70
     assert OUTPUT_COLUMNS == (
+        IDENTITY_COLUMNS
+        + COUNT_COLUMNS
+        + form_column_names()
+        + ODDS_COLUMNS
+        + ABSENCE_FEATURE_COLUMNS
+        + ("is_starter", "player_injury_status")
+        + OFFICIAL_COUNT_COLUMNS
+        + label_column_names()
+    )
+
+
+def test_actual_export_note_does_not_say_the_absence_columns_stay_empty(tmp_path: Path) -> None:
+    """A stand-in export fills minute and share columns, so its note must say so.
+
+    The reported note stays the old sentence. Output column names do not change.
+    """
+    present = "source_covered is present but this export does not read its columns"
+    reported = assemble_dataset(
+        [],
+        [],
+        [],
+        season_start=2024,
+        season_end=2025,
+        git_head="sha",
+        coverage_relation_note=present,
+    )
+    assert reported.metadata["absence_coverage_note"] == COVERAGE_NOTE_PRESENT
+    actual = assemble_dataset(
+        [],
+        [],
+        [],
+        season_start=2024,
+        season_end=2025,
+        git_head="sha",
+        absence_source=SOURCE_ACTUAL,
+        coverage_relation_note=present,
+    )
+    note = str(actual.metadata["absence_coverage_note"])
+    assert "pregame absence features stay empty" not in note
+    assert "info_source standin" in note
+    assert "are filled" in note
+    meta_path = write_outputs(actual, tmp_path / "standin.parquet")
+    written = json.loads(meta_path.read_text(encoding="utf-8"))
+    assert written["absence_coverage_note"] == note
+    assert list(OUTPUT_COLUMNS) == list(
         IDENTITY_COLUMNS
         + COUNT_COLUMNS
         + form_column_names()
