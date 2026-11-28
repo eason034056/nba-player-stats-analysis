@@ -35,6 +35,8 @@
 - Shuffling the stand-in columns still moves PRA from 6.334 to 6.277, so about a fifth of the gain is extra model capacity, not information.
 - The 2024-25 fitted baseline loses to naive, so "stand-in beats naive" mostly shows after-the-fact absence information rescuing a weak fit.
 
+The report below is the tool output from the c405221 run, kept byte for byte. Its re-run sentence is the one that code printed then. The code now uses the condition in the recommendation above for both zero coverage and the all-columns-dropped case.
+
 # SPO-155 injury-feature ablation
 
 not measurable: official coverage 0 rows. With 0 coverage, keep the official path gated/dark; re-run after the 2024-25 official reports are backfilled.

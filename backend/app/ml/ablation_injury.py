@@ -82,15 +82,22 @@ from app.ml.train_baseline import (
 logger = logging.getLogger(__name__)
 
 PLAYER_P_OUT = "player_injury_p_out"
+_RERUN = (
+    "re-run only after (a) migrations 006/007 are applied to the history database "
+    "and (b) official injury reports are backfilled for both the 2024-25 training "
+    "window and the 2025-26 validation window."
+)
 GATED_TEXT = (
     "not measurable: official coverage 0 rows. "
     "With 0 coverage, keep the official path gated/dark; "
-    "re-run after the 2024-25 official reports are backfilled."
+    + _RERUN
 )
 DROPPED_TEXT = (
     "not measurable: every official column was missing on every training row "
     "and was dropped, so the fit is the no-official baseline. "
-    "Keep the official path gated. Re-run when training rows have official values."
+    "Keep the official path gated. "
+    + _RERUN[0].upper()
+    + _RERUN[1:]
 )
 PINBALL_NOTE = (
     "The point model gives q=0.5 only. The trainer has no quantile model, "

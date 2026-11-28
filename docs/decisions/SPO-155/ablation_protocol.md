@@ -37,7 +37,8 @@ Official coverage: how many validation rows have any non-missing official injury
 
 ## Decision
 
-- Coverage is 0: `not measurable: official coverage 0 rows`. Keep the official path gated. Re-run only after (a) migrations 006/007 are applied to the history database and (b) official injury reports are backfilled for both the 2024-25 training window and the 2025-26 validation window. The dump used (migrations 001-005) has no official report, injury, lineup, source_refreshes, or odds snapshot rows, so 0 coverage is structural, not a join bug; production was not checked. Do not treat equal errors as a gain. The same sentence is used when the history export has no official report rows and the columns are dropped.
+- Coverage is 0: `not measurable: official coverage 0 rows`. Keep the official path gated. Re-run only after (a) migrations 006/007 are applied to the history database and (b) official injury reports are backfilled for both the 2024-25 training window and the 2025-26 validation window. The dump used (migrations 001-005) has no official report, injury, lineup, source_refreshes, or odds snapshot rows, so 0 coverage is structural, not a join bug; production was not checked. Do not treat equal errors as a gain.
+- Every official column missing on every training row is a different sentence. The fit is the no-official baseline. The re-run condition is the same (a) and (b). It is not the zero-coverage sentence.
 - Every market is strictly better (lower MAE, or lower Brier): `ship`.
 - At least one market is strictly better and another is not: `ship-some`.
 - No market is strictly better: `don't-ship`.
@@ -73,4 +74,4 @@ DATABASE_URL="" python -m app.ml.ablation_injury \
 
 ## Results
 
-The real-database number is not in this repo yet. See `ablation_results.md`.
+The real-database aggregate is in `ablation_results.md`. The tool report pasted under that headline is the c405221 output, byte for byte, including its older re-run sentence. The headline and the code use the condition above.

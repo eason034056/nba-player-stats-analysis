@@ -17,15 +17,27 @@ from pathlib import Path
 import pandas as pd
 import pytest
 
+import app.ml.ablation_injury as ablation_injury
 from app.ml.ablation_injury import (
+    DROPPED_TEXT,
     GATED_TEXT,
     PLAYER_P_OUT,
     AblationError,
     assert_frame_allowed,
     assert_same_scored_rows,
+    assert_standin_rows_leave_official_counts_empty,
+    attach_standin_features,
     decide,
+    fit_arm,
+    load_embedded_standin,
     main,
+    numeric_matrix,
+    render_report,
+    row_keys,
     run_ablation,
+    score_fitted_arm,
+    score_naive_arm,
+    standin_feature_columns,
 )
 from app.ml.absence import (
     ABSENCE_FEATURE_COLUMNS,
@@ -413,3 +425,167 @@ def test_importing_the_ablation_does_not_import_injury_ingest() -> None:
         check=False,
     )
     assert completed.returncode == 0, completed.stderr
+
+
+def _rows(n: int, *, season: int = 2024) -> pd.DataFrame:
+    """Tiny legal rows. Sum labels alternate. Binary labels include both classes."""
+    rows: list[dict[str, object]] = []
+    for index in range(n):
+        row: dict[str, object] = {
+            "league": "nba",
+            "season": season,
+            "bdl_game_id": 7000 + index,
+            "bdl_player_id": 8000 + index,
+            "info_source": "pregame",
+            "season_type": "regular_season",
+            "as_of": "2024-11-01T00:00:00+00:00",
+            "is_starter": False,
+            "player_injury_status": "Available",
+        }
+        for name in headline_feature_names():
+            row[name] = 1.0
+        for name in ABSENCE_FEATURE_COLUMNS:
+            row[name] = 0.0
+        for name in OFFICIAL_COUNT_COLUMNS:
+            row[name] = 0
+        for name in label_column_names():
+            row[name] = float(index % 2)
+        rows.append(row)
+    return pd.DataFrame(rows)
+
+
+def test_uncovered_safety_checks_raise(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    """Each listed AblationError has to fire. Deleting the raise turns this red."""
+    assert "006/007" in GATED_TEXT
+    assert "2025-26 validation window" in GATED_TEXT
+    assert "006/007" in DROPPED_TEXT
+    assert GATED_TEXT != DROPPED_TEXT
+    code, text = decide(4, None, None, scored_rows=4)
+    assert code == "not_measurable"
+    assert text == DROPPED_TEXT
+
+    with pytest.raises(AblationError, match="no season column"):
+        assert_frame_allowed(pd.DataFrame({"info_source": ["pregame"]}), role="training")
+    with pytest.raises(AblationError, match="info_source is not standin"):
+        assert_standin_rows_leave_official_counts_empty(
+            pd.DataFrame({"season": [2024]}),
+            require_standin=True,
+        )
+    with pytest.raises(AblationError, match="info_source is not standin"):
+        assert_standin_rows_leave_official_counts_empty(
+            pd.DataFrame({"info_source": ["pregame"]}),
+            require_standin=True,
+        )
+    with pytest.raises(AblationError, match="missing headline columns"):
+        numeric_matrix(pd.DataFrame({"player_injury_status": ["Out"]}), ["is_home"])
+
+    monkeypatch.setattr(
+        ablation_injury,
+        "OFFICIAL_COUNT_COLUMNS",
+        OFFICIAL_COUNT_COLUMNS + ("is_starter",),
+    )
+    with pytest.raises(AblationError, match="stand-in arm includes official count columns"):
+        standin_feature_columns()
+    monkeypatch.undo()
+
+    duplicated = _rows(2)
+    duplicated.loc[1, "bdl_game_id"] = duplicated.loc[0, "bdl_game_id"]
+    duplicated.loc[1, "bdl_player_id"] = duplicated.loc[0, "bdl_player_id"]
+    with pytest.raises(AblationError, match="duplicate player-game"):
+        ablation_injury._require_unique(duplicated, "training")
+
+    with pytest.raises(AblationError, match="training split has no rows"):
+        fit_arm(pd.DataFrame(), headline_feature_names(), 158)
+    wrong_source = _rows(2)
+    wrong_source["info_source"] = "standin"
+    with pytest.raises(AblationError, match="info_source pregame"):
+        fit_arm(wrong_source, headline_feature_names(), 158)
+    playoffs = _rows(2)
+    playoffs["season_type"] = "playoffs"
+    with pytest.raises(AblationError, match="regular_season"):
+        fit_arm(playoffs, headline_feature_names(), 158)
+
+    wide = ablation_injury.official_feature_columns()
+    blank = _rows(2)
+    for name in wide:
+        if name == PLAYER_P_OUT:
+            continue
+        if name in blank.columns:
+            blank[name] = float("nan")
+    blank["player_injury_status"] = None
+    with pytest.raises(AblationError, match="every feature is missing"):
+        fit_arm(blank, wide, 158)
+
+    unlabeled = _rows(2)
+    unlabeled["y_player_points"] = float("nan")
+    with pytest.raises(AblationError, match="player_points has no training labels"):
+        fit_arm(unlabeled, wide, 158)
+    one_class = _rows(24)
+    one_class["y_player_double_double"] = 0
+    with pytest.raises(AblationError, match="player_double_double training labels"):
+        fit_arm(one_class, wide, 158)
+
+    fitted = fit_arm(_rows(24), wide, 158)
+    score = _rows(2, season=2025)
+    score.loc[0, "y_player_points"] = float("nan")
+    with pytest.raises(AblationError, match="different row sets"):
+        score_fitted_arm(score, fitted, wide, _rows(24), {}, "official")
+    binary_gap = _rows(2, season=2025)
+    binary_gap.loc[0, "y_player_double_double"] = float("nan")
+    with pytest.raises(AblationError, match="different row sets"):
+        score_fitted_arm(binary_gap, fitted, wide, _rows(24), {}, "official")
+    naive_gap = _rows(2, season=2025)
+    naive_gap.loc[0, "y_player_points"] = float("nan")
+    with pytest.raises(AblationError, match="different row sets"):
+        score_naive_arm(naive_gap, _rows(24), {})
+    naive_binary = _rows(2, season=2025)
+    naive_binary.loc[0, "y_player_triple_double"] = float("nan")
+    with pytest.raises(AblationError, match="different row sets"):
+        score_naive_arm(naive_binary, _rows(24), {})
+
+    official = _markets(points_mae=1, dd_brier=0.1, other_mae=1, other_brier=0.1, rows=10)
+    baseline = _markets(points_mae=2, dd_brier=0.2, other_mae=2, other_brier=0.2, rows=10)
+    official["player_double_double"]["brier_row_count"] = 9
+    with pytest.raises(AblationError, match="different row sets"):
+        decide(10, official, baseline, scored_rows=10)
+
+    pregame = _rows(1)
+    copied = pregame.iloc[0].to_dict()
+    copied["rot_out_n"] = 3
+    monkeypatch.setattr(
+        ablation_injury,
+        "standin_feature_columns",
+        lambda: headline_feature_names() + ("rot_out_n",),
+    )
+    with pytest.raises(AblationError, match="stand-in values appear in official column rot_out_n"):
+        attach_standin_features(pregame, {row_keys(pregame)[0]: copied})
+    monkeypatch.undo()
+
+    embedded = tmp_path / "embedded.json"
+    embedded.write_text('{"standin_rows": {"not": "a list"}}', encoding="utf-8")
+    with pytest.raises(AblationError, match="standin_rows must be a list"):
+        load_embedded_standin(embedded)
+
+    no_naive = pd.concat([_rows(1, season=2024), _rows(1, season=2025)], ignore_index=True)
+    for name in form_column_names():
+        no_naive[name] = float("nan")
+    with pytest.raises(AblationError, match="no validation row has a naive"):
+        run_ablation(no_naive, None, [], seed=158)
+
+    monkeypatch.setattr(ablation_injury, "_season_list", lambda _frame: [2026])
+    with pytest.raises(AblationError, match="2026-27 was used for training or selection"):
+        run_ablation(load_dataset(SPO158), None, [], seed=158)
+
+    with pytest.raises(AblationError, match="official coverage is missing"):
+        render_report({"official_coverage": "nope"})
+    with pytest.raises(AblationError, match="arms are missing"):
+        render_report(
+            {
+                "official_coverage": {"rows_with_any_official_value": 0, "validation_rows": 0},
+                "recommendation": "x",
+                "pinball_note": "n",
+                "scored_row_count": 0,
+                "scored_row_rule": "r",
+                "arms": [],
+            }
+        )

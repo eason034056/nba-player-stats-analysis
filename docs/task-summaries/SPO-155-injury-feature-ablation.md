@@ -90,7 +90,7 @@ Arm 3 needs the second export. `--absence-source` defaults to `reported`, so the
 ## Follow-ups
 
 - [x] The real-history aggregate is in `docs/decisions/SPO-155/ablation_results.md`. Official coverage was 0.
-- [ ] Re-run after the 2024-25 official reports are backfilled. Leave the official path gated until then.
+- [ ] Re-run only after migrations 006/007 are on the history database and official reports cover both the 2024-25 training window and the 2025-26 validation window. Leave the official path gated until then.
 
 ## pstack steps
 
@@ -108,3 +108,7 @@ Restored before commit.
 1. **Allow 2026-27.** `assert_frame_allowed` returned immediately. `DATABASE_URL="" python -m pytest tests/test_spo155_injury_feature_ablation.py::test_season_2026_in_train_or_selection_raises tests/test_spo155_injury_feature_ablation.py::test_signal_fixture_official_arm_beats_the_baseline -q --tb=line` reported **1 failed, 1 passed**. The 2026-27 test failed with `Failed: DID NOT RAISE AblationError`. The signal test still passed because the split already drops that season before the guard.
 2. **Copy stand-in values into official columns.** `assert_standin_rows_leave_official_counts_empty` returned immediately. The copy test and the stand-in-row-inside-the-pregame-file test both failed with `Failed: DID NOT RAISE AblationError`. Result: **2 failed**.
 3. **Call zero coverage a gain.** The coverage-0 branch returned `ship` and a lower-error sentence. `test_zero_official_coverage_is_not_a_gain`, `test_cli_on_zero_coverage_writes_the_gated_sentence`, and `test_decision_ship_some_and_dont_ship` failed (`assert 'ship' == 'not_measurable'`, and the CLI text was the lower-error sentence). Result: **3 failed**.
+
+## Reflect
+
+The review of `845b7d3` found two drifts. The headline re-run condition named migrations 006/007 and both season windows, while the pasted tool report and `DROPPED_TEXT` still used shorter sentences, and the protocol said those two cases share one sentence. The pasted report stays the c405221 output. The code sentences and the protocol now use the headline condition, and they stay different sentences. The same review listed `AblationError` raises with no test. `test_uncovered_safety_checks_raise` calls each of those raises.
