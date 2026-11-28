@@ -2,7 +2,7 @@
 
 This is the fixed comparison model for a later ablation. It predicts each catalog stat from facts known at T. It does not use the official NBA injury report. The numbers in `baseline_metrics_synthetic.json` are synthetic fixture output from a 17-row made-up sample. Do not read 9.25 as a real-season error.
 
-Real-database metrics are added in this PR's next commit.
+Real-database metrics are in `SPO-158_real_metrics.md` and `baseline_metrics_real.json`. Headline: on 26,100 matching 2025-26 validation rows the model is worse than the naive last-10 mean on all 10 sum markets (points 4.791 vs 4.691, PRA 6.334 vs 6.212), better on double-double Brier (0.0550 vs 0.0670), worse on triple-double Brier (0.0062 vs 0.0051); 0 rows have a prop line, so no hit rate.
 
 ## Command
 
@@ -117,4 +117,4 @@ Opening prop lines in the data model start in 2024-25, and the historical odds b
 - It does not write the `predictions` table. Backtests write this JSON file.
 - It is not imported when the API process starts.
 - It does not train or pick a model on 2026-27.
-- Real-database metrics are added in this PR's next commit. Until that file is here, the history-database run is **PENDING**.
+- Real-database metrics are in `SPO-158_real_metrics.md` and `baseline_metrics_real.json`.

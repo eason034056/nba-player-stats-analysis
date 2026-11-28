@@ -10,6 +10,7 @@
 `injury_coverage_status` asked `to_regclass` for `source_covered`. Migration 005 creates a function, not a table, so the check was always null and the note said the function was not in the schema. The check now uses `to_regprocedure`. The status stays `unknown`. A player with no injury row is still not treated as healthy, and this change does not compute coverage for one game.
 
 The checked-in metrics file is synthetic fixture output. Real-database metrics are added in this PR's next commit.
+Real-database metrics were added in `docs/decisions/SPO-158/SPO-158_real_metrics.md` and `baseline_metrics_real.json`.
 
 ## Changes
 

@@ -1,0 +1,1329 @@
+{
+  "ticket": "SPO-158",
+  "model": "baseline_no_official_injury",
+  "library": "scikit-learn",
+  "library_version": "1.9.1",
+  "python_version": "3.11.18",
+  "seed": 158,
+  "command": "DATABASE_URL=\"\" python -m app.ml.train_baseline --dataset <local gitignored export>/player_games_2023_2025.parquet --out baseline_metrics_real.json",
+  "t_rule": "T = games.datetime_utc - hours_before_tip. When datetime_utc is NULL, T is 00:00 America/New_York on games.date. hours_before_tip is not subtracted from that midnight. The fallback is counted in metadata. It is not a guessed tip time.",
+  "t_column": "as_of",
+  "ran_against_database": false,
+  "real_database_metrics": "DONE: trained and scored on a Parquet export of the real nba_history database (migrations 001-005), restored read-only into a throwaway Postgres. The trainer itself reads only the Parquet file.",
+  "dataset_kind_note": "Real history export, 2026-11-25. Odds tables, injury_snapshots, source_refreshes are empty and there is no official injury report table, so 0 rows have a prop line and the four opening-odds value columns are all missing in train (dropped, see features_dropped_all_missing_in_train).",
+  "split": {
+    "train_season": 2024,
+    "train_season_name": "2024-25",
+    "validation_season": 2025,
+    "validation_season_name": "2025-26",
+    "excluded_season": 2026,
+    "excluded_season_name": "2026-27",
+    "headline_info_source": "pregame",
+    "headline_season_type": "regular_season",
+    "validation_used_for": "reporting_only",
+    "train_seasons_present": [
+      2024
+    ],
+    "validation_seasons_present": [
+      2025
+    ],
+    "season_2026_27_used_for_training_or_selection": false
+  },
+  "rows": {
+    "input_rows": 85089,
+    "train_rows": 26251,
+    "validation_rows_in_split": 26623,
+    "side_rows_not_used_for_selection": 2065,
+    "excluded_season_2026_rows": 0,
+    "excluded_not_pregame_rows": 0,
+    "ignored_other_rows": 30150
+  },
+  "features": [
+    "is_home",
+    "n_prev_games",
+    "n_played_prev",
+    "dnp_last_10",
+    "dnp_last_10_window",
+    "days_rest",
+    "is_back_to_back",
+    "pts_last_5",
+    "reb_last_5",
+    "ast_last_5",
+    "fg3m_last_5",
+    "stl_last_5",
+    "blk_last_5",
+    "seconds_played_last_5",
+    "pts_last_10",
+    "reb_last_10",
+    "ast_last_10",
+    "fg3m_last_10",
+    "stl_last_10",
+    "blk_last_10",
+    "seconds_played_last_10",
+    "opening_spread_home",
+    "opening_total",
+    "team_implied_points",
+    "opp_implied_points",
+    "opening_books",
+    "opening_spread_books",
+    "opening_total_books"
+  ],
+  "feature_count": 28,
+  "features_dropped_all_missing_in_train": [
+    "opening_spread_home",
+    "opening_total",
+    "team_implied_points",
+    "opp_implied_points"
+  ],
+  "features_actually_fit": [
+    "is_home",
+    "n_prev_games",
+    "n_played_prev",
+    "dnp_last_10",
+    "dnp_last_10_window",
+    "days_rest",
+    "is_back_to_back",
+    "pts_last_5",
+    "reb_last_5",
+    "ast_last_5",
+    "fg3m_last_5",
+    "stl_last_5",
+    "blk_last_5",
+    "seconds_played_last_5",
+    "pts_last_10",
+    "reb_last_10",
+    "ast_last_10",
+    "fg3m_last_10",
+    "stl_last_10",
+    "blk_last_10",
+    "seconds_played_last_10",
+    "opening_books",
+    "opening_spread_books",
+    "opening_total_books"
+  ],
+  "excluded_features": [
+    "nba_injury_report_rows",
+    "injuries_nba_official",
+    "current_injuries",
+    "source_covered",
+    "home_score",
+    "visitor_score",
+    "pts",
+    "reb",
+    "ast",
+    "fg3m",
+    "stl",
+    "blk",
+    "seconds_played",
+    "dnp",
+    "player_prop_snapshots",
+    "line",
+    "over_odds",
+    "under_odds",
+    "milestone_odds",
+    "team_missing_minutes",
+    "team_missing_share_player_points",
+    "team_missing_share_player_rebounds",
+    "team_missing_share_player_assists",
+    "team_missing_share_player_threes",
+    "team_missing_share_player_steals",
+    "team_missing_share_player_blocks",
+    "team_missing_share_player_points_rebounds",
+    "team_missing_share_player_points_assists",
+    "team_missing_share_player_rebounds_assists",
+    "team_missing_share_player_points_rebounds_assists",
+    "team_missing_share_player_double_double",
+    "team_missing_share_player_triple_double",
+    "opp_missing_minutes",
+    "is_starter",
+    "player_injury_status",
+    "league",
+    "season",
+    "date",
+    "bdl_game_id",
+    "bdl_player_id",
+    "bdl_team_id",
+    "season_type",
+    "info_source",
+    "as_of",
+    "tip_fallback",
+    "y_player_points",
+    "y_player_rebounds",
+    "y_player_assists",
+    "y_player_threes",
+    "y_player_steals",
+    "y_player_blocks",
+    "y_player_points_rebounds",
+    "y_player_points_assists",
+    "y_player_rebounds_assists",
+    "y_player_points_rebounds_assists",
+    "y_player_double_double",
+    "y_player_triple_double"
+  ],
+  "hyperparameters": {
+    "regressor": {
+      "loss": "squared_error",
+      "learning_rate": 0.1,
+      "max_iter": 100,
+      "max_leaf_nodes": 31,
+      "min_samples_leaf": 20,
+      "l2_regularization": 0.0,
+      "early_stopping": false,
+      "random_state": 158
+    },
+    "classifier": {
+      "learning_rate": 0.1,
+      "max_iter": 100,
+      "max_leaf_nodes": 31,
+      "min_samples_leaf": 20,
+      "l2_regularization": 0.0,
+      "early_stopping": false,
+      "random_state": 158
+    },
+    "iterations_run": 100,
+    "selection": "none. Hyperparameters are fixed. The validation season is not searched."
+  },
+  "markets": {
+    "player_points": {
+      "task": "regression",
+      "split": "season_2025_regular_season_pregame",
+      "rows_in_split": 26623,
+      "rows_scored": 26623,
+      "rows_label_null": 0,
+      "rows_with_usable_line": 0,
+      "rows_without_line": 26623,
+      "mae": 4.768977948416587,
+      "mae_row_count": 26623,
+      "naive_last10_mae": 4.690563218390804,
+      "naive_row_count": 26100,
+      "naive_missing_count": 523,
+      "mae_on_naive_rows": 4.790916966996275,
+      "mae_on_naive_row_count": 26100,
+      "hits": 0,
+      "misses": 0,
+      "pushes": 0,
+      "prediction_on_line": 0,
+      "hit_rate": null,
+      "hit_rate_row_count": 0,
+      "calibration": {
+        "kind": "binned_residual",
+        "residual": "actual_minus_predicted",
+        "row_count": 26623,
+        "bins": [
+          {
+            "bin": "below_-5",
+            "row_count": 5303,
+            "mean_residual": -7.9523461220675875
+          },
+          {
+            "bin": "within_5",
+            "row_count": 16575,
+            "mean_residual": -0.5817064616547196
+          },
+          {
+            "bin": "above_5",
+            "row_count": 4745,
+            "mean_residual": 9.530127590797347
+          }
+        ]
+      }
+    },
+    "player_rebounds": {
+      "task": "regression",
+      "split": "season_2025_regular_season_pregame",
+      "rows_in_split": 26623,
+      "rows_scored": 26623,
+      "rows_label_null": 0,
+      "rows_with_usable_line": 0,
+      "rows_without_line": 26623,
+      "mae": 1.9522738009354936,
+      "mae_row_count": 26623,
+      "naive_last10_mae": 1.943521072796935,
+      "naive_row_count": 26100,
+      "naive_missing_count": 523,
+      "mae_on_naive_rows": 1.956110119847767,
+      "mae_on_naive_row_count": 26100,
+      "hits": 0,
+      "misses": 0,
+      "pushes": 0,
+      "prediction_on_line": 0,
+      "hit_rate": null,
+      "hit_rate_row_count": 0,
+      "calibration": {
+        "kind": "binned_residual",
+        "residual": "actual_minus_predicted",
+        "row_count": 26623,
+        "bins": [
+          {
+            "bin": "below_-5",
+            "row_count": 370,
+            "mean_residual": -6.104979421533218
+          },
+          {
+            "bin": "within_5",
+            "row_count": 25196,
+            "mean_residual": -0.29415129361615827
+          },
+          {
+            "bin": "above_5",
+            "row_count": 1057,
+            "mean_residual": 6.8153379785328605
+          }
+        ]
+      }
+    },
+    "player_assists": {
+      "task": "regression",
+      "split": "season_2025_regular_season_pregame",
+      "rows_in_split": 26623,
+      "rows_scored": 26623,
+      "rows_label_null": 0,
+      "rows_with_usable_line": 0,
+      "rows_without_line": 26623,
+      "mae": 1.3812426185471838,
+      "mae_row_count": 26623,
+      "naive_last10_mae": 1.3767969348659004,
+      "naive_row_count": 26100,
+      "naive_missing_count": 523,
+      "mae_on_naive_rows": 1.3875004702683094,
+      "mae_on_naive_row_count": 26100,
+      "hits": 0,
+      "misses": 0,
+      "pushes": 0,
+      "prediction_on_line": 0,
+      "hit_rate": null,
+      "hit_rate_row_count": 0,
+      "calibration": {
+        "kind": "binned_residual",
+        "residual": "actual_minus_predicted",
+        "row_count": 26623,
+        "bins": [
+          {
+            "bin": "below_-5",
+            "row_count": 88,
+            "mean_residual": -5.9937023600890855
+          },
+          {
+            "bin": "within_5",
+            "row_count": 26082,
+            "mean_residual": -0.1038960306899326
+          },
+          {
+            "bin": "above_5",
+            "row_count": 453,
+            "mean_residual": 6.655719030946594
+          }
+        ]
+      }
+    },
+    "player_threes": {
+      "task": "regression",
+      "split": "season_2025_regular_season_pregame",
+      "rows_in_split": 26623,
+      "rows_scored": 26623,
+      "rows_label_null": 0,
+      "rows_with_usable_line": 0,
+      "rows_without_line": 26623,
+      "mae": 0.9454650976713732,
+      "mae_row_count": 26623,
+      "naive_last10_mae": 0.9058582375478926,
+      "naive_row_count": 26100,
+      "naive_missing_count": 523,
+      "mae_on_naive_rows": 0.9500966549079553,
+      "mae_on_naive_row_count": 26100,
+      "hits": 0,
+      "misses": 0,
+      "pushes": 0,
+      "prediction_on_line": 0,
+      "hit_rate": null,
+      "hit_rate_row_count": 0,
+      "calibration": {
+        "kind": "binned_residual",
+        "residual": "actual_minus_predicted",
+        "row_count": 26623,
+        "bins": [
+          {
+            "bin": "below_-5",
+            "row_count": 0,
+            "mean_residual": null
+          },
+          {
+            "bin": "within_5",
+            "row_count": 26516,
+            "mean_residual": -0.11147037548052434
+          },
+          {
+            "bin": "above_5",
+            "row_count": 107,
+            "mean_residual": 5.936569349102108
+          }
+        ]
+      }
+    },
+    "player_steals": {
+      "task": "regression",
+      "split": "season_2025_regular_season_pregame",
+      "rows_in_split": 26623,
+      "rows_scored": 26623,
+      "rows_label_null": 0,
+      "rows_with_usable_line": 0,
+      "rows_without_line": 26623,
+      "mae": 0.7369732583701928,
+      "mae_row_count": 26623,
+      "naive_last10_mae": 0.7384559386973178,
+      "naive_row_count": 26100,
+      "naive_missing_count": 523,
+      "mae_on_naive_rows": 0.7402258034418018,
+      "mae_on_naive_row_count": 26100,
+      "hits": 0,
+      "misses": 0,
+      "pushes": 0,
+      "prediction_on_line": 0,
+      "hit_rate": null,
+      "hit_rate_row_count": 0,
+      "calibration": {
+        "kind": "binned_residual",
+        "residual": "actual_minus_predicted",
+        "row_count": 26623,
+        "bins": [
+          {
+            "bin": "below_-5",
+            "row_count": 0,
+            "mean_residual": null
+          },
+          {
+            "bin": "within_5",
+            "row_count": 26602,
+            "mean_residual": 0.12345141901037376
+          },
+          {
+            "bin": "above_5",
+            "row_count": 21,
+            "mean_residual": 5.722014282188771
+          }
+        ]
+      }
+    },
+    "player_blocks": {
+      "task": "regression",
+      "split": "season_2025_regular_season_pregame",
+      "rows_in_split": 26623,
+      "rows_scored": 26623,
+      "rows_label_null": 0,
+      "rows_with_usable_line": 0,
+      "rows_without_line": 26623,
+      "mae": 0.5317593767405322,
+      "mae_row_count": 26623,
+      "naive_last10_mae": 0.5109386973180077,
+      "naive_row_count": 26100,
+      "naive_missing_count": 523,
+      "mae_on_naive_rows": 0.5346105944292155,
+      "mae_on_naive_row_count": 26100,
+      "hits": 0,
+      "misses": 0,
+      "pushes": 0,
+      "prediction_on_line": 0,
+      "hit_rate": null,
+      "hit_rate_row_count": 0,
+      "calibration": {
+        "kind": "binned_residual",
+        "residual": "actual_minus_predicted",
+        "row_count": 26623,
+        "bins": [
+          {
+            "bin": "below_-5",
+            "row_count": 0,
+            "mean_residual": null
+          },
+          {
+            "bin": "within_5",
+            "row_count": 26615,
+            "mean_residual": -0.014974577168029421
+          },
+          {
+            "bin": "above_5",
+            "row_count": 8,
+            "mean_residual": 5.91524470844253
+          }
+        ]
+      }
+    },
+    "player_points_rebounds": {
+      "task": "regression",
+      "split": "season_2025_regular_season_pregame",
+      "rows_in_split": 26623,
+      "rows_scored": 26623,
+      "rows_label_null": 0,
+      "rows_with_usable_line": 0,
+      "rows_without_line": 26623,
+      "mae": 5.750381011716727,
+      "mae_row_count": 26623,
+      "naive_last10_mae": 5.679586206896552,
+      "naive_row_count": 26100,
+      "naive_missing_count": 523,
+      "mae_on_naive_rows": 5.767835617605486,
+      "mae_on_naive_row_count": 26100,
+      "hits": 0,
+      "misses": 0,
+      "pushes": 0,
+      "prediction_on_line": 0,
+      "hit_rate": null,
+      "hit_rate_row_count": 0,
+      "calibration": {
+        "kind": "binned_residual",
+        "residual": "actual_minus_predicted",
+        "row_count": 26623,
+        "bins": [
+          {
+            "bin": "below_-5",
+            "row_count": 6954,
+            "mean_residual": -8.55034819243845
+          },
+          {
+            "bin": "within_5",
+            "row_count": 13902,
+            "mean_residual": -0.4629865315473558
+          },
+          {
+            "bin": "above_5",
+            "row_count": 5767,
+            "mean_residual": 10.352761756289281
+          }
+        ]
+      }
+    },
+    "player_points_assists": {
+      "task": "regression",
+      "split": "season_2025_regular_season_pregame",
+      "rows_in_split": 26623,
+      "rows_scored": 26623,
+      "rows_label_null": 0,
+      "rows_with_usable_line": 0,
+      "rows_without_line": 26623,
+      "mae": 5.232723481774505,
+      "mae_row_count": 26623,
+      "naive_last10_mae": 5.19467816091954,
+      "naive_row_count": 26100,
+      "naive_missing_count": 523,
+      "mae_on_naive_rows": 5.251598545134284,
+      "mae_on_naive_row_count": 26100,
+      "hits": 0,
+      "misses": 0,
+      "pushes": 0,
+      "prediction_on_line": 0,
+      "hit_rate": null,
+      "hit_rate_row_count": 0,
+      "calibration": {
+        "kind": "binned_residual",
+        "residual": "actual_minus_predicted",
+        "row_count": 26623,
+        "bins": [
+          {
+            "bin": "below_-5",
+            "row_count": 5928,
+            "mean_residual": -8.280911801254687
+          },
+          {
+            "bin": "within_5",
+            "row_count": 15311,
+            "mean_residual": -0.5249274169180839
+          },
+          {
+            "bin": "above_5",
+            "row_count": 5384,
+            "mean_residual": 9.892486474711639
+          }
+        ]
+      }
+    },
+    "player_rebounds_assists": {
+      "task": "regression",
+      "split": "season_2025_regular_season_pregame",
+      "rows_in_split": 26623,
+      "rows_scored": 26623,
+      "rows_label_null": 0,
+      "rows_with_usable_line": 0,
+      "rows_without_line": 26623,
+      "mae": 2.6908717585877184,
+      "mae_row_count": 26623,
+      "naive_last10_mae": 2.6873141762452106,
+      "naive_row_count": 26100,
+      "naive_missing_count": 523,
+      "mae_on_naive_rows": 2.696275429597415,
+      "mae_on_naive_row_count": 26100,
+      "hits": 0,
+      "misses": 0,
+      "pushes": 0,
+      "prediction_on_line": 0,
+      "hit_rate": null,
+      "hit_rate_row_count": 0,
+      "calibration": {
+        "kind": "binned_residual",
+        "residual": "actual_minus_predicted",
+        "row_count": 26623,
+        "bins": [
+          {
+            "bin": "below_-5",
+            "row_count": 1296,
+            "mean_residual": -6.435620460945481
+          },
+          {
+            "bin": "within_5",
+            "row_count": 23165,
+            "mean_residual": -0.4294268056247888
+          },
+          {
+            "bin": "above_5",
+            "row_count": 2162,
+            "mean_residual": 7.375517743704645
+          }
+        ]
+      }
+    },
+    "player_points_rebounds_assists": {
+      "task": "regression",
+      "split": "season_2025_regular_season_pregame",
+      "rows_in_split": 26623,
+      "rows_scored": 26623,
+      "rows_label_null": 0,
+      "rows_with_usable_line": 0,
+      "rows_without_line": 26623,
+      "mae": 6.318566019893039,
+      "mae_row_count": 26623,
+      "naive_last10_mae": 6.211946360153258,
+      "naive_row_count": 26100,
+      "naive_missing_count": 523,
+      "mae_on_naive_rows": 6.333649070471299,
+      "mae_on_naive_row_count": 26100,
+      "hits": 0,
+      "misses": 0,
+      "pushes": 0,
+      "prediction_on_line": 0,
+      "hit_rate": null,
+      "hit_rate_row_count": 0,
+      "calibration": {
+        "kind": "binned_residual",
+        "residual": "actual_minus_predicted",
+        "row_count": 26623,
+        "bins": [
+          {
+            "bin": "below_-5",
+            "row_count": 7811,
+            "mean_residual": -9.11679163415765
+          },
+          {
+            "bin": "within_5",
+            "row_count": 12665,
+            "mean_residual": -0.41951007255981043
+          },
+          {
+            "bin": "above_5",
+            "row_count": 6147,
+            "mean_residual": 10.726128495612478
+          }
+        ]
+      }
+    },
+    "player_double_double": {
+      "task": "probability",
+      "split": "season_2025_regular_season_pregame",
+      "rows_in_split": 26623,
+      "rows_scored": 26623,
+      "rows_label_null": 0,
+      "rows_with_usable_line": 0,
+      "rows_without_line": 26623,
+      "brier": 0.05504784606844346,
+      "brier_row_count": 26623,
+      "log_loss": 0.1968659160216394,
+      "log_loss_row_count": 26623,
+      "naive_train_rate": 0.08552055159803436,
+      "naive_brier": 0.06697215209027137,
+      "naive_brier_row_count": 26623,
+      "hits": 0,
+      "misses": 0,
+      "pushes": 0,
+      "prediction_on_line": 0,
+      "hit_rate": null,
+      "hit_rate_row_count": 0,
+      "calibration": {
+        "kind": "reliability",
+        "row_count": 26623,
+        "bins": [
+          {
+            "bin_low": 0.0,
+            "bin_high": 0.2,
+            "row_count": 23395,
+            "mean_predicted": 0.039178304971961446,
+            "mean_outcome": 0.03633254969010472
+          },
+          {
+            "bin_low": 0.2,
+            "bin_high": 0.4,
+            "row_count": 2015,
+            "mean_predicted": 0.2809126604378753,
+            "mean_outcome": 0.2456575682382134
+          },
+          {
+            "bin_low": 0.4,
+            "bin_high": 0.6,
+            "row_count": 686,
+            "mean_predicted": 0.4916518953957466,
+            "mean_outcome": 0.3877551020408163
+          },
+          {
+            "bin_low": 0.6,
+            "bin_high": 0.8,
+            "row_count": 455,
+            "mean_predicted": 0.6807045560865892,
+            "mean_outcome": 0.5626373626373626
+          },
+          {
+            "bin_low": 0.8,
+            "bin_high": 1.0,
+            "row_count": 72,
+            "mean_predicted": 0.8466953486238303,
+            "mean_outcome": 0.6805555555555556
+          }
+        ]
+      }
+    },
+    "player_triple_double": {
+      "task": "probability",
+      "split": "season_2025_regular_season_pregame",
+      "rows_in_split": 26623,
+      "rows_scored": 26623,
+      "rows_label_null": 0,
+      "rows_with_usable_line": 0,
+      "rows_without_line": 26623,
+      "brier": 0.0061520099526177156,
+      "brier_row_count": 26623,
+      "log_loss": 0.03897311089216182,
+      "log_loss_row_count": 26623,
+      "naive_train_rate": 0.005675974248600053,
+      "naive_brier": 0.005082591735482394,
+      "naive_brier_row_count": 26623,
+      "hits": 0,
+      "misses": 0,
+      "pushes": 0,
+      "prediction_on_line": 0,
+      "hit_rate": null,
+      "hit_rate_row_count": 0,
+      "calibration": {
+        "kind": "reliability",
+        "row_count": 26623,
+        "bins": [
+          {
+            "bin_low": 0.0,
+            "bin_high": 0.2,
+            "row_count": 26509,
+            "mean_predicted": 0.0007669471887654675,
+            "mean_outcome": 0.0039986419706514766
+          },
+          {
+            "bin_low": 0.2,
+            "bin_high": 0.4,
+            "row_count": 24,
+            "mean_predicted": 0.2920299318246005,
+            "mean_outcome": 0.16666666666666666
+          },
+          {
+            "bin_low": 0.4,
+            "bin_high": 0.6,
+            "row_count": 7,
+            "mean_predicted": 0.484432279700483,
+            "mean_outcome": 0.2857142857142857
+          },
+          {
+            "bin_low": 0.6,
+            "bin_high": 0.8,
+            "row_count": 9,
+            "mean_predicted": 0.6663758539567657,
+            "mean_outcome": 0.3333333333333333
+          },
+          {
+            "bin_low": 0.8,
+            "bin_high": 1.0,
+            "row_count": 74,
+            "mean_predicted": 0.9840859427852028,
+            "mean_outcome": 0.28378378378378377
+          }
+        ]
+      }
+    }
+  },
+  "side_table_not_used_for_selection": {
+    "not_used_for_selection": true,
+    "split": "season_2025_non_regular_pregame",
+    "row_count": 2065,
+    "markets": {
+      "player_points": {
+        "task": "regression",
+        "split": "season_2025_non_regular_pregame",
+        "rows_in_split": 2065,
+        "rows_scored": 2065,
+        "rows_label_null": 0,
+        "rows_with_usable_line": 0,
+        "rows_without_line": 2065,
+        "mae": 4.979251105434168,
+        "mae_row_count": 2065,
+        "naive_last10_mae": 4.534237288135594,
+        "naive_row_count": 2065,
+        "naive_missing_count": 0,
+        "mae_on_naive_rows": 4.979251105434168,
+        "mae_on_naive_row_count": 2065,
+        "hits": 0,
+        "misses": 0,
+        "pushes": 0,
+        "prediction_on_line": 0,
+        "hit_rate": null,
+        "hit_rate_row_count": 0,
+        "calibration": {
+          "kind": "binned_residual",
+          "residual": "actual_minus_predicted",
+          "row_count": 2065,
+          "bins": [
+            {
+              "bin": "below_-5",
+              "row_count": 641,
+              "mean_residual": -7.833131080496439
+            },
+            {
+              "bin": "within_5",
+              "row_count": 1184,
+              "mean_residual": -1.1293116871892424
+            },
+            {
+              "bin": "above_5",
+              "row_count": 240,
+              "mean_residual": 9.582019268083238
+            }
+          ]
+        }
+      },
+      "player_rebounds": {
+        "task": "regression",
+        "split": "season_2025_non_regular_pregame",
+        "rows_in_split": 2065,
+        "rows_scored": 2065,
+        "rows_label_null": 0,
+        "rows_with_usable_line": 0,
+        "rows_without_line": 2065,
+        "mae": 1.9776243361363983,
+        "mae_row_count": 2065,
+        "naive_last10_mae": 1.888861985472155,
+        "naive_row_count": 2065,
+        "naive_missing_count": 0,
+        "mae_on_naive_rows": 1.9776243361363983,
+        "mae_on_naive_row_count": 2065,
+        "hits": 0,
+        "misses": 0,
+        "pushes": 0,
+        "prediction_on_line": 0,
+        "hit_rate": null,
+        "hit_rate_row_count": 0,
+        "calibration": {
+          "kind": "binned_residual",
+          "residual": "actual_minus_predicted",
+          "row_count": 2065,
+          "bins": [
+            {
+              "bin": "below_-5",
+              "row_count": 51,
+              "mean_residual": -6.172494969911311
+            },
+            {
+              "bin": "within_5",
+              "row_count": 1957,
+              "mean_residual": -0.5669287895665598
+            },
+            {
+              "bin": "above_5",
+              "row_count": 57,
+              "mean_residual": 6.838736549287609
+            }
+          ]
+        }
+      },
+      "player_assists": {
+        "task": "regression",
+        "split": "season_2025_non_regular_pregame",
+        "rows_in_split": 2065,
+        "rows_scored": 2065,
+        "rows_label_null": 0,
+        "rows_with_usable_line": 0,
+        "rows_without_line": 2065,
+        "mae": 1.3138494476609879,
+        "mae_row_count": 2065,
+        "naive_last10_mae": 1.278498789346247,
+        "naive_row_count": 2065,
+        "naive_missing_count": 0,
+        "mae_on_naive_rows": 1.3138494476609879,
+        "mae_on_naive_row_count": 2065,
+        "hits": 0,
+        "misses": 0,
+        "pushes": 0,
+        "prediction_on_line": 0,
+        "hit_rate": null,
+        "hit_rate_row_count": 0,
+        "calibration": {
+          "kind": "binned_residual",
+          "residual": "actual_minus_predicted",
+          "row_count": 2065,
+          "bins": [
+            {
+              "bin": "below_-5",
+              "row_count": 6,
+              "mean_residual": -5.756588242183099
+            },
+            {
+              "bin": "within_5",
+              "row_count": 2036,
+              "mean_residual": -0.46010902127472625
+            },
+            {
+              "bin": "above_5",
+              "row_count": 23,
+              "mean_residual": 5.799516752300618
+            }
+          ]
+        }
+      },
+      "player_threes": {
+        "task": "regression",
+        "split": "season_2025_non_regular_pregame",
+        "rows_in_split": 2065,
+        "rows_scored": 2065,
+        "rows_label_null": 0,
+        "rows_with_usable_line": 0,
+        "rows_without_line": 2065,
+        "mae": 0.9647930299420789,
+        "mae_row_count": 2065,
+        "naive_last10_mae": 0.8508958837772397,
+        "naive_row_count": 2065,
+        "naive_missing_count": 0,
+        "mae_on_naive_rows": 0.9647930299420789,
+        "mae_on_naive_row_count": 2065,
+        "hits": 0,
+        "misses": 0,
+        "pushes": 0,
+        "prediction_on_line": 0,
+        "hit_rate": null,
+        "hit_rate_row_count": 0,
+        "calibration": {
+          "kind": "binned_residual",
+          "residual": "actual_minus_predicted",
+          "row_count": 2065,
+          "bins": [
+            {
+              "bin": "below_-5",
+              "row_count": 0,
+              "mean_residual": null
+            },
+            {
+              "bin": "within_5",
+              "row_count": 2063,
+              "mean_residual": -0.33734675909409645
+            },
+            {
+              "bin": "above_5",
+              "row_count": 2,
+              "mean_residual": 5.6122286100328225
+            }
+          ]
+        }
+      },
+      "player_steals": {
+        "task": "regression",
+        "split": "season_2025_non_regular_pregame",
+        "rows_in_split": 2065,
+        "rows_scored": 2065,
+        "rows_label_null": 0,
+        "rows_with_usable_line": 0,
+        "rows_without_line": 2065,
+        "mae": 0.7195702581092746,
+        "mae_row_count": 2065,
+        "naive_last10_mae": 0.7176755447941888,
+        "naive_row_count": 2065,
+        "naive_missing_count": 0,
+        "mae_on_naive_rows": 0.7195702581092746,
+        "mae_on_naive_row_count": 2065,
+        "hits": 0,
+        "misses": 0,
+        "pushes": 0,
+        "prediction_on_line": 0,
+        "hit_rate": null,
+        "hit_rate_row_count": 0,
+        "calibration": {
+          "kind": "binned_residual",
+          "residual": "actual_minus_predicted",
+          "row_count": 2065,
+          "bins": [
+            {
+              "bin": "below_-5",
+              "row_count": 0,
+              "mean_residual": null
+            },
+            {
+              "bin": "within_5",
+              "row_count": 2062,
+              "mean_residual": 0.10929951595920974
+            },
+            {
+              "bin": "above_5",
+              "row_count": 3,
+              "mean_residual": 5.429712899236011
+            }
+          ]
+        }
+      },
+      "player_blocks": {
+        "task": "regression",
+        "split": "season_2025_non_regular_pregame",
+        "rows_in_split": 2065,
+        "rows_scored": 2065,
+        "rows_label_null": 0,
+        "rows_with_usable_line": 0,
+        "rows_without_line": 2065,
+        "mae": 0.528193726585252,
+        "mae_row_count": 2065,
+        "naive_last10_mae": 0.5069249394673124,
+        "naive_row_count": 2065,
+        "naive_missing_count": 0,
+        "mae_on_naive_rows": 0.528193726585252,
+        "mae_on_naive_row_count": 2065,
+        "hits": 0,
+        "misses": 0,
+        "pushes": 0,
+        "prediction_on_line": 0,
+        "hit_rate": null,
+        "hit_rate_row_count": 0,
+        "calibration": {
+          "kind": "binned_residual",
+          "residual": "actual_minus_predicted",
+          "row_count": 2065,
+          "bins": [
+            {
+              "bin": "below_-5",
+              "row_count": 0,
+              "mean_residual": null
+            },
+            {
+              "bin": "within_5",
+              "row_count": 2062,
+              "mean_residual": -0.04352081122543276
+            },
+            {
+              "bin": "above_5",
+              "row_count": 3,
+              "mean_residual": 7.08305357255562
+            }
+          ]
+        }
+      },
+      "player_points_rebounds": {
+        "task": "regression",
+        "split": "season_2025_non_regular_pregame",
+        "rows_in_split": 2065,
+        "rows_scored": 2065,
+        "rows_label_null": 0,
+        "rows_with_usable_line": 0,
+        "rows_without_line": 2065,
+        "mae": 6.148398595668217,
+        "mae_row_count": 2065,
+        "naive_last10_mae": 5.578256658595642,
+        "naive_row_count": 2065,
+        "naive_missing_count": 0,
+        "mae_on_naive_rows": 6.148398595668217,
+        "mae_on_naive_row_count": 2065,
+        "hits": 0,
+        "misses": 0,
+        "pushes": 0,
+        "prediction_on_line": 0,
+        "hit_rate": null,
+        "hit_rate_row_count": 0,
+        "calibration": {
+          "kind": "binned_residual",
+          "residual": "actual_minus_predicted",
+          "row_count": 2065,
+          "bins": [
+            {
+              "bin": "below_-5",
+              "row_count": 812,
+              "mean_residual": -8.756725654098558
+            },
+            {
+              "bin": "within_5",
+              "row_count": 937,
+              "mean_residual": -1.014760983164732
+            },
+            {
+              "bin": "above_5",
+              "row_count": 316,
+              "mean_residual": 10.080697147672447
+            }
+          ]
+        }
+      },
+      "player_points_assists": {
+        "task": "regression",
+        "split": "season_2025_non_regular_pregame",
+        "rows_in_split": 2065,
+        "rows_scored": 2065,
+        "rows_label_null": 0,
+        "rows_with_usable_line": 0,
+        "rows_without_line": 2065,
+        "mae": 5.3690975483758585,
+        "mae_row_count": 2065,
+        "naive_last10_mae": 5.030072639225182,
+        "naive_row_count": 2065,
+        "naive_missing_count": 0,
+        "mae_on_naive_rows": 5.3690975483758585,
+        "mae_on_naive_row_count": 2065,
+        "hits": 0,
+        "misses": 0,
+        "pushes": 0,
+        "prediction_on_line": 0,
+        "hit_rate": null,
+        "hit_rate_row_count": 0,
+        "calibration": {
+          "kind": "binned_residual",
+          "residual": "actual_minus_predicted",
+          "row_count": 2065,
+          "bins": [
+            {
+              "bin": "below_-5",
+              "row_count": 696,
+              "mean_residual": -8.25340241374297
+            },
+            {
+              "bin": "within_5",
+              "row_count": 1103,
+              "mean_residual": -1.0550859009378482
+            },
+            {
+              "bin": "above_5",
+              "row_count": 266,
+              "mean_residual": 9.73866663709075
+            }
+          ]
+        }
+      },
+      "player_rebounds_assists": {
+        "task": "regression",
+        "split": "season_2025_non_regular_pregame",
+        "rows_in_split": 2065,
+        "rows_scored": 2065,
+        "rows_label_null": 0,
+        "rows_with_usable_line": 0,
+        "rows_without_line": 2065,
+        "mae": 2.721038806951056,
+        "mae_row_count": 2065,
+        "naive_last10_mae": 2.5916707021791763,
+        "naive_row_count": 2065,
+        "naive_missing_count": 0,
+        "mae_on_naive_rows": 2.721038806951056,
+        "mae_on_naive_row_count": 2065,
+        "hits": 0,
+        "misses": 0,
+        "pushes": 0,
+        "prediction_on_line": 0,
+        "hit_rate": null,
+        "hit_rate_row_count": 0,
+        "calibration": {
+          "kind": "binned_residual",
+          "residual": "actual_minus_predicted",
+          "row_count": 2065,
+          "bins": [
+            {
+              "bin": "below_-5",
+              "row_count": 140,
+              "mean_residual": -6.534833099308369
+            },
+            {
+              "bin": "within_5",
+              "row_count": 1824,
+              "mean_residual": -0.896174716200484
+            },
+            {
+              "bin": "above_5",
+              "row_count": 101,
+              "mean_residual": 7.056687228513186
+            }
+          ]
+        }
+      },
+      "player_points_rebounds_assists": {
+        "task": "regression",
+        "split": "season_2025_non_regular_pregame",
+        "rows_in_split": 2065,
+        "rows_scored": 2065,
+        "rows_label_null": 0,
+        "rows_with_usable_line": 0,
+        "rows_without_line": 2065,
+        "mae": 6.808502443079063,
+        "mae_row_count": 2065,
+        "naive_last10_mae": 6.09414043583535,
+        "naive_row_count": 2065,
+        "naive_missing_count": 0,
+        "mae_on_naive_rows": 6.808502443079063,
+        "mae_on_naive_row_count": 2065,
+        "hits": 0,
+        "misses": 0,
+        "pushes": 0,
+        "prediction_on_line": 0,
+        "hit_rate": null,
+        "hit_rate_row_count": 0,
+        "calibration": {
+          "kind": "binned_residual",
+          "residual": "actual_minus_predicted",
+          "row_count": 2065,
+          "bins": [
+            {
+              "bin": "below_-5",
+              "row_count": 925,
+              "mean_residual": -9.541602872554126
+            },
+            {
+              "bin": "within_5",
+              "row_count": 837,
+              "mean_residual": -0.8962174857122757
+            },
+            {
+              "bin": "above_5",
+              "row_count": 303,
+              "mean_residual": 10.26889852337089
+            }
+          ]
+        }
+      },
+      "player_double_double": {
+        "task": "probability",
+        "split": "season_2025_non_regular_pregame",
+        "rows_in_split": 2065,
+        "rows_scored": 2065,
+        "rows_label_null": 0,
+        "rows_with_usable_line": 0,
+        "rows_without_line": 2065,
+        "brier": 0.055088874774332525,
+        "brier_row_count": 2065,
+        "log_loss": 0.1857612143355,
+        "log_loss_row_count": 2065,
+        "naive_train_rate": 0.08552055159803436,
+        "naive_brier": 0.061507203519738936,
+        "naive_brier_row_count": 2065,
+        "hits": 0,
+        "misses": 0,
+        "pushes": 0,
+        "prediction_on_line": 0,
+        "hit_rate": null,
+        "hit_rate_row_count": 0,
+        "calibration": {
+          "kind": "reliability",
+          "row_count": 2065,
+          "bins": [
+            {
+              "bin_low": 0.0,
+              "bin_high": 0.2,
+              "row_count": 1727,
+              "mean_predicted": 0.042834126916556456,
+              "mean_outcome": 0.027793862188766647
+            },
+            {
+              "bin_low": 0.2,
+              "bin_high": 0.4,
+              "row_count": 202,
+              "mean_predicted": 0.28234376942664324,
+              "mean_outcome": 0.18316831683168316
+            },
+            {
+              "bin_low": 0.4,
+              "bin_high": 0.6,
+              "row_count": 82,
+              "mean_predicted": 0.5070675387763418,
+              "mean_outcome": 0.34146341463414637
+            },
+            {
+              "bin_low": 0.6,
+              "bin_high": 0.8,
+              "row_count": 47,
+              "mean_predicted": 0.6746537948290763,
+              "mean_outcome": 0.3404255319148936
+            },
+            {
+              "bin_low": 0.8,
+              "bin_high": 1.0,
+              "row_count": 7,
+              "mean_predicted": 0.8533021178717315,
+              "mean_outcome": 0.8571428571428571
+            }
+          ]
+        }
+      },
+      "player_triple_double": {
+        "task": "probability",
+        "split": "season_2025_non_regular_pregame",
+        "rows_in_split": 2065,
+        "rows_scored": 2065,
+        "rows_label_null": 0,
+        "rows_with_usable_line": 0,
+        "rows_without_line": 2065,
+        "brier": 0.0042728635147517196,
+        "brier_row_count": 2065,
+        "log_loss": 0.024669990236924542,
+        "log_loss_row_count": 2065,
+        "naive_train_rate": 0.005675974248600053,
+        "naive_brier": 0.002904801821209174,
+        "naive_brier_row_count": 2065,
+        "hits": 0,
+        "misses": 0,
+        "pushes": 0,
+        "prediction_on_line": 0,
+        "hit_rate": null,
+        "hit_rate_row_count": 0,
+        "calibration": {
+          "kind": "reliability",
+          "row_count": 2065,
+          "bins": [
+            {
+              "bin_low": 0.0,
+              "bin_high": 0.2,
+              "row_count": 2059,
+              "mean_predicted": 0.0008709550390119549,
+              "mean_outcome": 0.0024283632831471587
+            },
+            {
+              "bin_low": 0.2,
+              "bin_high": 0.4,
+              "row_count": 0,
+              "mean_predicted": null,
+              "mean_outcome": null
+            },
+            {
+              "bin_low": 0.4,
+              "bin_high": 0.6,
+              "row_count": 1,
+              "mean_predicted": 0.5417743807883536,
+              "mean_outcome": 0.0
+            },
+            {
+              "bin_low": 0.6,
+              "bin_high": 0.8,
+              "row_count": 1,
+              "mean_predicted": 0.7555258894856666,
+              "mean_outcome": 0.0
+            },
+            {
+              "bin_low": 0.8,
+              "bin_high": 1.0,
+              "row_count": 4,
+              "mean_predicted": 0.9964820954648054,
+              "mean_outcome": 0.25
+            }
+          ]
+        }
+      }
+    }
+  },
+  "dataset_export_command": "python -m app.ml.build_dataset --dsn-env ML_DATABASE_URL --seasons 2023:2025 --hours-before-tip 3 --out <local gitignored export>/player_games_2023_2025.parquet",
+  "code_version": "feature/SPO-159-train-baseline-real-data @ 7e0f99b"
+}
